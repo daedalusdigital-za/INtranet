@@ -1,0 +1,61 @@
+# See http://help.github.com/ignore-files/ for more about ignoring files.
+
+# Backend
+Backend/bin/
+Backend/obj/
+Backend/Migrations/
+Backend/*.user
+Backend/*.suo
+Backend/.vs/
+Backend/publish/
+Backend/deploy.zip
+Backend/appsettings.Development.json
+
+# Frontend
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.angular/
+Frontend/.vscode/
+Frontend/npm-debug.log
+Frontend/yarn-error.log
+Frontend/.DS_Store
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Database
+*.mdf
+*.ldf
+*.db
+*.sqlite
+
+# Build artifacts
+*.dll
+*.exe
+*.pdb
+
+# NuGet
+*.nupkg
+packages/
