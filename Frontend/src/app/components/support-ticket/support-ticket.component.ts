@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -7,6 +7,11 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 
 interface SupportTicket {
@@ -32,7 +37,8 @@ interface SupportTicket {
     MatToolbarModule,
     MatIconModule,
     MatChipsModule,
-    MatDividerModule
+    MatDividerModule,
+    MatDialogModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -77,6 +83,10 @@ interface SupportTicket {
           Support Ticket System
         </h1>
         <p class="subtitle">Submit and track your support requests</p>
+        <button mat-raised-button color="primary" class="create-ticket-btn" (click)="openCreateTicketDialog()">
+          <mat-icon>add</mat-icon>
+          Create New Ticket
+        </button>
       </div>
 
       <!-- Statistics Cards -->
@@ -112,8 +122,9 @@ interface SupportTicket {
         </mat-card>
       </div>
 
-      <!-- Open Tickets Section -->
-      <div class="tickets-section">
+      <!-- Tickets Row: Open and Closed Side by Side -->
+      <div class="tickets-row">
+        <!-- Open Tickets Section -->
         <mat-card class="tickets-card">
           <mat-card-header>
             <mat-card-title>
@@ -154,10 +165,8 @@ interface SupportTicket {
             }
           </mat-card-content>
         </mat-card>
-      </div>
 
-      <!-- Closed Tickets Section -->
-      <div class="tickets-section">
+        <!-- Closed Tickets Section -->
         <mat-card class="tickets-card">
           <mat-card-header>
             <mat-card-title>
@@ -232,7 +241,24 @@ interface SupportTicket {
     .subtitle {
       color: rgba(255, 255, 255, 0.9);
       font-size: 18px;
-      margin: 0;
+      margin: 0 0 20px 0;
+    }
+
+    .create-ticket-btn {
+      padding: 12px 32px !important;
+      font-size: 16px !important;
+      font-weight: 500 !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 139, 0.3) !important;
+      transition: all 0.3s ease !important;
+    }
+
+    .create-ticket-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 139, 0.4) !important;
+    }
+
+    .create-ticket-btn mat-icon {
+      margin-right: 8px;
     }
 
     .stats-grid {
@@ -306,11 +332,20 @@ interface SupportTicket {
       color: #00008B;
     }
 
-    .tickets-section {
+    .tickets-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
       margin-bottom: 24px;
       max-width: 1400px;
       margin-left: auto;
       margin-right: auto;
+    }
+
+    @media (max-width: 1024px) {
+      .tickets-row {
+        grid-template-columns: 1fr;
+      }
     }
 
     .tickets-card {
@@ -319,6 +354,7 @@ interface SupportTicket {
       -webkit-backdrop-filter: blur(10px);
       border-radius: 16px !important;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+      height: fit-content;
     }
 
     .tickets-card mat-card-header {
@@ -565,7 +601,8 @@ export class SupportTicketComponent implements OnInit {
 
   constructor(
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private dialog: MatDialog
   ) {
     this.currentUser = this.authService.currentUserValue;
   }
@@ -573,6 +610,31 @@ export class SupportTicketComponent implements OnInit {
   ngOnInit(): void {
     this.calculateStatistics();
     console.log('Support Ticket Component initialized');
+  }
+
+  openCreateTicketDialog(): void {
+    const dialogRef = this.dialog.open(CreateTicketDialogComponent, {
+      width: '600px',
+      data: { submittedBy: this.currentUser?.name }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Add the new ticket to openTickets
+        const newTicket: SupportTicket = {
+          id: 1000 + this.totalTickets + 1,
+          title: result.title,
+          description: result.description,
+          priority: result.priority,
+          status: 'Open',
+          submittedBy: this.currentUser?.name || 'Unknown',
+          submittedDate: new Date(),
+          category: result.category
+        };
+        this.openTickets.unshift(newTicket);
+        this.calculateStatistics();
+      }
+    });
   }
 
   calculateStatistics(): void {
@@ -588,5 +650,155 @@ export class SupportTicketComponent implements OnInit {
   logout(): void {
     this.authService.logout();
     this.router.navigate(['/login']);
+  }
+}
+
+// Create Ticket Dialog Component
+@Component({
+  selector: 'app-create-ticket-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatButtonModule,
+    MatIconModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>confirmation_number</mat-icon>
+      Create New Support Ticket
+    </h2>
+    <mat-dialog-content>
+      <form [formGroup]="ticketForm">
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Title</mat-label>
+          <input matInput formControlName="title" placeholder="Brief description of the issue">
+          <mat-icon matPrefix>title</mat-icon>
+          @if (ticketForm.get('title')?.hasError('required') && ticketForm.get('title')?.touched) {
+            <mat-error>Title is required</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Category</mat-label>
+          <mat-select formControlName="category">
+            <mat-option value="IT Support">IT Support</mat-option>
+            <mat-option value="Software">Software</mat-option>
+            <mat-option value="Hardware">Hardware</mat-option>
+            <mat-option value="Network">Network</mat-option>
+            <mat-option value="Account">Account</mat-option>
+            <mat-option value="Access">Access</mat-option>
+            <mat-option value="Other">Other</mat-option>
+          </mat-select>
+          <mat-icon matPrefix>category</mat-icon>
+          @if (ticketForm.get('category')?.hasError('required') && ticketForm.get('category')?.touched) {
+            <mat-error>Category is required</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Priority</mat-label>
+          <mat-select formControlName="priority">
+            <mat-option value="Low">Low</mat-option>
+            <mat-option value="Medium">Medium</mat-option>
+            <mat-option value="High">High</mat-option>
+            <mat-option value="Critical">Critical</mat-option>
+          </mat-select>
+          <mat-icon matPrefix>priority_high</mat-icon>
+          @if (ticketForm.get('priority')?.hasError('required') && ticketForm.get('priority')?.touched) {
+            <mat-error>Priority is required</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Description</mat-label>
+          <textarea matInput
+                    formControlName="description"
+                    rows="5"
+                    placeholder="Detailed description of the issue or request"></textarea>
+          <mat-icon matPrefix>description</mat-icon>
+          @if (ticketForm.get('description')?.hasError('required') && ticketForm.get('description')?.touched) {
+            <mat-error>Description is required</mat-error>
+          }
+        </mat-form-field>
+      </form>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="!ticketForm.valid">
+        <mat-icon>send</mat-icon>
+        Submit Ticket
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    mat-dialog-content {
+      padding: 20px 24px !important;
+      min-height: 400px;
+    }
+
+    mat-form-field {
+      margin-bottom: 16px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+
+    mat-dialog-actions button mat-icon {
+      margin-right: 4px;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  `]
+})
+export class CreateTicketDialogComponent {
+  ticketForm: FormGroup;
+
+  constructor(
+    public dialogRef: MatDialogRef<CreateTicketDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: { submittedBy: string },
+    private fb: FormBuilder
+  ) {
+    this.ticketForm = this.fb.group({
+      title: ['', Validators.required],
+      category: ['', Validators.required],
+      priority: ['Medium', Validators.required],
+      description: ['', Validators.required]
+    });
+  }
+
+  onSubmit(): void {
+    if (this.ticketForm.valid) {
+      this.dialogRef.close(this.ticketForm.value);
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
   }
 }
