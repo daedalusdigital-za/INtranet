@@ -21,7 +21,8 @@ INSERT INTO Departments (Name, ManagerName, CreatedAt) VALUES
 ('IT Department', 'Jane Doe', GETUTCDATE()),
 ('Sales Department', 'Mike Johnson', GETUTCDATE()),
 ('HR Department', 'Sarah Williams', GETUTCDATE()),
-('Finance Department', 'Robert Brown', GETUTCDATE());
+('Finance Department', 'Robert Brown', GETUTCDATE()),
+('Condom factory', 'David Chen', GETUTCDATE());
 GO
 
 -- Insert Users

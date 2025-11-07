@@ -35,6 +35,9 @@ import { AuthService } from '../../services/auth.service';
       <button mat-button routerLink="/people">
         <mat-icon>people</mat-icon> Human Resource
       </button>
+      <button mat-button routerLink="/stock-management">
+        <mat-icon>inventory</mat-icon> Stock Management
+      </button>
       <button mat-button routerLink="/documents">
         <mat-icon>folder</mat-icon> Documents
       </button>

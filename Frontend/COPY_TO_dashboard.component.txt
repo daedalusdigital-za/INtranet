@@ -1,3 +1,8 @@
+// ============================================================================
+// COPY THIS ENTIRE FILE CONTENT TO:
+// Frontend\src\app\components\dashboard\dashboard.component.ts
+// ============================================================================
+
 import { Component, OnInit, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
@@ -13,7 +18,6 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } 
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatChipsModule } from '@angular/material/chips';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { Department } from '../../models/models';
@@ -31,8 +35,7 @@ import { Department } from '../../models/models';
     MatProgressSpinnerModule,
     MatDialogModule,
     MatBadgeModule,
-    MatTooltipModule,
-    MatChipsModule
+    MatTooltipModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -50,9 +53,6 @@ import { Department } from '../../models/models';
       </button>
       <button mat-button routerLink="/people">
         <mat-icon>people</mat-icon> Human Resource
-      </button>
-      <button mat-button routerLink="/stock-management">
-        <mat-icon>inventory</mat-icon> Stock Management
       </button>
       <button mat-button routerLink="/documents">
         <mat-icon>folder</mat-icon> Documents
@@ -118,57 +118,51 @@ import { Department } from '../../models/models';
     </mat-toolbar>
 
     <div class="dashboard-container">
-      <h1>Welcome to Promed Intranet</h1>
+      <h1>
+        <mat-icon>business</mat-icon>
+        Project Management - Departments
+      </h1>
 
-      <!-- Project Management Departments Section -->
-      <div class="departments-section">
-        <h2 class="section-title">
-          <mat-icon>business</mat-icon>
-          Project Management - Departments
-        </h2>
-
-        @if (loading) {
-          <div class="loading-spinner">
-            <mat-spinner></mat-spinner>
-          </div>
-        } @else {
-          <div class="departments-grid">
-            @for (dept of departments; track dept.departmentId) {
-              <mat-card class="department-card" (click)="openPasswordDialog(dept)">
-                <mat-card-header>
-                  <mat-card-title>{{ dept.name }}</mat-card-title>
-                  <mat-card-subtitle>{{ dept.managerName }}</mat-card-subtitle>
-                </mat-card-header>
-                <mat-card-content>
-                  <div class="stats">
-                    <div class="stat">
-                      <mat-icon>dashboard</mat-icon>
-                      <span>{{ dept.boardCount }} Boards</span>
-                    </div>
-                    <div class="stat">
-                      <mat-icon>people</mat-icon>
-                      <span>{{ dept.userCount }} Users</span>
-                    </div>
+      @if (loading) {
+        <div class="loading-spinner">
+          <mat-spinner></mat-spinner>
+        </div>
+      } @else {
+        <div class="departments-grid">
+          @for (dept of departments; track dept.departmentId) {
+            <mat-card class="department-card" (click)="openPasswordDialog(dept)">
+              <mat-card-header>
+                <mat-card-title>{{ dept.name }}</mat-card-title>
+                <mat-card-subtitle>{{ dept.managerName }}</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="stats">
+                  <div class="stat">
+                    <mat-icon>dashboard</mat-icon>
+                    <span>{{ dept.boardCount }} Boards</span>
                   </div>
-                </mat-card-content>
-                <mat-card-actions>
-                  <button mat-button color="primary">View Boards</button>
-                </mat-card-actions>
-              </mat-card>
-            }
-          </div>
-        }
+                  <div class="stat">
+                    <mat-icon>people</mat-icon>
+                    <span>{{ dept.userCount }} Users</span>
+                  </div>
+                </div>
+              </mat-card-content>
+              <mat-card-actions>
+                <button mat-button color="primary">View Boards</button>
+              </mat-card-actions>
+            </mat-card>
+          }
+        </div>
+      }
 
-        @if (currentUser?.role === 'Admin') {
-          <div class="admin-actions">
-            <button mat-raised-button color="primary" (click)="openCreateDialog()">
-              <mat-icon>add</mat-icon>
-              Create New Department
-            </button>
-          </div>
-        }
-      </div>
-
+      @if (currentUser?.role === 'Admin') {
+        <div class="admin-actions">
+          <button mat-raised-button color="primary" (click)="openCreateDialog()">
+            <mat-icon>add</mat-icon>
+            Create New Department
+          </button>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -194,120 +188,21 @@ import { Department } from '../../models/models';
       font-size: 2.5rem;
       font-weight: 600;
       text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .loading-spinner {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 400px;
-    }
-
-    .loading-spinner ::ng-deep .mat-progress-spinner circle {
-      stroke: #ffffff;
-    }
-
-    .departments-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 24px;
-    }
-
-    .department-card {
-      cursor: pointer;
-      transition: all 0.3s ease;
-      background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-      overflow: hidden;
-      position: relative;
-    }
-
-    .department-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
-    }
-
-    .department-card:hover {
-      transform: translateY(-8px) scale(1.02);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-header {
-      padding: 20px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.1) 0%, rgba(65, 105, 225, 0.1) 100%);
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-title {
-      font-size: 1.5rem;
-      font-weight: 600;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 8px;
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-subtitle {
-      color: #1e90ff;
-      font-size: 0.9rem;
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-content {
-      padding: 20px;
-    }
-
-    .stats {
-      display: flex;
-      gap: 20px;
-      margin-top: 16px;
-    }
-
-    .stat {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.15) 0%, rgba(65, 105, 225, 0.15) 100%);
-      border-radius: 8px;
-      transition: all 0.2s ease;
+      gap: 16px;
     }
 
-    .stat:hover {
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.25) 0%, rgba(65, 105, 225, 0.25) 100%);
-      transform: scale(1.05);
-    }
-
-    .stat mat-icon {
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-size: 22px;
-      width: 22px;
-      height: 22px;
-    }
-
-    .stat span {
-      font-size: 14px;
-      font-weight: 500;
-      color: #4a5568;
+    h1 mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
     }
 
     mat-toolbar {
       background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
       color: white;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    mat-toolbar h2 {
-      font-weight: 600;
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
     }
 
     mat-toolbar button {
@@ -432,30 +327,6 @@ import { Department } from '../../models/models';
       text-align: center;
     }
 
-    /* Departments Section */
-    .departments-section {
-      margin-top: 48px;
-      padding-top: 32px;
-      border-top: 3px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .section-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: white;
-      font-size: 2rem;
-      font-weight: 600;
-      margin-bottom: 24px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .section-title mat-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
-    }
-
     .loading-spinner {
       display: flex;
       justify-content: center;
@@ -578,52 +449,34 @@ export class DashboardComponent implements OnInit {
   currentUser: any;
 
   // Notification properties
-  notificationCount: number = 5;
+  notificationCount: number = 3;
   showNotifications: boolean = false;
   notifications: any[] = [
     {
       id: 1,
-      icon: 'campaign',
-      iconColor: '#FF6B6B',
-      title: 'New Company Announcement',
-      message: 'Important policy update has been posted',
-      time: '10 minutes ago',
+      icon: 'business',
+      iconColor: '#4169e1',
+      title: 'New Department Added',
+      message: 'Marketing department has been created',
+      time: '2 hours ago',
       read: false
     },
     {
       id: 2,
-      icon: 'cake',
-      iconColor: '#f5576c',
-      title: 'Birthday Today',
-      message: 'Sarah Johnson from HR is celebrating today!',
-      time: '1 hour ago',
+      icon: 'dashboard',
+      iconColor: '#1e90ff',
+      title: 'Board Updated',
+      message: 'Main Office board has been updated',
+      time: '5 hours ago',
       read: false
     },
     {
       id: 3,
-      icon: 'group_add',
-      iconColor: '#11998e',
-      title: 'New Employee',
-      message: 'Welcome Michael Brown to the Marketing team',
-      time: '3 hours ago',
-      read: false
-    },
-    {
-      id: 4,
-      icon: 'emoji_events',
-      iconColor: '#FFD700',
-      title: 'Employee of the Month',
-      message: 'Jennifer Smith has been named Employee of the Month',
+      icon: 'people',
+      iconColor: '#00008B',
+      title: 'New User Added',
+      message: 'John Doe added to Sales Department',
       time: '1 day ago',
-      read: false
-    },
-    {
-      id: 5,
-      icon: 'support_agent',
-      iconColor: '#4169e1',
-      title: 'Support Ticket Resolved',
-      message: 'Your IT support ticket #1234 has been resolved',
-      time: '2 days ago',
       read: false
     }
   ];

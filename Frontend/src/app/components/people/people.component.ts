@@ -68,6 +68,9 @@ const environment = {
       <button mat-button routerLink="/people">
         <mat-icon>people</mat-icon> Human Resource
       </button>
+      <button mat-button routerLink="/stock-management">
+        <mat-icon>inventory</mat-icon> Stock Management
+      </button>
       <button mat-button routerLink="/documents">
         <mat-icon>folder</mat-icon> Documents
       </button>
@@ -77,9 +80,53 @@ const environment = {
 
       <span class="spacer"></span>
 
-      <button mat-icon-button>
-        <mat-icon>search</mat-icon>
+      <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0" (click)="toggleNotifications($event)">
+        <mat-icon>notifications</mat-icon>
       </button>
+
+      <!-- Notification Dropdown -->
+      @if (showNotifications) {
+        <div class="notification-dropdown" (click)="$event.stopPropagation()">
+          <div class="notification-header">
+            <h3>Notifications</h3>
+            <button mat-button color="primary" (click)="markAllAsRead()">
+              <mat-icon>done_all</mat-icon>
+              Mark All as Read
+            </button>
+          </div>
+
+          <div class="notification-list">
+            @if (notifications.length === 0) {
+              <div class="no-notifications">
+                <mat-icon>notifications_off</mat-icon>
+                <p>No new notifications</p>
+              </div>
+            } @else {
+              @for (notification of notifications; track notification.id) {
+                <div class="notification-item" [class.unread]="!notification.read">
+                  <div class="notification-icon">
+                    <mat-icon [style.color]="notification.iconColor">{{ notification.icon }}</mat-icon>
+                  </div>
+                  <div class="notification-content">
+                    <p class="notification-title">{{ notification.title }}</p>
+                    <p class="notification-message">{{ notification.message }}</p>
+                    <span class="notification-time">{{ notification.time }}</span>
+                  </div>
+                  @if (!notification.read) {
+                    <button mat-icon-button (click)="markAsRead(notification.id)" matTooltip="Mark as read">
+                      <mat-icon>check</mat-icon>
+                    </button>
+                  }
+                </div>
+              }
+            }
+          </div>
+
+          <div class="notification-footer">
+            <button mat-button color="primary" (click)="viewAllNotifications()">View All Notifications</button>
+          </div>
+        </div>
+      }
 
       <span style="margin-right: 16px;">{{ currentUser?.name }} ({{ currentUser?.role }})</span>
       <button mat-icon-button (click)="logout()">
@@ -88,6 +135,233 @@ const environment = {
     </mat-toolbar>
 
     <div class="attendance-container">
+      @if (!trainingAccess && !mainOfficeAccess && !condomFactoryAccess && !sanitaryPadsAccess && !newRoadAccess && !captownAccess && !brionkhorspruitAccess && !portElizabethAccess && !logisticsAccess) {
+        <!-- Training Section - Separated -->
+        <div class="training-section-header">
+          <h2>
+            <mat-icon>school</mat-icon>
+            Employee Training & Development
+          </h2>
+          <p>Access training materials, videos, and resources for all employees</p>
+        </div>
+
+        <div class="training-access-section">
+          <mat-card class="training-access-card">
+            <div class="training-card-content">
+              <mat-icon class="training-main-icon">school</mat-icon>
+              <h2>Training Center</h2>
+              <p>Watch training videos, download manuals, and access learning resources for sales, production, safety, and company policies</p>
+              <button mat-raised-button color="primary" (click)="openTrainingDialog()" class="training-access-btn">
+                <mat-icon>lock_open</mat-icon>
+                Access Training Center
+              </button>
+            </div>
+          </mat-card>
+        </div>
+
+        <!-- Departments & Branches Section -->
+        <div class="departments-section-header">
+          <h2>
+            <mat-icon>business</mat-icon>
+            Departments & Branch Locations
+          </h2>
+          <p>Select a department or branch location to access specific operational data</p>
+        </div>
+
+        <div class="access-section">
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">folder_special</mat-icon>
+            <h2>Main Office</h2>
+            <p>Access employee attendance records and HR data</p>
+            <button mat-raised-button color="primary" (click)="openMainOfficeDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access Main Office
+            </button>
+          </mat-card>
+
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">factory</mat-icon>
+            <h2>Condom Factory</h2>
+            <p>Access factory operations and production data</p>
+            <button mat-raised-button color="primary" (click)="openCondomFactoryDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access Condom Factory
+            </button>
+          </mat-card>
+
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">local_hospital</mat-icon>
+            <h2>Sanitary Pads</h2>
+            <p>Access sanitary pads production and inventory</p>
+            <button mat-raised-button color="primary" (click)="openSanitaryPadsDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access Sanitary Pads
+            </button>
+          </mat-card>
+
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">location_on</mat-icon>
+            <h2>New Road</h2>
+            <p>Access New Road branch operations and data</p>
+            <button mat-raised-button color="primary" (click)="openNewRoadDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access New Road
+            </button>
+          </mat-card>
+
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">location_city</mat-icon>
+            <h2>Cape Town</h2>
+            <p>Access Cape Town branch operations and data</p>
+            <button mat-raised-button color="primary" (click)="openCaptownDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access Cape Town
+            </button>
+          </mat-card>
+
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">place</mat-icon>
+            <h2>Brionkhorspruit</h2>
+            <p>Access Brionkhorspruit branch operations and data</p>
+            <button mat-raised-button color="primary" (click)="openBrionkhorspruitDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access Brionkhorspruit
+            </button>
+          </mat-card>
+
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">apartment</mat-icon>
+            <h2>Port Elizabeth</h2>
+            <p>Access Port Elizabeth branch operations and data</p>
+            <button mat-raised-button color="primary" (click)="openPortElizabethDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access Port Elizabeth
+            </button>
+          </mat-card>
+
+          <mat-card class="access-card">
+            <mat-icon class="folder-icon">local_shipping</mat-icon>
+            <h2>Logistics</h2>
+            <p>Access logistics operations and supply chain data</p>
+            <button mat-raised-button color="primary" (click)="openLogisticsDialog()" class="access-btn">
+              <mat-icon>lock_open</mat-icon>
+              Access Logistics
+            </button>
+          </mat-card>
+        </div>
+      } @else if (trainingAccess) {
+        <!-- Training Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>school</mat-icon>
+              Employee Training Center
+            </h1>
+            <p class="subtitle">Training videos, manuals, and resources for new employees</p>
+          </div>
+
+          <div class="training-content">
+            <div class="training-categories">
+              <mat-card class="training-category-card">
+                <mat-icon class="category-icon">people</mat-icon>
+                <h3>Sales Representative Training</h3>
+                <p>Complete training materials for sales team members</p>
+                <div class="training-actions">
+                  <button mat-raised-button color="primary">
+                    <mat-icon>play_circle</mat-icon>
+                    Watch Videos
+                  </button>
+                  <button mat-raised-button>
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    View Manuals
+                  </button>
+                </div>
+              </mat-card>
+
+              <mat-card class="training-category-card">
+                <mat-icon class="category-icon">handshake</mat-icon>
+                <h3>Customer Service Training</h3>
+                <p>Essential skills and protocols for customer interactions</p>
+                <div class="training-actions">
+                  <button mat-raised-button color="primary">
+                    <mat-icon>play_circle</mat-icon>
+                    Watch Videos
+                  </button>
+                  <button mat-raised-button>
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    View Manuals
+                  </button>
+                </div>
+              </mat-card>
+
+              <mat-card class="training-category-card">
+                <mat-icon class="category-icon">production_quantity_limits</mat-icon>
+                <h3>Production Training</h3>
+                <p>Manufacturing processes and quality control standards</p>
+                <div class="training-actions">
+                  <button mat-raised-button color="primary">
+                    <mat-icon>play_circle</mat-icon>
+                    Watch Videos
+                  </button>
+                  <button mat-raised-button>
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    View Manuals
+                  </button>
+                </div>
+              </mat-card>
+
+              <mat-card class="training-category-card">
+                <mat-icon class="category-icon">health_and_safety</mat-icon>
+                <h3>Safety & Compliance</h3>
+                <p>Workplace safety procedures and regulatory compliance</p>
+                <div class="training-actions">
+                  <button mat-raised-button color="primary">
+                    <mat-icon>play_circle</mat-icon>
+                    Watch Videos
+                  </button>
+                  <button mat-raised-button>
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    View Manuals
+                  </button>
+                </div>
+              </mat-card>
+
+              <mat-card class="training-category-card">
+                <mat-icon class="category-icon">admin_panel_settings</mat-icon>
+                <h3>Company Policies</h3>
+                <p>HR policies, code of conduct, and employee handbook</p>
+                <div class="training-actions">
+                  <button mat-raised-button color="primary">
+                    <mat-icon>play_circle</mat-icon>
+                    Watch Videos
+                  </button>
+                  <button mat-raised-button>
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    View Manuals
+                  </button>
+                </div>
+              </mat-card>
+
+              <mat-card class="training-category-card">
+                <mat-icon class="category-icon">computer</mat-icon>
+                <h3>IT Systems Training</h3>
+                <p>Software applications and internal systems usage</p>
+                <div class="training-actions">
+                  <button mat-raised-button color="primary">
+                    <mat-icon>play_circle</mat-icon>
+                    Watch Videos
+                  </button>
+                  <button mat-raised-button>
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    View Manuals
+                  </button>
+                </div>
+              </mat-card>
+            </div>
+          </div>
+        </div>
+      } @else if (mainOfficeAccess) {
+        <!-- Original Attendance Content -->
       <div class="header-section">
         <div class="title-row">
           <h1>
@@ -284,6 +558,126 @@ const environment = {
           </div>
         }
       </div>
+      } @else if (condomFactoryAccess) {
+        <!-- Condom Factory Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>factory</mat-icon>
+              Condom Factory Operations
+            </h1>
+            <p class="subtitle">Production monitoring and quality control</p>
+          </div>
+
+          <div class="coming-soon">
+            <mat-icon>construction</mat-icon>
+            <h2>Factory Dashboard Coming Soon</h2>
+            <p>Production tracking, quality metrics, and operations management will be available here.</p>
+          </div>
+        </div>
+      } @else if (sanitaryPadsAccess) {
+        <!-- Sanitary Pads Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>local_hospital</mat-icon>
+              Sanitary Pads Production
+            </h1>
+            <p class="subtitle">Manufacturing and inventory management</p>
+          </div>
+
+          <div class="coming-soon">
+            <mat-icon>construction</mat-icon>
+            <h2>Production Dashboard Coming Soon</h2>
+            <p>Sanitary pads production tracking, inventory levels, and quality assurance will be available here.</p>
+          </div>
+        </div>
+      } @else if (newRoadAccess) {
+        <!-- New Road Branch Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>location_on</mat-icon>
+              New Road Branch
+            </h1>
+            <p class="subtitle">Branch operations and staff management</p>
+          </div>
+
+          <div class="coming-soon">
+            <mat-icon>construction</mat-icon>
+            <h2>Branch Dashboard Coming Soon</h2>
+            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+          </div>
+        </div>
+      } @else if (captownAccess) {
+        <!-- Captown Branch Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>location_city</mat-icon>
+              Captown Branch
+            </h1>
+            <p class="subtitle">Branch operations and staff management</p>
+          </div>
+
+          <div class="coming-soon">
+            <mat-icon>construction</mat-icon>
+            <h2>Branch Dashboard Coming Soon</h2>
+            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+          </div>
+        </div>
+      } @else if (brionkhorspruitAccess) {
+        <!-- Brionkhorspruit Branch Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>place</mat-icon>
+              Brionkhorspruit Branch
+            </h1>
+            <p class="subtitle">Branch operations and staff management</p>
+          </div>
+
+          <div class="coming-soon">
+            <mat-icon>construction</mat-icon>
+            <h2>Branch Dashboard Coming Soon</h2>
+            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+          </div>
+        </div>
+      } @else if (portElizabethAccess) {
+        <!-- Port Elizabeth Branch Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>apartment</mat-icon>
+              Port Elizabeth Branch
+            </h1>
+            <p class="subtitle">Branch operations and staff management</p>
+          </div>
+
+          <div class="coming-soon">
+            <mat-icon>construction</mat-icon>
+            <h2>Branch Dashboard Coming Soon</h2>
+            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+          </div>
+        </div>
+      } @else if (logisticsAccess) {
+        <!-- Logistics Content -->
+        <div class="factory-section">
+          <div class="header-section">
+            <h1>
+              <mat-icon>local_shipping</mat-icon>
+              Logistics Operations
+            </h1>
+            <p class="subtitle">Supply chain and logistics management</p>
+          </div>
+
+          <div class="coming-soon">
+            <mat-icon>construction</mat-icon>
+            <h2>Logistics Dashboard Coming Soon</h2>
+            <p>Transportation tracking, inventory management, and supply chain analytics will be available here.</p>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -291,6 +685,302 @@ const environment = {
       padding: 24px;
       min-height: calc(100vh - 64px);
       background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+    }
+
+    .notification-dropdown {
+      position: absolute;
+      top: 60px;
+      right: 100px;
+      width: 420px;
+      max-height: 600px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .notification-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #f5f5f5;
+    }
+
+    .notification-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .notification-header button {
+      font-size: 13px;
+    }
+
+    .notification-list {
+      flex: 1;
+      overflow-y: auto;
+      max-height: 450px;
+    }
+
+    .no-notifications {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .no-notifications mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+    }
+
+    .no-notifications p {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .notification-item {
+      display: flex;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    .notification-item:hover {
+      background: #f9f9f9;
+    }
+
+    .notification-item.unread {
+      background: #e3f2fd;
+    }
+
+    .notification-item.unread:hover {
+      background: #d1e7f9;
+    }
+
+    .notification-icon {
+      flex-shrink: 0;
+    }
+
+    .notification-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .notification-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .notification-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 4px 0;
+    }
+
+    .notification-message {
+      font-size: 13px;
+      color: #666;
+      margin: 0 0 6px 0;
+      line-height: 1.4;
+    }
+
+    .notification-time {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .notification-item button {
+      flex-shrink: 0;
+      color: #4CAF50;
+    }
+
+    .notification-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #e0e0e0;
+      text-align: center;
+      background: #f5f5f5;
+    }
+
+    .notification-footer button {
+      width: 100%;
+    }
+
+    .training-section-header,
+    .departments-section-header {
+      text-align: center;
+      margin: 40px 0 32px 0;
+      padding: 0 24px;
+    }
+
+    .training-section-header h2,
+    .departments-section-header h2 {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 32px;
+      font-weight: 600;
+      color: white;
+      margin: 0 0 12px 0;
+    }
+
+    .training-section-header h2 mat-icon,
+    .departments-section-header h2 mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: white;
+    }
+
+    .training-section-header p,
+    .departments-section-header p {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.9);
+      margin: 0;
+    }
+
+    .training-access-section {
+      display: flex;
+      justify-content: center;
+      padding: 0 24px 60px 24px;
+      margin-bottom: 40px;
+      border-bottom: 2px solid rgba(0, 0, 139, 0.1);
+    }
+
+    .training-access-card {
+      max-width: 800px;
+      width: 100%;
+      background: linear-gradient(135deg, rgba(0, 0, 139, 0.95) 0%, rgba(30, 144, 255, 0.95) 100%) !important;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 24px !important;
+      box-shadow: 0 12px 48px rgba(0, 0, 139, 0.4) !important;
+      padding: 0 !important;
+      overflow: hidden;
+    }
+
+    .training-card-content {
+      padding: 64px 48px;
+      text-align: center;
+      color: white;
+    }
+
+    .training-main-icon {
+      font-size: 96px;
+      width: 96px;
+      height: 96px;
+      color: white;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+    }
+
+    .training-card-content h2 {
+      font-size: 42px;
+      font-weight: 700;
+      color: white;
+      margin: 0 0 20px 0;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .training-card-content p {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.95);
+      margin: 0 0 40px 0;
+      line-height: 1.6;
+    }
+
+    .training-access-btn {
+      padding: 16px 48px !important;
+      font-size: 18px !important;
+      background: white !important;
+      color: #00008B !important;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+      transition: all 0.3s ease !important;
+      font-weight: 600 !important;
+    }
+
+    .training-access-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4) !important;
+      background: rgba(255, 255, 255, 0.95) !important;
+    }
+
+    .training-access-btn mat-icon {
+      margin-right: 8px;
+    }
+
+    .access-section {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 32px;
+      padding-bottom: 40px;
+      flex-wrap: wrap;
+    }
+
+    .access-card {
+      text-align: center;
+      padding: 48px !important;
+      max-width: 400px;
+      min-width: 350px;
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 16px !important;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .access-card .folder-icon {
+      font-size: 80px;
+      width: 80px;
+      height: 80px;
+      color: #00008B;
+      margin: 0 auto 24px auto;
+      display: block;
+    }
+
+    .access-card h2 {
+      font-size: 32px;
+      font-weight: 600;
+      color: #00008B;
+      margin: 0 0 16px 0;
+    }
+
+    .access-card p {
+      font-size: 16px;
+      color: #666;
+      margin: 0 0 32px 0;
+    }
+
+    .access-btn {
+      padding: 12px 32px !important;
+      font-size: 16px !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 139, 0.3) !important;
+      transition: all 0.3s ease !important;
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 139, 0.4) !important;
+    }
+
+    .access-btn mat-icon {
+      margin-right: 8px;
     }
 
     .header-section {
@@ -909,6 +1599,135 @@ const environment = {
       font-weight: 400;
     }
 
+    .factory-section {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .factory-section .header-section {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .factory-section h1 {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: white;
+      margin: 0 0 12px 0;
+      font-size: 36px;
+      font-weight: 600;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .factory-section h1 mat-icon {
+      font-size: 42px;
+      width: 42px;
+      height: 42px;
+    }
+
+    .factory-section .subtitle {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 18px;
+      margin: 0;
+    }
+
+    .coming-soon {
+      text-align: center;
+      padding: 80px 40px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .coming-soon mat-icon {
+      font-size: 80px;
+      width: 80px;
+      height: 80px;
+      color: #00008B;
+      margin-bottom: 24px;
+    }
+
+    .coming-soon h2 {
+      color: #00008B;
+      font-size: 28px;
+      font-weight: 600;
+      margin: 0 0 16px 0;
+    }
+
+    .coming-soon p {
+      color: #666;
+      font-size: 16px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .training-content {
+      padding: 24px 0;
+    }
+
+    .training-categories {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .training-category-card {
+      padding: 32px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .training-category-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .category-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #00008B;
+      margin-bottom: 16px;
+    }
+
+    .training-category-card h3 {
+      color: #00008B;
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+    }
+
+    .training-category-card p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0 0 20px 0;
+    }
+
+    .training-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .training-actions button {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .training-actions button mat-icon {
+      margin-right: 8px;
+    }
+
     .spacer {
       flex: 1 1 auto;
     }
@@ -923,6 +1742,64 @@ export class PeopleComponent implements OnInit, OnDestroy {
   lastUpdate = new Date();
   currentUser: any;
   searchQuery: string = '';
+  notificationCount: number = 5;
+  showNotifications: boolean = false;
+  notifications: any[] = [
+    {
+      id: 1,
+      icon: 'person_add',
+      iconColor: '#4CAF50',
+      title: 'New Employee Added',
+      message: 'John Doe has been added to the Main Office department',
+      time: '5 minutes ago',
+      read: false
+    },
+    {
+      id: 2,
+      icon: 'assignment_late',
+      iconColor: '#FF9800',
+      title: 'Attendance Alert',
+      message: '3 employees marked as late today',
+      time: '1 hour ago',
+      read: false
+    },
+    {
+      id: 3,
+      icon: 'local_shipping',
+      iconColor: '#2196F3',
+      title: 'Logistics Update',
+      message: 'New shipment scheduled for delivery',
+      time: '2 hours ago',
+      read: false
+    },
+    {
+      id: 4,
+      icon: 'factory',
+      iconColor: '#9C27B0',
+      title: 'Production Report',
+      message: 'Condom Factory monthly report is ready',
+      time: '3 hours ago',
+      read: false
+    },
+    {
+      id: 5,
+      icon: 'school',
+      iconColor: '#00BCD4',
+      title: 'Training Reminder',
+      message: 'New training video available for Sales Representatives',
+      time: '5 hours ago',
+      read: false
+    }
+  ];
+  trainingAccess: boolean = false;
+  mainOfficeAccess: boolean = false;
+  condomFactoryAccess: boolean = false;
+  sanitaryPadsAccess: boolean = false;
+  newRoadAccess: boolean = false;
+  captownAccess: boolean = false;
+  brionkhorspruitAccess: boolean = false;
+  portElizabethAccess: boolean = false;
+  logisticsAccess: boolean = false;
   private autoRefreshSubscription?: Subscription;
   private signalRSubscription?: Subscription;
 
@@ -952,6 +1829,11 @@ export class PeopleComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         this.loadData();
       });
+
+    // Close notifications dropdown when clicking outside
+    document.addEventListener('click', () => {
+      this.showNotifications = false;
+    });
   }
 
   ngOnDestroy(): void {
@@ -1078,6 +1960,115 @@ export class PeopleComponent implements OnInit, OnDestroy {
     }
   }
 
+  openTrainingDialog(): void {
+    const dialogRef = this.dialog.open(TrainingPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.trainingAccess = true;
+      }
+    });
+  }
+
+  openMainOfficeDialog(): void {
+    const dialogRef = this.dialog.open(MainOfficePasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.mainOfficeAccess = true;
+        this.loadData(); // Load data once access is granted
+      }
+    });
+  }
+
+  openCondomFactoryDialog(): void {
+    const dialogRef = this.dialog.open(CondomFactoryPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.condomFactoryAccess = true;
+      }
+    });
+  }
+
+  openSanitaryPadsDialog(): void {
+    const dialogRef = this.dialog.open(SanitaryPadsPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.sanitaryPadsAccess = true;
+      }
+    });
+  }
+
+  openNewRoadDialog(): void {
+    const dialogRef = this.dialog.open(NewRoadPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.newRoadAccess = true;
+      }
+    });
+  }
+
+  openCaptownDialog(): void {
+    const dialogRef = this.dialog.open(CaptownPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.captownAccess = true;
+      }
+    });
+  }
+
+  openBrionkhorspruitDialog(): void {
+    const dialogRef = this.dialog.open(BrionkhorspruitPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.brionkhorspruitAccess = true;
+      }
+    });
+  }
+
+  openPortElizabethDialog(): void {
+    const dialogRef = this.dialog.open(PortElizabethPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.portElizabethAccess = true;
+      }
+    });
+  }
+
+  openLogisticsDialog(): void {
+    const dialogRef = this.dialog.open(LogisticsPasswordDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.success) {
+        this.logisticsAccess = true;
+      }
+    });
+  }
+
   downloadWeeklyReport(): void {
     const dialogRef = this.dialog.open(WeeklyReportDialogComponent, {
       width: '400px'
@@ -1125,6 +2116,34 @@ export class PeopleComponent implements OnInit, OnDestroy {
   clearSearch(): void {
     this.searchQuery = '';
     this.filterEmployees();
+  }
+
+  toggleNotifications(event: Event): void {
+    event.stopPropagation();
+    this.showNotifications = !this.showNotifications;
+  }
+
+  markAsRead(notificationId: number): void {
+    const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification) {
+      notification.read = true;
+      this.updateNotificationCount();
+    }
+  }
+
+  markAllAsRead(): void {
+    this.notifications.forEach(n => n.read = true);
+    this.updateNotificationCount();
+  }
+
+  updateNotificationCount(): void {
+    this.notificationCount = this.notifications.filter(n => !n.read).length;
+  }
+
+  viewAllNotifications(): void {
+    this.showNotifications = false;
+    // Navigate to notifications page or show all notifications
+    console.log('View all notifications');
   }
 
   logout(): void {
@@ -1350,5 +2369,1097 @@ export class MonthlyReportDialogComponent {
       month: this.selectedMonth,
       year: this.selectedYear
     });
+  }
+}
+
+// Main Office Password Dialog Component
+@Component({
+  selector: 'app-main-office-password-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    MatIconModule,
+    FormsModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>lock</mat-icon>
+      Access Main Office
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact HR management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput
+               type="password"
+               [(ngModel)]="password"
+               (keyup.enter)="validatePassword()"
+               placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class MainOfficePasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<MainOfficePasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact HR management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+// Condom Factory Password Dialog Component
+@Component({
+  selector: 'app-condom-factory-password-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    MatIconModule,
+    FormsModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>factory</mat-icon>
+      Access Condom Factory
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact factory management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput
+               type="password"
+               [(ngModel)]="password"
+               (keyup.enter)="validatePassword()"
+               placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class CondomFactoryPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<CondomFactoryPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact factory management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+// Sanitary Pads Password Dialog Component
+@Component({
+  selector: 'app-sanitary-pads-password-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    MatIconModule,
+    FormsModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>local_hospital</mat-icon>
+      Access Sanitary Pads
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact production management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput
+               type="password"
+               [(ngModel)]="password"
+               (keyup.enter)="validatePassword()"
+               placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class SanitaryPadsPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<SanitaryPadsPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact production management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+@Component({
+  selector: 'app-newroad-password-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>location_on</mat-icon>
+      Access New Road Branch
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact branch management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class NewRoadPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<NewRoadPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact branch management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+@Component({
+  selector: 'app-captown-password-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>location_city</mat-icon>
+      Access Captown Branch
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact branch management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class CaptownPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<CaptownPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact branch management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+@Component({
+  selector: 'app-brionkhorspruit-password-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>place</mat-icon>
+      Access Brionkhorspruit Branch
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact branch management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class BrionkhorspruitPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<BrionkhorspruitPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact branch management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+@Component({
+  selector: 'app-portelizabeth-password-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>apartment</mat-icon>
+      Access Port Elizabeth Branch
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact branch management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class PortElizabethPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<PortElizabethPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact branch management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+@Component({
+  selector: 'app-logistics-password-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>local_shipping</mat-icon>
+      Access Logistics
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact logistics management for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class LogisticsPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<LogisticsPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact logistics management.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+}
+
+@Component({
+  selector: 'app-training-password-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>school</mat-icon>
+      Access Training Center
+    </h2>
+    <mat-dialog-content>
+      <p class="info-text">This section is password protected.</p>
+      <p class="contact-text">Contact HR or training coordinator for the password.</p>
+
+      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
+        <mat-label>Password</mat-label>
+        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
+        <mat-icon matPrefix>vpn_key</mat-icon>
+      </mat-form-field>
+
+      @if (errorMessage) {
+        <p class="error-message">
+          <mat-icon>error</mat-icon>
+          {{ errorMessage }}
+        </p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="validatePassword()">
+        <mat-icon>lock_open</mat-icon>
+        Access
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00008B;
+      margin: 0;
+    }
+
+    h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .info-text {
+      color: #333;
+      font-size: 15px;
+      margin: 0 0 8px 0;
+    }
+
+    .contact-text {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0;
+    }
+
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d32f2f;
+      font-size: 14px;
+      margin: 8px 0 0 0;
+      padding: 8px;
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .error-message mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    mat-dialog-actions {
+      padding: 16px 24px !important;
+      margin: 0 !important;
+    }
+
+    mat-dialog-actions button {
+      margin-left: 8px;
+    }
+  `]
+})
+export class TrainingPasswordDialogComponent {
+  password: string = '';
+  errorMessage: string = '';
+  private readonly DEFAULT_PASSWORD = '0000';
+
+  constructor(
+    public dialogRef: MatDialogRef<TrainingPasswordDialogComponent>
+  ) {}
+
+  validatePassword(): void {
+    if (!this.password || this.password.trim() === '') {
+      this.errorMessage = 'Please enter a password';
+      return;
+    }
+
+    if (this.password === this.DEFAULT_PASSWORD) {
+      this.dialogRef.close({ success: true });
+    } else {
+      this.errorMessage = 'Incorrect password. Please contact HR or training coordinator.';
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
   }
 }

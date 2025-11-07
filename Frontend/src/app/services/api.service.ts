@@ -67,4 +67,14 @@ export class ApiService {
   createList(list: any): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/lists`, list);
   }
+
+  // Attendance
+  getEarliestEmployeeToday(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/attendance/earliest-today`);
+  }
+
+  // Employees
+  getEmployees(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/attendance/employees`);
+  }
 }

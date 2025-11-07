@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -7,6 +7,11 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 
@@ -21,7 +26,12 @@ import { AuthService } from '../../services/auth.service';
     MatToolbarModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatChipsModule
+    MatChipsModule,
+    MatBadgeModule,
+    MatTooltipModule,
+    MatFormFieldModule,
+    MatInputModule,
+    FormsModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -40,6 +50,9 @@ import { AuthService } from '../../services/auth.service';
       <button mat-button routerLink="/people">
         <mat-icon>people</mat-icon> Human Resource
       </button>
+      <button mat-button routerLink="/stock-management">
+        <mat-icon>inventory</mat-icon> Stock Management
+      </button>
       <button mat-button routerLink="/documents">
         <mat-icon>folder</mat-icon> Documents
       </button>
@@ -49,166 +62,1224 @@ import { AuthService } from '../../services/auth.service';
 
       <span class="spacer"></span>
 
-      <button mat-icon-button>
-        <mat-icon>search</mat-icon>
+      <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0" (click)="toggleNotifications($event)" matTooltip="Notifications">
+        <mat-icon>notifications</mat-icon>
       </button>
 
+      <!-- Notification Dropdown -->
+      @if (showNotifications) {
+        <div class="notification-dropdown" (click)="$event.stopPropagation()">
+          <div class="notification-header">
+            <h3>Notifications</h3>
+            <button mat-button color="primary" (click)="markAllAsRead()">
+              <mat-icon>done_all</mat-icon>
+              Mark All as Read
+            </button>
+          </div>
+
+          <div class="notification-list">
+            @if (notifications.length === 0) {
+              <div class="no-notifications">
+                <mat-icon>notifications_off</mat-icon>
+                <p>No new notifications</p>
+              </div>
+            } @else {
+              @for (notification of notifications; track notification.id) {
+                <div class="notification-item" [class.unread]="!notification.read">
+                  <div class="notification-icon">
+                    <mat-icon [style.color]="notification.iconColor">{{ notification.icon }}</mat-icon>
+                  </div>
+                  <div class="notification-content">
+                    <p class="notification-title">{{ notification.title }}</p>
+                    <p class="notification-message">{{ notification.message }}</p>
+                    <span class="notification-time">{{ notification.time }}</span>
+                  </div>
+                  @if (!notification.read) {
+                    <button mat-icon-button (click)="markAsRead(notification.id)" matTooltip="Mark as read">
+                      <mat-icon>check</mat-icon>
+                    </button>
+                  }
+                </div>
+              }
+            }
+          </div>
+
+          <div class="notification-footer">
+            <button mat-button color="primary" (click)="viewAllNotifications()">View All Notifications</button>
+          </div>
+        </div>
+      }
+
       <span style="margin-right: 16px;">{{ currentUser?.name }} ({{ currentUser?.role }})</span>
-      <button mat-icon-button (click)="logout()">
+      <button mat-icon-button (click)="logout()" matTooltip="Logout">
         <mat-icon>logout</mat-icon>
       </button>
     </mat-toolbar>
 
-    <div class="projects-container">
-      <h1>Projects Overview</h1>
+    <div class="dashboard-container">
+      <h1>Welcome to Promed Intranet</h1>
 
-      @if (loading) {
-        <div class="loading-container">
-          <mat-spinner></mat-spinner>
-        </div>
-      } @else {
-        <div class="projects-grid">
-          @for (board of boards; track board.boardId) {
-            <mat-card class="project-card" (click)="viewBoard(board.boardId)">
-              <mat-card-header>
-                <mat-card-title>{{ board.name }}</mat-card-title>
-              </mat-card-header>
-              <mat-card-content>
-                <div class="project-info">
-                  <div class="info-item">
-                    <mat-icon>business</mat-icon>
-                    <span>{{ board.departmentName }}</span>
+      <!-- Information Widgets -->
+      <div class="widgets-grid">
+
+        <!-- Company Announcements -->
+        <mat-card class="widget announcement-widget">
+          <mat-card-header>
+            <div class="widget-icon" style="background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%);">
+              <mat-icon>campaign</mat-icon>
+            </div>
+            <mat-card-title>Company Announcements</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="announcements-list">
+              @for (announcement of announcements; track announcement.id) {
+                <div class="announcement-item" [class.high-priority]="announcement.priority === 'high'">
+                  <div class="announcement-main">
+                    <h4>{{ announcement.title }}</h4>
+                    <p>{{ announcement.content }}</p>
                   </div>
-                  <div class="info-item">
-                    <mat-icon>list</mat-icon>
-                    <span>{{ board.listCount }} lists</span>
+                  <div class="announcement-meta">
+                    <span class="date">
+                      <mat-icon>calendar_today</mat-icon>
+                      {{ announcement.date }}
+                    </span>
+                    <span class="author">
+                      <mat-icon>person</mat-icon>
+                      {{ announcement.author }}
+                    </span>
+                    @if (announcement.priority === 'high') {
+                      <mat-chip class="priority-chip">Urgent</mat-chip>
+                    }
                   </div>
-                  <div class="info-item">
-                    <mat-icon>credit_card</mat-icon>
-                    <span>{{ board.cardCount }} cards</span>
-                  </div>
-                  @if (board.description) {
-                    <p class="description">{{ board.description }}</p>
+                </div>
+              }
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-button color="primary">
+              <mat-icon>arrow_forward</mat-icon>
+              View All Announcements
+            </button>
+          </mat-card-actions>
+        </mat-card>
+
+        <!-- Early Birds & Late Bird Today -->
+        <mat-card class="widget earliest-employee-widget">
+          <mat-card-header>
+            <div class="widget-icon" style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);">
+              <mat-icon>wb_twilight</mat-icon>
+            </div>
+            <mat-card-title>Attendance Today</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            @if (earlyBirds.hasEmployees) {
+              <!-- Early Birds Section -->
+              @if (earlyBirds.earlyBirds.length > 0) {
+                <div class="section-label">
+                  <mat-icon>wb_sunny</mat-icon>
+                  <span>Early Birds</span>
+                </div>
+                <div class="early-birds-list">
+                  @for (employee of earlyBirds.earlyBirds; track employee.employeeId) {
+                    <div class="early-bird-item">
+                      @if (employee.photoBase64) {
+                        <div class="bird-photo" [style.background-image]="'url(data:image/jpeg;base64,' + employee.photoBase64 + ')'" style="background-size: cover; background-position: center;"></div>
+                      } @else {
+                        <div class="bird-photo">
+                          <mat-icon>account_circle</mat-icon>
+                        </div>
+                      }
+                      <div class="bird-info">
+                        <h4>{{ employee.fullName }}</h4>
+                        <div class="bird-time">
+                          <mat-icon>access_time</mat-icon>
+                          <span>{{ employee.timeIn }}</span>
+                        </div>
+                      </div>
+                    </div>
                   }
                 </div>
-              </mat-card-content>
-            </mat-card>
-          } @empty {
-            <div class="empty-state">
-              <mat-icon>folder_open</mat-icon>
-              <h3>No projects found</h3>
+              }
+
+              <!-- Late Birds Section -->
+              @if (earlyBirds.lateBirds && earlyBirds.lateBirds.length > 0) {
+                <div class="section-divider"></div>
+                <div class="section-label late">
+                  <mat-icon>schedule</mat-icon>
+                  <span>Late Birds</span>
+                </div>
+                <div class="early-birds-list">
+                  @for (employee of earlyBirds.lateBirds; track employee.employeeId) {
+                    <div class="early-bird-item">
+                      @if (employee.photoBase64) {
+                        <div class="bird-photo late" [style.background-image]="'url(data:image/jpeg;base64,' + employee.photoBase64 + ')'" style="background-size: cover; background-position: center;"></div>
+                      } @else {
+                        <div class="bird-photo late">
+                          <mat-icon>account_circle</mat-icon>
+                        </div>
+                      }
+                      <div class="bird-info">
+                        <h4>{{ employee.fullName }}</h4>
+                        <div class="bird-time late">
+                          <mat-icon>access_time</mat-icon>
+                          <span>{{ employee.timeIn }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            } @else {
+              <div class="earliest-employee-container">
+                <div class="earliest-photo">
+                  <mat-icon>access_time</mat-icon>
+                </div>
+                <h3>No check-ins yet</h3>
+              </div>
+            }
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Hero Card (Rotating: New Members, Birthdays, Upcoming Birthdays) -->
+        <mat-card class="widget hero-card">
+          <mat-card-content>
+            @if (currentHeroCard === 'newMember' && newMembers.length > 0) {
+              <!-- Welcome New Member -->
+              <div class="hero-content welcome-hero">
+                <div class="hero-icon-large">
+                  <mat-icon>waving_hand</mat-icon>
+                </div>
+                <h2>Welcome to the Team!</h2>
+                @if (newMembers[currentNewMemberIndex].photoBase64) {
+                  <div class="hero-photo" [style.background-image]="'url(data:image/jpeg;base64,' + newMembers[currentNewMemberIndex].photoBase64 + ')'" style="background-size: cover; background-position: center;"></div>
+                } @else {
+                  <div class="hero-photo">
+                    <mat-icon>account_circle</mat-icon>
+                  </div>
+                }
+                <h3>{{ newMembers[currentNewMemberIndex].name }}</h3>
+                <p class="hero-role">{{ newMembers[currentNewMemberIndex].role }}</p>
+                <p class="hero-department">{{ newMembers[currentNewMemberIndex].department }}</p>
+                <div class="hero-badge">
+                  <mat-icon>calendar_today</mat-icon>
+                  <span>Joined {{ newMembers[currentNewMemberIndex].startDate }}</span>
+                </div>
+              </div>
+            } @else if (currentHeroCard === 'birthday' && todayBirthdays.length > 0) {
+              <!-- Happy Birthday -->
+              <div class="hero-content birthday-hero">
+                <div class="hero-icon-large">
+                  <mat-icon>celebration</mat-icon>
+                </div>
+                <h2>Happy Birthday!</h2>
+                @if (todayBirthdays[currentBirthdayIndex].photoBase64) {
+                  <div class="hero-photo birthday-glow" [style.background-image]="'url(data:image/jpeg;base64,' + todayBirthdays[currentBirthdayIndex].photoBase64 + ')'" style="background-size: cover; background-position: center;"></div>
+                } @else {
+                  <div class="hero-photo birthday-glow">
+                    <mat-icon>account_circle</mat-icon>
+                  </div>
+                }
+                <h3>{{ todayBirthdays[currentBirthdayIndex].name }}</h3>
+                <p class="hero-department">{{ todayBirthdays[currentBirthdayIndex].department }}</p>
+                <div class="hero-badge birthday-badge">
+                  <mat-icon>cake</mat-icon>
+                  <span>Wishing you an amazing day!</span>
+                </div>
+              </div>
+            } @else if (currentHeroCard === 'upcoming' && upcomingBirthdays.length > 0) {
+              <!-- Upcoming Birthday -->
+              <div class="hero-content upcoming-hero">
+                <div class="hero-icon-large">
+                  <mat-icon>event</mat-icon>
+                </div>
+                <h2>Upcoming Birthday</h2>
+                @if (upcomingBirthdays[currentUpcomingIndex].photoBase64) {
+                  <div class="hero-photo" [style.background-image]="'url(data:image/jpeg;base64,' + upcomingBirthdays[currentUpcomingIndex].photoBase64 + ')'" style="background-size: cover; background-position: center;"></div>
+                } @else {
+                  <div class="hero-photo">
+                    <mat-icon>account_circle</mat-icon>
+                  </div>
+                }
+                <h3>{{ upcomingBirthdays[currentUpcomingIndex].name }}</h3>
+                <p class="hero-department">{{ upcomingBirthdays[currentUpcomingIndex].department }}</p>
+                <div class="hero-badge upcoming-badge">
+                  <mat-icon>calendar_month</mat-icon>
+                  <span>{{ upcomingBirthdays[currentUpcomingIndex].date }}</span>
+                </div>
+              </div>
+            }
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Weather & Time Card (Rotating Locations) -->
+        <mat-card class="widget weather-rotating-card">
+          <mat-card-content>
+            @if (locations.length > 0) {
+              <div class="weather-content">
+                <div class="weather-header">
+                  <mat-icon class="location-icon">location_on</mat-icon>
+                  <h3>{{ locations[currentLocationIndex].name }}</h3>
+                </div>
+                <div class="weather-display">
+                  <div class="weather-icon-large">
+                    <mat-icon>{{ locations[currentLocationIndex].weatherIcon }}</mat-icon>
+                  </div>
+                  <div class="temperature-large">{{ locations[currentLocationIndex].temperature }}°C</div>
+                  <div class="weather-condition-text">{{ locations[currentLocationIndex].condition }}</div>
+                  <div class="local-time-display">
+                    <mat-icon>access_time</mat-icon>
+                    <span>{{ locations[currentLocationIndex].time }}</span>
+                  </div>
+                </div>
+              </div>
+            }
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Motivational Quote -->
+        <mat-card class="widget quote-widget">
+          <mat-card-header>
+            <div class="widget-icon" style="background: linear-gradient(135deg, #FA709A 0%, #FEE140 100%);">
+              <mat-icon>format_quote</mat-icon>
             </div>
-          }
-        </div>
-      }
+            <mat-card-title>Quote of the Day</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="quote-container">
+              <mat-icon class="quote-mark">format_quote</mat-icon>
+              <p class="quote-text">{{ dailyQuote.text }}</p>
+              <p class="quote-author">— {{ dailyQuote.author }}</p>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+      </div>
     </div>
   `,
   styles: [`
-    .projects-container {
-      padding: 24px;
-      min-height: calc(100vh - 64px);
+    :host {
+      display: block;
+      min-height: 100vh;
       background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
-    }
-
-    h1 {
-      color: white;
-      margin-bottom: 24px;
-      font-size: 32px;
-      font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .loading-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 200px;
-    }
-
-    .projects-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
-    }
-
-    .project-card {
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      background: white;
-      border-radius: 8px;
-    }
-
-    .project-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-    }
-
-    mat-card-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: #00008B;
-    }
-
-    .project-info {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .info-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #666;
-    }
-
-    .info-item mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      color: #1e90ff;
-    }
-
-    .description {
-      margin-top: 8px;
-      color: #666;
-      font-size: 14px;
-      line-height: 1.4;
-    }
-
-    .empty-state {
-      grid-column: 1 / -1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: white;
-    }
-
-    .empty-state mat-icon {
-      font-size: 80px;
-      width: 80px;
-      height: 80px;
-      margin-bottom: 16px;
-      opacity: 0.7;
-    }
-
-    .empty-state h3 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 400;
     }
 
     .spacer {
       flex: 1 1 auto;
     }
+
+    .dashboard-container {
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 24px;
+      color: #ffffff;
+      font-size: 2.5rem;
+      font-weight: 600;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    mat-toolbar {
+      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      color: white;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    mat-toolbar h2 {
+      font-weight: 600;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    mat-toolbar button {
+      color: white;
+    }
+
+    /* Notification Dropdown Styles */
+    .notification-dropdown {
+      position: absolute;
+      top: 60px;
+      right: 100px;
+      width: 420px;
+      max-height: 600px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .notification-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #f5f5f5;
+    }
+
+    .notification-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .notification-list {
+      flex: 1;
+      overflow-y: auto;
+      max-height: 450px;
+    }
+
+    .no-notifications {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #9e9e9e;
+      text-align: center;
+    }
+
+    .no-notifications mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .notification-item {
+      display: flex;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background-color 0.2s;
+      cursor: pointer;
+    }
+
+    .notification-item:hover {
+      background-color: #fafafa;
+    }
+
+    .notification-item.unread {
+      background-color: #e3f2fd;
+    }
+
+    .notification-item.unread:hover {
+      background-color: #d1e7f9;
+    }
+
+    .notification-icon {
+      flex-shrink: 0;
+    }
+
+    .notification-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .notification-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .notification-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+      margin: 0 0 4px 0;
+    }
+
+    .notification-message {
+      font-size: 13px;
+      color: #666;
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    .notification-time {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .notification-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #e0e0e0;
+      background: #f5f5f5;
+      text-align: center;
+    }
+
+    /* Widgets Grid */
+    .widgets-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    @media (max-width: 1400px) {
+      .widgets-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .widgets-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .widget {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .widget:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .widget ::ng-deep .mat-mdc-card-header {
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(0, 0, 139, 0.05) 0%, rgba(65, 105, 225, 0.05) 100%);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .widget-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .widget-icon mat-icon {
+      color: white;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .widget ::ng-deep .mat-mdc-card-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+
+    .widget ::ng-deep .mat-mdc-card-content {
+      padding: 20px;
+    }
+
+    /* Company Announcements Widget */
+    .announcement-widget {
+      grid-column: span 2;
+    }
+
+    .announcements-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .announcement-item {
+      padding: 16px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      border-left: 4px solid #4169e1;
+      transition: all 0.2s;
+    }
+
+    .announcement-item.high-priority {
+      border-left-color: #FF6B6B;
+      background: #fff5f5;
+    }
+
+    .announcement-item:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .announcement-main h4 {
+      margin: 0 0 8px 0;
+      color: #333;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .announcement-main p {
+      margin: 0;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .announcement-meta {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      align-items: center;
+    }
+
+    .announcement-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: #999;
+    }
+
+    .announcement-meta mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .priority-chip {
+      background: #FF6B6B !important;
+      color: white !important;
+      font-size: 11px;
+      height: 24px;
+      padding: 0 8px;
+    }
+
+    /* Early Birds Today Widget */
+    .earliest-employee-widget {
+      grid-column: span 1;
+    }
+
+    /* Late Bird Widget */
+    .late-bird-widget {
+      grid-column: span 1;
+    }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #FFA500;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #FFD700;
+    }
+
+    .section-label.late {
+      color: #f5576c;
+      border-bottom: 2px solid #f093fb;
+    }
+
+    .section-label mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #ddd, transparent);
+      margin: 20px 0;
+    }
+
+    .early-birds-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .early-bird-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .early-bird-item:hover {
+      transform: translateX(4px);
+      background: #e8f4f8;
+    }
+
+    .bird-photo {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      flex-shrink: 0;
+    }
+
+    .bird-photo.late {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+    }
+
+    .bird-photo mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    .bird-info {
+      flex: 1;
+    }
+
+    .bird-info h4 {
+      margin: 0 0 4px 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .bird-time {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #FFA500;
+    }
+
+    .bird-time.late {
+      color: #f5576c;
+    }
+
+    .bird-time mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #FFA500;
+    }
+
+    .bird-time.late mat-icon {
+      color: #f5576c;
+    }
+
+    .earliest-employee-container {
+      text-align: center;
+    }
+
+    .earliest-photo {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .earliest-photo mat-icon {
+      font-size: 70px;
+      width: 70px;
+      height: 70px;
+      color: white;
+    }
+
+    .earliest-employee-container h3 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* Hero Card (Rotating Welcome/Birthday) */
+    .hero-card {
+      grid-column: span 1;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-card mat-card-content {
+      width: 100%;
+      padding: 24px;
+    }
+
+    .hero-content {
+      text-align: center;
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .welcome-hero {
+      background: linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(56, 239, 125, 0.1) 100%);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .birthday-hero {
+      background: linear-gradient(135deg, rgba(245, 87, 108, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .upcoming-hero {
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 165, 0, 0.1) 100%);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .hero-icon-large {
+      display: inline-flex;
+      margin-bottom: 12px;
+    }
+
+    .hero-icon-large mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: white;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+    }
+
+    .hero-content h2 {
+      font-size: 26px;
+      font-weight: 700;
+      margin: 0 0 16px 0;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .hero-photo {
+      width: 90px;
+      height: 90px;
+      margin: 0 auto 12px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      border: 3px solid white;
+    }
+
+    .hero-photo.birthday-glow {
+      animation: glow 2s ease-in-out infinite;
+    }
+
+    @keyframes glow {
+      0%, 100% {
+        box-shadow: 0 8px 24px rgba(245, 87, 108, 0.5);
+      }
+      50% {
+        box-shadow: 0 8px 32px rgba(245, 87, 108, 0.8);
+      }
+    }
+
+    .hero-photo mat-icon {
+      font-size: 60px;
+      width: 60px;
+      height: 60px;
+      color: white;
+    }
+
+    .hero-content h3 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 6px 0;
+      color: white;
+    }
+
+    .hero-role {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.9);
+      margin: 0 0 3px 0;
+      font-weight: 500;
+    }
+
+    .hero-department {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.8);
+      margin: 0 0 12px 0;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-badge mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .birthday-badge {
+      background: rgba(245, 87, 108, 0.3);
+    }
+
+    .upcoming-badge {
+      background: rgba(255, 193, 7, 0.3);
+    }
+
+    /* Weather Rotating Card */
+    .weather-rotating-card {
+      grid-column: span 1;
+      background: linear-gradient(135deg, #56CCF2 0%, #2F80ED 100%);
+      color: white;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .weather-rotating-card mat-card-content {
+      width: 100%;
+      padding: 24px;
+    }
+
+    .weather-content {
+      text-align: center;
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    .weather-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .weather-header .location-icon {
+      color: white;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .weather-header h3 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .weather-display {
+      text-align: center;
+    }
+
+    .weather-icon-large {
+      margin: 12px 0;
+    }
+
+    .weather-icon-large mat-icon {
+      font-size: 80px;
+      width: 80px;
+      height: 80px;
+      color: white;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+    }
+
+    .temperature-large {
+      font-size: 48px;
+      font-weight: 700;
+      color: white;
+      margin: 12px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .weather-condition-text {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    .local-time-display {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      backdrop-filter: blur(10px);
+    }
+
+    .local-time-display mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Quote Widget */
+
+    /* Quote Widget */
+    .quote-widget {
+      grid-column: span 1;
+      background: linear-gradient(135deg, #FA709A 0%, #FEE140 100%);
+    }
+
+    .quote-widget mat-card-title {
+      color: white;
+    }
+
+    .quote-container {
+      position: relative;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .quote-mark {
+      position: absolute;
+      top: 0;
+      left: 0;
+      font-size: 80px;
+      width: 80px;
+      height: 80px;
+      color: rgba(255, 255, 255, 0.3);
+      transform: rotate(180deg);
+    }
+
+    .quote-text {
+      font-size: 22px;
+      font-style: italic;
+      color: white;
+      line-height: 1.6;
+      margin: 0 0 16px 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .quote-author {
+      font-size: 16px;
+      color: white;
+      font-weight: 600;
+      margin: 0;
+    }
   `]
 })
-export class ProjectsComponent implements OnInit {
-  boards: any[] = [];
-  loading = true;
+export class ProjectsComponent implements OnInit, OnDestroy {
   currentUser: any;
+
+  // Notification properties
+  notificationCount: number = 5;
+  showNotifications: boolean = false;
+  notifications: any[] = [
+    {
+      id: 1,
+      icon: 'campaign',
+      iconColor: '#FF6B6B',
+      title: 'New Company Announcement',
+      message: 'Important policy update has been posted',
+      time: '10 minutes ago',
+      read: false
+    },
+    {
+      id: 2,
+      icon: 'cake',
+      iconColor: '#f5576c',
+      title: 'Birthday Today',
+      message: 'Sarah Johnson from HR is celebrating today!',
+      time: '1 hour ago',
+      read: false
+    },
+    {
+      id: 3,
+      icon: 'group_add',
+      iconColor: '#11998e',
+      title: 'New Employee',
+      message: 'Welcome Michael Brown to the Marketing team',
+      time: '3 hours ago',
+      read: false
+    },
+    {
+      id: 4,
+      icon: 'emoji_events',
+      iconColor: '#FFD700',
+      title: 'Employee of the Month',
+      message: 'Jennifer Smith has been named Employee of the Month',
+      time: '1 day ago',
+      read: false
+    },
+    {
+      id: 5,
+      icon: 'support_agent',
+      iconColor: '#4169e1',
+      title: 'Support Ticket Resolved',
+      message: 'Your IT support ticket #1234 has been resolved',
+      time: '2 days ago',
+      read: false
+    }
+  ];
+
+  // Company Announcements
+  announcements: any[] = [
+    {
+      id: 1,
+      title: 'Year-End Company Meeting',
+      content: 'Join us for the annual company meeting on December 15th at 2 PM in the Main Conference Hall. All employees are required to attend.',
+      date: 'Dec 10, 2024',
+      author: 'Management',
+      priority: 'high'
+    },
+    {
+      id: 2,
+      title: 'New Health Insurance Policy',
+      content: 'We are pleased to announce enhanced health insurance benefits effective January 1st. Check your email for complete details.',
+      date: 'Dec 8, 2024',
+      author: 'HR Department',
+      priority: 'normal'
+    },
+    {
+      id: 3,
+      title: 'Holiday Schedule',
+      content: 'Company will be closed from December 24th to January 2nd. Emergency contacts will be shared via email.',
+      date: 'Dec 5, 2024',
+      author: 'Administration',
+      priority: 'normal'
+    }
+  ];
+
+  // Earliest Employee Today (loaded from database)
+  earlyBirds: any = {
+    hasEmployees: false,
+    earlyBirds: [],
+    lateBirds: [],
+    totalCheckedIn: 0
+  };
+
+  // Hero Card Rotation
+  currentHeroCard: 'newMember' | 'birthday' | 'upcoming' = 'newMember';
+  currentNewMemberIndex: number = 0;
+  currentBirthdayIndex: number = 0;
+  currentUpcomingIndex: number = 0;
+  private heroRotationInterval: any;
+  allEmployees: any[] = [];
+
+  // Weather Card Rotation
+  currentLocationIndex: number = 0;
+  private weatherRotationInterval: any;
+
+  // Employee Spotlight - Removed (replaced by hero card)
+
+  // New Team Members (will be populated from database - recent hires)
+  newMembers: any[] = [];
+
+  // Birthday Announcements (will be populated from database)
+  todayBirthdays: any[] = [];
+
+  upcomingBirthdays: any[] = [];
+
+  // Weather & Time for Locations
+  locations: any[] = [
+    {
+      id: 1,
+      name: 'Main Office',
+      temperature: 24,
+      condition: 'Sunny',
+      weatherIcon: 'wb_sunny',
+      time: '14:35'
+    },
+    {
+      id: 2,
+      name: 'Condom Factory',
+      temperature: 23,
+      condition: 'Partly Cloudy',
+      weatherIcon: 'cloud',
+      time: '14:35'
+    },
+    {
+      id: 3,
+      name: 'Sanitary Pads',
+      temperature: 25,
+      condition: 'Clear',
+      weatherIcon: 'wb_sunny',
+      time: '14:35'
+    },
+    {
+      id: 4,
+      name: 'New Road',
+      temperature: 22,
+      condition: 'Cloudy',
+      weatherIcon: 'cloud',
+      time: '14:35'
+    },
+    {
+      id: 5,
+      name: 'Cape Town',
+      temperature: 21,
+      condition: 'Windy',
+      weatherIcon: 'air',
+      time: '14:35'
+    },
+    {
+      id: 6,
+      name: 'Brionkhorspruit',
+      temperature: 26,
+      condition: 'Hot',
+      weatherIcon: 'wb_sunny',
+      time: '14:35'
+    },
+    {
+      id: 7,
+      name: 'Port Elizabeth',
+      temperature: 20,
+      condition: 'Mild',
+      weatherIcon: 'cloud',
+      time: '14:35'
+    },
+    {
+      id: 8,
+      name: 'Logistics',
+      temperature: 24,
+      condition: 'Clear',
+      weatherIcon: 'wb_sunny',
+      time: '14:35'
+    }
+  ];
+
+  // Daily Quote
+  dailyQuote: any = {
+    text: 'Success is not final, failure is not fatal: it is the courage to continue that counts.',
+    author: 'Winston Churchill'
+  };
 
   constructor(
     private apiService: ApiService,
@@ -219,38 +1290,230 @@ export class ProjectsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadAllBoards();
+    // Load earliest employee from database
+    this.loadEarliestEmployee();
+
+    // Load employees and populate hero card data
+    this.loadEmployeesForHeroCard();
+
+    // Start hero card rotation
+    this.startHeroRotation();
+
+    // Start weather card rotation
+    this.startWeatherRotation();
+
+    // Close notifications dropdown when clicking outside
+    document.addEventListener('click', () => {
+      this.showNotifications = false;
+    });
   }
 
-  loadAllBoards(): void {
-    this.loading = true;
-    // Get all departments first
-    this.apiService.getDepartments().subscribe({
-      next: (departments) => {
-        // For each department, get its boards
-        const boardPromises = departments.map(dept =>
-          this.apiService.getDepartment(dept.departmentId).toPromise()
-        );
+  ngOnDestroy(): void {
+    // Clear rotation intervals
+    if (this.heroRotationInterval) {
+      clearInterval(this.heroRotationInterval);
+    }
+    if (this.weatherRotationInterval) {
+      clearInterval(this.weatherRotationInterval);
+    }
+  }
 
-        Promise.all(boardPromises).then(results => {
-          this.boards = results.flatMap(dept =>
-            (dept as any)?.boards?.map((board: any) => ({
-              ...board,
-              departmentName: (dept as any)?.name
-            })) || []
-          );
-          this.loading = false;
-        });
+  // Hero Card Rotation
+  startHeroRotation(): void {
+    this.heroRotationInterval = setInterval(() => {
+      this.rotateHeroCard();
+    }, 5000); // Rotate every 5 seconds
+  }
+
+  rotateHeroCard(): void {
+    // Determine which cards have content
+    const hasNewMembers = this.newMembers.length > 0;
+    const hasTodayBirthdays = this.todayBirthdays.length > 0;
+    const hasUpcomingBirthdays = this.upcomingBirthdays.length > 0;
+
+    // Current card logic
+    if (this.currentHeroCard === 'newMember') {
+      if (hasNewMembers && this.currentNewMemberIndex < this.newMembers.length - 1) {
+        // Show next new member
+        this.currentNewMemberIndex++;
+      } else if (hasTodayBirthdays) {
+        // Switch to birthday
+        this.currentHeroCard = 'birthday';
+        this.currentBirthdayIndex = 0;
+      } else if (hasUpcomingBirthdays) {
+        // Switch to upcoming
+        this.currentHeroCard = 'upcoming';
+        this.currentUpcomingIndex = 0;
+      } else {
+        // Loop back to first new member
+        this.currentNewMemberIndex = 0;
+      }
+    } else if (this.currentHeroCard === 'birthday') {
+      if (hasTodayBirthdays && this.currentBirthdayIndex < this.todayBirthdays.length - 1) {
+        // Show next birthday
+        this.currentBirthdayIndex++;
+      } else if (hasUpcomingBirthdays) {
+        // Switch to upcoming
+        this.currentHeroCard = 'upcoming';
+        this.currentUpcomingIndex = 0;
+      } else if (hasNewMembers) {
+        // Switch back to new members
+        this.currentHeroCard = 'newMember';
+        this.currentNewMemberIndex = 0;
+      } else {
+        // Loop back to first birthday
+        this.currentBirthdayIndex = 0;
+      }
+    } else if (this.currentHeroCard === 'upcoming') {
+      if (hasUpcomingBirthdays && this.currentUpcomingIndex < this.upcomingBirthdays.length - 1) {
+        // Show next upcoming
+        this.currentUpcomingIndex++;
+      } else if (hasNewMembers) {
+        // Switch back to new members
+        this.currentHeroCard = 'newMember';
+        this.currentNewMemberIndex = 0;
+      } else if (hasTodayBirthdays) {
+        // Switch to birthday
+        this.currentHeroCard = 'birthday';
+        this.currentBirthdayIndex = 0;
+      } else {
+        // Loop back to first upcoming
+        this.currentUpcomingIndex = 0;
+      }
+    }
+  }
+
+  // Weather Card Rotation
+  startWeatherRotation(): void {
+    this.weatherRotationInterval = setInterval(() => {
+      this.rotateWeatherCard();
+    }, 4000); // Rotate every 4 seconds
+  }
+
+  rotateWeatherCard(): void {
+    if (this.locations.length > 0) {
+      this.currentLocationIndex = (this.currentLocationIndex + 1) % this.locations.length;
+    }
+  }
+
+  // Load early birds who clocked in today
+  loadEarliestEmployee(): void {
+    this.apiService.getEarliestEmployeeToday().subscribe({
+      next: (data) => {
+        console.log('Early birds data:', data);
+        this.earlyBirds = data;
       },
       error: (error) => {
-        console.error('Error loading boards:', error);
-        this.loading = false;
+        console.error('Error loading early birds:', error);
+        // Keep default state showing "no check-ins yet"
       }
     });
   }
 
-  viewBoard(boardId: number): void {
-    this.router.navigate(['/board', boardId]);
+  // Load employees from database and populate hero card data
+  loadEmployeesForHeroCard(): void {
+    this.apiService.getEmployees().subscribe({
+      next: (employees) => {
+        console.log('Loaded employees:', employees);
+        this.allEmployees = employees;
+
+        // Get recent hires (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        this.newMembers = employees
+          .filter(emp => new Date(emp.hireDate) >= thirtyDaysAgo)
+          .sort((a, b) => new Date(b.hireDate).getTime() - new Date(a.hireDate).getTime())
+          .slice(0, 5)
+          .map(emp => ({
+            id: emp.employeeId,
+            name: emp.fullName,
+            role: emp.position,
+            department: emp.department,
+            startDate: this.formatDate(emp.hireDate),
+            photoBase64: emp.photoBase64
+          }));
+
+        // For demo: Use random employees for birthdays
+        const shuffled = [...employees].sort(() => 0.5 - Math.random());
+
+        // Today's birthdays (using random 2-3 employees)
+        this.todayBirthdays = shuffled.slice(0, 2).map(emp => ({
+          id: emp.employeeId,
+          name: emp.fullName,
+          department: emp.department,
+          photoBase64: emp.photoBase64
+        }));
+
+        // Upcoming birthdays (using random 4 employees)
+        const today = new Date();
+        this.upcomingBirthdays = shuffled.slice(2, 6).map((emp, index) => {
+          const futureDate = new Date(today);
+          futureDate.setDate(today.getDate() + index + 1);
+          return {
+            id: emp.employeeId,
+            name: emp.fullName,
+            department: emp.department,
+            date: this.formatUpcomingDate(futureDate),
+            photoBase64: emp.photoBase64
+          };
+        });
+
+        console.log('New members:', this.newMembers);
+        console.log('Today birthdays:', this.todayBirthdays);
+        console.log('Upcoming birthdays:', this.upcomingBirthdays);
+      },
+      error: (error) => {
+        console.error('Error loading employees:', error);
+      }
+    });
+  }
+
+  formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  }
+
+  formatUpcomingDate(date: Date): string {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+      return date.toLocaleDateString('en-US', options);
+    }
+  }
+
+  // Notification methods
+  toggleNotifications(event: Event): void {
+    event.stopPropagation();
+    this.showNotifications = !this.showNotifications;
+  }
+
+  markAsRead(notificationId: number): void {
+    const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification) {
+      notification.read = true;
+      this.updateNotificationCount();
+    }
+  }
+
+  markAllAsRead(): void {
+    this.notifications.forEach(n => n.read = true);
+    this.updateNotificationCount();
+  }
+
+  updateNotificationCount(): void {
+    this.notificationCount = this.notifications.filter(n => !n.read).length;
+  }
+
+  viewAllNotifications(): void {
+    this.showNotifications = false;
+    console.log('View all notifications');
   }
 
   logout(): void {

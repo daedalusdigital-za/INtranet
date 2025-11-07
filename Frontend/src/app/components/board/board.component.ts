@@ -28,17 +28,29 @@ import { Subscription } from 'rxjs';
   ],
   template: `
     <mat-toolbar color="primary">
-      <span style="font-size: 20px; font-weight: 600;">Company Intranet</span>
+      <span style="font-size: 20px; font-weight: 600;">Promed Intranet</span>
       <span style="margin: 0 32px;"></span>
 
       <button mat-button routerLink="/dashboard">
         <mat-icon>home</mat-icon> Home
       </button>
+      <button mat-button routerLink="/crm">
+        <mat-icon>people_outline</mat-icon> CRM
+      </button>
       <button mat-button routerLink="/departments">
         <mat-icon>business</mat-icon> Project Management
       </button>
       <button mat-button routerLink="/people">
-        <mat-icon>people</mat-icon> People
+        <mat-icon>people</mat-icon> Human Resource
+      </button>
+      <button mat-button routerLink="/stock-management">
+        <mat-icon>inventory</mat-icon> Stock Management
+      </button>
+      <button mat-button routerLink="/documents">
+        <mat-icon>folder</mat-icon> Documents
+      </button>
+      <button mat-button routerLink="/support-ticket">
+        <mat-icon>support_agent</mat-icon> Support Ticket
       </button>
 
       <span class="spacer"></span>
@@ -47,7 +59,7 @@ import { Subscription } from 'rxjs';
         <mat-icon>search</mat-icon>
       </button>
 
-      <span style="margin-right: 16px; font-weight: 500;">{{ board?.title || 'Loading...' }}</span>
+      <span style="margin-right: 16px; font-weight: 500;">{{ currentUser?.name }} ({{ currentUser?.role }})</span>
       <button mat-icon-button (click)="logout()">
         <mat-icon>logout</mat-icon>
       </button>
@@ -316,6 +328,7 @@ import { Subscription } from 'rxjs';
 export class BoardComponent implements OnInit, OnDestroy {
   board?: Board;
   departmentId: number = 0;
+  currentUser: any;
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -325,7 +338,9 @@ export class BoardComponent implements OnInit, OnDestroy {
     private signalRService: SignalRService,
     private authService: AuthService,
     private dialog: MatDialog
-  ) {}
+  ) {
+    this.currentUser = this.authService.currentUserValue;
+  }
 
   ngOnInit(): void {
     this.departmentId = Number(this.route.snapshot.paramMap.get('id'));

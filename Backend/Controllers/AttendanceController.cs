@@ -47,7 +47,7 @@ namespace ProjectTracker.API.Controllers
             var result = employees.Select(e =>
             {
                 var hasAttendance = attendanceLookup.TryGetValue(e.EmpId, out var attendance);
-                var timeIn = hasAttendance ? attendance.TimeIn : null;
+                var timeIn = hasAttendance && attendance != null ? attendance.TimeIn : null;
                 var isLate = hasAttendance && timeIn.HasValue && timeIn.Value > workStartTime;
                 
                 return new
@@ -65,9 +65,9 @@ namespace ProjectTracker.API.Controllers
                     shiftEndTime = "16:00",
                     photoBase64 = e.Photo != null ? Convert.ToBase64String(e.Photo) : null,
                     isActive = true,
-                    status = hasAttendance ? (attendance.Status ?? "Absent") : "Absent",
+                    status = hasAttendance && attendance != null ? (attendance.Status ?? "Absent") : "Absent",
                     timeIn = timeIn,
-                    timeOut = hasAttendance ? attendance.TimeOut : null,
+                    timeOut = hasAttendance && attendance != null ? attendance.TimeOut : null,
                     isLate = isLate,
                     lateMinutes = isLate && timeIn.HasValue 
                         ? (int)(timeIn.Value.ToTimeSpan() - workStartTime.ToTimeSpan()).TotalMinutes 
@@ -415,6 +415,95 @@ namespace ProjectTracker.API.Controllers
                 return NotFound();
 
             return Ok(employee);
+        }
+
+        // GET: api/attendance/earliest-today
+        [HttpGet("earliest-today")]
+        public async Task<ActionResult<object>> GetEarliestEmployeesToday()
+        {
+            // Use local date instead of UTC to match database dates
+            var today = DateTime.Now.Date;
+            
+            // Get all check-ins from today
+            var allAttendance = await _context.AttendanceRecords
+                .Where(a => a.Date != null && a.TimeIn != null)
+                .ToListAsync();
+
+            // Filter in memory to handle date comparison properly
+            var todayAttendance = allAttendance
+                .Where(a => a.Date!.Value.Date == today)
+                .OrderBy(a => a.TimeIn)
+                .ToList();
+
+            if (todayAttendance.Count == 0)
+            {
+                // No one has clocked in today yet
+                return Ok(new
+                {
+                    hasEmployees = false,
+                    earlyBirds = new List<object>(),
+                    lateBirds = new List<object>(),
+                    message = "No employees have clocked in today yet"
+                });
+            }
+
+            // Get top 2 earliest and 2 latest
+            var earliest2 = todayAttendance.Take(2).ToList();
+            var latest2 = todayAttendance.Count > 2 
+                ? todayAttendance.Skip(Math.Max(0, todayAttendance.Count - 2)).ToList()
+                : new List<AttendanceRecord>();
+
+            // Get employee details
+            var employeeIds = todayAttendance.Select(a => a.EmpID).Distinct().ToList();
+            var employees = await _context.EmpRegistrations
+                .Where(e => employeeIds.Contains(e.EmpId))
+                .ToListAsync();
+
+            // Build early birds list
+            var earlyBirdsList = earliest2.Select(attendance =>
+            {
+                var employee = employees.FirstOrDefault(e => e.EmpId == attendance.EmpID);
+                if (employee == null) return null;
+
+                var timeInValue = attendance.TimeIn!.Value;
+                
+                return new
+                {
+                    employeeId = employee.EmpId,
+                    fullName = (employee.Name + " " + employee.LastName).Trim(),
+                    photoBase64 = employee.Photo != null ? Convert.ToBase64String(employee.Photo) : null,
+                    timeIn = timeInValue.ToString("HH:mm")
+                };
+            })
+            .Where(e => e != null)
+            .ToList();
+
+            // Build late birds list
+            var lateBirdsList = latest2.Select(attendance =>
+            {
+                var employee = employees.FirstOrDefault(e => e.EmpId == attendance.EmpID);
+                if (employee == null) return null;
+
+                var timeInValue = attendance.TimeIn!.Value;
+                
+                return new
+                {
+                    employeeId = employee.EmpId,
+                    fullName = (employee.Name + " " + employee.LastName).Trim(),
+                    photoBase64 = employee.Photo != null ? Convert.ToBase64String(employee.Photo) : null,
+                    timeIn = timeInValue.ToString("HH:mm")
+                };
+            })
+            .Where(e => e != null)
+            .ToList();
+
+            return Ok(new
+            {
+                hasEmployees = true,
+                earlyBirds = earlyBirdsList,
+                lateBirds = lateBirdsList,
+                totalCheckedIn = todayAttendance.Count
+            });
         }
     }
 }

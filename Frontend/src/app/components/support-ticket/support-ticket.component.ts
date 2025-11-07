@@ -11,7 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 
 interface SupportTicket {
@@ -38,7 +38,10 @@ interface SupportTicket {
     MatIconModule,
     MatChipsModule,
     MatDividerModule,
-    MatDialogModule
+    MatDialogModule,
+    MatSelectModule,
+    MatFormFieldModule,
+    FormsModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -56,6 +59,9 @@ interface SupportTicket {
       </button>
       <button mat-button routerLink="/people">
         <mat-icon>people</mat-icon> Human Resource
+      </button>
+      <button mat-button routerLink="/stock-management">
+        <mat-icon>inventory</mat-icon> Stock Management
       </button>
       <button mat-button routerLink="/documents">
         <mat-icon>folder</mat-icon> Documents
@@ -78,15 +84,29 @@ interface SupportTicket {
 
     <div class="support-container">
       <div class="header-section">
-        <h1>
-          <mat-icon>support_agent</mat-icon>
-          Support Ticket System
-        </h1>
-        <p class="subtitle">Submit and track your support requests</p>
-        <button mat-raised-button color="primary" class="create-ticket-btn" (click)="openCreateTicketDialog()">
-          <mat-icon>add</mat-icon>
-          Create New Ticket
-        </button>
+        <div class="header-left">
+          <h1>
+            <mat-icon>support_agent</mat-icon>
+            Support Ticket System
+          </h1>
+          <p class="subtitle">Submit and track your support requests</p>
+        </div>
+        <div class="header-right">
+          <mat-form-field appearance="outline" class="date-filter">
+            <mat-label>Time Period</mat-label>
+            <mat-select [(value)]="selectedDateRange" (selectionChange)="onDateRangeChange()">
+              <mat-option value="today">Today</mat-option>
+              <mat-option value="7days">Last 7 Days</mat-option>
+              <mat-option value="30days">Last 30 Days</mat-option>
+              <mat-option value="90days">Last 90 Days</mat-option>
+            </mat-select>
+            <mat-icon matPrefix>date_range</mat-icon>
+          </mat-form-field>
+          <button mat-raised-button color="primary" class="create-ticket-btn" (click)="openCreateTicketDialog()">
+            <mat-icon>add</mat-icon>
+            Create New Ticket
+          </button>
+        </div>
       </div>
 
       <!-- Statistics Cards -->
@@ -217,13 +237,47 @@ interface SupportTicket {
 
     .header-section {
       margin-bottom: 32px;
-      text-align: center;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .header-left {
+      flex: 1;
+      text-align: left;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .date-filter {
+      min-width: 200px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 8px;
+      padding: 0;
+    }
+
+    .date-filter ::ng-deep .mat-mdc-form-field-infix {
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+      min-height: 40px !important;
+    }
+
+    .date-filter ::ng-deep .mat-mdc-text-field-wrapper {
+      padding: 0 8px !important;
+    }
+
+    .date-filter ::ng-deep .mdc-notched-outline {
+      display: none !important;
     }
 
     h1 {
       display: flex;
       align-items: center;
-      justify-content: center;
       gap: 12px;
       color: white;
       margin: 0 0 8px 0;
@@ -529,8 +583,34 @@ export class SupportTicketComponent implements OnInit {
   averageResponseTime: string = '2.5 hrs';
   resolutionRate: number = 0;
 
-  // Sample data for tickets
-  openTickets: SupportTicket[] = [
+  // Date filter
+  selectedDateRange: string = 'today';
+
+  // All tickets storage
+  allOpenTickets: SupportTicket[] = [];
+  allClosedTickets: SupportTicket[] = [];
+
+  // Filtered tickets for display
+  openTickets: SupportTicket[] = [];
+  closedTickets: SupportTicket[] = [];
+
+  constructor(
+    private authService: AuthService,
+    private router: Router,
+    private dialog: MatDialog
+  ) {
+    this.currentUser = this.authService.currentUserValue;
+    this.initializeSampleData();
+  }
+
+  ngOnInit(): void {
+    this.filterTicketsByDateRange();
+    this.calculateStatistics();
+    console.log('Support Ticket Component initialized');
+  }
+
+  initializeSampleData(): void {
+    this.allOpenTickets = [
     {
       id: 1001,
       title: 'Email System Not Working',
@@ -563,7 +643,7 @@ export class SupportTicketComponent implements OnInit {
     }
   ];
 
-  closedTickets: SupportTicket[] = [
+    this.allClosedTickets = [
     {
       id: 998,
       title: 'Password Reset Request',
@@ -597,19 +677,42 @@ export class SupportTicketComponent implements OnInit {
       closedDate: new Date('2025-10-30'),
       category: 'Access'
     }
-  ];
-
-  constructor(
-    private authService: AuthService,
-    private router: Router,
-    private dialog: MatDialog
-  ) {
-    this.currentUser = this.authService.currentUserValue;
+    ];
   }
 
-  ngOnInit(): void {
+  onDateRangeChange(): void {
+    this.filterTicketsByDateRange();
     this.calculateStatistics();
-    console.log('Support Ticket Component initialized');
+  }
+
+  filterTicketsByDateRange(): void {
+    const now = new Date();
+    let cutoffDate: Date;
+
+    switch (this.selectedDateRange) {
+      case 'today':
+        cutoffDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case '7days':
+        cutoffDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+        break;
+      case '30days':
+        cutoffDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+        break;
+      case '90days':
+        cutoffDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+        break;
+      default:
+        cutoffDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    }
+
+    this.openTickets = this.allOpenTickets.filter(ticket =>
+      ticket.submittedDate >= cutoffDate
+    );
+
+    this.closedTickets = this.allClosedTickets.filter(ticket =>
+      ticket.submittedDate >= cutoffDate
+    );
   }
 
   openCreateTicketDialog(): void {
@@ -620,7 +723,7 @@ export class SupportTicketComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        // Add the new ticket to openTickets
+        // Add the new ticket to both allOpenTickets and openTickets
         const newTicket: SupportTicket = {
           id: 1000 + this.totalTickets + 1,
           title: result.title,
@@ -631,6 +734,7 @@ export class SupportTicketComponent implements OnInit {
           submittedDate: new Date(),
           category: result.category
         };
+        this.allOpenTickets.unshift(newTicket);
         this.openTickets.unshift(newTicket);
         this.calculateStatistics();
       }

@@ -7,6 +7,7 @@ import { PeopleComponent } from './components/people/people.component';
 import { SupportTicketComponent } from './components/support-ticket/support-ticket.component';
 import { DocumentsComponent } from './components/documents/documents.component';
 import { CrmComponent } from './components/crm/crm.component';
+import { StockManagementComponent } from './components/stock-management/stock-management.component';
 import { authGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
@@ -17,6 +18,7 @@ export const routes: Routes = [
   { path: 'departments', component: DashboardComponent, canActivate: [authGuard] },
   { path: 'projects', redirectTo: '/dashboard', pathMatch: 'full' },
   { path: 'people', component: PeopleComponent, canActivate: [authGuard] },
+  { path: 'stock-management', component: StockManagementComponent, canActivate: [authGuard] },
   { path: 'support-ticket', component: SupportTicketComponent, canActivate: [authGuard] },
   { path: 'documents', component: DocumentsComponent, canActivate: [authGuard] },
   { path: 'board/:id', component: BoardComponent, canActivate: [authGuard] },
