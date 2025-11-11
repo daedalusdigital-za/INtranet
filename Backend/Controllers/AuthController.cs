@@ -19,8 +19,12 @@ namespace ProjectTracker.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
+            // Trim whitespace from input
+            var email = loginDto.Email?.Trim() ?? "";
+            var password = loginDto.Password?.Trim() ?? "";
+
             // Hardcoded login - bypass database
-            if (loginDto.Email == "welcome@promedtechnologies.co.za" && loginDto.Password == "Kingsland")
+            if (email == "welcome@promedtechnologies.co.za" && password == "Kingsland")
             {
                 var result = new
                 {

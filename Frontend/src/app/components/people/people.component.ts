@@ -16,6 +16,7 @@ import { MatDialog, MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angu
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
+import { MatMenuModule } from '@angular/material/menu';
 import { AuthService } from '../../services/auth.service';
 import { AttendanceService } from '../../services/attendance.service';
 import { Employee, AttendanceMetrics } from '../../models/attendance.model';
@@ -49,7 +50,8 @@ const environment = {
     MatDialogModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule
+    MatNativeDateModule,
+    MatMenuModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -58,6 +60,9 @@ const environment = {
 
       <button mat-button routerLink="/dashboard">
         <mat-icon>home</mat-icon> Home
+      </button>
+      <button mat-button routerLink="/calendar">
+        <mat-icon>calendar_month</mat-icon> Calendar
       </button>
       <button mat-button routerLink="/crm">
         <mat-icon>people_outline</mat-icon> CRM
@@ -128,10 +133,23 @@ const environment = {
         </div>
       }
 
-      <span style="margin-right: 16px;">{{ currentUser?.name }} ({{ currentUser?.role }})</span>
-      <button mat-icon-button (click)="logout()">
-        <mat-icon>logout</mat-icon>
+      <button mat-icon-button [matMenuTriggerFor]="menu">
+        <mat-icon>account_circle</mat-icon>
       </button>
+      <mat-menu #menu="matMenu">
+        <button mat-menu-item>
+          <mat-icon>person</mat-icon>
+          <span>Profile</span>
+        </button>
+        <button mat-menu-item>
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </mat-menu>
     </mat-toolbar>
 
     <div class="attendance-container">
@@ -1742,7 +1760,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
   lastUpdate = new Date();
   currentUser: any;
   searchQuery: string = '';
-  notificationCount: number = 5;
+  notificationCount: number = 3;
   showNotifications: boolean = false;
   notifications: any[] = [
     {

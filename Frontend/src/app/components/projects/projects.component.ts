@@ -11,6 +11,7 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatMenuModule } from '@angular/material/menu';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -28,6 +29,7 @@ import { AuthService } from '../../services/auth.service';
     MatProgressSpinnerModule,
     MatChipsModule,
     MatBadgeModule,
+    MatMenuModule,
     MatTooltipModule,
     MatFormFieldModule,
     MatInputModule,
@@ -40,6 +42,9 @@ import { AuthService } from '../../services/auth.service';
 
       <button mat-button routerLink="/dashboard">
         <mat-icon>home</mat-icon> Home
+      </button>
+      <button mat-button routerLink="/calendar">
+        <mat-icon>calendar_month</mat-icon> Calendar
       </button>
       <button mat-button routerLink="/crm">
         <mat-icon>people_outline</mat-icon> CRM
@@ -110,10 +115,23 @@ import { AuthService } from '../../services/auth.service';
         </div>
       }
 
-      <span style="margin-right: 16px;">{{ currentUser?.name }} ({{ currentUser?.role }})</span>
-      <button mat-icon-button (click)="logout()" matTooltip="Logout">
-        <mat-icon>logout</mat-icon>
+      <button mat-icon-button [matMenuTriggerFor]="menu">
+        <mat-icon>account_circle</mat-icon>
       </button>
+      <mat-menu #menu="matMenu">
+        <button mat-menu-item>
+          <mat-icon>person</mat-icon>
+          <span>Profile</span>
+        </button>
+        <button mat-menu-item>
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </mat-menu>
     </mat-toolbar>
 
     <div class="dashboard-container">
@@ -125,39 +143,53 @@ import { AuthService } from '../../services/auth.service';
         <!-- Company Announcements -->
         <mat-card class="widget announcement-widget">
           <mat-card-header>
-            <div class="widget-icon" style="background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%);">
+            <div class="widget-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
               <mat-icon>campaign</mat-icon>
             </div>
             <mat-card-title>Company Announcements</mat-card-title>
+            <mat-card-subtitle style="color: #666; margin-top: 4px;">Latest updates and news</mat-card-subtitle>
           </mat-card-header>
           <mat-card-content>
             <div class="announcements-list">
               @for (announcement of announcements; track announcement.id) {
-                <div class="announcement-item" [class.high-priority]="announcement.priority === 'high'">
-                  <div class="announcement-main">
-                    <h4>{{ announcement.title }}</h4>
-                    <p>{{ announcement.content }}</p>
+                <div class="announcement-item" [class.high-priority]="announcement.priority === 'high'" [class.normal-priority]="announcement.priority === 'normal'">
+                  <div class="announcement-icon-badge" [class.high-priority-badge]="announcement.priority === 'high'">
+                    <mat-icon>{{ announcement.priority === 'high' ? 'priority_high' : 'info' }}</mat-icon>
                   </div>
-                  <div class="announcement-meta">
-                    <span class="date">
-                      <mat-icon>calendar_today</mat-icon>
-                      {{ announcement.date }}
-                    </span>
-                    <span class="author">
-                      <mat-icon>person</mat-icon>
-                      {{ announcement.author }}
-                    </span>
-                    @if (announcement.priority === 'high') {
-                      <mat-chip class="priority-chip">Urgent</mat-chip>
-                    }
+                  <div class="announcement-content">
+                    <div class="announcement-header">
+                      <h4>{{ announcement.title }}</h4>
+                      @if (announcement.priority === 'high') {
+                        <mat-chip class="priority-chip urgent-chip">
+                          <mat-icon>bolt</mat-icon>
+                          Urgent
+                        </mat-chip>
+                      } @else {
+                        <mat-chip class="priority-chip normal-chip">
+                          <mat-icon>info_outline</mat-icon>
+                          Info
+                        </mat-chip>
+                      }
+                    </div>
+                    <p class="announcement-text">{{ announcement.content }}</p>
+                    <div class="announcement-meta">
+                      <span class="date">
+                        <mat-icon>event</mat-icon>
+                        {{ announcement.date }}
+                      </span>
+                      <span class="author">
+                        <mat-icon>account_circle</mat-icon>
+                        {{ announcement.author }}
+                      </span>
+                    </div>
                   </div>
                 </div>
               }
             </div>
           </mat-card-content>
           <mat-card-actions>
-            <button mat-button color="primary">
-              <mat-icon>arrow_forward</mat-icon>
+            <button mat-raised-button color="primary" style="width: 100%; height: 48px; font-weight: 600; border-radius: 12px;">
+              <mat-icon>visibility</mat-icon>
               View All Announcements
             </button>
           </mat-card-actions>
@@ -586,73 +618,193 @@ import { AuthService } from '../../services/auth.service';
     /* Company Announcements Widget */
     .announcement-widget {
       grid-column: span 2;
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+    }
+
+    .announcement-widget mat-card-header {
+      margin-bottom: 24px;
     }
 
     .announcements-list {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
     }
 
     .announcement-item {
-      padding: 16px;
-      background: #f8f9fa;
-      border-radius: 12px;
-      border-left: 4px solid #4169e1;
-      transition: all 0.2s;
+      display: flex;
+      gap: 16px;
+      padding: 20px;
+      background: white;
+      border-radius: 16px;
+      border: 2px solid transparent;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .announcement-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s;
     }
 
     .announcement-item.high-priority {
-      border-left-color: #FF6B6B;
-      background: #fff5f5;
+      background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+      border-color: rgba(255, 107, 107, 0.2);
+    }
+
+    .announcement-item.high-priority::before {
+      background: linear-gradient(180deg, #FF6B6B 0%, #FF4757 100%);
+    }
+
+    .announcement-item.normal-priority {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+
+    .announcement-item.normal-priority::before {
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
     }
 
     .announcement-item:hover {
-      transform: translateX(4px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      border-color: rgba(102, 126, 234, 0.3);
     }
 
-    .announcement-main h4 {
-      margin: 0 0 8px 0;
-      color: #333;
-      font-size: 16px;
-      font-weight: 600;
+    .announcement-item:hover::before {
+      width: 8px;
     }
 
-    .announcement-main p {
+    .announcement-icon-badge {
+      flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .announcement-icon-badge mat-icon {
+      color: white;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .announcement-icon-badge.high-priority-badge {
+      background: linear-gradient(135deg, #FF6B6B 0%, #FF4757 100%);
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    .announcement-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .announcement-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .announcement-header h4 {
       margin: 0;
-      color: #666;
+      color: #1a1a1a;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.4;
+      flex: 1;
+    }
+
+    .announcement-text {
+      margin: 0;
+      color: #4a5568;
       font-size: 14px;
-      line-height: 1.5;
+      line-height: 1.7;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
 
     .announcement-meta {
       display: flex;
-      gap: 16px;
-      margin-top: 12px;
+      gap: 20px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .announcement-meta span {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       font-size: 13px;
-      color: #999;
+      color: #64748b;
+      font-weight: 500;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 8px;
     }
 
     .announcement-meta mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      opacity: 0.8;
     }
 
     .priority-chip {
-      background: #FF6B6B !important;
+      font-size: 12px !important;
+      height: 28px !important;
+      padding: 0 12px !important;
+      font-weight: 600 !important;
+      border-radius: 8px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+    }
+
+    .priority-chip mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      margin: 0 !important;
+    }
+
+    .urgent-chip {
+      background: linear-gradient(135deg, #FF6B6B 0%, #FF4757 100%) !important;
       color: white !important;
-      font-size: 11px;
-      height: 24px;
-      padding: 0 8px;
+      box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    }
+
+    .normal-chip {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+      color: white !important;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
     }
 
     /* Early Birds Today Widget */
@@ -1099,7 +1251,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   currentUser: any;
 
   // Notification properties
-  notificationCount: number = 5;
+  notificationCount: number = 3;
   showNotifications: boolean = false;
   notifications: any[] = [
     {

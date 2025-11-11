@@ -24,7 +24,7 @@ export class ChatbotComponent implements OnInit {
 
   ngOnInit(): void {
     // Welcome message
-    this.addBotMessage('Hello! 👋 I\'m your PharmaCare assistant. How can I help you today?');
+    this.addBotMessage('Hello! I\'m Deskie your AI assistant. How can I help you?');
   }
 
   toggleChat(): void {

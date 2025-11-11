@@ -6,9 +6,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatMenuModule } from '@angular/material/menu';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -29,10 +33,14 @@ import { Department } from '../../models/models';
     MatToolbarModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatDialogModule,
     MatBadgeModule,
     MatTooltipModule,
-    MatChipsModule
+    MatChipsModule,
+    MatSelectModule,
+    MatButtonToggleModule,
+    MatMenuModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -41,6 +49,9 @@ import { Department } from '../../models/models';
 
       <button mat-button routerLink="/dashboard">
         <mat-icon>home</mat-icon> Home
+      </button>
+      <button mat-button routerLink="/calendar">
+        <mat-icon>calendar_month</mat-icon> Calendar
       </button>
       <button mat-button routerLink="/crm">
         <mat-icon>people_outline</mat-icon> CRM
@@ -111,59 +122,322 @@ import { Department } from '../../models/models';
         </div>
       }
 
-      <span style="margin-right: 16px;">{{ currentUser?.name }} ({{ currentUser?.role }})</span>
-      <button mat-icon-button (click)="logout()" matTooltip="Logout">
-        <mat-icon>logout</mat-icon>
+      <button mat-icon-button [matMenuTriggerFor]="menu">
+        <mat-icon>account_circle</mat-icon>
       </button>
+      <mat-menu #menu="matMenu">
+        <button mat-menu-item>
+          <mat-icon>person</mat-icon>
+          <span>Profile</span>
+        </button>
+        <button mat-menu-item>
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </mat-menu>
     </mat-toolbar>
 
     <div class="dashboard-container">
-      <h1>Welcome to Promed Intranet</h1>
+      <h1>Project Management</h1>
 
-      <!-- Project Management Departments Section -->
-      <div class="departments-section">
-        <h2 class="section-title">
-          <mat-icon>business</mat-icon>
-          Project Management - Departments
-        </h2>
+      <!-- Filters and View Controls -->
+      <div class="controls-bar">
+        <div class="filters">
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Department</mat-label>
+            <mat-select [(value)]="selectedDepartment" (selectionChange)="filterProjects()">
+              <mat-option value="all">All Departments</mat-option>
+              @for (dept of departments; track dept.departmentId) {
+                <mat-option [value]="dept.departmentId">{{ dept.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
 
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Workflow Stage</mat-label>
+            <mat-select [(value)]="selectedWorkflow" (selectionChange)="filterProjects()">
+              <mat-option value="all">All Stages</mat-option>
+              <mat-option value="planning">Planning</mat-option>
+              <mat-option value="in-progress">In Progress</mat-option>
+              <mat-option value="testing">Testing</mat-option>
+              <mat-option value="deployment">Deployment</mat-option>
+              <mat-option value="completed">Completed</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Status</mat-label>
+            <mat-select [(value)]="selectedStatus" (selectionChange)="filterProjects()">
+              <mat-option value="all">All Status</mat-option>
+              <mat-option value="on-track">On Track</mat-option>
+              <mat-option value="at-risk">At Risk</mat-option>
+              <mat-option value="delayed">Delayed</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="view-controls">
+          <mat-button-toggle-group [(value)]="currentView" (change)="changeView()">
+            <mat-button-toggle value="grid" matTooltip="Grid View">
+              <mat-icon>grid_view</mat-icon>
+            </mat-button-toggle>
+            <mat-button-toggle value="list" matTooltip="List View">
+              <mat-icon>view_list</mat-icon>
+            </mat-button-toggle>
+            <mat-button-toggle value="kanban" matTooltip="Kanban View">
+              <mat-icon>view_kanban</mat-icon>
+            </mat-button-toggle>
+            <mat-button-toggle value="timeline" matTooltip="Timeline View">
+              <mat-icon>timeline</mat-icon>
+            </mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+      </div>
+
+      <!-- Project Management Section -->
+      <div class="projects-section">
         @if (loading) {
           <div class="loading-spinner">
             <mat-spinner></mat-spinner>
           </div>
         } @else {
-          <div class="departments-grid">
-            @for (dept of departments; track dept.departmentId) {
-              <mat-card class="department-card" (click)="openPasswordDialog(dept)">
-                <mat-card-header>
-                  <mat-card-title>{{ dept.name }}</mat-card-title>
-                  <mat-card-subtitle>{{ dept.managerName }}</mat-card-subtitle>
-                </mat-card-header>
-                <mat-card-content>
-                  <div class="stats">
-                    <div class="stat">
-                      <mat-icon>dashboard</mat-icon>
-                      <span>{{ dept.boardCount }} Boards</span>
+          <!-- Grid View -->
+          @if (currentView === 'grid') {
+            <div class="projects-grid">
+              @for (project of filteredProjects; track project.id) {
+                <mat-card class="project-card" [class]="'project-type-' + project.type">
+                  <mat-card-header>
+                    <div class="project-header">
+                      <div class="project-type-badge" [style.background]="getProjectTypeColor(project.type)">
+                        <mat-icon>{{ getProjectTypeIcon(project.type) }}</mat-icon>
+                      </div>
+                      <div>
+                        <mat-card-title>{{ project.name }}</mat-card-title>
+                        <mat-card-subtitle>{{ project.description }}</mat-card-subtitle>
+                      </div>
                     </div>
-                    <div class="stat">
-                      <mat-icon>people</mat-icon>
-                      <span>{{ dept.userCount }} Users</span>
+                  </mat-card-header>
+
+                  <mat-card-content>
+                    <!-- Workflow Stage -->
+                    <div class="workflow-indicator">
+                      <mat-chip [style.background]="getWorkflowColor(project.workflow)">
+                        {{ project.workflow }}
+                      </mat-chip>
+                      <mat-chip [style.background]="getStatusColor(project.status)">
+                        {{ project.status }}
+                      </mat-chip>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="progress-section">
+                      <div class="progress-header">
+                        <span>Progress</span>
+                        <span class="progress-value">{{ project.progress }}%</span>
+                      </div>
+                      <mat-progress-bar
+                        mode="determinate"
+                        [value]="project.progress"
+                        [color]="getProgressColor(project.progress)">
+                      </mat-progress-bar>
+                    </div>
+
+                    <!-- Resource Tracking -->
+                    <div class="resources">
+                      <div class="resource-item">
+                        <mat-icon>people</mat-icon>
+                        <span>{{ project.teamSize }} members</span>
+                      </div>
+                      <div class="resource-item">
+                        <mat-icon>attach_money</mat-icon>
+                        <span>{{ project.budgetUsed }}% budget</span>
+                      </div>
+                      <div class="resource-item">
+                        <mat-icon>schedule</mat-icon>
+                        <span>{{ project.daysRemaining }} days left</span>
+                      </div>
+                    </div>
+
+                    <!-- Milestones -->
+                    <div class="milestones">
+                      <div class="milestone-header">
+                        <mat-icon>flag</mat-icon>
+                        <span>Milestones: {{ project.milestonesCompleted }}/{{ project.totalMilestones }}</span>
+                      </div>
+                      <div class="milestone-progress">
+                        @for (milestone of [].constructor(project.totalMilestones); track $index) {
+                          <div class="milestone-dot" [class.completed]="$index < project.milestonesCompleted"></div>
+                        }
+                      </div>
+                    </div>
+
+                    <!-- Team Members -->
+                    <div class="team-avatars">
+                      @for (member of project.team; track member) {
+                        <div class="avatar" [matTooltip]="member">
+                          {{ member.charAt(0) }}
+                        </div>
+                      }
+                    </div>
+                  </mat-card-content>
+
+                  <mat-card-actions>
+                    <button mat-button color="primary" (click)="openPasswordDialog(project)">
+                      <mat-icon>dashboard</mat-icon>
+                      View Boards
+                    </button>
+                    <button mat-icon-button [matMenuTriggerFor]="projectMenu">
+                      <mat-icon>more_vert</mat-icon>
+                    </button>
+                    <mat-menu #projectMenu="matMenu">
+                      <button mat-menu-item>
+                        <mat-icon>edit</mat-icon>
+                        <span>Edit Project</span>
+                      </button>
+                      <button mat-menu-item>
+                        <mat-icon>people</mat-icon>
+                        <span>Manage Team</span>
+                      </button>
+                      <button mat-menu-item>
+                        <mat-icon>assessment</mat-icon>
+                        <span>View Reports</span>
+                      </button>
+                    </mat-menu>
+                  </mat-card-actions>
+                </mat-card>
+              }
+            </div>
+          }
+
+          <!-- List View -->
+          @if (currentView === 'list') {
+            <div class="projects-list">
+              @for (project of filteredProjects; track project.id) {
+                <mat-card class="project-list-item">
+                  <div class="list-item-content">
+                    <div class="list-item-main">
+                      <div class="project-type-badge-small" [style.background]="getProjectTypeColor(project.type)">
+                        <mat-icon>{{ getProjectTypeIcon(project.type) }}</mat-icon>
+                      </div>
+                      <div class="list-item-details">
+                        <h3>{{ project.name }}</h3>
+                        <p>{{ project.description }}</p>
+                      </div>
+                    </div>
+
+                    <div class="list-item-meta">
+                      <mat-chip [style.background]="getWorkflowColor(project.workflow)">
+                        {{ project.workflow }}
+                      </mat-chip>
+                      <div class="progress-inline">
+                        <span>{{ project.progress }}%</span>
+                        <mat-progress-bar mode="determinate" [value]="project.progress"></mat-progress-bar>
+                      </div>
+                      <div class="resource-inline">
+                        <span><mat-icon>people</mat-icon> {{ project.teamSize }}</span>
+                        <span><mat-icon>schedule</mat-icon> {{ project.daysRemaining }}d</span>
+                      </div>
+                      <button mat-raised-button color="primary" (click)="openPasswordDialog(project)">
+                        View Boards
+                      </button>
                     </div>
                   </div>
-                </mat-card-content>
-                <mat-card-actions>
-                  <button mat-button color="primary">View Boards</button>
-                </mat-card-actions>
-              </mat-card>
-            }
-          </div>
+                </mat-card>
+              }
+            </div>
+          }
+
+          <!-- Kanban View -->
+          @if (currentView === 'kanban') {
+            <div class="kanban-board">
+              @for (stage of workflowStages; track stage) {
+                <div class="kanban-column">
+                  <div class="column-header">
+                    <h3>{{ stage }}</h3>
+                    <span class="column-count">{{ getProjectsByWorkflow(stage).length }}</span>
+                  </div>
+                  <div class="column-content">
+                    @for (project of getProjectsByWorkflow(stage); track project.id) {
+                      <mat-card class="kanban-card">
+                        <div class="kanban-card-header">
+                          <h4>{{ project.name }}</h4>
+                          <mat-chip [style.background]="getProjectTypeColor(project.type)" class="type-chip-small">
+                            {{ project.type }}
+                          </mat-chip>
+                        </div>
+                        <p class="kanban-description">{{ project.description }}</p>
+                        <div class="kanban-progress">
+                          <span>{{ project.progress }}%</span>
+                          <mat-progress-bar mode="determinate" [value]="project.progress"></mat-progress-bar>
+                        </div>
+                        <div class="kanban-footer">
+                          <div class="team-avatars-small">
+                            @for (member of project.team.slice(0, 3); track member) {
+                              <div class="avatar-small">{{ member.charAt(0) }}</div>
+                            }
+                          </div>
+                          <button mat-icon-button (click)="openPasswordDialog(project)">
+                            <mat-icon>arrow_forward</mat-icon>
+                          </button>
+                        </div>
+                      </mat-card>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Timeline View -->
+          @if (currentView === 'timeline') {
+            <div class="timeline-view">
+              @for (project of filteredProjects; track project.id) {
+                <div class="timeline-item">
+                  <div class="timeline-marker" [style.background]="getStatusColor(project.status)"></div>
+                  <mat-card class="timeline-card">
+                    <div class="timeline-header">
+                      <div>
+                        <h3>{{ project.name }}</h3>
+                        <p>{{ project.description }}</p>
+                      </div>
+                      <mat-chip [style.background]="getWorkflowColor(project.workflow)">
+                        {{ project.workflow }}
+                      </mat-chip>
+                    </div>
+                    <div class="timeline-dates">
+                      <div class="date-item">
+                        <mat-icon>event</mat-icon>
+                        <span>Start: {{ project.startDate }}</span>
+                      </div>
+                      <div class="date-item">
+                        <mat-icon>event</mat-icon>
+                        <span>End: {{ project.endDate }}</span>
+                      </div>
+                      <div class="date-item">
+                        <mat-icon>schedule</mat-icon>
+                        <span>{{ project.daysRemaining }} days remaining</span>
+                      </div>
+                    </div>
+                    <div class="timeline-progress">
+                      <mat-progress-bar mode="determinate" [value]="project.progress"></mat-progress-bar>
+                      <span>{{ project.progress }}% Complete</span>
+                    </div>
+                  </mat-card>
+                </div>
+              }
+            </div>
+          }
         }
 
         @if (currentUser?.role === 'Admin') {
           <div class="admin-actions">
             <button mat-raised-button color="primary" (click)="openCreateDialog()">
               <mat-icon>add</mat-icon>
-              Create New Department
+              Create New Project
             </button>
           </div>
         }
@@ -207,96 +481,680 @@ import { Department } from '../../models/models';
       stroke: #ffffff;
     }
 
-    .departments-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 24px;
-    }
-
-    .department-card {
-      cursor: pointer;
-      transition: all 0.3s ease;
-      background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-      overflow: hidden;
-      position: relative;
-    }
-
-    .department-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
-    }
-
-    .department-card:hover {
-      transform: translateY(-8px) scale(1.02);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-header {
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      background: rgba(255, 255, 255, 0.95);
       padding: 20px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.1) 0%, rgba(65, 105, 225, 0.1) 100%);
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
-    .department-card ::ng-deep .mat-mdc-card-title {
-      font-size: 1.5rem;
-      font-weight: 600;
+    .filters {
+      display: flex;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .filter-field {
+      min-width: 200px;
+    }
+
+    .view-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .view-controls ::ng-deep .mat-button-toggle-group {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .view-controls ::ng-deep .mat-button-toggle {
+      border: none;
+    }
+
+    .view-controls ::ng-deep .mat-button-toggle-checked {
       background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: white;
+    }
+
+    /* Grid View */
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .project-card {
+      transition: all 0.3s ease;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      border-left: 4px solid transparent;
+    }
+
+    .project-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .project-card ::ng-deep .mat-mdc-card-header {
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(0, 0, 139, 0.05) 0%, rgba(65, 105, 225, 0.05) 100%);
+    }
+
+    .project-card-header {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .project-type-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .project-type-badge mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: white;
+    }
+
+    .project-info h3 {
+      margin: 0 0 4px 0;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .project-info p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #666;
+      line-height: 1.4;
+    }
+
+    .workflow-indicator {
+      display: flex;
+      gap: 8px;
+      margin: 16px 0;
+      flex-wrap: wrap;
+    }
+
+    .workflow-indicator mat-chip {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .progress-section {
+      margin: 20px 0;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 8px;
     }
 
-    .department-card ::ng-deep .mat-mdc-card-subtitle {
-      color: #1e90ff;
-      font-size: 0.9rem;
+    .progress-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
     }
 
-    .department-card ::ng-deep .mat-mdc-card-content {
-      padding: 20px;
+    .progress-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #4169e1;
     }
 
-    .stats {
+    .progress-section ::ng-deep .mat-mdc-progress-bar {
+      height: 8px;
+      border-radius: 4px;
+    }
+
+    .resources {
       display: flex;
-      gap: 20px;
-      margin-top: 16px;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin: 16px 0;
     }
 
-    .stat {
+    .resource-item {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.15) 0%, rgba(65, 105, 225, 0.15) 100%);
-      border-radius: 8px;
+      gap: 6px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .resource-item mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #4169e1;
+    }
+
+    .resource-item strong {
+      color: #333;
+      font-weight: 600;
+    }
+
+    .milestones {
+      margin: 16px 0;
+    }
+
+    .milestones-header {
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .milestone-dots {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .milestone-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #e0e0e0;
       transition: all 0.2s ease;
     }
 
-    .stat:hover {
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.25) 0%, rgba(65, 105, 225, 0.25) 100%);
-      transform: scale(1.05);
+    .milestone-dot.completed {
+      background: #4CAF50;
+      box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
     }
 
-    .stat mat-icon {
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-size: 22px;
-      width: 22px;
-      height: 22px;
+    .team-avatars {
+      display: flex;
+      gap: 8px;
+      margin: 16px 0;
+      flex-wrap: wrap;
     }
 
-    .stat span {
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
       font-size: 14px;
-      font-weight: 500;
-      color: #4a5568;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      transition: transform 0.2s ease;
+    }
+
+    .avatar:hover {
+      transform: scale(1.1);
+    }
+
+    .avatar:nth-child(2) {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .avatar:nth-child(3) {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .avatar:nth-child(4) {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .avatar:nth-child(5) {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+      margin-top: 16px;
+    }
+
+    /* List View */
+    .projects-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .project-list-item {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .project-list-item:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: translateX(4px);
+    }
+
+    .list-item-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .list-item-main {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .list-item-main h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .list-item-main p {
+      margin: 4px 0 0 0;
+      font-size: 0.85rem;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-item-meta {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .progress-inline {
+      display: flex;
+      flex-direction: column;
+      min-width: 150px;
+    }
+
+    .progress-inline-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .progress-inline ::ng-deep .mat-mdc-progress-bar {
+      height: 6px;
+      border-radius: 3px;
+      width: 100px;
+    }
+
+    .resource-inline {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .resource-inline div {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .resource-inline mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Kanban View */
+    .kanban-board {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kanban-column {
+      min-width: 320px;
+      max-width: 320px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .column-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .column-header h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #333;
+      text-transform: capitalize;
+    }
+
+    .column-count {
+      background: #e0e0e0;
+      color: #666;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 12px;
+    }
+
+    .column-content {
+      min-height: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .kanban-card {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      cursor: grab;
+      transition: all 0.2s ease;
+      border-left: 3px solid transparent;
+    }
+
+    .kanban-card:hover {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .kanban-card:active {
+      cursor: grabbing;
+    }
+
+    .kanban-card-header {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .kanban-card-header h4 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+    }
+
+    .kanban-type-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .kanban-type-badge mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: white;
+    }
+
+    .kanban-progress {
+      margin: 12px 0;
+    }
+
+    .kanban-progress ::ng-deep .mat-mdc-progress-bar {
+      height: 6px;
+      border-radius: 3px;
+    }
+
+    .kanban-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .team-avatars-small {
+      display: flex;
+      gap: 4px;
+    }
+
+    .avatar-small {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 11px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .avatar-small:nth-child(2) {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .avatar-small:nth-child(3) {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    /* Timeline View */
+    .timeline-view {
+      position: relative;
+      padding-left: 50px;
+      margin-bottom: 24px;
+    }
+
+    .timeline-view::before {
+      content: '';
+      position: absolute;
+      left: 24px;
+      top: 30px;
+      bottom: 30px;
+      width: 3px;
+      background: linear-gradient(180deg, #00008B 0%, #4169e1 100%);
+      border-radius: 2px;
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 32px;
+    }
+
+    .timeline-marker {
+      position: absolute;
+      left: -34px;
+      top: 28px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      border: 4px solid #4169e1;
+      box-shadow: 0 0 0 4px rgba(65, 105, 225, 0.2);
+      z-index: 2;
+    }
+
+    .timeline-marker.on-track {
+      border-color: #4CAF50;
+      box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.2);
+    }
+
+    .timeline-marker.at-risk {
+      border-color: #FF9800;
+      box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.2);
+    }
+
+    .timeline-marker.delayed {
+      border-color: #F44336;
+      box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.2);
+    }
+
+    .timeline-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .timeline-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+      transform: translateX(4px);
+    }
+
+    .timeline-card-header {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .timeline-card-header h3 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+    }
+
+    .timeline-dates {
+      display: flex;
+      gap: 24px;
+      margin: 12px 0;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .date-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .date-item mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #4169e1;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1400px) {
+      .projects-grid {
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .projects-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      }
+
+      .kanban-board {
+        flex-wrap: wrap;
+      }
+
+      .kanban-column {
+        min-width: 280px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .controls-bar {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+      }
+
+      .filters {
+        flex-direction: column;
+      }
+
+      .filter-field {
+        width: 100%;
+      }
+
+      .view-controls {
+        justify-content: center;
+      }
+
+      .projects-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .list-item-content {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .list-item-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .kanban-board {
+        flex-direction: column;
+      }
+
+      .kanban-column {
+        min-width: 100%;
+        max-width: 100%;
+      }
+
+      .timeline-view {
+        padding-left: 40px;
+      }
+
+      .timeline-view::before {
+        left: 20px;
+      }
+
+      .timeline-marker {
+        left: -30px;
+      }
     }
 
     mat-toolbar {
@@ -466,110 +1324,6 @@ import { Department } from '../../models/models';
     .loading-spinner ::ng-deep .mat-progress-spinner circle {
       stroke: #ffffff;
     }
-
-    .departments-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 24px;
-      margin-bottom: 24px;
-    }
-
-    .department-card {
-      cursor: pointer;
-      transition: all 0.3s ease;
-      background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-      overflow: hidden;
-      position: relative;
-    }
-
-    .department-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
-    }
-
-    .department-card:hover {
-      transform: translateY(-8px) scale(1.02);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-header {
-      padding: 20px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.1) 0%, rgba(65, 105, 225, 0.1) 100%);
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-title {
-      font-size: 1.5rem;
-      font-weight: 600;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 8px;
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-subtitle {
-      color: #1e90ff;
-      font-size: 0.9rem;
-    }
-
-    .department-card ::ng-deep .mat-mdc-card-content {
-      padding: 20px;
-    }
-
-    .stats {
-      display: flex;
-      gap: 20px;
-      margin-top: 16px;
-    }
-
-    .stat {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.15) 0%, rgba(65, 105, 225, 0.15) 100%);
-      border-radius: 8px;
-      transition: all 0.2s ease;
-    }
-
-    .stat:hover {
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.25) 0%, rgba(65, 105, 225, 0.25) 100%);
-      transform: scale(1.05);
-    }
-
-    .stat mat-icon {
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-size: 22px;
-      width: 22px;
-      height: 22px;
-    }
-
-    .stat span {
-      font-size: 14px;
-      font-weight: 500;
-      color: #4a5568;
-    }
-
-    .admin-actions {
-      display: flex;
-      justify-content: center;
-      margin-top: 24px;
-    }
-
-    .admin-actions button {
-      font-size: 16px;
-      padding: 12px 32px;
-    }
   `]
 })
 export class DashboardComponent implements OnInit {
@@ -577,8 +1331,20 @@ export class DashboardComponent implements OnInit {
   loading = true;
   currentUser: any;
 
+  // View and Filter properties
+  currentView: 'grid' | 'list' | 'kanban' | 'timeline' = 'grid';
+  selectedDepartment: string | number = 'all';
+  selectedWorkflow: string = 'all';
+  selectedStatus: string = 'all';
+
+  workflowStages = ['planning', 'in-progress', 'testing', 'deployment', 'completed'];
+
+  // Projects data
+  projects: any[] = [];
+  filteredProjects: any[] = [];
+
   // Notification properties
-  notificationCount: number = 5;
+  notificationCount: number = 3;
   showNotifications: boolean = false;
   notifications: any[] = [
     {
@@ -640,11 +1406,229 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadDepartments();
+    this.initializeProjects();
 
     // Close notifications dropdown when clicking outside
     document.addEventListener('click', () => {
       this.showNotifications = false;
     });
+  }
+
+  initializeProjects(): void {
+    // Mock project data with enhanced features
+    this.projects = [
+      {
+        id: 1,
+        name: 'E-Commerce Platform',
+        description: 'Building new online shopping platform',
+        type: 'software',
+        workflow: 'in-progress',
+        status: 'on-track',
+        progress: 65,
+        teamSize: 8,
+        budgetUsed: 58,
+        daysRemaining: 45,
+        milestonesCompleted: 4,
+        totalMilestones: 6,
+        team: ['John D', 'Sarah M', 'Mike Chen', 'Lisa Wang'],
+        startDate: '2025-01-15',
+        endDate: '2025-12-30',
+        departmentId: 1
+      },
+      {
+        id: 2,
+        name: 'Network Upgrade',
+        description: 'Modernizing IT infrastructure',
+        type: 'infrastructure',
+        workflow: 'testing',
+        status: 'on-track',
+        progress: 78,
+        teamSize: 5,
+        budgetUsed: 82,
+        daysRemaining: 15,
+        milestonesCompleted: 5,
+        totalMilestones: 6,
+        team: ['Tom Hardy', 'Emma Watson', 'Chris Evans'],
+        startDate: '2025-02-01',
+        endDate: '2025-11-25',
+        departmentId: 2
+      },
+      {
+        id: 3,
+        name: 'Brand Refresh Campaign',
+        description: 'Complete brand identity redesign',
+        type: 'marketing',
+        workflow: 'planning',
+        status: 'on-track',
+        progress: 25,
+        teamSize: 6,
+        budgetUsed: 15,
+        daysRemaining: 90,
+        milestonesCompleted: 1,
+        totalMilestones: 5,
+        team: ['Anna Lee', 'Bob Smith', 'Carol Davis'],
+        startDate: '2025-10-01',
+        endDate: '2026-02-28',
+        departmentId: 3
+      },
+      {
+        id: 4,
+        name: 'AI Research Project',
+        description: 'Developing machine learning models',
+        type: 'research',
+        workflow: 'in-progress',
+        status: 'at-risk',
+        progress: 42,
+        teamSize: 10,
+        budgetUsed: 68,
+        daysRemaining: 60,
+        milestonesCompleted: 3,
+        totalMilestones: 8,
+        team: ['Dr. Smith', 'Jane Foster', 'Peter Parker', 'Tony Stark'],
+        startDate: '2025-03-01',
+        endDate: '2026-01-10',
+        departmentId: 4
+      },
+      {
+        id: 5,
+        name: 'Supply Chain Optimization',
+        description: 'Streamlining logistics operations',
+        type: 'operations',
+        workflow: 'deployment',
+        status: 'on-track',
+        progress: 92,
+        teamSize: 7,
+        budgetUsed: 95,
+        daysRemaining: 8,
+        milestonesCompleted: 6,
+        totalMilestones: 6,
+        team: ['David Lee', 'Emily Brown', 'Frank Miller'],
+        startDate: '2025-04-01',
+        endDate: '2025-11-18',
+        departmentId: 5
+      },
+      {
+        id: 6,
+        name: 'Mobile App Development',
+        description: 'iOS and Android native apps',
+        type: 'software',
+        workflow: 'in-progress',
+        status: 'delayed',
+        progress: 38,
+        teamSize: 9,
+        budgetUsed: 72,
+        daysRemaining: 75,
+        milestonesCompleted: 2,
+        totalMilestones: 7,
+        team: ['Alex Johnson', 'Maria Garcia', 'Sam Wilson', 'Nina Patel'],
+        startDate: '2025-05-01',
+        endDate: '2026-01-25',
+        departmentId: 1
+      },
+      {
+        id: 7,
+        name: 'Data Center Migration',
+        description: 'Moving to cloud infrastructure',
+        type: 'infrastructure',
+        workflow: 'planning',
+        status: 'on-track',
+        progress: 18,
+        teamSize: 12,
+        budgetUsed: 22,
+        daysRemaining: 120,
+        milestonesCompleted: 1,
+        totalMilestones: 9,
+        team: ['Kevin Hart', 'Rachel Green', 'Ross Geller'],
+        startDate: '2025-11-01',
+        endDate: '2026-03-31',
+        departmentId: 2
+      },
+      {
+        id: 8,
+        name: 'Customer Loyalty Program',
+        description: 'Rewards and engagement platform',
+        type: 'marketing',
+        workflow: 'completed',
+        status: 'on-track',
+        progress: 100,
+        teamSize: 4,
+        budgetUsed: 98,
+        daysRemaining: 0,
+        milestonesCompleted: 4,
+        totalMilestones: 4,
+        team: ['Monica Bing', 'Chandler Bing'],
+        startDate: '2025-01-01',
+        endDate: '2025-10-15',
+        departmentId: 3
+      }
+    ];
+
+    this.filteredProjects = [...this.projects];
+  }
+
+  filterProjects(): void {
+    this.filteredProjects = this.projects.filter(project => {
+      const deptMatch = this.selectedDepartment === 'all' || project.departmentId === this.selectedDepartment;
+      const workflowMatch = this.selectedWorkflow === 'all' || project.workflow === this.selectedWorkflow;
+      const statusMatch = this.selectedStatus === 'all' || project.status === this.selectedStatus;
+      return deptMatch && workflowMatch && statusMatch;
+    });
+  }
+
+  changeView(): void {
+    // View changed, could add analytics here
+  }
+
+  getProjectsByWorkflow(workflow: string): any[] {
+    return this.filteredProjects.filter(p => p.workflow === workflow);
+  }
+
+  getProjectTypeColor(type: string): string {
+    const colors: any = {
+      'software': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      'infrastructure': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      'marketing': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+      'research': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+      'operations': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
+    };
+    return colors[type] || '#cccccc';
+  }
+
+  getProjectTypeIcon(type: string): string {
+    const icons: any = {
+      'software': 'code',
+      'infrastructure': 'dns',
+      'marketing': 'campaign',
+      'research': 'science',
+      'operations': 'settings'
+    };
+    return icons[type] || 'folder';
+  }
+
+  getWorkflowColor(workflow: string): string {
+    const colors: any = {
+      'planning': '#9E9E9E',
+      'in-progress': '#2196F3',
+      'testing': '#FF9800',
+      'deployment': '#9C27B0',
+      'completed': '#4CAF50'
+    };
+    return colors[workflow] || '#cccccc';
+  }
+
+  getStatusColor(status: string): string {
+    const colors: any = {
+      'on-track': '#4CAF50',
+      'at-risk': '#FF9800',
+      'delayed': '#F44336'
+    };
+    return colors[status] || '#cccccc';
+  }
+
+  getProgressColor(progress: number): string {
+    if (progress >= 75) return 'primary';
+    if (progress >= 50) return 'accent';
+    return 'warn';
   }
 
   loadDepartments(): void {

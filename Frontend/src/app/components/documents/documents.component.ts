@@ -8,6 +8,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatMenuModule } from '@angular/material/menu';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 
@@ -21,7 +23,9 @@ import { AuthService } from '../../services/auth.service';
     MatButtonModule,
     MatToolbarModule,
     MatIconModule,
-    MatDialogModule
+    MatDialogModule,
+    MatBadgeModule,
+    MatMenuModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -30,6 +34,9 @@ import { AuthService } from '../../services/auth.service';
 
       <button mat-button routerLink="/dashboard">
         <mat-icon>home</mat-icon> Home
+      </button>
+      <button mat-button routerLink="/calendar">
+        <mat-icon>calendar_month</mat-icon> Calendar
       </button>
       <button mat-button routerLink="/crm">
         <mat-icon>people_outline</mat-icon> CRM
@@ -52,14 +59,26 @@ import { AuthService } from '../../services/auth.service';
 
       <span class="spacer"></span>
 
-      <button mat-icon-button>
-        <mat-icon>search</mat-icon>
+      <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0">
+        <mat-icon>notifications</mat-icon>
       </button>
-
-      <span style="margin-right: 16px;">{{ currentUser?.name }} ({{ currentUser?.role }})</span>
-      <button mat-icon-button (click)="logout()">
-        <mat-icon>logout</mat-icon>
+      <button mat-icon-button [matMenuTriggerFor]="menu">
+        <mat-icon>account_circle</mat-icon>
       </button>
+      <mat-menu #menu="matMenu">
+        <button mat-menu-item>
+          <mat-icon>person</mat-icon>
+          <span>Profile</span>
+        </button>
+        <button mat-menu-item>
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </mat-menu>
     </mat-toolbar>
 
     <div class="documents-container">
@@ -194,6 +213,7 @@ import { AuthService } from '../../services/auth.service';
 })
 export class DocumentsComponent implements OnInit {
   currentUser: any;
+  notificationCount = 3;
   departments = [
     {
       name: 'Warehouses',

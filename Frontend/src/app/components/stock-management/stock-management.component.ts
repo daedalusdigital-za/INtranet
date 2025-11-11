@@ -1,12 +1,22 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSelectModule } from '@angular/material/select';
+import { SelectionModel } from '@angular/cdk/collections';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-stock-management',
@@ -19,7 +29,10 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
     MatIconModule,
     MatCardModule,
     MatTableModule,
-    MatDialogModule
+    MatDialogModule,
+    MatBadgeModule,
+    MatMenuModule,
+    MatChipsModule
   ],
   template: `
     <mat-toolbar color="primary">
@@ -28,6 +41,9 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
       <button mat-button routerLink="/dashboard">
         <mat-icon>home</mat-icon> Home
+      </button>
+      <button mat-button routerLink="/calendar">
+        <mat-icon>calendar_month</mat-icon> Calendar
       </button>
       <button mat-button routerLink="/crm">
         <mat-icon>people_outline</mat-icon> CRM
@@ -49,6 +65,27 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
       </button>
 
       <span class="spacer"></span>
+
+      <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0">
+        <mat-icon>notifications</mat-icon>
+      </button>
+      <button mat-icon-button [matMenuTriggerFor]="menu">
+        <mat-icon>account_circle</mat-icon>
+      </button>
+      <mat-menu #menu="matMenu">
+        <button mat-menu-item>
+          <mat-icon>person</mat-icon>
+          <span>Profile</span>
+        </button>
+        <button mat-menu-item>
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </mat-menu>
     </mat-toolbar>
 
     <div class="container">
@@ -93,7 +130,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
               </div>
             </mat-card-content>
             <mat-card-actions>
-              <button mat-button color="primary">
+              <button mat-button color="primary" (click)="viewWarehouseDetails(warehouse); $event.stopPropagation()">
                 <mat-icon>visibility</mat-icon>
                 View Details
               </button>
@@ -107,7 +144,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
     }
 
     .spacer {
@@ -126,17 +163,19 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
       font-weight: 600;
       margin-bottom: 8px;
       text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+      text-align: center;
     }
 
     .subtitle {
       color: rgba(255, 255, 255, 0.9);
       font-size: 1.1rem;
       margin-bottom: 32px;
+      text-align: center;
     }
 
     .warehouses-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 24px;
     }
 
@@ -258,8 +297,8 @@ export class StockManagementComponent implements OnInit {
   warehouses = [
     {
       id: 1,
-      name: 'Main Warehouse',
-      location: 'Bangkok Central',
+      name: 'KZN Warehouse',
+      location: 'Durban',
       totalItems: 12450,
       categories: 45,
       capacity: 78,
@@ -267,8 +306,8 @@ export class StockManagementComponent implements OnInit {
     },
     {
       id: 2,
-      name: 'North Distribution Center',
-      location: 'Chiang Mai',
+      name: 'Port Elizabeth Warehouse',
+      location: 'Gqeberha',
       totalItems: 8320,
       categories: 32,
       capacity: 65,
@@ -276,8 +315,8 @@ export class StockManagementComponent implements OnInit {
     },
     {
       id: 3,
-      name: 'South Warehouse',
-      location: 'Phuket',
+      name: 'Gauteng Warehouse',
+      location: 'Johannesburg',
       totalItems: 5680,
       categories: 28,
       capacity: 45,
@@ -285,43 +324,1334 @@ export class StockManagementComponent implements OnInit {
     },
     {
       id: 4,
-      name: 'East Regional Hub',
-      location: 'Rayong',
+      name: 'Cape Town Warehouse',
+      location: 'Cape Town',
       totalItems: 9870,
       categories: 38,
       capacity: 85,
       manager: 'Lisa Wang'
-    },
-    {
-      id: 5,
-      name: 'West Storage Facility',
-      location: 'Kanchanaburi',
-      totalItems: 4200,
-      categories: 22,
-      capacity: 52,
-      manager: 'David Lee'
-    },
-    {
-      id: 6,
-      name: 'Northeast Depot',
-      location: 'Khon Kaen',
-      totalItems: 7150,
-      categories: 35,
-      capacity: 70,
-      manager: 'Emma Brown'
     }
   ];
 
+  notificationCount = 3;
+
   constructor(
     private router: Router,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private authService: AuthService
   ) {}
 
   ngOnInit(): void {
   }
 
+  viewWarehouseDetails(warehouse: any): void {
+    this.dialog.open(WarehouseDetailsDialog, {
+      width: '90%',
+      maxWidth: '1200px',
+      data: warehouse
+    });
+  }
+
   openWarehouse(warehouse: any): void {
     // Navigate to warehouse detail page (to be created)
     this.router.navigate(['/stock-management/warehouse', warehouse.id]);
+  }
+
+  logout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
+  }
+}
+
+// Warehouse Details Dialog Component
+@Component({
+  selector: 'warehouse-details-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatChipsModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatCheckboxModule,
+    MatSelectModule
+  ],
+  template: `
+    <div class="modern-dialog">
+      <div class="dialog-header">
+        <div class="header-content">
+          <div class="icon-wrapper">
+            <mat-icon>warehouse</mat-icon>
+          </div>
+          <div class="header-text">
+            <h2>{{ data.name }}</h2>
+            <p class="location-subtitle">
+              <mat-icon>place</mat-icon>
+              {{ data.location }}
+            </p>
+          </div>
+        </div>
+        <button mat-icon-button mat-dialog-close class="close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <mat-dialog-content>
+        <!-- Summary Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+              <mat-icon>inventory_2</mat-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ data.totalItems }}</div>
+              <div class="stat-label">Total Items</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+              <mat-icon>category</mat-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ data.categories }}</div>
+              <div class="stat-label">Categories</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+              <mat-icon>person</mat-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ data.manager }}</div>
+              <div class="stat-label">Manager</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+              <mat-icon>storage</mat-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ data.capacity }}%</div>
+              <div class="stat-label">Capacity Used</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inventory Table -->
+        <div class="table-section">
+          <div class="table-header">
+            <h3>
+              <mat-icon>list_alt</mat-icon>
+              Inventory Items
+            </h3>
+            <div class="search-box">
+              <mat-form-field appearance="outline" class="search-field">
+                <mat-label>Search inventory</mat-label>
+                <input matInput [(ngModel)]="searchQuery" (ngModelChange)="filterInventory()" placeholder="Search by name, Item Code, or company">
+                <mat-icon matPrefix>search</mat-icon>
+                @if (searchQuery) {
+                  <button matSuffix mat-icon-button (click)="clearSearch()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                }
+              </mat-form-field>
+            </div>
+          </div>
+
+          <table mat-table [dataSource]="filteredInventoryData" class="modern-table">
+            <!-- Checkbox Column -->
+            <ng-container matColumnDef="select">
+              <th mat-header-cell *matHeaderCellDef>
+                <mat-checkbox
+                  (change)="$event ? toggleAllRows() : null"
+                  [checked]="selection.hasValue() && isAllSelected()"
+                  [indeterminate]="selection.hasValue() && !isAllSelected()">
+                </mat-checkbox>
+              </th>
+              <td mat-cell *matCellDef="let item">
+                <mat-checkbox
+                  (click)="$event.stopPropagation()"
+                  (change)="$event ? selection.toggle(item) : null"
+                  [checked]="selection.isSelected(item)">
+                </mat-checkbox>
+              </td>
+            </ng-container>
+
+            <!-- Item Description Column -->
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Item Description</th>
+              <td mat-cell *matCellDef="let item">
+                <div class="item-name">
+                  <mat-icon [style.color]="getCategoryColor(item.category)">{{ getCategoryIcon(item.category) }}</mat-icon>
+                  <span>{{ item.name }}</span>
+                </div>
+              </td>
+            </ng-container>
+
+            <!-- Item Code Column -->
+            <ng-container matColumnDef="sku">
+              <th mat-header-cell *matHeaderCellDef>Item Code</th>
+              <td mat-cell *matCellDef="let item">
+                <span class="sku-badge">{{ item.sku }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Company Column -->
+            <ng-container matColumnDef="category">
+              <th mat-header-cell *matHeaderCellDef>Company</th>
+              <td mat-cell *matCellDef="let item">
+                <mat-chip [style.background]="getCategoryColor(item.category)" style="color: white;">
+                  {{ item.category }}
+                </mat-chip>
+              </td>
+            </ng-container>
+
+            <!-- Quantity Column -->
+            <ng-container matColumnDef="quantity">
+              <th mat-header-cell *matHeaderCellDef>Quantity</th>
+              <td mat-cell *matCellDef="let item">
+                <span class="quantity-value">{{ item.quantity }}</span>
+              </td>
+            </ng-container>
+
+            <!-- UOM Column -->
+            <ng-container matColumnDef="unitPrice">
+              <th mat-header-cell *matHeaderCellDef>UOM</th>
+              <td mat-cell *matCellDef="let item">
+                <span class="price-value">R{{ item.unitPrice.toLocaleString() }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Stock Value Column -->
+            <ng-container matColumnDef="totalValue">
+              <th mat-header-cell *matHeaderCellDef>Stock Value</th>
+              <td mat-cell *matCellDef="let item">
+                <span class="total-value">R{{ (item.quantity * item.unitPrice).toLocaleString() }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Status Column -->
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let item">
+                <mat-chip [class]="'status-chip ' + item.status.toLowerCase()">
+                  <mat-icon>{{ getStatusIcon(item.status) }}</mat-icon>
+                  {{ item.status }}
+                </mat-chip>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
+          </table>
+        </div>
+      </mat-dialog-content>
+
+      <mat-dialog-actions>
+        <button mat-flat-button color="accent" (click)="exportToExcel()" class="export-btn">
+          <mat-icon>file_download</mat-icon>
+          Export to Excel
+        </button>
+        <button mat-flat-button (click)="openGRVDialog()" class="grv-btn">
+          <mat-icon>add_box</mat-icon>
+          GRV
+        </button>
+        <button mat-flat-button (click)="openTransferDialog()" [disabled]="!selection.hasValue()" class="transfer-btn">
+          <mat-icon>swap_horiz</mat-icon>
+          Transfer ({{ selection.selected.length }})
+        </button>
+        <button mat-flat-button color="primary" mat-dialog-close>
+          <mat-icon>check_circle</mat-icon>
+          Close
+        </button>
+      </mat-dialog-actions>
+
+      <!-- Transfer Dialog Overlay -->
+      @if (showTransferDialog) {
+        <div class="transfer-overlay" (click)="closeTransferDialog()">
+          <div class="transfer-dialog" (click)="$event.stopPropagation()">
+            <div class="transfer-header">
+              <h3>Transfer Items</h3>
+              <button mat-icon-button (click)="closeTransferDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            <div class="transfer-content">
+              <p class="transfer-info">
+                <mat-icon>info</mat-icon>
+                You are about to transfer <strong>{{ selection.selected.length }}</strong> item(s)
+              </p>
+
+              <div class="selected-items">
+                <h4>Selected Items:</h4>
+                <div class="item-list-detailed">
+                  @for (item of selection.selected; track item.sku) {
+                    <div class="item-row">
+                      <div class="item-info">
+                        <mat-icon [style.color]="getCategoryColor(item.category)">inventory_2</mat-icon>
+                        <div class="item-details">
+                          <span class="item-name-text">{{ item.name }}</span>
+                          <span class="item-sku">{{ item.sku }}</span>
+                          <span class="available-qty">Available: {{ item.quantity }}</span>
+                        </div>
+                      </div>
+                      <mat-form-field appearance="outline" class="quantity-field">
+                        <mat-label>Quantity</mat-label>
+                        <input
+                          matInput
+                          type="number"
+                          min="1"
+                          [max]="item.quantity"
+                          [(ngModel)]="transferQuantities[item.sku]"
+                          (ngModelChange)="setTransferQuantity(item.sku, $event, item.quantity)">
+                        <span matSuffix>/ {{ item.quantity }}</span>
+                      </mat-form-field>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <mat-form-field appearance="outline" class="warehouse-select">
+                <mat-label>Select Destination Warehouse</mat-label>
+                <mat-select [(ngModel)]="selectedWarehouse">
+                  @for (warehouse of warehouses; track warehouse) {
+                    @if (warehouse !== data.name) {
+                      <mat-option [value]="warehouse">{{ warehouse }}</mat-option>
+                    }
+                  }
+                </mat-select>
+                <mat-icon matPrefix>warehouse</mat-icon>
+              </mat-form-field>
+            </div>
+
+            <div class="transfer-actions">
+              <button mat-stroked-button (click)="closeTransferDialog()">
+                <mat-icon>cancel</mat-icon>
+                Cancel
+              </button>
+              <button mat-flat-button color="primary" (click)="confirmTransfer()" [disabled]="!selectedWarehouse">
+                <mat-icon>check_circle</mat-icon>
+                Confirm Transfer
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- GRV Dialog Overlay -->
+      @if (showGRVDialog) {
+        <div class="transfer-overlay" (click)="closeGRVDialog()">
+          <div class="transfer-dialog" (click)="$event.stopPropagation()">
+            <div class="transfer-header">
+              <h3>GRV - Goods Received Voucher</h3>
+              <button mat-icon-button (click)="closeGRVDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            <div class="transfer-content">
+              <p class="transfer-info">
+                <mat-icon>info</mat-icon>
+                Add stock to <strong>{{ data.name }}</strong>
+              </p>
+
+              <!-- Search for Items -->
+              <mat-form-field appearance="outline" class="warehouse-select">
+                <mat-label>Search for Item</mat-label>
+                <input
+                  matInput
+                  [(ngModel)]="grvSearchQuery"
+                  (ngModelChange)="filterGRVItems()"
+                  placeholder="Search by name or item code">
+                <mat-icon matPrefix>search</mat-icon>
+              </mat-form-field>
+
+              <!-- Filtered Items List -->
+              @if (grvSearchQuery && filteredGRVItems.length > 0) {
+                <div class="grv-items-dropdown">
+                  <div class="grv-item-option"
+                       *ngFor="let item of filteredGRVItems.slice(0, 5)"
+                       (click)="selectGRVItem(item)">
+                    <mat-icon [style.color]="getCategoryColor(item.category)">inventory_2</mat-icon>
+                    <div class="grv-option-details">
+                      <span class="grv-option-name">{{ item.name }}</span>
+                      <span class="grv-option-sku">{{ item.sku }}</span>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              <!-- Selected Items for GRV -->
+              @if (selectedGRVItems.length > 0) {
+                <div class="selected-items">
+                  <h4>Items to Receive:</h4>
+                  <div class="item-list-detailed">
+                    @for (item of selectedGRVItems; track item.sku) {
+                      <div class="item-row">
+                        <div class="item-info">
+                          <mat-icon [style.color]="getCategoryColor(item.category)">inventory_2</mat-icon>
+                          <div class="item-details">
+                            <span class="item-name-text">{{ item.name }}</span>
+                            <span class="item-sku">{{ item.sku }}</span>
+                            <span class="available-qty">Current Stock: {{ item.quantity }}</span>
+                          </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                          <mat-form-field appearance="outline" class="quantity-field">
+                            <mat-label>Qty to Add</mat-label>
+                            <input
+                              matInput
+                              type="number"
+                              min="1"
+                              [(ngModel)]="grvQuantities[item.sku]">
+                          </mat-form-field>
+                          <button mat-icon-button (click)="removeGRVItem(item.sku)" color="warn">
+                            <mat-icon>delete</mat-icon>
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            <div class="transfer-actions">
+              <button mat-stroked-button (click)="closeGRVDialog()">
+                <mat-icon>cancel</mat-icon>
+                Cancel
+              </button>
+              <button mat-flat-button color="primary" (click)="confirmGRV()" [disabled]="selectedGRVItems.length === 0">
+                <mat-icon>check_circle</mat-icon>
+                Confirm Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .modern-dialog {
+      background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 32px 32px 24px 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin: -24px -24px 0 -24px;
+      border-radius: 12px 12px 0 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .dialog-header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 300px;
+      height: 300px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .icon-wrapper {
+      width: 64px;
+      height: 64px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .icon-wrapper mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+    }
+
+    .header-text h2 {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .location-subtitle {
+      margin: 8px 0 0 0;
+      font-size: 1rem;
+      opacity: 0.95;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .location-subtitle mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .close-btn {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      position: relative;
+      z-index: 1;
+      transition: all 0.3s ease;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: rotate(90deg);
+    }
+
+    mat-dialog-content {
+      padding: 32px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-4px);
+    }
+
+    .stat-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .stat-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .stat-info {
+      flex: 1;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1a1a1a;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .table-section {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .table-section h3 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1a1a1a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .table-section h3 mat-icon {
+      color: #667eea;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 300px;
+      max-width: 500px;
+    }
+
+    .search-field {
+      width: 100%;
+    }
+
+    .search-field ::ng-deep .mat-mdc-form-field-wrapper {
+      padding-bottom: 0;
+    }
+
+    .search-field ::ng-deep .mat-mdc-text-field-wrapper {
+      background: white;
+      border-radius: 12px;
+    }
+
+    .search-field ::ng-deep .mat-mdc-form-field-focus-overlay {
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    .modern-table {
+      width: 100%;
+      background: transparent;
+    }
+
+    .modern-table th {
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8ebf1 100%);
+      color: #333;
+      font-weight: 700;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 16px 12px;
+    }
+
+    .modern-table td {
+      padding: 16px 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .table-row:hover {
+      background: #f8f9ff;
+    }
+
+    .item-name {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+    }
+
+    .item-name mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .sku-badge {
+      background: #f0f0f0;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #555;
+    }
+
+    mat-chip {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+
+    .quantity-value {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #333;
+    }
+
+    .price-value {
+      font-weight: 600;
+      color: #555;
+    }
+
+    .total-value {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #667eea;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .status-chip mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .status-chip.in-stock {
+      background: #43e97b !important;
+      color: white !important;
+    }
+
+    .status-chip.low-stock {
+      background: #ffa502 !important;
+      color: white !important;
+    }
+
+    .status-chip.out-of-stock {
+      background: #f5576c !important;
+      color: white !important;
+    }
+
+    mat-dialog-actions {
+      padding: 24px 32px;
+      background: linear-gradient(180deg, transparent 0%, #f8f9ff 100%);
+      margin: 0 -24px -24px -24px;
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    mat-dialog-actions button {
+      min-width: 160px;
+      height: 48px;
+      font-weight: 700;
+      font-size: 1rem;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+
+    mat-dialog-actions button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .export-btn {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%) !important;
+      color: white !important;
+    }
+
+    .grv-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+    }
+
+    .transfer-btn {
+      background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%) !important;
+      color: white !important;
+    }
+
+    .transfer-btn:disabled {
+      background: #ccc !important;
+      color: #666 !important;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    /* GRV Dropdown Styles */
+    .grv-items-dropdown {
+      position: relative;
+      margin-top: -8px;
+      margin-bottom: 16px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      max-height: 300px;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .grv-item-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .grv-item-option:last-child {
+      border-bottom: none;
+    }
+
+    .grv-item-option:hover {
+      background: #f5f5f5;
+    }
+
+    .grv-item-option mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .grv-option-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .grv-option-name {
+      font-weight: 600;
+      color: #333;
+      font-size: 0.95rem;
+    }
+
+    .grv-option-sku {
+      font-size: 0.85rem;
+      color: #666;
+      font-family: monospace;
+    }
+
+    /* Transfer Dialog Overlay */
+    .transfer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      backdrop-filter: blur(4px);
+    }
+
+    .transfer-dialog {
+      background: white;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .transfer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px;
+      border-bottom: 1px solid #e0e0e0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 16px 16px 0 0;
+    }
+
+    .transfer-header h3 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .transfer-header button {
+      color: white;
+    }
+
+    .transfer-content {
+      padding: 24px;
+    }
+
+    .transfer-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: #e3f2fd;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      color: #1976d2;
+    }
+
+    .transfer-info mat-icon {
+      color: #1976d2;
+    }
+
+    .selected-items {
+      margin-bottom: 24px;
+    }
+
+    .selected-items h4 {
+      margin: 0 0 12px 0;
+      color: #333;
+      font-size: 1.1rem;
+    }
+
+    .item-list-detailed {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 12px;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .item-row:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    }
+
+    .item-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .item-info mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .item-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .item-name-text {
+      font-weight: 600;
+      color: #333;
+      font-size: 0.95rem;
+    }
+
+    .item-sku {
+      font-size: 0.85rem;
+      color: #666;
+      font-family: monospace;
+    }
+
+    .available-qty {
+      font-size: 0.8rem;
+      color: #999;
+    }
+
+    .quantity-field {
+      width: 140px;
+      margin-bottom: -1.25em;
+    }
+
+    .quantity-field input {
+      text-align: center;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .item-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 8px;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+
+    .item-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+
+    .item-chip mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #667eea;
+    }
+
+    .warehouse-select {
+      width: 100%;
+    }
+
+    .transfer-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .transfer-actions button {
+      min-width: 140px;
+      height: 44px;
+      font-weight: 600;
+      border-radius: 8px;
+    }
+
+    .export-btn:hover {
+      box-shadow: 0 8px 30px rgba(67, 233, 123, 0.4) !important;
+    }
+
+    mat-dialog-actions button mat-icon {
+      margin-right: 8px;
+    }
+
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f0f0f0;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #667eea;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #764ba2;
+    }
+  `]
+})
+export class WarehouseDetailsDialog {
+  displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'unitPrice', 'totalValue', 'status'];
+  searchQuery: string = '';
+  selection = new SelectionModel<any>(true, []);
+  showTransferDialog = false;
+  selectedWarehouse: string = '';
+  transferQuantities: { [key: string]: number } = {};
+
+  // GRV properties
+  showGRVDialog = false;
+  grvSearchQuery: string = '';
+  filteredGRVItems: any[] = [];
+  selectedGRVItems: any[] = [];
+  grvQuantities: { [key: string]: number } = {};
+
+  warehouses = [
+    'KZN Warehouse',
+    'Port Elizabeth Warehouse',
+    'Gauteng Warehouse',
+    'Cape Town Warehouse'
+  ];
+
+  inventoryData = [
+    { name: 'Laptop Dell XPS 15', sku: 'LAP-001', category: 'Access', quantity: 45, unitPrice: 42000, status: 'In Stock' },
+    { name: 'Office Chair Ergonomic', sku: 'FUR-023', category: 'Promed', quantity: 8, unitPrice: 8500, status: 'Low Stock' },
+    { name: 'Wireless Mouse Logitech', sku: 'ACC-156', category: 'Pharama', quantity: 120, unitPrice: 890, status: 'In Stock' },
+    { name: 'Monitor 27" 4K', sku: 'MON-089', category: 'Sebenzani', quantity: 0, unitPrice: 15000, status: 'Out of Stock' },
+    { name: 'Desk Lamp LED', sku: 'LIG-045', category: 'Access', quantity: 65, unitPrice: 1200, status: 'In Stock' },
+    { name: 'Keyboard Mechanical', sku: 'ACC-201', category: 'Promed', quantity: 12, unitPrice: 3500, status: 'Low Stock' },
+    { name: 'Standing Desk Adjustable', sku: 'FUR-087', category: 'Pharama', quantity: 22, unitPrice: 18000, status: 'In Stock' },
+    { name: 'Webcam HD 1080p', sku: 'ACC-312', category: 'Sebenzani', quantity: 85, unitPrice: 2200, status: 'In Stock' },
+    { name: 'Printer Multifunction', sku: 'OFF-156', category: 'Access', quantity: 5, unitPrice: 12000, status: 'Low Stock' },
+    { name: 'USB Hub 7-Port', sku: 'ACC-445', category: 'Promed', quantity: 150, unitPrice: 650, status: 'In Stock' },
+    { name: 'External Hard Drive 2TB', sku: 'STO-234', category: 'Pharama', quantity: 92, unitPrice: 2800, status: 'In Stock' },
+    { name: 'Headset Noise Cancelling', sku: 'AUD-178', category: 'Sebenzani', quantity: 38, unitPrice: 4500, status: 'In Stock' },
+    { name: 'Whiteboard Magnetic', sku: 'OFF-289', category: 'Access', quantity: 15, unitPrice: 3200, status: 'In Stock' },
+    { name: 'Paper Shredder', sku: 'OFF-401', category: 'Promed', quantity: 6, unitPrice: 5500, status: 'Low Stock' },
+    { name: 'Cable Organizer Set', sku: 'ACC-567', category: 'Pharama', quantity: 200, unitPrice: 350, status: 'In Stock' }
+  ];
+
+  filteredInventoryData = [...this.inventoryData];
+
+  constructor(
+    public dialogRef: MatDialogRef<WarehouseDetailsDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {}
+
+  isAllSelected() {
+    const numSelected = this.selection.selected.length;
+    const numRows = this.filteredInventoryData.length;
+    return numSelected === numRows;
+  }
+
+  toggleAllRows() {
+    if (this.isAllSelected()) {
+      this.selection.clear();
+      return;
+    }
+    this.selection.select(...this.filteredInventoryData);
+  }
+
+  openTransferDialog() {
+    this.showTransferDialog = true;
+    // Initialize transfer quantities to 1 for each selected item
+    this.selection.selected.forEach(item => {
+      this.transferQuantities[item.sku] = 1;
+    });
+  }
+
+  closeTransferDialog() {
+    this.showTransferDialog = false;
+    this.selectedWarehouse = '';
+    this.transferQuantities = {};
+  }
+
+  getTransferQuantity(sku: string): number {
+    return this.transferQuantities[sku] || 1;
+  }
+
+  setTransferQuantity(sku: string, quantity: number, maxQuantity: number) {
+    // Ensure quantity is between 1 and available quantity
+    if (quantity < 1) {
+      this.transferQuantities[sku] = 1;
+    } else if (quantity > maxQuantity) {
+      this.transferQuantities[sku] = maxQuantity;
+    } else {
+      this.transferQuantities[sku] = quantity;
+    }
+  }
+
+  confirmTransfer() {
+    if (this.selectedWarehouse && this.selection.selected.length > 0) {
+      const transferDetails = this.selection.selected.map(item =>
+        `${item.name} - Quantity: ${this.transferQuantities[item.sku]}`
+      ).join('\n');
+      alert(`Transferring ${this.selection.selected.length} item(s) to ${this.selectedWarehouse}:\n\n${transferDetails}`);
+      this.selection.clear();
+      this.closeTransferDialog();
+    }
+  }
+
+  // GRV Methods
+  openGRVDialog() {
+    this.showGRVDialog = true;
+    this.grvSearchQuery = '';
+    this.filteredGRVItems = [];
+    this.selectedGRVItems = [];
+    this.grvQuantities = {};
+  }
+
+  closeGRVDialog() {
+    this.showGRVDialog = false;
+    this.grvSearchQuery = '';
+    this.filteredGRVItems = [];
+    this.selectedGRVItems = [];
+    this.grvQuantities = {};
+  }
+
+  filterGRVItems() {
+    const query = this.grvSearchQuery.toLowerCase().trim();
+
+    if (!query) {
+      this.filteredGRVItems = [];
+      return;
+    }
+
+    // Filter items that haven't been selected yet
+    this.filteredGRVItems = this.inventoryData.filter(item => {
+      const isNotSelected = !this.selectedGRVItems.find(selected => selected.sku === item.sku);
+      const matchesQuery = item.name.toLowerCase().includes(query) ||
+                          item.sku.toLowerCase().includes(query);
+      return isNotSelected && matchesQuery;
+    });
+  }
+
+  selectGRVItem(item: any) {
+    // Add item to selected list if not already there
+    if (!this.selectedGRVItems.find(selected => selected.sku === item.sku)) {
+      this.selectedGRVItems.push(item);
+      this.grvQuantities[item.sku] = 1; // Default quantity
+    }
+    // Clear search
+    this.grvSearchQuery = '';
+    this.filteredGRVItems = [];
+  }
+
+  removeGRVItem(sku: string) {
+    this.selectedGRVItems = this.selectedGRVItems.filter(item => item.sku !== sku);
+    delete this.grvQuantities[sku];
+  }
+
+  confirmGRV() {
+    if (this.selectedGRVItems.length > 0) {
+      const grvDetails = this.selectedGRVItems.map(item => {
+        const qtyToAdd = this.grvQuantities[item.sku] || 1;
+        const newTotal = item.quantity + qtyToAdd;
+        return `${item.name} (${item.sku})\n  Adding: ${qtyToAdd} units\n  New Total: ${newTotal} units`;
+      }).join('\n\n');
+
+      alert(`GRV Confirmation for ${this.data.name}:\n\n${grvDetails}`);
+
+      // Update inventory quantities (in real app, this would be API call)
+      this.selectedGRVItems.forEach(item => {
+        const qtyToAdd = this.grvQuantities[item.sku] || 1;
+        const inventoryItem = this.inventoryData.find(i => i.sku === item.sku);
+        if (inventoryItem) {
+          inventoryItem.quantity += qtyToAdd;
+          // Update status based on new quantity
+          if (inventoryItem.quantity === 0) {
+            inventoryItem.status = 'Out of Stock';
+          } else if (inventoryItem.quantity < 10) {
+            inventoryItem.status = 'Low Stock';
+          } else {
+            inventoryItem.status = 'In Stock';
+          }
+        }
+      });
+
+      // Refresh filtered data
+      this.filteredInventoryData = [...this.inventoryData];
+      this.closeGRVDialog();
+    }
+  }
+
+  filterInventory(): void {
+    const query = this.searchQuery.toLowerCase().trim();
+
+    if (!query) {
+      this.filteredInventoryData = [...this.inventoryData];
+      return;
+    }
+
+    this.filteredInventoryData = this.inventoryData.filter(item =>
+      item.name.toLowerCase().includes(query) ||
+      item.sku.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query)
+    );
+  }
+
+  clearSearch(): void {
+    this.searchQuery = '';
+    this.filterInventory();
+  }
+
+  getCategoryColor(category: string): string {
+    const colors: any = {
+      'Access': '#667eea',
+      'Promed': '#f5576c',
+      'Pharama': '#4facfe',
+      'Sebenzani': '#43e97b'
+    };
+    return colors[category] || '#999';
+  }
+
+  getCategoryIcon(category: string): string {
+    const icons: any = {
+      'Access': 'business',
+      'Promed': 'medical_services',
+      'Pharama': 'local_pharmacy',
+      'Sebenzani': 'store'
+    };
+    return icons[category] || 'inventory_2';
+  }
+
+  getStatusIcon(status: string): string {
+    const icons: any = {
+      'In Stock': 'check_circle',
+      'Low Stock': 'warning',
+      'Out of Stock': 'cancel'
+    };
+    return icons[status] || 'help';
+  }
+
+  exportToExcel(): void {
+    // Create CSV data
+    const headers = ['Item Description', 'Item Code', 'Company', 'Quantity', 'UOM (R)', 'Stock Value (R)', 'Status'];
+    const rows = this.filteredInventoryData.map(item => [
+      item.name,
+      item.sku,
+      item.category,
+      item.quantity,
+      item.unitPrice,
+      item.quantity * item.unitPrice,
+      item.status
+    ]);
+
+    // Convert to CSV format
+    let csvContent = headers.join(',') + '\n';
+    rows.forEach(row => {
+      csvContent += row.map(cell => {
+        // Escape cells containing commas or quotes
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"')) {
+          return '"' + cellStr.replace(/"/g, '""') + '"';
+        }
+        return cellStr;
+      }).join(',') + '\n';
+    });
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    const filename = `${this.data.name.replace(/\s+/g, '_')}_Inventory_${new Date().toISOString().split('T')[0]}.csv`;
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 }
