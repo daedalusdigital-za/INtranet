@@ -1552,7 +1552,6 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   loadEarliestEmployee(): void {
     this.apiService.getEarliestEmployeeToday().subscribe({
       next: (data) => {
-        console.log('Early birds data:', data);
         this.earlyBirds = data;
       },
       error: (error) => {
@@ -1566,7 +1565,6 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   loadEmployeesForHeroCard(): void {
     this.apiService.getEmployees().subscribe({
       next: (employees) => {
-        console.log('Loaded employees:', employees);
         this.allEmployees = employees;
 
         // Get recent hires (last 30 days)
@@ -1610,10 +1608,6 @@ export class ProjectsComponent implements OnInit, OnDestroy {
             photoBase64: emp.photoBase64
           };
         });
-
-        console.log('New members:', this.newMembers);
-        console.log('Today birthdays:', this.todayBirthdays);
-        console.log('Upcoming birthdays:', this.upcomingBirthdays);
       },
       error: (error) => {
         console.error('Error loading employees:', error);
@@ -1665,7 +1659,6 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
   viewAllNotifications(): void {
     this.showNotifications = false;
-    console.log('View all notifications');
   }
 
   logout(): void {

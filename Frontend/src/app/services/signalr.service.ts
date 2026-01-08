@@ -7,7 +7,7 @@ import { Subject } from 'rxjs';
 })
 export class SignalRService {
   private hubConnection?: signalR.HubConnection;
-  private apiUrl = 'http://localhost:5143';
+  private apiUrl = '';
 
   public cardMoved$ = new Subject<any>();
   public cardCreated$ = new Subject<any>();
@@ -28,7 +28,6 @@ export class SignalRService {
     this.registerHandlers();
 
     return this.hubConnection.start()
-      .then(() => console.log('SignalR Connected'))
       .catch(err => console.error('Error connecting to SignalR:', err));
   }
 

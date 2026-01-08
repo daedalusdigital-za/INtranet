@@ -26,8 +26,8 @@ import { switchMap } from 'rxjs/operators';
 // Hardcoded development environment for debugging
 const environment = {
   production: false,
-  apiUrl: 'http://localhost:5143/api',
-  signalRUrl: 'http://localhost:5143'
+  apiUrl: '/api',
+  signalRUrl: ''
 };
 
 @Component({
@@ -1831,10 +1831,6 @@ export class PeopleComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    console.log('🌍 People Component - Environment Check');
-    console.log('   API URL:', environment.apiUrl);
-    console.log('   Production:', environment.production);
-
     this.loadData();
 
     // Auto-refresh every 10 minutes
@@ -2161,7 +2157,6 @@ export class PeopleComponent implements OnInit, OnDestroy {
   viewAllNotifications(): void {
     this.showNotifications = false;
     // Navigate to notifications page or show all notifications
-    console.log('View all notifications');
   }
 
   logout(): void {

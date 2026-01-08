@@ -1,0 +1,8 @@
+{"instruction": "What is ProjectTracker?", "output": "ProjectTracker is our company's intranet application for managing projects, tracking attendance, and team collaboration."}
+{"instruction": "How do I clock in?", "output": "Go to the Attendance module and click the 'Clock In' button. Your time will be recorded automatically."}
+{"instruction": "How do I create a new project?", "output": "Navigate to the Projects section, click 'New Board', enter your project name, and start adding lists and cards."}
+{"instruction": "How do I request time off?", "output": "Go to Attendance > Leave Requests, select your dates, choose the leave type, and submit for approval."}
+{"instruction": "Who can see my attendance records?", "output": "Your attendance records are visible to you, your department manager, and HR administrators."}
+{"instruction": "How do I add team members to a project?", "output": "Open your project board, click Settings or the team icon, and invite members by their email or username."}
+{"instruction": "What are the different card statuses?", "output": "Cards can be moved between lists like To Do, In Progress, Review, and Done. You can customize lists for your workflow."}
+{"instruction": "How do I generate a report?", "output": "Go to the Reports section, select the report type (attendance, project progress, etc.), set your date range, and click Generate."}

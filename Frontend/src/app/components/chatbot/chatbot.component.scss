@@ -414,3 +414,15 @@
     right: 20px;
   }
 }
+
+// Streaming cursor animation
+.cursor {
+  animation: blink 1s infinite;
+  color: #667eea;
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}

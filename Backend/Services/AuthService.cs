@@ -35,8 +35,8 @@ namespace ProjectTracker.API.Services
                 return null;
             }
 
-            // Simple plain text password check (BCrypt disabled for testing)
-            if (user.PasswordHash != loginDto.Password)
+            // Verify password using BCrypt
+            if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
             {
                 return null;
             }

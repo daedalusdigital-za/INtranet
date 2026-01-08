@@ -627,7 +627,6 @@ export class SupportTicketComponent implements OnInit {
   ngOnInit(): void {
     this.filterTicketsByDateRange();
     this.calculateStatistics();
-    console.log('Support Ticket Component initialized');
   }
 
   initializeSampleData(): void {

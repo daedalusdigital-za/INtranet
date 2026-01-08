@@ -266,7 +266,7 @@ export class DocumentsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    console.log('Documents Component initialized');
+    // Documents component ready
   }
 
   openPasswordDialog(department: any): void {
@@ -278,7 +278,6 @@ export class DocumentsComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result && result.success) {
         // Password was correct, navigate to department hub
-        console.log(`Access granted to ${department.name}`);
         // TODO: Navigate to department hub page
       }
     });

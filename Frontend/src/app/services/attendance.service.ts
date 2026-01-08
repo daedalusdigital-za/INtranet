@@ -7,8 +7,8 @@ import { Employee, AttendanceMetrics, CheckInRequest, CheckOutRequest } from '..
 // Hardcoded development environment
 const environment = {
   production: false,
-  apiUrl: 'http://localhost:5143/api',
-  signalRUrl: 'http://localhost:5143',
+  apiUrl: '/api',
+  signalRUrl: '',
   enableDebugMode: true,
   logLevel: 'debug'
 };
@@ -23,8 +23,6 @@ export class AttendanceService {
   public refresh$ = this.refreshSubject.asObservable();
 
   constructor(private http: HttpClient) {
-    console.log('🔧 AttendanceService Environment:', environment);
-    console.log('📡 API URL:', this.apiUrl);
     this.startConnection();
   }
 
@@ -47,22 +45,18 @@ export class AttendanceService {
 
     this.hubConnection
       .start()
-      .then(() => console.log('AttendanceHub connection started'))
       .catch(err => console.error('Error starting AttendanceHub connection:', err));
 
     // Listen to events
-    this.hubConnection.on('EmployeeCheckedIn', (data: any) => {
-      console.log('Employee checked in:', data);
+    this.hubConnection.on('EmployeeCheckedIn', (_data: any) => {
       this.refreshSubject.next();
     });
 
-    this.hubConnection.on('EmployeeCheckedOut', (data: any) => {
-      console.log('Employee checked out:', data);
+    this.hubConnection.on('EmployeeCheckedOut', (_data: any) => {
       this.refreshSubject.next();
     });
 
     this.hubConnection.on('RefreshDashboard', () => {
-      console.log('Dashboard refresh requested');
       this.refreshSubject.next();
     });
   }

@@ -1,0 +1,7 @@
+# Models Folder
+
+Place your GGUF model files here.
+
+Required: `tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf`
+
+Run `.\download-model.ps1` from the project root to download automatically.

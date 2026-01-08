@@ -1708,7 +1708,6 @@ export class DashboardComponent implements OnInit {
 
   viewAllNotifications(): void {
     this.showNotifications = false;
-    console.log('View all notifications');
   }
 
   logout(): void {

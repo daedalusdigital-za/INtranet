@@ -7,7 +7,7 @@ import { Department, Board, Card, CardDetail, CreateCardRequest, MoveCardRequest
   providedIn: 'root'
 })
 export class ApiService {
-  private apiUrl = 'http://localhost:5143/api';
+  private apiUrl = '/api';
 
   constructor(private http: HttpClient) {}
 

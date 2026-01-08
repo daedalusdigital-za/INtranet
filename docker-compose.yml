@@ -1,0 +1,81 @@
+services:
+  # llama.cpp Server (Lightweight LLM)
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: projecttracker-llama
+    ports:
+      - "0.0.0.0:8080:8080"
+    volumes:
+      - ./ai-data/models:/models
+    command: >
+      -m /models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+      --host 0.0.0.0
+      --port 8080
+      --ctx-size 2048
+      --threads 4
+      --n-predict 512
+    networks:
+      - projecttracker-network
+    restart: unless-stopped
+
+  # SQL Server Database
+  database:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: projecttracker-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Express
+    ports:
+      - "0.0.0.0:1433:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+    networks:
+      - projecttracker-network
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # ASP.NET Core Backend
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: projecttracker-backend
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationThatIsLongEnough123456!
+    ports:
+      - "0.0.0.0:5000:80"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - projecttracker-network
+    restart: unless-stopped
+
+  # Angular Frontend
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    container_name: projecttracker-frontend
+    ports:
+      - "0.0.0.0:4200:80"
+    depends_on:
+      - backend
+    networks:
+      - projecttracker-network
+    restart: unless-stopped
+
+volumes:
+  sql-data:
+    driver: local
+
+networks:
+  projecttracker-network:
+    driver: bridge
