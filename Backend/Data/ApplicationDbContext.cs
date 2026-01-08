@@ -35,6 +35,17 @@ namespace ProjectTracker.API.Data
         public DbSet<EmpRegistration> EmpRegistrations { get; set; }
         public DbSet<AttendanceRecord> AttendanceRecords { get; set; }
 
+        // Support Ticket System
+        public DbSet<SupportTicket> SupportTickets { get; set; }
+        public DbSet<TicketComment> TicketComments { get; set; }
+
+        // Messaging System
+        public DbSet<Conversation> Conversations { get; set; }
+        public DbSet<ConversationParticipant> ConversationParticipants { get; set; }
+        public DbSet<Message> Messages { get; set; }
+        public DbSet<MessageAttachment> MessageAttachments { get; set; }
+        public DbSet<MessageReadReceipt> MessageReadReceipts { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -95,6 +106,62 @@ namespace ProjectTracker.API.Data
                 .WithMany(e => e.Attendances)
                 .HasForeignKey(a => a.EmployeeId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Support Ticket System relationships
+            modelBuilder.Entity<TicketComment>()
+                .HasOne(tc => tc.Ticket)
+                .WithMany(t => t.Comments)
+                .HasForeignKey(tc => tc.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Messaging System relationships
+            modelBuilder.Entity<ConversationParticipant>()
+                .HasOne(cp => cp.Conversation)
+                .WithMany(c => c.Participants)
+                .HasForeignKey(cp => cp.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ConversationParticipant>()
+                .HasOne(cp => cp.User)
+                .WithMany()
+                .HasForeignKey(cp => cp.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Message>()
+                .HasOne(m => m.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Message>()
+                .HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Message>()
+                .HasOne(m => m.ReplyToMessage)
+                .WithMany()
+                .HasForeignKey(m => m.ReplyToMessageId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<MessageAttachment>()
+                .HasOne(ma => ma.Message)
+                .WithMany(m => m.Attachments)
+                .HasForeignKey(ma => ma.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<MessageReadReceipt>()
+                .HasOne(mr => mr.Message)
+                .WithMany(m => m.ReadReceipts)
+                .HasForeignKey(mr => mr.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<MessageReadReceipt>()
+                .HasOne(mr => mr.User)
+                .WithMany()
+                .HasForeignKey(mr => mr.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Seed initial data
             SeedData(modelBuilder);

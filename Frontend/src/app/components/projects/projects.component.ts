@@ -67,6 +67,61 @@ import { AuthService } from '../../services/auth.service';
 
       <span class="spacer"></span>
 
+      <!-- Messages Icon -->
+      <button mat-icon-button [matBadge]="unreadMessagesCount" matBadgeColor="accent" [matBadgeHidden]="unreadMessagesCount === 0" (click)="toggleMessages($event)" matTooltip="Messages">
+        <mat-icon>mail</mat-icon>
+      </button>
+
+      <!-- Messages Dropdown -->
+      @if (showMessages) {
+        <div class="messages-dropdown" (click)="$event.stopPropagation()">
+          <div class="messages-header">
+            <h3>Messages</h3>
+            <button mat-mini-fab color="primary" (click)="openNewMessageDialog()" matTooltip="New Message">
+              <mat-icon>edit</mat-icon>
+            </button>
+          </div>
+
+          <div class="messages-list">
+            @if (recentConversations.length === 0) {
+              <div class="no-messages">
+                <mat-icon>forum</mat-icon>
+                <p>No messages yet</p>
+                <button mat-raised-button color="primary" (click)="openNewMessageDialog()">
+                  Start a Conversation
+                </button>
+              </div>
+            } @else {
+              @for (conv of recentConversations; track conv.conversationId) {
+                <div class="message-item" [class.unread]="conv.unreadCount > 0" (click)="openConversation(conv)">
+                  <div class="message-avatar">
+                    @if (conv.isGroupChat) {
+                      <mat-icon>group</mat-icon>
+                    } @else {
+                      <mat-icon>person</mat-icon>
+                    }
+                  </div>
+                  <div class="message-content">
+                    <div class="message-header-row">
+                      <span class="message-sender">{{ conv.isGroupChat ? conv.groupName : getOtherParticipantName(conv) }}</span>
+                      @if (conv.unreadCount > 0) {
+                        <span class="unread-badge">{{ conv.unreadCount }}</span>
+                      }
+                    </div>
+                    <p class="message-preview">{{ conv.lastMessage?.content || 'No messages' }}</p>
+                    <span class="message-time">{{ formatMessageTime(conv.lastMessageAt) }}</span>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+
+          <div class="messages-footer">
+            <button mat-button color="primary" (click)="viewAllMessages()">View All Messages</button>
+          </div>
+        </div>
+      }
+
       <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0" (click)="toggleNotifications($event)" matTooltip="Notifications">
         <mat-icon>notifications</mat-icon>
       </button>
@@ -119,7 +174,7 @@ import { AuthService } from '../../services/auth.service';
         <mat-icon>account_circle</mat-icon>
       </button>
       <mat-menu #menu="matMenu">
-        <button mat-menu-item>
+        <button mat-menu-item (click)="goToProfile()">
           <mat-icon>person</mat-icon>
           <span>Profile</span>
         </button>
@@ -540,6 +595,151 @@ import { AuthService } from '../../services/auth.service';
     }
 
     .notification-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #e0e0e0;
+      background: #f5f5f5;
+      text-align: center;
+    }
+
+    /* Messages Dropdown Styles */
+    .messages-dropdown {
+      position: absolute;
+      top: 60px;
+      right: 150px;
+      width: 400px;
+      max-height: 550px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      z-index: 1001;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .messages-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e0e0e0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .messages-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .messages-list {
+      flex: 1;
+      overflow-y: auto;
+      max-height: 400px;
+    }
+
+    .no-messages {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #9e9e9e;
+      text-align: center;
+    }
+
+    .no-messages mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .no-messages button {
+      margin-top: 16px;
+    }
+
+    .message-item {
+      display: flex;
+      gap: 12px;
+      padding: 14px 20px;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background-color 0.2s;
+      cursor: pointer;
+    }
+
+    .message-item:hover {
+      background-color: #f5f5f5;
+    }
+
+    .message-item.unread {
+      background-color: #ede7f6;
+    }
+
+    .message-item.unread:hover {
+      background-color: #e1d5f0;
+    }
+
+    .message-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .message-avatar mat-icon {
+      color: white;
+      font-size: 24px;
+    }
+
+    .message-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .message-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .message-sender {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .unread-badge {
+      background: #667eea;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .message-preview {
+      font-size: 13px;
+      color: #666;
+      margin: 0 0 4px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .message-time {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .messages-footer {
       padding: 12px 20px;
       border-top: 1px solid #e0e0e0;
       background: #f5f5f5;
@@ -1301,6 +1501,16 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
   ];
 
+  // Messages properties
+  showMessages: boolean = false;
+  unreadMessagesCount: number = 0;
+  recentConversations: any[] = [];
+
+  // Get current user ID from auth service
+  get currentUserId(): number {
+    return this.authService.currentUserValue?.userId || 0;
+  }
+
   // Company Announcements
   announcements: any[] = [
     {
@@ -1454,9 +1664,14 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     // Start weather card rotation
     this.startWeatherRotation();
 
-    // Close notifications dropdown when clicking outside
+    // Load messages
+    this.loadRecentConversations();
+    this.loadUnreadCount();
+
+    // Close dropdowns when clicking outside
     document.addEventListener('click', () => {
       this.showNotifications = false;
+      this.showMessages = false;
     });
   }
 
@@ -1638,6 +1853,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   toggleNotifications(event: Event): void {
     event.stopPropagation();
     this.showNotifications = !this.showNotifications;
+    this.showMessages = false; // Close messages when opening notifications
   }
 
   markAsRead(notificationId: number): void {
@@ -1659,6 +1875,83 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
   viewAllNotifications(): void {
     this.showNotifications = false;
+  }
+
+  // Messages methods
+  toggleMessages(event: Event): void {
+    event.stopPropagation();
+    this.showMessages = !this.showMessages;
+    this.showNotifications = false; // Close notifications when opening messages
+    if (this.showMessages) {
+      this.loadRecentConversations();
+    }
+  }
+
+  loadRecentConversations(): void {
+    fetch(`http://localhost:5000/api/messages/conversations?userId=${this.currentUserId}`)
+      .then(response => response.json())
+      .then(data => {
+        this.recentConversations = data.slice(0, 5); // Show only 5 most recent
+      })
+      .catch(error => {
+        console.error('Error loading conversations:', error);
+        this.recentConversations = [];
+      });
+  }
+
+  loadUnreadCount(): void {
+    fetch(`http://localhost:5000/api/messages/unread-count?userId=${this.currentUserId}`)
+      .then(response => response.json())
+      .then(count => {
+        this.unreadMessagesCount = count;
+      })
+      .catch(error => {
+        console.error('Error loading unread count:', error);
+        this.unreadMessagesCount = 0;
+      });
+  }
+
+  getOtherParticipantName(conv: any): string {
+    const otherParticipant = conv.participants?.find((p: any) => p.userId !== this.currentUserId);
+    return otherParticipant ? `${otherParticipant.name} ${otherParticipant.surname}` : 'Unknown';
+  }
+
+  formatMessageTime(dateStr: string): string {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  }
+
+  openConversation(conv: any): void {
+    this.showMessages = false;
+    // TODO: Navigate to full messages view or open chat dialog
+    console.log('Opening conversation:', conv.conversationId);
+  }
+
+  openNewMessageDialog(): void {
+    this.showMessages = false;
+    // TODO: Open new message dialog
+    console.log('Opening new message dialog');
+  }
+
+  viewAllMessages(): void {
+    this.showMessages = false;
+    // TODO: Navigate to full messages page
+    console.log('View all messages');
+  }
+
+  goToProfile(): void {
+    this.router.navigate(['/profile']);
   }
 
   logout(): void {

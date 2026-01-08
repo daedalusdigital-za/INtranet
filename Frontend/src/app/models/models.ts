@@ -1,10 +1,15 @@
 export interface User {
   userId: number;
   name: string;
+  surname?: string;
   email: string;
   role: string;
+  title?: string;
+  permissions?: string;
   departmentId?: number;
   departmentName?: string;
+  profilePictureUrl?: string;
+  lastLoginAt?: Date;
 }
 
 export interface LoginRequest {

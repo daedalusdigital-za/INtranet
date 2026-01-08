@@ -13,20 +13,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
-
-interface SupportTicket {
-  id: number;
-  title: string;
-  description: string;
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
-  status: 'Open' | 'Closed';
-  submittedBy: string;
-  submittedDate: Date;
-  closedDate?: Date;
-  category: string;
-}
+import { SupportTicketService, SupportTicket, TicketStatistics } from '../../services/support-ticket.service';
 
 @Component({
   selector: 'app-support-ticket',
@@ -45,6 +36,8 @@ interface SupportTicket {
     MatDialogModule,
     MatSelectModule,
     MatFormFieldModule,
+    MatSnackBarModule,
+    MatProgressSpinnerModule,
     FormsModule
   ],
   template: `
@@ -108,7 +101,6 @@ interface SupportTicket {
             <mat-icon>support_agent</mat-icon>
             Support Ticket System
           </h1>
-          <p class="subtitle">Submit and track your support requests</p>
         </div>
         <div class="header-right">
           <mat-form-field appearance="outline" class="date-filter">
@@ -161,7 +153,16 @@ interface SupportTicket {
         </mat-card>
       </div>
 
+      <!-- Loading Spinner -->
+      @if (loading) {
+        <div class="loading-container">
+          <mat-spinner diameter="50"></mat-spinner>
+          <p>Loading tickets...</p>
+        </div>
+      }
+
       <!-- Tickets Row: Open and Closed Side by Side -->
+      @if (!loading) {
       <div class="tickets-row">
         <!-- Open Tickets Section -->
         <mat-card class="tickets-card">
@@ -181,16 +182,21 @@ interface SupportTicket {
               </div>
             } @else {
               <div class="tickets-list">
-                @for (ticket of openTickets; track ticket.id) {
+                @for (ticket of openTickets; track ticket.ticketId) {
                   <div class="ticket-item">
                     <div class="ticket-header">
                       <div class="ticket-title-section">
                         <h4>{{ ticket.title }}</h4>
-                        <span class="ticket-id">#{{ ticket.id }}</span>
+                        <span class="ticket-id">#{{ ticket.ticketId }}</span>
                       </div>
-                      <mat-chip [class]="'priority-' + ticket.priority.toLowerCase()">
-                        {{ ticket.priority }}
-                      </mat-chip>
+                      <div class="ticket-actions">
+                        <mat-chip [class]="'priority-' + ticket.priority.toLowerCase()">
+                          {{ ticket.priority }}
+                        </mat-chip>
+                        <button mat-icon-button color="primary" (click)="closeTicket(ticket)" title="Close Ticket">
+                          <mat-icon>check_circle</mat-icon>
+                        </button>
+                      </div>
                     </div>
                     <p class="ticket-description">{{ ticket.description }}</p>
                     <div class="ticket-meta">
@@ -223,16 +229,24 @@ interface SupportTicket {
               </div>
             } @else {
               <div class="tickets-list">
-                @for (ticket of closedTickets; track ticket.id) {
+                @for (ticket of closedTickets; track ticket.ticketId) {
                   <div class="ticket-item closed">
                     <div class="ticket-header">
                       <div class="ticket-title-section">
                         <h4>{{ ticket.title }}</h4>
-                        <span class="ticket-id">#{{ ticket.id }}</span>
+                        <span class="ticket-id">#{{ ticket.ticketId }}</span>
                       </div>
-                      <mat-chip class="status-closed">Resolved</mat-chip>
+                      <div class="ticket-actions">
+                        <mat-chip class="status-closed">Resolved</mat-chip>
+                        <button mat-icon-button color="warn" (click)="reopenTicket(ticket)" title="Reopen Ticket">
+                          <mat-icon>refresh</mat-icon>
+                        </button>
+                      </div>
                     </div>
                     <p class="ticket-description">{{ ticket.description }}</p>
+                    @if (ticket.resolution) {
+                      <p class="ticket-resolution"><strong>Resolution:</strong> {{ ticket.resolution }}</p>
+                    }
                     <div class="ticket-meta">
                       <span><mat-icon>person</mat-icon>{{ ticket.submittedBy }}</span>
                       <span><mat-icon>calendar_today</mat-icon>{{ ticket.submittedDate | date: 'MMM dd, yyyy' }}</span>
@@ -245,6 +259,7 @@ interface SupportTicket {
           </mat-card-content>
         </mat-card>
       </div>
+      }
     </div>
   `,
   styles: [`
@@ -252,6 +267,35 @@ interface SupportTicket {
       padding: 24px;
       min-height: calc(100vh - 64px);
       background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+    }
+
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px;
+      color: white;
+    }
+
+    .loading-container p {
+      margin-top: 16px;
+      font-size: 16px;
+    }
+
+    .ticket-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ticket-resolution {
+      font-size: 13px;
+      color: #059669;
+      background: #d1fae5;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin: 8px 0;
     }
 
     .header-section {
@@ -598,141 +642,108 @@ interface SupportTicket {
 export class SupportTicketComponent implements OnInit {
   currentUser: any;
   notificationCount = 3;
+  loading = false;
 
   // Statistics
   totalTickets: number = 0;
-  averageResponseTime: string = '2.5 hrs';
+  averageResponseTime: string = '0 hrs';
   resolutionRate: number = 0;
 
   // Date filter
-  selectedDateRange: string = 'today';
+  selectedDateRange: string = '30days';
 
-  // All tickets storage
-  allOpenTickets: SupportTicket[] = [];
-  allClosedTickets: SupportTicket[] = [];
-
-  // Filtered tickets for display
+  // Tickets from database
   openTickets: SupportTicket[] = [];
   closedTickets: SupportTicket[] = [];
 
   constructor(
     private authService: AuthService,
     private router: Router,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private ticketService: SupportTicketService,
+    private snackBar: MatSnackBar
   ) {
     this.currentUser = this.authService.currentUserValue;
-    this.initializeSampleData();
   }
 
   ngOnInit(): void {
-    this.filterTicketsByDateRange();
-    this.calculateStatistics();
+    this.loadTickets();
   }
 
-  initializeSampleData(): void {
-    this.allOpenTickets = [
-    {
-      id: 1001,
-      title: 'Email System Not Working',
-      description: 'Unable to send or receive emails since this morning. Getting connection timeout errors.',
-      priority: 'High',
-      status: 'Open',
-      submittedBy: 'John Smith',
-      submittedDate: new Date('2025-11-04'),
-      category: 'IT Support'
-    },
-    {
-      id: 1002,
-      title: 'Request for New Software License',
-      description: 'Need Adobe Creative Cloud license for marketing team member.',
-      priority: 'Medium',
-      status: 'Open',
-      submittedBy: 'Sarah Johnson',
-      submittedDate: new Date('2025-11-03'),
-      category: 'Software'
-    },
-    {
-      id: 1003,
-      title: 'Printer Offline in Conference Room',
-      description: 'The main conference room printer is showing offline status and not responding.',
-      priority: 'Low',
-      status: 'Open',
-      submittedBy: 'Michael Brown',
-      submittedDate: new Date('2025-11-02'),
-      category: 'Hardware'
-    }
-  ];
+  loadTickets(): void {
+    this.loading = true;
+    
+    // Load open tickets
+    this.ticketService.getOpenTickets().subscribe({
+      next: (tickets) => {
+        this.openTickets = tickets;
+        this.loadClosedTickets();
+      },
+      error: (error) => {
+        console.error('Error loading open tickets:', error);
+        this.snackBar.open('Failed to load tickets', 'Close', { duration: 3000 });
+        this.loading = false;
+      }
+    });
+  }
 
-    this.allClosedTickets = [
-    {
-      id: 998,
-      title: 'Password Reset Request',
-      description: 'Locked out of account after multiple failed login attempts.',
-      priority: 'High',
-      status: 'Closed',
-      submittedBy: 'Emily Davis',
-      submittedDate: new Date('2025-11-01'),
-      closedDate: new Date('2025-11-01'),
-      category: 'Account'
-    },
-    {
-      id: 999,
-      title: 'VPN Connection Issues',
-      description: 'Cannot connect to company VPN from home network.',
-      priority: 'Medium',
-      status: 'Closed',
-      submittedBy: 'David Wilson',
-      submittedDate: new Date('2025-10-30'),
-      closedDate: new Date('2025-10-31'),
-      category: 'Network'
-    },
-    {
-      id: 1000,
-      title: 'Request Access to Shared Drive',
-      description: 'Need read/write access to Marketing shared drive folder.',
-      priority: 'Low',
-      status: 'Closed',
-      submittedBy: 'Lisa Anderson',
-      submittedDate: new Date('2025-10-29'),
-      closedDate: new Date('2025-10-30'),
-      category: 'Access'
+  loadClosedTickets(): void {
+    this.ticketService.getClosedTickets().subscribe({
+      next: (tickets) => {
+        this.closedTickets = tickets;
+        this.loadStatistics();
+      },
+      error: (error) => {
+        console.error('Error loading closed tickets:', error);
+        this.loading = false;
+      }
+    });
+  }
+
+  loadStatistics(): void {
+    const fromDate = this.getDateRangeStart();
+    this.ticketService.getStatistics(fromDate).subscribe({
+      next: (stats) => {
+        this.totalTickets = stats.totalTickets;
+        this.resolutionRate = Math.round(stats.resolutionRate);
+        if (stats.averageResponseTimeHours > 0) {
+          this.averageResponseTime = stats.averageResponseTimeHours.toFixed(1) + ' hrs';
+        }
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error loading statistics:', error);
+        this.calculateLocalStatistics();
+        this.loading = false;
+      }
+    });
+  }
+
+  calculateLocalStatistics(): void {
+    this.totalTickets = this.openTickets.length + this.closedTickets.length;
+    if (this.totalTickets > 0) {
+      this.resolutionRate = Math.round((this.closedTickets.length / this.totalTickets) * 100);
     }
-    ];
+  }
+
+  getDateRangeStart(): Date {
+    const now = new Date();
+    switch (this.selectedDateRange) {
+      case 'today':
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      case '7days':
+        return new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+      case '30days':
+        return new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+      case '90days':
+        return new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+      default:
+        return new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    }
   }
 
   onDateRangeChange(): void {
-    this.filterTicketsByDateRange();
-    this.calculateStatistics();
-  }
-
-  filterTicketsByDateRange(): void {
-    const now = new Date();
-    let cutoffDate: Date;
-
-    switch (this.selectedDateRange) {
-      case 'today':
-        cutoffDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        break;
-      case '7days':
-        cutoffDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
-        break;
-      case '30days':
-        cutoffDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-        break;
-      case '90days':
-        cutoffDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-        break;
-      default:
-        cutoffDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-    }
-
-    this.openTickets = this.allOpenTickets.filter(ticket =>
-      ticket.submittedDate >= cutoffDate
-    );
-
-    this.closedTickets = this.allClosedTickets.filter(ticket =>
-      ticket.submittedDate >= cutoffDate
-    );
+    this.loadStatistics();
   }
 
   openCreateTicketDialog(): void {
@@ -743,32 +754,63 @@ export class SupportTicketComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        // Add the new ticket to both allOpenTickets and openTickets
-        const newTicket: SupportTicket = {
-          id: 1000 + this.totalTickets + 1,
+        const createRequest = {
           title: result.title,
           description: result.description,
           priority: result.priority,
-          status: 'Open',
-          submittedBy: this.currentUser?.name || 'Unknown',
-          submittedDate: new Date(),
-          category: result.category
+          category: result.category,
+          submittedBy: this.currentUser?.name || 'Unknown'
         };
-        this.allOpenTickets.unshift(newTicket);
-        this.openTickets.unshift(newTicket);
-        this.calculateStatistics();
+
+        this.ticketService.createTicket(createRequest).subscribe({
+          next: (newTicket) => {
+            this.openTickets.unshift(newTicket);
+            this.totalTickets++;
+            this.snackBar.open('Ticket created successfully!', 'Close', { duration: 3000 });
+          },
+          error: (error) => {
+            console.error('Error creating ticket:', error);
+            this.snackBar.open('Failed to create ticket', 'Close', { duration: 3000 });
+          }
+        });
       }
     });
   }
 
-  calculateStatistics(): void {
-    this.totalTickets = this.openTickets.length + this.closedTickets.length;
+  closeTicket(ticket: SupportTicket): void {
+    this.ticketService.closeTicket(ticket.ticketId).subscribe({
+      next: () => {
+        // Move from open to closed
+        this.openTickets = this.openTickets.filter(t => t.ticketId !== ticket.ticketId);
+        ticket.status = 'Closed';
+        ticket.closedDate = new Date();
+        this.closedTickets.unshift(ticket);
+        this.loadStatistics();
+        this.snackBar.open('Ticket closed', 'Close', { duration: 3000 });
+      },
+      error: (error) => {
+        console.error('Error closing ticket:', error);
+        this.snackBar.open('Failed to close ticket', 'Close', { duration: 3000 });
+      }
+    });
+  }
 
-    if (this.totalTickets > 0) {
-      this.resolutionRate = Math.round((this.closedTickets.length / this.totalTickets) * 100);
-    } else {
-      this.resolutionRate = 0;
-    }
+  reopenTicket(ticket: SupportTicket): void {
+    this.ticketService.reopenTicket(ticket.ticketId).subscribe({
+      next: () => {
+        // Move from closed to open
+        this.closedTickets = this.closedTickets.filter(t => t.ticketId !== ticket.ticketId);
+        ticket.status = 'Open';
+        ticket.closedDate = undefined;
+        this.openTickets.unshift(ticket);
+        this.loadStatistics();
+        this.snackBar.open('Ticket reopened', 'Close', { duration: 3000 });
+      },
+      error: (error) => {
+        console.error('Error reopening ticket:', error);
+        this.snackBar.open('Failed to reopen ticket', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   logout(): void {

@@ -28,18 +28,35 @@ namespace ProjectTracker.API.Services
         {
             var user = await _context.Users
                 .Include(u => u.Department)
-                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
+                .FirstOrDefaultAsync(u => u.Email == loginDto.Email && u.IsActive);
 
             if (user == null)
             {
                 return null;
             }
 
-            // Verify password using BCrypt
-            if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
+            // Verify password - support both plain text (for dev) and BCrypt hashed
+            bool passwordValid = false;
+            
+            // Check if password is BCrypt hashed (starts with $2)
+            if (user.PasswordHash.StartsWith("$2"))
+            {
+                passwordValid = BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash);
+            }
+            else
+            {
+                // Plain text comparison (for development/testing)
+                passwordValid = user.PasswordHash == loginDto.Password;
+            }
+
+            if (!passwordValid)
             {
                 return null;
             }
+
+            // Update last login time
+            user.LastLoginAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
 
             var token = _tokenService.GenerateToken(user);
 
@@ -50,10 +67,15 @@ namespace ProjectTracker.API.Services
                 {
                     UserId = user.UserId,
                     Name = user.Name,
+                    Surname = user.Surname,
                     Email = user.Email,
                     Role = user.Role,
+                    Title = user.Title,
+                    Permissions = user.Permissions,
                     DepartmentId = user.DepartmentId,
-                    DepartmentName = user.Department?.Name
+                    DepartmentName = user.Department?.Name,
+                    ProfilePictureUrl = user.ProfilePictureUrl,
+                    LastLoginAt = user.LastLoginAt
                 }
             };
         }

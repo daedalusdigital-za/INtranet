@@ -57,6 +57,9 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
+// Add Azure Sync Background Service
+builder.Services.AddHostedService<AzureSyncService>();
+
 var app = builder.Build();
 
 // Apply migrations and seed data automatically
@@ -84,5 +87,6 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<BoardHub>("/hubs/board");
 app.MapHub<AttendanceHub>("/hubs/attendance");
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

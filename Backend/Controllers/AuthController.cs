@@ -20,27 +20,18 @@ namespace ProjectTracker.API.Controllers
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
             // Trim whitespace from input
-            var email = loginDto.Email?.Trim() ?? "";
-            var password = loginDto.Password?.Trim() ?? "";
+            loginDto.Email = loginDto.Email?.Trim() ?? "";
+            loginDto.Password = loginDto.Password?.Trim() ?? "";
 
-            // Hardcoded login - bypass database
-            if (email == "welcome@promedtechnologies.co.za" && password == "Kingsland")
+            // Authenticate against Users table in database
+            var result = await _authService.LoginAsync(loginDto);
+
+            if (result == null)
             {
-                var result = new
-                {
-                    token = _authService.GenerateToken(1, "Admin User", "welcome@promedtechnologies.co.za", "Admin"),
-                    user = new
-                    {
-                        userId = 1,
-                        name = "Admin User",
-                        email = "welcome@promedtechnologies.co.za",
-                        role = "Admin"
-                    }
-                };
-                return Ok(result);
+                return Unauthorized(new { message = "Invalid email or password" });
             }
 
-            return Unauthorized(new { message = "Invalid email or password" });
+            return Ok(result);
         }
 
         [HttpPost("register")]

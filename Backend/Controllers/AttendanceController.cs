@@ -7,6 +7,8 @@ using ProjectTracker.API.DTOs;
 using ProjectTracker.API.Hubs;
 using ProjectTracker.API.Models;
 
+using ProjectTracker.API.Services;
+
 namespace ProjectTracker.API.Controllers
 {
     [ApiController]
@@ -16,11 +18,36 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IHubContext<AttendanceHub> _attendanceHub;
+        private readonly AzureSyncService? _syncService;
 
-        public AttendanceController(ApplicationDbContext context, IHubContext<AttendanceHub> attendanceHub)
+        public AttendanceController(
+            ApplicationDbContext context, 
+            IHubContext<AttendanceHub> attendanceHub,
+            IEnumerable<IHostedService> hostedServices)
         {
             _context = context;
             _attendanceHub = attendanceHub;
+            _syncService = hostedServices.OfType<AzureSyncService>().FirstOrDefault();
+        }
+
+        // POST: api/attendance/sync
+        [HttpPost("sync")]
+        public async Task<ActionResult> TriggerSync()
+        {
+            if (_syncService == null)
+            {
+                return StatusCode(500, new { message = "Sync service not available" });
+            }
+
+            try
+            {
+                await _syncService.SyncFromAzureAsync();
+                return Ok(new { message = "Sync completed successfully", timestamp = DateTime.UtcNow });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Sync failed", error = ex.Message });
+            }
         }
 
         // GET: api/attendance/employees

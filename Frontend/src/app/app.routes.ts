@@ -9,6 +9,7 @@ import { DocumentsComponent } from './components/documents/documents.component';
 import { CrmComponent } from './components/crm/crm.component';
 import { StockManagementComponent } from './components/stock-management/stock-management.component';
 import { CalendarComponent } from './components/calendar/calendar.component';
+import { ProfileComponent } from './components/profile/profile.component';
 import { authGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
@@ -23,6 +24,7 @@ export const routes: Routes = [
   { path: 'stock-management', component: StockManagementComponent, canActivate: [authGuard] },
   { path: 'support-ticket', component: SupportTicketComponent, canActivate: [authGuard] },
   { path: 'documents', component: DocumentsComponent, canActivate: [authGuard] },
+  { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
   { path: 'board/:id', component: BoardComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '/login' }
 ];
