@@ -281,9 +281,24 @@ import { UserSearchPopupComponent } from '../../user-search-popup/user-search-po
     }
 
     .dropdown-footer {
-      padding: 8px 16px;
+      padding: 12px 16px;
       border-top: 1px solid #eee;
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .dropdown-footer button {
+      background: #1a237e !important;
+      color: white !important;
+      border-radius: 8px;
+      font-weight: 500;
+      padding: 8px 16px;
+    }
+
+    .dropdown-footer button:hover {
+      background: #0d1453 !important;
     }
 
     .empty-state {
