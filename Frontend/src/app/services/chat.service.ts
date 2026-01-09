@@ -2,14 +2,19 @@ import { Injectable } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 
 export interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
 }
 
-export interface LlamaResponse {
-  content: string;
-  stop: boolean;
+export interface OllamaResponse {
+  model: string;
+  created_at: string;
+  message: {
+    role: string;
+    content: string;
+  };
+  done: boolean;
 }
 
 @Injectable({
@@ -17,7 +22,8 @@ export interface LlamaResponse {
 })
 export class ChatService {
   // Use relative path so it works on any intranet host
-  private llamaUrl = '/ai';
+  private ollamaUrl = '/ai';
+  private modelName = 'mistral:latest';
   private conversationHistory: ChatMessage[] = [];
   
   // System prompt - Welly's personality
@@ -52,7 +58,7 @@ Response Style:
   constructor() {}
 
   /**
-   * Send a message to llama.cpp and get a streaming response
+   * Send a message to Ollama and get a streaming response
    */
   sendMessage(message: string): Observable<string> {
     const responseSubject = new Subject<string>();
@@ -64,32 +70,53 @@ Response Style:
       timestamp: new Date()
     });
 
-    // Build the prompt with context
-    const prompt = this.buildPrompt(message);
-
     // Stream the response
-    this.streamChat(prompt, responseSubject);
+    this.streamChat(message, responseSubject);
 
     return responseSubject.asObservable();
   }
 
   /**
-   * Stream chat response from llama.cpp
+   * Stream chat response from Ollama
    */
-  private async streamChat(prompt: string, subject: Subject<string>): Promise<void> {
+  private async streamChat(userMessage: string, subject: Subject<string>): Promise<void> {
     try {
-      const response = await fetch(`${this.llamaUrl}/completion`, {
+      // Build messages array with system prompt and history
+      const messages: any[] = [
+        {
+          role: 'system',
+          content: this.systemPrompt
+        }
+      ];
+
+      // Include last 6 messages for context (3 exchanges)
+      const recentHistory = this.conversationHistory.slice(-7, -1); // Exclude the just-added user message
+      for (const msg of recentHistory) {
+        messages.push({
+          role: msg.role,
+          content: msg.content
+        });
+      }
+
+      // Add current user message
+      messages.push({
+        role: 'user',
+        content: userMessage
+      });
+
+      const response = await fetch(`${this.ollamaUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: prompt,
-          n_predict: 512,
+          model: this.modelName,
+          messages: messages,
           stream: true,
-          temperature: 0.7,
-          stop: ["User:", "\nUser", "</s>"],
-          repeat_penalty: 1.1
+          options: {
+            temperature: 0.7,
+            num_predict: 512
+          }
         })
       });
 
@@ -110,19 +137,15 @@ Response Style:
           const lines = chunk.split('\n').filter(line => line.trim());
 
           for (const line of lines) {
-            // llama.cpp sends "data: {json}" format
-            const dataMatch = line.match(/^data:\s*(.+)$/);
-            if (dataMatch) {
-              try {
-                const json: LlamaResponse = JSON.parse(dataMatch[1]);
-                if (json.content) {
-                  fullResponse += json.content;
-                  subject.next(json.content);
-                }
-                if (json.stop) break;
-              } catch (e) {
-                // Skip invalid JSON
+            try {
+              const json: OllamaResponse = JSON.parse(line);
+              if (json.message?.content) {
+                fullResponse += json.message.content;
+                subject.next(json.message.content);
               }
+              if (json.done) break;
+            } catch (e) {
+              // Skip invalid JSON
             }
           }
         }
@@ -138,27 +161,8 @@ Response Style:
       subject.complete();
     } catch (error) {
       console.error('Chat error:', error);
-      subject.error('Failed to connect to AI service. Please ensure the LLM server is running.');
+      subject.error('Failed to connect to AI service. Please ensure Ollama is running.');
     }
-  }
-
-  /**
-   * Build prompt with conversation context (ChatML format)
-   */
-  private buildPrompt(userMessage: string): string {
-    let prompt = `<|system|>\n${this.systemPrompt}</s>\n`;
-
-    // Include last 6 messages for context (3 exchanges)
-    const recentHistory = this.conversationHistory.slice(-6);
-    for (const msg of recentHistory) {
-      if (msg.role === 'user') {
-        prompt += `<|user|>\n${msg.content}</s>\n`;
-      } else {
-        prompt += `<|assistant|>\n${msg.content}</s>\n`;
-      }
-    }
-
-    return prompt + '<|assistant|>\n';
   }
 
   /**
@@ -176,11 +180,11 @@ Response Style:
   }
 
   /**
-   * Check if llama.cpp service is available
+   * Check if Ollama service is available
    */
   checkHealth(): Observable<boolean> {
     return new Observable(observer => {
-      fetch(`${this.llamaUrl}/health`)
+      fetch(`${this.ollamaUrl}/api/tags`)
         .then(response => {
           observer.next(response.ok);
           observer.complete();

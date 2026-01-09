@@ -1,22 +1,17 @@
 services:
-  # llama.cpp Server (Lightweight LLM)
-  llama:
-    image: ghcr.io/ggml-org/llama.cpp:server
-    container_name: projecttracker-llama
+  # Ollama AI Server (Mistral 7B)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: projecttracker-ollama
     ports:
-      - "0.0.0.0:8080:8080"
+      - "0.0.0.0:11434:11434"
     volumes:
-      - ./ai-data/models:/models
-    command: >
-      -m /models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
-      --host 0.0.0.0
-      --port 8080
-      --ctx-size 2048
-      --threads 4
-      --n-predict 512
+      - ollama-data:/root/.ollama
     networks:
       - projecttracker-network
     restart: unless-stopped
+    environment:
+      - OLLAMA_HOST=0.0.0.0
 
   # SQL Server Database
   database:
@@ -70,7 +65,8 @@ services:
 volumes:
   sql-data:
     driver: local
-
+  ollama-data:
+    driver: local
 networks:
   projecttracker-network:
     driver: bridge

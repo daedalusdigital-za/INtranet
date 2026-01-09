@@ -65,9 +65,9 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       </div>
 
       <div class="events-sidebar">
-        <h2>Upcoming Events</h2>
+        <h2>Events for {{ monthNames[currentMonth] }} {{ currentYear }}</h2>
         <div class="events-list">
-          @for (event of upcomingEvents; track event.id) {
+          @for (event of getCurrentMonthEvents(); track event.id) {
             <mat-card class="event-card">
               <mat-card-header>
                 <mat-card-title>{{ event.title }}</mat-card-title>
@@ -85,6 +85,9 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
                 <p>{{ event.description }}</p>
               </mat-card-content>
             </mat-card>
+          }
+          @if (getCurrentMonthEvents().length === 0) {
+            <p style="color: white; font-size: 1.1rem; opacity: 0.9;">No events scheduled for this month.</p>
           }
         </div>
       </div>
@@ -345,6 +348,125 @@ export class CalendarComponent implements OnInit {
   ];
 
   upcomingEvents = [
+    // South African Public Holidays 2026
+    {
+      id: 101,
+      title: "New Year's Day",
+      date: new Date(2026, 0, 1), // January 1, 2026 (Thursday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 102,
+      title: 'Human Rights Day',
+      date: new Date(2026, 2, 21), // March 21, 2026 (Saturday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 103,
+      title: 'Good Friday',
+      date: new Date(2026, 3, 3), // April 3, 2026 (Friday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 104,
+      title: 'Family Day',
+      date: new Date(2026, 3, 6), // April 6, 2026 (Monday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 105,
+      title: 'Freedom Day',
+      date: new Date(2026, 3, 27), // April 27, 2026 (Monday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 106,
+      title: "Workers' Day",
+      date: new Date(2026, 4, 1), // May 1, 2026 (Friday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 107,
+      title: 'Youth Day',
+      date: new Date(2026, 5, 16), // June 16, 2026 (Tuesday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 108,
+      title: "National Women's Day",
+      date: new Date(2026, 7, 9), // August 9, 2026 (Sunday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 109,
+      title: "Public Holiday (Women's Day observed)",
+      date: new Date(2026, 7, 10), // August 10, 2026 (Monday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: "Public Holiday observed for National Women's Day",
+      color: '#DC143C'
+    },
+    {
+      id: 110,
+      title: 'Heritage Day',
+      date: new Date(2026, 8, 24), // September 24, 2026 (Thursday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 111,
+      title: 'Day of Reconciliation',
+      date: new Date(2026, 11, 16), // December 16, 2026 (Wednesday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 112,
+      title: 'Christmas Day',
+      date: new Date(2026, 11, 25), // December 25, 2026 (Friday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    {
+      id: 113,
+      title: 'Day of Goodwill',
+      date: new Date(2026, 11, 26), // December 26, 2026 (Saturday)
+      time: 'All Day',
+      location: 'Public Holiday',
+      description: 'South African Public Holiday',
+      color: '#DC143C'
+    },
+    // Regular events
     {
       id: 1,
       title: 'Team Meeting',
@@ -475,6 +597,13 @@ export class CalendarComponent implements OnInit {
       this.currentMonth++;
     }
     this.generateCalendar();
+  }
+
+  getCurrentMonthEvents(): any[] {
+    return this.upcomingEvents.filter(event => 
+      event.date.getMonth() === this.currentMonth && 
+      event.date.getFullYear() === this.currentYear
+    ).sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
   openDayEvents(day: any): void {
