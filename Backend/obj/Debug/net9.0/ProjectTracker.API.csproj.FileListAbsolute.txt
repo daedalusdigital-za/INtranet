@@ -342,3 +342,15 @@ C:\Users\Administrator\Documents\GitHub\INtranet\Backend\obj\Debug\net9.0\refint
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\obj\Debug\net9.0\ProjectTracker.API.pdb
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\obj\Debug\net9.0\ProjectTracker.API.genruntimeconfig.cache
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\obj\Debug\net9.0\ref\ProjectTracker.API.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.barcodes.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.bouncy-castle-connector.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.forms.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.io.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.kernel.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.layout.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.pdfa.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.sign.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.styledxmlparser.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.svg.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\itext.commons.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net9.0\Microsoft.DotNet.PlatformAbstractions.dll

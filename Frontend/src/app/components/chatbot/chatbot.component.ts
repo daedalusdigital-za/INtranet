@@ -8,6 +8,8 @@ interface ChatMessage {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  attachmentName?: string;
+  attachmentType?: string;
 }
 
 @Component({
@@ -26,6 +28,8 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   isTyping = false;
   isServiceAvailable = false;
   currentStreamingText = '';
+  selectedFile: File | null = null;
+  fileInputError = '';
   
   private chatSubscription?: Subscription;
 
@@ -75,27 +79,40 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   }
 
   sendMessage(): void {
-    if (!this.userInput.trim()) return;
+    if (!this.userInput.trim() && !this.selectedFile) return;
 
-    const userMessage = this.userInput.trim();
+    const userMessage = this.userInput.trim() || 'Please analyze this file';
     this.messages.push({
       text: userMessage,
       isUser: true,
-      timestamp: new Date()
+      timestamp: new Date(),
+      attachmentName: this.selectedFile?.name,
+      attachmentType: this.selectedFile?.type
     });
 
+    const fileToSend = this.selectedFile;
     this.userInput = '';
+    this.selectedFile = null;
+    this.fileInputError = '';
     this.isTyping = true;
     this.currentStreamingText = '';
     this.scrollToBottom();
 
     // Use AI service if available, otherwise fall back to basic responses
     if (this.isServiceAvailable) {
-      this.sendToAI(userMessage);
+      if (fileToSend) {
+        this.sendFileToAI(userMessage, fileToSend);
+      } else {
+        this.sendToAI(userMessage);
+      }
     } else {
       // Fallback to basic responses
       setTimeout(() => {
-        this.handleFallbackResponse(userMessage);
+        if (fileToSend) {
+          this.addBotMessage('Sorry, file analysis requires the AI service to be online. The service is currently unavailable.');
+        } else {
+          this.handleFallbackResponse(userMessage);
+        }
         this.isTyping = false;
         this.scrollToBottom();
       }, 500);
@@ -176,5 +193,66 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       event.preventDefault();
       this.sendMessage();
     }
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      
+      // Validate file type (PDF only)
+      if (file.type !== 'application/pdf') {
+        this.fileInputError = 'Only PDF files are supported';
+        this.selectedFile = null;
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        this.fileInputError = 'File size must be less than 10MB';
+        this.selectedFile = null;
+        return;
+      }
+      
+      this.selectedFile = file;
+      this.fileInputError = '';
+    }
+    // Reset input
+    input.value = '';
+  }
+
+  removeSelectedFile(): void {
+    this.selectedFile = null;
+    this.fileInputError = '';
+  }
+
+  triggerFileInput(): void {
+    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
+    fileInput?.click();
+  }
+
+  private sendFileToAI(message: string, file: File): void {
+    this.chatSubscription = this.chatService.sendMessageWithFile(message, file).subscribe({
+      next: (chunk) => {
+        this.currentStreamingText += chunk;
+        this.scrollToBottom();
+      },
+      error: (error) => {
+        console.error('AI Error:', error);
+        this.isTyping = false;
+        this.currentStreamingText = '';
+        this.addBotMessage('Sorry, I encountered an error processing the file. Please try again.');
+        this.scrollToBottom();
+      },
+      complete: () => {
+        if (this.currentStreamingText.trim()) {
+          this.addBotMessage(this.currentStreamingText.trim());
+        }
+        this.currentStreamingText = '';
+        this.isTyping = false;
+        this.scrollToBottom();
+      }
+    });
   }
 }

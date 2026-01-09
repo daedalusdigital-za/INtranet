@@ -232,4 +232,70 @@ You are Welly, the company's trusted intranet assistant.`;
         });
     });
   }
+
+  /**
+   * Send a message with a PDF file attachment
+   */
+  sendMessageWithFile(message: string, file: File): Observable<string> {
+    const responseSubject = new Subject<string>();
+    
+    this.uploadAndProcessFile(message, file, responseSubject);
+    
+    return responseSubject.asObservable();
+  }
+
+  /**
+   * Upload PDF file and get AI response
+   */
+  private async uploadAndProcessFile(message: string, file: File, subject: Subject<string>): Promise<void> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('message', message);
+
+      const response = await fetch('/api/aichat/upload-pdf', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to process PDF');
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.response) {
+        // Simulate streaming for consistency
+        const text = result.response;
+        const words = text.split(' ');
+        
+        for (let i = 0; i < words.length; i++) {
+          subject.next(words[i] + ' ');
+          // Small delay to simulate streaming
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+        
+        // Add to history
+        this.conversationHistory.push({
+          role: 'user',
+          content: `${message} [Attached: ${file.name}]`,
+          timestamp: new Date()
+        });
+        
+        this.conversationHistory.push({
+          role: 'assistant',
+          content: text,
+          timestamp: new Date()
+        });
+        
+        subject.complete();
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('PDF processing error:', error);
+      subject.error(error instanceof Error ? error.message : 'Failed to process PDF file');
+    }
+  }
 }

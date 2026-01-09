@@ -52,6 +52,13 @@
          [class.user-message]="message.isUser"
          [class.bot-message]="!message.isUser">
       <div class="message-bubble">
+        <div class="message-attachment" *ngIf="message.attachmentName">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span>{{ message.attachmentName }}</span>
+        </div>
         <div class="message-text">{{ message.text }}</div>
         <div class="message-time">{{ message.timestamp | date:'shortTime' }}</div>
       </div>
@@ -77,21 +84,56 @@
   <!-- Chat Input -->
   <div class="chat-input" *ngIf="!isMinimized">
     <input
-      type="text"
-      [(ngModel)]="userInput"
-      (keypress)="handleKeyPress($event)"
-      placeholder="Type your message..."
-      class="chat-input-field"
+      type="file"
+      id="fileInput"
+      accept=".pdf"
+      style="display: none;"
+      (change)="onFileSelected($event)"
     />
-    <button
-      class="chat-send-btn"
-      (click)="sendMessage()"
-      [disabled]="!userInput.trim()"
-      title="Send">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="22" y1="2" x2="11" y2="13"></line>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-      </svg>
-    </button>
+    <div class="chat-input-container">
+      <div class="selected-file-preview" *ngIf="selectedFile">
+        <div class="file-info">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span>{{ selectedFile.name }}</span>
+        </div>
+        <button class="remove-file-btn" (click)="removeSelectedFile()" title="Remove file">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="file-error" *ngIf="fileInputError">{{ fileInputError }}</div>
+      <div class="input-wrapper">
+        <button
+          class="chat-attach-btn"
+          (click)="triggerFileInput()"
+          title="Attach PDF">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+          </svg>
+        </button>
+        <input
+          type="text"
+          [(ngModel)]="userInput"
+          (keypress)="handleKeyPress($event)"
+          placeholder="Type your message or attach a PDF..."
+          class="chat-input-field"
+        />
+        <button
+          class="chat-send-btn"
+          (click)="sendMessage()"
+          [disabled]="!userInput.trim() && !selectedFile"
+          title="Send">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </div>
   </div>
 </div>
