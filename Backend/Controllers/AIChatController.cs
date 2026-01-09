@@ -110,7 +110,7 @@ Please analyze this document and respond to the user's request. Be specific and 
         {
             try
             {
-                var ollamaUrl = _configuration["Ollama:Url"] ?? "http://localhost:11434";
+                var ollamaUrl = _configuration["Ollama:Url"] ?? "http://ollama:11434";
                 var modelName = _configuration["Ollama:ModelName"] ?? "mistral:latest";
 
                 var requestBody = new

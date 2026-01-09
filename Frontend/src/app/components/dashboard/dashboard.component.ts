@@ -351,7 +351,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .spacer {
@@ -363,7 +363,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       max-width: 1400px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     h1 {
@@ -424,7 +424,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .view-controls ::ng-deep .mat-button-toggle-checked {
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       color: white;
     }
 
@@ -452,7 +452,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .project-card ::ng-deep .mat-mdc-card-header {
       padding: 20px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.05) 0%, rgba(65, 105, 225, 0.05) 100%);
+      background: linear-gradient(135deg, rgba(30, 144, 255, 0.05) 0%, rgba(65, 105, 225, 0.05) 100%);
     }
 
     .project-card-header {
@@ -898,7 +898,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       top: 30px;
       bottom: 30px;
       width: 3px;
-      background: linear-gradient(180deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(180deg, #1e90ff 0%, #4169e1 100%);
       border-radius: 2px;
     }
 
@@ -1658,7 +1658,7 @@ export class DashboardComponent implements OnInit {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -1801,3 +1801,4 @@ export class CreateDepartmentDialog {
     }
   }
 }
+
