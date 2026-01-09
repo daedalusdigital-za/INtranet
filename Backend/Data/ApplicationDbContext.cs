@@ -46,6 +46,11 @@ namespace ProjectTracker.API.Data
         public DbSet<MessageAttachment> MessageAttachments { get; set; }
         public DbSet<MessageReadReceipt> MessageReadReceipts { get; set; }
 
+        // Knowledge Base System
+        public DbSet<KnowledgeBaseDocument> KnowledgeBaseDocuments { get; set; }
+        public DbSet<KnowledgeBaseChunk> KnowledgeBaseChunks { get; set; }
+        public DbSet<KnowledgeBaseIngestionLog> KnowledgeBaseIngestionLogs { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

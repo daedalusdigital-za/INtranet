@@ -17,6 +17,7 @@ RUN dotnet publish "ProjectTracker.API.csproj" -c Release -o /app/publish /p:Use
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
+
 EXPOSE 80
 EXPOSE 443
 

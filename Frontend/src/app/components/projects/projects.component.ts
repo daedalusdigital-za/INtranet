@@ -292,7 +292,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .spacer {
@@ -304,7 +304,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       max-width: 1400px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     h1 {
@@ -1722,7 +1722,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   }
 
   loadRecentConversations(): void {
-    fetch(`http://localhost:5000/api/messages/conversations?userId=${this.currentUserId}`)
+    fetch(`/api/messages/conversations?userId=${this.currentUserId}`)
       .then(response => response.json())
       .then(data => {
         this.recentConversations = data.slice(0, 5); // Show only 5 most recent
@@ -1734,7 +1734,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   }
 
   loadUnreadCount(): void {
-    fetch(`http://localhost:5000/api/messages/unread-count?userId=${this.currentUserId}`)
+    fetch(`/api/messages/unread-count?userId=${this.currentUserId}`)
       .then(response => response.json())
       .then(count => {
         this.unreadMessagesCount = count;
@@ -1793,3 +1793,5 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     this.router.navigate(['/login']);
   }
 }
+
+

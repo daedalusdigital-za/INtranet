@@ -108,7 +108,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .board-container {
       padding: 80px;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .board-header {
@@ -121,7 +121,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .board-header h2 {
       margin: 0 0 8px 0;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -164,14 +164,14 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin-bottom: 16px;
       padding-bottom: 12px;
       border-bottom: 2px solid transparent;
-      border-image: linear-gradient(90deg, #00008B 0%, #4169e1 100%) 1;
+      border-image: linear-gradient(90deg, #1e90ff 0%, #4169e1 100%) 1;
     }
 
     .list-header h3 {
       margin: 0;
       font-size: 18px;
       font-weight: 700;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -180,7 +180,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .card-count {
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       color: white;
       padding: 4px 12px;
       border-radius: 20px;
@@ -200,7 +200,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       cursor: pointer;
       transition: all 0.3s ease;
       border-left: 4px solid;
-      border-image: linear-gradient(180deg, #00008B 0%, #4169e1 100%) 1;
+      border-image: linear-gradient(180deg, #1e90ff 0%, #4169e1 100%) 1;
       background: white;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
     }
@@ -217,7 +217,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .cdk-drag-placeholder {
       opacity: 0.4;
       border: 2px dashed;
-      border-image: linear-gradient(135deg, #00008B 0%, #4169e1 100%) 1;
+      border-image: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%) 1;
       background: rgba(0, 0, 139, 0.1);
     }
 
@@ -232,7 +232,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       align-items: center;
       gap: 4px;
       font-size: 12px;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -270,7 +270,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-size: 14px;
       width: 14px;
       height: 14px;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -279,13 +279,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .add-card-btn {
       width: 100%;
       margin-top: 8px;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       color: white;
       font-weight: 600;
     }
 
     .add-card-btn:hover {
-      background: linear-gradient(135deg, #4169e1 0%, #00008B 100%);
+      background: linear-gradient(135deg, #4169e1 0%, #1e90ff 100%);
     }
   `]
 })
@@ -408,3 +408,5 @@ export class BoardComponent implements OnInit, OnDestroy {
     this.router.navigate(['/login']);
   }
 }
+
+

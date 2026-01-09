@@ -178,4 +178,19 @@ namespace ProjectTracker.API.DTOs
         public bool IsOnline { get; set; }
         public DateTime? LastSeen { get; set; }
     }
+
+    // User Search
+    public class UserSearchDto
+    {
+        public int UserId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Surname { get; set; } = string.Empty;
+        public string FullName => $"{Name} {Surname}";
+        public string Email { get; set; } = string.Empty;
+        public string? Title { get; set; }
+        public string? Department { get; set; }
+        public string? ProfilePictureUrl { get; set; }
+        public string? ProfilePictureData { get; set; }
+        public string? ProfilePictureMimeType { get; set; }
+    }
 }

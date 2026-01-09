@@ -7,95 +7,18 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-export interface OllamaResponse {
-  model: string;
-  created_at: string;
-  message: {
-    role: string;
-    content: string;
-  };
-  done: boolean;
-}
-
 @Injectable({
   providedIn: 'root'
 })
 export class ChatService {
-  // Use relative path so it works on any intranet host
-  private ollamaUrl = '/ai';
-  private modelName = 'mistral:latest';
+  // Use backend API for AI chat
+  private apiUrl = '/api/aichat';
   private conversationHistory: ChatMessage[] = [];
-  
-  // System prompt - Welly's professional assistant role
-  private systemPrompt = `You are Welly, a helpful, professional AI assistant designed exclusively for the company intranet.
-
-Your primary role is to:
-- Assist employees with internal questions
-- Provide clear, accurate, and practical guidance
-- Support IT, HR, Operations, Logistics, and General Staff
-
-You are not a public chatbot. You operate only within the company environment.
-
-Core Responsibilities:
-You help users with:
-- IT support (software, hardware, network, passwords, systems)
-- Intranet usage (files, messaging, dashboards, attendance tracking, project boards)
-- Internal processes and SOPs
-- Company tools and applications (ProjectTracker, attendance system, messaging, document management)
-- General workplace questions
-
-If a request is unclear, ask one short clarifying question.
-
-Tone & Communication Style:
-- Professional but friendly
-- Clear and concise
-- Calm and supportive
-- No slang, emojis, or sarcasm
-- Avoid unnecessary technical jargon unless the user is technical
-- Sound like a knowledgeable internal support colleague
-
-Accuracy & Safety Rules:
-- Only provide information relevant to internal systems and general knowledge
-- Do not invent company policies, credentials, or confidential data
-- If you are unsure, say so and suggest who to contact (IT Support, HR, Department Manager)
-- Never request or store passwords, OTPs, or sensitive personal data
-
-Security & Privacy:
-- Respect internal confidentiality
-- Avoid exposing system internals unless appropriate
-- Never suggest bypassing security controls
-- Follow company IT and data-protection principles
-- If a request violates security policy, politely refuse and explain why
-
-Knowledge Scope - You may assist with:
-- Windows systems and general IT troubleshooting
-- Internal servers and applications
-- Intranet features (ProjectTracker boards, cards, lists, attendance clock-in/out, messaging, file management)
-- Common business tools (email, documents, printers)
-- General troubleshooting steps
-
-You must NOT provide:
-- Legal advice
-- Medical advice
-- Financial investment advice
-- Instructions for illegal or unethical activity
-- Actual passwords or credentials
-
-How to Respond:
-- Be direct and helpful
-- Provide step-by-step instructions where applicable
-- Use bullet points for clarity
-- Offer a next step if the issue persists
-- If the issue requires human intervention, clearly state: "Please contact IT Support or your department manager for further assistance."
-
-Your goal is to reduce friction, save time, and help employees get answers quickly and safely.
-
-You are Welly, the company's trusted intranet assistant.`;
 
   constructor() {}
 
   /**
-   * Send a message to Ollama and get a streaming response
+   * Send a message to AI and get a streaming response
    */
   sendMessage(message: string): Observable<string> {
     const responseSubject = new Subject<string>();
@@ -114,20 +37,15 @@ You are Welly, the company's trusted intranet assistant.`;
   }
 
   /**
-   * Stream chat response from Ollama
+   * Stream chat response from backend AI service
    */
   private async streamChat(userMessage: string, subject: Subject<string>): Promise<void> {
     try {
-      // Build messages array with system prompt and history
-      const messages: any[] = [
-        {
-          role: 'system',
-          content: this.systemPrompt
-        }
-      ];
+      // Build messages array with recent history
+      const messages: any[] = [];
 
       // Include last 6 messages for context (3 exchanges)
-      const recentHistory = this.conversationHistory.slice(-7, -1); // Exclude the just-added user message
+      const recentHistory = this.conversationHistory.slice(-7, -1);
       for (const msg of recentHistory) {
         messages.push({
           role: msg.role,
@@ -141,19 +59,13 @@ You are Welly, the company's trusted intranet assistant.`;
         content: userMessage
       });
 
-      const response = await fetch(`${this.ollamaUrl}/api/chat`, {
+      const response = await fetch(`${this.apiUrl}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: this.modelName,
-          messages: messages,
-          stream: true,
-          options: {
-            temperature: 0.7,
-            num_predict: 512
-          }
+          messages: messages
         })
       });
 
@@ -171,16 +83,25 @@ You are Welly, the company's trusted intranet assistant.`;
           if (done) break;
 
           const chunk = decoder.decode(value);
-          const lines = chunk.split('\n').filter(line => line.trim());
+          const lines = chunk.split('\n').filter(line => line.startsWith('data:'));
 
           for (const line of lines) {
+            const data = line.substring(5).trim();
+            
+            if (data === '[DONE]') {
+              break;
+            }
+
             try {
-              const json: OllamaResponse = JSON.parse(line);
-              if (json.message?.content) {
-                fullResponse += json.message.content;
-                subject.next(json.message.content);
+              const json = JSON.parse(data);
+              if (json.token) {
+                fullResponse += json.token;
+                subject.next(json.token);
               }
-              if (json.done) break;
+              if (json.message) {
+                fullResponse += json.message;
+                subject.next(json.message);
+              }
             } catch (e) {
               // Skip invalid JSON
             }
@@ -198,7 +119,7 @@ You are Welly, the company's trusted intranet assistant.`;
       subject.complete();
     } catch (error) {
       console.error('Chat error:', error);
-      subject.error('Failed to connect to AI service. Please ensure Ollama is running.');
+      subject.error('Failed to connect to AI service. Please try again.');
     }
   }
 
@@ -217,13 +138,14 @@ You are Welly, the company's trusted intranet assistant.`;
   }
 
   /**
-   * Check if Ollama service is available
+   * Check if AI service is available
    */
   checkHealth(): Observable<boolean> {
     return new Observable(observer => {
-      fetch(`${this.ollamaUrl}/api/tags`)
-        .then(response => {
-          observer.next(response.ok);
+      fetch(`${this.apiUrl}/health`)
+        .then(response => response.json())
+        .then(data => {
+          observer.next(data.status === 'ready');
           observer.complete();
         })
         .catch(() => {
@@ -253,7 +175,7 @@ You are Welly, the company's trusted intranet assistant.`;
       formData.append('file', file);
       formData.append('message', message);
 
-      const response = await fetch('/api/aichat/upload-pdf', {
+      const response = await fetch(`${this.apiUrl}/upload-pdf`, {
         method: 'POST',
         body: formData
       });
@@ -299,3 +221,5 @@ You are Welly, the company's trusted intranet assistant.`;
     }
   }
 }
+
+

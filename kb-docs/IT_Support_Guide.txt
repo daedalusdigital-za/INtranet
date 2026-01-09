@@ -1,0 +1,73 @@
+# IT Support Knowledge Base
+
+## Password Reset Procedure
+
+If you need to reset your password, follow these steps:
+
+1. Go to the login page at http://intranet.company.local
+2. Click on "Forgot Password" link
+3. Enter your company email address
+4. Check your inbox for the password reset email
+5. Click the reset link (valid for 24 hours)
+6. Create a new password following the password policy
+7. Log in with your new password
+
+### Password Policy
+- Minimum 12 characters
+- Must include uppercase and lowercase letters
+- Must include at least one number
+- Must include at least one special character
+- Cannot reuse last 5 passwords
+- Expires every 90 days
+
+## VPN Setup Guide
+
+To connect to the company VPN from home:
+
+1. Download the VPN client from the IT portal
+2. Install the application on your computer
+3. Launch the VPN client
+4. Enter the server address: vpn.company.local
+5. Use your company credentials to authenticate
+6. Wait for connection confirmation
+7. You now have access to internal resources
+
+### Troubleshooting VPN Issues
+- Ensure your internet connection is stable
+- Check if firewall is blocking VPN traffic
+- Try restarting the VPN client
+- Contact IT Support if issues persist
+
+## Printer Setup
+
+To add a network printer:
+
+1. Open Settings > Printers & Scanners
+2. Click "Add a printer"
+3. Select "Add a printer using TCP/IP address"
+4. Enter the printer IP address (check IT portal for list)
+5. Wait for driver installation
+6. Print a test page to verify
+
+Common printer IP addresses:
+- Floor 1: 192.168.1.10
+- Floor 2: 192.168.1.20
+- Floor 3: 192.168.1.30
+
+## Software Installation Requests
+
+To request new software:
+
+1. Submit a request through the IT Help Desk
+2. Include the software name and version
+3. Provide business justification
+4. Wait for manager approval
+5. IT will evaluate security and licensing
+6. Software will be deployed if approved
+
+## Contact Information
+
+- IT Help Desk: helpdesk@company.local
+- Phone: Extension 1234
+- Hours: Monday-Friday 8AM-6PM
+- Emergency: After-hours pager 555-0199

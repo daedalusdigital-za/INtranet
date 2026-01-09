@@ -89,7 +89,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .spacer {
@@ -1601,3 +1601,5 @@ export class WarehouseDetailsDialog {
     document.body.removeChild(link);
   }
 }
+
+

@@ -1,0 +1,95 @@
+<div class="chat-bubble-wrapper" [class.minimized]="isMinimized" [style.right.px]="getBubblePosition()">
+  <!-- Minimized Bubble -->
+  <div class="bubble-icon" *ngIf="isMinimized" (click)="toggleMinimize()">
+    <div class="avatar" *ngIf="!getProfileImage()">
+      <span class="initials">{{ getInitials() }}</span>
+    </div>
+    <img *ngIf="getProfileImage()" [src]="getProfileImage()" class="avatar-img" alt="Profile">
+    <span class="unread-badge" *ngIf="conversation?.unreadCount && conversation.unreadCount > 0">
+      {{ conversation.unreadCount > 99 ? '99+' : conversation.unreadCount }}
+    </span>
+  </div>
+
+  <!-- Expanded Chat Window -->
+  <div class="chat-window" *ngIf="!isMinimized">
+    <!-- Header -->
+    <div class="chat-header">
+      <div class="user-info" (click)="toggleMinimize()">
+        <div class="avatar-small" *ngIf="!getProfileImage()">
+          <span class="initials">{{ getInitials() }}</span>
+        </div>
+        <img *ngIf="getProfileImage()" [src]="getProfileImage()" class="avatar-img-small" alt="Profile">
+        <span class="user-name">{{ getChatTitle() }}</span>
+      </div>
+      <div class="header-actions">
+        <button class="action-btn" (click)="toggleMinimize()" title="Minimize">
+          <i class="bi bi-dash-lg"></i>
+        </button>
+        <button class="action-btn close-btn" (click)="closeChat()" title="Close">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Messages Container -->
+    <div class="messages-container" #messagesContainer>
+      <div class="loading-spinner" *ngIf="isLoading">
+        <div class="spinner"></div>
+      </div>
+      
+      <div class="messages-list" *ngIf="!isLoading">
+        <ng-container *ngFor="let message of messages; let i = index">
+          <!-- Date separator -->
+          <div class="date-separator" 
+               *ngIf="i === 0 || formatDate(message.sentAt) !== formatDate(messages[i-1].sentAt)">
+            <span>{{ formatDate(message.sentAt) }}</span>
+          </div>
+          
+          <!-- Message bubble -->
+          <div class="message" [class.own]="isOwnMessage(message)" [class.other]="!isOwnMessage(message)">
+            <div class="message-bubble">
+              <p class="message-content">{{ message.content }}</p>
+              <span class="message-time">{{ formatTime(message.sentAt) }}</span>
+            </div>
+          </div>
+        </ng-container>
+        
+        <div class="no-messages" *ngIf="messages.length === 0">
+          <i class="bi bi-chat-dots"></i>
+          <p>No messages yet. Start the conversation!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Selected File Preview -->
+    <div class="selected-file" *ngIf="selectedFile">
+      <div class="file-info">
+        <i class="bi bi-file-earmark"></i>
+        <span class="file-name">{{ selectedFile.name }}</span>
+        <span class="file-size">{{ formatFileSize(selectedFile.size) }}</span>
+      </div>
+      <button class="remove-file" (click)="removeSelectedFile()">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+      <button class="attach-btn" (click)="triggerFileInput()" title="Attach file">
+        <i class="bi bi-paperclip"></i>
+      </button>
+      <input type="file" #fileInput (change)="onFileSelected($event)" hidden>
+      <input 
+        type="text" 
+        [(ngModel)]="newMessage" 
+        (keypress)="onKeyPress($event)"
+        placeholder="Type a message..."
+        class="message-input"
+        [disabled]="isSending">
+      <button class="send-btn" (click)="sendMessage()" [disabled]="isSending || (!newMessage.trim() && !selectedFile)">
+        <i class="bi bi-send-fill" *ngIf="!isSending"></i>
+        <div class="send-spinner" *ngIf="isSending"></div>
+      </button>
+    </div>
+  </div>
+</div>

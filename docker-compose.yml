@@ -1,18 +1,4 @@
 services:
-  # Ollama AI Server (Mistral 7B)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: projecttracker-ollama
-    ports:
-      - "0.0.0.0:11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - projecttracker-network
-    restart: unless-stopped
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-
   # SQL Server Database
   database:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -28,7 +14,7 @@ services:
     networks:
       - projecttracker-network
 
-  # ASP.NET Core Backend
+  # ASP.NET Core Backend with AI assistant
   backend:
     build:
       context: ./Backend
@@ -40,8 +26,11 @@ services:
       - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationThatIsLongEnough123456!
       - ConnectionStrings__DefaultConnection=Server=database;Database=ProjectTrackerDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;
+      - KnowledgeBase__DocumentsPath=/app/kb-docs
     ports:
       - "0.0.0.0:5000:80"
+    volumes:
+      - kb-docs:/app/kb-docs
     depends_on:
       - database
     networks:
@@ -65,7 +54,7 @@ services:
 volumes:
   sql-data:
     driver: local
-  ollama-data:
+  kb-docs:
     driver: local
 networks:
   projecttracker-network:

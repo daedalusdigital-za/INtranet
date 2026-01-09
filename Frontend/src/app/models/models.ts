@@ -104,3 +104,5 @@ export interface CreateCommentRequest {
   cardId: number;
   content: string;
 }
+
+

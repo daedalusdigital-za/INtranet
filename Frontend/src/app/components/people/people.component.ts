@@ -604,7 +604,7 @@ const environment = {
     .attendance-container {
       padding: 80px;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .notification-dropdown {
@@ -828,7 +828,7 @@ const environment = {
       padding: 16px 48px !important;
       font-size: 18px !important;
       background: white !important;
-      color: #00008B !important;
+      color: #1e90ff !important;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
       transition: all 0.3s ease !important;
       font-weight: 600 !important;
@@ -869,7 +869,7 @@ const environment = {
       font-size: 80px;
       width: 80px;
       height: 80px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0 auto 24px auto;
       display: block;
     }
@@ -877,7 +877,7 @@ const environment = {
     .access-card h2 {
       font-size: 32px;
       font-weight: 600;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0 0 16px 0;
     }
 
@@ -1084,7 +1084,7 @@ const environment = {
 
     .department-card h3 {
       margin: 0 0 12px;
-      color: #00008B;
+      color: #1e90ff;
       font-size: 18px;
     }
 
@@ -1568,12 +1568,12 @@ const environment = {
       font-size: 80px;
       width: 80px;
       height: 80px;
-      color: #00008B;
+      color: #1e90ff;
       margin-bottom: 24px;
     }
 
     .coming-soon h2 {
-      color: #00008B;
+      color: #1e90ff;
       font-size: 28px;
       font-weight: 600;
       margin: 0 0 16px 0;
@@ -1615,12 +1615,12 @@ const environment = {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #00008B;
+      color: #1e90ff;
       margin-bottom: 16px;
     }
 
     .training-category-card h3 {
-      color: #00008B;
+      color: #1e90ff;
       font-size: 20px;
       font-weight: 600;
       margin: 0 0 12px 0;
@@ -2109,7 +2109,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
     }
 
     mat-dialog-content {
@@ -2223,7 +2223,7 @@ export class WeeklyReportDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
     }
 
     mat-dialog-content {
@@ -2339,7 +2339,7 @@ export class MonthlyReportDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -2469,7 +2469,7 @@ export class MainOfficePasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -2599,7 +2599,7 @@ export class CondomFactoryPasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -2716,7 +2716,7 @@ export class SanitaryPadsPasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -2833,7 +2833,7 @@ export class NewRoadPasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -2950,7 +2950,7 @@ export class CaptownPasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -3067,7 +3067,7 @@ export class BrionkhorspruitPasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -3184,7 +3184,7 @@ export class PortElizabethPasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -3301,7 +3301,7 @@ export class LogisticsPasswordDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -3378,3 +3378,5 @@ export class TrainingPasswordDialogComponent {
     this.dialogRef.close();
   }
 }
+
+

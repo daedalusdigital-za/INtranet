@@ -56,7 +56,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .documents-container {
       padding: 80px;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .header-section {
@@ -124,11 +124,11 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #00008B;
+      color: #1e90ff;
     }
 
     .department-card h3 {
-      color: #00008B;
+      color: #1e90ff;
       font-size: 22px;
       font-weight: 600;
       margin: 0 0 8px 0;
@@ -286,7 +286,7 @@ export class DocumentsComponent implements OnInit {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -364,4 +364,6 @@ export class DepartmentPasswordDialogComponent {
     this.dialogRef.close();
   }
 }
+
+
 

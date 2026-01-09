@@ -54,7 +54,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .crm-container {
       padding: 80px;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .header-section {
@@ -109,12 +109,12 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-size: 80px;
       width: 80px;
       height: 80px;
-      color: #00008B;
+      color: #1e90ff;
       margin-bottom: 16px;
     }
 
     .coming-soon-card h2 {
-      color: #00008B;
+      color: #1e90ff;
       font-size: 28px;
       margin: 0 0 16px 0;
     }
@@ -163,3 +163,5 @@ export class CrmComponent implements OnInit {
     this.router.navigate(['/login']);
   }
 }
+
+

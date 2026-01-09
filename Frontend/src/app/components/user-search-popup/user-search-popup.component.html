@@ -1,0 +1,62 @@
+<div class="popup-backdrop" (click)="onBackdropClick($event)">
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="popup-header">
+      <h3>Start New Conversation</h3>
+      <button class="close-btn" (click)="closePopup()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+
+    <!-- Search Input -->
+    <div class="search-container">
+      <i class="bi bi-search search-icon"></i>
+      <input 
+        type="text" 
+        [(ngModel)]="searchQuery" 
+        (input)="onSearchChange()"
+        placeholder="Search by name, email, department..."
+        class="search-input"
+        autofocus>
+      <button *ngIf="searchQuery" class="clear-btn" (click)="searchQuery = ''; onSearchChange()">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>
+
+    <!-- Users List -->
+    <div class="users-list">
+      <div class="loading" *ngIf="isLoading">
+        <div class="spinner"></div>
+        <span>Loading users...</span>
+      </div>
+
+      <div class="no-results" *ngIf="!isLoading && filteredUsers.length === 0 && hasSearched">
+        <i class="bi bi-person-x"></i>
+        <p>No users found matching "{{ searchQuery }}"</p>
+      </div>
+
+      <div 
+        class="user-item" 
+        *ngFor="let user of filteredUsers" 
+        (click)="selectUser(user)">
+        <div class="user-avatar" *ngIf="!user.profilePictureUrl">
+          <span class="initials">{{ getInitials(user) }}</span>
+        </div>
+        <img 
+          *ngIf="user.profilePictureUrl" 
+          [src]="user.profilePictureUrl" 
+          class="user-avatar-img" 
+          alt="Profile">
+        <div class="user-info">
+          <span class="user-name">{{ user.name }} {{ user.surname }}</span>
+          <span class="user-details">
+            <span *ngIf="user.position">{{ user.position }}</span>
+            <span *ngIf="user.position && user.department"> • </span>
+            <span *ngIf="user.department">{{ user.department }}</span>
+          </span>
+        </div>
+        <i class="bi bi-chat-dots action-icon"></i>
+      </div>
+    </div>
+  </div>
+</div>

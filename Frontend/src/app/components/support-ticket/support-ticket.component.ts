@@ -211,7 +211,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .support-container {
       padding: 80px;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .loading-container {
@@ -361,7 +361,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .stat-icon-container.blue {
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .stat-icon-container.green {
@@ -392,7 +392,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin: 0;
       font-size: 32px;
       font-weight: 700;
-      color: #00008B;
+      color: #1e90ff;
     }
 
     .tickets-row {
@@ -430,7 +430,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       gap: 12px;
       font-size: 24px;
       font-weight: 600;
-      color: #00008B;
+      color: #1e90ff;
     }
 
     .tickets-card mat-card-title mat-icon {
@@ -483,7 +483,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .ticket-item:hover {
-      border-color: #00008B;
+      border-color: #1e90ff;
       box-shadow: 0 4px 12px rgba(0, 0, 139, 0.1);
     }
 
@@ -851,7 +851,7 @@ export class SupportTicketComponent implements OnInit {
       display: flex;
       align-items: center;
       gap: 12px;
-      color: #00008B;
+      color: #1e90ff;
       margin: 0;
     }
 
@@ -913,3 +913,5 @@ export class CreateTicketDialogComponent {
     this.dialogRef.close();
   }
 }
+
+

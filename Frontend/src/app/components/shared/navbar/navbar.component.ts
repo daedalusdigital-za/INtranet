@@ -9,6 +9,9 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
 import { AuthService } from '../../../services/auth.service';
+import { MessageService, User, Conversation } from '../../../services/message.service';
+import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
+import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
 
 @Component({
   selector: 'app-navbar',
@@ -22,7 +25,9 @@ import { AuthService } from '../../../services/auth.service';
     MatMenuModule,
     MatBadgeModule,
     MatTooltipModule,
-    MatDividerModule
+    MatDividerModule,
+    ChatBubbleComponent,
+    UserSearchPopupComponent
   ],
   template: `
     <mat-toolbar color="primary">
@@ -97,6 +102,9 @@ import { AuthService } from '../../../services/auth.service';
               }
             </div>
             <div class="dropdown-footer">
+              <button mat-button color="primary" (click)="startNewConversation()">
+                <mat-icon>add</mat-icon> Start Conversation
+              </button>
               <button mat-button color="primary" (click)="viewAllMessages()">View All Messages</button>
             </div>
           </div>
@@ -173,6 +181,25 @@ import { AuthService } from '../../../services/auth.service';
       </mat-menu>
     </mat-toolbar>
     <div class="toolbar-spacer"></div>
+
+    <!-- User Search Popup -->
+    @if (showUserSearchPopup) {
+      <app-user-search-popup 
+        [currentUserId]="currentUserId"
+        (close)="closeUserSearchPopup()"
+        (userSelected)="onUserSelected($event)">
+      </app-user-search-popup>
+    }
+
+    <!-- Chat Bubbles -->
+    @for (chat of activeChatBubbles; track chat.conversationId; let i = $index) {
+      <app-chat-bubble
+        [conversation]="chat"
+        [currentUserId]="currentUserId"
+        [position]="i"
+        (close)="closeChatBubble($event)">
+      </app-chat-bubble>
+    }
   `,
   styles: [`
     :host {
@@ -395,7 +422,9 @@ export class NavbarComponent implements OnInit, OnDestroy {
   unreadMessagesCount: number = 0;
   showMessages: boolean = false;
   showNotifications: boolean = false;
+  showUserSearchPopup: boolean = false;
   recentConversations: any[] = [];
+  activeChatBubbles: Conversation[] = [];
   
   notifications: any[] = [
     {
@@ -426,13 +455,19 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   constructor(
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private messageService: MessageService
   ) {}
 
   ngOnInit(): void {
     this.currentUser = this.authService.currentUserValue;
     this.loadRecentConversations();
     this.loadUnreadCount();
+    
+    // Subscribe to active chat bubbles
+    this.messageService.activeChats$.subscribe((chats: Conversation[]) => {
+      this.activeChatBubbles = chats;
+    });
   }
 
   ngOnDestroy(): void {}
@@ -523,14 +558,41 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   openConversation(conv: any): void {
     this.showMessages = false;
-    // TODO: Navigate to messages page with conversation
-    console.log('Open conversation:', conv.conversationId);
+    // Open as chat bubble
+    this.messageService.openChatBubble(conv as Conversation);
   }
 
   viewAllMessages(): void {
     this.showMessages = false;
     // TODO: Navigate to messages page
     console.log('View all messages');
+  }
+
+  startNewConversation(): void {
+    this.showMessages = false;
+    this.showUserSearchPopup = true;
+  }
+
+  closeUserSearchPopup(): void {
+    this.showUserSearchPopup = false;
+  }
+
+  onUserSelected(user: User): void {
+    this.showUserSearchPopup = false;
+    
+    // Start a conversation with this user
+    this.messageService.startChatWithUser(user, this.currentUserId).subscribe({
+      next: (conversation: Conversation) => {
+        this.messageService.openChatBubble(conversation);
+      },
+      error: (err: any) => {
+        console.error('Error starting conversation:', err);
+      }
+    });
+  }
+
+  closeChatBubble(conversationId: number): void {
+    this.messageService.closeChatBubble(conversationId);
   }
 
   viewAllNotifications(): void {
@@ -547,3 +609,5 @@ export class NavbarComponent implements OnInit, OnDestroy {
     this.router.navigate(['/login']);
   }
 }
+
+

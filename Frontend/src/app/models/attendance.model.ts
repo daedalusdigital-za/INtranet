@@ -62,3 +62,5 @@ export interface CheckOutRequest {
   employeeId: number;
   timeOut: Date;
 }
+
+

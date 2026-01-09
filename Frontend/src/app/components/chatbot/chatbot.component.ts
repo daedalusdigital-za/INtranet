@@ -39,7 +39,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     // Check if AI service is available
     this.checkServiceHealth();
     // Welcome message
-    this.addBotMessage('Hey there! 👋 I\'m Welly from IT. Need help with ProjectTracker or anything tech-related? Fire away!');
+    this.addBotMessage('Hey there! 👋 I\'m Welly from IT. Need help with work or anything tech-related? Fire away!');
   }
 
   ngOnDestroy(): void {
@@ -256,3 +256,5 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     });
   }
 }
+
+

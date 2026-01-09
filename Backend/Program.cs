@@ -60,6 +60,12 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
+// Add Knowledge Base Service (must be registered before LlamaAIService)
+builder.Services.AddSingleton<IKnowledgeBaseService, KnowledgeBaseService>();
+
+// Add LLaMA AI Service (singleton so model is loaded once)
+builder.Services.AddSingleton<ILlamaAIService, LlamaAIService>();
+
 // Add Azure Sync Background Service
 builder.Services.AddHostedService<AzureSyncService>();
 

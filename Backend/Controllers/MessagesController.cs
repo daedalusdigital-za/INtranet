@@ -484,6 +484,53 @@ namespace ProjectTracker.API.Controllers
             return Ok(count);
         }
 
+        // GET: api/messages/users/search
+        [HttpGet("users/search")]
+        public async Task<ActionResult<IEnumerable<UserSearchDto>>> SearchUsers([FromQuery] string? query = "", [FromQuery] int excludeUserId = 0)
+        {
+            var usersQuery = _context.Users
+                .Include(u => u.Department)
+                .Where(u => u.IsActive)
+                .AsQueryable();
+
+            if (excludeUserId > 0)
+            {
+                usersQuery = usersQuery.Where(u => u.UserId != excludeUserId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var searchTerm = query.ToLower();
+                usersQuery = usersQuery.Where(u => 
+                    u.Name.ToLower().Contains(searchTerm) ||
+                    u.Surname.ToLower().Contains(searchTerm) ||
+                    u.Email.ToLower().Contains(searchTerm) ||
+                    (u.Title != null && u.Title.ToLower().Contains(searchTerm)) ||
+                    (u.Department != null && u.Department.Name.ToLower().Contains(searchTerm)));
+            }
+
+            var users = await usersQuery
+                .OrderBy(u => u.Name)
+                .ThenBy(u => u.Surname)
+                .Take(50)
+                .ToListAsync();
+
+            var result = users.Select(u => new UserSearchDto
+            {
+                UserId = u.UserId,
+                Name = u.Name,
+                Surname = u.Surname,
+                Email = u.Email,
+                Title = u.Title,
+                Department = u.Department?.Name,
+                ProfilePictureUrl = u.ProfilePictureUrl,
+                ProfilePictureData = u.ProfilePictureData != null ? Convert.ToBase64String(u.ProfilePictureData) : null,
+                ProfilePictureMimeType = u.ProfilePictureMimeType
+            }).ToList();
+
+            return Ok(result);
+        }
+
         // Helper methods
         private ConversationDto MapConversationToDto(Conversation conversation, int currentUserId)
         {

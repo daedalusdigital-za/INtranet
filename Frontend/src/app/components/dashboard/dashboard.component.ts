@@ -44,7 +44,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     <app-navbar></app-navbar>
 
     <div class="dashboard-container">
-      <h1>Project Management</h1>
+      <div class="page-header">
+        <h1>Project Management</h1>
+        <button mat-raised-button color="accent" (click)="openCreateBoardDialog()">
+          <mat-icon>add</mat-icon>
+          Create New Board
+        </button>
+      </div>
 
       <!-- Filters and View Controls -->
       <div class="controls-bar">
@@ -364,6 +370,30 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin: 0 auto;
       min-height: calc(100vh - 64px);
       background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+      margin: 0;
+      color: #ffffff;
+      font-size: 2.5rem;
+      font-weight: 600;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .page-header button {
+      height: 48px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 12px;
+      padding: 0 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
     h1 {
@@ -1297,12 +1327,87 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadDepartments();
-    this.initializeProjects();
+    this.loadBoards();
 
     // Close notifications dropdown when clicking outside
     document.addEventListener('click', () => {
       this.showNotifications = false;
     });
+  }
+
+  loadBoards(): void {
+    this.loading = true;
+    this.apiService.getAllBoards().subscribe({
+      next: (boards) => {
+        // Map boards to project format for display
+        this.projects = boards.map((board: any) => {
+          // Calculate progress based on cards in Done/Completed list vs total
+          const totalCards = board.lists?.reduce((sum: number, list: any) => sum + (list.cards?.length || 0), 0) || 0;
+          const doneCards = board.lists
+            ?.filter((l: any) => l.title?.toLowerCase().includes('done') || l.title?.toLowerCase().includes('complete'))
+            .reduce((sum: number, list: any) => sum + (list.cards?.length || 0), 0) || 0;
+          const progress = totalCards > 0 ? Math.round((doneCards / totalCards) * 100) : 0;
+          
+          return {
+            id: board.boardId,
+            name: board.title,
+            description: board.description || 'No description',
+            type: this.getProjectTypeFromDepartment(board.departmentName),
+            workflow: this.getWorkflowFromProgress(progress),
+            status: 'on-track',
+            progress: progress,
+            teamSize: board.lists?.reduce((sum: number, list: any) => {
+              const assignees = new Set(list.cards?.map((c: any) => c.assignedToUserId).filter((id: number) => id));
+              return sum + assignees.size;
+            }, 0) || 0,
+            budgetUsed: 0,
+            daysRemaining: 30,
+            milestonesCompleted: doneCards,
+            totalMilestones: totalCards || 1,
+            team: [],
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            departmentId: board.departmentId,
+            departmentName: board.departmentName,
+            lists: board.lists || [],
+            isRealBoard: true // Flag to identify this is from database
+          };
+        });
+        this.filteredProjects = [...this.projects];
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error loading boards:', error);
+        this.initializeProjects(); // Fallback to mock data
+        this.loading = false;
+      }
+    });
+  }
+
+  getProjectTypeFromDepartment(departmentName: string): string {
+    const typeMap: {[key: string]: string} = {
+      'production': 'operations',
+      'quality assurance': 'research',
+      'warehouse': 'infrastructure',
+      'administration': 'software',
+      'it': 'software',
+      'marketing': 'marketing',
+      'sales': 'marketing',
+      'hr': 'operations'
+    };
+    const lowerName = departmentName?.toLowerCase() || '';
+    for (const key of Object.keys(typeMap)) {
+      if (lowerName.includes(key)) return typeMap[key];
+    }
+    return 'software';
+  }
+
+  getWorkflowFromProgress(progress: number): string {
+    if (progress === 0) return 'planning';
+    if (progress < 50) return 'in-progress';
+    if (progress < 80) return 'testing';
+    if (progress < 100) return 'deployment';
+    return 'completed';
   }
 
   initializeProjects(): void {
@@ -1523,34 +1628,60 @@ export class DashboardComponent implements OnInit {
   }
 
   loadDepartments(): void {
-    this.loading = true;
     this.apiService.getDepartments().subscribe({
       next: (data) => {
         this.departments = data;
-        this.loading = false;
       },
       error: (error) => {
         console.error('Error loading departments:', error);
-        this.loading = false;
       }
     });
   }
 
-  openPasswordDialog(department: Department): void {
+  openPasswordDialog(project: any): void {
+    // If it's a real board from database, navigate directly
+    if (project.isRealBoard) {
+      this.router.navigate(['/board', project.id]);
+      return;
+    }
+    
+    // For mock data, show password dialog
     const dialogRef = this.dialog.open(BoardPasswordDialogComponent, {
       width: '400px',
-      data: { departmentName: department.name }
+      data: { departmentName: project.name }
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result && result.success) {
-        this.viewDepartment(department.departmentId);
+        this.router.navigate(['/board', project.id]);
       }
     });
   }
 
   viewDepartment(id: number): void {
     this.router.navigate(['/board', id]);
+  }
+
+  openCreateBoardDialog(): void {
+    const dialogRef = this.dialog.open(CreateBoardDialog, {
+      width: '500px',
+      data: { departments: this.departments }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.apiService.createBoard(result).subscribe({
+          next: (newBoard) => {
+            this.snackBar.open('Board created successfully!', 'Close', { duration: 3000 });
+            this.loadBoards();
+          },
+          error: (error) => {
+            console.error('Error creating board:', error);
+            this.snackBar.open('Failed to create board', 'Close', { duration: 3000 });
+          }
+        });
+      }
+    });
   }
 
   openCreateDialog(): void {
@@ -1801,4 +1932,85 @@ export class CreateDepartmentDialog {
     }
   }
 }
+
+@Component({
+  selector: 'create-board-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatButtonModule
+  ],
+  template: `
+    <h2 mat-dialog-title>Create New Board</h2>
+    <mat-dialog-content>
+      <form [formGroup]="form">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Board Title</mat-label>
+          <input matInput formControlName="title" required placeholder="Enter board title">
+          @if (form.get('title')?.hasError('required')) {
+            <mat-error>Board title is required</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Department</mat-label>
+          <mat-select formControlName="departmentId" required>
+            @for (dept of data.departments; track dept.departmentId) {
+              <mat-option [value]="dept.departmentId">{{ dept.name }}</mat-option>
+            }
+          </mat-select>
+          @if (form.get('departmentId')?.hasError('required')) {
+            <mat-error>Department is required</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Description</mat-label>
+          <textarea matInput formControlName="description" rows="3" placeholder="Enter board description (optional)"></textarea>
+        </mat-form-field>
+      </form>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="form.invalid" (click)="submit()">Create Board</button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .full-width {
+      width: 100%;
+      margin-bottom: 16px;
+    }
+    mat-dialog-content {
+      min-width: 400px;
+    }
+  `]
+})
+export class CreateBoardDialog {
+  form: FormGroup;
+
+  constructor(
+    private fb: FormBuilder,
+    private dialogRef: MatDialogRef<CreateBoardDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { departments: any[] }
+  ) {
+    this.form = this.fb.group({
+      title: ['', Validators.required],
+      departmentId: ['', Validators.required],
+      description: ['']
+    });
+  }
+
+  submit(): void {
+    if (this.form.valid) {
+      this.dialogRef.close(this.form.value);
+    }
+  }
+}
+
+
 

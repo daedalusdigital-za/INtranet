@@ -70,7 +70,7 @@ import { AuthService } from '../../services/auth.service';
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .login-card {
@@ -92,7 +92,7 @@ import { AuthService } from '../../services/auth.service';
     mat-card-title {
       font-size: 28px;
       font-weight: 700;
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -142,3 +142,5 @@ export class LoginComponent {
     }
   }
 }
+
+

@@ -25,6 +25,10 @@ export class ApiService {
   }
 
   // Boards
+  getAllBoards(): Observable<Board[]> {
+    return this.http.get<Board[]>(`${this.apiUrl}/boards`);
+  }
+
   getBoardsByDepartment(departmentId: number): Observable<Board[]> {
     return this.http.get<Board[]>(`${this.apiUrl}/boards/department/${departmentId}`);
   }
@@ -33,8 +37,16 @@ export class ApiService {
     return this.http.get<Board>(`${this.apiUrl}/boards/${id}`);
   }
 
-  createBoard(board: any): Observable<Board> {
+  createBoard(board: { departmentId: number; title: string; description?: string }): Observable<Board> {
     return this.http.post<Board>(`${this.apiUrl}/boards`, board);
+  }
+
+  updateBoard(id: number, board: { departmentId: number; title: string; description?: string }): Observable<void> {
+    return this.http.put<void>(`${this.apiUrl}/boards/${id}`, board);
+  }
+
+  deleteBoard(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/boards/${id}`);
   }
 
   // Cards
@@ -78,3 +90,5 @@ export class ApiService {
     return this.http.get<any[]>(`${this.apiUrl}/attendance/employees`);
   }
 }
+
+

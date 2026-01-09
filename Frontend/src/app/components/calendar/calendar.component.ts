@@ -97,7 +97,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .calendar-container {
       padding: 80px;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .spacer {
@@ -149,7 +149,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .calendar-weekdays {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      background: linear-gradient(135deg, #00008B 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       color: white;
     }
 
@@ -270,7 +270,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .event-card mat-card-title {
       font-size: 1.3rem;
       font-weight: 600;
-      color: #00008B;
+      color: #1e90ff;
     }
 
     .event-card mat-card-subtitle {
@@ -1009,7 +1009,7 @@ export class CalendarComponent implements OnInit {
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #00008B;
+      background: #1e90ff;
     }
   `]
 })
@@ -1018,3 +1018,5 @@ export class DayEventsDialogComponent {
     @Inject(MAT_DIALOG_DATA) public data: { date: Date; events: any[] }
   ) {}
 }
+
+
