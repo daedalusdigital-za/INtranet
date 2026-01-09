@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
-import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -15,12 +14,12 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatMenuModule } from '@angular/material/menu';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { Department } from '../../models/models';
+import { NavbarComponent } from '../shared/navbar/navbar.component';
 
 @Component({
   selector: 'app-dashboard',
@@ -30,116 +29,19 @@ import { Department } from '../../models/models';
     RouterLink,
     MatCardModule,
     MatButtonModule,
-    MatToolbarModule,
     MatIconModule,
     MatProgressSpinnerModule,
     MatProgressBarModule,
     MatDialogModule,
-    MatBadgeModule,
     MatTooltipModule,
     MatChipsModule,
     MatSelectModule,
     MatButtonToggleModule,
-    MatMenuModule
+    MatMenuModule,
+    NavbarComponent
   ],
   template: `
-    <mat-toolbar color="primary">
-      <span style="font-size: 20px; font-weight: 600;">Promed Intranet</span>
-      <span style="margin: 0 32px;"></span>
-
-      <button mat-button routerLink="/dashboard">
-        <mat-icon>home</mat-icon> Home
-      </button>
-      <button mat-button routerLink="/calendar">
-        <mat-icon>calendar_month</mat-icon> Calendar
-      </button>
-      <button mat-button routerLink="/crm">
-        <mat-icon>people_outline</mat-icon> CRM
-      </button>
-      <button mat-button routerLink="/departments">
-        <mat-icon>business</mat-icon> Project Management
-      </button>
-      <button mat-button routerLink="/people">
-        <mat-icon>people</mat-icon> Human Resource
-      </button>
-      <button mat-button routerLink="/stock-management">
-        <mat-icon>inventory</mat-icon> Stock Management
-      </button>
-      <button mat-button routerLink="/documents">
-        <mat-icon>folder</mat-icon> Documents
-      </button>
-      <button mat-button routerLink="/support-ticket">
-        <mat-icon>support_agent</mat-icon> Support Ticket
-      </button>
-
-      <span class="spacer"></span>
-
-      <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0" (click)="toggleNotifications($event)" matTooltip="Notifications">
-        <mat-icon>notifications</mat-icon>
-      </button>
-
-      <!-- Notification Dropdown -->
-      @if (showNotifications) {
-        <div class="notification-dropdown" (click)="$event.stopPropagation()">
-          <div class="notification-header">
-            <h3>Notifications</h3>
-            <button mat-button color="primary" (click)="markAllAsRead()">
-              <mat-icon>done_all</mat-icon>
-              Mark All as Read
-            </button>
-          </div>
-
-          <div class="notification-list">
-            @if (notifications.length === 0) {
-              <div class="no-notifications">
-                <mat-icon>notifications_off</mat-icon>
-                <p>No new notifications</p>
-              </div>
-            } @else {
-              @for (notification of notifications; track notification.id) {
-                <div class="notification-item" [class.unread]="!notification.read">
-                  <div class="notification-icon">
-                    <mat-icon [style.color]="notification.iconColor">{{ notification.icon }}</mat-icon>
-                  </div>
-                  <div class="notification-content">
-                    <p class="notification-title">{{ notification.title }}</p>
-                    <p class="notification-message">{{ notification.message }}</p>
-                    <span class="notification-time">{{ notification.time }}</span>
-                  </div>
-                  @if (!notification.read) {
-                    <button mat-icon-button (click)="markAsRead(notification.id)" matTooltip="Mark as read">
-                      <mat-icon>check</mat-icon>
-                    </button>
-                  }
-                </div>
-              }
-            }
-          </div>
-
-          <div class="notification-footer">
-            <button mat-button color="primary" (click)="viewAllNotifications()">View All Notifications</button>
-          </div>
-        </div>
-      }
-
-      <button mat-icon-button [matMenuTriggerFor]="menu">
-        <mat-icon>account_circle</mat-icon>
-      </button>
-      <mat-menu #menu="matMenu">
-        <button mat-menu-item>
-          <mat-icon>person</mat-icon>
-          <span>Profile</span>
-        </button>
-        <button mat-menu-item>
-          <mat-icon>settings</mat-icon>
-          <span>Settings</span>
-        </button>
-        <button mat-menu-item (click)="logout()">
-          <mat-icon>logout</mat-icon>
-          <span>Logout</span>
-        </button>
-      </mat-menu>
-    </mat-toolbar>
+    <app-navbar></app-navbar>
 
     <div class="dashboard-container">
       <h1>Project Management</h1>
@@ -457,9 +359,11 @@ import { Department } from '../../models/models';
     }
 
     .dashboard-container {
-      padding: 24px;
+      padding: 80px;
       max-width: 1400px;
       margin: 0 auto;
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
     }
 
     h1 {
@@ -1157,20 +1061,7 @@ import { Department } from '../../models/models';
       }
     }
 
-    mat-toolbar {
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
-      color: white;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
 
-    mat-toolbar h2 {
-      font-weight: 600;
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-    }
-
-    mat-toolbar button {
-      color: white;
-    }
 
     /* Notification Dropdown Styles */
     .notification-dropdown {

@@ -4,16 +4,14 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatBadgeModule } from '@angular/material/badge';
-import { MatMenuModule } from '@angular/material/menu';
 import { DragDropModule, CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../services/api.service';
 import { SignalRService } from '../../services/signalr.service';
 import { AuthService } from '../../services/auth.service';
 import { Board, List, Card } from '../../models/models';
 import { Subscription } from 'rxjs';
+import { NavbarComponent } from '../shared/navbar/navbar.component';
 
 @Component({
   selector: 'app-board',
@@ -24,65 +22,12 @@ import { Subscription } from 'rxjs';
     MatCardModule,
     MatButtonModule,
     MatIconModule,
-    MatToolbarModule,
     MatDialogModule,
-    MatBadgeModule,
-    MatMenuModule,
-    DragDropModule
+    DragDropModule,
+    NavbarComponent
   ],
   template: `
-    <mat-toolbar color="primary">
-      <span style="font-size: 20px; font-weight: 600;">Promed Intranet</span>
-      <span style="margin: 0 32px;"></span>
-
-      <button mat-button routerLink="/dashboard">
-        <mat-icon>home</mat-icon> Home
-      </button>
-      <button mat-button routerLink="/calendar">
-        <mat-icon>calendar_month</mat-icon> Calendar
-      </button>
-      <button mat-button routerLink="/crm">
-        <mat-icon>people_outline</mat-icon> CRM
-      </button>
-      <button mat-button routerLink="/departments">
-        <mat-icon>business</mat-icon> Project Management
-      </button>
-      <button mat-button routerLink="/people">
-        <mat-icon>people</mat-icon> Human Resource
-      </button>
-      <button mat-button routerLink="/stock-management">
-        <mat-icon>inventory</mat-icon> Stock Management
-      </button>
-      <button mat-button routerLink="/documents">
-        <mat-icon>folder</mat-icon> Documents
-      </button>
-      <button mat-button routerLink="/support-ticket">
-        <mat-icon>support_agent</mat-icon> Support Ticket
-      </button>
-
-      <span class="spacer"></span>
-
-      <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0">
-        <mat-icon>notifications</mat-icon>
-      </button>
-      <button mat-icon-button [matMenuTriggerFor]="menu">
-        <mat-icon>account_circle</mat-icon>
-      </button>
-      <mat-menu #menu="matMenu">
-        <button mat-menu-item>
-          <mat-icon>person</mat-icon>
-          <span>Profile</span>
-        </button>
-        <button mat-menu-item>
-          <mat-icon>settings</mat-icon>
-          <span>Settings</span>
-        </button>
-        <button mat-menu-item (click)="logout()">
-          <mat-icon>logout</mat-icon>
-          <span>Logout</span>
-        </button>
-      </mat-menu>
-    </mat-toolbar>
+    <app-navbar></app-navbar>
 
     <div class="board-container">
       @if (board) {
@@ -161,9 +106,9 @@ import { Subscription } from 'rxjs';
     }
 
     .board-container {
-      padding: 24px;
-      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
+      padding: 80px;
       min-height: calc(100vh - 64px);
+      background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
     }
 
     .board-header {

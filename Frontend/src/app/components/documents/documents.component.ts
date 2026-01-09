@@ -1,17 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
-import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialogModule, MatDialog } from '@angular/material/dialog';
+import { MatDialogModule, MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatBadgeModule } from '@angular/material/badge';
-import { MatMenuModule } from '@angular/material/menu';
-import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
+import { NavbarComponent } from '../shared/navbar/navbar.component';
 
 @Component({
   selector: 'app-documents',
@@ -21,65 +19,12 @@ import { AuthService } from '../../services/auth.service';
     RouterLink,
     MatCardModule,
     MatButtonModule,
-    MatToolbarModule,
     MatIconModule,
     MatDialogModule,
-    MatBadgeModule,
-    MatMenuModule
+    NavbarComponent
   ],
   template: `
-    <mat-toolbar color="primary">
-      <span style="font-size: 20px; font-weight: 600;">Promed Intranet</span>
-      <span style="margin: 0 32px;"></span>
-
-      <button mat-button routerLink="/dashboard">
-        <mat-icon>home</mat-icon> Home
-      </button>
-      <button mat-button routerLink="/calendar">
-        <mat-icon>calendar_month</mat-icon> Calendar
-      </button>
-      <button mat-button routerLink="/crm">
-        <mat-icon>people_outline</mat-icon> CRM
-      </button>
-      <button mat-button routerLink="/departments">
-        <mat-icon>business</mat-icon> Project Management
-      </button>
-      <button mat-button routerLink="/people">
-        <mat-icon>people</mat-icon> Human Resource
-      </button>
-      <button mat-button routerLink="/stock-management">
-        <mat-icon>inventory</mat-icon> Stock Management
-      </button>
-      <button mat-button routerLink="/documents">
-        <mat-icon>folder</mat-icon> Documents
-      </button>
-      <button mat-button routerLink="/support-ticket">
-        <mat-icon>support_agent</mat-icon> Support Ticket
-      </button>
-
-      <span class="spacer"></span>
-
-      <button mat-icon-button [matBadge]="notificationCount" matBadgeColor="warn" [matBadgeHidden]="notificationCount === 0">
-        <mat-icon>notifications</mat-icon>
-      </button>
-      <button mat-icon-button [matMenuTriggerFor]="menu">
-        <mat-icon>account_circle</mat-icon>
-      </button>
-      <mat-menu #menu="matMenu">
-        <button mat-menu-item>
-          <mat-icon>person</mat-icon>
-          <span>Profile</span>
-        </button>
-        <button mat-menu-item>
-          <mat-icon>settings</mat-icon>
-          <span>Settings</span>
-        </button>
-        <button mat-menu-item (click)="logout()">
-          <mat-icon>logout</mat-icon>
-          <span>Logout</span>
-        </button>
-      </mat-menu>
-    </mat-toolbar>
+    <app-navbar></app-navbar>
 
     <div class="documents-container">
       <div class="header-section">
@@ -109,7 +54,7 @@ import { AuthService } from '../../services/auth.service';
   `,
   styles: [`
     .documents-container {
-      padding: 24px;
+      padding: 80px;
       min-height: calc(100vh - 64px);
       background: linear-gradient(135deg, #00008B 0%, #1e90ff 50%, #4169e1 100%);
     }
@@ -419,8 +364,4 @@ export class DepartmentPasswordDialogComponent {
     this.dialogRef.close();
   }
 }
-
-// Import for dialog data
-import { Inject } from '@angular/core';
-import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 
