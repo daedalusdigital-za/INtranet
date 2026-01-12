@@ -1,0 +1,5 @@
+# Finance Department Document Example
+
+This is a sample document in the Finance department folder.
+
+Created for testing the document management system.

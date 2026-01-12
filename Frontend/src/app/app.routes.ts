@@ -6,6 +6,7 @@ import { ProjectsComponent } from './components/projects/projects.component';
 import { PeopleComponent } from './components/people/people.component';
 import { SupportTicketComponent } from './components/support-ticket/support-ticket.component';
 import { DocumentsComponent } from './components/documents/documents.component';
+import { DepartmentHubComponent } from './components/department-hub/department-hub.component';
 import { CrmComponent } from './components/crm/crm.component';
 import { StockManagementComponent } from './components/stock-management/stock-management.component';
 import { CalendarComponent } from './components/calendar/calendar.component';
@@ -26,6 +27,7 @@ export const routes: Routes = [
   { path: 'stock-management', component: StockManagementComponent, canActivate: [authGuard] },
   { path: 'support-ticket', component: SupportTicketComponent, canActivate: [authGuard] },
   { path: 'documents', component: DocumentsComponent, canActivate: [authGuard] },
+  { path: 'documents/:department', component: DepartmentHubComponent, canActivate: [authGuard] },
   { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
   { path: 'user-management', component: UserManagementComponent, canActivate: [authGuard] },
   { path: 'messages', component: MessagesComponent, canActivate: [authGuard] },

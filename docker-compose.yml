@@ -27,10 +27,12 @@ services:
       - ConnectionStrings__DefaultConnection=Server=database;Database=ProjectTrackerDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;
       - KnowledgeBase__DocumentsPath=/app/kb-docs
+      - DocumentsPath=/app/documents
     ports:
       - "0.0.0.0:5000:80"
     volumes:
       - kb-docs:/app/kb-docs
+      - ./documents:/app/documents
     depends_on:
       - database
     networks:

@@ -366,18 +366,19 @@
     width: 36px;
     height: 36px;
     border: none;
-    background: #f3f4f6;
-    color: #6b7280;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
     
     &:hover {
-      background: #667eea;
-      color: white;
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
     }
     
     i {
@@ -419,10 +420,11 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
     
     &:hover:not(:disabled) {
       transform: scale(1.05);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
     }
     
     &:disabled {

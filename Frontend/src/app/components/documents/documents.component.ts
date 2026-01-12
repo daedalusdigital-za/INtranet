@@ -9,6 +9,7 @@ import { MatDialogModule, MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { AuthService } from '../../services/auth.service';
+import { DocumentsService, DepartmentInfo } from '../../services/documents.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 
 @Component({
@@ -159,51 +160,11 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 export class DocumentsComponent implements OnInit {
   currentUser: any;
   notificationCount = 3;
-  departments = [
-    {
-      name: 'Warehouses',
-      icon: 'warehouse',
-      documentCount: 0
-    },
-    {
-      name: 'Private Sales',
-      icon: 'point_of_sale',
-      documentCount: 0
-    },
-    {
-      name: 'Projects',
-      icon: 'engineering',
-      documentCount: 0
-    },
-    {
-      name: 'Stock',
-      icon: 'inventory_2',
-      documentCount: 0
-    },
-    {
-      name: 'Production',
-      icon: 'precision_manufacturing',
-      documentCount: 0
-    },
-    {
-      name: 'Marketing',
-      icon: 'campaign',
-      documentCount: 0
-    },
-    {
-      name: 'Finance',
-      icon: 'account_balance',
-      documentCount: 0
-    },
-    {
-      name: 'Tender',
-      icon: 'gavel',
-      documentCount: 0
-    }
-  ];
+  departments: DepartmentInfo[] = [];
 
   constructor(
     private authService: AuthService,
+    private documentsService: DocumentsService,
     private router: Router,
     private dialog: MatDialog
   ) {
@@ -211,10 +172,32 @@ export class DocumentsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Documents component ready
+    this.loadDepartments();
   }
 
-  openPasswordDialog(department: any): void {
+  loadDepartments(): void {
+    this.documentsService.getDepartments().subscribe({
+      next: (departments) => {
+        this.departments = departments;
+      },
+      error: (error) => {
+        console.error('Error loading departments:', error);
+        // Fallback to static data if API fails
+        this.departments = [
+          { name: 'Warehouses', icon: 'warehouse', documentCount: 0 },
+          { name: 'Private Sales', icon: 'point_of_sale', documentCount: 0 },
+          { name: 'Projects', icon: 'engineering', documentCount: 0 },
+          { name: 'Stock', icon: 'inventory_2', documentCount: 0 },
+          { name: 'Production', icon: 'precision_manufacturing', documentCount: 0 },
+          { name: 'Marketing', icon: 'campaign', documentCount: 0 },
+          { name: 'Finance', icon: 'account_balance', documentCount: 0 },
+          { name: 'Tender', icon: 'gavel', documentCount: 0 }
+        ];
+      }
+    });
+  }
+
+  openPasswordDialog(department: DepartmentInfo): void {
     const dialogRef = this.dialog.open(DepartmentPasswordDialogComponent, {
       width: '400px',
       data: { departmentName: department.name }
@@ -223,7 +206,7 @@ export class DocumentsComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result && result.success) {
         // Password was correct, navigate to department hub
-        // TODO: Navigate to department hub page
+        this.router.navigate(['/documents', department.name]);
       }
     });
   }
@@ -340,11 +323,12 @@ export class DocumentsComponent implements OnInit {
 export class DepartmentPasswordDialogComponent {
   password: string = '';
   errorMessage: string = '';
-  private readonly DEFAULT_PASSWORD = '0000';
+  isValidating: boolean = false;
 
   constructor(
     public dialogRef: MatDialogRef<DepartmentPasswordDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { departmentName: string }
+    @Inject(MAT_DIALOG_DATA) public data: { departmentName: string },
+    private documentsService: DocumentsService
   ) {}
 
   validatePassword(): void {
@@ -353,11 +337,25 @@ export class DepartmentPasswordDialogComponent {
       return;
     }
 
-    if (this.password === this.DEFAULT_PASSWORD) {
-      this.dialogRef.close({ success: true });
-    } else {
-      this.errorMessage = 'Incorrect password. Please contact the department head.';
-    }
+    this.isValidating = true;
+    this.errorMessage = '';
+
+    this.documentsService.validatePassword(this.data.departmentName, this.password).subscribe({
+      next: (response) => {
+        this.isValidating = false;
+        if (response.success) {
+          // Store token for this department session
+          sessionStorage.setItem(`dept_token_${this.data.departmentName}`, response.token || '');
+          this.dialogRef.close({ success: true });
+        } else {
+          this.errorMessage = 'Incorrect password. Please contact the department head.';
+        }
+      },
+      error: (error) => {
+        this.isValidating = false;
+        this.errorMessage = 'Incorrect password. Please contact the department head.';
+      }
+    });
   }
 
   onCancel(): void {
