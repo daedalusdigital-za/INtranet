@@ -1774,14 +1774,13 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
   openNewMessageDialog(): void {
     this.showMessages = false;
-    // TODO: Open new message dialog
-    console.log('Opening new message dialog');
+    // Navigate to messages page
+    this.router.navigate(['/messages']);
   }
 
   viewAllMessages(): void {
     this.showMessages = false;
-    // TODO: Navigate to full messages page
-    console.log('View all messages');
+    this.router.navigate(['/messages']);
   }
 
   goToProfile(): void {

@@ -585,8 +585,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   viewAllMessages(): void {
     this.showMessages = false;
-    // TODO: Navigate to messages page
-    console.log('View all messages');
+    this.router.navigate(['/messages']);
   }
 
   startNewConversation(): void {

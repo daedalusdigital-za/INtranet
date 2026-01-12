@@ -155,6 +155,12 @@ export class MessageService {
       { headers: this.getHeaders() });
   }
 
+  // Delete a message
+  deleteMessage(messageId: number, userId: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${messageId}?userId=${userId}`,
+      { headers: this.getHeaders() });
+  }
+
   // Get unread message count
   getUnreadCount(userId: number): Observable<number> {
     return this.http.get<number>(`${this.apiUrl}/unread-count?userId=${userId}`,
