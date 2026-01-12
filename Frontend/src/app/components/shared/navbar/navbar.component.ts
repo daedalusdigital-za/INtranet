@@ -170,6 +170,12 @@ import { UserSearchPopupComponent } from '../../user-search-popup/user-search-po
           <mat-icon>person</mat-icon>
           <span>Profile</span>
         </button>
+        @if (isAdmin()) {
+          <button mat-menu-item routerLink="/user-management">
+            <mat-icon>admin_panel_settings</mat-icon>
+            <span>User Management</span>
+          </button>
+        }
         <button mat-menu-item>
           <mat-icon>settings</mat-icon>
           <span>Settings</span>
@@ -617,6 +623,10 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   goToProfile(): void {
     this.router.navigate(['/profile']);
+  }
+
+  isAdmin(): boolean {
+    return this.currentUser?.role === 'Admin' || this.currentUser?.role === 'Super Admin';
   }
 
   logout(): void {

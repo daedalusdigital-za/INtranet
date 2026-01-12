@@ -191,7 +191,7 @@ namespace ProjectTracker.API.Data
                     Name = "Admin User", 
                     Email = "welcome@promedtechnologies.co.za", 
                     PasswordHash = "Kingsland",
-                    Role = "Admin",
+                    Role = "Super Admin",
                     CreatedAt = seedDate
                 },
                 new User 

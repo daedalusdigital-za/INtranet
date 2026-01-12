@@ -1,1 +1,100 @@
+# ===================
+# Build outputs
+# ===================
 /build
+dist/
+out/
+
+# ===================
+# IDE & Editor
+# ===================
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# ===================
+# OS Generated
+# ===================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ===================
+# .NET / Backend
+# ===================
+Backend/bin/
+Backend/obj/
+*.user
+*.suo
+*.cache
+*.log
+*.vspscc
+*.vssscc
+
+# ===================
+# Node.js / Frontend
+# ===================
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.angular/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===================
+# Android / Gradle
+# ===================
+.gradle/
+local.properties
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+/captures
+.externalNativeBuild/
+.cxx/
+
+# ===================
+# AI Models (large files)
+# ===================
+ai-data/models/*.gguf
+ai-data/models/*.bin
+
+# ===================
+# Environment & Secrets
+# ===================
+*.env
+.env.local
+.env.*.local
+appsettings.local.json
+
+# ===================
+# Logs
+# ===================
+logs/
+*.log
+
+# ===================
+# Test Coverage
+# ===================
+coverage/
+*.lcov
+
+# ===================
+# Temp files
+# ===================
+*.tmp
+*.temp
+tmp/
+temp/
