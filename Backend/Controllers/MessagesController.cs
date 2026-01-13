@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs;
+using ProjectTracker.API.Hubs;
 using ProjectTracker.API.Models;
 
 namespace ProjectTracker.API.Controllers
@@ -12,11 +14,13 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<MessagesController> _logger;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public MessagesController(ApplicationDbContext context, ILogger<MessagesController> logger)
+        public MessagesController(ApplicationDbContext context, ILogger<MessagesController> logger, IHubContext<ChatHub> hubContext)
         {
             _context = context;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         // GET: api/messages/conversations
@@ -208,9 +212,25 @@ namespace ProjectTracker.API.Controllers
                     .ThenInclude(r => r!.Sender)
                 .FirstOrDefaultAsync(m => m.MessageId == message.MessageId);
 
+            var messageDto = MapMessageToDto(result!, userId);
+
+            // Send SignalR notification to all participants in the conversation
+            try
+            {
+                await _hubContext.Clients.Group($"conversation_{request.ConversationId}")
+                    .SendAsync("ReceiveMessage", messageDto);
+                
+                _logger.LogInformation("SignalR notification sent for message {MessageId} in conversation {ConversationId}", 
+                    message.MessageId, request.ConversationId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send SignalR notification for message {MessageId}", message.MessageId);
+            }
+
             return CreatedAtAction(nameof(GetMessages), 
                 new { id = request.ConversationId }, 
-                MapMessageToDto(result!, userId));
+                messageDto);
         }
 
         // POST: api/messages/send-direct

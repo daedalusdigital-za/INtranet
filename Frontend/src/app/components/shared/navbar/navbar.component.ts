@@ -8,10 +8,12 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { AuthService } from '../../../services/auth.service';
 import { MessageService, User, Conversation } from '../../../services/message.service';
 import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
 import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
+import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
 
 @Component({
   selector: 'app-navbar',
@@ -26,6 +28,7 @@ import { UserSearchPopupComponent } from '../../user-search-popup/user-search-po
     MatBadgeModule,
     MatTooltipModule,
     MatDividerModule,
+    MatDialogModule,
     ChatBubbleComponent,
     UserSearchPopupComponent
   ],
@@ -176,6 +179,10 @@ import { UserSearchPopupComponent } from '../../user-search-popup/user-search-po
             <span>User Management</span>
           </button>
         }
+        <button mat-menu-item (click)="openTodoDialog()">
+          <mat-icon>checklist</mat-icon>
+          <span>ToDo</span>
+        </button>
         <button mat-menu-item>
           <mat-icon>settings</mat-icon>
           <span>Settings</span>
@@ -477,7 +484,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
   constructor(
     private authService: AuthService,
     private router: Router,
-    private messageService: MessageService
+    private messageService: MessageService,
+    private dialog: MatDialog
   ) {}
 
   ngOnInit(): void {
@@ -622,6 +630,15 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   goToProfile(): void {
     this.router.navigate(['/profile']);
+  }
+
+  openTodoDialog(): void {
+    this.dialog.open(TodoDialogComponent, {
+      width: '1200px',
+      maxWidth: '95vw',
+      maxHeight: '85vh',
+      data: { userId: this.currentUserId }
+    });
   }
 
   isAdmin(): boolean {

@@ -32,6 +32,9 @@ namespace ProjectTracker.API.Hubs
                 _connectionUsers[connectionId] = userId;
             }
 
+            // Add user to their personal notification group
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+
             // Notify others that user is online
             await Clients.Others.SendAsync("UserOnline", new OnlineStatus
             {
@@ -116,8 +119,11 @@ namespace ProjectTracker.API.Hubs
                 }
             }
 
+            // Remove from user notification group
             if (userId.HasValue)
             {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user_{userId.Value}");
+                
                 await Clients.Others.SendAsync("UserOffline", new OnlineStatus
                 {
                     UserId = userId.Value,

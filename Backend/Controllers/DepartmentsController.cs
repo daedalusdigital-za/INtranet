@@ -22,42 +22,18 @@ namespace ProjectTracker.API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DepartmentDto>>> GetDepartments()
         {
-            // Hardcoded departments - TODO: Replace with database query later
-            var departments = new List<DepartmentDto>
-            {
-                new DepartmentDto
+            // Read departments from database
+            var departments = await _context.Departments
+                .OrderBy(d => d.Name)
+                .Select(d => new DepartmentDto
                 {
-                    DepartmentId = 1,
-                    Name = "Production",
-                    ManagerName = "Production Manager",
-                    BoardCount = 3,
-                    UserCount = 12
-                },
-                new DepartmentDto
-                {
-                    DepartmentId = 2,
-                    Name = "Quality Assurance",
-                    ManagerName = "QA Manager",
-                    BoardCount = 2,
-                    UserCount = 8
-                },
-                new DepartmentDto
-                {
-                    DepartmentId = 3,
-                    Name = "Warehouse",
-                    ManagerName = "Warehouse Manager",
-                    BoardCount = 2,
-                    UserCount = 15
-                },
-                new DepartmentDto
-                {
-                    DepartmentId = 4,
-                    Name = "Administration",
-                    ManagerName = "Admin Manager",
-                    BoardCount = 4,
-                    UserCount = 10
-                }
-            };
+                    DepartmentId = d.DepartmentId,
+                    Name = d.Name,
+                    ManagerName = d.ManagerName ?? "",
+                    BoardCount = 0,
+                    UserCount = _context.Users.Count(u => u.DepartmentId == d.DepartmentId)
+                })
+                .ToListAsync();
 
             return Ok(departments);
         }
@@ -65,21 +41,24 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<DepartmentDto>> GetDepartment(int id)
         {
-            // Hardcoded departments - TODO: Replace with database query later
-            var departments = new Dictionary<int, DepartmentDto>
-            {
-                { 1, new DepartmentDto { DepartmentId = 1, Name = "Production", ManagerName = "Production Manager", BoardCount = 3, UserCount = 12 } },
-                { 2, new DepartmentDto { DepartmentId = 2, Name = "Quality Assurance", ManagerName = "QA Manager", BoardCount = 2, UserCount = 8 } },
-                { 3, new DepartmentDto { DepartmentId = 3, Name = "Warehouse", ManagerName = "Warehouse Manager", BoardCount = 2, UserCount = 15 } },
-                { 4, new DepartmentDto { DepartmentId = 4, Name = "Administration", ManagerName = "Admin Manager", BoardCount = 4, UserCount = 10 } }
-            };
+            var department = await _context.Departments
+                .Where(d => d.DepartmentId == id)
+                .Select(d => new DepartmentDto
+                {
+                    DepartmentId = d.DepartmentId,
+                    Name = d.Name,
+                    ManagerName = d.ManagerName ?? "",
+                    BoardCount = 0,
+                    UserCount = _context.Users.Count(u => u.DepartmentId == d.DepartmentId)
+                })
+                .FirstOrDefaultAsync();
 
-            if (!departments.ContainsKey(id))
+            if (department == null)
             {
                 return NotFound();
             }
 
-            return Ok(departments[id]);
+            return Ok(department);
         }
 
         [HttpPost]

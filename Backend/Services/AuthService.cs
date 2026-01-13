@@ -26,14 +26,19 @@ namespace ProjectTracker.API.Services
 
         public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto)
         {
+            Console.WriteLine($"[AUTH] Login attempt for email: '{loginDto.Email}'");
+            
             var user = await _context.Users
                 .Include(u => u.Department)
                 .FirstOrDefaultAsync(u => u.Email == loginDto.Email && u.IsActive);
 
             if (user == null)
             {
+                Console.WriteLine($"[AUTH] User not found or inactive for email: '{loginDto.Email}'");
                 return null;
             }
+
+            Console.WriteLine($"[AUTH] User found: {user.Email}, PasswordHash starts with: '{user.PasswordHash.Substring(0, Math.Min(10, user.PasswordHash.Length))}'");
 
             // Verify password - support both plain text (for dev) and BCrypt hashed
             bool passwordValid = false;
@@ -41,13 +46,17 @@ namespace ProjectTracker.API.Services
             // Check if password is BCrypt hashed (starts with $2)
             if (user.PasswordHash.StartsWith("$2"))
             {
+                Console.WriteLine("[AUTH] Using BCrypt verification");
                 passwordValid = BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash);
             }
             else
             {
+                Console.WriteLine($"[AUTH] Using plain text comparison: '{user.PasswordHash}' == '{loginDto.Password}'");
                 // Plain text comparison (for development/testing)
                 passwordValid = user.PasswordHash == loginDto.Password;
             }
+
+            Console.WriteLine($"[AUTH] Password valid: {passwordValid}");
 
             if (!passwordValid)
             {

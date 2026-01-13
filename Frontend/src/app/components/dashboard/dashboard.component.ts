@@ -69,11 +69,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
             <mat-label>Workflow Stage</mat-label>
             <mat-select [(value)]="selectedWorkflow" (selectionChange)="filterProjects()">
               <mat-option value="all">All Stages</mat-option>
-              <mat-option value="planning">Planning</mat-option>
-              <mat-option value="in-progress">In Progress</mat-option>
-              <mat-option value="testing">Testing</mat-option>
-              <mat-option value="deployment">Deployment</mat-option>
-              <mat-option value="completed">Completed</mat-option>
+              <mat-option value="Planning">Planning</mat-option>
+              <mat-option value="In Progress">In Progress</mat-option>
+              <mat-option value="Stuck">Stuck</mat-option>
+              <mat-option value="Completed">Completed</mat-option>
             </mat-select>
           </mat-form-field>
 
@@ -1258,7 +1257,7 @@ export class DashboardComponent implements OnInit {
   selectedWorkflow: string = 'all';
   selectedStatus: string = 'all';
 
-  workflowStages = ['planning', 'in-progress', 'testing', 'deployment', 'completed'];
+  workflowStages = ['Planning', 'In Progress', 'Stuck', 'Completed'];
 
   // Projects data
   projects: any[] = [];
@@ -1603,11 +1602,10 @@ export class DashboardComponent implements OnInit {
 
   getWorkflowColor(workflow: string): string {
     const colors: any = {
-      'planning': '#9E9E9E',
-      'in-progress': '#2196F3',
-      'testing': '#FF9800',
-      'deployment': '#9C27B0',
-      'completed': '#4CAF50'
+      'Planning': '#9E9E9E',
+      'In Progress': '#2196F3',
+      'Stuck': '#F44336',
+      'Completed': '#4CAF50'
     };
     return colors[workflow] || '#cccccc';
   }

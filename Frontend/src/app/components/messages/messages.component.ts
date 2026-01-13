@@ -776,6 +776,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
   replyingTo: Message | null = null;
   
   private refreshSubscription?: Subscription;
+  private signalRSubscriptions: Subscription[] = [];
 
   constructor(
     private messageService: MessageService,
@@ -784,15 +785,33 @@ export class MessagesComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    const userJson = localStorage.getItem('user');
+    // Try 'currentUser' first (correct key used by AuthService), then fallback to 'user'
+    const userJson = localStorage.getItem('currentUser') || localStorage.getItem('user');
     if (userJson) {
       const user = JSON.parse(userJson);
       this.currentUserId = user.userId;
+      
+      // Start SignalR connection
+      this.messageService.startConnection(this.currentUserId).then(() => {
+        console.log('Connected to messaging hub');
+      }).catch(err => {
+        console.error('Failed to connect to messaging hub:', err);
+        this.snackBar.open('Unable to connect to real-time messaging', 'Close', { duration: 3000 });
+      });
+      
+      // Subscribe to real-time events
+      this.setupSignalRSubscriptions();
+      
+      // Load conversations now that we have a valid userId
+      this.loadConversations();
+    } else {
+      console.error('No user found in localStorage');
+      this.snackBar.open('Please log in to view messages', 'Close', { duration: 3000 });
+      this.router.navigate(['/login']);
+      return;
     }
-
-    this.loadConversations();
     
-    // Refresh conversations every 30 seconds
+    // Refresh conversations every 30 seconds as backup
     this.refreshSubscription = interval(30000).subscribe(() => {
       this.loadConversations(false);
     });
@@ -800,6 +819,100 @@ export class MessagesComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.refreshSubscription?.unsubscribe();
+    this.signalRSubscriptions.forEach(sub => sub.unsubscribe());
+    
+    // Stop SignalR connection
+    this.messageService.stopConnection();
+  }
+
+  private setupSignalRSubscriptions(): void {
+    // New message received
+    this.signalRSubscriptions.push(
+      this.messageService.newMessage$.subscribe(message => {
+        console.log('New message received:', message);
+        
+        // Add to messages if in the current conversation
+        if (this.selectedConversation?.conversationId === message.conversationId) {
+          // Check if message already exists (avoid duplicates)
+          if (!this.messages.find(m => m.messageId === message.messageId)) {
+            this.messages.push(message);
+            this.scrollToBottom();
+            
+            // Mark as read if conversation is open
+            this.messageService.markAsRead(message.conversationId, this.currentUserId).subscribe();
+          }
+        }
+        
+        // Update conversation in list
+        const conv = this.conversations.find(c => c.conversationId === message.conversationId);
+        if (conv) {
+          conv.lastMessage = message;
+          conv.lastMessageAt = message.sentAt;
+          
+          // Increment unread count if not in current conversation
+          if (this.selectedConversation?.conversationId !== message.conversationId && message.senderId !== this.currentUserId) {
+            conv.unreadCount = (conv.unreadCount || 0) + 1;
+          }
+          
+          // Move conversation to top
+          this.conversations = [conv, ...this.conversations.filter(c => c.conversationId !== conv.conversationId)];
+          this.filterConversations();
+        } else {
+          // New conversation - reload list
+          this.loadConversations(false);
+        }
+      })
+    );
+
+    // Message edited
+    this.signalRSubscriptions.push(
+      this.messageService.messageEdited$.subscribe(({ conversationId, messageId, content }) => {
+        if (this.selectedConversation?.conversationId === conversationId) {
+          const message = this.messages.find(m => m.messageId === messageId);
+          if (message) {
+            message.content = content;
+            message.isEdited = true;
+          }
+        }
+      })
+    );
+
+    // Message deleted
+    this.signalRSubscriptions.push(
+      this.messageService.messageDeleted$.subscribe(({ conversationId, messageId }) => {
+        if (this.selectedConversation?.conversationId === conversationId) {
+          const message = this.messages.find(m => m.messageId === messageId);
+          if (message) {
+            message.isDeleted = true;
+            message.content = 'This message was deleted';
+          }
+        }
+      })
+    );
+
+    // Conversation updated
+    this.signalRSubscriptions.push(
+      this.messageService.conversationUpdated$.subscribe(conversation => {
+        const index = this.conversations.findIndex(c => c.conversationId === conversation.conversationId);
+        if (index >= 0) {
+          this.conversations[index] = conversation;
+          this.filterConversations();
+        }
+      })
+    );
+
+    // User online status
+    this.signalRSubscriptions.push(
+      this.messageService.userOnline$.subscribe(({ userId, isOnline }) => {
+        // Update participant online status in conversations
+        this.conversations.forEach(conv => {
+          const participant = conv.participants?.find(p => p.userId === userId);
+          if (participant) {
+            participant.isOnline = isOnline;
+          }
+        });
+      })
+    );
   }
 
   loadConversations(showLoading: boolean = true): void {
@@ -833,9 +946,17 @@ export class MessagesComponent implements OnInit, OnDestroy {
   }
 
   selectConversation(conversation: Conversation): void {
+    // Leave previous conversation
+    if (this.selectedConversation) {
+      this.messageService.leaveConversation(this.selectedConversation.conversationId);
+    }
+    
     this.selectedConversation = conversation;
     this.replyingTo = null;
     this.loadMessages();
+    
+    // Join new conversation via SignalR
+    this.messageService.joinConversation(conversation.conversationId);
     
     // Mark as read
     this.messageService.markAsRead(conversation.conversationId, this.currentUserId).subscribe();

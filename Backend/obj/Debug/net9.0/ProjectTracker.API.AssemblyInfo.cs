@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ProjectTracker.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3635e7e27e6c355cec4e96b04095ce572ff02ca0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ee83d49dda958f003b85a413b9fa5de8121b3c9f")]
 [assembly: System.Reflection.AssemblyProductAttribute("ProjectTracker.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ProjectTracker.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

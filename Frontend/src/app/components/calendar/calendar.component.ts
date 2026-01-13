@@ -4,9 +4,33 @@ import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialogModule, MatDialog, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router, RouterLink } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { environment } from '../../../environments/environment';
+
+interface TodoTask {
+  id: number;
+  title: string;
+  description?: string;
+  dueDate: Date;
+  dueTime?: Date;
+  createdByUserId: number;
+  createdByUserName: string;
+  assignedToUserId: number;
+  assignedToUserName: string;
+  status: string;
+  isCompleted: boolean;
+  completedAt?: Date;
+  createdAt: Date;
+  priority: string;
+  category?: string;
+  isSelfAssigned: boolean;
+}
 
 @Component({
   selector: 'app-calendar',
@@ -18,6 +42,9 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     MatButtonModule,
     MatIconModule,
     MatDialogModule,
+    MatCheckboxModule,
+    MatTooltipModule,
+    MatSnackBarModule,
     NavbarComponent
   ],
   template: `
@@ -50,13 +77,21 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
             <div class="calendar-day"
                  [class.other-month]="!day.isCurrentMonth"
                  [class.today]="day.isToday"
-                 [class.has-events]="day.events.length > 0"
-                 [class.clickable]="day.events.length > 0"
+                 [class.has-events]="day.events.length > 0 || day.tasks.length > 0"
+                 [class.clickable]="day.events.length > 0 || day.tasks.length > 0"
                  (click)="openDayEvents(day)">
               <div class="day-number">{{ day.day }}</div>
               <div class="day-events">
                 @for (event of day.events; track event.id) {
                   <div class="event-indicator" [style.background]="event.color" [title]="event.title"></div>
+                }
+                @for (task of day.tasks; track task.id) {
+                  <div class="task-indicator" 
+                       [class.completed]="task.isCompleted"
+                       [class.pending]="task.status === 'Pending'"
+                       [title]="task.title">
+                    <mat-icon>task_alt</mat-icon>
+                  </div>
                 }
               </div>
             </div>
@@ -65,7 +100,50 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       </div>
 
       <div class="events-sidebar">
-        <h2>Events for {{ monthNames[currentMonth] }} {{ currentYear }}</h2>
+        <h2>Events & Tasks for {{ monthNames[currentMonth] }} {{ currentYear }}</h2>
+        
+        <!-- ToDo Tasks Section -->
+        @if (getCurrentMonthTasks().length > 0) {
+          <h3 class="section-title">
+            <mat-icon>task_alt</mat-icon>
+            ToDo Tasks
+          </h3>
+          <div class="tasks-list">
+            @for (task of getCurrentMonthTasks(); track task.id) {
+              <mat-card class="task-card" [class.completed]="task.isCompleted" [class.pending]="task.status === 'Pending'">
+                <mat-card-header>
+                  <mat-checkbox [checked]="task.isCompleted" 
+                                [disabled]="task.status === 'Pending' || task.isCompleted"
+                                (change)="completeTask(task)"
+                                (click)="$event.stopPropagation()">
+                  </mat-checkbox>
+                  <div class="task-header-content">
+                    <mat-card-title [class.completed-text]="task.isCompleted">{{ task.title }}</mat-card-title>
+                    <mat-card-subtitle>Due: {{ task.dueDate | date:'MMM d, y' }}</mat-card-subtitle>
+                  </div>
+                  <span class="priority-badge" [class]="'priority-' + task.priority.toLowerCase()">{{ task.priority }}</span>
+                </mat-card-header>
+                <mat-card-content>
+                  <div class="task-meta">
+                    <span class="status-badge" [class]="'status-' + task.status.toLowerCase()">{{ task.status }}</span>
+                    @if (!task.isSelfAssigned) {
+                      <span class="assigned-by">From: {{ task.createdByUserName }}</span>
+                    }
+                  </div>
+                  @if (task.description) {
+                    <p class="task-description">{{ task.description }}</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+            }
+          </div>
+        }
+
+        <!-- Events Section -->
+        <h3 class="section-title">
+          <mat-icon>event</mat-icon>
+          Events
+        </h3>
         <div class="events-list">
           @for (event of getCurrentMonthEvents(); track event.id) {
             <mat-card class="event-card">
@@ -234,8 +312,122 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       transition: all 0.2s ease;
     }
 
+    .task-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      background: #e3f2fd;
+      border-radius: 4px;
+      font-size: 10px;
+      color: #1976d2;
+    }
+
+    .task-indicator mat-icon {
+      font-size: 12px;
+      width: 12px;
+      height: 12px;
+    }
+
+    .task-indicator.completed {
+      background: #e8f5e9;
+      color: #388e3c;
+      text-decoration: line-through;
+    }
+
+    .task-indicator.pending {
+      background: #fff3e0;
+      color: #f57c00;
+    }
+
     .calendar-day:hover .event-indicator {
       height: 8px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.3rem;
+      margin: 24px 0 16px;
+      color: white;
+    }
+
+    .tasks-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .task-card {
+      background: white;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .task-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .task-card.completed {
+      opacity: 0.7;
+      background: #f5f5f5;
+    }
+
+    .task-card.pending {
+      border-left: 4px solid #ff9800;
+    }
+
+    .task-card mat-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .task-header-content {
+      flex: 1;
+    }
+
+    .task-card mat-card-title.completed-text {
+      text-decoration: line-through;
+      color: #999;
+    }
+
+    .task-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .priority-badge, .status-badge {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .priority-low { background: #e3f2fd; color: #1976d2; }
+    .priority-normal { background: #e8f5e9; color: #388e3c; }
+    .priority-high { background: #fff3e0; color: #f57c00; }
+    .priority-urgent { background: #ffebee; color: #d32f2f; }
+
+    .status-pending { background: #fff3e0; color: #f57c00; }
+    .status-accepted { background: #e3f2fd; color: #1976d2; }
+    .status-completed { background: #e8f5e9; color: #388e3c; }
+
+    .assigned-by {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .task-description {
+      font-size: 13px;
+      color: #666;
+      margin-top: 8px;
     }
 
     .events-sidebar {
@@ -341,6 +533,8 @@ export class CalendarComponent implements OnInit {
   currentYear: number;
   calendarDays: any[] = [];
   notificationCount = 3;
+  todoTasks: TodoTask[] = [];
+  currentUserId: number = 0;
 
   monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -517,7 +711,9 @@ export class CalendarComponent implements OnInit {
   constructor(
     private router: Router,
     private authService: AuthService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private http: HttpClient,
+    private snackBar: MatSnackBar
   ) {
     const today = new Date();
     this.currentMonth = today.getMonth();
@@ -525,7 +721,22 @@ export class CalendarComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.currentUserId = this.authService.currentUserValue?.userId || 0;
+    this.loadTasks();
     this.generateCalendar();
+  }
+
+  loadTasks(): void {
+    if (this.currentUserId === 0) return;
+    
+    this.http.get<TodoTask[]>(`${environment.apiUrl}/api/todo/calendar/${this.currentUserId}?month=${this.currentMonth + 1}&year=${this.currentYear}`)
+      .subscribe({
+        next: (tasks) => {
+          this.todoTasks = tasks;
+          this.generateCalendar(); // Regenerate calendar with tasks
+        },
+        error: (err) => console.error('Error loading tasks:', err)
+      });
   }
 
   generateCalendar(): void {
@@ -545,7 +756,8 @@ export class CalendarComponent implements OnInit {
         date: new Date(this.currentYear, this.currentMonth - 1, day),
         isCurrentMonth: false,
         isToday: false,
-        events: []
+        events: [],
+        tasks: []
       });
     }
 
@@ -556,13 +768,18 @@ export class CalendarComponent implements OnInit {
       const dayEvents = this.upcomingEvents.filter(event =>
         event.date.toDateString() === date.toDateString()
       );
+      const dayTasks = this.todoTasks.filter(task => {
+        const taskDate = new Date(task.dueDate);
+        return taskDate.toDateString() === date.toDateString();
+      });
 
       this.calendarDays.push({
         day,
         date,
         isCurrentMonth: true,
         isToday,
-        events: dayEvents
+        events: dayEvents,
+        tasks: dayTasks
       });
     }
 
@@ -574,7 +791,8 @@ export class CalendarComponent implements OnInit {
         date: new Date(this.currentYear, this.currentMonth + 1, day),
         isCurrentMonth: false,
         isToday: false,
-        events: []
+        events: [],
+        tasks: []
       });
     }
   }
@@ -586,7 +804,7 @@ export class CalendarComponent implements OnInit {
     } else {
       this.currentMonth--;
     }
-    this.generateCalendar();
+    this.loadTasks();
   }
 
   nextMonth(): void {
@@ -596,7 +814,7 @@ export class CalendarComponent implements OnInit {
     } else {
       this.currentMonth++;
     }
-    this.generateCalendar();
+    this.loadTasks();
   }
 
   getCurrentMonthEvents(): any[] {
@@ -604,6 +822,25 @@ export class CalendarComponent implements OnInit {
       event.date.getMonth() === this.currentMonth && 
       event.date.getFullYear() === this.currentYear
     ).sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  getCurrentMonthTasks(): TodoTask[] {
+    return this.todoTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }
+
+  completeTask(task: TodoTask): void {
+    if (task.status === 'Pending' || task.isCompleted) return;
+
+    this.http.post(`${environment.apiUrl}/api/todo/${task.id}/complete`, {}).subscribe({
+      next: () => {
+        this.snackBar.open('Task completed!', 'Close', { duration: 3000 });
+        this.loadTasks();
+      },
+      error: (err) => {
+        console.error('Error completing task:', err);
+        this.snackBar.open('Error completing task', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   openDayEvents(day: any): void {

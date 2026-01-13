@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Models;
+using ProjectTracker.API.Models.CRM;
 
 namespace ProjectTracker.API.Data
 {
@@ -50,6 +51,23 @@ namespace ProjectTracker.API.Data
         public DbSet<KnowledgeBaseDocument> KnowledgeBaseDocuments { get; set; }
         public DbSet<KnowledgeBaseChunk> KnowledgeBaseChunks { get; set; }
         public DbSet<KnowledgeBaseIngestionLog> KnowledgeBaseIngestionLogs { get; set; }
+
+        // CRM System
+        public DbSet<OperatingCompany> OperatingCompanies { get; set; }
+        public DbSet<StaffOperatingCompany> StaffOperatingCompanies { get; set; }
+        public DbSet<Lead> Leads { get; set; }
+        public DbSet<LeadLog> LeadLogs { get; set; }
+        public DbSet<LeadStatus> LeadStatuses { get; set; }
+        public DbSet<Disposition> Dispositions { get; set; }
+        public DbSet<Campaign> Campaigns { get; set; }
+        public DbSet<CampaignAgent> CampaignAgents { get; set; }
+        public DbSet<Promotion> Promotions { get; set; }
+        public DbSet<LeadInterest> LeadInterests { get; set; }
+        public DbSet<LeadAssignmentHistory> LeadAssignmentHistories { get; set; }
+
+        // ToDo Task System
+        public DbSet<TodoTask> TodoTasks { get; set; }
+        public DbSet<TodoNotification> TodoNotifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -167,6 +185,129 @@ namespace ProjectTracker.API.Data
                 .WithMany()
                 .HasForeignKey(mr => mr.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // CRM System relationships
+            modelBuilder.Entity<StaffOperatingCompany>()
+                .HasOne(soc => soc.OperatingCompany)
+                .WithMany(oc => oc.StaffMappings)
+                .HasForeignKey(soc => soc.OperatingCompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Lead>()
+                .HasOne(l => l.OperatingCompany)
+                .WithMany(oc => oc.Leads)
+                .HasForeignKey(l => l.OperatingCompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Lead>()
+                .HasOne(l => l.AssignedAgent)
+                .WithMany()
+                .HasForeignKey(l => l.AssignedAgentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Lead>()
+                .HasOne(l => l.LeadStatus)
+                .WithMany(ls => ls.Leads)
+                .HasForeignKey(l => l.LeadStatusId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Lead>()
+                .HasOne(l => l.Campaign)
+                .WithMany(c => c.Leads)
+                .HasForeignKey(l => l.CampaignId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<LeadLog>()
+                .HasOne(ll => ll.Lead)
+                .WithMany(l => l.Logs)
+                .HasForeignKey(ll => ll.LeadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<LeadLog>()
+                .HasOne(ll => ll.Agent)
+                .WithMany()
+                .HasForeignKey(ll => ll.AgentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<LeadLog>()
+                .HasOne(ll => ll.Disposition)
+                .WithMany(d => d.LeadLogs)
+                .HasForeignKey(ll => ll.DispositionId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<LeadStatus>()
+                .HasOne(ls => ls.OperatingCompany)
+                .WithMany(oc => oc.LeadStatuses)
+                .HasForeignKey(ls => ls.OperatingCompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Disposition>()
+                .HasOne(d => d.OperatingCompany)
+                .WithMany(oc => oc.Dispositions)
+                .HasForeignKey(d => d.OperatingCompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Campaign>()
+                .HasOne(c => c.OperatingCompany)
+                .WithMany(oc => oc.Campaigns)
+                .HasForeignKey(c => c.OperatingCompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CampaignAgent>()
+                .HasOne(ca => ca.Campaign)
+                .WithMany(c => c.AssignedAgents)
+                .HasForeignKey(ca => ca.CampaignId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<CampaignAgent>()
+                .HasOne(ca => ca.Agent)
+                .WithMany()
+                .HasForeignKey(ca => ca.AgentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Promotion>()
+                .HasOne(p => p.OperatingCompany)
+                .WithMany(oc => oc.Promotions)
+                .HasForeignKey(p => p.OperatingCompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<LeadInterest>()
+                .HasOne(li => li.Lead)
+                .WithMany(l => l.Interests)
+                .HasForeignKey(li => li.LeadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<LeadInterest>()
+                .HasOne(li => li.Promotion)
+                .WithMany(p => p.LeadInterests)
+                .HasForeignKey(li => li.PromotionId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<LeadAssignmentHistory>()
+                .HasOne(lah => lah.Lead)
+                .WithMany(l => l.AssignmentHistory)
+                .HasForeignKey(lah => lah.LeadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // CRM Indexes
+            modelBuilder.Entity<Lead>()
+                .HasIndex(l => new { l.OperatingCompanyId, l.AssignedAgentId });
+
+            modelBuilder.Entity<Lead>()
+                .HasIndex(l => new { l.OperatingCompanyId, l.LeadStatusId });
+
+            modelBuilder.Entity<Lead>()
+                .HasIndex(l => l.NextCallbackAt);
+
+            modelBuilder.Entity<Lead>()
+                .HasIndex(l => l.Phone);
+
+            modelBuilder.Entity<LeadLog>()
+                .HasIndex(ll => new { ll.LeadId, ll.LogDateTime });
+
+            modelBuilder.Entity<StaffOperatingCompany>()
+                .HasIndex(soc => new { soc.StaffMemberId, soc.OperatingCompanyId })
+                .IsUnique();
 
             // Seed initial data
             SeedData(modelBuilder);
@@ -334,6 +475,53 @@ namespace ProjectTracker.API.Data
                     IsActive = true, 
                     CreatedAt = seedDate 
                 }
+            );
+
+            // Seed CRM Operating Companies
+            modelBuilder.Entity<OperatingCompany>().HasData(
+                new OperatingCompany { OperatingCompanyId = 1, Name = "PromedTechnologies", Code = "PROMED", Description = "Medical technology solutions", PrimaryColor = "#1e90ff", IsActive = true, CreatedAt = seedDate },
+                new OperatingCompany { OperatingCompanyId = 2, Name = "AccessMedical", Code = "ACCMED", Description = "Medical access solutions", PrimaryColor = "#28a745", IsActive = true, CreatedAt = seedDate },
+                new OperatingCompany { OperatingCompanyId = 3, Name = "Pharmatech", Code = "PHARMA", Description = "Pharmaceutical technology", PrimaryColor = "#6f42c1", IsActive = true, CreatedAt = seedDate },
+                new OperatingCompany { OperatingCompanyId = 4, Name = "SebenzaniTrading", Code = "SEBENZ", Description = "Trading solutions", PrimaryColor = "#fd7e14", IsActive = true, CreatedAt = seedDate }
+            );
+
+            // Seed CRM Lead Statuses (for each operating company)
+            var leadStatusId = 1;
+            foreach (var companyId in new[] { 1, 2, 3, 4 })
+            {
+                modelBuilder.Entity<LeadStatus>().HasData(
+                    new LeadStatus { LeadStatusId = leadStatusId++, OperatingCompanyId = companyId, Name = "New", Description = "New lead", Color = "#17a2b8", Icon = "fiber_new", SortOrder = 1, IsDefault = true, CreatedAt = seedDate },
+                    new LeadStatus { LeadStatusId = leadStatusId++, OperatingCompanyId = companyId, Name = "Attempting Contact", Description = "Trying to reach", Color = "#ffc107", Icon = "phone_callback", SortOrder = 2, CreatedAt = seedDate },
+                    new LeadStatus { LeadStatusId = leadStatusId++, OperatingCompanyId = companyId, Name = "Contacted", Description = "Successfully contacted", Color = "#28a745", Icon = "phone_in_talk", SortOrder = 3, CreatedAt = seedDate },
+                    new LeadStatus { LeadStatusId = leadStatusId++, OperatingCompanyId = companyId, Name = "Qualified", Description = "Qualified lead", Color = "#007bff", Icon = "verified", SortOrder = 4, CreatedAt = seedDate },
+                    new LeadStatus { LeadStatusId = leadStatusId++, OperatingCompanyId = companyId, Name = "Follow-up", Description = "Needs follow-up", Color = "#6f42c1", Icon = "schedule", SortOrder = 5, CreatedAt = seedDate },
+                    new LeadStatus { LeadStatusId = leadStatusId++, OperatingCompanyId = companyId, Name = "Won", Description = "Deal closed successfully", Color = "#28a745", Icon = "emoji_events", SortOrder = 6, IsFinal = true, CreatedAt = seedDate },
+                    new LeadStatus { LeadStatusId = leadStatusId++, OperatingCompanyId = companyId, Name = "Lost", Description = "Deal lost", Color = "#dc3545", Icon = "cancel", SortOrder = 7, IsFinal = true, CreatedAt = seedDate }
+                );
+            }
+
+            // Seed CRM Dispositions (for each operating company)
+            var dispositionId = 1;
+            foreach (var companyId in new[] { 1, 2, 3, 4 })
+            {
+                modelBuilder.Entity<Disposition>().HasData(
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "No Answer", Description = "No one answered", Color = "#6c757d", Icon = "phone_missed", SortOrder = 1, CreatedAt = seedDate },
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "Voicemail", Description = "Left voicemail", Color = "#17a2b8", Icon = "voicemail", SortOrder = 2, CreatedAt = seedDate },
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "Invalid Number", Description = "Number is invalid", Color = "#dc3545", Icon = "phone_disabled", SortOrder = 3, IsFinal = true, CreatedAt = seedDate },
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "Not Interested", Description = "Not interested in offer", Color = "#dc3545", Icon = "thumb_down", SortOrder = 4, IsFinal = true, CreatedAt = seedDate },
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "Interested - Call Back", Description = "Interested, schedule callback", Color = "#28a745", Icon = "event", SortOrder = 5, RequiresCallback = true, IsPositive = true, CreatedAt = seedDate },
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "Interested - Send Info", Description = "Send more information", Color = "#28a745", Icon = "mail", SortOrder = 6, IsPositive = true, CreatedAt = seedDate },
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "Decision Maker Not Available", Description = "Need to reach decision maker", Color = "#ffc107", Icon = "person_search", SortOrder = 7, RequiresCallback = true, CreatedAt = seedDate },
+                    new Disposition { DispositionId = dispositionId++, OperatingCompanyId = companyId, Name = "DNC", Description = "Do Not Call", Color = "#dc3545", Icon = "block", SortOrder = 8, IsFinal = true, IsDoNotCall = true, CreatedAt = seedDate }
+                );
+            }
+
+            // Seed Staff Operating Company mappings (Admin user has access to all)
+            modelBuilder.Entity<StaffOperatingCompany>().HasData(
+                new StaffOperatingCompany { StaffOperatingCompanyId = 1, StaffMemberId = 1, OperatingCompanyId = 1, CompanyRole = "SalesManager", IsPrimaryCompany = true, IsActive = true, CreatedAt = seedDate },
+                new StaffOperatingCompany { StaffOperatingCompanyId = 2, StaffMemberId = 1, OperatingCompanyId = 2, CompanyRole = "SalesManager", IsActive = true, CreatedAt = seedDate },
+                new StaffOperatingCompany { StaffOperatingCompanyId = 3, StaffMemberId = 1, OperatingCompanyId = 3, CompanyRole = "SalesManager", IsActive = true, CreatedAt = seedDate },
+                new StaffOperatingCompany { StaffOperatingCompanyId = 4, StaffMemberId = 1, OperatingCompanyId = 4, CompanyRole = "SalesManager", IsActive = true, CreatedAt = seedDate }
             );
         }
     }

@@ -35,11 +35,18 @@ interface User {
   createdAt: Date;
   permissions?: string;
   hasProfilePicture: boolean;
+  companyIds?: number[];
 }
 
 interface Department {
   departmentId: number;
   name: string;
+}
+
+interface OperatingCompany {
+  operatingCompanyId: number;
+  name: string;
+  code: string;
 }
 
 interface Permission {
@@ -560,6 +567,7 @@ export class UserManagementComponent implements OnInit {
   users: User[] = [];
   filteredUsers: User[] = [];
   departments: Department[] = [];
+  companies: OperatingCompany[] = [];
   roles: string[] = [];
   permissions: Permission[] = [];
 
@@ -578,6 +586,7 @@ export class UserManagementComponent implements OnInit {
   ngOnInit(): void {
     this.loadUsers();
     this.loadDepartments();
+    this.loadCompanies();
     this.loadRoles();
     this.loadPermissions();
   }
@@ -612,6 +621,14 @@ export class UserManagementComponent implements OnInit {
       .subscribe({
         next: (departments) => this.departments = departments,
         error: (err) => console.error('Error loading departments:', err)
+      });
+  }
+
+  loadCompanies(): void {
+    this.http.get<OperatingCompany[]>('/api/crm/all-companies', { headers: this.getHeaders() })
+      .subscribe({
+        next: (companies) => this.companies = companies,
+        error: (err) => console.error('Error loading companies:', err)
       });
   }
 
@@ -692,6 +709,7 @@ export class UserManagementComponent implements OnInit {
       data: { 
         mode: 'create',
         departments: this.departments,
+        companies: this.companies,
         roles: this.roles,
         permissions: this.permissions
       }
@@ -720,6 +738,7 @@ export class UserManagementComponent implements OnInit {
         mode: 'edit',
         user,
         departments: this.departments,
+        companies: this.companies,
         roles: this.roles,
         permissions: this.permissions
       }
@@ -890,6 +909,20 @@ export class UserManagementComponent implements OnInit {
           <input matInput formControlName="title" placeholder="e.g., Software Engineer">
         </mat-form-field>
 
+        <div class="companies-section">
+          <h4>Company Assignments</h4>
+          <p class="section-hint">Select which companies this user works for</p>
+          <div class="companies-grid">
+            @for (company of data.companies; track company.operatingCompanyId) {
+              <mat-checkbox 
+                [checked]="hasCompany(company.operatingCompanyId)"
+                (change)="toggleCompany(company.operatingCompanyId, $event.checked)">
+                {{ company.name }}
+              </mat-checkbox>
+            }
+          </div>
+        </div>
+
         <div class="permissions-section">
           <h4>Permissions</h4>
           <div class="permissions-grid">
@@ -952,6 +985,35 @@ export class UserManagementComponent implements OnInit {
       margin-bottom: 8px;
     }
 
+    .companies-section {
+      margin: 16px 0;
+      padding: 16px;
+      background: #e8f5e9;
+      border-radius: 8px;
+      border: 1px solid #c8e6c9;
+    }
+
+    .companies-section h4 {
+      margin: 0 0 4px 0;
+      color: #2e7d32;
+    }
+
+    .section-hint {
+      margin: 0 0 12px 0;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .companies-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .companies-grid mat-checkbox {
+      display: block;
+    }
+
     .permissions-section {
       margin: 16px 0;
       padding: 16px;
@@ -990,6 +1052,7 @@ export class UserManagementComponent implements OnInit {
 export class UserFormDialogComponent {
   form: FormGroup;
   selectedPermissions: string[] = [];
+  selectedCompanies: number[] = [];
 
   constructor(
     private fb: FormBuilder,
@@ -998,6 +1061,7 @@ export class UserFormDialogComponent {
   ) {
     const user = data.user;
     this.selectedPermissions = user?.permissions ? user.permissions.split(',') : [];
+    this.selectedCompanies = user?.companyIds || [];
 
     this.form = this.fb.group({
       name: [user?.name || '', Validators.required],
@@ -1034,10 +1098,25 @@ export class UserFormDialogComponent {
     }
   }
 
+  hasCompany(companyId: number): boolean {
+    return this.selectedCompanies.includes(companyId);
+  }
+
+  toggleCompany(companyId: number, checked: boolean): void {
+    if (checked) {
+      if (!this.selectedCompanies.includes(companyId)) {
+        this.selectedCompanies.push(companyId);
+      }
+    } else {
+      this.selectedCompanies = this.selectedCompanies.filter(id => id !== companyId);
+    }
+  }
+
   submit(): void {
     if (this.form.valid) {
       const formData = { ...this.form.value };
       formData.permissions = this.selectedPermissions.join(',');
+      formData.companyIds = this.selectedCompanies;
       
       // Remove password field if editing
       if (this.data.mode === 'edit') {

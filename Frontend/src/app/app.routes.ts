@@ -7,7 +7,6 @@ import { PeopleComponent } from './components/people/people.component';
 import { SupportTicketComponent } from './components/support-ticket/support-ticket.component';
 import { DocumentsComponent } from './components/documents/documents.component';
 import { DepartmentHubComponent } from './components/department-hub/department-hub.component';
-import { CrmComponent } from './components/crm/crm.component';
 import { StockManagementComponent } from './components/stock-management/stock-management.component';
 import { CalendarComponent } from './components/calendar/calendar.component';
 import { ProfileComponent } from './components/profile/profile.component';
@@ -15,11 +14,27 @@ import { UserManagementComponent } from './components/user-management/user-manag
 import { MessagesComponent } from './components/messages/messages.component';
 import { authGuard } from './guards/auth.guard';
 
+// CRM Components
+import { CrmDashboardComponent } from './components/crm/crm-dashboard.component';
+import { CrmLeadsComponent } from './components/crm/crm-leads.component';
+import { CrmLeadDetailComponent } from './components/crm/crm-lead-detail.component';
+import { CrmLeadCreateComponent } from './components/crm/crm-lead-create.component';
+import { CrmCampaignsComponent } from './components/crm/crm-campaigns.component';
+import { CrmManagerConsoleComponent } from './components/crm/crm-manager-console.component';
+
 export const routes: Routes = [
   { path: '', redirectTo: '/login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
   { path: 'dashboard', component: ProjectsComponent, canActivate: [authGuard] },
-  { path: 'crm', component: CrmComponent, canActivate: [authGuard] },
+  
+  // CRM Routes
+  { path: 'crm', component: CrmDashboardComponent, canActivate: [authGuard] },
+  { path: 'crm/leads', component: CrmLeadsComponent, canActivate: [authGuard] },
+  { path: 'crm/leads/new', component: CrmLeadCreateComponent, canActivate: [authGuard] },
+  { path: 'crm/leads/:id', component: CrmLeadDetailComponent, canActivate: [authGuard] },
+  { path: 'crm/campaigns', component: CrmCampaignsComponent, canActivate: [authGuard] },
+  { path: 'crm/manager', component: CrmManagerConsoleComponent, canActivate: [authGuard] },
+  
   { path: 'departments', component: DashboardComponent, canActivate: [authGuard] },
   { path: 'calendar', component: CalendarComponent, canActivate: [authGuard] },
   { path: 'projects', redirectTo: '/dashboard', pathMatch: 'full' },

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
+using ProjectTracker.API.Models.CRM;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -27,25 +28,35 @@ namespace ProjectTracker.API.Controllers
                 .Include(u => u.Department)
                 .OrderBy(u => u.Surname)
                 .ThenBy(u => u.Name)
-                .Select(u => new UserListDto
-                {
-                    UserId = u.UserId,
-                    Name = u.Name,
-                    Surname = u.Surname,
-                    Email = u.Email,
-                    Role = u.Role,
-                    Title = u.Title,
-                    DepartmentId = u.DepartmentId,
-                    DepartmentName = u.Department != null ? u.Department.Name : null,
-                    IsActive = u.IsActive,
-                    LastLoginAt = u.LastLoginAt,
-                    CreatedAt = u.CreatedAt,
-                    Permissions = u.Permissions,
-                    HasProfilePicture = u.ProfilePictureData != null
-                })
                 .ToListAsync();
 
-            return Ok(users);
+            // Get all company assignments
+            var allCompanyAssignments = await _context.Set<StaffOperatingCompany>()
+                .Where(soc => soc.IsActive)
+                .ToListAsync();
+
+            var result = users.Select(u => new UserListDto
+            {
+                UserId = u.UserId,
+                Name = u.Name,
+                Surname = u.Surname,
+                Email = u.Email,
+                Role = u.Role,
+                Title = u.Title,
+                DepartmentId = u.DepartmentId,
+                DepartmentName = u.Department != null ? u.Department.Name : null,
+                IsActive = u.IsActive,
+                LastLoginAt = u.LastLoginAt,
+                CreatedAt = u.CreatedAt,
+                Permissions = u.Permissions,
+                HasProfilePicture = u.ProfilePictureData != null,
+                CompanyIds = allCompanyAssignments
+                    .Where(soc => soc.StaffMemberId == u.UserId)
+                    .Select(soc => soc.OperatingCompanyId)
+                    .ToList()
+            }).ToList();
+
+            return Ok(result);
         }
 
         // GET: api/users/{id}
@@ -60,6 +71,11 @@ namespace ProjectTracker.API.Controllers
             {
                 return NotFound(new { message = "User not found" });
             }
+
+            var companyIds = await _context.Set<StaffOperatingCompany>()
+                .Where(soc => soc.StaffMemberId == id && soc.IsActive)
+                .Select(soc => soc.OperatingCompanyId)
+                .ToListAsync();
 
             return Ok(new UserDetailDto
             {
@@ -77,7 +93,8 @@ namespace ProjectTracker.API.Controllers
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
                 ProfilePictureUrl = user.ProfilePictureUrl,
-                HasProfilePicture = user.ProfilePictureData != null
+                HasProfilePicture = user.ProfilePictureData != null,
+                CompanyIds = companyIds
             });
         }
 
@@ -107,6 +124,22 @@ namespace ProjectTracker.API.Controllers
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+
+            // Add company assignments
+            if (dto.CompanyIds != null && dto.CompanyIds.Any())
+            {
+                foreach (var companyId in dto.CompanyIds)
+                {
+                    _context.Set<StaffOperatingCompany>().Add(new StaffOperatingCompany
+                    {
+                        StaffMemberId = user.UserId,
+                        OperatingCompanyId = companyId,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
 
             _logger.LogInformation("User created: {Email} by admin", dto.Email);
 
@@ -166,6 +199,28 @@ namespace ProjectTracker.API.Controllers
 
             if (dto.IsActive.HasValue)
                 user.IsActive = dto.IsActive.Value;
+
+            // Update company assignments
+            if (dto.CompanyIds != null)
+            {
+                // Remove existing assignments
+                var existingAssignments = await _context.Set<StaffOperatingCompany>()
+                    .Where(soc => soc.StaffMemberId == id)
+                    .ToListAsync();
+                _context.Set<StaffOperatingCompany>().RemoveRange(existingAssignments);
+
+                // Add new assignments
+                foreach (var companyId in dto.CompanyIds)
+                {
+                    _context.Set<StaffOperatingCompany>().Add(new StaffOperatingCompany
+                    {
+                        StaffMemberId = id,
+                        OperatingCompanyId = companyId,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
 
             user.UpdatedAt = DateTime.UtcNow;
 
@@ -296,6 +351,7 @@ namespace ProjectTracker.API.Controllers
         public DateTime CreatedAt { get; set; }
         public string? Permissions { get; set; }
         public bool HasProfilePicture { get; set; }
+        public List<int>? CompanyIds { get; set; }
     }
 
     public class UserDetailDto
@@ -315,6 +371,7 @@ namespace ProjectTracker.API.Controllers
         public DateTime? UpdatedAt { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public bool HasProfilePicture { get; set; }
+        public List<int>? CompanyIds { get; set; }
     }
 
     public class CreateUserDto
@@ -328,6 +385,7 @@ namespace ProjectTracker.API.Controllers
         public string? Permissions { get; set; }
         public int? DepartmentId { get; set; }
         public bool? IsActive { get; set; }
+        public List<int>? CompanyIds { get; set; }
     }
 
     public class UpdateUserDto
@@ -340,6 +398,7 @@ namespace ProjectTracker.API.Controllers
         public string? Permissions { get; set; }
         public int? DepartmentId { get; set; }
         public bool? IsActive { get; set; }
+        public List<int>? CompanyIds { get; set; }
     }
 
     public class ResetPasswordDto

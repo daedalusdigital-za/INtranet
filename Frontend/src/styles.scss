@@ -24,3 +24,29 @@ mat-toolbar mat-icon {
   color: white !important;
 }
 
+/* Notification Snackbar Styles */
+.notification-info .mdc-snackbar__surface {
+  background-color: #2196f3 !important;
+  color: white !important;
+}
+
+.notification-success .mdc-snackbar__surface {
+  background-color: #4caf50 !important;
+  color: white !important;
+}
+
+.notification-warning .mdc-snackbar__surface {
+  background-color: #ff9800 !important;
+  color: white !important;
+}
+
+.notification-error .mdc-snackbar__surface {
+  background-color: #f44336 !important;
+  color: white !important;
+}
+
+.mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-color: #323232;
+  --mat-snack-bar-button-color: #fff;
+}
+

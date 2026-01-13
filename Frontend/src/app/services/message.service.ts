@@ -1,7 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, BehaviorSubject } from 'rxjs';
+import { Observable, BehaviorSubject, Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
+import * as signalR from '@microsoft/signalr';
+import { environment } from '../../environments/environment';
+import { NotificationService } from './notification.service';
 
 export interface User {
   userId: number;
@@ -103,11 +106,35 @@ export class MessageService {
   private apiUrl = '/api/messages';
   private usersApiUrl = '/api/profile';
   
+  // SignalR Hub Connection
+  private hubConnection: signalR.HubConnection | null = null;
+  private isConnected = false;
+  private currentUserId: number | null = null;
+  
   // Active chat bubbles
   private activeChatBubblesSubject = new BehaviorSubject<Conversation[]>([]);
   public activeChats$ = this.activeChatBubblesSubject.asObservable();
+  
+  // Real-time message updates
+  private newMessageSubject = new Subject<Message>();
+  public newMessage$ = this.newMessageSubject.asObservable();
+  
+  private messageEditedSubject = new Subject<{ conversationId: number; messageId: number; content: string }>();
+  public messageEdited$ = this.messageEditedSubject.asObservable();
+  
+  private messageDeletedSubject = new Subject<{ conversationId: number; messageId: number }>();
+  public messageDeleted$ = this.messageDeletedSubject.asObservable();
+  
+  private conversationUpdatedSubject = new Subject<Conversation>();
+  public conversationUpdated$ = this.conversationUpdatedSubject.asObservable();
+  
+  private userOnlineSubject = new Subject<{ userId: number; isOnline: boolean }>();
+  public userOnline$ = this.userOnlineSubject.asObservable();
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private notificationService: NotificationService
+  ) {}
 
   private getHeaders(): HttpHeaders {
     const token = localStorage.getItem('token');
@@ -231,5 +258,188 @@ export class MessageService {
       subject: `Chat with ${targetUser.name} ${targetUser.surname}`
     };
     return this.createConversation(request, currentUserId);
+  }
+
+  // SignalR Connection Management
+  async startConnection(userId: number): Promise<void> {
+    if (this.isConnected && this.currentUserId === userId) {
+      return;
+    }
+
+    this.currentUserId = userId;
+    const token = localStorage.getItem('token');
+    
+    // Use signalRUrl if available, otherwise derive from apiUrl
+    const hubUrl = environment.signalRUrl || environment.apiUrl.replace('/api', '');
+    
+    this.hubConnection = new signalR.HubConnectionBuilder()
+      .withUrl(`${hubUrl}/chathub`, {
+        accessTokenFactory: () => token || '',
+        skipNegotiation: false,
+        transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling
+      })
+      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .configureLogging(signalR.LogLevel.Information)
+      .build();
+
+    // Set up event handlers
+    this.setupSignalRHandlers();
+
+    try {
+      await this.hubConnection.start();
+      console.log('SignalR Connected');
+      this.isConnected = true;
+      
+      // Register user
+      await this.hubConnection.invoke('RegisterUser', userId);
+      
+      // Load initial unread count
+      this.updateUnreadCount(userId);
+    } catch (err) {
+      console.error('Error connecting to SignalR:', err);
+      this.isConnected = false;
+      // Retry connection after delay
+      setTimeout(() => this.startConnection(userId), 5000);
+    }
+
+    // Handle reconnection
+    this.hubConnection.onreconnected(() => {
+      console.log('SignalR Reconnected');
+      this.isConnected = true;
+      if (this.currentUserId) {
+        this.hubConnection?.invoke('RegisterUser', this.currentUserId);
+      }
+    });
+
+    this.hubConnection.onreconnecting(() => {
+      console.log('SignalR Reconnecting...');
+      this.isConnected = false;
+    });
+
+    this.hubConnection.onclose(() => {
+      console.log('SignalR Disconnected');
+      this.isConnected = false;
+      // Attempt to reconnect
+      setTimeout(() => {
+        if (this.currentUserId) {
+          this.startConnection(this.currentUserId);
+        }
+      }, 5000);
+    });
+  }
+
+  private setupSignalRHandlers(): void {
+    if (!this.hubConnection) return;
+
+    // Receive new message
+    this.hubConnection.on('ReceiveMessage', (message: Message) => {
+      console.log('Received message via SignalR:', message);
+      this.newMessageSubject.next(message);
+      
+      // Show notification if message is from someone else
+      if (message.senderId !== this.currentUserId) {
+        this.notificationService.showMessageNotification(
+          message.senderFullName || message.senderName,
+          message.content
+        );
+        this.notificationService.incrementUnreadCount();
+      }
+    });
+
+    // ToDo notification
+    this.hubConnection.on('TodoNotification', (notification: any) => {
+      console.log('Received ToDo notification via SignalR:', notification);
+      this.notificationService.showTodoNotification(notification);
+    });
+
+    // Message edited
+    this.hubConnection.on('MessageEdited', (conversationId: number, messageId: number, newContent: string) => {
+      console.log('Message edited:', conversationId, messageId);
+      this.messageEditedSubject.next({ conversationId, messageId, content: newContent });
+    });
+
+    // Message deleted
+    this.hubConnection.on('MessageDeleted', (conversationId: number, messageId: number) => {
+      console.log('Message deleted:', conversationId, messageId);
+      this.messageDeletedSubject.next({ conversationId, messageId });
+    });
+
+    // Conversation updated
+    this.hubConnection.on('ConversationUpdated', (conversation: Conversation) => {
+      console.log('Conversation updated:', conversation);
+      this.conversationUpdatedSubject.next(conversation);
+    });
+
+    // User online status
+    this.hubConnection.on('UserOnline', (status: { userId: number; isOnline: boolean }) => {
+      console.log('User online status:', status);
+      this.userOnlineSubject.next(status);
+    });
+
+    // Typing indicator
+    this.hubConnection.on('UserTyping', (data: { conversationId: number; userId: number; userName: string; isTyping: boolean }) => {
+      console.log('User typing:', data);
+      // Can be used to show "User is typing..." indicator
+    });
+  }
+
+  async stopConnection(): Promise<void> {
+    if (this.hubConnection) {
+      try {
+        await this.hubConnection.stop();
+        this.isConnected = false;
+        this.currentUserId = null;
+        console.log('SignalR connection stopped');
+      } catch (err) {
+        console.error('Error stopping SignalR connection:', err);
+      }
+    }
+  }
+
+  async joinConversation(conversationId: number): Promise<void> {
+    if (this.hubConnection && this.isConnected) {
+      try {
+        await this.hubConnection.invoke('JoinConversation', conversationId);
+        console.log(`Joined conversation ${conversationId}`);
+      } catch (err) {
+        console.error('Error joining conversation:', err);
+      }
+    }
+  }
+
+  async leaveConversation(conversationId: number): Promise<void> {
+    if (this.hubConnection && this.isConnected) {
+      try {
+        await this.hubConnection.invoke('LeaveConversation', conversationId);
+        console.log(`Left conversation ${conversationId}`);
+      } catch (err) {
+        console.error('Error leaving conversation:', err);
+      }
+    }
+  }
+
+  async sendTypingIndicator(conversationId: number, isTyping: boolean): Promise<void> {
+    if (this.hubConnection && this.isConnected) {
+      try {
+        await this.hubConnection.invoke('SendTypingIndicator', conversationId, isTyping);
+      } catch (err) {
+        console.error('Error sending typing indicator:', err);
+      }
+    }
+  }
+
+  private updateUnreadCount(userId: number): void {
+    this.getUnreadCount(userId).subscribe({
+      next: (count) => {
+        this.notificationService.updateUnreadCount(count);
+      },
+      error: (err) => {
+        console.error('Error getting unread count:', err);
+      }
+    });
+  }
+
+  getConnectionState(): boolean {
+    return this.isConnected;
   }
 }

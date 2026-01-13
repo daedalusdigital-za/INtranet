@@ -11,8 +11,8 @@ RUN npm ci
 # Copy source files
 COPY . .
 
-# Build the Angular app
-RUN npm run build --production
+# Build the Angular app for production
+RUN npm run build -- --configuration=production
 
 # Runtime stage with Nginx
 FROM nginx:alpine
