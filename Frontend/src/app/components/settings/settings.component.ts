@@ -292,17 +292,69 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Ope
           </ng-template>
           
           <div class="tab-content">
+            <!-- Stats Cards -->
+            <div class="stats-row">
+              <mat-card class="stat-card">
+                <mat-card-content>
+                  <div class="stat-icon" style="background: #2196f3;">
+                    <mat-icon>list_alt</mat-icon>
+                  </div>
+                  <div class="stat-info">
+                    <span class="stat-value">{{ logStats.totalLogs }}</span>
+                    <span class="stat-label">Total Logs</span>
+                  </div>
+                </mat-card-content>
+              </mat-card>
+              <mat-card class="stat-card">
+                <mat-card-content>
+                  <div class="stat-icon" style="background: #4caf50;">
+                    <mat-icon>today</mat-icon>
+                  </div>
+                  <div class="stat-info">
+                    <span class="stat-value">{{ logStats.todayLogs }}</span>
+                    <span class="stat-label">Today</span>
+                  </div>
+                </mat-card-content>
+              </mat-card>
+              <mat-card class="stat-card">
+                <mat-card-content>
+                  <div class="stat-icon" style="background: #f44336;">
+                    <mat-icon>security</mat-icon>
+                  </div>
+                  <div class="stat-info">
+                    <span class="stat-value">{{ logStats.securityEvents }}</span>
+                    <span class="stat-label">Security Events</span>
+                  </div>
+                </mat-card-content>
+              </mat-card>
+              <mat-card class="stat-card">
+                <mat-card-content>
+                  <div class="stat-icon" style="background: #ff9800;">
+                    <mat-icon>error_outline</mat-icon>
+                  </div>
+                  <div class="stat-info">
+                    <span class="stat-value">{{ logStats.errorCount }}</span>
+                    <span class="stat-label">Errors</span>
+                  </div>
+                </mat-card-content>
+              </mat-card>
+            </div>
+
             <div class="tab-toolbar">
               <div class="filters">
                 <mat-form-field appearance="outline" class="filter-field">
                   <mat-label>Category</mat-label>
                   <mat-select [(ngModel)]="logCategoryFilter" (selectionChange)="filterLogs()">
                     <mat-option value="all">All Categories</mat-option>
+                    <mat-option value="security">Security</mat-option>
                     <mat-option value="user">User</mat-option>
                     <mat-option value="announcement">Announcement</mat-option>
                     <mat-option value="settings">Settings</mat-option>
-                    <mat-option value="security">Security</mat-option>
                     <mat-option value="system">System</mat-option>
+                    <mat-option value="document">Document</mat-option>
+                    <mat-option value="crm">CRM</mat-option>
+                    <mat-option value="attendance">Attendance</mat-option>
+                    <mat-option value="meeting">Meeting</mat-option>
                   </mat-select>
                 </mat-form-field>
                 <mat-form-field appearance="outline" class="filter-field">
@@ -314,11 +366,22 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Ope
                     <mat-option value="all">All Time</mat-option>
                   </mat-select>
                 </mat-form-field>
+                <mat-form-field appearance="outline" class="search-field">
+                  <mat-label>Search logs</mat-label>
+                  <input matInput [(ngModel)]="logSearchQuery" (keyup.enter)="filterLogs()" placeholder="Search by action, user, description...">
+                  <mat-icon matSuffix>search</mat-icon>
+                </mat-form-field>
               </div>
-              <button mat-stroked-button color="primary" (click)="exportLogs()">
-                <mat-icon>download</mat-icon>
-                Export Logs
-              </button>
+              <div class="toolbar-actions">
+                <button mat-stroked-button (click)="refreshLogs()">
+                  <mat-icon>refresh</mat-icon>
+                  Refresh
+                </button>
+                <button mat-stroked-button color="primary" (click)="exportLogs()">
+                  <mat-icon>download</mat-icon>
+                  Export Logs
+                </button>
+              </div>
             </div>
 
             <div class="logs-list">
@@ -335,18 +398,34 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Ope
               } @else {
                 <div class="logs-timeline">
                   @for (log of paginatedLogs; track log.id) {
-                    <div class="log-item">
+                    <div class="log-item" [class.log-warning]="log.severity === 'warning'" [class.log-error]="log.severity === 'error' || log.severity === 'critical'" [class.log-failed]="!log.isSuccess">
                       <div class="log-icon" [style.background]="getCategoryColor(log.category)">
                         <mat-icon>{{ getCategoryIcon(log.category) }}</mat-icon>
                       </div>
                       <div class="log-content">
                         <div class="log-header">
                           <span class="log-action">{{ log.action }}</span>
-                          <span class="log-category">{{ log.category | titlecase }}</span>
+                          <div class="log-badges">
+                            <span class="log-category" [style.background]="getCategoryColor(log.category) + '20'" [style.color]="getCategoryColor(log.category)">{{ log.category | titlecase }}</span>
+                            @if (log.severity && log.severity !== 'info') {
+                              <span class="log-severity" [class]="'severity-' + log.severity">{{ log.severity | titlecase }}</span>
+                            }
+                            @if (!log.isSuccess) {
+                              <span class="log-failed-badge">Failed</span>
+                            }
+                          </div>
                         </div>
                         <p class="log-description">{{ log.description }}</p>
+                        @if (log.errorMessage) {
+                          <p class="log-error-message"><mat-icon>error</mat-icon> {{ log.errorMessage }}</p>
+                        }
                         <div class="log-meta">
-                          <span><mat-icon>person</mat-icon> {{ log.userName }}</span>
+                          @if (log.userName) {
+                            <span><mat-icon>person</mat-icon> {{ log.userName }}</span>
+                          }
+                          @if (log.userRole) {
+                            <span class="user-role-badge">{{ log.userRole }}</span>
+                          }
                           <span><mat-icon>schedule</mat-icon> {{ formatDateTime(log.timestamp) }}</span>
                           @if (log.ipAddress) {
                             <span><mat-icon>computer</mat-icon> {{ log.ipAddress }}</span>
@@ -1039,6 +1118,150 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Ope
       height: 14px;
     }
 
+    /* Stats Row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+    }
+
+    .stat-card mat-card-content {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px !important;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .stat-icon mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    /* Log Badges and Severity */
+    .log-badges {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .log-severity {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .severity-warning {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .severity-error, .severity-critical {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .log-failed-badge {
+      background: #ffebee;
+      color: #c62828;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .log-item.log-warning {
+      border-left: 3px solid #ff9800;
+    }
+
+    .log-item.log-error, .log-item.log-failed {
+      border-left: 3px solid #f44336;
+      background: #fff5f5;
+    }
+
+    .log-error-message {
+      margin: 0 0 8px 0;
+      color: #c62828;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .log-error-message mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .user-role-badge {
+      background: #e3f2fd;
+      color: #1565c0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .search-field {
+      min-width: 250px;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    @media (max-width: 1200px) {
+      .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .stats-row {
+        grid-template-columns: 1fr;
+      }
+      
+      .search-field {
+        min-width: 100%;
+      }
+    }
+
     /* Settings Section Styles */
     .settings-section {
       margin-bottom: 32px;
@@ -1315,8 +1538,15 @@ export class SettingsComponent implements OnInit {
   logsLoading = false;
   logCategoryFilter = 'all';
   logDateFilter = 'all';
+  logSearchQuery = '';
   logsPageSize = 10;
   logsPageIndex = 0;
+  logStats = {
+    totalLogs: 0,
+    todayLogs: 0,
+    securityEvents: 0,
+    errorCount: 0
+  };
 
   // Settings
   settings = {
@@ -1740,6 +1970,10 @@ export class SettingsComponent implements OnInit {
     if (this.logCategoryFilter !== 'all') {
       filter.category = this.logCategoryFilter;
     }
+
+    if (this.logSearchQuery) {
+      filter.searchTerm = this.logSearchQuery;
+    }
     
     if (this.logDateFilter !== 'all') {
       const now = new Date();
@@ -1756,14 +1990,43 @@ export class SettingsComponent implements OnInit {
       }
     }
 
-    this.logsService.getLogs(filter).subscribe(logs => {
-      this.logs = logs;
-      this.updatePaginatedLogs();
-      this.logsLoading = false;
+    // Load logs
+    this.logsService.getLogs(filter).subscribe({
+      next: logs => {
+        this.logs = logs;
+        this.updatePaginatedLogs();
+        this.logsLoading = false;
+      },
+      error: (err) => {
+        console.error('Error loading logs:', err);
+        this.logsLoading = false;
+        this.snackBar.open('Failed to load logs', 'Close', { duration: 3000 });
+      }
+    });
+
+    // Load stats
+    this.logsService.getStats().subscribe({
+      next: stats => {
+        this.logStats = {
+          totalLogs: stats.totalLogs || 0,
+          todayLogs: stats.todayLogs || 0,
+          securityEvents: stats.securityEvents || 0,
+          errorCount: stats.errorCount || 0
+        };
+      },
+      error: (err) => {
+        console.error('Error loading log stats:', err);
+      }
     });
   }
 
+  refreshLogs(): void {
+    this.loadLogs();
+    this.snackBar.open('Logs refreshed', 'Close', { duration: 2000 });
+  }
+
   filterLogs(): void {
+    this.logsPageIndex = 0;
     this.loadLogs();
   }
 
@@ -1780,7 +2043,66 @@ export class SettingsComponent implements OnInit {
   }
 
   exportLogs(): void {
-    this.snackBar.open('Exporting logs...', 'Close', { duration: 3000 });
+    this.snackBar.open('Exporting logs...', '', { duration: 2000 });
+    
+    // Build filter based on current settings
+    let filter: any = {};
+    if (this.logCategoryFilter !== 'all') {
+      filter.category = this.logCategoryFilter;
+    }
+    if (this.logDateFilter !== 'all') {
+      const now = new Date();
+      switch (this.logDateFilter) {
+        case 'today':
+          filter.startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          filter.startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          filter.startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+      }
+    }
+
+    this.logsService.exportLogs(filter).subscribe({
+      next: (logs) => {
+        // Convert logs to CSV format
+        const headers = ['Timestamp', 'Action', 'Category', 'Description', 'User', 'Role', 'IP Address', 'Severity', 'Success'];
+        const csvRows = [headers.join(',')];
+        
+        logs.forEach(log => {
+          const row = [
+            new Date(log.timestamp).toISOString(),
+            `"${log.action.replace(/"/g, '""')}"`,
+            log.category,
+            `"${(log.description || '').replace(/"/g, '""')}"`,
+            `"${(log.userName || '').replace(/"/g, '""')}"`,
+            log.userRole || '',
+            log.ipAddress || '',
+            log.severity,
+            log.isSuccess ? 'Yes' : 'No'
+          ];
+          csvRows.push(row.join(','));
+        });
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `system-logs-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        this.snackBar.open('Logs exported successfully', 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        console.error('Error exporting logs:', err);
+        this.snackBar.open('Failed to export logs', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   getCategoryIcon(category: string): string {
@@ -1799,14 +2121,14 @@ export class SettingsComponent implements OnInit {
 
   // Helper Methods
   logAction(action: string, category: 'user' | 'announcement' | 'settings' | 'security' | 'system', description: string): void {
-    const currentUser = this.authService.currentUserValue;
     this.logsService.addLog({
       action,
       category,
       description,
-      userId: currentUser?.userId || 1,
-      userName: currentUser?.name || 'Admin'
-    });
+      entityType: 'System',
+      severity: 'info',
+      isSuccess: true
+    }).subscribe();
   }
 
   formatDate(date: Date): string {

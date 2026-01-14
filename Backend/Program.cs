@@ -59,6 +59,7 @@ builder.Services.AddHttpClient();
 // Add Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 // Add Knowledge Base Service (must be registered before LlamaAIService)
 builder.Services.AddSingleton<IKnowledgeBaseService, KnowledgeBaseService>();

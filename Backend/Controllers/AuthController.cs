@@ -10,10 +10,12 @@ namespace ProjectTracker.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IAuditLogService _auditLogService;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IAuditLogService auditLogService)
         {
             _authService = authService;
+            _auditLogService = auditLogService;
         }
 
         [HttpPost("login")]
@@ -28,10 +30,50 @@ namespace ProjectTracker.API.Controllers
 
             if (result == null)
             {
+                // Log failed login attempt
+                await _auditLogService.LogAsync(
+                    "Login Failed", 
+                    "security", 
+                    "User", 
+                    null, 
+                    $"Failed login attempt for email: {loginDto.Email}",
+                    null,
+                    "warning",
+                    false,
+                    "Invalid credentials"
+                );
                 return Unauthorized(new { message = "Invalid email or password" });
             }
 
+            // Log successful login
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync(
+                "Login", 
+                "security", 
+                "User", 
+                result.User.UserId, 
+                $"User logged in: {result.User.Name} ({result.User.Email})",
+                null,
+                "info",
+                true
+            );
+
             return Ok(result);
+        }
+
+        [HttpPost("logout")]
+        [Authorize]
+        public async Task<IActionResult> Logout()
+        {
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync(
+                "Logout", 
+                "security", 
+                "User", 
+                null, 
+                "User logged out"
+            );
+            return Ok(new { message = "Logged out successfully" });
         }
 
         [HttpPost("register")]
@@ -44,6 +86,16 @@ namespace ProjectTracker.API.Controllers
             {
                 return BadRequest(new { message = "User with this email already exists" });
             }
+
+            // Log user registration
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync(
+                "User Registered", 
+                "user", 
+                "User", 
+                result.UserId, 
+                $"New user registered: {result.Name} ({result.Email})"
+            );
 
             return Ok(result);
         }

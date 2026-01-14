@@ -5,6 +5,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
 using ProjectTracker.API.Models.CRM;
 using ProjectTracker.API.DTOs.Users;
+using ProjectTracker.API.Services;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -14,11 +15,13 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<UsersController> _logger;
+        private readonly IAuditLogService _auditLogService;
 
-        public UsersController(ApplicationDbContext context, ILogger<UsersController> logger)
+        public UsersController(ApplicationDbContext context, ILogger<UsersController> logger, IAuditLogService auditLogService)
         {
             _context = context;
             _logger = logger;
+            _auditLogService = auditLogService;
         }
 
         // GET: api/users
@@ -206,6 +209,11 @@ namespace ProjectTracker.API.Controllers
 
             _logger.LogInformation("User created: {Email} by admin", dto.Email);
 
+            // Audit log
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync("User Created", "user", "User", user.UserId, 
+                $"Created user: {user.Name} {user.Surname} ({user.Email}) with role {user.Role}");
+
             return CreatedAtAction(nameof(GetUser), new { id = user.UserId }, new UserDetailDto
             {
                 UserId = user.UserId,
@@ -297,6 +305,11 @@ namespace ProjectTracker.API.Controllers
 
             _logger.LogInformation("User updated: {UserId} ({Email})", id, user.Email);
 
+            // Audit log
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync("User Updated", "user", "User", id, 
+                $"Updated user: {user.Name} {user.Surname} ({user.Email})");
+
             return Ok(new { message = "User updated successfully" });
         }
 
@@ -321,6 +334,11 @@ namespace ProjectTracker.API.Controllers
 
             _logger.LogInformation("User deleted: {UserId} ({Email})", id, user.Email);
 
+            // Audit log
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync("User Deleted", "user", "User", id, 
+                $"Deleted user: {user.Name} {user.Surname} ({user.Email})", null, "warning");
+
             return Ok(new { message = "User deleted successfully" });
         }
 
@@ -341,6 +359,11 @@ namespace ProjectTracker.API.Controllers
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Password reset for user: {UserId} ({Email})", id, user.Email);
+
+            // Audit log
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync("Password Reset", "security", "User", id, 
+                $"Password reset for user: {user.Name} {user.Surname} ({user.Email})");
 
             return Ok(new { message = "Password reset successfully" });
         }
