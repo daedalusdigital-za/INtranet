@@ -1,14 +1,18 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogModule, MatDialogRef, MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { LeaveRequestDialogComponent } from '../leave-request-dialog/leave-request-dialog.component';
+import { PayslipRequestDialogComponent } from '../payslip-request-dialog/payslip-request-dialog.component';
+import { PrivateMeetingRequestDialogComponent } from '../private-meeting-request-dialog/private-meeting-request-dialog.component';
 
 interface RequestCategory {
   name: string;
   icon: string;
   color: string;
   description: string;
+  type: string;
 }
 
 @Component({
@@ -25,7 +29,7 @@ interface RequestCategory {
       </div>
       
       <div class="dialog-content">
-        <p class="subtitle">Select a category for your request</p>
+        <p class="subtitle">Select the type of request you want to submit</p>
         
         <div class="categories-grid">
           @for (category of categories; track category.name) {
@@ -87,7 +91,7 @@ interface RequestCategory {
 
     .categories-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 16px;
     }
 
@@ -132,38 +136,57 @@ interface RequestCategory {
 export class RequestDialogComponent {
   categories: RequestCategory[] = [
     {
-      name: 'Marketing',
-      icon: 'campaign',
-      color: '#e91e63',
-      description: 'Marketing & Branding requests'
-    },
-    {
-      name: 'Finances',
-      icon: 'account_balance',
+      name: 'Leave Request',
+      icon: 'event_busy',
       color: '#4caf50',
-      description: 'Financial & Budget requests'
+      description: 'Apply for annual, sick, or other leave',
+      type: 'leave'
     },
     {
-      name: 'HR',
-      icon: 'people',
-      color: '#ff9800',
-      description: 'Human Resources requests'
+      name: 'Payslip Request',
+      icon: 'receipt_long',
+      color: '#2196f3',
+      description: 'Request your payslip or salary info',
+      type: 'payslip'
     },
     {
-      name: 'Meeting',
-      icon: 'event',
+      name: 'Private Meeting',
+      icon: 'meeting_room',
       color: '#9c27b0',
-      description: 'Meeting room & schedule requests'
+      description: 'Request a private meeting with HR/Manager',
+      type: 'private-meeting'
     }
   ];
 
-  constructor(private dialogRef: MatDialogRef<RequestDialogComponent>) {}
+  constructor(
+    private dialogRef: MatDialogRef<RequestDialogComponent>,
+    private dialog: MatDialog
+  ) {}
 
   selectCategory(category: RequestCategory): void {
     console.log('Selected category:', category.name);
-    // For now, just close the dialog
-    // Later this can navigate to a request form for that category
-    this.dialogRef.close(category);
+    this.dialogRef.close();
+    
+    switch (category.type) {
+      case 'leave':
+        this.dialog.open(LeaveRequestDialogComponent, {
+          width: '600px',
+          maxHeight: '90vh'
+        });
+        break;
+      case 'payslip':
+        this.dialog.open(PayslipRequestDialogComponent, {
+          width: '500px',
+          maxHeight: '90vh'
+        });
+        break;
+      case 'private-meeting':
+        this.dialog.open(PrivateMeetingRequestDialogComponent, {
+          width: '600px',
+          maxHeight: '90vh'
+        });
+        break;
+    }
   }
 
   close(): void {

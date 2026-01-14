@@ -69,6 +69,15 @@ namespace ProjectTracker.API.Data
         public DbSet<TodoTask> TodoTasks { get; set; }
         public DbSet<TodoNotification> TodoNotifications { get; set; }
 
+        // Meeting System
+        public DbSet<Meeting> Meetings { get; set; }
+        public DbSet<MeetingAttendee> MeetingAttendees { get; set; }
+        public DbSet<MeetingNotification> MeetingNotifications { get; set; }
+
+        // Announcement System
+        public DbSet<Announcement> Announcements { get; set; }
+        public DbSet<AnnouncementRead> AnnouncementReads { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -308,6 +317,56 @@ namespace ProjectTracker.API.Data
             modelBuilder.Entity<StaffOperatingCompany>()
                 .HasIndex(soc => new { soc.StaffMemberId, soc.OperatingCompanyId })
                 .IsUnique();
+
+            // Meeting System relationships
+            modelBuilder.Entity<Meeting>()
+                .HasOne(m => m.Organizer)
+                .WithMany()
+                .HasForeignKey(m => m.OrganizerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MeetingAttendee>()
+                .HasOne(ma => ma.Meeting)
+                .WithMany(m => m.Attendees)
+                .HasForeignKey(ma => ma.MeetingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<MeetingAttendee>()
+                .HasOne(ma => ma.User)
+                .WithMany()
+                .HasForeignKey(ma => ma.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MeetingNotification>()
+                .HasOne(mn => mn.Meeting)
+                .WithMany()
+                .HasForeignKey(mn => mn.MeetingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<MeetingNotification>()
+                .HasOne(mn => mn.User)
+                .WithMany()
+                .HasForeignKey(mn => mn.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Announcement System relationships
+            modelBuilder.Entity<Announcement>()
+                .HasOne(a => a.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(a => a.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AnnouncementRead>()
+                .HasOne(ar => ar.Announcement)
+                .WithMany(a => a.ReadByUsers)
+                .HasForeignKey(ar => ar.AnnouncementId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<AnnouncementRead>()
+                .HasOne(ar => ar.User)
+                .WithMany()
+                .HasForeignKey(ar => ar.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Seed initial data
             SeedData(modelBuilder);

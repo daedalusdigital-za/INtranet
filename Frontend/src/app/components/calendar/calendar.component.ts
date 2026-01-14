@@ -827,6 +827,7 @@ export class CalendarComponent implements OnInit {
     this.currentUserId = this.authService.currentUserValue?.userId || 0;
     this.loadTasks();
     this.loadBirthdays();
+    this.loadMeetings();
     this.generateCalendar();
   }
 
@@ -872,6 +873,36 @@ export class CalendarComponent implements OnInit {
         color: '#E91E63' // Pink for birthdays
       });
     });
+  }
+
+  loadMeetings(): void {
+    const startDate = new Date(this.currentYear, this.currentMonth, 1);
+    const endDate = new Date(this.currentYear, this.currentMonth + 2, 0);
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/meetings/calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
+      .subscribe({
+        next: (meetings) => {
+          // Remove existing meeting events
+          this.upcomingEvents = this.upcomingEvents.filter(e => !e.title.startsWith('📅'));
+          
+          // Add meeting events
+          meetings.forEach((meeting, index) => {
+            const meetingDate = new Date(meeting.start);
+            this.upcomingEvents.push({
+              id: 3000 + index,
+              title: `📅 ${meeting.title}`,
+              date: meetingDate,
+              time: meetingDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }),
+              location: meeting.location,
+              description: `Meeting - ${meeting.responseStatus}`,
+              color: meeting.color
+            });
+          });
+          
+          this.generateCalendar(); // Regenerate calendar with meetings
+        },
+        error: (err) => console.error('Error loading meetings:', err)
+      });
   }
 
   generateCalendar(): void {
@@ -941,6 +972,7 @@ export class CalendarComponent implements OnInit {
     }
     this.loadTasks();
     this.loadBirthdays();
+    this.loadMeetings();
   }
 
   nextMonth(): void {
@@ -952,6 +984,7 @@ export class CalendarComponent implements OnInit {
     }
     this.loadTasks();
     this.loadBirthdays();
+    this.loadMeetings();
   }
 
   getCurrentMonthEvents(): any[] {

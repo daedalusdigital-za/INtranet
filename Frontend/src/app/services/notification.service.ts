@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, forkJoin, of, Observable } from 'rxjs';
+import { catchError, tap, map } from 'rxjs/operators';
+import { environment } from '../../environments/environment';
 
 export interface NotificationConfig {
   title: string;
@@ -11,6 +14,52 @@ export interface NotificationConfig {
   showPopup?: boolean;
 }
 
+export type NotificationType = 'meeting' | 'announcement' | 'task' | 'system' | 'message';
+
+export interface UnifiedNotification {
+  id: string;
+  type: NotificationType;
+  icon: string;
+  iconClass: string;
+  title: string;
+  message: string;
+  timestamp: Date;
+  isRead: boolean;
+  data?: any;
+  actions?: NotificationAction[];
+}
+
+export interface NotificationAction {
+  label: string;
+  action: string;
+  color?: 'primary' | 'warn' | 'accent';
+}
+
+export interface MeetingNotificationData {
+  id: number;
+  meetingId: number;
+  meetingTitle: string;
+  meetingDate: Date;
+  startTime: string;
+  location: string;
+  organizerName: string;
+  message: string;
+  notificationType: string;
+  isRead: boolean;
+  createdAt: Date;
+}
+
+export interface AnnouncementData {
+  announcementId: number;
+  title: string;
+  content: string;
+  createdByName: string;
+  createdAt: Date;
+  priority: string;
+  category?: string;
+  isRead: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -18,13 +67,34 @@ export class NotificationService {
   private audio: HTMLAudioElement | null = null;
   private notificationPermission: NotificationPermission = 'default';
   
-  // Observable for unread message count
+  // Observable for unread message count (for messages specifically)
   private unreadCountSubject = new BehaviorSubject<number>(0);
   public unreadCount$ = this.unreadCountSubject.asObservable();
 
-  constructor(private snackBar: MatSnackBar) {
+  // Unified notifications
+  private notificationsSubject = new BehaviorSubject<UnifiedNotification[]>([]);
+  public notifications$ = this.notificationsSubject.asObservable();
+
+  private totalUnreadSubject = new BehaviorSubject<number>(0);
+  public totalUnread$ = this.totalUnreadSubject.asObservable();
+
+  private loadingSubject = new BehaviorSubject<boolean>(false);
+  public loading$ = this.loadingSubject.asObservable();
+
+  constructor(
+    private snackBar: MatSnackBar,
+    private http: HttpClient
+  ) {
     this.initAudio();
     this.requestNotificationPermission();
+  }
+
+  private getHeaders(): HttpHeaders {
+    const token = localStorage.getItem('token');
+    return new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    });
   }
 
   private initAudio(): void {
@@ -252,5 +322,232 @@ export class NotificationService {
 
   public getUnreadCount(): number {
     return this.unreadCountSubject.value;
+  }
+
+  // ===== Unified Notification Center Methods =====
+
+  loadAllNotifications(): void {
+    this.loadingSubject.next(true);
+    
+    forkJoin({
+      meetings: this.http.get<MeetingNotificationData[]>(
+        `${environment.apiUrl}/meetings/notifications?unreadOnly=false`,
+        { headers: this.getHeaders() }
+      ).pipe(catchError(() => of([]))),
+      announcements: this.http.get<AnnouncementData[]>(
+        `${environment.apiUrl}/announcements?activeOnly=true&limit=20`,
+        { headers: this.getHeaders() }
+      ).pipe(catchError(() => of([])))
+    }).subscribe({
+      next: ({ meetings, announcements }) => {
+        const unifiedNotifications: UnifiedNotification[] = [];
+
+        // Convert meeting notifications
+        meetings.forEach((m: MeetingNotificationData) => {
+          const actions: NotificationAction[] = [];
+          if (m.notificationType === 'Invitation' && !m.isRead) {
+            actions.push(
+              { label: 'Accept', action: 'accept', color: 'primary' },
+              { label: 'Decline', action: 'decline', color: 'warn' }
+            );
+          }
+
+          unifiedNotifications.push({
+            id: `meeting-${m.id}`,
+            type: 'meeting',
+            icon: this.getMeetingIcon(m.notificationType),
+            iconClass: this.getMeetingIconClass(m.notificationType),
+            title: m.meetingTitle,
+            message: m.message,
+            timestamp: new Date(m.createdAt),
+            isRead: m.isRead,
+            data: m,
+            actions
+          });
+        });
+
+        // Convert announcements (show unread ones as notifications)
+        announcements.forEach((a: AnnouncementData) => {
+          if (!a.isRead) {
+            unifiedNotifications.push({
+              id: `announcement-${a.announcementId}`,
+              type: 'announcement',
+              icon: 'campaign',
+              iconClass: this.getAnnouncementPriorityClass(a.priority),
+              title: a.title,
+              message: a.content.substring(0, 100) + (a.content.length > 100 ? '...' : ''),
+              timestamp: new Date(a.createdAt),
+              isRead: a.isRead,
+              data: a
+            });
+          }
+        });
+
+        // Sort by timestamp (newest first)
+        unifiedNotifications.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+        this.notificationsSubject.next(unifiedNotifications);
+        this.updateTotalUnread(unifiedNotifications);
+        this.loadingSubject.next(false);
+      },
+      error: () => {
+        this.loadingSubject.next(false);
+      }
+    });
+  }
+
+  private updateTotalUnread(notifications: UnifiedNotification[]): void {
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+    this.totalUnreadSubject.next(unreadCount);
+  }
+
+  private getMeetingIcon(notificationType: string): string {
+    switch (notificationType) {
+      case 'Invitation': return 'event';
+      case 'Reminder': return 'alarm';
+      case 'Cancelled': return 'event_busy';
+      case 'Updated': return 'update';
+      case 'Response': return 'how_to_reg';
+      default: return 'event';
+    }
+  }
+
+  private getMeetingIconClass(notificationType: string): string {
+    switch (notificationType) {
+      case 'Invitation': return 'icon-primary';
+      case 'Reminder': return 'icon-warning';
+      case 'Cancelled': return 'icon-error';
+      case 'Updated': return 'icon-info';
+      case 'Response': return 'icon-success';
+      default: return 'icon-info';
+    }
+  }
+
+  private getAnnouncementPriorityClass(priority: string): string {
+    switch (priority?.toLowerCase()) {
+      case 'urgent': return 'icon-error';
+      case 'high': return 'icon-warning';
+      case 'normal': return 'icon-primary';
+      case 'low': return 'icon-info';
+      default: return 'icon-info';
+    }
+  }
+
+  markNotificationAsRead(notificationId: string): void {
+    const notifications = this.notificationsSubject.value;
+    const notification = notifications.find(n => n.id === notificationId);
+    
+    if (notification && !notification.isRead) {
+      // Handle meeting notification
+      if (notification.type === 'meeting') {
+        const meetingNotificationId = notification.data?.id;
+        if (meetingNotificationId) {
+          this.http.post<void>(
+            `${environment.apiUrl}/meetings/notifications/${meetingNotificationId}/read`,
+            {},
+            { headers: this.getHeaders() }
+          ).subscribe();
+        }
+      }
+      
+      // Handle announcement
+      if (notification.type === 'announcement') {
+        const announcementId = notification.data?.announcementId;
+        if (announcementId) {
+          this.http.post<void>(
+            `${environment.apiUrl}/announcements/${announcementId}/mark-read`,
+            {},
+            { headers: this.getHeaders() }
+          ).subscribe();
+        }
+      }
+
+      // Update local state
+      notification.isRead = true;
+      this.notificationsSubject.next([...notifications]);
+      this.updateTotalUnread(notifications);
+    }
+  }
+
+  markAllNotificationsAsRead(): void {
+    const notifications = this.notificationsSubject.value;
+    
+    // Mark all meeting notifications as read
+    this.http.post<void>(
+      `${environment.apiUrl}/meetings/notifications/read-all`,
+      {},
+      { headers: this.getHeaders() }
+    ).pipe(catchError(() => of(null))).subscribe();
+
+    // Mark all announcements as read
+    notifications
+      .filter(n => n.type === 'announcement' && !n.isRead)
+      .forEach(n => {
+        const announcementId = n.data?.announcementId;
+        if (announcementId) {
+          this.http.post<void>(
+            `${environment.apiUrl}/announcements/${announcementId}/mark-read`,
+            {},
+            { headers: this.getHeaders() }
+          ).subscribe();
+        }
+      });
+
+    // Update local state
+    notifications.forEach(n => n.isRead = true);
+    this.notificationsSubject.next([...notifications]);
+    this.totalUnreadSubject.next(0);
+  }
+
+  respondToMeetingNotification(notificationId: string, response: 'Accepted' | 'Declined'): Observable<any> {
+    const notifications = this.notificationsSubject.value;
+    const notification = notifications.find(n => n.id === notificationId);
+    
+    if (notification && notification.type === 'meeting') {
+      const meetingId = notification.data?.meetingId;
+      if (meetingId) {
+        return this.http.post(
+          `${environment.apiUrl}/meetings/${meetingId}/respond`,
+          { responseStatus: response },
+          { headers: this.getHeaders() }
+        ).pipe(
+          tap(() => {
+            // Mark as read after responding
+            this.markNotificationAsRead(notificationId);
+            // Remove the actions since response is complete
+            notification.actions = [];
+            notification.message = `You ${response.toLowerCase()} this meeting`;
+            this.notificationsSubject.next([...notifications]);
+          })
+        );
+      }
+    }
+    return of(null);
+  }
+
+  getTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - new Date(date).getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return new Date(date).toLocaleDateString();
+  }
+
+  refreshNotifications(): void {
+    this.loadAllNotifications();
+  }
+
+  getNotifications(): UnifiedNotification[] {
+    return this.notificationsSubject.value;
+  }
+
+  getTotalUnread(): number {
+    return this.totalUnreadSubject.value;
   }
 }

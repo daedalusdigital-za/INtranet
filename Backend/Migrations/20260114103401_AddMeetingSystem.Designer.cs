@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ProjectTracker.API.Data;
 
@@ -11,9 +12,11 @@ using ProjectTracker.API.Data;
 namespace ProjectTracker.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260114103401_AddMeetingSystem")]
+    partial class AddMeetingSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,77 +59,6 @@ namespace ProjectTracker.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("admin");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.Announcement", b =>
-                {
-                    b.Property<int>("AnnouncementId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AnnouncementId"));
-
-                    b.Property<string>("Category")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("AnnouncementId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.ToTable("Announcements");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.AnnouncementRead", b =>
-                {
-                    b.Property<int>("AnnouncementReadId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AnnouncementReadId"));
-
-                    b.Property<int>("AnnouncementId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("ReadAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("AnnouncementReadId");
-
-                    b.HasIndex("AnnouncementId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("AnnouncementReads");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Attendance", b =>
@@ -3951,36 +3883,6 @@ namespace ProjectTracker.API.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ProjectTracker.API.Models.Announcement", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("CreatedByUser");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.AnnouncementRead", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.Announcement", "Announcement")
-                        .WithMany("ReadByUsers")
-                        .HasForeignKey("AnnouncementId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Announcement");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("ProjectTracker.API.Models.Attendance", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Employee", "Employee")
@@ -4536,11 +4438,6 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Department");
 
                     b.Navigation("LinkedEmployee");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.Announcement", b =>
-                {
-                    b.Navigation("ReadByUsers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Board", b =>

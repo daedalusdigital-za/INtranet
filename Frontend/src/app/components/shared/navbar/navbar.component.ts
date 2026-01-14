@@ -10,12 +10,17 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../../services/auth.service';
 import { MessageService, User, Conversation } from '../../../services/message.service';
+import { NotificationService, UnifiedNotification } from '../../../services/notification.service';
 import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
 import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
 import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
 import { RequestDialogComponent } from '../request-dialog/request-dialog.component';
+import { QuickPrintDialogComponent } from '../quick-print-dialog/quick-print-dialog.component';
+import { AnnouncementDialogComponent } from '../announcement-dialog/announcement-dialog.component';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-navbar',
@@ -31,6 +36,7 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
     MatTooltipModule,
     MatDividerModule,
     MatDialogModule,
+    MatProgressSpinnerModule,
     ChatBubbleComponent,
     UserSearchPopupComponent
   ],
@@ -119,9 +125,9 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
       <!-- Notifications Button -->
       <div class="dropdown-container">
         <button mat-icon-button 
-                [matBadge]="notificationCount" 
+                [matBadge]="totalUnreadCount" 
                 matBadgeColor="warn" 
-                [matBadgeHidden]="notificationCount === 0"
+                [matBadgeHidden]="totalUnreadCount === 0"
                 (click)="toggleNotifications($event)"
                 matTooltip="Notifications">
           <mat-icon>notifications</mat-icon>
@@ -131,31 +137,59 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
           <div class="dropdown-panel notifications-dropdown" (click)="$event.stopPropagation()">
             <div class="dropdown-header">
               <h3>Notifications</h3>
-              <button mat-icon-button (click)="showNotifications = false">
-                <mat-icon>close</mat-icon>
-              </button>
+              <div class="header-actions">
+                @if (totalUnreadCount > 0) {
+                  <button mat-button color="primary" (click)="markAllRead()">Mark all read</button>
+                }
+                <button mat-icon-button (click)="showNotifications = false">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
             </div>
             <div class="dropdown-content">
-              @if (notifications.length === 0) {
+              @if (notificationsLoading) {
+                <div class="loading-state">
+                  <mat-spinner diameter="32"></mat-spinner>
+                </div>
+              } @else if (notifications.length === 0) {
                 <div class="empty-state">
                   <mat-icon>notifications_none</mat-icon>
                   <p>No notifications</p>
                 </div>
               } @else {
                 @for (notification of notifications; track notification.id) {
-                  <div class="notification-item" [class.unread]="!notification.read">
-                    <mat-icon [class]="'notification-icon ' + notification.type">{{ getNotificationIcon(notification.type) }}</mat-icon>
+                  <div class="notification-item" 
+                       [class.unread]="!notification.isRead"
+                       (click)="handleNotificationClick(notification)">
+                    <mat-icon [class]="'notification-icon ' + notification.iconClass">
+                      {{ notification.icon }}
+                    </mat-icon>
                     <div class="notification-content">
                       <div class="notification-title">{{ notification.title }}</div>
                       <div class="notification-message">{{ notification.message }}</div>
-                      <div class="notification-time">{{ notification.time }}</div>
+                      <div class="notification-meta">
+                        <span class="notification-type">{{ getNotificationTypeLabel(notification.type) }}</span>
+                        <span class="notification-time">{{ getTimeAgo(notification.timestamp) }}</span>
+                      </div>
                     </div>
+                    @if (notification.actions && notification.actions.length > 0) {
+                      <div class="notification-actions" (click)="$event.stopPropagation()">
+                        @for (action of notification.actions; track action.action) {
+                          <button mat-icon-button 
+                                  [color]="action.color"
+                                  [matTooltip]="action.label"
+                                  (click)="handleNotificationAction(notification, action.action)">
+                            <mat-icon>{{ action.action === 'accept' ? 'check_circle' : 'cancel' }}</mat-icon>
+                          </button>
+                        }
+                      </div>
+                    }
+                    @if (respondingTo === notification.id) {
+                      <mat-spinner diameter="24"></mat-spinner>
+                    }
                   </div>
                 }
               }
-            </div>
-            <div class="dropdown-footer">
-              <button mat-button color="primary" (click)="viewAllNotifications()">View All Notifications</button>
             </div>
           </div>
         }
@@ -175,12 +209,6 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
           <mat-icon>person</mat-icon>
           <span>Profile</span>
         </button>
-        @if (isAdmin()) {
-          <button mat-menu-item routerLink="/user-management">
-            <mat-icon>admin_panel_settings</mat-icon>
-            <span>User Management</span>
-          </button>
-        }
         <button mat-menu-item (click)="openTodoDialog()">
           <mat-icon>checklist</mat-icon>
           <span>ToDo</span>
@@ -189,10 +217,18 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
           <mat-icon>assignment</mat-icon>
           <span>Request</span>
         </button>
-        <button mat-menu-item>
-          <mat-icon>settings</mat-icon>
-          <span>Settings</span>
+        <button mat-menu-item (click)="openQuickPrintDialog()">
+          <mat-icon>print</mat-icon>
+          <span>Quick Print</span>
         </button>
+        @if (isAdmin()) {
+          <mat-divider></mat-divider>
+          <button mat-menu-item routerLink="/settings">
+            <mat-icon>admin_panel_settings</mat-icon>
+            <span>Admin Settings</span>
+          </button>
+        }
+        <mat-divider></mat-divider>
         <button mat-menu-item (click)="logout()">
           <mat-icon>logout</mat-icon>
           <span>Logout</span>
@@ -412,26 +448,76 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
     .notification-icon.warning { color: #FF9800; }
     .notification-icon.success { color: #4CAF50; }
     .notification-icon.error { color: #F44336; }
+    .notification-icon.icon-primary { color: #3f51b5; }
+    .notification-icon.icon-warning { color: #FF9800; }
+    .notification-icon.icon-success { color: #4CAF50; }
+    .notification-icon.icon-error { color: #F44336; }
+    .notification-icon.icon-info { color: #2196F3; }
 
     .notification-content {
       flex: 1;
+      min-width: 0;
     }
 
     .notification-title {
       font-weight: 500;
       color: #333;
       margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .notification-message {
       font-size: 13px;
       color: #666;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
+
+    .notification-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .notification-type {
+      font-size: 11px;
+      color: #fff;
+      background: #9e9e9e;
+      padding: 2px 6px;
+      border-radius: 10px;
+      text-transform: capitalize;
+    }
+
+    .notification-item[class*="meeting"] .notification-type { background: #3f51b5; }
+    .notification-item[class*="announcement"] .notification-type { background: #ff9800; }
 
     .notification-time {
       font-size: 12px;
       color: #999;
-      margin-top: 4px;
+    }
+
+    .notification-actions {
+      display: flex;
+      gap: 4px;
+      margin-left: 8px;
+    }
+
+    .loading-state {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
     .user-info {
@@ -452,45 +538,24 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
 })
 export class NavbarComponent implements OnInit, OnDestroy {
   currentUser: any = null;
-  notificationCount: number = 3;
+  totalUnreadCount: number = 0;
   unreadMessagesCount: number = 0;
   showMessages: boolean = false;
   showNotifications: boolean = false;
   showUserSearchPopup: boolean = false;
   recentConversations: any[] = [];
   activeChatBubbles: Conversation[] = [];
+  notifications: UnifiedNotification[] = [];
+  notificationsLoading: boolean = false;
+  respondingTo: string | null = null;
   
-  notifications: any[] = [
-    {
-      id: 1,
-      type: 'info',
-      title: 'New Task Assigned',
-      message: 'You have been assigned a new task in the Development board.',
-      time: '5 min ago',
-      read: false
-    },
-    {
-      id: 2,
-      type: 'success',
-      title: 'Project Completed',
-      message: 'The Marketing Campaign project has been marked as complete.',
-      time: '1 hour ago',
-      read: false
-    },
-    {
-      id: 3,
-      type: 'warning',
-      title: 'Deadline Approaching',
-      message: 'The Q4 Report is due in 2 days.',
-      time: '2 hours ago',
-      read: true
-    }
-  ];
+  private subscriptions: Subscription[] = [];
 
   constructor(
     private authService: AuthService,
     private router: Router,
     private messageService: MessageService,
+    private notificationService: NotificationService,
     private dialog: MatDialog
   ) {}
 
@@ -499,13 +564,31 @@ export class NavbarComponent implements OnInit, OnDestroy {
     this.loadRecentConversations();
     this.loadUnreadCount();
     
+    // Subscribe to unified notifications
+    this.subscriptions.push(
+      this.notificationService.notifications$.subscribe(notifications => {
+        this.notifications = notifications;
+      }),
+      this.notificationService.totalUnread$.subscribe(count => {
+        this.totalUnreadCount = count;
+      }),
+      this.notificationService.loading$.subscribe(loading => {
+        this.notificationsLoading = loading;
+      })
+    );
+    
+    // Load notifications initially
+    this.notificationService.loadAllNotifications();
+    
     // Subscribe to active chat bubbles
     this.messageService.activeChats$.subscribe((chats: Conversation[]) => {
       this.activeChatBubbles = chats;
     });
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+  }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: Event): void {
@@ -530,6 +613,9 @@ export class NavbarComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     this.showNotifications = !this.showNotifications;
     this.showMessages = false;
+    if (this.showNotifications) {
+      this.notificationService.loadAllNotifications();
+    }
   }
 
   loadRecentConversations(): void {
@@ -591,6 +677,54 @@ export class NavbarComponent implements OnInit, OnDestroy {
     }
   }
 
+  getNotificationTypeLabel(type: string): string {
+    switch (type) {
+      case 'meeting': return 'Meeting';
+      case 'announcement': return 'Announcement';
+      case 'task': return 'Task';
+      case 'message': return 'Message';
+      case 'system': return 'System';
+      default: return type;
+    }
+  }
+
+  getTimeAgo(date: Date): string {
+    return this.notificationService.getTimeAgo(date);
+  }
+
+  handleNotificationClick(notification: UnifiedNotification): void {
+    // Mark as read
+    this.notificationService.markNotificationAsRead(notification.id);
+    
+    // Handle navigation based on type
+    if (notification.type === 'meeting') {
+      this.showNotifications = false;
+      this.router.navigate(['/calendar']);
+    } else if (notification.type === 'announcement') {
+      this.showNotifications = false;
+      this.router.navigate(['/dashboard']);
+    }
+  }
+
+  handleNotificationAction(notification: UnifiedNotification, action: string): void {
+    if (notification.type === 'meeting') {
+      this.respondingTo = notification.id;
+      const response = action === 'accept' ? 'Accepted' : 'Declined';
+      this.notificationService.respondToMeetingNotification(notification.id, response).subscribe({
+        next: () => {
+          this.respondingTo = null;
+        },
+        error: () => {
+          this.respondingTo = null;
+        }
+      });
+    }
+  }
+
+  markAllRead(): void {
+    this.notificationService.markAllNotificationsAsRead();
+  }
+
   openConversation(conv: any): void {
     this.showMessages = false;
     // Open as chat bubble
@@ -629,11 +763,6 @@ export class NavbarComponent implements OnInit, OnDestroy {
     this.messageService.closeChatBubble(conversationId);
   }
 
-  viewAllNotifications(): void {
-    this.showNotifications = false;
-    console.log('View all notifications');
-  }
-
   goToProfile(): void {
     this.router.navigate(['/profile']);
   }
@@ -655,8 +784,34 @@ export class NavbarComponent implements OnInit, OnDestroy {
     });
   }
 
+  openQuickPrintDialog(): void {
+    this.dialog.open(QuickPrintDialogComponent, {
+      width: '650px',
+      maxWidth: '95vw',
+      panelClass: 'centered-dialog'
+    });
+  }
+
+  openAnnouncementDialog(): void {
+    this.dialog.open(AnnouncementDialogComponent, {
+      width: '600px',
+      maxWidth: '95vw',
+      panelClass: 'centered-dialog'
+    }).afterClosed().subscribe(result => {
+      if (result) {
+        // Announcement created successfully
+        console.log('Announcement created:', result);
+      }
+    });
+  }
+
   isAdmin(): boolean {
     return this.currentUser?.role === 'Admin' || this.currentUser?.role === 'Super Admin';
+  }
+
+  isManager(): boolean {
+    const role = this.currentUser?.role?.toLowerCase() || '';
+    return role.includes('admin') || role.includes('manager');
   }
 
   logout(): void {

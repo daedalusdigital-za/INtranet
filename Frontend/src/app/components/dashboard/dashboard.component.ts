@@ -18,6 +18,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { AnnouncementService, AnnouncementListItem } from '../../services/announcement.service';
 import { Department } from '../../models/models';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 
@@ -44,6 +45,65 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     <app-navbar></app-navbar>
 
     <div class="dashboard-container">
+      <!-- Announcements Section -->
+      @if (announcements.length > 0) {
+        <div class="announcements-section">
+          <div class="section-header">
+            <h2>
+              <mat-icon>campaign</mat-icon>
+              Announcements
+            </h2>
+          </div>
+          <div class="announcements-grid">
+            @for (announcement of announcements.slice(0, 3); track announcement.announcementId) {
+              <mat-card class="announcement-card" [class.unread]="!announcement.isRead"
+                        [class.priority-urgent]="announcement.priority === 'Urgent'"
+                        [class.priority-high]="announcement.priority === 'High'"
+                        (click)="markAnnouncementAsRead(announcement)">
+                <mat-card-header>
+                  <div class="announcement-header">
+                    <div class="announcement-title-row">
+                      @if (!announcement.isRead) {
+                        <span class="unread-indicator"></span>
+                      }
+                      <h3>{{ announcement.title }}</h3>
+                    </div>
+                    @if (announcement.priority !== 'Normal') {
+                      <mat-chip class="priority-chip" [class]="'priority-' + announcement.priority.toLowerCase()">
+                        @if (announcement.priority === 'Urgent') {
+                          <mat-icon>priority_high</mat-icon>
+                        } @else if (announcement.priority === 'High') {
+                          <mat-icon>arrow_upward</mat-icon>
+                        } @else if (announcement.priority === 'Low') {
+                          <mat-icon>arrow_downward</mat-icon>
+                        }
+                        {{ announcement.priority }}
+                      </mat-chip>
+                    }
+                  </div>
+                </mat-card-header>
+                <mat-card-content>
+                  <p class="announcement-content">{{ announcement.content }}</p>
+                  <div class="announcement-meta">
+                    <span class="created-by">
+                      <mat-icon>person</mat-icon>
+                      {{ announcement.createdByName }}
+                    </span>
+                    <span class="created-date">
+                      <mat-icon>schedule</mat-icon>
+                      {{ formatDate(announcement.createdAt) }}
+                    </span>
+                    @if (announcement.category) {
+                      <mat-chip class="category-chip">{{ announcement.category }}</mat-chip>
+                    }
+                  </div>
+                </mat-card-content>
+              </mat-card>
+            }
+          </div>
+        </div>
+      }
+
       <div class="page-header">
         <h1>Project Management</h1>
         <button mat-raised-button color="accent" (click)="openCreateBoardDialog()">
@@ -369,6 +429,164 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin: 0 auto;
       min-height: calc(100vh - 64px);
       background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
+    /* Announcements Section */
+    .announcements-section {
+      margin-bottom: 32px;
+    }
+
+    .announcements-section .section-header {
+      margin-bottom: 16px;
+    }
+
+    .announcements-section .section-header h2 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #ffffff;
+      font-size: 1.5rem;
+      font-weight: 600;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+      margin: 0;
+    }
+
+    .announcements-section .section-header h2 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .announcements-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 16px;
+    }
+
+    .announcement-card {
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border-radius: 12px;
+      border-left: 4px solid #1976d2;
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    .announcement-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .announcement-card.unread {
+      background: #ffffff;
+      border-left-color: #4caf50;
+    }
+
+    .announcement-card.priority-urgent {
+      border-left-color: #f44336;
+      animation: pulse-urgent 2s infinite;
+    }
+
+    .announcement-card.priority-high {
+      border-left-color: #ff9800;
+    }
+
+    @keyframes pulse-urgent {
+      0%, 100% { box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3); }
+      50% { box-shadow: 0 4px 20px rgba(244, 67, 54, 0.5); }
+    }
+
+    .announcement-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+    }
+
+    .announcement-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .unread-indicator {
+      width: 10px;
+      height: 10px;
+      background: #4caf50;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .announcement-card h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .priority-chip {
+      font-size: 11px;
+      height: 24px;
+    }
+
+    .priority-chip.priority-urgent {
+      background: #ffebee;
+      color: #f44336;
+    }
+
+    .priority-chip.priority-high {
+      background: #fff3e0;
+      color: #ff9800;
+    }
+
+    .priority-chip.priority-low {
+      background: #e8f5e9;
+      color: #4caf50;
+    }
+
+    .priority-chip mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      margin-right: 4px;
+    }
+
+    .announcement-content {
+      color: #555;
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 8px 0 12px 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .announcement-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .announcement-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .announcement-meta mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .category-chip {
+      font-size: 10px;
+      height: 20px;
+      background: #e3f2fd;
+      color: #1976d2;
     }
 
     .page-header {
@@ -1263,6 +1481,9 @@ export class DashboardComponent implements OnInit {
   projects: any[] = [];
   filteredProjects: any[] = [];
 
+  // Announcements data
+  announcements: AnnouncementListItem[] = [];
+
   // Notification properties
   notificationCount: number = 3;
   showNotifications: boolean = false;
@@ -1317,6 +1538,7 @@ export class DashboardComponent implements OnInit {
   constructor(
     private apiService: ApiService,
     private authService: AuthService,
+    private announcementService: AnnouncementService,
     private router: Router,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
@@ -1327,6 +1549,7 @@ export class DashboardComponent implements OnInit {
   ngOnInit(): void {
     this.loadDepartments();
     this.loadBoards();
+    this.loadAnnouncements();
 
     // Close notifications dropdown when clicking outside
     document.addEventListener('click', () => {
@@ -1634,6 +1857,49 @@ export class DashboardComponent implements OnInit {
         console.error('Error loading departments:', error);
       }
     });
+  }
+
+  loadAnnouncements(): void {
+    this.announcementService.getAnnouncements(true, 10).subscribe({
+      next: (data) => {
+        this.announcements = data;
+      },
+      error: (error) => {
+        console.error('Error loading announcements:', error);
+      }
+    });
+  }
+
+  markAnnouncementAsRead(announcement: AnnouncementListItem): void {
+    if (!announcement.isRead) {
+      this.announcementService.markAsRead(announcement.announcementId).subscribe({
+        next: () => {
+          announcement.isRead = true;
+        },
+        error: (error) => {
+          console.error('Error marking announcement as read:', error);
+        }
+      });
+    }
+  }
+
+  formatDate(date: Date | string): string {
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) {
+      return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    } else {
+      return d.toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
   }
 
   openPasswordDialog(project: any): void {

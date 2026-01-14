@@ -12,6 +12,7 @@ import { CalendarComponent } from './components/calendar/calendar.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { UserManagementComponent } from './components/user-management/user-management.component';
 import { MessagesComponent } from './components/messages/messages.component';
+import { SettingsComponent } from './components/settings/settings.component';
 import { authGuard } from './guards/auth.guard';
 
 // CRM Components
@@ -46,6 +47,7 @@ export const routes: Routes = [
   { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
   { path: 'user-management', component: UserManagementComponent, canActivate: [authGuard] },
   { path: 'messages', component: MessagesComponent, canActivate: [authGuard] },
+  { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: 'board/:id', component: BoardComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '/login' }
 ];
