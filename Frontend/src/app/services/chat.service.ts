@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -12,7 +13,7 @@ export interface ChatMessage {
 })
 export class ChatService {
   // Use backend API for AI chat
-  private apiUrl = '/api/aichat';
+  private apiUrl = `${environment.apiUrl}/aichat`;
   private conversationHistory: ChatMessage[] = [];
 
   constructor() {}

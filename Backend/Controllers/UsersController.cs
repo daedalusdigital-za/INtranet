@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
 using ProjectTracker.API.Models.CRM;
+using ProjectTracker.API.DTOs.Users;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -26,6 +27,7 @@ namespace ProjectTracker.API.Controllers
         {
             var users = await _context.Users
                 .Include(u => u.Department)
+                .Include(u => u.LinkedEmployee)
                 .OrderBy(u => u.Surname)
                 .ThenBy(u => u.Name)
                 .ToListAsync();
@@ -53,7 +55,10 @@ namespace ProjectTracker.API.Controllers
                 CompanyIds = allCompanyAssignments
                     .Where(soc => soc.StaffMemberId == u.UserId)
                     .Select(soc => soc.OperatingCompanyId)
-                    .ToList()
+                    .ToList(),
+                LinkedEmpId = u.LinkedEmpId,
+                LinkedEmployeeName = u.LinkedEmployee != null ? $"{u.LinkedEmployee.Name} {u.LinkedEmployee.LastName}" : null,
+                Birthday = u.Birthday
             }).ToList();
 
             return Ok(result);
@@ -65,6 +70,7 @@ namespace ProjectTracker.API.Controllers
         {
             var user = await _context.Users
                 .Include(u => u.Department)
+                .Include(u => u.LinkedEmployee)
                 .FirstOrDefaultAsync(u => u.UserId == id);
 
             if (user == null)
@@ -94,8 +100,63 @@ namespace ProjectTracker.API.Controllers
                 UpdatedAt = user.UpdatedAt,
                 ProfilePictureUrl = user.ProfilePictureUrl,
                 HasProfilePicture = user.ProfilePictureData != null,
-                CompanyIds = companyIds
+                CompanyIds = companyIds,
+                LinkedEmpId = user.LinkedEmpId,
+                LinkedEmployeeName = user.LinkedEmployee != null ? $"{user.LinkedEmployee.Name} {user.LinkedEmployee.LastName}" : null,
+                Birthday = user.Birthday
             });
+        }
+
+        // GET: api/users/clockin-employees
+        [HttpGet("clockin-employees")]
+        public async Task<ActionResult<IEnumerable<ClockInEmployeeDto>>> GetClockInEmployees()
+        {
+            var employees = await _context.EmpRegistrations
+                .OrderBy(e => e.Name)
+                .ThenBy(e => e.LastName)
+                .Select(e => new ClockInEmployeeDto
+                {
+                    EmpId = e.EmpId,
+                    Name = e.Name ?? "",
+                    LastName = e.LastName ?? "",
+                    Department = e.Department,
+                    JobTitle = e.JobTitle,
+                    IdNum = e.IdNum
+                })
+                .ToListAsync();
+
+            return Ok(employees);
+        }
+
+        // GET: api/users/birthdays
+        [HttpGet("birthdays")]
+        public async Task<ActionResult<IEnumerable<UserBirthdayDto>>> GetBirthdays([FromQuery] int? month, [FromQuery] int? year)
+        {
+            var query = _context.Users
+                .Include(u => u.Department)
+                .Where(u => u.IsActive && u.Birthday.HasValue);
+
+            // If month is specified, filter by month (for calendar view)
+            if (month.HasValue)
+            {
+                query = query.Where(u => u.Birthday!.Value.Month == month.Value);
+            }
+
+            var users = await query
+                .OrderBy(u => u.Birthday!.Value.Month)
+                .ThenBy(u => u.Birthday!.Value.Day)
+                .Select(u => new UserBirthdayDto
+                {
+                    UserId = u.UserId,
+                    Name = u.Name,
+                    Surname = u.Surname,
+                    Birthday = u.Birthday!.Value,
+                    DepartmentName = u.Department != null ? u.Department.Name : null,
+                    ProfilePictureUrl = u.ProfilePictureUrl
+                })
+                .ToListAsync();
+
+            return Ok(users);
         }
 
         // POST: api/users
@@ -118,6 +179,8 @@ namespace ProjectTracker.API.Controllers
                 Title = dto.Title,
                 Permissions = dto.Permissions,
                 DepartmentId = dto.DepartmentId,
+                LinkedEmpId = dto.LinkedEmpId,
+                Birthday = dto.Birthday,
                 IsActive = dto.IsActive ?? true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -197,8 +260,14 @@ namespace ProjectTracker.API.Controllers
             if (dto.DepartmentId.HasValue)
                 user.DepartmentId = dto.DepartmentId.Value == 0 ? null : dto.DepartmentId;
 
+            if (dto.LinkedEmpId != null)
+                user.LinkedEmpId = string.IsNullOrEmpty(dto.LinkedEmpId) ? null : dto.LinkedEmpId;
+
             if (dto.IsActive.HasValue)
                 user.IsActive = dto.IsActive.Value;
+
+            if (dto.Birthday.HasValue)
+                user.Birthday = dto.Birthday.Value;
 
             // Update company assignments
             if (dto.CompanyIds != null)
@@ -352,6 +421,9 @@ namespace ProjectTracker.API.Controllers
         public string? Permissions { get; set; }
         public bool HasProfilePicture { get; set; }
         public List<int>? CompanyIds { get; set; }
+        public string? LinkedEmpId { get; set; }
+        public string? LinkedEmployeeName { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class UserDetailDto
@@ -372,6 +444,9 @@ namespace ProjectTracker.API.Controllers
         public string? ProfilePictureUrl { get; set; }
         public bool HasProfilePicture { get; set; }
         public List<int>? CompanyIds { get; set; }
+        public string? LinkedEmpId { get; set; }
+        public string? LinkedEmployeeName { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class CreateUserDto
@@ -386,6 +461,8 @@ namespace ProjectTracker.API.Controllers
         public int? DepartmentId { get; set; }
         public bool? IsActive { get; set; }
         public List<int>? CompanyIds { get; set; }
+        public string? LinkedEmpId { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class UpdateUserDto
@@ -399,6 +476,8 @@ namespace ProjectTracker.API.Controllers
         public int? DepartmentId { get; set; }
         public bool? IsActive { get; set; }
         public List<int>? CompanyIds { get; set; }
+        public string? LinkedEmpId { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class ResetPasswordDto
@@ -411,5 +490,26 @@ namespace ProjectTracker.API.Controllers
         public string Key { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
+    }
+
+    public class ClockInEmployeeDto
+    {
+        public string EmpId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? Department { get; set; }
+        public string? JobTitle { get; set; }
+        public string? IdNum { get; set; }
+        public string FullName => $"{Name} {LastName}".Trim();
+    }
+
+    public class UserBirthdayDto
+    {
+        public int UserId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Surname { get; set; }
+        public DateTime Birthday { get; set; }
+        public string? DepartmentName { get; set; }
+        public string? ProfilePictureUrl { get; set; }
     }
 }

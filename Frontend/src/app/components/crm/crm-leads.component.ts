@@ -343,10 +343,17 @@ import { CrmService, Lead, LeadFilter, LeadStatus, Agent } from '../../services/
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
     .leads-container {
       padding: 24px;
       max-width: 1400px;
       margin: 0 auto;
+      min-height: calc(100vh - 64px);
     }
 
     .leads-header {
@@ -365,6 +372,8 @@ import { CrmService, Lead, LeadFilter, LeadStatus, Agent } from '../../services/
     .header-left h1 {
       margin: 0;
       font-size: 24px;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .company-badge {

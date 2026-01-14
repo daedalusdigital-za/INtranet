@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-projects',
@@ -1722,7 +1723,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   }
 
   loadRecentConversations(): void {
-    fetch(`/api/messages/conversations?userId=${this.currentUserId}`)
+    fetch(`${environment.apiUrl}/messages/conversations?userId=${this.currentUserId}`)
       .then(response => response.json())
       .then(data => {
         this.recentConversations = data.slice(0, 5); // Show only 5 most recent
@@ -1734,7 +1735,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   }
 
   loadUnreadCount(): void {
-    fetch(`/api/messages/unread-count?userId=${this.currentUserId}`)
+    fetch(`${environment.apiUrl}/messages/unread-count?userId=${this.currentUserId}`)
       .then(response => response.json())
       .then(count => {
         this.unreadMessagesCount = count;

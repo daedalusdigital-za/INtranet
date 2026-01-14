@@ -33,7 +33,6 @@ import { AuthService } from '../../services/auth.service';
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Email</mat-label>
               <input matInput type="email" formControlName="email" required>
-              <mat-hint>welcome&#64;promedtechnologies.co.za</mat-hint>
               @if (loginForm.get('email')?.hasError('required')) {
                 <mat-error>Email is required</mat-error>
               }
@@ -45,7 +44,6 @@ import { AuthService } from '../../services/auth.service';
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Password</mat-label>
               <input matInput type="password" formControlName="password" required>
-              <mat-hint>Kingsland</mat-hint>
               @if (loginForm.get('password')?.hasError('required')) {
                 <mat-error>Password is required</mat-error>
               }

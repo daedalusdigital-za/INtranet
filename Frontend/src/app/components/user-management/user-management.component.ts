@@ -2,6 +2,7 @@ import { Component, OnInit, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
@@ -36,6 +37,9 @@ interface User {
   permissions?: string;
   hasProfilePicture: boolean;
   companyIds?: number[];
+  linkedEmpId?: string;
+  linkedEmployeeName?: string;
+  birthday?: Date;
 }
 
 interface Department {
@@ -47,6 +51,15 @@ interface OperatingCompany {
   operatingCompanyId: number;
   name: string;
   code: string;
+}
+
+interface ClockInEmployee {
+  empId: string;
+  name: string;
+  lastName: string;
+  department?: string;
+  jobTitle?: string;
+  idNum?: string;
 }
 
 interface Permission {
@@ -206,7 +219,12 @@ interface Permission {
                           {{ getInitials(user) }}
                         </div>
                         <div class="user-info">
-                          <span class="user-name">{{ user.name }} {{ user.surname }}</span>
+                          <span class="user-name">
+                            {{ user.name }} {{ user.surname }}
+                            @if (user.linkedEmpId) {
+                              <mat-icon class="clockin-linked-icon" matTooltip="Linked to clock-in: {{ user.linkedEmployeeName }}">fingerprint</mat-icon>
+                            }
+                          </span>
                           <span class="user-title">{{ user.title || 'No title' }}</span>
                         </div>
                       </div>
@@ -455,6 +473,16 @@ interface Permission {
     .user-name {
       font-weight: 600;
       color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .clockin-linked-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #e65100;
     }
 
     .user-title {
@@ -568,6 +596,7 @@ export class UserManagementComponent implements OnInit {
   filteredUsers: User[] = [];
   departments: Department[] = [];
   companies: OperatingCompany[] = [];
+  clockInEmployees: ClockInEmployee[] = [];
   roles: string[] = [];
   permissions: Permission[] = [];
 
@@ -587,6 +616,7 @@ export class UserManagementComponent implements OnInit {
     this.loadUsers();
     this.loadDepartments();
     this.loadCompanies();
+    this.loadClockInEmployees();
     this.loadRoles();
     this.loadPermissions();
   }
@@ -601,7 +631,7 @@ export class UserManagementComponent implements OnInit {
 
   loadUsers(): void {
     this.isLoading = true;
-    this.http.get<User[]>('/api/users', { headers: this.getHeaders() })
+    this.http.get<User[]>(`${environment.apiUrl}/users`, { headers: this.getHeaders() })
       .subscribe({
         next: (users) => {
           this.users = users;
@@ -617,7 +647,7 @@ export class UserManagementComponent implements OnInit {
   }
 
   loadDepartments(): void {
-    this.http.get<Department[]>('/api/departments', { headers: this.getHeaders() })
+    this.http.get<Department[]>(`${environment.apiUrl}/departments`, { headers: this.getHeaders() })
       .subscribe({
         next: (departments) => this.departments = departments,
         error: (err) => console.error('Error loading departments:', err)
@@ -625,15 +655,23 @@ export class UserManagementComponent implements OnInit {
   }
 
   loadCompanies(): void {
-    this.http.get<OperatingCompany[]>('/api/crm/all-companies', { headers: this.getHeaders() })
+    this.http.get<OperatingCompany[]>(`${environment.apiUrl}/crm/all-companies`, { headers: this.getHeaders() })
       .subscribe({
         next: (companies) => this.companies = companies,
         error: (err) => console.error('Error loading companies:', err)
       });
   }
 
+  loadClockInEmployees(): void {
+    this.http.get<ClockInEmployee[]>(`${environment.apiUrl}/users/clockin-employees`, { headers: this.getHeaders() })
+      .subscribe({
+        next: (employees) => this.clockInEmployees = employees,
+        error: (err) => console.error('Error loading clock-in employees:', err)
+      });
+  }
+
   loadRoles(): void {
-    this.http.get<string[]>('/api/users/roles', { headers: this.getHeaders() })
+    this.http.get<string[]>(`${environment.apiUrl}/users/roles`, { headers: this.getHeaders() })
       .subscribe({
         next: (roles) => this.roles = roles,
         error: (err) => console.error('Error loading roles:', err)
@@ -641,7 +679,7 @@ export class UserManagementComponent implements OnInit {
   }
 
   loadPermissions(): void {
-    this.http.get<Permission[]>('/api/users/permissions', { headers: this.getHeaders() })
+    this.http.get<Permission[]>(`${environment.apiUrl}/users/permissions`, { headers: this.getHeaders() })
       .subscribe({
         next: (permissions) => this.permissions = permissions,
         error: (err) => console.error('Error loading permissions:', err)
@@ -710,6 +748,7 @@ export class UserManagementComponent implements OnInit {
         mode: 'create',
         departments: this.departments,
         companies: this.companies,
+        clockInEmployees: this.clockInEmployees,
         roles: this.roles,
         permissions: this.permissions
       }
@@ -717,7 +756,7 @@ export class UserManagementComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.http.post('/api/users', result, { headers: this.getHeaders() })
+        this.http.post(`${environment.apiUrl}/users`, result, { headers: this.getHeaders() })
           .subscribe({
             next: () => {
               this.snackBar.open('User created successfully', 'Close', { duration: 3000 });
@@ -739,6 +778,7 @@ export class UserManagementComponent implements OnInit {
         user,
         departments: this.departments,
         companies: this.companies,
+        clockInEmployees: this.clockInEmployees,
         roles: this.roles,
         permissions: this.permissions
       }
@@ -746,7 +786,7 @@ export class UserManagementComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.http.put(`/api/users/${user.userId}`, result, { headers: this.getHeaders() })
+        this.http.put(`${environment.apiUrl}/users/${user.userId}`, result, { headers: this.getHeaders() })
           .subscribe({
             next: () => {
               this.snackBar.open('User updated successfully', 'Close', { duration: 3000 });
@@ -768,7 +808,7 @@ export class UserManagementComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.http.post(`/api/users/${user.userId}/reset-password`, { newPassword: result }, { headers: this.getHeaders() })
+        this.http.post(`${environment.apiUrl}/users/${user.userId}/reset-password`, { newPassword: result }, { headers: this.getHeaders() })
           .subscribe({
             next: () => {
               this.snackBar.open('Password reset successfully', 'Close', { duration: 3000 });
@@ -782,7 +822,7 @@ export class UserManagementComponent implements OnInit {
   }
 
   toggleUserStatus(user: User): void {
-    this.http.post(`/api/users/${user.userId}/toggle-active`, {}, { headers: this.getHeaders() })
+    this.http.post(`${environment.apiUrl}/users/${user.userId}/toggle-active`, {}, { headers: this.getHeaders() })
       .subscribe({
         next: () => {
           this.snackBar.open(`User ${user.isActive ? 'deactivated' : 'activated'} successfully`, 'Close', { duration: 3000 });
@@ -802,7 +842,7 @@ export class UserManagementComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.http.delete(`/api/users/${user.userId}`, { headers: this.getHeaders() })
+        this.http.delete(`${environment.apiUrl}/users/${user.userId}`, { headers: this.getHeaders() })
           .subscribe({
             next: () => {
               this.snackBar.open('User deleted successfully', 'Close', { duration: 3000 });
@@ -909,6 +949,41 @@ export class UserManagementComponent implements OnInit {
           <input matInput formControlName="title" placeholder="e.g., Software Engineer">
         </mat-form-field>
 
+        <div class="birthday-section">
+          <h4><mat-icon>cake</mat-icon> Birthday</h4>
+          <p class="section-hint">Add birthday to display on the company calendar</p>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Birthday</mat-label>
+            <input matInput formControlName="birthday" type="date">
+            <mat-hint>Birthday will appear on the calendar for active users</mat-hint>
+          </mat-form-field>
+        </div>
+
+        <div class="clockin-section">
+          <h4><mat-icon>fingerprint</mat-icon> Clock-In System Link</h4>
+          <p class="section-hint">Link this user to an employee in the clock-in system to pull attendance data</p>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Link to Clock-In Employee</mat-label>
+            <mat-select formControlName="linkedEmpId">
+              <mat-option [value]="null">Not Linked</mat-option>
+              @for (emp of data.clockInEmployees; track emp.empId) {
+                <mat-option [value]="emp.empId">
+                  {{ emp.name }} {{ emp.lastName }} 
+                  @if (emp.department) { - {{ emp.department }} }
+                  @if (emp.idNum) { ({{ emp.idNum }}) }
+                </mat-option>
+              }
+            </mat-select>
+            <mat-hint>Select an employee to view their attendance records</mat-hint>
+          </mat-form-field>
+          @if (form.get('linkedEmpId')?.value) {
+            <div class="linked-status">
+              <mat-icon>check_circle</mat-icon>
+              <span>Linked to clock-in system</span>
+            </div>
+          }
+        </div>
+
         <div class="companies-section">
           <h4>Company Assignments</h4>
           <p class="section-hint">Select which companies this user works for</p>
@@ -983,6 +1058,68 @@ export class UserManagementComponent implements OnInit {
 
     mat-form-field {
       margin-bottom: 8px;
+    }
+
+    .birthday-section {
+      margin: 16px 0;
+      padding: 16px;
+      background: #fce4ec;
+      border-radius: 8px;
+      border: 1px solid #f8bbd9;
+    }
+
+    .birthday-section h4 {
+      margin: 0 0 4px 0;
+      color: #c2185b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .birthday-section h4 mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .clockin-section {
+      margin: 16px 0;
+      padding: 16px;
+      background: #fff3e0;
+      border-radius: 8px;
+      border: 1px solid #ffe0b2;
+    }
+
+    .clockin-section h4 {
+      margin: 0 0 4px 0;
+      color: #e65100;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .clockin-section h4 mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .linked-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #e8f5e9;
+      border-radius: 4px;
+      color: #2e7d32;
+      font-size: 13px;
+    }
+
+    .linked-status mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
 
     .companies-section {
@@ -1071,8 +1208,16 @@ export class UserFormDialogComponent {
       role: [user?.role || 'Employee', Validators.required],
       departmentId: [user?.departmentId || null],
       title: [user?.title || ''],
+      linkedEmpId: [user?.linkedEmpId || null],
+      birthday: [user?.birthday ? this.formatDateForInput(user.birthday) : null],
       isActive: [user?.isActive ?? true]
     });
+  }
+
+  formatDateForInput(date: Date | string): string {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toISOString().split('T')[0];
   }
 
   getPermissionCategories(): string[] {

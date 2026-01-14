@@ -184,14 +184,17 @@ export class DocumentsComponent implements OnInit {
         console.error('Error loading departments:', error);
         // Fallback to static data if API fails
         this.departments = [
-          { name: 'Warehouses', icon: 'warehouse', documentCount: 0 },
-          { name: 'Private Sales', icon: 'point_of_sale', documentCount: 0 },
-          { name: 'Projects', icon: 'engineering', documentCount: 0 },
-          { name: 'Stock', icon: 'inventory_2', documentCount: 0 },
-          { name: 'Production', icon: 'precision_manufacturing', documentCount: 0 },
+          { name: 'IT', icon: 'computer', documentCount: 0 },
           { name: 'Marketing', icon: 'campaign', documentCount: 0 },
-          { name: 'Finance', icon: 'account_balance', documentCount: 0 },
-          { name: 'Tender', icon: 'gavel', documentCount: 0 }
+          { name: 'Tender', icon: 'gavel', documentCount: 0 },
+          { name: 'Projects', icon: 'engineering', documentCount: 0 },
+          { name: 'Sales', icon: 'point_of_sale', documentCount: 0 },
+          { name: 'Call Center', icon: 'headset_mic', documentCount: 0 },
+          { name: 'Production', icon: 'precision_manufacturing', documentCount: 0 },
+          { name: 'Human Resource', icon: 'people', documentCount: 0 },
+          { name: 'Stock', icon: 'inventory_2', documentCount: 0 },
+          { name: 'Logistics', icon: 'local_shipping', documentCount: 0 },
+          { name: 'Finance', icon: 'account_balance', documentCount: 0 }
         ];
       }
     });

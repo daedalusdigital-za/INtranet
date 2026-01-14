@@ -13,6 +13,7 @@ namespace ProjectTracker.API.DTOs.Users
         public string? DepartmentName { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public DateTime? LastLoginAt { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class UserProfileDto
@@ -30,6 +31,7 @@ namespace ProjectTracker.API.DTOs.Users
         public bool IsActive { get; set; }
         public DateTime? LastLoginAt { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class UpdateProfileDto
@@ -38,6 +40,7 @@ namespace ProjectTracker.API.DTOs.Users
         public string? Surname { get; set; }
         public string? Title { get; set; }
         public string? ProfilePictureUrl { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class ChangePasswordDto
@@ -57,6 +60,7 @@ namespace ProjectTracker.API.DTOs.Users
         public string? DepartmentName { get; set; }
         public bool IsActive { get; set; }
         public DateTime? LastLoginAt { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class UserDetailDto : UserDto
@@ -76,6 +80,7 @@ namespace ProjectTracker.API.DTOs.Users
         public string? Permissions { get; set; }
         public int? DepartmentId { get; set; }
         public string? ProfilePictureUrl { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class UpdateUserDto
@@ -89,10 +94,21 @@ namespace ProjectTracker.API.DTOs.Users
         public int? DepartmentId { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public bool? IsActive { get; set; }
+        public DateTime? Birthday { get; set; }
     }
 
     public class ResetPasswordDto
     {
         public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class UserBirthdayDto
+    {
+        public int UserId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Surname { get; set; }
+        public DateTime Birthday { get; set; }
+        public string? DepartmentName { get; set; }
+        public string? ProfilePictureUrl { get; set; }
     }
 }

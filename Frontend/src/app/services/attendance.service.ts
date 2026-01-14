@@ -3,15 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, BehaviorSubject } from 'rxjs';
 import * as signalR from '@microsoft/signalr';
 import { Employee, AttendanceMetrics, CheckInRequest, CheckOutRequest } from '../models/attendance.model';
-
-// Hardcoded development environment
-const environment = {
-  production: false,
-  apiUrl: '/api',
-  signalRUrl: '',
-  enableDebugMode: true,
-  logLevel: 'debug'
-};
+import { environment } from '../../environments/environment.development';
 
 @Injectable({
   providedIn: 'root'

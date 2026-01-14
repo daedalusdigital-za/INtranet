@@ -48,6 +48,16 @@ namespace ProjectTracker.API.Models
         [ForeignKey("DepartmentId")]
         public Department? Department { get; set; }
 
+        // Link to clock-in system employee
+        [MaxLength(50)]
+        public string? LinkedEmpId { get; set; }
+
+        [ForeignKey("LinkedEmpId")]
+        public EmpRegistration? LinkedEmployee { get; set; }
+
+        // Birthday for calendar display
+        public DateTime? Birthday { get; set; }
+
         public bool IsActive { get; set; } = true;
 
         public DateTime? LastLoginAt { get; set; }

@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
+import { environment } from '../../../../environments/environment';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -14,6 +15,7 @@ import { MessageService, User, Conversation } from '../../../services/message.se
 import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
 import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
 import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
+import { RequestDialogComponent } from '../request-dialog/request-dialog.component';
 
 @Component({
   selector: 'app-navbar',
@@ -182,6 +184,10 @@ import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
         <button mat-menu-item (click)="openTodoDialog()">
           <mat-icon>checklist</mat-icon>
           <span>ToDo</span>
+        </button>
+        <button mat-menu-item (click)="openRequestDialog()">
+          <mat-icon>assignment</mat-icon>
+          <span>Request</span>
         </button>
         <button mat-menu-item>
           <mat-icon>settings</mat-icon>
@@ -529,7 +535,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
   loadRecentConversations(): void {
     if (this.currentUserId === 0) return;
     
-    fetch(`/api/messages/conversations?userId=${this.currentUserId}`)
+    fetch(`${environment.apiUrl}/messages/conversations?userId=${this.currentUserId}`)
       .then(response => response.json())
       .then(data => {
         this.recentConversations = data.slice(0, 5);
@@ -543,7 +549,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
   loadUnreadCount(): void {
     if (this.currentUserId === 0) return;
     
-    fetch(`/api/messages/unread-count?userId=${this.currentUserId}`)
+    fetch(`${environment.apiUrl}/messages/unread-count?userId=${this.currentUserId}`)
       .then(response => response.json())
       .then(count => {
         this.unreadMessagesCount = count;
@@ -638,6 +644,14 @@ export class NavbarComponent implements OnInit, OnDestroy {
       maxWidth: '95vw',
       maxHeight: '85vh',
       data: { userId: this.currentUserId }
+    });
+  }
+
+  openRequestDialog(): void {
+    this.dialog.open(RequestDialogComponent, {
+      width: '550px',
+      maxWidth: '95vw',
+      panelClass: 'centered-dialog'
     });
   }
 

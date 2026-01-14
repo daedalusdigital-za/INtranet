@@ -304,10 +304,17 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
     .crm-dashboard {
       padding: 24px;
       max-width: 1400px;
       margin: 0 auto;
+      min-height: calc(100vh - 64px);
     }
 
     .dashboard-header {
@@ -329,6 +336,8 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
       margin: 0;
       font-size: 28px;
       font-weight: 500;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .company-badge {
@@ -388,18 +397,24 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
       display: flex;
       justify-content: center;
       padding: 60px;
+      min-height: calc(100vh - 200px);
+      align-items: center;
     }
 
     .no-companies-container {
       display: flex;
       justify-content: center;
       padding: 60px;
+      min-height: calc(100vh - 200px);
+      align-items: center;
     }
 
     .no-companies-card {
       max-width: 500px;
       text-align: center;
       padding: 40px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
     }
 
     .no-companies-icon {
@@ -422,7 +437,7 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
 
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -430,11 +445,13 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
     .stat-card {
       cursor: pointer;
       transition: transform 0.2s, box-shadow 0.2s;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
     }
 
     .stat-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
     }
 
     .stat-card mat-card-content {
@@ -498,6 +515,8 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
 
     .pipeline-card, .performance-card {
       height: fit-content;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
     }
 
     mat-card-header {
@@ -650,7 +669,7 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
       flex-direction: column;
       align-items: center;
       padding: 40px;
-      color: #999;
+      color: #666;
     }
 
     .empty-state mat-icon {
@@ -658,18 +677,32 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
       width: 48px;
       height: 48px;
       margin-bottom: 12px;
+      color: #999;
     }
 
     .quick-actions {
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
+      margin-top: 24px;
     }
 
     .quick-actions button {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.9) !important;
+      color: #1976d2 !important;
+    }
+
+    .quick-actions button:hover {
+      background: white !important;
+    }
+
+    @media (max-width: 1200px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
 
     @media (max-width: 768px) {
@@ -688,6 +721,12 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
 
       .agent-stats {
         display: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
       }
     }
   `]

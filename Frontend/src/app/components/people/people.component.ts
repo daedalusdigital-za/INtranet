@@ -21,13 +21,7 @@ import { Employee, AttendanceMetrics } from '../../models/attendance.model';
 import { interval, Subscription, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
-
-// Hardcoded development environment for debugging
-const environment = {
-  production: false,
-  apiUrl: '/api',
-  signalRUrl: ''
-};
+import { environment } from '../../../environments/environment.development';
 
 @Component({
   selector: 'app-people',
@@ -490,9 +484,14 @@ const environment = {
           </div>
 
           <div class="coming-soon">
-            <mat-icon>construction</mat-icon>
-            <h2>Factory Dashboard Coming Soon</h2>
-            <p>Production tracking, quality metrics, and operations management will be available here.</p>
+            <mat-icon>cloud_queue</mat-icon>
+            <h2>Coming Soon</h2>
+            <p>This department will be connected to an Azure database for live data synchronization.</p>
+            <p class="azure-note"><mat-icon>cloud</mat-icon> Azure integration pending</p>
+            <button mat-raised-button color="warn" (click)="condomFactoryAccess = false">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Departments
+            </button>
           </div>
         </div>
       } @else if (sanitaryPadsAccess) {
@@ -507,9 +506,14 @@ const environment = {
           </div>
 
           <div class="coming-soon">
-            <mat-icon>construction</mat-icon>
-            <h2>Production Dashboard Coming Soon</h2>
-            <p>Sanitary pads production tracking, inventory levels, and quality assurance will be available here.</p>
+            <mat-icon>cloud_queue</mat-icon>
+            <h2>Coming Soon</h2>
+            <p>This department will be connected to an Azure database for live data synchronization.</p>
+            <p class="azure-note"><mat-icon>cloud</mat-icon> Azure integration pending</p>
+            <button mat-raised-button color="warn" (click)="sanitaryPadsAccess = false">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Departments
+            </button>
           </div>
         </div>
       } @else if (newRoadAccess) {
@@ -524,26 +528,36 @@ const environment = {
           </div>
 
           <div class="coming-soon">
-            <mat-icon>construction</mat-icon>
-            <h2>Branch Dashboard Coming Soon</h2>
-            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+            <mat-icon>cloud_queue</mat-icon>
+            <h2>Coming Soon</h2>
+            <p>This branch will be connected to an Azure database for live data synchronization.</p>
+            <p class="azure-note"><mat-icon>cloud</mat-icon> Azure integration pending</p>
+            <button mat-raised-button color="warn" (click)="newRoadAccess = false">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Departments
+            </button>
           </div>
         </div>
       } @else if (captownAccess) {
-        <!-- Captown Branch Content -->
+        <!-- Cape Town Branch Content -->
         <div class="factory-section">
           <div class="header-section">
             <h1>
               <mat-icon>location_city</mat-icon>
-              Captown Branch
+              Cape Town Branch
             </h1>
             <p class="subtitle">Branch operations and staff management</p>
           </div>
 
           <div class="coming-soon">
-            <mat-icon>construction</mat-icon>
-            <h2>Branch Dashboard Coming Soon</h2>
-            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+            <mat-icon>cloud_queue</mat-icon>
+            <h2>Coming Soon</h2>
+            <p>This branch will be connected to an Azure database for live data synchronization.</p>
+            <p class="azure-note"><mat-icon>cloud</mat-icon> Azure integration pending</p>
+            <button mat-raised-button color="warn" (click)="captownAccess = false">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Departments
+            </button>
           </div>
         </div>
       } @else if (brionkhorspruitAccess) {
@@ -558,9 +572,14 @@ const environment = {
           </div>
 
           <div class="coming-soon">
-            <mat-icon>construction</mat-icon>
-            <h2>Branch Dashboard Coming Soon</h2>
-            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+            <mat-icon>cloud_queue</mat-icon>
+            <h2>Coming Soon</h2>
+            <p>This branch will be connected to an Azure database for live data synchronization.</p>
+            <p class="azure-note"><mat-icon>cloud</mat-icon> Azure integration pending</p>
+            <button mat-raised-button color="warn" (click)="brionkhorspruitAccess = false">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Departments
+            </button>
           </div>
         </div>
       } @else if (portElizabethAccess) {
@@ -575,9 +594,14 @@ const environment = {
           </div>
 
           <div class="coming-soon">
-            <mat-icon>construction</mat-icon>
-            <h2>Branch Dashboard Coming Soon</h2>
-            <p>Staff attendance, performance metrics, and operations management will be available here.</p>
+            <mat-icon>cloud_queue</mat-icon>
+            <h2>Coming Soon</h2>
+            <p>This branch will be connected to an Azure database for live data synchronization.</p>
+            <p class="azure-note"><mat-icon>cloud</mat-icon> Azure integration pending</p>
+            <button mat-raised-button color="warn" (click)="portElizabethAccess = false">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Departments
+            </button>
           </div>
         </div>
       } @else if (logisticsAccess) {
@@ -592,9 +616,14 @@ const environment = {
           </div>
 
           <div class="coming-soon">
-            <mat-icon>construction</mat-icon>
-            <h2>Logistics Dashboard Coming Soon</h2>
-            <p>Transportation tracking, inventory management, and supply chain analytics will be available here.</p>
+            <mat-icon>cloud_queue</mat-icon>
+            <h2>Coming Soon</h2>
+            <p>This department will be connected to an Azure database for live data synchronization.</p>
+            <p class="azure-note"><mat-icon>cloud</mat-icon> Azure integration pending</p>
+            <button mat-raised-button color="warn" (click)="logisticsAccess = false">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Departments
+            </button>
           </div>
         </div>
       }
@@ -1583,7 +1612,34 @@ const environment = {
       color: #666;
       font-size: 16px;
       line-height: 1.6;
+      margin: 0 0 16px 0;
+    }
+
+    .coming-soon .azure-note {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #0078d4;
+      font-size: 14px;
+      font-weight: 500;
+      background: linear-gradient(135deg, #e6f3ff 0%, #cce5ff 100%);
+      padding: 12px 24px;
+      border-radius: 8px;
+      margin: 24px 0;
+      border: 1px solid #99ccff;
+    }
+
+    .coming-soon .azure-note mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
       margin: 0;
+      color: #0078d4;
+    }
+
+    .coming-soon button {
+      margin-top: 16px;
     }
 
     .training-content {

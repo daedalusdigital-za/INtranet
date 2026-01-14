@@ -103,8 +103,8 @@ export interface SendDirectMessageRequest {
   providedIn: 'root'
 })
 export class MessageService {
-  private apiUrl = '/api/messages';
-  private usersApiUrl = '/api/profile';
+  private apiUrl = `${environment.apiUrl}/messages`;
+  private usersApiUrl = `${environment.apiUrl}/profile`;
   
   // SignalR Hub Connection
   private hubConnection: signalR.HubConnection | null = null;
@@ -215,8 +215,13 @@ export class MessageService {
 
   // Get all users (for user picker)
   getAllUsers(): Observable<User[]> {
-    return this.http.get<User[]>(`${this.usersApiUrl}/users`,
-      { headers: this.getHeaders() });
+    return this.http.get<User[]>(`${this.apiUrl}/users/search`,
+      { headers: this.getHeaders() }).pipe(
+        map((users: User[]) => users.map((u: User) => ({
+          ...u,
+          position: u.title
+        })))
+      );
   }
 
   // Upload attachment
@@ -273,7 +278,7 @@ export class MessageService {
     const hubUrl = environment.signalRUrl || environment.apiUrl.replace('/api', '');
     
     this.hubConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${hubUrl}/chathub`, {
+      .withUrl(`${hubUrl}/hubs/chat`, {
         accessTokenFactory: () => token || '',
         skipNegotiation: false,
         transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling

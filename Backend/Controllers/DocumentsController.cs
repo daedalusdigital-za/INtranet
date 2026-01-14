@@ -14,14 +14,18 @@ namespace ProjectTracker.API.Controllers
         // Department passwords - in production, these should be in database
         private static readonly Dictionary<string, string> DepartmentPasswords = new()
         {
-            { "Warehouses", "warehouse2024" },
-            { "Private Sales", "sales2024" },
-            { "Projects", "projects2024" },
-            { "Stock", "stock2024" },
-            { "Production", "production2024" },
+            { "IT", "it2024" },
             { "Marketing", "marketing2024" },
+            { "Tender", "tender2024" },
+            { "Projects", "projects2024" },
+            { "Sales", "sales2024" },
+            { "Call Center", "callcenter2024" },
+            { "Production", "production2024" },
+            { "Human Resource", "hr2024" },
+            { "Stock", "stock2024" },
+            { "Logistics", "logistics2024" },
             { "Finance", "finance2024" },
-            { "Tender", "tender2024" }
+            { "Managers", "managers2024" }
         };
 
         public DocumentsController(ILogger<DocumentsController> logger, IConfiguration configuration)
@@ -326,14 +330,18 @@ namespace ProjectTracker.API.Controllers
 
         private string GetDepartmentIcon(string department) => department switch
         {
-            "Warehouses" => "warehouse",
-            "Private Sales" => "point_of_sale",
-            "Projects" => "engineering",
-            "Stock" => "inventory_2",
-            "Production" => "precision_manufacturing",
+            "IT" => "computer",
             "Marketing" => "campaign",
-            "Finance" => "account_balance",
             "Tender" => "gavel",
+            "Projects" => "engineering",
+            "Sales" => "point_of_sale",
+            "Call Center" => "headset_mic",
+            "Production" => "precision_manufacturing",
+            "Human Resource" => "people",
+            "Stock" => "inventory_2",
+            "Logistics" => "local_shipping",
+            "Finance" => "account_balance",
+            "Managers" => "supervisor_account",
             _ => "folder"
         };
 

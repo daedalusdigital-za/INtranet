@@ -194,10 +194,17 @@ import { CrmService, Campaign, Agent } from '../../services/crm/crm.service';
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
     .lead-create-container {
       padding: 24px;
       max-width: 900px;
       margin: 0 auto;
+      min-height: calc(100vh - 64px);
     }
 
     .page-header {
@@ -210,6 +217,8 @@ import { CrmService, Campaign, Agent } from '../../services/crm/crm.service';
     .page-header h1 {
       margin: 0;
       font-size: 24px;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     h3 {

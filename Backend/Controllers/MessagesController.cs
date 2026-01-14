@@ -523,7 +523,7 @@ namespace ProjectTracker.API.Controllers
                 var searchTerm = query.ToLower();
                 usersQuery = usersQuery.Where(u => 
                     u.Name.ToLower().Contains(searchTerm) ||
-                    u.Surname.ToLower().Contains(searchTerm) ||
+                    (u.Surname != null && u.Surname.ToLower().Contains(searchTerm)) ||
                     u.Email.ToLower().Contains(searchTerm) ||
                     (u.Title != null && u.Title.ToLower().Contains(searchTerm)) ||
                     (u.Department != null && u.Department.Name.ToLower().Contains(searchTerm)));

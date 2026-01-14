@@ -32,6 +32,15 @@ interface TodoTask {
   isSelfAssigned: boolean;
 }
 
+interface UserBirthday {
+  userId: number;
+  name: string;
+  surname?: string;
+  birthday: Date;
+  departmentName?: string;
+  profilePictureUrl?: string;
+}
+
 @Component({
   selector: 'app-calendar',
   standalone: true,
@@ -102,6 +111,32 @@ interface TodoTask {
       <div class="events-sidebar">
         <h2>Events & Tasks for {{ monthNames[currentMonth] }} {{ currentYear }}</h2>
         
+        <!-- Birthdays Section -->
+        @if (getCurrentMonthBirthdays().length > 0) {
+          <h3 class="section-title birthday-title">
+            <mat-icon>cake</mat-icon>
+            Birthdays This Month
+          </h3>
+          <div class="birthdays-list">
+            @for (birthday of getCurrentMonthBirthdays(); track birthday.userId) {
+              <mat-card class="birthday-card">
+                <mat-card-header>
+                  <div class="birthday-avatar">🎂</div>
+                  <div class="birthday-info">
+                    <mat-card-title>{{ birthday.name }} {{ birthday.surname }}</mat-card-title>
+                    <mat-card-subtitle>{{ getBirthdayDate(birthday.birthday) | date:'MMMM d' }}</mat-card-subtitle>
+                  </div>
+                </mat-card-header>
+                <mat-card-content>
+                  @if (birthday.departmentName) {
+                    <span class="department-badge">{{ birthday.departmentName }}</span>
+                  }
+                </mat-card-content>
+              </mat-card>
+            }
+          </div>
+        }
+
         <!-- ToDo Tasks Section -->
         @if (getCurrentMonthTasks().length > 0) {
           <h3 class="section-title">
@@ -353,6 +388,73 @@ interface TodoTask {
       color: white;
     }
 
+    .section-title.birthday-title {
+      color: #fce4ec;
+    }
+
+    .section-title.birthday-title mat-icon {
+      color: #E91E63;
+    }
+
+    .birthdays-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .birthday-card {
+      background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      border-left: 4px solid #E91E63;
+    }
+
+    .birthday-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(233, 30, 99, 0.3);
+    }
+
+    .birthday-card mat-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .birthday-avatar {
+      font-size: 32px;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      border-radius: 50%;
+    }
+
+    .birthday-info {
+      flex: 1;
+    }
+
+    .birthday-card mat-card-title {
+      color: #880e4f;
+      font-size: 1.1rem;
+      margin-bottom: 4px;
+    }
+
+    .birthday-card mat-card-subtitle {
+      color: #ad1457;
+    }
+
+    .department-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 12px;
+      font-size: 12px;
+      color: #880e4f;
+    }
+
     .tasks-list {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -534,6 +636,7 @@ export class CalendarComponent implements OnInit {
   calendarDays: any[] = [];
   notificationCount = 3;
   todoTasks: TodoTask[] = [];
+  birthdays: UserBirthday[] = [];
   currentUserId: number = 0;
 
   monthNames = [
@@ -723,6 +826,7 @@ export class CalendarComponent implements OnInit {
   ngOnInit(): void {
     this.currentUserId = this.authService.currentUserValue?.userId || 0;
     this.loadTasks();
+    this.loadBirthdays();
     this.generateCalendar();
   }
 
@@ -737,6 +841,37 @@ export class CalendarComponent implements OnInit {
         },
         error: (err) => console.error('Error loading tasks:', err)
       });
+  }
+
+  loadBirthdays(): void {
+    this.http.get<UserBirthday[]>(`${environment.apiUrl}/api/users/birthdays?month=${this.currentMonth + 1}`)
+      .subscribe({
+        next: (birthdays) => {
+          this.birthdays = birthdays;
+          this.generateBirthdayEvents();
+          this.generateCalendar(); // Regenerate calendar with birthdays
+        },
+        error: (err) => console.error('Error loading birthdays:', err)
+      });
+  }
+
+  generateBirthdayEvents(): void {
+    // Remove existing birthday events
+    this.upcomingEvents = this.upcomingEvents.filter(e => !e.title.includes('Birthday'));
+    
+    // Add birthday events for the current year
+    this.birthdays.forEach((birthday, index) => {
+      const birthDate = new Date(birthday.birthday);
+      this.upcomingEvents.push({
+        id: 2000 + index,
+        title: `🎂 ${birthday.name} ${birthday.surname || ''}'s Birthday`,
+        date: new Date(this.currentYear, birthDate.getMonth(), birthDate.getDate()),
+        time: 'All Day',
+        location: birthday.departmentName || 'Company',
+        description: `Happy Birthday to ${birthday.name} ${birthday.surname || ''}!`,
+        color: '#E91E63' // Pink for birthdays
+      });
+    });
   }
 
   generateCalendar(): void {
@@ -805,6 +940,7 @@ export class CalendarComponent implements OnInit {
       this.currentMonth--;
     }
     this.loadTasks();
+    this.loadBirthdays();
   }
 
   nextMonth(): void {
@@ -815,6 +951,7 @@ export class CalendarComponent implements OnInit {
       this.currentMonth++;
     }
     this.loadTasks();
+    this.loadBirthdays();
   }
 
   getCurrentMonthEvents(): any[] {
@@ -826,6 +963,22 @@ export class CalendarComponent implements OnInit {
 
   getCurrentMonthTasks(): TodoTask[] {
     return this.todoTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }
+
+  getCurrentMonthBirthdays(): UserBirthday[] {
+    return this.birthdays.filter(b => {
+      const birthDate = new Date(b.birthday);
+      return birthDate.getMonth() === this.currentMonth;
+    }).sort((a, b) => {
+      const aDay = new Date(a.birthday).getDate();
+      const bDay = new Date(b.birthday).getDate();
+      return aDay - bDay;
+    });
+  }
+
+  getBirthdayDate(birthday: Date): Date {
+    const d = new Date(birthday);
+    return new Date(this.currentYear, d.getMonth(), d.getDate());
   }
 
   completeTask(task: TodoTask): void {

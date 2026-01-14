@@ -326,10 +326,17 @@ import { CrmService, Campaign, CampaignCreate, Agent } from '../../services/crm/
     </ng-template>
   `,
   styles: [`
+    :host {
+      display: block;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
     .campaigns-container {
       padding: 24px;
       max-width: 1400px;
       margin: 0 auto;
+      min-height: calc(100vh - 64px);
     }
 
     .campaigns-header {
@@ -348,6 +355,8 @@ import { CrmService, Campaign, CampaignCreate, Agent } from '../../services/crm/
     .header-left h1 {
       margin: 0;
       font-size: 24px;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .company-badge {
