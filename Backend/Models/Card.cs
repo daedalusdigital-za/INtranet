@@ -21,6 +21,13 @@ namespace ProjectTracker.API.Models
         [MaxLength(2000)]
         public string? Description { get; set; }
 
+        // Who created the card
+        public int? CreatedByUserId { get; set; }
+
+        [ForeignKey("CreatedByUserId")]
+        public User? CreatedBy { get; set; }
+
+        // Who the card is assigned to
         public int? AssignedToUserId { get; set; }
 
         [ForeignKey("AssignedToUserId")]

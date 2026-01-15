@@ -1,13 +1,14 @@
 import { Injectable } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
 import { Subject } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SignalRService {
   private hubConnection?: signalR.HubConnection;
-  private apiUrl = '';
+  private signalRUrl = environment.signalRUrl;
 
   public cardMoved$ = new Subject<any>();
   public cardCreated$ = new Subject<any>();
@@ -19,7 +20,7 @@ export class SignalRService {
 
   startConnection(token: string): Promise<void> {
     this.hubConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${this.apiUrl}/hubs/board`, {
+      .withUrl(`${this.signalRUrl}/hubs/board`, {
         accessTokenFactory: () => token
       })
       .withAutomaticReconnect()

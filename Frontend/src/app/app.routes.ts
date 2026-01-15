@@ -13,6 +13,8 @@ import { ProfileComponent } from './components/profile/profile.component';
 import { UserManagementComponent } from './components/user-management/user-management.component';
 import { MessagesComponent } from './components/messages/messages.component';
 import { SettingsComponent } from './components/settings/settings.component';
+import { NotFoundComponent } from './components/not-found/not-found.component';
+import { ActiveCallsComponent } from './components/active-calls/active-calls.component';
 import { authGuard } from './guards/auth.guard';
 
 // CRM Components
@@ -49,7 +51,11 @@ export const routes: Routes = [
   { path: 'messages', component: MessagesComponent, canActivate: [authGuard] },
   { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: 'board/:id', component: BoardComponent, canActivate: [authGuard] },
-  { path: '**', redirectTo: '/login' }
+  { path: 'pbx/active-calls', component: ActiveCallsComponent, canActivate: [authGuard] },
+  
+  // 404 Page - must be last
+  { path: '404', component: NotFoundComponent },
+  { path: '**', component: NotFoundComponent }
 ];
 
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs;
+using ProjectTracker.API.DTOs.Boards;
 using ProjectTracker.API.Models;
 
 namespace ProjectTracker.API.Controllers

@@ -31,6 +31,7 @@ namespace ProjectTracker.API.Controllers
             var users = await _context.Users
                 .Include(u => u.Department)
                 .Include(u => u.LinkedEmployee)
+                .Include(u => u.Extensions)
                 .OrderBy(u => u.Surname)
                 .ThenBy(u => u.Name)
                 .ToListAsync();
@@ -61,7 +62,9 @@ namespace ProjectTracker.API.Controllers
                     .ToList(),
                 LinkedEmpId = u.LinkedEmpId,
                 LinkedEmployeeName = u.LinkedEmployee != null ? $"{u.LinkedEmployee.Name} {u.LinkedEmployee.LastName}" : null,
-                Birthday = u.Birthday
+                Birthday = u.Birthday,
+                PrimaryExtension = u.Extensions.FirstOrDefault(e => e.IsPrimary && e.IsActive)?.ExtensionNumber 
+                    ?? u.Extensions.FirstOrDefault(e => e.IsActive)?.ExtensionNumber
             }).ToList();
 
             return Ok(result);
@@ -74,6 +77,7 @@ namespace ProjectTracker.API.Controllers
             var user = await _context.Users
                 .Include(u => u.Department)
                 .Include(u => u.LinkedEmployee)
+                .Include(u => u.Extensions)
                 .FirstOrDefaultAsync(u => u.UserId == id);
 
             if (user == null)
@@ -85,6 +89,19 @@ namespace ProjectTracker.API.Controllers
                 .Where(soc => soc.StaffMemberId == id && soc.IsActive)
                 .Select(soc => soc.OperatingCompanyId)
                 .ToListAsync();
+
+            var extensions = user.Extensions
+                .Where(e => e.IsActive)
+                .OrderByDescending(e => e.IsPrimary)
+                .ThenBy(e => e.ExtensionNumber)
+                .Select(e => new ExtensionSummaryDto
+                {
+                    ExtensionId = e.ExtensionId,
+                    ExtensionNumber = e.ExtensionNumber,
+                    Label = e.Label,
+                    ExtensionType = e.ExtensionType,
+                    IsPrimary = e.IsPrimary
+                }).ToList();
 
             return Ok(new UserDetailDto
             {
@@ -106,7 +123,10 @@ namespace ProjectTracker.API.Controllers
                 CompanyIds = companyIds,
                 LinkedEmpId = user.LinkedEmpId,
                 LinkedEmployeeName = user.LinkedEmployee != null ? $"{user.LinkedEmployee.Name} {user.LinkedEmployee.LastName}" : null,
-                Birthday = user.Birthday
+                Birthday = user.Birthday,
+                PrimaryExtension = extensions.FirstOrDefault(e => e.IsPrimary)?.ExtensionNumber 
+                    ?? extensions.FirstOrDefault()?.ExtensionNumber,
+                Extensions = extensions
             });
         }
 
@@ -205,6 +225,19 @@ namespace ProjectTracker.API.Controllers
                     });
                 }
                 await _context.SaveChangesAsync();
+            }
+
+            // Link extension to user if provided
+            if (dto.ExtensionId.HasValue)
+            {
+                var extension = await _context.Extensions.FindAsync(dto.ExtensionId.Value);
+                if (extension != null)
+                {
+                    extension.UserId = user.UserId;
+                    extension.IsPrimary = true;
+                    extension.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
             }
 
             _logger.LogInformation("User created: {Email} by admin", dto.Email);
@@ -447,6 +480,7 @@ namespace ProjectTracker.API.Controllers
         public string? LinkedEmpId { get; set; }
         public string? LinkedEmployeeName { get; set; }
         public DateTime? Birthday { get; set; }
+        public string? PrimaryExtension { get; set; }
     }
 
     public class UserDetailDto
@@ -470,6 +504,17 @@ namespace ProjectTracker.API.Controllers
         public string? LinkedEmpId { get; set; }
         public string? LinkedEmployeeName { get; set; }
         public DateTime? Birthday { get; set; }
+        public string? PrimaryExtension { get; set; }
+        public List<ExtensionSummaryDto> Extensions { get; set; } = new();
+    }
+
+    public class ExtensionSummaryDto
+    {
+        public int ExtensionId { get; set; }
+        public string ExtensionNumber { get; set; } = string.Empty;
+        public string? Label { get; set; }
+        public string? ExtensionType { get; set; }
+        public bool IsPrimary { get; set; }
     }
 
     public class CreateUserDto
@@ -486,6 +531,7 @@ namespace ProjectTracker.API.Controllers
         public List<int>? CompanyIds { get; set; }
         public string? LinkedEmpId { get; set; }
         public DateTime? Birthday { get; set; }
+        public int? ExtensionId { get; set; } // Link an existing extension during user creation
     }
 
     public class UpdateUserDto

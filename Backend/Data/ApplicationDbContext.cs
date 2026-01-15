@@ -20,6 +20,8 @@ namespace ProjectTracker.API.Data
         public DbSet<User> Users { get; set; }
         public DbSet<Department> Departments { get; set; }
         public DbSet<Board> Boards { get; set; }
+        public DbSet<BoardChecklistItem> BoardChecklistItems { get; set; }
+        public DbSet<BoardMember> BoardMembers { get; set; }
         public DbSet<List> Lists { get; set; }
         public DbSet<Card> Cards { get; set; }
         public DbSet<CardComment> CardComments { get; set; }
@@ -77,6 +79,9 @@ namespace ProjectTracker.API.Data
         // Announcement System
         public DbSet<Announcement> Announcements { get; set; }
         public DbSet<AnnouncementRead> AnnouncementReads { get; set; }
+
+        // Phone Extension System
+        public DbSet<Extension> Extensions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

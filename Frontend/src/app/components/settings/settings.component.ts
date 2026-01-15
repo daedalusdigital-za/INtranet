@@ -806,10 +806,18 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Ope
     }
   `,
   styles: [`
+    :host {
+      display: block;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
     .settings-container {
-      padding: 24px;
+      padding: 80px;
       max-width: 1400px;
       margin: 0 auto;
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
     }
 
     .settings-header {
@@ -826,24 +834,25 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Ope
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #1976d2;
+      color: #ffffff;
     }
 
     .header-content h1 {
       margin: 0;
       font-size: 2rem;
-      color: #333;
+      color: #ffffff;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .header-content p {
       margin: 4px 0 0 0;
-      color: #666;
+      color: rgba(255, 255, 255, 0.9);
     }
 
     .settings-tabs {
       background: white;
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
     }
 
     ::ng-deep .mat-mdc-tab-labels {

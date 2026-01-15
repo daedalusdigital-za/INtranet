@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ProjectTracker.API.Data;
 
@@ -11,9 +12,11 @@ using ProjectTracker.API.Data;
 namespace ProjectTracker.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260115074323_AddBoardMembersAndCardCreator")]
+    partial class AddBoardMembersAndCardCreator
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3284,74 +3287,6 @@ namespace ProjectTracker.API.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ProjectTracker.API.Models.Extension", b =>
-                {
-                    b.Property<int>("ExtensionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ExtensionId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("DepartmentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("ExtensionNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("ExtensionType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPrimary")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Location")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MacAddress")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PbxDeviceId")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PhoneModel")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("ExtensionId");
-
-                    b.HasIndex("DepartmentId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("Extensions");
-                });
-
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseChunk", b =>
                 {
                     b.Property<int>("Id")
@@ -4612,21 +4547,6 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("ProjectTracker.API.Models.Extension", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.Department", "Department")
-                        .WithMany()
-                        .HasForeignKey("DepartmentId");
-
-                    b.HasOne("ProjectTracker.API.Models.User", "User")
-                        .WithMany("Extensions")
-                        .HasForeignKey("UserId");
-
-                    b.Navigation("Department");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseChunk", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.KnowledgeBaseDocument", "Document")
@@ -4955,8 +4875,6 @@ namespace ProjectTracker.API.Migrations
             modelBuilder.Entity("ProjectTracker.API.Models.User", b =>
                 {
                     b.Navigation("AssignedCards");
-
-                    b.Navigation("Extensions");
                 });
 #pragma warning restore 612, 618
         }

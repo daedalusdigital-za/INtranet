@@ -43,7 +43,7 @@ export interface CreateAnnouncementDto {
   providedIn: 'root'
 })
 export class AnnouncementService {
-  private baseUrl = `${environment.apiUrl}/api/announcements`;
+  private baseUrl = `${environment.apiUrl}/announcements`;
   private unreadCountSubject = new BehaviorSubject<number>(0);
   public unreadCount$ = this.unreadCountSubject.asObservable();
 

@@ -69,6 +69,9 @@ import { Subscription } from 'rxjs';
       <button mat-button routerLink="/support-ticket" routerLinkActive="active-link">
         <mat-icon>support_agent</mat-icon> Support Ticket
       </button>
+      <button mat-button routerLink="/pbx/active-calls" routerLinkActive="active-link">
+        <mat-icon>phone_in_talk</mat-icon> Active Calls
+      </button>
 
       <span class="spacer"></span>
 

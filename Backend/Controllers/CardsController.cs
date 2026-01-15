@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs;
+using ProjectTracker.API.DTOs.Boards;
 using ProjectTracker.API.Hubs;
 using ProjectTracker.API.Models;
 using System.Security.Claims;
@@ -28,6 +29,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<CardDetailDto>> GetCard(int id)
         {
             var card = await _context.Cards
+                .Include(c => c.CreatedBy)
                 .Include(c => c.AssignedTo)
                 .Include(c => c.Comments).ThenInclude(cc => cc.User)
                 .Include(c => c.Attachments).ThenInclude(ca => ca.UploadedBy)
@@ -38,6 +40,8 @@ namespace ProjectTracker.API.Controllers
                     ListId = c.ListId,
                     Title = c.Title,
                     Description = c.Description,
+                    CreatedByUserId = c.CreatedByUserId,
+                    CreatedByName = c.CreatedBy != null ? c.CreatedBy.Name : null,
                     AssignedToUserId = c.AssignedToUserId,
                     AssignedToName = c.AssignedTo != null ? c.AssignedTo.Name : null,
                     DueDate = c.DueDate,
@@ -45,6 +49,7 @@ namespace ProjectTracker.API.Controllers
                     Position = c.Position,
                     CommentCount = c.Comments.Count,
                     AttachmentCount = c.Attachments.Count,
+                    CreatedAt = c.CreatedAt,
                     Comments = c.Comments.Select(cc => new CommentDto
                     {
                         CommentId = cc.CommentId,
@@ -79,11 +84,52 @@ namespace ProjectTracker.API.Controllers
         [HttpPost]
         public async Task<ActionResult<CardDto>> CreateCard([FromBody] CreateCardDto createCardDto)
         {
+            // Get the board ID for the list
+            var list = await _context.Lists
+                .Include(l => l.Board)
+                .FirstOrDefaultAsync(l => l.ListId == createCardDto.ListId);
+            
+            if (list == null)
+            {
+                return NotFound("List not found");
+            }
+
+            var boardId = list.BoardId;
+
+            // Invite users to the board if specified
+            if (createCardDto.InviteUserIds != null && createCardDto.InviteUserIds.Count > 0)
+            {
+                foreach (var inviteUserId in createCardDto.InviteUserIds)
+                {
+                    // Check if user exists
+                    var inviteUser = await _context.Users.FindAsync(inviteUserId);
+                    if (inviteUser == null) continue;
+
+                    // Check if already a member
+                    var existingMember = await _context.BoardMembers
+                        .FirstOrDefaultAsync(m => m.BoardId == boardId && m.UserId == inviteUserId);
+                    
+                    if (existingMember == null)
+                    {
+                        var member = new BoardMember
+                        {
+                            BoardId = boardId,
+                            UserId = inviteUserId,
+                            Role = "Member",
+                            InvitedAt = DateTime.UtcNow,
+                            InvitedByUserId = createCardDto.CreatedByUserId
+                        };
+                        _context.BoardMembers.Add(member);
+                    }
+                }
+            }
+
             var card = new Card
             {
                 ListId = createCardDto.ListId,
                 Title = createCardDto.Title,
                 Description = createCardDto.Description,
+                CreatedByUserId = createCardDto.CreatedByUserId,
                 AssignedToUserId = createCardDto.AssignedToUserId,
                 DueDate = createCardDto.DueDate,
                 Position = createCardDto.Position,
@@ -94,20 +140,48 @@ namespace ProjectTracker.API.Controllers
             _context.Cards.Add(card);
             await _context.SaveChangesAsync();
 
+            // Get creator and assignee names
+            string? creatorName = null;
+            string? assigneeName = null;
+
+            if (createCardDto.CreatedByUserId.HasValue)
+            {
+                var creator = await _context.Users.FindAsync(createCardDto.CreatedByUserId.Value);
+                creatorName = creator?.Name;
+            }
+
+            if (createCardDto.AssignedToUserId.HasValue)
+            {
+                var assignee = await _context.Users.FindAsync(createCardDto.AssignedToUserId.Value);
+                assigneeName = assignee?.Name;
+            }
+
             // Create audit log
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
             await CreateAuditLog(userId, "Created", "Card", card.CardId, $"Created card: {card.Title}");
 
-            // Get board ID for SignalR
-            var boardId = await _context.Lists
-                .Where(l => l.ListId == card.ListId)
-                .Select(l => l.BoardId)
-                .FirstOrDefaultAsync();
-
             // Notify via SignalR
-            await _hubContext.Clients.Group($"Board_{boardId}").SendAsync("CardCreated", card);
+            var cardDto = new CardDto
+            {
+                CardId = card.CardId,
+                ListId = card.ListId,
+                Title = card.Title,
+                Description = card.Description,
+                CreatedByUserId = card.CreatedByUserId,
+                CreatedByName = creatorName,
+                AssignedToUserId = card.AssignedToUserId,
+                AssignedToName = assigneeName,
+                DueDate = card.DueDate,
+                Status = card.Status,
+                Position = card.Position,
+                CommentCount = 0,
+                AttachmentCount = 0,
+                CreatedAt = card.CreatedAt
+            };
 
-            return CreatedAtAction(nameof(GetCard), new { id = card.CardId }, card);
+            await _hubContext.Clients.Group($"Board_{boardId}").SendAsync("CardCreated", cardDto);
+
+            return CreatedAtAction(nameof(GetCard), new { id = card.CardId }, cardDto);
         }
 
         [HttpPut("{id}")]

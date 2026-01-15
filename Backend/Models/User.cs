@@ -68,6 +68,9 @@ namespace ProjectTracker.API.Models
 
         public ICollection<Card> AssignedCards { get; set; } = new List<Card>();
 
+        // Phone Extensions linked to this user
+        public ICollection<Extension> Extensions { get; set; } = new List<Extension>();
+
         // Computed property for full name
         [NotMapped]
         public string FullName => $"{Name} {Surname}";

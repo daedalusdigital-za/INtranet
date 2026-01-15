@@ -1,5 +1,14 @@
 namespace ProjectTracker.API.DTOs.Users
 {
+    public class ExtensionInfoDto
+    {
+        public int ExtensionId { get; set; }
+        public string ExtensionNumber { get; set; } = string.Empty;
+        public string? Label { get; set; }
+        public string? ExtensionType { get; set; }
+        public bool IsPrimary { get; set; }
+    }
+
     public class UserDto
     {
         public int UserId { get; set; }
@@ -14,6 +23,8 @@ namespace ProjectTracker.API.DTOs.Users
         public string? ProfilePictureUrl { get; set; }
         public DateTime? LastLoginAt { get; set; }
         public DateTime? Birthday { get; set; }
+        public string? PrimaryExtension { get; set; }
+        public List<ExtensionInfoDto> Extensions { get; set; } = new();
     }
 
     public class UserProfileDto
@@ -32,6 +43,8 @@ namespace ProjectTracker.API.DTOs.Users
         public DateTime? LastLoginAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? Birthday { get; set; }
+        public string? PrimaryExtension { get; set; }
+        public List<ExtensionInfoDto> Extensions { get; set; } = new();
     }
 
     public class UpdateProfileDto
@@ -61,6 +74,7 @@ namespace ProjectTracker.API.DTOs.Users
         public bool IsActive { get; set; }
         public DateTime? LastLoginAt { get; set; }
         public DateTime? Birthday { get; set; }
+        public string? PrimaryExtension { get; set; }
     }
 
     public class UserDetailDto : UserDto
@@ -81,6 +95,7 @@ namespace ProjectTracker.API.DTOs.Users
         public int? DepartmentId { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public DateTime? Birthday { get; set; }
+        public int? ExtensionId { get; set; } // Link an existing extension during user creation
     }
 
     public class UpdateUserDto

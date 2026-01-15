@@ -834,7 +834,7 @@ export class CalendarComponent implements OnInit {
   loadTasks(): void {
     if (this.currentUserId === 0) return;
     
-    this.http.get<TodoTask[]>(`${environment.apiUrl}/api/todo/calendar/${this.currentUserId}?month=${this.currentMonth + 1}&year=${this.currentYear}`)
+    this.http.get<TodoTask[]>(`${environment.apiUrl}/todo/calendar/${this.currentUserId}?month=${this.currentMonth + 1}&year=${this.currentYear}`)
       .subscribe({
         next: (tasks) => {
           this.todoTasks = tasks;
@@ -845,7 +845,7 @@ export class CalendarComponent implements OnInit {
   }
 
   loadBirthdays(): void {
-    this.http.get<UserBirthday[]>(`${environment.apiUrl}/api/users/birthdays?month=${this.currentMonth + 1}`)
+    this.http.get<UserBirthday[]>(`${environment.apiUrl}/users/birthdays?month=${this.currentMonth + 1}`)
       .subscribe({
         next: (birthdays) => {
           this.birthdays = birthdays;
@@ -879,7 +879,7 @@ export class CalendarComponent implements OnInit {
     const startDate = new Date(this.currentYear, this.currentMonth, 1);
     const endDate = new Date(this.currentYear, this.currentMonth + 2, 0);
     
-    this.http.get<any[]>(`${environment.apiUrl}/api/meetings/calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
+    this.http.get<any[]>(`${environment.apiUrl}/meetings/calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
       .subscribe({
         next: (meetings) => {
           // Remove existing meeting events
@@ -1017,7 +1017,7 @@ export class CalendarComponent implements OnInit {
   completeTask(task: TodoTask): void {
     if (task.status === 'Pending' || task.isCompleted) return;
 
-    this.http.post(`${environment.apiUrl}/api/todo/${task.id}/complete`, {}).subscribe({
+    this.http.post(`${environment.apiUrl}/todo/${task.id}/complete`, {}).subscribe({
       next: () => {
         this.snackBar.open('Task completed!', 'Close', { duration: 3000 });
         this.loadTasks();

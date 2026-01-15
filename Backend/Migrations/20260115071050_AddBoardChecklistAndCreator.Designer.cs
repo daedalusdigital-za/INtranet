@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ProjectTracker.API.Data;
 
@@ -11,9 +12,11 @@ using ProjectTracker.API.Data;
 namespace ProjectTracker.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260115071050_AddBoardChecklistAndCreator")]
+    partial class AddBoardChecklistAndCreator
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -838,42 +841,6 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("CompletedByUserId");
 
                     b.ToTable("BoardChecklistItems");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.BoardMember", b =>
-                {
-                    b.Property<int>("BoardMemberId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("BoardMemberId"));
-
-                    b.Property<int>("BoardId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("InvitedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("InvitedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("BoardMemberId");
-
-                    b.HasIndex("BoardId");
-
-                    b.HasIndex("InvitedByUserId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("BoardMembers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CRM.Campaign", b =>
@@ -2639,9 +2606,6 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("CreatedByUserId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
@@ -2671,8 +2635,6 @@ namespace ProjectTracker.API.Migrations
                     b.HasKey("CardId");
 
                     b.HasIndex("AssignedToUserId");
-
-                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("ListId");
 
@@ -3282,74 +3244,6 @@ namespace ProjectTracker.API.Migrations
                             ShiftEndTime = new TimeSpan(0, 17, 0, 0, 0),
                             ShiftStartTime = new TimeSpan(0, 8, 0, 0, 0)
                         });
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.Extension", b =>
-                {
-                    b.Property<int>("ExtensionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ExtensionId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("DepartmentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("ExtensionNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("ExtensionType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPrimary")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Location")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MacAddress")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PbxDeviceId")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PhoneModel")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("ExtensionId");
-
-                    b.HasIndex("DepartmentId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("Extensions");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseChunk", b =>
@@ -4275,31 +4169,6 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("CompletedBy");
                 });
 
-            modelBuilder.Entity("ProjectTracker.API.Models.BoardMember", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.Board", "Board")
-                        .WithMany("Members")
-                        .HasForeignKey("BoardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.User", "InvitedBy")
-                        .WithMany()
-                        .HasForeignKey("InvitedByUserId");
-
-                    b.HasOne("ProjectTracker.API.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Board");
-
-                    b.Navigation("InvitedBy");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("ProjectTracker.API.Models.CRM.Campaign", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
@@ -4538,10 +4407,6 @@ namespace ProjectTracker.API.Migrations
                         .HasForeignKey("AssignedToUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("ProjectTracker.API.Models.User", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId");
-
                     b.HasOne("ProjectTracker.API.Models.List", "List")
                         .WithMany("Cards")
                         .HasForeignKey("ListId")
@@ -4549,8 +4414,6 @@ namespace ProjectTracker.API.Migrations
                         .IsRequired();
 
                     b.Navigation("AssignedTo");
-
-                    b.Navigation("CreatedBy");
 
                     b.Navigation("List");
                 });
@@ -4608,21 +4471,6 @@ namespace ProjectTracker.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Conversation");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.Extension", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.Department", "Department")
-                        .WithMany()
-                        .HasForeignKey("DepartmentId");
-
-                    b.HasOne("ProjectTracker.API.Models.User", "User")
-                        .WithMany("Extensions")
-                        .HasForeignKey("UserId");
-
-                    b.Navigation("Department");
 
                     b.Navigation("User");
                 });
@@ -4844,8 +4692,6 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("ChecklistItems");
 
                     b.Navigation("Lists");
-
-                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CRM.Campaign", b =>
@@ -4955,8 +4801,6 @@ namespace ProjectTracker.API.Migrations
             modelBuilder.Entity("ProjectTracker.API.Models.User", b =>
                 {
                     b.Navigation("AssignedCards");
-
-                    b.Navigation("Extensions");
                 });
 #pragma warning restore 612, 618
         }

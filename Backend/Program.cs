@@ -5,6 +5,7 @@ using System.Text;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Services;
 using ProjectTracker.API.Hubs;
+using ProjectTracker.API.DTOs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,6 +54,12 @@ builder.Services.AddCors(options =>
 // Add SignalR
 builder.Services.AddSignalR();
 
+// Add Memory Cache for PBX session management
+builder.Services.AddMemoryCache();
+
+// Configure PBX Settings
+builder.Services.Configure<PbxSettings>(builder.Configuration.GetSection("PbxSettings"));
+
 // Add HttpClient for AI service
 builder.Services.AddHttpClient();
 
@@ -60,6 +67,9 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+
+// Add PBX Service (singleton to maintain session cache)
+builder.Services.AddSingleton<IPbxService, PbxService>();
 
 // Add Knowledge Base Service (must be registered before LlamaAIService)
 builder.Services.AddSingleton<IKnowledgeBaseService, KnowledgeBaseService>();
