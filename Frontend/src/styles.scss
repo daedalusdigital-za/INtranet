@@ -50,3 +50,14 @@ mat-toolbar mat-icon {
   --mat-snack-bar-button-color: #fff;
 }
 
+/* Prevent scrolling in dialogs - make them expand to full width */
+.no-scroll-dialog .mat-mdc-dialog-container {
+  max-height: none !important;
+  height: auto !important;
+}
+
+.no-scroll-dialog .mat-mdc-dialog-content {
+  max-height: none !important;
+  overflow: visible !important;
+}
+

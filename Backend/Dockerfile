@@ -18,7 +18,7 @@ RUN dotnet publish "ProjectTracker.API.csproj" -c Release -o /app/publish /p:Use
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-EXPOSE 80
+EXPOSE 5143
 EXPOSE 443
 
 COPY --from=publish /app/publish .

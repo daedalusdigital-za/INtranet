@@ -69,9 +69,6 @@ import { Subscription } from 'rxjs';
       <button mat-button routerLink="/support-ticket" routerLinkActive="active-link">
         <mat-icon>support_agent</mat-icon> Support Ticket
       </button>
-      <button mat-button routerLink="/pbx/active-calls" routerLinkActive="active-link">
-        <mat-icon>phone_in_talk</mat-icon> Active Calls
-      </button>
 
       <span class="spacer"></span>
 
@@ -224,8 +221,14 @@ import { Subscription } from 'rxjs';
           <mat-icon>print</mat-icon>
           <span>Quick Print</span>
         </button>
-        @if (isAdmin()) {
+        @if (isAdmin() || isManager()) {
           <mat-divider></mat-divider>
+          <button mat-menu-item routerLink="/call-center">
+            <mat-icon>call</mat-icon>
+            <span>Call Center</span>
+          </button>
+        }
+        @if (isAdmin()) {
           <button mat-menu-item routerLink="/settings">
             <mat-icon>admin_panel_settings</mat-icon>
             <span>Admin Settings</span>

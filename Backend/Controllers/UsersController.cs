@@ -415,6 +415,31 @@ namespace ProjectTracker.API.Controllers
             user.IsActive = !user.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
 
+            // If deactivating user, delete all their messages
+            if (!user.IsActive)
+            {
+                var userMessages = await _context.Messages
+                    .Where(m => m.SenderId == id)
+                    .Include(m => m.Attachments)
+                    .Include(m => m.ReadReceipts)
+                    .ToListAsync();
+
+                if (userMessages.Any())
+                {
+                    // Remove all attachments and read receipts first
+                    foreach (var message in userMessages)
+                    {
+                        _context.MessageAttachments.RemoveRange(message.Attachments);
+                        _context.MessageReadReceipts.RemoveRange(message.ReadReceipts);
+                    }
+
+                    // Remove the messages
+                    _context.Messages.RemoveRange(userMessages);
+
+                    _logger.LogInformation("Deleted {Count} messages from deactivated user {UserId}", userMessages.Count, id);
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("User {UserId} active status toggled to: {IsActive}", id, user.IsActive);

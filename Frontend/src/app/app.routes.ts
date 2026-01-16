@@ -51,7 +51,10 @@ export const routes: Routes = [
   { path: 'messages', component: MessagesComponent, canActivate: [authGuard] },
   { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: 'board/:id', component: BoardComponent, canActivate: [authGuard] },
-  { path: 'pbx/active-calls', component: ActiveCallsComponent, canActivate: [authGuard] },
+  { path: 'call-history', component: ActiveCallsComponent, canActivate: [authGuard] },
+  { path: 'my-extension', component: ActiveCallsComponent, canActivate: [authGuard] },
+  { path: 'call-center', component: ActiveCallsComponent, canActivate: [authGuard] },
+  { path: 'pbx/active-calls', redirectTo: '/call-history', pathMatch: 'full' },
   
   // 404 Page - must be last
   { path: '404', component: NotFoundComponent },

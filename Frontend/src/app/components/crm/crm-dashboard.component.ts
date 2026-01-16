@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -242,7 +242,7 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
               </mat-card-header>
               <mat-card-content>
                 <div class="agent-list">
-                  @for (agent of dashboard()?.agentPerformance; track agent.agentId) {
+                  @for (agent of displayedAgents(); track agent.agentId) {
                     <div class="agent-row">
                       <div class="agent-info">
                         <div class="agent-avatar">
@@ -274,6 +274,19 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
                     </div>
                   }
                 </div>
+                @if ((dashboard()?.agentPerformance?.length || 0) > 5) {
+                  <div class="expand-section">
+                    <button mat-button color="primary" (click)="toggleExpandAgents()">
+                      @if (showAllAgents()) {
+                        <mat-icon>expand_less</mat-icon>
+                        Show Less
+                      } @else {
+                        <mat-icon>expand_more</mat-icon>
+                        Show All ({{ dashboard()?.agentPerformance?.length }})
+                      }
+                    </button>
+                  </div>
+                }
               </mat-card-content>
             </mat-card>
           }
@@ -664,6 +677,20 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
       color: #f44336;
     }
 
+    .expand-section {
+      display: flex;
+      justify-content: center;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+      margin-top: 12px;
+    }
+
+    .expand-section button {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
     .empty-state {
       display: flex;
       flex-direction: column;
@@ -740,6 +767,17 @@ export class CrmDashboardComponent implements OnInit {
   loading = signal(true);
   isManager = signal(false);
   noCompaniesAssigned = signal(false);
+  showAllAgents = signal(false);
+
+  // Computed signal to limit displayed agents to 5 unless expanded
+  displayedAgents = computed(() => {
+    const agents = this.dashboard()?.agentPerformance || [];
+    return this.showAllAgents() ? agents : agents.slice(0, 5);
+  });
+
+  toggleExpandAgents() {
+    this.showAllAgents.set(!this.showAllAgents());
+  }
 
   ngOnInit() {
     this.crmService.currentCompany$.subscribe(company => {

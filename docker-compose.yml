@@ -22,14 +22,14 @@ services:
     container_name: projecttracker-backend
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:80
+      - ASPNETCORE_URLS=http://+:5143
       - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationThatIsLongEnough123456!
       - ConnectionStrings__DefaultConnection=Server=database;Database=ProjectTrackerDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;
       - KnowledgeBase__DocumentsPath=/app/kb-docs
       - DocumentsPath=/app/documents
     ports:
-      - "0.0.0.0:5000:80"
+      - "0.0.0.0:5143:5143"
     volumes:
       - kb-docs:/app/kb-docs
       - ./documents:/app/documents

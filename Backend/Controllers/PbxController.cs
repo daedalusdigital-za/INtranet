@@ -154,6 +154,58 @@ namespace ProjectTracker.API.Controllers
         }
 
         /// <summary>
+        /// Receive CDR reports pushed from the PBX (NEW HTTPS API)
+        /// This endpoint receives call reports that the UCM pushes automatically
+        /// </summary>
+        [HttpPost("cdr-report")]
+        [AllowAnonymous] // PBX pushes without auth - secure via IP whitelist
+        public async Task<ActionResult> ReceiveCdrReport([FromBody] object report)
+        {
+            try
+            {
+                var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+                _logger.LogInformation("Received CDR report from PBX at {IP}: {Report}", 
+                    clientIp, System.Text.Json.JsonSerializer.Serialize(report));
+
+                // Process the incoming CDR report
+                // The UCM sends call records in JSON format when calls complete
+                await _pbxService.ProcessPushedCdrReportAsync(report);
+
+                return Ok(new { status = "received", timestamp = DateTime.UtcNow });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing CDR report from PBX");
+                // Still return OK to prevent PBX from retrying
+                return Ok(new { status = "error", message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Receive system status reports pushed from the PBX
+        /// </summary>
+        [HttpPost("status-report")]
+        [AllowAnonymous] // PBX pushes without auth
+        public async Task<ActionResult> ReceiveStatusReport([FromBody] object report)
+        {
+            try
+            {
+                var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+                _logger.LogInformation("Received status report from PBX at {IP}", clientIp);
+
+                // Log and process the system report
+                await _pbxService.ProcessPushedStatusReportAsync(report);
+
+                return Ok(new { status = "received", timestamp = DateTime.UtcNow });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing status report from PBX");
+                return Ok(new { status = "error", message = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Test PBX connection
         /// </summary>
         [HttpGet("test-connection")]

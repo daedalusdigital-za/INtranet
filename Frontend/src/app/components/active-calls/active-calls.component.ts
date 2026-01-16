@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
+import { Router, ActivatedRoute } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -67,10 +68,10 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
       <div class="page-header">
         <div class="header-content">
           <div class="header-title">
-            <mat-icon class="header-icon">phone_in_talk</mat-icon>
+            <mat-icon class="header-icon">{{ isCallCenterMode ? 'call' : 'phone_in_talk' }}</mat-icon>
             <div>
-              <h1>PBX Active Calls Monitor</h1>
-              <p class="subtitle">Real-time call monitoring and history</p>
+              <h1>{{ pageTitle }}</h1>
+              <p class="subtitle">{{ pageSubtitle }}</p>
             </div>
           </div>
           <div class="header-actions">
@@ -341,9 +342,9 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
                   <ng-container matColumnDef="direction">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Direction</th>
                     <td mat-cell *matCellDef="let record">
-                      <mat-chip [class]="'direction-' + record.direction.toLowerCase()">
+                      <mat-chip [class]="'direction-' + (record.direction || 'unknown').toLowerCase()">
                         <mat-icon>{{ getDirectionIcon(record.direction) }}</mat-icon>
-                        {{ record.direction }}
+                        {{ record.direction || 'Unknown' }}
                       </mat-chip>
                     </td>
                   </ng-container>
@@ -355,6 +356,9 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
                         <span class="number">{{ record.callerNumber }}</span>
                         @if (record.callerName) {
                           <span class="name">{{ record.callerName }}</span>
+                        }
+                        @if (record.callerDepartment) {
+                          <span class="department">{{ record.callerDepartment }}</span>
                         }
                       </div>
                     </td>
@@ -368,6 +372,9 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
                         @if (record.calleeName) {
                           <span class="name">{{ record.calleeName }}</span>
                         }
+                        @if (record.calleeDepartment) {
+                          <span class="department">{{ record.calleeDepartment }}</span>
+                        }
                       </div>
                     </td>
                   </ng-container>
@@ -380,8 +387,8 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
                   <ng-container matColumnDef="disposition">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
                     <td mat-cell *matCellDef="let record">
-                      <mat-chip [class]="'disposition-' + record.disposition.toLowerCase().replace(' ', '-')">
-                        {{ record.disposition }}
+                      <mat-chip [class]="'disposition-' + (record.disposition || 'unknown').toLowerCase().replace(' ', '-')">
+                        {{ record.disposition || 'Unknown' }}
                       </mat-chip>
                     </td>
                   </ng-container>
@@ -456,7 +463,7 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
             } @else {
               <div class="extensions-grid">
                 @for (ext of extensionStatuses; track ext.extension) {
-                  <mat-card class="extension-card" [class]="'status-' + ext.status.toLowerCase()">
+                  <mat-card class="extension-card" [class]="'status-' + (ext.status || 'unknown').toLowerCase()">
                     <mat-card-header>
                       <div mat-card-avatar class="ext-avatar">
                         <mat-icon>{{ getExtensionIcon(ext.status) }}</mat-icon>
@@ -487,8 +494,8 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
                       </div>
                     </mat-card-content>
                     <mat-card-actions>
-                      <mat-chip [class]="'status-chip-' + ext.status.toLowerCase()">
-                        {{ ext.statusText || ext.status }}
+                      <mat-chip [class]="'status-chip-' + (ext.status || 'unknown').toLowerCase()">
+                        {{ ext.statusText || ext.status || 'Unknown' }}
                       </mat-chip>
                     </mat-card-actions>
                   </mat-card>
@@ -845,6 +852,13 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
       color: #666;
     }
 
+    .caller-info .department {
+      font-size: 11px;
+      color: #888;
+      font-style: italic;
+      margin-top: 2px;
+    }
+
     .direction-inbound { background: #e8f5e9 !important; color: #2e7d32 !important; }
     .direction-outbound { background: #e3f2fd !important; color: #1565c0 !important; }
     .direction-internal { background: #f3e5f5 !important; color: #7b1fa2 !important; }
@@ -948,6 +962,11 @@ import { ActiveCall, ActiveCallsResponse, CdrRecord, CdrResponse, ExtensionStatu
   `]
 })
 export class ActiveCallsComponent implements OnInit, OnDestroy {
+  // Route mode
+  isCallCenterMode = false;
+  pageTitle = 'Call History';
+  pageSubtitle = 'View your call history and extension status';
+  
   // Data
   activeCalls: ActiveCall[] = [];
   activeCallsData: ActiveCallsResponse | null = null;
@@ -982,7 +1001,9 @@ export class ActiveCallsComponent implements OnInit, OnDestroy {
     private apiService: ApiService,
     private authService: AuthService,
     private snackBar: MatSnackBar,
-    private fb: FormBuilder
+    private fb: FormBuilder,
+    private router: Router,
+    private route: ActivatedRoute
   ) {
     this.filterForm = this.fb.group({
       startDate: [null],
@@ -996,6 +1017,22 @@ export class ActiveCallsComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Detect which route we're on
+    const currentUrl = this.router.url;
+    if (currentUrl.includes('/call-center')) {
+      this.isCallCenterMode = true;
+      this.pageTitle = 'Call Center';
+      this.pageSubtitle = 'Monitor all calls and extensions across the organization';
+    } else if (currentUrl.includes('/my-extension')) {
+      this.isCallCenterMode = false;
+      this.pageTitle = 'My Extension';
+      this.pageSubtitle = 'View your phone extension status and settings';
+    } else {
+      this.isCallCenterMode = false;
+      this.pageTitle = 'Call History';
+      this.pageSubtitle = 'View call records and extension status';
+    }
+    
     this.loadInitialData();
     this.startAutoRefresh();
   }

@@ -27,11 +27,44 @@ namespace ProjectTracker.API.Controllers.CRM
             return int.TryParse(userIdClaim, out var id) ? id : 1;
         }
 
+        private bool IsAdmin()
+        {
+            var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+            return roleClaim == "Admin";
+        }
+
         // GET: api/crm/operating-companies
         [HttpGet("operating-companies")]
         public async Task<ActionResult<List<OperatingCompanyDto>>> GetUserOperatingCompanies()
         {
             var userId = GetCurrentUserId();
+
+            // Admin users get access to ALL companies
+            if (IsAdmin())
+            {
+                var allCompanies = await _context.OperatingCompanies
+                    .Where(oc => oc.IsActive)
+                    .OrderBy(oc => oc.Name)
+                    .Select(oc => new OperatingCompanyDto
+                    {
+                        OperatingCompanyId = oc.OperatingCompanyId,
+                        Name = oc.Name,
+                        Code = oc.Code,
+                        Description = oc.Description,
+                        LogoUrl = oc.LogoUrl,
+                        PrimaryColor = oc.PrimaryColor,
+                        IsActive = oc.IsActive,
+                        UserRole = "Admin",
+                        IsPrimaryCompany = false
+                    })
+                    .ToListAsync();
+
+                // Set first company as primary for admin
+                if (allCompanies.Any())
+                    allCompanies[0].IsPrimaryCompany = true;
+
+                return Ok(allCompanies);
+            }
 
             var companies = await _context.StaffOperatingCompanies
                 .Include(soc => soc.OperatingCompany)

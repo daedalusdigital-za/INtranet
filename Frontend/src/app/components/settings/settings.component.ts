@@ -670,6 +670,12 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Ope
                 <input matInput formControlName="title" placeholder="e.g., Senior Developer">
               </mat-form-field>
 
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Extension Number</mat-label>
+                <input matInput formControlName="extensionNumber" placeholder="e.g., 301">
+                <mat-hint>PBX extension number for phone system</mat-hint>
+              </mat-form-field>
+
               <!-- Birthday Section -->
               <div class="form-section birthday-section">
                 <h4><mat-icon>cake</mat-icon> Birthday</h4>
@@ -1723,6 +1729,7 @@ export class SettingsComponent implements OnInit {
       role: ['Employee', Validators.required],
       departmentId: [null],
       title: [''],
+      extensionNumber: [''],
       birthday: [null],
       linkedEmpId: [null],
       isActive: [true]
@@ -1789,6 +1796,7 @@ export class SettingsComponent implements OnInit {
       role: user.role,
       departmentId: user.departmentId,
       title: user.title,
+      extensionNumber: user.extensionNumber || '',
       birthday: user.birthday ? this.formatDateForInput(user.birthday) : null,
       linkedEmpId: user.linkedEmpId || null,
       isActive: user.isActive

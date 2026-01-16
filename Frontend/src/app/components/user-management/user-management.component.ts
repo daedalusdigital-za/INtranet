@@ -949,6 +949,12 @@ export class UserManagementComponent implements OnInit {
           <input matInput formControlName="title" placeholder="e.g., Software Engineer">
         </mat-form-field>
 
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Extension Number</mat-label>
+          <input matInput formControlName="extensionNumber" placeholder="e.g., 301">
+          <mat-hint>PBX extension number for phone system</mat-hint>
+        </mat-form-field>
+
         <div class="birthday-section">
           <h4><mat-icon>cake</mat-icon> Birthday</h4>
           <p class="section-hint">Add birthday to display on the company calendar</p>
@@ -1208,6 +1214,7 @@ export class UserFormDialogComponent {
       role: [user?.role || 'Employee', Validators.required],
       departmentId: [user?.departmentId || null],
       title: [user?.title || ''],
+      extensionNumber: [user?.extensionNumber || ''],
       linkedEmpId: [user?.linkedEmpId || null],
       birthday: [user?.birthday ? this.formatDateForInput(user.birthday) : null],
       isActive: [user?.isActive ?? true]

@@ -173,17 +173,19 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
   `,
   styles: [`
     .meeting-request-dialog {
-      min-width: 550px;
+      width: 100%;
     }
 
     .dialog-header {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 12px;
       padding: 20px 24px;
       background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
       color: white;
       margin: -24px -24px 0 -24px;
+      position: relative;
     }
 
     .header-icon {
@@ -194,12 +196,16 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
     .dialog-header h2 {
       margin: 0;
-      flex: 1;
       font-size: 1.5rem;
+      text-align: center;
     }
 
     .close-btn {
       color: white;
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
     }
 
     .dialog-content {

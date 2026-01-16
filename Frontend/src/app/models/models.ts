@@ -9,7 +9,18 @@ export interface User {
   departmentId?: number;
   departmentName?: string;
   profilePictureUrl?: string;
+  phoneExtension?: string;
+  primaryExtension?: string;
+  extensions?: ExtensionInfo[];
   lastLoginAt?: Date;
+}
+
+export interface ExtensionInfo {
+  extensionId: number;
+  extensionNumber: string;
+  label?: string;
+  extensionType?: string;
+  isPrimary: boolean;
 }
 
 export interface LoginRequest {
@@ -205,8 +216,10 @@ export interface CdrRecord {
   callId: string;
   callerNumber: string;
   callerName: string;
+  callerDepartment?: string;
   calleeNumber: string;
   calleeName: string;
+  calleeDepartment?: string;
   direction: string;
   startTime: Date;
   answerTime: Date;
@@ -221,6 +234,12 @@ export interface CdrRecord {
   recordingUrl: string;
   didNumber: string;
   queueName: string;
+  // Additional fields for compatibility
+  source?: string;
+  destination?: string;
+  callerIdNum?: string;
+  callDate?: Date;
+  status?: string;
 }
 
 export interface CdrQuery {
@@ -252,6 +271,8 @@ export interface ExtensionStatus {
   statusText: string;
   ipAddress: string;
   deviceType: string;
+  userAgent?: string;
+  callerIdName?: string;
   registered: boolean;
   lastSeen: Date;
   currentCallId: string;

@@ -67,6 +67,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<IDatabaseSeederService, DatabaseSeederService>();
 
 // Add PBX Service (singleton to maintain session cache)
 builder.Services.AddSingleton<IPbxService, PbxService>();

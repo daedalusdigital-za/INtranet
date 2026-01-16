@@ -26,9 +26,21 @@ namespace ProjectTracker.API.Services
         {
             _logger.LogInformation("Azure Sync Service starting...");
 
-            // Initial sync on startup
-            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken); // Wait for DB to be ready
-            await SyncFromAzureAsync();
+            // Initial sync on startup - wrapped in try-catch to prevent app shutdown
+            try 
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken); // Wait for DB to be ready
+                await SyncFromAzureAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Azure Sync Service cancelled during initial sync.");
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during initial Azure sync - continuing with periodic sync");
+            }
 
             // Periodic sync
             while (!stoppingToken.IsCancellationRequested)

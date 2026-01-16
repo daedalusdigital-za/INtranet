@@ -13,6 +13,7 @@ export interface User {
   title?: string;
   departmentId?: number;
   departmentName?: string;
+  extensionNumber?: string;
   isActive: boolean;
   lastLoginAt?: Date;
   createdAt: Date;
@@ -31,6 +32,7 @@ export interface CreateUserDto {
   password: string;
   role?: string;
   title?: string;
+  extensionNumber?: string;
   permissions?: string[];
   departmentId?: number;
   isActive?: boolean;
@@ -45,6 +47,7 @@ export interface UpdateUserDto {
   email?: string;
   role?: string;
   title?: string;
+  extensionNumber?: string;
   permissions?: string[];
   departmentId?: number;
   isActive?: boolean;
