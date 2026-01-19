@@ -15,6 +15,7 @@ import { MessagesComponent } from './components/messages/messages.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
 import { ActiveCallsComponent } from './components/active-calls/active-calls.component';
+import { LogisticsDashboardComponent } from './components/logistics/logistics-dashboard.component';
 import { authGuard } from './guards/auth.guard';
 
 // CRM Components
@@ -46,6 +47,7 @@ export const routes: Routes = [
   { path: 'support-ticket', component: SupportTicketComponent, canActivate: [authGuard] },
   { path: 'documents', component: DocumentsComponent, canActivate: [authGuard] },
   { path: 'documents/:department', component: DepartmentHubComponent, canActivate: [authGuard] },
+  { path: 'logistics', component: LogisticsDashboardComponent, canActivate: [authGuard] },
   { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
   { path: 'user-management', component: UserManagementComponent, canActivate: [authGuard] },
   { path: 'messages', component: MessagesComponent, canActivate: [authGuard] },

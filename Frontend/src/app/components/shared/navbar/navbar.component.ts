@@ -63,6 +63,9 @@ import { Subscription } from 'rxjs';
       <button mat-button routerLink="/stock-management" routerLinkActive="active-link">
         <mat-icon>inventory</mat-icon> Stock Management
       </button>
+      <button mat-button routerLink="/logistics" routerLinkActive="active-link">
+        <mat-icon>local_shipping</mat-icon> Logistics
+      </button>
       <button mat-button routerLink="/documents" routerLinkActive="active-link">
         <mat-icon>folder</mat-icon> Documents
       </button>

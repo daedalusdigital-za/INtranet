@@ -521,15 +521,33 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
 
     .dashboard-sections {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 24px;
       margin-bottom: 24px;
+      align-items: stretch;
     }
 
     .pipeline-card, .performance-card {
-      height: fit-content;
+      display: flex;
+      flex-direction: column;
       background: rgba(255, 255, 255, 0.95);
       border-radius: 16px;
+      min-height: 400px;
+    }
+
+    .pipeline-card mat-card-content,
+    .performance-card mat-card-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pipeline-stages {
+      flex: 1;
+    }
+
+    .agent-list {
+      flex: 1;
     }
 
     mat-card-header {
@@ -552,6 +570,7 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
       flex-direction: column;
       gap: 12px;
       padding-top: 16px;
+      flex: 1;
     }
 
     .pipeline-stage {
@@ -607,6 +626,7 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
       flex-direction: column;
       gap: 8px;
       padding-top: 16px;
+      flex: 1;
     }
 
     .agent-row {

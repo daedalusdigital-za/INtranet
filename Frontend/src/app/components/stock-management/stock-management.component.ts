@@ -1,7 +1,8 @@
-import { Component, OnInit, Inject } from '@angular/core';
+import { Component, OnInit, Inject, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
@@ -12,9 +13,38 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { environment } from '../../../environments/environment';
+
+interface WarehouseSummary {
+  id: number;
+  name: string;
+  location: string;
+  managerName: string;
+  totalItems: number;
+  categories: number;
+  capacityPercent: number;
+  totalCapacity: number;
+  availableCapacity: number;
+  status: string;
+}
+
+interface WarehouseInventory {
+  id: number;
+  warehouseId: number;
+  warehouseName: string;
+  commodityId: number;
+  commodityName: string;
+  quantityOnHand: number;
+  reorderLevel: number;
+  maximumLevel: number;
+  binLocation: string;
+  lastCountDate: string;
+  lastRestockDate: string;
+}
 
 @Component({
   selector: 'app-stock-management',
@@ -28,6 +58,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     MatTableModule,
     MatDialogModule,
     MatChipsModule,
+    MatProgressSpinnerModule,
     NavbarComponent
   ],
   template: `
@@ -37,52 +68,65 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       <h1>Stock Management</h1>
       <p class="subtitle">Manage your warehouses and inventory</p>
 
-      <div class="warehouses-grid">
-        @for (warehouse of warehouses; track warehouse.id) {
-          <mat-card class="warehouse-card" (click)="openWarehouse(warehouse)">
-            <mat-card-header>
-              <div class="warehouse-icon">
-                <mat-icon>warehouse</mat-icon>
-              </div>
-              <mat-card-title>{{ warehouse.name }}</mat-card-title>
-              <mat-card-subtitle>{{ warehouse.location }}</mat-card-subtitle>
-            </mat-card-header>
-            <mat-card-content>
-              <div class="warehouse-stats">
-                <div class="stat">
-                  <mat-icon>inventory_2</mat-icon>
-                  <div>
-                    <div class="stat-value">{{ warehouse.totalItems }}</div>
-                    <div class="stat-label">Total Items</div>
+      @if (loading) {
+        <div class="loading-container">
+          <mat-spinner diameter="50"></mat-spinner>
+          <p>Loading warehouses...</p>
+        </div>
+      } @else if (warehouses.length === 0) {
+        <div class="empty-state">
+          <mat-icon>warehouse</mat-icon>
+          <h3>No Warehouses Found</h3>
+          <p>No warehouses have been configured yet.</p>
+        </div>
+      } @else {
+        <div class="warehouses-grid">
+          @for (warehouse of warehouses; track warehouse.id) {
+            <mat-card class="warehouse-card" (click)="openWarehouse(warehouse)">
+              <mat-card-header>
+                <div class="warehouse-icon">
+                  <mat-icon>warehouse</mat-icon>
+                </div>
+                <mat-card-title>{{ warehouse.name }}</mat-card-title>
+                <mat-card-subtitle>{{ warehouse.location }}</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="warehouse-stats">
+                  <div class="stat">
+                    <mat-icon>inventory_2</mat-icon>
+                    <div>
+                      <div class="stat-value">{{ warehouse.totalItems | number }}</div>
+                      <div class="stat-label">Total Items</div>
+                    </div>
+                  </div>
+                  <div class="stat">
+                    <mat-icon>category</mat-icon>
+                    <div>
+                      <div class="stat-value">{{ warehouse.categories }}</div>
+                      <div class="stat-label">Categories</div>
+                    </div>
                   </div>
                 </div>
-                <div class="stat">
-                  <mat-icon>category</mat-icon>
-                  <div>
-                    <div class="stat-value">{{ warehouse.categories }}</div>
-                    <div class="stat-label">Categories</div>
+                <div class="warehouse-capacity">
+                  <div class="capacity-label">
+                    <span>Capacity</span>
+                    <span>{{ warehouse.capacityPercent }}%</span>
+                  </div>
+                  <div class="capacity-bar">
+                    <div class="capacity-fill" [style.width.%]="warehouse.capacityPercent" [class.high]="warehouse.capacityPercent > 80"></div>
                   </div>
                 </div>
-              </div>
-              <div class="warehouse-capacity">
-                <div class="capacity-label">
-                  <span>Capacity</span>
-                  <span>{{ warehouse.capacity }}%</span>
-                </div>
-                <div class="capacity-bar">
-                  <div class="capacity-fill" [style.width.%]="warehouse.capacity" [class.high]="warehouse.capacity > 80"></div>
-                </div>
-              </div>
-            </mat-card-content>
-            <mat-card-actions>
-              <button mat-button color="primary" (click)="viewWarehouseDetails(warehouse); $event.stopPropagation()">
-                <mat-icon>visibility</mat-icon>
-                View Details
-              </button>
-            </mat-card-actions>
-          </mat-card>
-        }
-      </div>
+              </mat-card-content>
+              <mat-card-actions>
+                <button mat-button color="primary" (click)="viewWarehouseDetails(warehouse); $event.stopPropagation()">
+                  <mat-icon>visibility</mat-icon>
+                  View Details
+                </button>
+              </mat-card-actions>
+            </mat-card>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -237,57 +281,79 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       padding: 16px;
       border-top: 1px solid #e0e0e0;
     }
+
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+      color: white;
+    }
+
+    .loading-container p {
+      margin-top: 16px;
+      font-size: 1.1rem;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      color: white;
+    }
+
+    .empty-state mat-icon {
+      font-size: 72px;
+      width: 72px;
+      height: 72px;
+      margin-bottom: 16px;
+      opacity: 0.8;
+    }
+
+    .empty-state h3 {
+      font-size: 1.5rem;
+      margin: 0 0 8px 0;
+    }
+
+    .empty-state p {
+      opacity: 0.8;
+      margin: 0;
+    }
   `]
 })
 export class StockManagementComponent implements OnInit {
-  warehouses = [
-    {
-      id: 1,
-      name: 'KZN Warehouse',
-      location: 'Durban',
-      totalItems: 12450,
-      categories: 45,
-      capacity: 78,
-      manager: 'John Smith'
-    },
-    {
-      id: 2,
-      name: 'Port Elizabeth Warehouse',
-      location: 'Gqeberha',
-      totalItems: 8320,
-      categories: 32,
-      capacity: 65,
-      manager: 'Sarah Johnson'
-    },
-    {
-      id: 3,
-      name: 'Gauteng Warehouse',
-      location: 'Johannesburg',
-      totalItems: 5680,
-      categories: 28,
-      capacity: 45,
-      manager: 'Mike Chen'
-    },
-    {
-      id: 4,
-      name: 'Cape Town Warehouse',
-      location: 'Cape Town',
-      totalItems: 9870,
-      categories: 38,
-      capacity: 85,
-      manager: 'Lisa Wang'
-    }
-  ];
-
+  warehouses: WarehouseSummary[] = [];
+  loading = true;
   notificationCount = 3;
 
   constructor(
     private router: Router,
     private dialog: MatDialog,
-    private authService: AuthService
+    private authService: AuthService,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
+    this.loadWarehouses();
+  }
+
+  loadWarehouses(): void {
+    this.loading = true;
+    this.http.get<WarehouseSummary[]>(`${environment.apiUrl}/warehouses/summary`).subscribe({
+      next: (data) => {
+        this.warehouses = data;
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error loading warehouses:', error);
+        this.loading = false;
+      }
+    });
   }
 
   viewWarehouseDetails(warehouse: any): void {
@@ -324,7 +390,8 @@ export class StockManagementComponent implements OnInit {
     MatFormFieldModule,
     MatInputModule,
     MatCheckboxModule,
-    MatSelectModule
+    MatSelectModule,
+    MatProgressSpinnerModule
   ],
   template: `
     <div class="modern-dialog">
@@ -1327,13 +1394,14 @@ export class StockManagementComponent implements OnInit {
     }
   `]
 })
-export class WarehouseDetailsDialog {
-  displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'unitPrice', 'totalValue', 'status'];
+export class WarehouseDetailsDialog implements OnInit {
+  displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'status'];
   searchQuery: string = '';
   selection = new SelectionModel<any>(true, []);
   showTransferDialog = false;
   selectedWarehouse: string = '';
   transferQuantities: { [key: string]: number } = {};
+  loading = true;
 
   // GRV properties
   showGRVDialog = false;
@@ -1342,37 +1410,62 @@ export class WarehouseDetailsDialog {
   selectedGRVItems: any[] = [];
   grvQuantities: { [key: string]: number } = {};
 
-  warehouses = [
-    'KZN Warehouse',
-    'Port Elizabeth Warehouse',
-    'Gauteng Warehouse',
-    'Cape Town Warehouse'
-  ];
+  warehouses: string[] = [];
+  inventoryData: any[] = [];
+  filteredInventoryData: any[] = [];
 
-  inventoryData = [
-    { name: 'Laptop Dell XPS 15', sku: 'LAP-001', category: 'Access', quantity: 45, unitPrice: 42000, status: 'In Stock' },
-    { name: 'Office Chair Ergonomic', sku: 'FUR-023', category: 'Promed', quantity: 8, unitPrice: 8500, status: 'Low Stock' },
-    { name: 'Wireless Mouse Logitech', sku: 'ACC-156', category: 'Pharama', quantity: 120, unitPrice: 890, status: 'In Stock' },
-    { name: 'Monitor 27" 4K', sku: 'MON-089', category: 'Sebenzani', quantity: 0, unitPrice: 15000, status: 'Out of Stock' },
-    { name: 'Desk Lamp LED', sku: 'LIG-045', category: 'Access', quantity: 65, unitPrice: 1200, status: 'In Stock' },
-    { name: 'Keyboard Mechanical', sku: 'ACC-201', category: 'Promed', quantity: 12, unitPrice: 3500, status: 'Low Stock' },
-    { name: 'Standing Desk Adjustable', sku: 'FUR-087', category: 'Pharama', quantity: 22, unitPrice: 18000, status: 'In Stock' },
-    { name: 'Webcam HD 1080p', sku: 'ACC-312', category: 'Sebenzani', quantity: 85, unitPrice: 2200, status: 'In Stock' },
-    { name: 'Printer Multifunction', sku: 'OFF-156', category: 'Access', quantity: 5, unitPrice: 12000, status: 'Low Stock' },
-    { name: 'USB Hub 7-Port', sku: 'ACC-445', category: 'Promed', quantity: 150, unitPrice: 650, status: 'In Stock' },
-    { name: 'External Hard Drive 2TB', sku: 'STO-234', category: 'Pharama', quantity: 92, unitPrice: 2800, status: 'In Stock' },
-    { name: 'Headset Noise Cancelling', sku: 'AUD-178', category: 'Sebenzani', quantity: 38, unitPrice: 4500, status: 'In Stock' },
-    { name: 'Whiteboard Magnetic', sku: 'OFF-289', category: 'Access', quantity: 15, unitPrice: 3200, status: 'In Stock' },
-    { name: 'Paper Shredder', sku: 'OFF-401', category: 'Promed', quantity: 6, unitPrice: 5500, status: 'Low Stock' },
-    { name: 'Cable Organizer Set', sku: 'ACC-567', category: 'Pharama', quantity: 200, unitPrice: 350, status: 'In Stock' }
-  ];
-
-  filteredInventoryData = [...this.inventoryData];
+  private http = inject(HttpClient);
 
   constructor(
     public dialogRef: MatDialogRef<WarehouseDetailsDialog>,
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {}
+
+  ngOnInit(): void {
+    this.loadInventory();
+    this.loadAllWarehouses();
+  }
+
+  loadInventory(): void {
+    this.loading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/warehouses/${this.data.id}/inventory`).subscribe({
+      next: (data) => {
+        this.inventoryData = data.map(item => ({
+          id: item.id,
+          name: item.commodityName,
+          sku: `COM-${item.commodityId.toString().padStart(3, '0')}`,
+          category: 'General',
+          quantity: item.quantityOnHand,
+          reorderLevel: item.reorderLevel,
+          binLocation: item.binLocation,
+          status: this.getStockStatus(item.quantityOnHand, item.reorderLevel)
+        }));
+        this.filteredInventoryData = [...this.inventoryData];
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error loading inventory:', error);
+        this.loading = false;
+      }
+    });
+  }
+
+  loadAllWarehouses(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/warehouses/summary`).subscribe({
+      next: (data) => {
+        this.warehouses = data
+          .filter(w => w.id !== this.data.id)
+          .map(w => w.name);
+      },
+      error: (error) => console.error('Error loading warehouses:', error)
+    });
+  }
+
+  getStockStatus(quantity: number, reorderLevel: number | null): string {
+    if (quantity === 0) return 'Out of Stock';
+    if (reorderLevel && quantity <= reorderLevel) return 'Low Stock';
+    return 'In Stock';
+  }
 
   isAllSelected() {
     const numSelected = this.selection.selected.length;

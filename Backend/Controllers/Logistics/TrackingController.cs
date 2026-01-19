@@ -27,6 +27,30 @@ namespace ProjectTracker.API.Controllers.Logistics
             _logger = logger;
         }
 
+        [AllowAnonymous]
+        [HttpGet("test-cartrack")]
+        public async Task<ActionResult> TestCarTrackConnection()
+        {
+            try
+            {
+                var status = await _carTrackService.GetFleetStatusAsync();
+                return Ok(new { 
+                    success = true, 
+                    message = "CarTrack connection successful",
+                    totalVehicles = status.TotalVehicles,
+                    moving = status.VehiclesMoving,
+                    stopped = status.VehiclesStopped,
+                    idling = status.VehiclesIdling,
+                    offline = status.VehiclesOffline
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "CarTrack test failed");
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet("fleet-status")]
         public async Task<ActionResult<FleetStatusDto>> GetFleetStatus()
         {
@@ -167,8 +191,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     tracking.DistanceToNextStop = CalculateDistance(
                         location.Location.Latitude,
                         location.Location.Longitude,
-                        nextStop.Latitude.Value,
-                        nextStop.Longitude.Value
+                        (double)nextStop.Latitude.Value,
+                        (double)nextStop.Longitude.Value
                     );
 
                     // Estimate ETA based on current speed (if moving)

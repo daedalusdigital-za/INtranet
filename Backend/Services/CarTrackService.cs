@@ -60,6 +60,8 @@ namespace ProjectTracker.API.Services
                 }
 
                 var content = await response.Content.ReadAsStringAsync();
+                _logger.LogDebug($"CarTrack API response: {content.Substring(0, Math.Min(500, content.Length))}...");
+                
                 var carTrackResponse = JsonSerializer.Deserialize<CarTrackApiResponse>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -67,27 +69,52 @@ namespace ProjectTracker.API.Services
 
                 if (carTrackResponse?.Data == null)
                 {
+                    _logger.LogWarning("CarTrack API returned null data");
                     return new List<VehicleLocationDto>();
                 }
 
-                var vehicles = carTrackResponse.Data.Select(v => new VehicleLocationDto
-                {
-                    VehicleId = v.VehicleId ?? string.Empty,
-                    VehicleName = v.Name,
-                    Location = v.Location != null ? new LocationDto
+                _logger.LogInformation($"CarTrack returned {carTrackResponse.Data.Count} vehicles");
+
+                var vehicles = carTrackResponse.Data.Select(v => {
+                    DateTime? lastUpdate = null;
+                    if (!string.IsNullOrEmpty(v.Location?.Updated))
                     {
-                        Latitude = v.Location.Latitude,
-                        Longitude = v.Location.Longitude,
-                        Address = v.Location.Address,
-                        Updated = v.Location.Updated
-                    } : null,
-                    Speed = v.Speed ?? 0,
-                    Heading = v.Heading ?? 0,
-                    Status = DetermineVehicleStatus(v.Speed, v.Location?.Updated),
-                    LastUpdate = v.Location?.Updated
+                        if (DateTime.TryParse(v.Location.Updated, out var parsed))
+                            lastUpdate = parsed;
+                    }
+                    else if (!string.IsNullOrEmpty(v.EventTs))
+                    {
+                        if (DateTime.TryParse(v.EventTs, out var parsed))
+                            lastUpdate = parsed;
+                    }
+
+                    var driverName = "";
+                    if (v.Driver != null && !string.IsNullOrEmpty(v.Driver.FirstName))
+                    {
+                        driverName = $"{v.Driver.FirstName} {v.Driver.LastName}".Trim();
+                    }
+
+                    return new VehicleLocationDto
+                    {
+                        VehicleId = v.VehicleId?.ToString() ?? string.Empty,
+                        VehicleName = v.Registration ?? $"Vehicle {v.VehicleId}",
+                        RegistrationNumber = v.Registration,
+                        CurrentDriverName = driverName,
+                        Location = v.Location != null ? new LocationDto
+                        {
+                            Latitude = v.Location.Latitude ?? 0,
+                            Longitude = v.Location.Longitude ?? 0,
+                            Address = v.Location.PositionDescription ?? "Unknown location",
+                            Updated = lastUpdate ?? DateTime.UtcNow
+                        } : null,
+                        Speed = v.Speed ?? 0,
+                        Heading = v.Bearing ?? 0,
+                        Status = DetermineVehicleStatus(v.Speed, v.Ignition, lastUpdate),
+                        LastUpdate = lastUpdate
+                    };
                 }).ToList();
 
-                _logger.LogInformation($"Successfully fetched {vehicles.Count} vehicle locations");
+                _logger.LogInformation($"Successfully processed {vehicles.Count} vehicle locations");
                 return vehicles;
             }
             catch (Exception ex)
@@ -131,10 +158,13 @@ namespace ProjectTracker.API.Services
                     TotalVehicles = vehicles.Count,
                     VehiclesMoving = vehicles.Count(v => v.Status == "moving"),
                     VehiclesStopped = vehicles.Count(v => v.Status == "stopped"),
+                    VehiclesIdling = vehicles.Count(v => v.Status == "idling"),
                     VehiclesOffline = vehicles.Count(v => v.Status == "offline"),
                     Vehicles = vehicles,
                     LastUpdate = DateTime.UtcNow
                 };
+
+                _logger.LogInformation($"Fleet status: {status.TotalVehicles} total, {status.VehiclesMoving} moving, {status.VehiclesStopped} stopped, {status.VehiclesIdling} idling, {status.VehiclesOffline} offline");
 
                 return status;
             }
@@ -156,9 +186,9 @@ namespace ProjectTracker.API.Services
             return null;
         }
 
-        private string DetermineVehicleStatus(double? speed, DateTime? lastUpdate)
+        private string DetermineVehicleStatus(double? speed, bool? ignition, DateTime? lastUpdate)
         {
-            if (lastUpdate == null || DateTime.UtcNow.Subtract(lastUpdate.Value).TotalMinutes > 30)
+            if (lastUpdate == null || DateTime.UtcNow.Subtract(lastUpdate.Value).TotalHours > 24)
             {
                 return "offline";
             }
@@ -168,10 +198,15 @@ namespace ProjectTracker.API.Services
                 return "moving";
             }
 
+            if (ignition == true)
+            {
+                return "idling";
+            }
+
             return "stopped";
         }
 
-        // CarTrack API response models
+        // CarTrack API response models (using snake_case to match API)
         private class CarTrackApiResponse
         {
             public List<CarTrackVehicle>? Data { get; set; }
@@ -179,20 +214,56 @@ namespace ProjectTracker.API.Services
 
         private class CarTrackVehicle
         {
-            public string? VehicleId { get; set; }
-            public string? Name { get; set; }
-            public CarTrackLocation? Location { get; set; }
+            [System.Text.Json.Serialization.JsonPropertyName("vehicle_id")]
+            public long? VehicleId { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("registration")]
+            public string? Registration { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("chassis_number")]
+            public string? ChassisNumber { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("speed")]
             public double? Speed { get; set; }
-            public double? Heading { get; set; }
-            public string? Status { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("bearing")]
+            public double? Bearing { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("ignition")]
+            public bool? Ignition { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("event_ts")]
+            public string? EventTs { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("location")]
+            public CarTrackLocation? Location { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("driver")]
+            public CarTrackDriver? Driver { get; set; }
         }
 
         private class CarTrackLocation
         {
-            public double Latitude { get; set; }
-            public double Longitude { get; set; }
-            public string? Address { get; set; }
-            public DateTime Updated { get; set; }
+            [System.Text.Json.Serialization.JsonPropertyName("latitude")]
+            public double? Latitude { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("longitude")]
+            public double? Longitude { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("position_description")]
+            public string? PositionDescription { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("updated")]
+            public string? Updated { get; set; }
+        }
+
+        private class CarTrackDriver
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("first_name")]
+            public string? FirstName { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("last_name")]
+            public string? LastName { get; set; }
         }
     }
 }

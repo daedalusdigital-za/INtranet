@@ -49,6 +49,32 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(warehouses);
         }
 
+        [HttpGet("summary")]
+        public async Task<ActionResult<IEnumerable<WarehouseSummaryDto>>> GetWarehouseSummaries()
+        {
+            var warehouses = await _context.Warehouses
+                .Include(w => w.Inventory)
+                    .ThenInclude(i => i.Commodity)
+                .Select(w => new WarehouseSummaryDto
+                {
+                    Id = w.Id,
+                    Name = w.Name,
+                    Location = w.City ?? w.Province ?? "Unknown",
+                    ManagerName = w.ManagerName,
+                    TotalItems = w.Inventory.Sum(i => (int)i.QuantityOnHand),
+                    Categories = w.Inventory.Select(i => i.Commodity.Category).Distinct().Count(),
+                    CapacityPercent = w.TotalCapacity.HasValue && w.TotalCapacity > 0
+                        ? (int)(((w.TotalCapacity - (w.AvailableCapacity ?? 0)) / w.TotalCapacity) * 100)
+                        : 0,
+                    TotalCapacity = w.TotalCapacity,
+                    AvailableCapacity = w.AvailableCapacity,
+                    Status = w.Status
+                })
+                .ToListAsync();
+
+            return Ok(warehouses);
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<WarehouseDto>> GetWarehouse(int id)
         {

@@ -7,6 +7,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? VehicleName { get; set; }
         public int? LocalVehicleId { get; set; }
         public string? RegistrationNumber { get; set; }
+        public string? CurrentDriverName { get; set; }
         public LocationDto? Location { get; set; }
         public double Speed { get; set; }
         public double Heading { get; set; }
@@ -41,7 +42,10 @@ namespace ProjectTracker.API.DTOs.Logistics
         public int TotalVehicles { get; set; }
         public int VehiclesMoving { get; set; }
         public int VehiclesStopped { get; set; }
+        public int VehiclesIdling { get; set; }
         public int VehiclesOffline { get; set; }
+        public int MovingCount => VehiclesMoving;
+        public int StationaryCount => VehiclesStopped + VehiclesIdling;
         public List<VehicleLocationDto> Vehicles { get; set; } = new();
         public DateTime LastUpdate { get; set; }
     }

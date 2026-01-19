@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ProjectTracker.API.Data;
 
@@ -11,9 +12,11 @@ using ProjectTracker.API.Data;
 namespace ProjectTracker.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260119085313_AddLogisticsModule")]
+    partial class AddLogisticsModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4080,9 +4083,6 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime?>("ScheduledPickupDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("SourceWarehouseId")
-                        .HasColumnType("int");
-
                     b.Property<string>("SpecialInstructions")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -4103,8 +4103,6 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("DriverId");
-
-                    b.HasIndex("SourceWarehouseId");
 
                     b.HasIndex("VehicleId");
 
@@ -5812,10 +5810,6 @@ namespace ProjectTracker.API.Migrations
                         .HasForeignKey("DriverId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("ProjectTracker.API.Models.Logistics.Warehouse", "SourceWarehouse")
-                        .WithMany()
-                        .HasForeignKey("SourceWarehouseId");
-
                     b.HasOne("ProjectTracker.API.Models.Logistics.Vehicle", "Vehicle")
                         .WithMany("Loads")
                         .HasForeignKey("VehicleId")
@@ -5824,8 +5818,6 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Driver");
-
-                    b.Navigation("SourceWarehouse");
 
                     b.Navigation("Vehicle");
                 });

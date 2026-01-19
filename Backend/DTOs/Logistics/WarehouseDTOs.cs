@@ -20,6 +20,20 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string Status { get; set; } = string.Empty;
     }
 
+    public class WarehouseSummaryDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Location { get; set; }
+        public string? ManagerName { get; set; }
+        public int TotalItems { get; set; }
+        public int Categories { get; set; }
+        public int CapacityPercent { get; set; }
+        public decimal? TotalCapacity { get; set; }
+        public decimal? AvailableCapacity { get; set; }
+        public string Status { get; set; } = "Active";
+    }
+
     public class CreateWarehouseDto
     {
         public string Name { get; set; } = string.Empty;
