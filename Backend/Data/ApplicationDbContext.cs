@@ -83,6 +83,25 @@ namespace ProjectTracker.API.Data
         // Phone Extension System
         public DbSet<Extension> Extensions { get; set; }
 
+        // Logistics System
+        public DbSet<Models.Logistics.Driver> Drivers { get; set; }
+        public DbSet<Models.Logistics.Vehicle> Vehicles { get; set; }
+        public DbSet<Models.Logistics.VehicleType> VehicleTypes { get; set; }
+        public DbSet<Models.Logistics.Customer> LogisticsCustomers { get; set; }
+        public DbSet<Models.Logistics.Warehouse> Warehouses { get; set; }
+        public DbSet<Models.Logistics.Commodity> Commodities { get; set; }
+        public DbSet<Models.Logistics.Load> Loads { get; set; }
+        public DbSet<Models.Logistics.LoadItem> LoadItems { get; set; }
+        public DbSet<Models.Logistics.LoadStop> LoadStops { get; set; }
+        public DbSet<Models.Logistics.WarehouseInventory> WarehouseInventory { get; set; }
+        public DbSet<Models.Logistics.StockTransfer> StockTransfers { get; set; }
+        public DbSet<Models.Logistics.Backorder> Backorders { get; set; }
+        public DbSet<Models.Logistics.ProofOfDelivery> ProofOfDeliveries { get; set; }
+        public DbSet<Models.Logistics.Invoice> Invoices { get; set; }
+        public DbSet<Models.Logistics.InvoiceLineItem> InvoiceLineItems { get; set; }
+        public DbSet<Models.Logistics.VehicleMaintenance> VehicleMaintenance { get; set; }
+        public DbSet<Models.Logistics.CustomerContract> CustomerContracts { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -380,7 +399,7 @@ namespace ProjectTracker.API.Data
         private void SeedData(ModelBuilder modelBuilder)
         {
             var seedDate = new DateTime(2025, 11, 3, 0, 0, 0, DateTimeKind.Utc);
-            
+
             // Seed Departments
             modelBuilder.Entity<Department>().HasData(
                 new Department { DepartmentId = 1, Name = "IT", ManagerName = "Jane Doe", CreatedAt = seedDate },
@@ -390,40 +409,40 @@ namespace ProjectTracker.API.Data
 
             // Seed Users (Password: "Kingsland" - BCrypt verification currently disabled)
             modelBuilder.Entity<User>().HasData(
-                new User 
-                { 
-                    UserId = 1, 
-                    Name = "Admin User", 
-                    Email = "welcome@promedtechnologies.co.za", 
+                new User
+                {
+                    UserId = 1,
+                    Name = "Admin User",
+                    Email = "welcome@promedtechnologies.co.za",
                     PasswordHash = "Kingsland",
                     Role = "Super Admin",
                     CreatedAt = seedDate
                 },
-                new User 
-                { 
-                    UserId = 2, 
-                    Name = "Jane Doe", 
-                    Email = "jane@company.com", 
+                new User
+                {
+                    UserId = 2,
+                    Name = "Jane Doe",
+                    Email = "jane@company.com",
                     PasswordHash = "$2a$11$XQRdlQ8P9RfHOKVYOz5Wy.vHZe8RrH7pNWEJhGCRdPQ6kV0UqKPXm",
                     Role = "Manager",
                     DepartmentId = 1,
                     CreatedAt = seedDate
                 },
-                new User 
-                { 
-                    UserId = 3, 
-                    Name = "Mike Johnson", 
-                    Email = "mike@company.com", 
+                new User
+                {
+                    UserId = 3,
+                    Name = "Mike Johnson",
+                    Email = "mike@company.com",
                     PasswordHash = "$2a$11$XQRdlQ8P9RfHOKVYOz5Wy.vHZe8RrH7pNWEJhGCRdPQ6kV0UqKPXm",
                     Role = "Manager",
                     DepartmentId = 2,
                     CreatedAt = seedDate
                 },
-                new User 
-                { 
-                    UserId = 4, 
-                    Name = "John Smith", 
-                    Email = "john@company.com", 
+                new User
+                {
+                    UserId = 4,
+                    Name = "John Smith",
+                    Email = "john@company.com",
                     PasswordHash = "$2a$11$XQRdlQ8P9RfHOKVYOz5Wy.vHZe8RrH7pNWEJhGCRdPQ6kV0UqKPXm",
                     Role = "Manager",
                     DepartmentId = 3,
@@ -445,7 +464,7 @@ namespace ProjectTracker.API.Data
                 new Board { BoardId = 10, DepartmentId = 1, Title = "Help Desk System", Description = "Help desk system projects", CreatedAt = seedDate },
                 new Board { BoardId = 11, DepartmentId = 1, Title = "Backup Solutions", Description = "Backup and recovery projects", CreatedAt = seedDate },
                 new Board { BoardId = 12, DepartmentId = 1, Title = "Hardware Refresh", Description = "Hardware refresh projects", CreatedAt = seedDate },
-                
+
                 // Logistics Department (9 projects)
                 new Board { BoardId = 13, DepartmentId = 2, Title = "Supply Chain", Description = "Supply chain projects", CreatedAt = seedDate },
                 new Board { BoardId = 14, DepartmentId = 2, Title = "Warehouse Management", Description = "Warehouse projects", CreatedAt = seedDate },
@@ -456,7 +475,7 @@ namespace ProjectTracker.API.Data
                 new Board { BoardId = 19, DepartmentId = 2, Title = "Route Planning", Description = "Route planning projects", CreatedAt = seedDate },
                 new Board { BoardId = 20, DepartmentId = 2, Title = "Distribution Center", Description = "Distribution center projects", CreatedAt = seedDate },
                 new Board { BoardId = 21, DepartmentId = 2, Title = "Quality Control", Description = "Quality control projects", CreatedAt = seedDate },
-                
+
                 // Marketing Department (7 projects)
                 new Board { BoardId = 22, DepartmentId = 3, Title = "Digital Marketing", Description = "Digital marketing projects", CreatedAt = seedDate },
                 new Board { BoardId = 23, DepartmentId = 3, Title = "Content Creation", Description = "Content creation projects", CreatedAt = seedDate },
@@ -484,13 +503,13 @@ namespace ProjectTracker.API.Data
                 new Card { CardId = 4, ListId = 3, Title = "VPN setup complete", Description = "VPN infrastructure deployed", Position = 3, Status = "Completed", CreatedAt = seedDate.AddDays(-15) },
                 new Card { CardId = 5, ListId = 3, Title = "Monitoring tools deployed", Description = "Infrastructure monitoring tools active", Position = 4, Status = "Completed", CreatedAt = seedDate.AddDays(-10) },
                 new Card { CardId = 6, ListId = 3, Title = "Documentation updated", Description = "All infrastructure documentation current", Position = 5, Status = "Completed", CreatedAt = seedDate.AddDays(-5) },
-                
+
                 // In Progress cards (4)
                 new Card { CardId = 7, ListId = 2, Title = "Load balancer configuration", Description = "Configuring load balancers", AssignedToUserId = 2, Position = 0, Status = "Active", CreatedAt = seedDate.AddDays(-3) },
                 new Card { CardId = 8, ListId = 2, Title = "DNS migration", Description = "Migrating DNS infrastructure", AssignedToUserId = 2, Position = 1, Status = "Active", CreatedAt = seedDate.AddDays(-4) },
                 new Card { CardId = 9, ListId = 2, Title = "SSL certificate renewal", Description = "Renewing SSL certificates", AssignedToUserId = 2, Position = 2, Status = "Active", CreatedAt = seedDate.AddDays(-2) },
                 new Card { CardId = 10, ListId = 2, Title = "Storage expansion", Description = "Expanding storage capacity", AssignedToUserId = 2, Position = 3, Status = "Active", CreatedAt = seedDate.AddDays(-1) },
-                
+
                 // Overdue cards (2)
                 new Card { CardId = 11, ListId = 4, Title = "Legacy system decommission", Description = "Decommission old servers", DueDate = seedDate.AddDays(-5), Position = 0, Status = "Active", CreatedAt = seedDate.AddDays(-20) },
                 new Card { CardId = 12, ListId = 4, Title = "Security audit", Description = "Complete security audit", DueDate = seedDate.AddDays(-3), Position = 1, Status = "Active", CreatedAt = seedDate.AddDays(-15) }
@@ -529,15 +548,15 @@ namespace ProjectTracker.API.Data
 
             // Seed Attendance Admin
             modelBuilder.Entity<AttendanceAdmin>().HasData(
-                new AttendanceAdmin 
-                { 
-                    AdminId = 1, 
-                    Username = "admin", 
-                    Email = "admin@company.com", 
+                new AttendanceAdmin
+                {
+                    AdminId = 1,
+                    Username = "admin",
+                    Email = "admin@company.com",
                     PasswordHash = "$2a$11$XQRdlQ8P9RfHOKVYOz5Wy.vHZe8RrH7pNWEJhGCRdPQ6kV0UqKPXm", // Admin123!
-                    FullName = "System Administrator", 
-                    IsActive = true, 
-                    CreatedAt = seedDate 
+                    FullName = "System Administrator",
+                    IsActive = true,
+                    CreatedAt = seedDate
                 }
             );
 
@@ -587,6 +606,133 @@ namespace ProjectTracker.API.Data
                 new StaffOperatingCompany { StaffOperatingCompanyId = 3, StaffMemberId = 1, OperatingCompanyId = 3, CompanyRole = "SalesManager", IsActive = true, CreatedAt = seedDate },
                 new StaffOperatingCompany { StaffOperatingCompanyId = 4, StaffMemberId = 1, OperatingCompanyId = 4, CompanyRole = "SalesManager", IsActive = true, CreatedAt = seedDate }
             );
+
+            // Logistics System relationships
+            modelBuilder.Entity<Models.Logistics.Vehicle>()
+                .HasOne(v => v.VehicleType)
+                .WithMany(vt => vt.Vehicles)
+                .HasForeignKey(v => v.VehicleTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.Vehicle>()
+                .HasOne(v => v.CurrentDriver)
+                .WithMany(d => d.Vehicles)
+                .HasForeignKey(v => v.CurrentDriverId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Logistics.Load>()
+                .HasOne(l => l.Customer)
+                .WithMany(c => c.Loads)
+                .HasForeignKey(l => l.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.Load>()
+                .HasOne(l => l.Vehicle)
+                .WithMany(v => v.Loads)
+                .HasForeignKey(l => l.VehicleId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Logistics.Load>()
+                .HasOne(l => l.Driver)
+                .WithMany(d => d.Loads)
+                .HasForeignKey(l => l.DriverId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Logistics.LoadItem>()
+                .HasOne(li => li.Load)
+                .WithMany(l => l.LoadItems)
+                .HasForeignKey(li => li.LoadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Logistics.LoadItem>()
+                .HasOne(li => li.Commodity)
+                .WithMany(c => c.LoadItems)
+                .HasForeignKey(li => li.CommodityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.LoadStop>()
+                .HasOne(ls => ls.Load)
+                .WithMany(l => l.Stops)
+                .HasForeignKey(ls => ls.LoadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Logistics.ProofOfDelivery>()
+                .HasOne(pod => pod.Load)
+                .WithOne(l => l.ProofOfDelivery)
+                .HasForeignKey<Models.Logistics.ProofOfDelivery>(pod => pod.LoadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Logistics.WarehouseInventory>()
+                .HasOne(wi => wi.Warehouse)
+                .WithMany(w => w.Inventory)
+                .HasForeignKey(wi => wi.WarehouseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Logistics.WarehouseInventory>()
+                .HasOne(wi => wi.Commodity)
+                .WithMany(c => c.InventoryRecords)
+                .HasForeignKey(wi => wi.CommodityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.StockTransfer>()
+                .HasOne(st => st.FromWarehouse)
+                .WithMany(w => w.TransfersFrom)
+                .HasForeignKey(st => st.FromWarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.StockTransfer>()
+                .HasOne(st => st.ToWarehouse)
+                .WithMany(w => w.TransfersTo)
+                .HasForeignKey(st => st.ToWarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.StockTransfer>()
+                .HasOne(st => st.Commodity)
+                .WithMany()
+                .HasForeignKey(st => st.CommodityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.Backorder>()
+                .HasOne(bo => bo.Inventory)
+                .WithMany(inv => inv.Backorders)
+                .HasForeignKey(bo => bo.InventoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.Backorder>()
+                .HasOne(bo => bo.Customer)
+                .WithMany()
+                .HasForeignKey(bo => bo.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.Invoice>()
+                .HasOne(i => i.Customer)
+                .WithMany(c => c.Invoices)
+                .HasForeignKey(i => i.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.Invoice>()
+                .HasOne(i => i.Load)
+                .WithOne(l => l.Invoice)
+                .HasForeignKey<Models.Logistics.Invoice>(i => i.LoadId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Logistics.InvoiceLineItem>()
+                .HasOne(ili => ili.Invoice)
+                .WithMany(i => i.LineItems)
+                .HasForeignKey(ili => ili.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Logistics.VehicleMaintenance>()
+                .HasOne(vm => vm.Vehicle)
+                .WithMany(v => v.MaintenanceRecords)
+                .HasForeignKey(vm => vm.VehicleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Logistics.CustomerContract>()
+                .HasOne(cc => cc.Customer)
+                .WithMany(c => c.Contracts)
+                .HasForeignKey(cc => cc.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

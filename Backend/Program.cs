@@ -16,7 +16,7 @@ builder.Services.AddEndpointsApiExplorer();
 // Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection") ?? 
+        builder.Configuration.GetConnectionString("DefaultConnection") ??
         "Server=(localdb)\\mssqllocaldb;Database=ProjectTrackerDb;Trusted_Connection=true;MultipleActiveResultSets=true"));
 
 // Add JWT Authentication
@@ -32,7 +32,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
             ValidAudience = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"] ?? 
+                Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"] ??
                 "YourSuperSecretKeyForJWTTokenGeneration123!"))
         };
     });
@@ -71,6 +71,9 @@ builder.Services.AddScoped<IDatabaseSeederService, DatabaseSeederService>();
 
 // Add PBX Service (singleton to maintain session cache)
 builder.Services.AddSingleton<IPbxService, PbxService>();
+
+// Add CarTrack Service for logistics GPS tracking
+builder.Services.AddHttpClient<ICarTrackService, CarTrackService>();
 
 // Add Knowledge Base Service (must be registered before LlamaAIService)
 builder.Services.AddSingleton<IKnowledgeBaseService, KnowledgeBaseService>();
