@@ -8,7 +8,7 @@ namespace ProjectTracker.API.Data
         public ApplicationDbContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-            optionsBuilder.UseSqlServer("Server=.\\SQLEXPRESS;Database=INtranet;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true");
+            optionsBuilder.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ProjectTrackerDb;Trusted_Connection=True;Encrypt=False;");
 
             return new ApplicationDbContext(optionsBuilder.Options);
         }

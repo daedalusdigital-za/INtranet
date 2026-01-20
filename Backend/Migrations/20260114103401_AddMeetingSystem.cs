@@ -99,34 +99,6 @@ namespace ProjectTracker.API.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
-            migrationBuilder.UpdateData(
-                table: "Users",
-                keyColumn: "UserId",
-                keyValue: 1,
-                columns: new[] { "Birthday", "LinkedEmpId" },
-                values: new object[] { null, null });
-
-            migrationBuilder.UpdateData(
-                table: "Users",
-                keyColumn: "UserId",
-                keyValue: 2,
-                columns: new[] { "Birthday", "LinkedEmpId" },
-                values: new object[] { null, null });
-
-            migrationBuilder.UpdateData(
-                table: "Users",
-                keyColumn: "UserId",
-                keyValue: 3,
-                columns: new[] { "Birthday", "LinkedEmpId" },
-                values: new object[] { null, null });
-
-            migrationBuilder.UpdateData(
-                table: "Users",
-                keyColumn: "UserId",
-                keyValue: 4,
-                columns: new[] { "Birthday", "LinkedEmpId" },
-                values: new object[] { null, null });
-
             migrationBuilder.CreateIndex(
                 name: "IX_MeetingAttendees_MeetingId",
                 table: "MeetingAttendees",
