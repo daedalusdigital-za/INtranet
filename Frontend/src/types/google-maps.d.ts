@@ -61,6 +61,15 @@ declare namespace google {
       icon?: string | Icon | Symbol;
       animation?: Animation;
       zIndex?: number;
+      label?: string | MarkerLabel;
+    }
+
+    interface MarkerLabel {
+      text: string;
+      color?: string;
+      fontFamily?: string;
+      fontSize?: string;
+      fontWeight?: string;
     }
 
     interface InfoWindowOptions {

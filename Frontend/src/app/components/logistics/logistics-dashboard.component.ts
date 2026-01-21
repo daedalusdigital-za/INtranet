@@ -20,6 +20,9 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatStepperModule } from '@angular/material/stepper';
+import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { forkJoin, of } from 'rxjs';
@@ -767,6 +770,10 @@ interface WarehouseSummary {
                   <div class="tripsheets-header">
                     <h3><mat-icon>description</mat-icon> Trip Sheets</h3>
                     <div class="tripsheets-actions">
+                      <button mat-raised-button color="primary" (click)="openCreateTripsheetDialog()">
+                        <mat-icon>add</mat-icon>
+                        Create Trip Sheet
+                      </button>
                       <mat-form-field appearance="outline" class="search-field">
                         <mat-label>Search Tripsheets</mat-label>
                         <input matInput [(ngModel)]="tripsheetSearch" placeholder="Load #, driver, date...">
@@ -2289,6 +2296,8 @@ export class LogisticsDashboardComponent implements OnInit {
   activeLoads = signal<ActiveLoad[]>([]);
   vehicles = signal<Vehicle[]>([]);
   warehouses = signal<WarehouseSummary[]>([]);
+  drivers = signal<any[]>([]);
+  customers = signal<any[]>([]);
   syncing = signal(false);
 
   // Tripsheets
@@ -2327,6 +2336,40 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadFuelSummary();
     this.loadTfnOrders();
     this.loadTfnDepots();
+    this.loadDrivers();
+    this.loadCustomers();
+  }
+
+  loadDrivers(): void {
+    this.http.get<any[]>(`${this.apiUrl}/logistics/drivers`).subscribe({
+      next: (drivers) => {
+        this.drivers.set(drivers);
+        this.stats.update(s => ({
+          ...s,
+          totalDrivers: drivers.length,
+          availableDrivers: drivers.filter(d => d.status === 'Available' || !d.currentLoadId).length
+        }));
+      },
+      error: () => {
+        // Use sample data
+        this.drivers.set([
+          { id: 1, firstName: 'John', lastName: 'Smith', phoneNumber: '082-123-4567', licenseNumber: 'DL12345', status: 'Available' },
+          { id: 2, firstName: 'Peter', lastName: 'Nkosi', phoneNumber: '083-456-7890', licenseNumber: 'DL23456', status: 'OnDuty' },
+          { id: 3, firstName: 'Mike', lastName: 'Johnson', phoneNumber: '084-789-0123', licenseNumber: 'DL34567', status: 'Available' }
+        ]);
+      }
+    });
+  }
+
+  loadCustomers(): void {
+    this.http.get<any[]>(`${this.apiUrl}/logistics/customers`).subscribe({
+      next: (customers) => {
+        this.customers.set(customers);
+      },
+      error: () => {
+        this.customers.set([]);
+      }
+    });
   }
 
   async loadDashboardData(): Promise<void> {
@@ -2796,6 +2839,29 @@ export class LogisticsDashboardComponent implements OnInit {
       width: '900px',
       maxHeight: '90vh',
       data: { loadId: trip.loadId || trip.id }
+    });
+  }
+
+  openCreateTripsheetDialog(): void {
+    const dialogRef = this.dialog.open(CreateTripsheetDialog, {
+      width: '95vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      panelClass: 'create-tripsheet-dialog-panel',
+      data: {
+        invoices: this.importedInvoices(),
+        drivers: this.drivers(),
+        vehicles: this.vehicles(),
+        warehouses: this.warehouses(),
+        customers: this.customers()
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.created) {
+        this.loadTripsheets();
+        this.loadImportedInvoices();
+      }
     });
   }
 
@@ -8012,5 +8078,1231 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
 
   isNearestDepot(depot: any): boolean {
     return this.nearestDepots.some(nd => nd.depot.id === depot.id);
+  }
+}
+
+// Create Trip Sheet Dialog Component
+@Component({
+  selector: 'app-create-tripsheet-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatInputModule,
+    MatTooltipModule,
+    MatProgressSpinnerModule,
+    MatChipsModule,
+    MatTableModule,
+    MatCheckboxModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatStepperModule,
+    MatDividerModule,
+    FormsModule,
+    ReactiveFormsModule,
+    CdkDrag,
+    CdkDropList
+  ],
+  template: `
+    <div class="create-tripsheet-dialog">
+      <div class="dialog-header">
+        <h2>
+          <mat-icon>add_road</mat-icon>
+          Create Trip Sheet
+        </h2>
+        <div class="header-info">
+          @if (selectedStops.length > 0) {
+            <mat-chip class="stop-count">{{ selectedStops.length }} stops</mat-chip>
+          }
+          @if (totalDistance > 0) {
+            <mat-chip class="distance-chip">{{ totalDistance | number:'1.0-0' }} km</mat-chip>
+          }
+        </div>
+        <button mat-icon-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-content">
+        <mat-stepper #stepper linear>
+          <!-- Step 1: Select Invoices/Stops -->
+          <mat-step [completed]="selectedStops.length > 0" label="Select Stops">
+            <div class="step-content">
+              <div class="source-panel">
+                <div class="panel-header">
+                  <h3><mat-icon>receipt_long</mat-icon> Available Invoices</h3>
+                  <mat-form-field appearance="outline" class="search-field">
+                    <mat-label>Search invoices...</mat-label>
+                    <input matInput [(ngModel)]="invoiceSearch" placeholder="Customer, invoice #...">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                </div>
+                <div class="invoice-list">
+                  @for (invoice of filteredInvoices(); track invoice.id) {
+                    <div class="invoice-item" 
+                         [class.selected]="isInvoiceSelected(invoice)"
+                         (click)="toggleInvoiceSelection(invoice)">
+                      <mat-checkbox [checked]="isInvoiceSelected(invoice)" (click)="$event.stopPropagation()"></mat-checkbox>
+                      <div class="invoice-info">
+                        <span class="invoice-number">{{ invoice.transactionNumber }}</span>
+                        <span class="customer-name">{{ invoice.customerName }}</span>
+                      </div>
+                      <div class="invoice-details">
+                        <span class="product">{{ invoice.productDescription | slice:0:30 }}...</span>
+                        <span class="amount">R {{ invoice.salesAmount | number:'1.2-2' }}</span>
+                      </div>
+                      <mat-icon class="add-icon">add_circle</mat-icon>
+                    </div>
+                  }
+                  @if (filteredInvoices().length === 0) {
+                    <div class="empty-list">
+                      <mat-icon>inventory_2</mat-icon>
+                      <p>No pending invoices found</p>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <div class="stops-panel">
+                <div class="panel-header">
+                  <h3><mat-icon>pin_drop</mat-icon> Selected Stops ({{ selectedStops.length }})</h3>
+                  @if (selectedStops.length > 0) {
+                    <button mat-stroked-button (click)="clearAllStops()">
+                      <mat-icon>clear_all</mat-icon> Clear All
+                    </button>
+                  }
+                </div>
+                <div class="stops-list" cdkDropList (cdkDropListDropped)="dropStop($event)">
+                  @for (stop of selectedStops; track stop.id; let i = $index) {
+                    <div class="stop-item" cdkDrag>
+                      <div class="stop-drag-handle" cdkDragHandle>
+                        <mat-icon>drag_indicator</mat-icon>
+                      </div>
+                      <div class="stop-sequence">{{ i + 1 }}</div>
+                      <div class="stop-info">
+                        <span class="stop-customer">{{ stop.customerName }}</span>
+                        <span class="stop-address">{{ stop.address || 'No address' }}</span>
+                        <span class="stop-invoice">{{ stop.transactionNumber }}</span>
+                      </div>
+                      <div class="stop-value">
+                        R {{ stop.salesAmount | number:'1.2-2' }}
+                      </div>
+                      <button mat-icon-button (click)="removeStop(i)" matTooltip="Remove stop">
+                        <mat-icon>remove_circle</mat-icon>
+                      </button>
+                    </div>
+                  }
+                  @if (selectedStops.length === 0) {
+                    <div class="empty-stops">
+                      <mat-icon>add_location</mat-icon>
+                      <p>Select invoices from the left to add stops</p>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button mat-button mat-dialog-close>Cancel</button>
+              <button mat-raised-button color="primary" matStepperNext [disabled]="selectedStops.length === 0">
+                Next <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          </mat-step>
+
+          <!-- Step 2: Route Optimization & Details -->
+          <mat-step [completed]="tripForm.valid" label="Route Details">
+            <div class="step-content route-step">
+              <div class="route-config">
+                <h3><mat-icon>route</mat-icon> Route Configuration</h3>
+                
+                <div class="config-grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Pickup Warehouse</mat-label>
+                    <mat-select [(ngModel)]="selectedWarehouse">
+                      @for (wh of data.warehouses; track wh.id) {
+                        <mat-option [value]="wh">{{ wh.name }} - {{ wh.city }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Driver</mat-label>
+                    <mat-select [(ngModel)]="selectedDriver">
+                      <mat-option [value]="null">-- Unassigned --</mat-option>
+                      @for (driver of data.drivers; track driver.id) {
+                        <mat-option [value]="driver">{{ driver.firstName }} {{ driver.lastName }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Vehicle</mat-label>
+                    <mat-select [(ngModel)]="selectedVehicle">
+                      <mat-option [value]="null">-- Unassigned --</mat-option>
+                      @for (vehicle of data.vehicles; track vehicle.id) {
+                        <mat-option [value]="vehicle">{{ vehicle.registrationNumber }} - {{ vehicle.make }} {{ vehicle.model }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Scheduled Date</mat-label>
+                    <input matInput [matDatepicker]="picker" [(ngModel)]="scheduledDate">
+                    <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+                    <mat-datepicker #picker></mat-datepicker>
+                  </mat-form-field>
+                </div>
+
+                <div class="optimize-section">
+                  <button mat-raised-button color="accent" (click)="optimizeRoute()" [disabled]="optimizing || selectedStops.length < 2">
+                    @if (optimizing) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>alt_route</mat-icon>
+                    }
+                    {{ optimizing ? 'Optimizing...' : 'Optimize Route' }}
+                  </button>
+                  <button mat-stroked-button (click)="calculateDistance()" [disabled]="calculating">
+                    @if (calculating) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>straighten</mat-icon>
+                    }
+                    {{ calculating ? 'Calculating...' : 'Calculate Distance' }}
+                  </button>
+                </div>
+
+                @if (totalDistance > 0) {
+                  <div class="route-summary">
+                    <div class="summary-item">
+                      <mat-icon>straighten</mat-icon>
+                      <span class="label">Total Distance:</span>
+                      <span class="value">{{ totalDistance | number:'1.0-0' }} km</span>
+                    </div>
+                    <div class="summary-item">
+                      <mat-icon>schedule</mat-icon>
+                      <span class="label">Est. Drive Time:</span>
+                      <span class="value">{{ estimatedTime }}</span>
+                    </div>
+                    <div class="summary-item">
+                      <mat-icon>payments</mat-icon>
+                      <span class="label">Total Value:</span>
+                      <span class="value">R {{ totalValue | number:'1.2-2' }}</span>
+                    </div>
+                  </div>
+                }
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Special Instructions</mat-label>
+                  <textarea matInput [(ngModel)]="specialInstructions" rows="3" placeholder="Any special instructions for the driver..."></textarea>
+                </mat-form-field>
+              </div>
+
+              <div class="route-map-preview">
+                <h3><mat-icon>map</mat-icon> Route Preview</h3>
+                <div id="tripsheetRouteMap" class="route-map"></div>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <button mat-raised-button color="primary" matStepperNext [disabled]="!selectedWarehouse">
+                Next <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          </mat-step>
+
+          <!-- Step 3: Review & Generate -->
+          <mat-step label="Review & Generate">
+            <div class="step-content review-step">
+              <div class="review-section">
+                <h3><mat-icon>fact_check</mat-icon> Trip Sheet Summary</h3>
+                
+                <div class="review-grid">
+                  <div class="review-card">
+                    <h4><mat-icon>warehouse</mat-icon> Pickup</h4>
+                    <p class="main-value">{{ selectedWarehouse?.name || 'Not selected' }}</p>
+                    <p class="sub-value">{{ selectedWarehouse?.address }}</p>
+                    <p class="sub-value">{{ scheduledDate | date:'EEEE, dd MMM yyyy' }}</p>
+                  </div>
+                  
+                  <div class="review-card">
+                    <h4><mat-icon>person</mat-icon> Driver</h4>
+                    <p class="main-value">{{ selectedDriver ? selectedDriver.firstName + ' ' + selectedDriver.lastName : 'Unassigned' }}</p>
+                    <p class="sub-value">{{ selectedDriver?.phoneNumber || '' }}</p>
+                  </div>
+
+                  <div class="review-card">
+                    <h4><mat-icon>local_shipping</mat-icon> Vehicle</h4>
+                    <p class="main-value">{{ selectedVehicle?.registrationNumber || 'Unassigned' }}</p>
+                    <p class="sub-value">{{ selectedVehicle ? selectedVehicle.make + ' ' + selectedVehicle.model : '' }}</p>
+                  </div>
+
+                  <div class="review-card">
+                    <h4><mat-icon>route</mat-icon> Route Info</h4>
+                    <p class="main-value">{{ selectedStops.length }} stops</p>
+                    <p class="sub-value">{{ totalDistance | number:'1.0-0' }} km • {{ estimatedTime }}</p>
+                    <p class="sub-value">Total: R {{ totalValue | number:'1.2-2' }}</p>
+                  </div>
+                </div>
+
+                <div class="stops-summary">
+                  <h4><mat-icon>pin_drop</mat-icon> Delivery Stops</h4>
+                  <table class="stops-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Customer</th>
+                        <th>Invoice</th>
+                        <th>Product</th>
+                        <th>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (stop of selectedStops; track stop.id; let i = $index) {
+                        <tr>
+                          <td>{{ i + 1 }}</td>
+                          <td>{{ stop.customerName }}</td>
+                          <td>{{ stop.transactionNumber }}</td>
+                          <td>{{ stop.productDescription | slice:0:25 }}...</td>
+                          <td>R {{ stop.salesAmount | number:'1.2-2' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="step-actions final-actions">
+              <button mat-button matStepperPrevious>
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <div class="action-buttons">
+                <button mat-raised-button (click)="previewPdf()" [disabled]="creating">
+                  <mat-icon>preview</mat-icon> Preview PDF
+                </button>
+                <button mat-raised-button color="primary" (click)="createTripsheet()" [disabled]="creating">
+                  @if (creating) {
+                    <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                  } @else {
+                    <mat-icon>check</mat-icon>
+                  }
+                  {{ creating ? 'Creating...' : 'Create & Download' }}
+                </button>
+              </div>
+            </div>
+          </mat-step>
+        </mat-stepper>
+      </div>
+    </div>
+  `,
+  styles: [`
+    :host {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .create-tripsheet-dialog {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin: -24px -24px 0 -24px;
+      gap: 16px;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 22px;
+      font-weight: 500;
+    }
+    .header-info {
+      display: flex;
+      gap: 12px;
+      flex: 1;
+      justify-content: flex-end;
+      margin-right: 16px;
+    }
+    .header-info mat-chip {
+      background: rgba(255,255,255,0.2) !important;
+      color: white !important;
+    }
+    .dialog-header button {
+      color: white;
+    }
+    .dialog-content {
+      flex: 1;
+      padding: 24px;
+      overflow: auto;
+    }
+    .step-content {
+      display: flex;
+      gap: 24px;
+      min-height: 400px;
+      padding: 16px 0;
+    }
+    .source-panel, .stops-panel {
+      flex: 1;
+      background: #f5f5f5;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .panel-header h3 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      color: #333;
+    }
+    .search-field {
+      width: 250px;
+    }
+    .invoice-list, .stops-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+    .invoice-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .invoice-item:hover {
+      background: #e3f2fd;
+    }
+    .invoice-item.selected {
+      border-color: #667eea;
+      background: #ede7f6;
+    }
+    .invoice-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 150px;
+    }
+    .invoice-number {
+      font-weight: 600;
+      color: #333;
+      font-size: 13px;
+    }
+    .customer-name {
+      font-size: 14px;
+      color: #1976d2;
+    }
+    .invoice-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .product {
+      font-size: 12px;
+      color: #666;
+    }
+    .amount {
+      font-weight: 600;
+      color: #4caf50;
+    }
+    .add-icon {
+      color: #667eea;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .invoice-item:hover .add-icon {
+      opacity: 1;
+    }
+    .stop-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border-left: 4px solid #667eea;
+    }
+    .stop-drag-handle {
+      cursor: move;
+      color: #999;
+    }
+    .stop-sequence {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #667eea;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .stop-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .stop-customer {
+      font-weight: 600;
+      color: #333;
+    }
+    .stop-address {
+      font-size: 12px;
+      color: #666;
+    }
+    .stop-invoice {
+      font-size: 11px;
+      color: #999;
+    }
+    .stop-value {
+      font-weight: 600;
+      color: #4caf50;
+    }
+    .empty-list, .empty-stops {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+    }
+    .empty-list mat-icon, .empty-stops mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+    }
+    .step-actions {
+      display: flex;
+      justify-content: space-between;
+      padding: 16px 0;
+      border-top: 1px solid #e0e0e0;
+      margin-top: 16px;
+    }
+    .route-step {
+      flex-direction: column;
+    }
+    .route-config {
+      flex: 1;
+    }
+    .route-config h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .optimize-section {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .inline-spinner {
+      display: inline-block;
+      margin-right: 8px;
+    }
+    .route-summary {
+      display: flex;
+      gap: 24px;
+      padding: 16px;
+      background: #e8f5e9;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .summary-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .summary-item mat-icon {
+      color: #4caf50;
+    }
+    .summary-item .label {
+      color: #666;
+    }
+    .summary-item .value {
+      font-weight: 600;
+      color: #333;
+    }
+    .full-width {
+      width: 100%;
+    }
+    .route-map-preview {
+      margin-top: 20px;
+    }
+    .route-map-preview h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .route-map {
+      height: 300px;
+      border-radius: 12px;
+      background: #e5e3df;
+    }
+    .review-step {
+      flex-direction: column;
+    }
+    .review-section h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .review-card {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 12px;
+    }
+    .review-card h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px 0;
+      color: #667eea;
+      font-size: 14px;
+    }
+    .review-card .main-value {
+      font-weight: 600;
+      font-size: 16px;
+      margin: 0;
+    }
+    .review-card .sub-value {
+      font-size: 13px;
+      color: #666;
+      margin: 4px 0 0 0;
+    }
+    .stops-summary {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 12px;
+    }
+    .stops-summary h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 16px 0;
+    }
+    .stops-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .stops-table th, .stops-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .stops-table th {
+      background: #e0e0e0;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .stops-table tr:hover {
+      background: #f0f0f0;
+    }
+    .final-actions {
+      justify-content: space-between;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    .cdk-drag-preview {
+      box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    }
+    .cdk-drag-placeholder {
+      opacity: 0.3;
+    }
+    .cdk-drag-animating {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    }
+    @media (max-width: 1200px) {
+      .config-grid, .review-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  `]
+})
+export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
+  invoiceSearch = '';
+  selectedStops: any[] = [];
+  selectedWarehouse: any = null;
+  selectedDriver: any = null;
+  selectedVehicle: any = null;
+  scheduledDate = new Date();
+  specialInstructions = '';
+  
+  totalDistance = 0;
+  estimatedTime = '';
+  totalValue = 0;
+  
+  optimizing = false;
+  calculating = false;
+  creating = false;
+  
+  tripForm = new FormGroup({});
+  
+  private map: google.maps.Map | null = null;
+  private routePolyline: google.maps.Polyline | null = null;
+  private stopMarkers: google.maps.Marker[] = [];
+  private http: HttpClient;
+  private mapInitialized = false;
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: { 
+      invoices: any[], 
+      drivers: any[], 
+      vehicles: any[], 
+      warehouses: any[],
+      customers: any[]
+    },
+    private dialogRef: MatDialogRef<CreateTripsheetDialog>,
+    private injector: Injector
+  ) {
+    this.http = this.injector.get(HttpClient);
+    // Set first warehouse as default
+    if (data.warehouses && data.warehouses.length > 0) {
+      this.selectedWarehouse = data.warehouses[0];
+    }
+  }
+
+  ngAfterViewInit(): void {
+    // Map will be initialized when step 2 is active
+  }
+
+  ngOnDestroy(): void {
+    if (this.routePolyline) {
+      this.routePolyline.setMap(null);
+    }
+    this.stopMarkers.forEach(m => m.setMap(null));
+  }
+
+  filteredInvoices(): any[] {
+    let invoices = this.data.invoices.filter(inv => 
+      inv.status === 'Pending' && !this.isInvoiceSelected(inv)
+    );
+    
+    if (this.invoiceSearch) {
+      const search = this.invoiceSearch.toLowerCase();
+      invoices = invoices.filter(inv =>
+        inv.transactionNumber?.toLowerCase().includes(search) ||
+        inv.customerName?.toLowerCase().includes(search) ||
+        inv.productDescription?.toLowerCase().includes(search)
+      );
+    }
+    
+    return invoices;
+  }
+
+  isInvoiceSelected(invoice: any): boolean {
+    return this.selectedStops.some(s => s.id === invoice.id);
+  }
+
+  toggleInvoiceSelection(invoice: any): void {
+    if (this.isInvoiceSelected(invoice)) {
+      this.removeStopByInvoice(invoice);
+    } else {
+      this.addStop(invoice);
+    }
+  }
+
+  addStop(invoice: any): void {
+    // Find customer details for address
+    const customer = this.data.customers?.find(c => 
+      c.accountNumber === invoice.customerNumber || c.name === invoice.customerName
+    );
+    
+    this.selectedStops.push({
+      ...invoice,
+      address: customer?.physicalAddress || customer?.deliveryAddress || 'Address not available',
+      latitude: customer?.latitude,
+      longitude: customer?.longitude
+    });
+    
+    this.calculateTotalValue();
+  }
+
+  removeStop(index: number): void {
+    this.selectedStops.splice(index, 1);
+    this.calculateTotalValue();
+  }
+
+  removeStopByInvoice(invoice: any): void {
+    const index = this.selectedStops.findIndex(s => s.id === invoice.id);
+    if (index > -1) {
+      this.removeStop(index);
+    }
+  }
+
+  clearAllStops(): void {
+    this.selectedStops = [];
+    this.totalDistance = 0;
+    this.estimatedTime = '';
+    this.totalValue = 0;
+  }
+
+  dropStop(event: CdkDragDrop<any[]>): void {
+    moveItemInArray(this.selectedStops, event.previousIndex, event.currentIndex);
+  }
+
+  calculateTotalValue(): void {
+    this.totalValue = this.selectedStops.reduce((sum, stop) => sum + (stop.salesAmount || 0), 0);
+  }
+
+  optimizeRoute(): void {
+    if (this.selectedStops.length < 2) return;
+    
+    this.optimizing = true;
+    
+    // Get stops with coordinates
+    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+    
+    if (stopsWithCoords.length < 2) {
+      // Simple sort by customer name if no coordinates
+      this.selectedStops.sort((a, b) => a.customerName.localeCompare(b.customerName));
+      this.optimizing = false;
+      return;
+    }
+    
+    // Nearest neighbor algorithm for route optimization
+    const start = this.selectedWarehouse;
+    const startLat = start?.latitude || -26.2041; // Default to JHB
+    const startLng = start?.longitude || 28.0473;
+    
+    const optimized: any[] = [];
+    const remaining = [...this.selectedStops];
+    
+    let currentLat = startLat;
+    let currentLng = startLng;
+    
+    while (remaining.length > 0) {
+      let nearestIndex = 0;
+      let nearestDistance = Infinity;
+      
+      remaining.forEach((stop, index) => {
+        if (stop.latitude && stop.longitude) {
+          const dist = this.haversineDistance(currentLat, currentLng, stop.latitude, stop.longitude);
+          if (dist < nearestDistance) {
+            nearestDistance = dist;
+            nearestIndex = index;
+          }
+        }
+      });
+      
+      const nearest = remaining.splice(nearestIndex, 1)[0];
+      optimized.push(nearest);
+      
+      if (nearest.latitude && nearest.longitude) {
+        currentLat = nearest.latitude;
+        currentLng = nearest.longitude;
+      }
+    }
+    
+    this.selectedStops = optimized;
+    this.optimizing = false;
+    
+    // Auto-calculate distance after optimization
+    this.calculateDistance();
+  }
+
+  calculateDistance(): void {
+    this.calculating = true;
+    
+    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+    
+    if (stopsWithCoords.length < 1) {
+      this.calculating = false;
+      return;
+    }
+    
+    // Start from warehouse
+    const startLat = this.selectedWarehouse?.latitude || -26.2041;
+    const startLng = this.selectedWarehouse?.longitude || 28.0473;
+    
+    let totalDist = 0;
+    let prevLat = startLat;
+    let prevLng = startLng;
+    
+    stopsWithCoords.forEach(stop => {
+      totalDist += this.haversineDistance(prevLat, prevLng, stop.latitude, stop.longitude);
+      prevLat = stop.latitude;
+      prevLng = stop.longitude;
+    });
+    
+    // Add 20% for road vs straight line
+    this.totalDistance = Math.round(totalDist * 1.2);
+    
+    // Estimate time: 60km/h average + 15min per stop
+    const driveTimeMinutes = (this.totalDistance / 60) * 60;
+    const stopTimeMinutes = this.selectedStops.length * 15;
+    const totalMinutes = Math.round(driveTimeMinutes + stopTimeMinutes);
+    
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    
+    this.calculating = false;
+    
+    // Update map
+    this.updateRouteMap();
+  }
+
+  private haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = this.toRad(lat2 - lat1);
+    const dLng = this.toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private toRad(deg: number): number {
+    return deg * (Math.PI / 180);
+  }
+
+  private initializeMap(): void {
+    const mapElement = document.getElementById('tripsheetRouteMap');
+    if (!mapElement || this.mapInitialized) return;
+
+    const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
+    
+    if (typeof google !== 'undefined' && google.maps) {
+      this.createMap(mapElement);
+      return;
+    }
+
+    const callbackName = 'initTripsheetMap' + Date.now();
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${callbackName}`;
+    script.async = true;
+    
+    (window as any)[callbackName] = () => {
+      this.createMap(mapElement);
+      delete (window as any)[callbackName];
+    };
+    
+    document.head.appendChild(script);
+  }
+
+  private createMap(element: HTMLElement): void {
+    this.map = new google.maps.Map(element, {
+      zoom: 6,
+      center: { lat: -28.5, lng: 25.5 },
+      mapTypeId: 'roadmap',
+      mapTypeControl: false,
+      streetViewControl: false
+    });
+    this.mapInitialized = true;
+    this.updateRouteMap();
+  }
+
+  updateRouteMap(): void {
+    setTimeout(() => this.initializeMap(), 100);
+    
+    if (!this.map) return;
+    
+    // Clear existing
+    if (this.routePolyline) {
+      this.routePolyline.setMap(null);
+    }
+    this.stopMarkers.forEach(m => m.setMap(null));
+    this.stopMarkers = [];
+    
+    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+    if (stopsWithCoords.length === 0) return;
+    
+    const bounds = new google.maps.LatLngBounds();
+    
+    // Add warehouse as start point
+    const startLat = this.selectedWarehouse?.latitude || -26.2041;
+    const startLng = this.selectedWarehouse?.longitude || 28.0473;
+    
+    const path = [{ lat: startLat, lng: startLng }];
+    bounds.extend(path[0]);
+    
+    // Add warehouse marker
+    const warehouseMarker = new google.maps.Marker({
+      position: path[0],
+      map: this.map,
+      title: this.selectedWarehouse?.name || 'Warehouse',
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 12,
+        fillColor: '#4caf50',
+        fillOpacity: 1,
+        strokeColor: 'white',
+        strokeWeight: 2
+      }
+    });
+    this.stopMarkers.push(warehouseMarker);
+    
+    // Add stop markers
+    stopsWithCoords.forEach((stop, index) => {
+      const pos = { lat: stop.latitude, lng: stop.longitude };
+      path.push(pos);
+      bounds.extend(pos);
+      
+      const marker = new google.maps.Marker({
+        position: pos,
+        map: this.map,
+        title: stop.customerName,
+        label: {
+          text: (index + 1).toString(),
+          color: 'white',
+          fontWeight: 'bold'
+        },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 14,
+          fillColor: '#667eea',
+          fillOpacity: 1,
+          strokeColor: 'white',
+          strokeWeight: 2
+        }
+      });
+      this.stopMarkers.push(marker);
+    });
+    
+    // Draw route line
+    this.routePolyline = new google.maps.Polyline({
+      path: path,
+      geodesic: true,
+      strokeColor: '#667eea',
+      strokeOpacity: 0.8,
+      strokeWeight: 4,
+      map: this.map
+    });
+    
+    this.map.fitBounds(bounds, 50);
+  }
+
+  previewPdf(): void {
+    // Create a preview window with trip sheet HTML
+    const html = this.generateTripsheetHtml();
+    const previewWindow = window.open('', '_blank');
+    if (previewWindow) {
+      previewWindow.document.write(html);
+      previewWindow.document.close();
+    }
+  }
+
+  createTripsheet(): void {
+    this.creating = true;
+    
+    // Build the load/tripsheet payload
+    const payload = {
+      warehouseId: this.selectedWarehouse?.id,
+      driverId: this.selectedDriver?.id,
+      vehicleId: this.selectedVehicle?.id,
+      scheduledPickupDate: this.scheduledDate,
+      specialInstructions: this.specialInstructions,
+      estimatedDistance: this.totalDistance,
+      estimatedTimeMinutes: Math.round(this.totalDistance * 1.2), // rough estimate
+      priority: 'Normal',
+      stops: this.selectedStops.map((stop, index) => ({
+        stopSequence: index + 1,
+        stopType: index === this.selectedStops.length - 1 ? 'Destination' : 'Delivery',
+        customerId: stop.customerId,
+        companyName: stop.customerName,
+        address: stop.address || 'Unknown',
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        orderNumber: stop.transactionNumber,
+        invoiceNumber: stop.transactionNumber,
+        commodities: [{
+          commodityName: stop.productDescription,
+          commodityCode: stop.productCode,
+          quantity: stop.quantity || 1,
+          unitPrice: stop.salesAmount,
+          totalPrice: stop.salesAmount
+        }]
+      })),
+      invoiceIds: this.selectedStops.map(s => s.id)
+    };
+    
+    this.http.post('http://localhost:5143/api/logistics/loads', payload).subscribe({
+      next: (result: any) => {
+        // Download the PDF
+        this.http.get(`http://localhost:5143/api/logistics/tripsheet/${result.id}/pdf`, { responseType: 'text' }).subscribe({
+          next: (html) => {
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+              printWindow.document.write(html);
+              printWindow.document.close();
+              setTimeout(() => printWindow.print(), 500);
+            }
+            
+            this.creating = false;
+            this.dialogRef.close({ created: true, loadId: result.id });
+          },
+          error: () => {
+            this.creating = false;
+            this.dialogRef.close({ created: true, loadId: result.id });
+          }
+        });
+      },
+      error: (err) => {
+        console.error('Failed to create tripsheet:', err);
+        this.creating = false;
+      }
+    });
+  }
+
+  private generateTripsheetHtml(): string {
+    const date = new Date().toLocaleDateString('en-ZA', { 
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+    
+    let stopsHtml = '';
+    this.selectedStops.forEach((stop, i) => {
+      stopsHtml += `
+        <tr>
+          <td style="text-align: center; font-weight: bold;">${i + 1}</td>
+          <td>${stop.customerName}</td>
+          <td>${stop.address || 'N/A'}</td>
+          <td>${stop.transactionNumber}</td>
+          <td>${stop.productDescription?.substring(0, 40) || ''}...</td>
+          <td style="text-align: right;">R ${stop.salesAmount?.toFixed(2) || '0.00'}</td>
+          <td style="text-align: center;">☐</td>
+        </tr>
+      `;
+    });
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Trip Sheet - ${date}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #667eea; padding-bottom: 20px; }
+          .header h1 { color: #667eea; margin: 0; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+          .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; }
+          .info-box h3 { margin: 0 0 10px 0; color: #667eea; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { padding: 10px; border: 1px solid #ddd; }
+          th { background: #667eea; color: white; text-align: left; }
+          tr:nth-child(even) { background: #f9f9f9; }
+          .summary { margin-top: 30px; text-align: right; font-size: 18px; }
+          .signature { margin-top: 50px; display: flex; justify-content: space-between; }
+          .signature-box { width: 200px; text-align: center; }
+          .signature-line { border-top: 1px solid #333; margin-top: 50px; padding-top: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>🚛 TRIP SHEET</h1>
+          <p>${date}</p>
+        </div>
+        
+        <div class="info-grid">
+          <div class="info-box">
+            <h3>📍 Pickup Location</h3>
+            <p><strong>${this.selectedWarehouse?.name || 'Warehouse'}</strong></p>
+            <p>${this.selectedWarehouse?.address || ''}</p>
+          </div>
+          <div class="info-box">
+            <h3>🚗 Vehicle & Driver</h3>
+            <p><strong>Driver:</strong> ${this.selectedDriver ? this.selectedDriver.firstName + ' ' + this.selectedDriver.lastName : 'Unassigned'}</p>
+            <p><strong>Vehicle:</strong> ${this.selectedVehicle?.registrationNumber || 'Unassigned'}</p>
+          </div>
+          <div class="info-box">
+            <h3>📊 Route Info</h3>
+            <p><strong>Stops:</strong> ${this.selectedStops.length}</p>
+            <p><strong>Distance:</strong> ${this.totalDistance} km</p>
+            <p><strong>Est. Time:</strong> ${this.estimatedTime}</p>
+          </div>
+          <div class="info-box">
+            <h3>💰 Financial</h3>
+            <p><strong>Total Value:</strong> R ${this.totalValue.toFixed(2)}</p>
+          </div>
+        </div>
+        
+        ${this.specialInstructions ? `<div class="info-box"><h3>⚠️ Special Instructions</h3><p>${this.specialInstructions}</p></div>` : ''}
+        
+        <h2>📦 Delivery Stops</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Customer</th>
+              <th>Address</th>
+              <th>Invoice #</th>
+              <th>Product</th>
+              <th>Amount</th>
+              <th>✓</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stopsHtml}
+          </tbody>
+        </table>
+        
+        <div class="summary">
+          <strong>Total: R ${this.totalValue.toFixed(2)}</strong>
+        </div>
+        
+        <div class="signature">
+          <div class="signature-box">
+            <div class="signature-line">Driver Signature</div>
+          </div>
+          <div class="signature-box">
+            <div class="signature-line">Dispatcher Signature</div>
+          </div>
+          <div class="signature-box">
+            <div class="signature-line">Date & Time Out</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   }
 }
