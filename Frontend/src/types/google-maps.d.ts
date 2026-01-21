@@ -60,6 +60,7 @@ declare namespace google {
       title?: string;
       icon?: string | Icon | Symbol;
       animation?: Animation;
+      zIndex?: number;
     }
 
     interface InfoWindowOptions {
@@ -107,6 +108,31 @@ declare namespace google {
 
     class Point {
       constructor(x: number, y: number);
+    }
+
+    class Polyline {
+      constructor(options?: PolylineOptions);
+      setMap(map: Map | null): void;
+      getPath(): MVCArray<LatLng>;
+      setPath(path: LatLng[] | LatLngLiteral[]): void;
+      addListener(event: string, handler: Function): MapsEventListener;
+    }
+
+    interface PolylineOptions {
+      path?: LatLng[] | LatLngLiteral[];
+      geodesic?: boolean;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      strokeWeight?: number;
+      map?: Map | null;
+      clickable?: boolean;
+      zIndex?: number;
+    }
+
+    class MVCArray<T> {
+      getLength(): number;
+      getAt(index: number): T;
+      forEach(callback: (element: T, index: number) => void): void;
     }
 
     enum Animation {

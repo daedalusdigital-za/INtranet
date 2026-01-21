@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject } from '@angular/core';
+import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject, Injector } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -7105,6 +7105,8 @@ export class TfnOrderDetailsDialog {
     MatSelectModule,
     MatInputModule,
     MatTooltipModule,
+    MatProgressSpinnerModule,
+    MatChipsModule,
     FormsModule
   ],
   template: `
@@ -7140,11 +7142,52 @@ export class TfnOrderDetailsDialog {
             <mat-icon matSuffix>search</mat-icon>
           </mat-form-field>
 
+          <button mat-raised-button color="accent" (click)="loadTripSheets()" [disabled]="loadingTrips">
+            @if (loadingTrips) {
+              <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+            } @else {
+              <mat-icon>route</mat-icon>
+            }
+            {{ loadingTrips ? 'Loading...' : 'Load Trip Sheets' }}
+          </button>
+
           <button mat-stroked-button (click)="resetView()">
             <mat-icon>zoom_out_map</mat-icon>
             Reset View
           </button>
+
+          @if (tripRoutes.length > 0) {
+            <button mat-stroked-button color="warn" (click)="clearTripRoutes()">
+              <mat-icon>clear</mat-icon>
+              Clear Routes
+            </button>
+          }
         </div>
+
+        @if (tripRoutes.length > 0) {
+          <div class="trip-routes-bar">
+            <span class="routes-label"><mat-icon>route</mat-icon> Trip Routes ({{ tripRoutes.length }}):</span>
+            <div class="route-chips">
+              @for (route of tripRoutes; track route.loadNumber) {
+                <mat-chip [style.background-color]="route.color" 
+                          [class.selected]="selectedRoute?.loadNumber === route.loadNumber"
+                          (click)="focusRoute(route)">
+                  {{ route.loadNumber }} - {{ route.stops.length }} stops
+                </mat-chip>
+              }
+            </div>
+            @if (nearestDepots.length > 0) {
+              <div class="nearest-depots">
+                <span class="nearest-label">Nearest Depots:</span>
+                @for (nd of nearestDepots.slice(0, 5); track nd.depot.id) {
+                  <span class="nearest-item" (click)="focusDepot(nd.depot)">
+                    {{ nd.depot.name }} ({{ nd.distance | number:'1.1-1' }} km)
+                  </span>
+                }
+              </div>
+            }
+          </div>
+        }
 
         <div class="map-container">
           <div id="depotMap" class="depot-map"></div>
@@ -7156,6 +7199,16 @@ export class TfnOrderDetailsDialog {
               <mat-icon>remove</mat-icon>
             </button>
           </div>
+          @if (selectedRoute) {
+            <div class="route-info-panel">
+              <h4>{{ selectedRoute.loadNumber }}</h4>
+              <p><strong>Driver:</strong> {{ selectedRoute.driverName || 'N/A' }}</p>
+              <p><strong>Vehicle:</strong> {{ selectedRoute.vehicleReg || 'N/A' }}</p>
+              <p><strong>Stops:</strong> {{ selectedRoute.stops.length }}</p>
+              <p><strong>Distance:</strong> {{ selectedRoute.totalDistance | number:'1.0-0' }} km</p>
+              <button mat-stroked-button (click)="selectedRoute = null">Close</button>
+            </div>
+          }
         </div>
 
         <div class="depot-list">
@@ -7166,12 +7219,15 @@ export class TfnOrderDetailsDialog {
           @if (showList) {
             <div class="list-content">
               @for (depot of filteredDepots.slice(0, 20); track depot.id) {
-                <div class="depot-item" (click)="focusDepot(depot)">
+                <div class="depot-item" (click)="focusDepot(depot)" [class.nearest]="isNearestDepot(depot)">
                   <mat-icon class="fuel-icon">local_gas_station</mat-icon>
                   <div class="depot-info">
                     <span class="depot-name">{{ depot.name }}</span>
                     <span class="depot-coords">{{ depot.latitude?.toFixed(4) }}, {{ depot.longitude?.toFixed(4) }}</span>
                   </div>
+                  @if (isNearestDepot(depot)) {
+                    <mat-icon class="nearest-badge" matTooltip="Near trip route">star</mat-icon>
+                  }
                 </div>
               }
               @if (filteredDepots.length > 20) {
@@ -7341,6 +7397,107 @@ export class TfnOrderDetailsDialog {
       font-size: 13px;
       grid-column: 1 / -1;
     }
+    .inline-spinner {
+      display: inline-block;
+      margin-right: 8px;
+    }
+    .trip-routes-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .routes-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: white;
+      font-weight: 500;
+      font-size: 13px;
+    }
+    .routes-label mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+    .route-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .route-chips mat-chip {
+      color: white !important;
+      font-size: 12px;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .route-chips mat-chip.selected {
+      border-color: white;
+      box-shadow: 0 0 8px rgba(255,255,255,0.5);
+    }
+    .nearest-depots {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+    .nearest-label {
+      color: rgba(255,255,255,0.8);
+      font-size: 12px;
+    }
+    .nearest-item {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .nearest-item:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    .route-info-panel {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      min-width: 200px;
+      z-index: 1000;
+    }
+    .route-info-panel h4 {
+      margin: 0 0 12px 0;
+      color: #667eea;
+      font-size: 16px;
+    }
+    .route-info-panel p {
+      margin: 4px 0;
+      font-size: 13px;
+      color: #666;
+    }
+    .route-info-panel button {
+      margin-top: 12px;
+      width: 100%;
+    }
+    .depot-item.nearest {
+      background: #fff3e0;
+      border-left: 3px solid #ff9800;
+    }
+    .depot-item.nearest:hover {
+      background: #ffe0b2;
+    }
+    .nearest-badge {
+      color: #ff9800;
+      margin-left: auto;
+    }
   `]
 })
 export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
@@ -7349,10 +7506,23 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   filteredDepots: any[] = [];
   showList = true;
   mapLoading = true;
+  loadingTrips = false;
+  tripRoutes: any[] = [];
+  selectedRoute: any = null;
+  nearestDepots: { depot: any; distance: number }[] = [];
   private map: google.maps.Map | null = null;
   private markers: google.maps.Marker[] = [];
+  private routePolylines: google.maps.Polyline[] = [];
+  private stopMarkers: google.maps.Marker[] = [];
   private infoWindow: google.maps.InfoWindow | null = null;
   private mapInitialized = false;
+  private http: HttpClient;
+
+  // Route colors for different trips
+  private routeColors = [
+    '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f39c12',
+    '#1abc9c', '#e91e63', '#00bcd4', '#ff5722', '#795548'
+  ];
 
   // South African provinces with approximate bounding boxes
   provinces = [
@@ -7369,8 +7539,10 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { depots: any[] },
-    private dialogRef: MatDialogRef<TfnDepotsMapDialog>
+    private dialogRef: MatDialogRef<TfnDepotsMapDialog>,
+    private injector: Injector
   ) {
+    this.http = this.injector.get(HttpClient);
     this.filteredDepots = [...this.data.depots];
     this.calculateProvinceCounts();
   }
@@ -7382,6 +7554,10 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.markers.forEach(m => m.setMap(null));
     this.markers = [];
+    this.routePolylines.forEach(p => p.setMap(null));
+    this.routePolylines = [];
+    this.stopMarkers.forEach(m => m.setMap(null));
+    this.stopMarkers = [];
     if (this.infoWindow) {
       this.infoWindow.close();
     }
@@ -7620,5 +7796,221 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
 
   toggleList(): void {
     this.showList = !this.showList;
+  }
+
+  // Trip Sheet Methods
+  loadTripSheets(): void {
+    this.loadingTrips = true;
+    const apiUrl = 'http://localhost:5143/api';
+    
+    // Fetch loads with stops that have coordinates
+    this.http.get<any[]>(`${apiUrl}/logistics/loads`).subscribe({
+      next: (loads) => {
+        // Filter loads that have stops with coordinates
+        const routesWithCoords = loads
+          .filter(load => load.stops && load.stops.length > 0)
+          .map((load, index) => {
+            // Get stops that have coordinates, sorted by sequence
+            const stopsWithCoords = load.stops
+              .filter((stop: any) => stop.latitude && stop.longitude)
+              .sort((a: any, b: any) => a.stopSequence - b.stopSequence);
+            
+            return {
+              loadId: load.id,
+              loadNumber: load.loadNumber,
+              driverName: load.driverName,
+              vehicleReg: load.vehicleRegistration,
+              status: load.status,
+              totalDistance: load.estimatedDistance || 0,
+              color: this.routeColors[index % this.routeColors.length],
+              stops: stopsWithCoords.map((stop: any) => ({
+                sequence: stop.stopSequence,
+                name: stop.companyName || stop.locationName || stop.customerName || 'Stop',
+                address: stop.address,
+                city: stop.city,
+                lat: stop.latitude,
+                lng: stop.longitude,
+                type: stop.stopType
+              }))
+            };
+          })
+          .filter(route => route.stops.length >= 2); // Need at least 2 points for a route
+
+        this.tripRoutes = routesWithCoords;
+        this.loadingTrips = false;
+        
+        if (routesWithCoords.length > 0) {
+          this.drawAllRoutes();
+          this.calculateNearestDepots();
+        } else {
+          console.log('No routes with coordinates found');
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load trips:', err);
+        this.loadingTrips = false;
+      }
+    });
+  }
+
+  private drawAllRoutes(): void {
+    if (!this.map) return;
+
+    // Clear existing route markers and polylines
+    this.routePolylines.forEach(p => p.setMap(null));
+    this.routePolylines = [];
+    this.stopMarkers.forEach(m => m.setMap(null));
+    this.stopMarkers = [];
+
+    const bounds = new google.maps.LatLngBounds();
+
+    this.tripRoutes.forEach(route => {
+      if (route.stops.length < 2) return;
+
+      const path = route.stops.map((stop: any) => ({
+        lat: stop.lat,
+        lng: stop.lng
+      }));
+
+      // Add all points to bounds
+      path.forEach((point: any) => bounds.extend(point));
+
+      // Draw the route line
+      const polyline = new google.maps.Polyline({
+        path: path,
+        geodesic: true,
+        strokeColor: route.color,
+        strokeOpacity: 0.8,
+        strokeWeight: 4,
+        map: this.map
+      });
+
+      polyline.addListener('click', () => {
+        this.selectedRoute = route;
+      });
+
+      this.routePolylines.push(polyline);
+
+      // Add stop markers
+      route.stops.forEach((stop: any, index: number) => {
+        const isFirst = index === 0;
+        const isLast = index === route.stops.length - 1;
+        
+        const marker = new google.maps.Marker({
+          position: { lat: stop.lat, lng: stop.lng },
+          map: this.map,
+          title: stop.name,
+          icon: {
+            path: isFirst ? google.maps.SymbolPath.CIRCLE : (isLast ? google.maps.SymbolPath.BACKWARD_CLOSED_ARROW : google.maps.SymbolPath.CIRCLE),
+            scale: isFirst || isLast ? 10 : 6,
+            fillColor: isFirst ? '#4caf50' : (isLast ? '#f44336' : route.color),
+            fillOpacity: 1,
+            strokeColor: 'white',
+            strokeWeight: 2
+          },
+          zIndex: isFirst || isLast ? 100 : 50
+        });
+
+        marker.addListener('click', () => {
+          if (this.infoWindow && this.map) {
+            const content = `
+              <div style="padding: 8px; min-width: 180px;">
+                <h4 style="margin: 0 0 8px 0; color: ${route.color};">${stop.name}</h4>
+                <p style="margin: 4px 0; font-size: 12px;"><strong>Route:</strong> ${route.loadNumber}</p>
+                <p style="margin: 4px 0; font-size: 12px;"><strong>Stop:</strong> ${index + 1} of ${route.stops.length}</p>
+                <p style="margin: 4px 0; font-size: 12px;"><strong>Type:</strong> ${stop.type}</p>
+                <p style="margin: 4px 0; font-size: 12px;">${stop.address}${stop.city ? ', ' + stop.city : ''}</p>
+              </div>
+            `;
+            this.infoWindow.setContent(content);
+            this.infoWindow.open(this.map, marker);
+          }
+        });
+
+        this.stopMarkers.push(marker);
+      });
+    });
+
+    // Fit map to show all routes
+    if (this.tripRoutes.length > 0) {
+      this.map.fitBounds(bounds, 50);
+    }
+  }
+
+  private calculateNearestDepots(): void {
+    if (this.tripRoutes.length === 0) {
+      this.nearestDepots = [];
+      return;
+    }
+
+    // Collect all route points
+    const routePoints: { lat: number; lng: number }[] = [];
+    this.tripRoutes.forEach(route => {
+      route.stops.forEach((stop: any) => {
+        routePoints.push({ lat: stop.lat, lng: stop.lng });
+      });
+    });
+
+    // Calculate distance from each depot to the nearest route point
+    const depotDistances = this.data.depots
+      .filter(depot => depot.latitude && depot.longitude)
+      .map(depot => {
+        let minDistance = Infinity;
+        routePoints.forEach(point => {
+          const distance = this.calculateDistance(
+            depot.latitude, depot.longitude,
+            point.lat, point.lng
+          );
+          if (distance < minDistance) {
+            minDistance = distance;
+          }
+        });
+        return { depot, distance: minDistance };
+      })
+      .filter(item => item.distance < 50) // Within 50km of route
+      .sort((a, b) => a.distance - b.distance);
+
+    this.nearestDepots = depotDistances.slice(0, 10);
+  }
+
+  // Haversine formula to calculate distance between two points
+  private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = this.toRad(lat2 - lat1);
+    const dLng = this.toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private toRad(deg: number): number {
+    return deg * (Math.PI / 180);
+  }
+
+  clearTripRoutes(): void {
+    this.routePolylines.forEach(p => p.setMap(null));
+    this.routePolylines = [];
+    this.stopMarkers.forEach(m => m.setMap(null));
+    this.stopMarkers = [];
+    this.tripRoutes = [];
+    this.selectedRoute = null;
+    this.nearestDepots = [];
+  }
+
+  focusRoute(route: any): void {
+    this.selectedRoute = route;
+    if (!this.map || route.stops.length === 0) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    route.stops.forEach((stop: any) => {
+      bounds.extend({ lat: stop.lat, lng: stop.lng });
+    });
+    this.map.fitBounds(bounds, 50);
+  }
+
+  isNearestDepot(depot: any): boolean {
+    return this.nearestDepots.some(nd => nd.depot.id === depot.id);
   }
 }
