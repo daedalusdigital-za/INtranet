@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ProjectTracker.API.Models.Logistics
 {
@@ -27,10 +28,12 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(100)]
         public string? Province { get; set; }
 
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? Latitude { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? Longitude { get; set; }
 
-        // Contact
         [MaxLength(100)]
         public string? ManagerName { get; set; }
 
@@ -41,11 +44,14 @@ namespace ProjectTracker.API.Models.Logistics
         public string? Email { get; set; }
 
         // Specifications
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? TotalCapacity { get; set; } // in cubic meters or units
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? AvailableCapacity { get; set; }
 
         [MaxLength(50)]
-        public string Status { get; set; } = "Active"; // Active, Inactive, Under Maintenance
+        public string Status { get; set; } = "Active";
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }

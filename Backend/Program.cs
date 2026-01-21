@@ -75,11 +75,32 @@ builder.Services.AddSingleton<IPbxService, PbxService>();
 // Add CarTrack Service for logistics GPS tracking
 builder.Services.AddHttpClient<ICarTrackService, CarTrackService>();
 
+// Add TFN (TruckFuelNet) Services for fuel management
+// TfnTokenService must be Singleton so all clients share the same token
+builder.Services.AddSingleton<ProjectTracker.API.Services.TFN.TfnTokenService>();
+builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnVehiclesClient>();
+builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnDriversClient>();
+builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnOrdersClient>();
+builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnTransactionsClient>();
+builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnAccountsClient>();
+builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnDepotsClient>();
+builder.Services.AddScoped<ProjectTracker.API.Services.TFN.TfnSyncService>();
+
 // Add Knowledge Base Service (must be registered before LlamaAIService)
 builder.Services.AddSingleton<IKnowledgeBaseService, KnowledgeBaseService>();
 
 // Add LLaMA AI Service (singleton so model is loaded once)
 builder.Services.AddSingleton<ILlamaAIService, LlamaAIService>();
+
+// Add Logistics AI Service for load/tripsheet querying
+builder.Services.AddScoped<ILogisticsAIService, LogisticsAIService>();
+builder.Services.AddScoped<LoadOptimizationService>();
+
+// Add comprehensive AI Context Service for database access
+builder.Services.AddScoped<IAIContextService, AIContextService>();
+
+// Add Ollama AI Service for local LLM support
+builder.Services.AddSingleton<IOllamaAIService, OllamaAIService>();
 
 // Add Azure Sync Background Service
 builder.Services.AddHostedService<AzureSyncService>();

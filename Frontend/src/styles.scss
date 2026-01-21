@@ -61,3 +61,62 @@ mat-toolbar mat-icon {
   overflow: visible !important;
 }
 
+/* Wide dialog panel for forms with many fields */
+.wide-dialog .mat-mdc-dialog-container {
+  min-width: 800px;
+  max-width: 95vw;
+}
+
+.wide-dialog .mat-mdc-dialog-surface {
+  min-width: 800px;
+  max-width: 95vw;
+}
+
+/* Full width dialog */
+.full-width-dialog .mat-mdc-dialog-container {
+  width: 100%;
+  max-width: 1200px;
+}
+
+.full-width-dialog .mat-mdc-dialog-surface {
+  width: 100%;
+  max-width: 1200px;
+}
+
+/* Responsive dialog for smaller screens */
+@media (max-width: 900px) {
+  .wide-dialog .mat-mdc-dialog-container,
+  .wide-dialog .mat-mdc-dialog-surface {
+    min-width: 95vw;
+    max-width: 98vw;
+  }
+}
+
+/* Hide Google Maps error dialog */
+.gm-err-container,
+.gm-style-cc,
+.dismissButton {
+  display: none !important;
+}
+
+/* Google Places autocomplete dropdown styling */
+.pac-container {
+  z-index: 10000 !important;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  font-family: Roboto, sans-serif;
+}
+
+.pac-item {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.pac-item:hover {
+  background-color: #f5f5f5;
+}
+
+.pac-icon {
+  margin-right: 8px;
+}
+

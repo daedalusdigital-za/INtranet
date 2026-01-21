@@ -569,15 +569,17 @@ namespace ProjectTracker.API.Controllers
                 GroupName = conversation.GroupName,
                 CreatedAt = conversation.CreatedAt,
                 LastMessageAt = conversation.LastMessageAt,
-                Participants = conversation.Participants.Select(p => new ParticipantDto
-                {
-                    UserId = p.UserId,
-                    Name = p.User.Name,
-                    Surname = p.User.Surname,
-                    ProfilePictureUrl = p.User.ProfilePictureUrl,
-                    IsAdmin = p.IsAdmin,
-                    LastReadAt = p.LastReadAt
-                }).ToList(),
+                Participants = conversation.Participants
+                    .Where(p => p.User != null)
+                    .Select(p => new ParticipantDto
+                    {
+                        UserId = p.UserId,
+                        Name = p.User?.Name ?? "Unknown",
+                        Surname = p.User?.Surname ?? "",
+                        ProfilePictureUrl = p.User?.ProfilePictureUrl,
+                        IsAdmin = p.IsAdmin,
+                        LastReadAt = p.LastReadAt
+                    }).ToList(),
                 LastMessage = lastMessage != null ? new MessageDto
                 {
                     MessageId = lastMessage.MessageId,

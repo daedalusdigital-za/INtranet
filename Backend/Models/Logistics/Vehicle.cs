@@ -39,14 +39,45 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(200)]
         public string? CarTrackName { get; set; }
 
+        // TruckFuelNet Integration
+        [MaxLength(100)]
+        public string? TfnVehicleId { get; set; }
+
+        [MaxLength(100)]
+        public string? TfnSubAccountNumber { get; set; }
+
+        [MaxLength(100)]
+        public string? TfnVirtualCardNumber { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? TfnCreditLimit { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? TfnCurrentBalance { get; set; }
+        public DateTime? TfnLastSyncedAt { get; set; }
+
         // Vehicle Status
         [MaxLength(50)]
         public string Status { get; set; } = "Available"; // Available, In Use, Under Maintenance, Decommissioned
 
         // Specifications
+        [MaxLength(50)]
+        public string? FuelType { get; set; } // Diesel, Petrol, etc.
+
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? FuelCapacity { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? TankSize { get; set; } // Litres
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? AverageFuelConsumption { get; set; } // km/l
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? CurrentOdometer { get; set; }
         public DateTime? LastServiceDate { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? NextServiceOdometer { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

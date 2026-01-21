@@ -14,25 +14,50 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ILogger<AIChatController> _logger;
         private readonly ILlamaAIService _aiService;
+        private readonly IOllamaAIService _ollamaService;
+        private readonly IConfiguration _configuration;
 
-        public AIChatController(ILogger<AIChatController> logger, ILlamaAIService aiService)
+        public AIChatController(
+            ILogger<AIChatController> logger, 
+            ILlamaAIService aiService,
+            IOllamaAIService ollamaService,
+            IConfiguration configuration)
         {
             _logger = logger;
             _aiService = aiService;
+            _ollamaService = ollamaService;
+            _configuration = configuration;
         }
 
         /// <summary>
         /// Check if AI service is available
         /// </summary>
         [HttpGet("health")]
-        public IActionResult Health()
+        public async Task<IActionResult> Health()
         {
+            var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
+            var ollamaAvailable = ollamaEnabled && await _ollamaService.IsAvailableAsync();
+            var model = ollamaAvailable ? _configuration["Ollama:Model"] ?? "llama3.2" : "rule-based-fallback";
+            
             return Ok(new 
             { 
-                status = _aiService.IsModelLoaded ? "ready" : "loading",
-                model = "tinyllama-1.1b-chat",
+                status = "ready",
+                model = model,
+                provider = ollamaAvailable ? "ollama" : "fallback",
+                ollamaEnabled = ollamaEnabled,
+                ollamaAvailable = ollamaAvailable,
                 timestamp = DateTime.UtcNow
             });
+        }
+
+        /// <summary>
+        /// Get available Ollama models
+        /// </summary>
+        [HttpGet("models")]
+        public async Task<IActionResult> GetModels()
+        {
+            var models = await _ollamaService.GetModelsAsync();
+            return Ok(new { models, currentModel = _configuration["Ollama:Model"] ?? "llama3.2" });
         }
 
         /// <summary>
@@ -47,28 +72,53 @@ namespace ProjectTracker.API.Controllers
 
             try
             {
-                if (!_aiService.IsModelLoaded)
+                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
+                var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
+
+                if (useOllama)
                 {
-                    await WriteSSEMessage("AI service is still loading. Please wait a moment and try again.");
-                    await WriteSSEDone();
-                    return;
+                    // Use Ollama for AI responses
+                    var messages = request.Messages?.Select(m => new OllamaMessage
+                    {
+                        Role = m.Role,
+                        Content = m.Content
+                    }).ToList() ?? new List<OllamaMessage>();
+
+                    if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
+                    {
+                        messages.Add(new OllamaMessage { Role = "user", Content = request.Prompt });
+                    }
+
+                    await foreach (var token in _ollamaService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                    {
+                        await WriteSSEToken(token);
+                    }
                 }
-
-                var messages = request.Messages?.Select(m => new ChatMessage
+                else
                 {
-                    Role = m.Role,
-                    Content = m.Content
-                }).ToList() ?? new List<ChatMessage>();
+                    // Fallback to rule-based service
+                    if (!_aiService.IsModelLoaded)
+                    {
+                        await WriteSSEMessage("AI service is still loading. Please wait a moment and try again.");
+                        await WriteSSEDone();
+                        return;
+                    }
 
-                // If no messages but we have a prompt, use that
-                if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
-                {
-                    messages.Add(new ChatMessage { Role = "user", Content = request.Prompt });
-                }
+                    var messages = request.Messages?.Select(m => new ChatMessage
+                    {
+                        Role = m.Role,
+                        Content = m.Content
+                    }).ToList() ?? new List<ChatMessage>();
 
-                await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
-                {
-                    await WriteSSEToken(token);
+                    if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
+                    {
+                        messages.Add(new ChatMessage { Role = "user", Content = request.Prompt });
+                    }
+
+                    await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                    {
+                        await WriteSSEToken(token);
+                    }
                 }
 
                 await WriteSSEDone();
@@ -93,25 +143,46 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
-                if (!_aiService.IsModelLoaded)
+                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
+                var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
+
+                if (useOllama)
                 {
-                    return Ok(new { response = "AI service is still loading. Please wait a moment and try again." });
+                    var messages = request.Messages?.Select(m => new OllamaMessage
+                    {
+                        Role = m.Role,
+                        Content = m.Content
+                    }).ToList() ?? new List<OllamaMessage>();
+
+                    if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
+                    {
+                        messages.Add(new OllamaMessage { Role = "user", Content = request.Prompt });
+                    }
+
+                    var response = await _ollamaService.ChatAsync(messages);
+                    return Ok(new { response = response, provider = "ollama" });
                 }
-
-                var messages = request.Messages?.Select(m => new ChatMessage
+                else
                 {
-                    Role = m.Role,
-                    Content = m.Content
-                }).ToList() ?? new List<ChatMessage>();
+                    if (!_aiService.IsModelLoaded)
+                    {
+                        return Ok(new { response = "AI service is still loading. Please wait a moment and try again." });
+                    }
 
-                if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
-                {
-                    messages.Add(new ChatMessage { Role = "user", Content = request.Prompt });
+                    var messages = request.Messages?.Select(m => new ChatMessage
+                    {
+                        Role = m.Role,
+                        Content = m.Content
+                    }).ToList() ?? new List<ChatMessage>();
+
+                    if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
+                    {
+                        messages.Add(new ChatMessage { Role = "user", Content = request.Prompt });
+                    }
+
+                    var response = await _aiService.ChatAsync(messages);
+                    return Ok(new { response = response, provider = "fallback" });
                 }
-
-                var response = await _aiService.ChatAsync(messages);
-
-                return Ok(new { response = response });
             }
             catch (Exception ex)
             {

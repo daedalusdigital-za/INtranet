@@ -12,11 +12,16 @@ namespace ProjectTracker.API.Models.Logistics
         public int WarehouseId { get; set; }
         public int CommodityId { get; set; }
 
-        public decimal QuantityOnHand { get; set; }
-        public decimal? ReorderLevel { get; set; }
-        public decimal? MaximumLevel { get; set; }
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal QuantityOnHand { get; set; }
+    
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ReorderLevel { get; set; }
+    
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MaximumLevel { get; set; }
 
-        [MaxLength(50)]
+        [MaxLength(100)]
         public string? BinLocation { get; set; }
 
         public DateTime? LastCountDate { get; set; }

@@ -3,7 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, BehaviorSubject } from 'rxjs';
 import * as signalR from '@microsoft/signalr';
 import { Employee, AttendanceMetrics, CheckInRequest, CheckOutRequest } from '../models/attendance.model';
-import { environment } from '../../environments/environment.development';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'

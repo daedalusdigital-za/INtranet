@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ProjectTracker.API.Models.Logistics
 {
@@ -15,11 +16,14 @@ namespace ProjectTracker.API.Models.Logistics
         public string? Description { get; set; }
 
         // Capacity specifications
-        public decimal? MaxLoadWeight { get; set; } // in kg
-        public decimal? MaxLoadVolume { get; set; } // in cubic meters
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MaxLoadWeight { get; set; } // in kg
+    
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MaxLoadVolume { get; set; } // in cubic meters
 
         [MaxLength(50)]
-        public string? FuelType { get; set; } // Diesel, Petrol, Electric, etc.
+        public string? FuelType { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }

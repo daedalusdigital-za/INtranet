@@ -19,9 +19,11 @@ namespace ProjectTracker.API.Models.Logistics
         public DateTime ScheduledDate { get; set; }
         public DateTime? CompletedDate { get; set; }
 
-        public decimal? OdometerReading { get; set; }
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? OdometerReading { get; set; }
 
-        public decimal? Cost { get; set; }
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? Cost { get; set; }
 
         [MaxLength(200)]
         public string? ServiceProvider { get; set; }
@@ -37,6 +39,8 @@ namespace ProjectTracker.API.Models.Logistics
 
         // Next service reminder
         public DateTime? NextServiceDate { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal? NextServiceOdometer { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -110,40 +110,125 @@ namespace ProjectTracker.API.DTOs.Logistics
     public class CustomerDto
     {
         public int Id { get; set; }
+        public string? CustomerCode { get; set; }
         public string Name { get; set; } = string.Empty;
+        public string? ShortName { get; set; }
         public string? CompanyRegistration { get; set; }
         public string? VatNumber { get; set; }
         public string? ContactPerson { get; set; }
         public string? Email { get; set; }
+        public string? ContactEmail { get; set; }
         public string? PhoneNumber { get; set; }
         public string? MobileNumber { get; set; }
+        public string? Fax { get; set; }
+        public string? ContactPhone { get; set; }
+        public string? ContactFax { get; set; }
+        public string? Address { get; set; }
         public string? PhysicalAddress { get; set; }
         public string? PostalAddress { get; set; }
         public string? City { get; set; }
         public string? PostalCode { get; set; }
         public string? Province { get; set; }
         public string? Country { get; set; }
+        public List<string>? AddressLines { get; set; }
+        public string? DeliveryAddress { get; set; }
+        public string? DeliveryCity { get; set; }
+        public string? DeliveryProvince { get; set; }
+        public string? DeliveryPostalCode { get; set; }
         public string Status { get; set; } = string.Empty;
         public string? PaymentTerms { get; set; }
         public decimal? CreditLimit { get; set; }
+        public DateTime? LastMaintained { get; set; }
+        public string? SourceSystem { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
     }
 
     public class CreateCustomerDto
     {
+        public string? CustomerCode { get; set; }
         public string Name { get; set; } = string.Empty;
+        public string? ShortName { get; set; }
         public string? CompanyRegistration { get; set; }
         public string? VatNumber { get; set; }
         public string? ContactPerson { get; set; }
         public string? Email { get; set; }
+        public string? ContactEmail { get; set; }
         public string? PhoneNumber { get; set; }
         public string? MobileNumber { get; set; }
+        public string? Fax { get; set; }
+        public string? ContactPhone { get; set; }
+        public string? ContactFax { get; set; }
         public string? PhysicalAddress { get; set; }
         public string? PostalAddress { get; set; }
         public string? City { get; set; }
         public string? PostalCode { get; set; }
         public string? Province { get; set; }
         public string? Country { get; set; }
+        public List<string>? AddressLines { get; set; }
         public string? PaymentTerms { get; set; }
         public decimal? CreditLimit { get; set; }
+    }
+
+    // ==========================================
+    // Customer Import DTOs (for ERP Integration)
+    // ==========================================
+
+    /// <summary>
+    /// DTO for importing a customer from ERP system (matches the JSON structure)
+    /// </summary>
+    public class ImportCustomerDto
+    {
+        public string CustomerNumber { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string? ShortName { get; set; }
+        public string? LastMaintained { get; set; }
+        public List<string>? AddressLines { get; set; }
+        public string? Email { get; set; }
+        public string? ContactEmail { get; set; }
+        public string? Phone { get; set; }
+        public string? Fax { get; set; }
+        public string? Contact { get; set; }
+        public string? ContactPhone { get; set; }
+        public string? ContactFax { get; set; }
+        public string? VatNo { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for bulk importing multiple customers
+    /// </summary>
+    public class BulkImportCustomersDto
+    {
+        public List<ImportCustomerDto> Customers { get; set; } = new();
+        public string? SourceSystem { get; set; }
+        public string? FileName { get; set; }
+    }
+
+    /// <summary>
+    /// Response for customer import operation
+    /// </summary>
+    public class CustomerImportResultDto
+    {
+        public bool Success { get; set; }
+        public string BatchId { get; set; } = string.Empty;
+        public int TotalRecords { get; set; }
+        public int CreatedRecords { get; set; }
+        public int UpdatedRecords { get; set; }
+        public int FailedRecords { get; set; }
+        public List<string> Errors { get; set; } = new();
+        public List<CustomerDto> ImportedCustomers { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Summary of customers in the system
+    /// </summary>
+    public class CustomerSummaryDto
+    {
+        public int TotalCustomers { get; set; }
+        public int ActiveCustomers { get; set; }
+        public int InactiveCustomers { get; set; }
+        public int CustomersWithEmail { get; set; }
+        public int CustomersWithPhone { get; set; }
+        public int CustomersFromERP { get; set; }
     }
 }

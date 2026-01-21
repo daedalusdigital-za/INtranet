@@ -93,6 +93,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.Load> Loads { get; set; }
         public DbSet<Models.Logistics.LoadItem> LoadItems { get; set; }
         public DbSet<Models.Logistics.LoadStop> LoadStops { get; set; }
+        public DbSet<Models.Logistics.StopCommodity> StopCommodities { get; set; }
         public DbSet<Models.Logistics.WarehouseInventory> WarehouseInventory { get; set; }
         public DbSet<Models.Logistics.StockTransfer> StockTransfers { get; set; }
         public DbSet<Models.Logistics.Backorder> Backorders { get; set; }
@@ -101,6 +102,14 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.InvoiceLineItem> InvoiceLineItems { get; set; }
         public DbSet<Models.Logistics.VehicleMaintenance> VehicleMaintenance { get; set; }
         public DbSet<Models.Logistics.CustomerContract> CustomerContracts { get; set; }
+        public DbSet<Models.Logistics.ImportedInvoice> ImportedInvoices { get; set; }
+        public DbSet<Models.Logistics.ImportBatch> ImportBatches { get; set; }
+
+        // TFN (TruckFuelNet) Integration
+        public DbSet<Models.Logistics.TFN.TfnDepot> TfnDepots { get; set; }
+        public DbSet<Models.Logistics.TFN.TfnOrder> TfnOrders { get; set; }
+        public DbSet<Models.Logistics.TFN.TfnTransaction> TfnTransactions { get; set; }
+        public DbSet<Models.Logistics.TFN.TfnAccountBalance> TfnAccountBalances { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -655,6 +664,38 @@ namespace ProjectTracker.API.Data
                 .WithMany(l => l.Stops)
                 .HasForeignKey(ls => ls.LoadId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // StopCommodity relationships
+            modelBuilder.Entity<Models.Logistics.StopCommodity>()
+                .HasOne(sc => sc.LoadStop)
+                .WithMany(ls => ls.Commodities)
+                .HasForeignKey(sc => sc.LoadStopId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Logistics.StopCommodity>()
+                .HasOne(sc => sc.Commodity)
+                .WithMany()
+                .HasForeignKey(sc => sc.CommodityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.StopCommodity>()
+                .HasOne(sc => sc.Contract)
+                .WithMany()
+                .HasForeignKey(sc => sc.ContractId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // LoadStop Customer and Warehouse relationships
+            modelBuilder.Entity<Models.Logistics.LoadStop>()
+                .HasOne(ls => ls.Customer)
+                .WithMany()
+                .HasForeignKey(ls => ls.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Models.Logistics.LoadStop>()
+                .HasOne(ls => ls.Warehouse)
+                .WithMany()
+                .HasForeignKey(ls => ls.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Models.Logistics.ProofOfDelivery>()
                 .HasOne(pod => pod.Load)

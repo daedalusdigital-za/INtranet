@@ -21,7 +21,7 @@ import { Employee, AttendanceMetrics } from '../../models/attendance.model';
 import { interval, Subscription, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
-import { environment } from '../../../environments/environment.development';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-people',

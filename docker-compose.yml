@@ -8,7 +8,7 @@ services:
       - SA_PASSWORD=YourStrong@Passw0rd
       - MSSQL_PID=Express
     ports:
-      - "0.0.0.0:1433:1433"
+      - "0.0.0.0:1434:1433"
     volumes:
       - sql-data:/var/opt/mssql
     networks:
@@ -28,6 +28,11 @@ services:
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;
       - KnowledgeBase__DocumentsPath=/app/kb-docs
       - DocumentsPath=/app/documents
+      - Ollama__BaseUrl=http://host.docker.internal:11434
+      - Ollama__Model=phi3:mini
+      - Ollama__Enabled=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "0.0.0.0:5143:5143"
     volumes:

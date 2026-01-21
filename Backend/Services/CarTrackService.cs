@@ -11,6 +11,18 @@ namespace ProjectTracker.API.Services
         Task<VehicleLocationDto?> GetVehicleLocationAsync(string carTrackId);
         Task<FleetStatusDto> GetFleetStatusAsync();
         Task<TripTrackingDto?> TrackActiveTripAsync(int loadId);
+        Task<List<CarTrackVehicleData>> GetRawVehicleDataAsync();
+    }
+
+    // DTO for raw CarTrack vehicle data used in sync
+    public class CarTrackVehicleData
+    {
+        public string VehicleId { get; set; } = string.Empty;
+        public string? Registration { get; set; }
+        public string? ChassisNumber { get; set; }
+        public string? DriverFirstName { get; set; }
+        public string? DriverLastName { get; set; }
+        public string? Status { get; set; }
     }
 
     public class CarTrackService : ICarTrackService
@@ -184,6 +196,56 @@ namespace ProjectTracker.API.Services
             // It should be implemented in a service that has access to both CarTrack and the database
             _logger.LogWarning("TrackActiveTripAsync requires database access and should be implemented in a higher-level service");
             return null;
+        }
+
+        public async Task<List<CarTrackVehicleData>> GetRawVehicleDataAsync()
+        {
+            try
+            {
+                _logger.LogInformation("Fetching raw vehicle data from CarTrack for sync");
+
+                var response = await _httpClient.GetAsync("vehicles/status?limit=1000");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError($"CarTrack API returned status code: {response.StatusCode}");
+                    return new List<CarTrackVehicleData>();
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var carTrackResponse = JsonSerializer.Deserialize<CarTrackApiResponse>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (carTrackResponse?.Data == null)
+                {
+                    return new List<CarTrackVehicleData>();
+                }
+
+                return carTrackResponse.Data.Select(v => {
+                    DateTime? lastUpdate = null;
+                    if (!string.IsNullOrEmpty(v.Location?.Updated) && DateTime.TryParse(v.Location.Updated, out var parsed))
+                        lastUpdate = parsed;
+                    else if (!string.IsNullOrEmpty(v.EventTs) && DateTime.TryParse(v.EventTs, out var parsed2))
+                        lastUpdate = parsed2;
+
+                    return new CarTrackVehicleData
+                    {
+                        VehicleId = v.VehicleId?.ToString() ?? string.Empty,
+                        Registration = v.Registration,
+                        ChassisNumber = v.ChassisNumber,
+                        DriverFirstName = v.Driver?.FirstName,
+                        DriverLastName = v.Driver?.LastName,
+                        Status = DetermineVehicleStatus(v.Speed, v.Ignition, lastUpdate)
+                    };
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching raw vehicle data from CarTrack");
+                return new List<CarTrackVehicleData>();
+            }
         }
 
         private string DetermineVehicleStatus(double? speed, bool? ignition, DateTime? lastUpdate)
