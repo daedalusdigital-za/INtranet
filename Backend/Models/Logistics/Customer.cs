@@ -88,6 +88,16 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(20)]
         public string? DeliveryPostalCode { get; set; }
 
+        // Geolocation (from Google Maps API)
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        
+        [MaxLength(100)]
+        public string? GooglePlaceId { get; set; }
+        
+        public bool? AddressVerified { get; set; }
+        public DateTime? AddressVerifiedAt { get; set; }
+
         // Business Details
         [MaxLength(50)]
         public string Status { get; set; } = "Active"; // Active, Inactive, Suspended

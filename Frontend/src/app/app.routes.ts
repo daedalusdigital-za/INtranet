@@ -16,7 +16,8 @@ import { SettingsComponent } from './components/settings/settings.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
 import { ActiveCallsComponent } from './components/active-calls/active-calls.component';
 import { LogisticsDashboardComponent } from './components/logistics/logistics-dashboard.component';
-import { authGuard } from './guards/auth.guard';
+import { SalesDashboardComponent } from './components/sales/sales-dashboard.component';
+import { authGuard, moduleGuard } from './guards/auth.guard';
 
 // CRM Components
 import { CrmDashboardComponent } from './components/crm/crm-dashboard.component';
@@ -31,28 +32,49 @@ export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'dashboard', component: ProjectsComponent, canActivate: [authGuard] },
   
-  // CRM Routes
-  { path: 'crm', component: CrmDashboardComponent, canActivate: [authGuard] },
-  { path: 'crm/leads', component: CrmLeadsComponent, canActivate: [authGuard] },
-  { path: 'crm/leads/new', component: CrmLeadCreateComponent, canActivate: [authGuard] },
-  { path: 'crm/leads/:id', component: CrmLeadDetailComponent, canActivate: [authGuard] },
-  { path: 'crm/campaigns', component: CrmCampaignsComponent, canActivate: [authGuard] },
-  { path: 'crm/manager', component: CrmManagerConsoleComponent, canActivate: [authGuard] },
+  // CRM Routes - requires 'crm' permission
+  { path: 'crm', component: CrmDashboardComponent, canActivate: [authGuard, moduleGuard], data: { module: 'crm' } },
+  { path: 'crm/leads', component: CrmLeadsComponent, canActivate: [authGuard, moduleGuard], data: { module: 'crm' } },
+  { path: 'crm/leads/new', component: CrmLeadCreateComponent, canActivate: [authGuard, moduleGuard], data: { module: 'crm' } },
+  { path: 'crm/leads/:id', component: CrmLeadDetailComponent, canActivate: [authGuard, moduleGuard], data: { module: 'crm' } },
+  { path: 'crm/campaigns', component: CrmCampaignsComponent, canActivate: [authGuard, moduleGuard], data: { module: 'crm' } },
+  { path: 'crm/manager', component: CrmManagerConsoleComponent, canActivate: [authGuard, moduleGuard], data: { module: 'crm' } },
   
-  { path: 'departments', component: DashboardComponent, canActivate: [authGuard] },
+  // Sales Routes - requires 'sales' permission
+  { path: 'sales', component: SalesDashboardComponent, canActivate: [authGuard, moduleGuard], data: { module: 'sales' } },
+  
+  // Project Management - requires 'project_management' permission
+  { path: 'departments', component: DashboardComponent, canActivate: [authGuard, moduleGuard], data: { module: 'project_management' } },
+  { path: 'board/:id', component: BoardComponent, canActivate: [authGuard, moduleGuard], data: { module: 'project_management' } },
+  
+  // Calendar - available to all authenticated users
   { path: 'calendar', component: CalendarComponent, canActivate: [authGuard] },
   { path: 'projects', redirectTo: '/dashboard', pathMatch: 'full' },
-  { path: 'people', component: PeopleComponent, canActivate: [authGuard] },
-  { path: 'stock-management', component: StockManagementComponent, canActivate: [authGuard] },
-  { path: 'support-ticket', component: SupportTicketComponent, canActivate: [authGuard] },
-  { path: 'documents', component: DocumentsComponent, canActivate: [authGuard] },
-  { path: 'documents/:department', component: DepartmentHubComponent, canActivate: [authGuard] },
-  { path: 'logistics', component: LogisticsDashboardComponent, canActivate: [authGuard] },
+  
+  // Human Resource - requires 'human_resource' permission
+  { path: 'people', component: PeopleComponent, canActivate: [authGuard, moduleGuard], data: { module: 'human_resource' } },
+  
+  // Stock Management - requires 'stock_management' permission
+  { path: 'stock-management', component: StockManagementComponent, canActivate: [authGuard, moduleGuard], data: { module: 'stock_management' } },
+  
+  // Support Tickets - requires 'support_tickets' permission
+  { path: 'support-ticket', component: SupportTicketComponent, canActivate: [authGuard, moduleGuard], data: { module: 'support_tickets' } },
+  
+  // Documents - requires 'documents' permission
+  { path: 'documents', component: DocumentsComponent, canActivate: [authGuard, moduleGuard], data: { module: 'documents' } },
+  { path: 'documents/:department', component: DepartmentHubComponent, canActivate: [authGuard, moduleGuard], data: { module: 'documents' } },
+  
+  // Logistics - requires 'logistics' permission
+  { path: 'logistics', component: LogisticsDashboardComponent, canActivate: [authGuard, moduleGuard], data: { module: 'logistics' } },
+  
+  // Profile and Settings - available to all authenticated users
   { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
   { path: 'user-management', component: UserManagementComponent, canActivate: [authGuard] },
-  { path: 'messages', component: MessagesComponent, canActivate: [authGuard] },
+  
+  // Messages - requires 'messaging' permission
+  { path: 'messages', component: MessagesComponent, canActivate: [authGuard, moduleGuard], data: { module: 'messaging' } },
+  
   { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
-  { path: 'board/:id', component: BoardComponent, canActivate: [authGuard] },
   { path: 'call-history', component: ActiveCallsComponent, canActivate: [authGuard] },
   { path: 'my-extension', component: ActiveCallsComponent, canActivate: [authGuard] },
   { path: 'call-center', component: ActiveCallsComponent, canActivate: [authGuard] },

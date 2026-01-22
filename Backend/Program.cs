@@ -96,6 +96,22 @@ builder.Services.AddSingleton<ILlamaAIService, LlamaAIService>();
 builder.Services.AddScoped<ILogisticsAIService, LogisticsAIService>();
 builder.Services.AddScoped<LoadOptimizationService>();
 
+// Add Customer Address Cleanup Service
+builder.Services.AddScoped<CustomerAddressCleanupService>();
+builder.Services.AddScoped<CustomerProvinceMapperService>();
+
+// Add Google Maps API Services
+builder.Services.AddScoped<ProjectTracker.API.Services.Google.GeocodingService>();
+builder.Services.AddScoped<ProjectTracker.API.Services.Google.AddressValidationService>();
+builder.Services.AddScoped<ProjectTracker.API.Services.Google.RoutesService>();
+builder.Services.AddScoped<ProjectTracker.API.Services.Google.RouteOptimizationService>();
+
+// Sales Report Import Service
+builder.Services.AddScoped<SalesReportImportService>();
+
+// Stock on Hand Import Service
+builder.Services.AddScoped<StockOnHandImportService>();
+
 // Add comprehensive AI Context Service for database access
 builder.Services.AddScoped<IAIContextService, AIContextService>();
 

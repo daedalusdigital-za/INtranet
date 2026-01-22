@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -9,9 +9,11 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { AnnouncementService, AnnouncementListItem } from '../../services/announcement.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
 
@@ -29,6 +31,7 @@ import { environment } from '../../../environments/environment';
     MatTooltipModule,
     MatFormFieldModule,
     MatInputModule,
+    MatDialogModule,
     FormsModule,
     NavbarComponent
   ],
@@ -52,18 +55,23 @@ import { environment } from '../../../environments/environment';
           </mat-card-header>
           <mat-card-content>
             <div class="announcements-list">
-              @for (announcement of announcements; track announcement.id) {
-                <div class="announcement-item" [class.high-priority]="announcement.priority === 'high'" [class.normal-priority]="announcement.priority === 'normal'">
-                  <div class="announcement-icon-badge" [class.high-priority-badge]="announcement.priority === 'high'">
-                    <mat-icon>{{ announcement.priority === 'high' ? 'priority_high' : 'info' }}</mat-icon>
+              @for (announcement of announcements.slice(0, 3); track announcement.announcementId) {
+                <div class="announcement-item" [class.high-priority]="announcement.priority === 'Urgent' || announcement.priority === 'High'" [class.normal-priority]="announcement.priority === 'Normal' || announcement.priority === 'Low'">
+                  <div class="announcement-icon-badge" [class.high-priority-badge]="announcement.priority === 'Urgent' || announcement.priority === 'High'">
+                    <mat-icon>{{ (announcement.priority === 'Urgent' || announcement.priority === 'High') ? 'priority_high' : 'info' }}</mat-icon>
                   </div>
                   <div class="announcement-content">
                     <div class="announcement-header">
                       <h4>{{ announcement.title }}</h4>
-                      @if (announcement.priority === 'high') {
+                      @if (announcement.priority === 'Urgent') {
                         <mat-chip class="priority-chip urgent-chip">
                           <mat-icon>bolt</mat-icon>
                           Urgent
+                        </mat-chip>
+                      } @else if (announcement.priority === 'High') {
+                        <mat-chip class="priority-chip urgent-chip">
+                          <mat-icon>arrow_upward</mat-icon>
+                          High
                         </mat-chip>
                       } @else {
                         <mat-chip class="priority-chip normal-chip">
@@ -76,22 +84,28 @@ import { environment } from '../../../environments/environment';
                     <div class="announcement-meta">
                       <span class="date">
                         <mat-icon>event</mat-icon>
-                        {{ announcement.date }}
+                        {{ formatAnnouncementDate(announcement.createdAt) }}
                       </span>
                       <span class="author">
                         <mat-icon>account_circle</mat-icon>
-                        {{ announcement.author }}
+                        {{ announcement.createdByName }}
                       </span>
                     </div>
                   </div>
                 </div>
               }
+              @if (announcements.length === 0) {
+                <div class="no-announcements">
+                  <mat-icon>campaign</mat-icon>
+                  <p>No announcements at this time</p>
+                </div>
+              }
             </div>
           </mat-card-content>
           <mat-card-actions>
-            <button mat-raised-button color="primary" style="width: 100%; height: 48px; font-weight: 600; border-radius: 12px;">
+            <button mat-raised-button color="primary" style="width: 100%; height: 48px; font-weight: 600; border-radius: 12px;" (click)="openAllAnnouncementsDialog()">
               <mat-icon>visibility</mat-icon>
-              View All Announcements
+              View All Announcements ({{ announcements.length }})
             </button>
           </mat-card-actions>
         </mat-card>
@@ -1346,33 +1360,8 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     return this.authService.currentUserValue?.userId || 0;
   }
 
-  // Company Announcements
-  announcements: any[] = [
-    {
-      id: 1,
-      title: 'Year-End Company Meeting',
-      content: 'Join us for the annual company meeting on December 15th at 2 PM in the Main Conference Hall. All employees are required to attend.',
-      date: 'Dec 10, 2024',
-      author: 'Management',
-      priority: 'high'
-    },
-    {
-      id: 2,
-      title: 'New Health Insurance Policy',
-      content: 'We are pleased to announce enhanced health insurance benefits effective January 1st. Check your email for complete details.',
-      date: 'Dec 8, 2024',
-      author: 'HR Department',
-      priority: 'normal'
-    },
-    {
-      id: 3,
-      title: 'Holiday Schedule',
-      content: 'Company will be closed from December 24th to January 2nd. Emergency contacts will be shared via email.',
-      date: 'Dec 5, 2024',
-      author: 'Administration',
-      priority: 'normal'
-    }
-  ];
+  // Company Announcements (loaded from database)
+  announcements: AnnouncementListItem[] = [];
 
   // Earliest Employee Today (loaded from database)
   earlyBirds: any = {
@@ -1481,12 +1470,17 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   constructor(
     private apiService: ApiService,
     private authService: AuthService,
-    private router: Router
+    private announcementService: AnnouncementService,
+    private router: Router,
+    private dialog: MatDialog
   ) {
     this.currentUser = this.authService.currentUserValue;
   }
 
   ngOnInit(): void {
+    // Load announcements from database
+    this.loadAnnouncements();
+
     // Load earliest employee from database
     this.loadEarliestEmployee();
 
@@ -1596,6 +1590,35 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     if (this.locations.length > 0) {
       this.currentLocationIndex = (this.currentLocationIndex + 1) % this.locations.length;
     }
+  }
+
+  // Load announcements from database
+  loadAnnouncements(): void {
+    this.announcementService.getAnnouncements(true, 5).subscribe({
+      next: (data) => {
+        this.announcements = data;
+      },
+      error: (error) => {
+        console.error('Error loading announcements:', error);
+      }
+    });
+  }
+
+  // Format announcement date
+  formatAnnouncementDate(date: Date | string): string {
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return d.toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   // Load early birds who clocked in today
@@ -1792,6 +1815,388 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     this.authService.logout();
     this.router.navigate(['/login']);
   }
+
+  // Open All Announcements Dialog
+  openAllAnnouncementsDialog(): void {
+    this.dialog.open(AllAnnouncementsDialogComponent, {
+      width: '800px',
+      maxHeight: '80vh',
+      data: { 
+        announcements: this.announcements,
+        formatDate: this.formatAnnouncementDate.bind(this)
+      }
+    });
+  }
 }
 
+// All Announcements Dialog Component
+@Component({
+  selector: 'app-all-announcements-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatChipsModule,
+    MatCardModule
+  ],
+  template: `
+    <div class="announcements-dialog">
+      <div class="dialog-header">
+        <h2>
+          <mat-icon>campaign</mat-icon>
+          All Announcements
+        </h2>
+        <button mat-icon-button (click)="dialogRef.close()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
 
+      <div class="dialog-content">
+        @if (selectedAnnouncement) {
+          <!-- Single Announcement View -->
+          <div class="announcement-detail">
+            <button mat-button (click)="selectedAnnouncement = null" class="back-button">
+              <mat-icon>arrow_back</mat-icon>
+              Back to all announcements
+            </button>
+            
+            <div class="detail-header">
+              <h3>{{ selectedAnnouncement.title }}</h3>
+              @if (selectedAnnouncement.priority === 'Urgent') {
+                <mat-chip class="priority-chip urgent">
+                  <mat-icon>bolt</mat-icon>
+                  Urgent
+                </mat-chip>
+              } @else if (selectedAnnouncement.priority === 'High') {
+                <mat-chip class="priority-chip high">
+                  <mat-icon>arrow_upward</mat-icon>
+                  High Priority
+                </mat-chip>
+              } @else {
+                <mat-chip class="priority-chip normal">
+                  <mat-icon>info_outline</mat-icon>
+                  Information
+                </mat-chip>
+              }
+            </div>
+            
+            <div class="detail-meta">
+              <span>
+                <mat-icon>person</mat-icon>
+                {{ selectedAnnouncement.createdByName }}
+              </span>
+              <span>
+                <mat-icon>event</mat-icon>
+                {{ data.formatDate(selectedAnnouncement.createdAt) }}
+              </span>
+              @if (selectedAnnouncement.category) {
+                <span>
+                  <mat-icon>label</mat-icon>
+                  {{ selectedAnnouncement.category }}
+                </span>
+              }
+            </div>
+            
+            <div class="detail-content">
+              {{ selectedAnnouncement.content }}
+            </div>
+          </div>
+        } @else {
+          <!-- All Announcements List -->
+          @if (data.announcements.length === 0) {
+            <div class="no-announcements">
+              <mat-icon>campaign</mat-icon>
+              <p>No announcements at this time</p>
+            </div>
+          } @else {
+            <div class="announcements-list">
+              @for (announcement of data.announcements; track announcement.announcementId) {
+                <mat-card class="announcement-card" 
+                          [class.urgent]="announcement.priority === 'Urgent'"
+                          [class.high]="announcement.priority === 'High'"
+                          (click)="viewAnnouncement(announcement)">
+                  <div class="card-content">
+                    <div class="card-icon" [class.urgent]="announcement.priority === 'Urgent' || announcement.priority === 'High'">
+                      <mat-icon>{{ (announcement.priority === 'Urgent' || announcement.priority === 'High') ? 'priority_high' : 'info' }}</mat-icon>
+                    </div>
+                    <div class="card-details">
+                      <div class="card-header">
+                        <h4>{{ announcement.title }}</h4>
+                        @if (announcement.priority === 'Urgent') {
+                          <mat-chip class="priority-chip urgent">Urgent</mat-chip>
+                        } @else if (announcement.priority === 'High') {
+                          <mat-chip class="priority-chip high">High</mat-chip>
+                        }
+                      </div>
+                      <p class="card-preview">{{ announcement.content | slice:0:120 }}{{ announcement.content.length > 120 ? '...' : '' }}</p>
+                      <div class="card-meta">
+                        <span><mat-icon>person</mat-icon> {{ announcement.createdByName }}</span>
+                        <span><mat-icon>event</mat-icon> {{ data.formatDate(announcement.createdAt) }}</span>
+                      </div>
+                    </div>
+                    <div class="card-action">
+                      <button mat-icon-button color="primary" matTooltip="Read full announcement">
+                        <mat-icon>chevron_right</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                </mat-card>
+              }
+            </div>
+          }
+        }
+      </div>
+    </div>
+  `,
+  styles: [`
+    .announcements-dialog {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin: -24px -24px 0 -24px;
+    }
+
+    .dialog-header h2 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .dialog-header button {
+      color: white;
+    }
+
+    .dialog-content {
+      padding: 24px;
+      overflow-y: auto;
+      max-height: calc(80vh - 100px);
+    }
+
+    .announcements-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .announcement-card {
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border-left: 4px solid #e0e0e0;
+    }
+
+    .announcement-card:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .announcement-card.urgent {
+      border-left-color: #f44336;
+      background: linear-gradient(90deg, rgba(244,67,54,0.05) 0%, transparent 100%);
+    }
+
+    .announcement-card.high {
+      border-left-color: #ff9800;
+      background: linear-gradient(90deg, rgba(255,152,0,0.05) 0%, transparent 100%);
+    }
+
+    .card-content {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #e3f2fd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .card-icon.urgent {
+      background: linear-gradient(135deg, #ff5252 0%, #f44336 100%);
+      color: white;
+    }
+
+    .card-icon mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .card-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .card-header h4 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .card-preview {
+      margin: 0 0 12px 0;
+      color: #666;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .card-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 0.8rem;
+      color: #999;
+    }
+
+    .card-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .card-meta mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .card-action {
+      display: flex;
+      align-items: center;
+    }
+
+    .priority-chip {
+      font-size: 0.7rem;
+      height: 24px;
+    }
+
+    .priority-chip.urgent {
+      background: #f44336 !important;
+      color: white !important;
+    }
+
+    .priority-chip.high {
+      background: #ff9800 !important;
+      color: white !important;
+    }
+
+    .priority-chip.normal {
+      background: #2196f3 !important;
+      color: white !important;
+    }
+
+    /* Detail View */
+    .announcement-detail {
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .back-button {
+      margin-bottom: 16px;
+      color: #667eea;
+    }
+
+    .detail-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .detail-header h3 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: #333;
+    }
+
+    .detail-meta {
+      display: flex;
+      gap: 24px;
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+
+    .detail-meta span {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .detail-meta mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #667eea;
+    }
+
+    .detail-content {
+      font-size: 1rem;
+      line-height: 1.8;
+      color: #333;
+      white-space: pre-wrap;
+    }
+
+    .no-announcements {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px;
+      color: #999;
+    }
+
+    .no-announcements mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+    }
+  `]
+})
+export class AllAnnouncementsDialogComponent {
+  selectedAnnouncement: AnnouncementListItem | null = null;
+
+  constructor(
+    public dialogRef: MatDialogRef<AllAnnouncementsDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: { announcements: AnnouncementListItem[], formatDate: (date: Date | string) => string }
+  ) {}
+
+  viewAnnouncement(announcement: AnnouncementListItem): void {
+    this.selectedAnnouncement = announcement;
+  }
+}

@@ -14,9 +14,13 @@ import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { SohImportDialogComponent, SohImportDialogData, SohImportDialogResult } from '../shared/soh-import-dialog/soh-import-dialog.component';
 import { environment } from '../../../environments/environment';
 
 interface WarehouseSummary {
@@ -25,7 +29,7 @@ interface WarehouseSummary {
   location: string;
   managerName: string;
   totalItems: number;
-  categories: number;
+  totalStockValue: number;
   capacityPercent: number;
   totalCapacity: number;
   availableCapacity: number;
@@ -59,14 +63,27 @@ interface WarehouseInventory {
     MatDialogModule,
     MatChipsModule,
     MatProgressSpinnerModule,
+    MatSnackBarModule,
+    MatMenuModule,
+    MatTooltipModule,
     NavbarComponent
   ],
   template: `
     <app-navbar></app-navbar>
 
     <div class="container">
-      <h1>Stock Management</h1>
-      <p class="subtitle">Manage your warehouses and inventory</p>
+      <div class="page-header">
+        <div class="header-text">
+          <h1>Stock Management</h1>
+          <p class="subtitle">Manage your warehouses and inventory</p>
+        </div>
+        <div class="header-actions">
+          <button mat-raised-button color="accent" (click)="openSohImportDialog()" matTooltip="Import Stock on Hand from Excel">
+            <mat-icon>upload_file</mat-icon>
+            Import SOH
+          </button>
+        </div>
+      </div>
 
       @if (loading) {
         <div class="loading-container">
@@ -82,7 +99,7 @@ interface WarehouseInventory {
       } @else {
         <div class="warehouses-grid">
           @for (warehouse of warehouses; track warehouse.id) {
-            <mat-card class="warehouse-card" (click)="openWarehouse(warehouse)">
+            <mat-card class="warehouse-card" (click)="viewWarehouseDetails(warehouse)">
               <mat-card-header>
                 <div class="warehouse-icon">
                   <mat-icon>warehouse</mat-icon>
@@ -102,8 +119,8 @@ interface WarehouseInventory {
                   <div class="stat">
                     <mat-icon>category</mat-icon>
                     <div>
-                      <div class="stat-value">{{ warehouse.categories }}</div>
-                      <div class="stat-label">Categories</div>
+                      <div class="stat-value">R{{ warehouse.totalStockValue | number:'1.0-0' }}</div>
+                      <div class="stat-label">Value</div>
                     </div>
                   </div>
                 </div>
@@ -147,31 +164,50 @@ interface WarehouseInventory {
       min-height: calc(100vh - 64px);
     }
 
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+
+    .header-text {
+      text-align: left;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .header-actions button {
+      font-weight: 500;
+    }
+
     h1 {
       color: white;
       font-size: 2.5rem;
       font-weight: 600;
       margin-bottom: 8px;
       text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-      text-align: center;
     }
 
     .subtitle {
       color: rgba(255, 255, 255, 0.9);
       font-size: 1.1rem;
-      margin-bottom: 32px;
-      text-align: center;
+      margin: 0;
     }
 
     .warehouses-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 24px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
     }
 
     .warehouse-card {
       cursor: pointer;
       transition: all 0.3s ease;
+      padding: 24px;
     }
 
     .warehouse-card:hover {
@@ -237,9 +273,10 @@ interface WarehouseInventory {
     }
 
     .stat-value {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 700;
       color: #333;
+      white-space: nowrap;
     }
 
     .stat-label {
@@ -335,7 +372,8 @@ export class StockManagementComponent implements OnInit {
     private router: Router,
     private dialog: MatDialog,
     private authService: AuthService,
-    private http: HttpClient
+    private http: HttpClient,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
@@ -367,6 +405,26 @@ export class StockManagementComponent implements OnInit {
   openWarehouse(warehouse: any): void {
     // Navigate to warehouse detail page (to be created)
     this.router.navigate(['/stock-management/warehouse', warehouse.id]);
+  }
+
+  openSohImportDialog(): void {
+    const dialogRef = this.dialog.open(SohImportDialogComponent, {
+      width: '95vw',
+      maxWidth: '1200px',
+      maxHeight: '90vh',
+      disableClose: true,
+      data: {
+        apiUrl: environment.apiUrl
+      } as SohImportDialogData
+    });
+
+    dialogRef.afterClosed().subscribe((result: SohImportDialogResult) => {
+      if (result?.success && result?.committed) {
+        this.snackBar.open(result.message || 'Stock on Hand data imported successfully!', 'Close', { duration: 5000 });
+        // Optionally refresh warehouse data
+        this.loadWarehouses();
+      }
+    });
   }
 
   logout(): void {
@@ -421,7 +479,7 @@ export class StockManagementComponent implements OnInit {
               <mat-icon>inventory_2</mat-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value">{{ data.totalItems }}</div>
+              <div class="stat-value">{{ sohTotalItems > 0 ? sohTotalItems : data.totalItems }}</div>
               <div class="stat-label">Total Items</div>
             </div>
           </div>
@@ -430,8 +488,8 @@ export class StockManagementComponent implements OnInit {
               <mat-icon>category</mat-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value">{{ data.categories }}</div>
-              <div class="stat-label">Categories</div>
+              <div class="stat-value">R{{ sohTotalValue > 0 ? (sohTotalValue | number:'1.0-0') : (data.totalStockValue | number:'1.0-0') }}</div>
+              <div class="stat-label">Value</div>
             </div>
           </div>
           <div class="stat-card">
@@ -453,6 +511,30 @@ export class StockManagementComponent implements OnInit {
             </div>
           </div>
         </div>
+
+        <!-- SOH Info Banner -->
+        @if (sohAsAtDate) {
+          <div class="soh-info-banner">
+            <div class="soh-info-item">
+              <mat-icon>calendar_today</mat-icon>
+              <span>Stock as at: <strong>{{ sohAsAtDate }}</strong></span>
+            </div>
+            <div class="soh-info-item">
+              <mat-icon>inventory_2</mat-icon>
+              <span>{{ sohTotalItems | number }} items</span>
+            </div>
+            <div class="soh-info-item">
+              <mat-icon>attach_money</mat-icon>
+              <span>Total Value: <strong>R {{ sohTotalValue | number:'1.2-2' }}</strong></span>
+            </div>
+            @if (sohLocations.length > 0) {
+              <div class="soh-info-item locations">
+                <mat-icon>warehouse</mat-icon>
+                <span>Locations: {{ sohLocations.join(', ') }}</span>
+              </div>
+            }
+          </div>
+        }
 
         <!-- Inventory Table -->
         <div class="table-section">
@@ -900,6 +982,42 @@ export class StockManagementComponent implements OnInit {
       font-size: 0.875rem;
       color: #666;
       font-weight: 500;
+    }
+
+    .soh-info-banner {
+      background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: center;
+      border-left: 4px solid #4caf50;
+    }
+
+    .soh-info-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #2e7d32;
+      font-size: 14px;
+
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+        color: #388e3c;
+      }
+
+      strong {
+        font-weight: 600;
+      }
+
+      &.locations {
+        flex: 1;
+        min-width: 200px;
+      }
     }
 
     .table-section {
@@ -1413,6 +1531,12 @@ export class WarehouseDetailsDialog implements OnInit {
   warehouses: string[] = [];
   inventoryData: any[] = [];
   filteredInventoryData: any[] = [];
+  
+  // SOH data
+  sohAsAtDate: string | null = null;
+  sohTotalItems: number = 0;
+  sohTotalValue: number = 0;
+  sohLocations: string[] = [];
 
   private http = inject(HttpClient);
 
@@ -1428,6 +1552,45 @@ export class WarehouseDetailsDialog implements OnInit {
 
   loadInventory(): void {
     this.loading = true;
+    // Try to load from SOH snapshots first
+    this.http.get<any>(`${environment.apiUrl}/warehouses/${this.data.id}/soh`).subscribe({
+      next: (data) => {
+        if (data.items && data.items.length > 0) {
+          // Use SOH data
+          this.sohAsAtDate = data.asAtDate;
+          this.sohTotalItems = data.totalItems;
+          this.sohTotalValue = data.totalStockValue;
+          this.sohLocations = data.locations || [];
+          
+          this.inventoryData = data.items.map((item: any) => ({
+            id: item.id,
+            name: item.itemDescription || item.itemCode,
+            sku: item.itemCode,
+            category: item.companyName || 'Unknown',
+            location: item.location,
+            quantity: item.qtyOnHand || 0,
+            reorderLevel: null,
+            binLocation: item.uom,
+            totalCost: item.totalCost,
+            unitCost: item.unitCost,
+            qtyOnPO: item.qtyOnPO,
+            qtyOnSO: item.qtyOnSO,
+            stockAvailable: item.stockAvailable,
+            status: this.getStockStatus(item.qtyOnHand || 0, null)
+          }));
+          this.filteredInventoryData = [...this.inventoryData];
+        }
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error loading SOH inventory:', error);
+        // Fallback to legacy inventory
+        this.loadLegacyInventory();
+      }
+    });
+  }
+
+  loadLegacyInventory(): void {
     this.http.get<any[]>(`${environment.apiUrl}/warehouses/${this.data.id}/inventory`).subscribe({
       next: (data) => {
         this.inventoryData = data.map(item => ({

@@ -52,25 +52,76 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpGet("summary")]
         public async Task<ActionResult<IEnumerable<WarehouseSummaryDto>>> GetWarehouseSummaries()
         {
-            var warehouses = await _context.Warehouses
-                .Include(w => w.Inventory)
-                    .ThenInclude(i => i.Commodity)
-                .Select(w => new WarehouseSummaryDto
+            // Get all warehouses with their codes
+            var warehouseData = await _context.Warehouses
+                .Select(w => new
+                {
+                    w.Id,
+                    w.Name,
+                    w.Code,
+                    Location = w.City ?? w.Province ?? "Unknown",
+                    w.ManagerName,
+                    w.TotalCapacity,
+                    w.AvailableCapacity,
+                    w.Status
+                })
+                .ToListAsync();
+
+            // Get the latest SOH snapshot date
+            var latestDate = await _context.StockOnHandSnapshots
+                .MaxAsync(s => (DateTime?)s.AsAtDate);
+
+            // Get all SOH data for latest date and group in memory
+            var sohLookup = new Dictionary<string, (int Count, decimal Value)>(StringComparer.OrdinalIgnoreCase);
+            
+            if (latestDate.HasValue)
+            {
+                var sohItems = await _context.StockOnHandSnapshots
+                    .Where(s => s.AsAtDate == latestDate.Value)
+                    .Select(s => new { s.Location, s.TotalCostForQOH })
+                    .ToListAsync();
+
+                // Group by location prefix (e.g., "KZN 1" -> "KZN")
+                foreach (var item in sohItems)
+                {
+                    var prefix = item.Location.Contains(' ') 
+                        ? item.Location.Substring(0, item.Location.IndexOf(' '))
+                        : item.Location;
+                    
+                    if (sohLookup.TryGetValue(prefix, out var existing))
+                    {
+                        sohLookup[prefix] = (existing.Count + 1, existing.Value + (item.TotalCostForQOH ?? 0));
+                    }
+                    else
+                    {
+                        sohLookup[prefix] = (1, item.TotalCostForQOH ?? 0);
+                    }
+                }
+            }
+
+            // Build the result
+            var warehouses = warehouseData.Select(w =>
+            {
+                var soh = !string.IsNullOrEmpty(w.Code) && sohLookup.TryGetValue(w.Code, out var data) 
+                    ? data 
+                    : (Count: 0, Value: 0m);
+
+                return new WarehouseSummaryDto
                 {
                     Id = w.Id,
                     Name = w.Name,
-                    Location = w.City ?? w.Province ?? "Unknown",
+                    Location = w.Location,
                     ManagerName = w.ManagerName,
-                    TotalItems = w.Inventory.Sum(i => (int)i.QuantityOnHand),
-                    Categories = w.Inventory.Select(i => i.Commodity.Category).Distinct().Count(),
+                    TotalItems = soh.Count,
+                    TotalStockValue = soh.Value,
                     CapacityPercent = w.TotalCapacity.HasValue && w.TotalCapacity > 0
                         ? (int)(((w.TotalCapacity - (w.AvailableCapacity ?? 0)) / w.TotalCapacity) * 100)
                         : 0,
                     TotalCapacity = w.TotalCapacity,
                     AvailableCapacity = w.AvailableCapacity,
                     Status = w.Status
-                })
-                .ToListAsync();
+                };
+            }).ToList();
 
             return Ok(warehouses);
         }
@@ -416,6 +467,144 @@ namespace ProjectTracker.API.Controllers.Logistics
             await _context.SaveChangesAsync();
 
             return Ok(commodity);
+        }
+
+        // Stock on Hand Snapshots
+        /// <summary>
+        /// Get SOH snapshots for a warehouse by matching warehouse code to SOH location prefix
+        /// </summary>
+        [HttpGet("{warehouseId}/soh")]
+        public async Task<ActionResult> GetWarehouseSoh(int warehouseId, [FromQuery] DateTime? asAtDate = null)
+        {
+            var warehouse = await _context.Warehouses.FindAsync(warehouseId);
+            if (warehouse == null)
+                return NotFound("Warehouse not found");
+
+            // Match SOH locations that start with warehouse code (e.g., KZN matches KZN 1, KZN 2)
+            var warehouseCode = warehouse.Code;
+            var targetDate = asAtDate?.Date ?? DateTime.Today;
+
+            // Get the most recent snapshot date <= targetDate for this warehouse's locations
+            var latestSnapshotDate = await _context.StockOnHandSnapshots
+                .Where(s => s.Location.StartsWith(warehouseCode) && s.AsAtDate <= targetDate)
+                .MaxAsync(s => (DateTime?)s.AsAtDate);
+
+            if (!latestSnapshotDate.HasValue)
+            {
+                return Ok(new
+                {
+                    warehouseId,
+                    warehouseName = warehouse.Name,
+                    warehouseCode,
+                    asAtDate = (DateTime?)null,
+                    totalItems = 0,
+                    totalQtyOnHand = 0m,
+                    totalStockValue = 0m,
+                    locations = new List<string>(),
+                    items = new List<object>()
+                });
+            }
+
+            // Get operating company lookup
+            var operatingCompanies = await _context.OperatingCompanies
+                .ToDictionaryAsync(c => c.OperatingCompanyId, c => c.Name);
+
+            var snapshots = await _context.StockOnHandSnapshots
+                .Where(s => s.Location.StartsWith(warehouseCode) && s.AsAtDate == latestSnapshotDate.Value)
+                .OrderBy(s => s.Location)
+                .ThenBy(s => s.ItemCode)
+                .ToListAsync();
+
+            var result = new
+            {
+                warehouseId,
+                warehouseName = warehouse.Name,
+                warehouseCode,
+                asAtDate = latestSnapshotDate.Value.ToString("yyyy-MM-dd"),
+                totalItems = snapshots.Count,
+                totalQtyOnHand = snapshots.Sum(s => s.QtyOnHand ?? 0),
+                totalStockValue = snapshots.Sum(s => s.TotalCostForQOH ?? 0),
+                locations = snapshots.Select(s => s.Location).Distinct().OrderBy(l => l).ToList(),
+                items = snapshots.Select(s => new
+                {
+                    id = s.StockSnapshotId,
+                    itemCode = s.ItemCode,
+                    itemDescription = s.ItemDescription,
+                    location = s.Location,
+                    companyName = operatingCompanies.GetValueOrDefault(s.OperatingCompanyId, "Unknown"),
+                    uom = s.Uom,
+                    qtyOnHand = s.QtyOnHand,
+                    qtyOnPO = s.QtyOnPO,
+                    qtyOnSO = s.QtyOnSO,
+                    stockAvailable = s.StockAvailable,
+                    totalCost = s.TotalCostForQOH,
+                    unitCost = s.UnitCostForQOH
+                }).ToList()
+            };
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Get all SOH snapshots with filtering
+        /// </summary>
+        [HttpGet("soh")]
+        public async Task<ActionResult> GetAllSoh([FromQuery] DateTime? asAtDate = null, [FromQuery] string? location = null)
+        {
+            var targetDate = asAtDate?.Date ?? DateTime.Today;
+
+            // Get the most recent snapshot date
+            var query = _context.StockOnHandSnapshots.AsQueryable();
+            
+            if (!string.IsNullOrEmpty(location))
+            {
+                query = query.Where(s => s.Location.StartsWith(location));
+            }
+
+            var latestSnapshotDate = await query
+                .Where(s => s.AsAtDate <= targetDate)
+                .MaxAsync(s => (DateTime?)s.AsAtDate);
+
+            if (!latestSnapshotDate.HasValue)
+            {
+                return Ok(new
+                {
+                    asAtDate = (DateTime?)null,
+                    totalItems = 0,
+                    totalQtyOnHand = 0m,
+                    totalStockValue = 0m,
+                    items = new List<object>()
+                });
+            }
+
+            var snapshots = await query
+                .Where(s => s.AsAtDate == latestSnapshotDate.Value)
+                .OrderBy(s => s.Location)
+                .ThenBy(s => s.ItemCode)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                asAtDate = latestSnapshotDate.Value.ToString("yyyy-MM-dd"),
+                totalItems = snapshots.Count,
+                totalQtyOnHand = snapshots.Sum(s => s.QtyOnHand ?? 0),
+                totalStockValue = snapshots.Sum(s => s.TotalCostForQOH ?? 0),
+                locations = snapshots.Select(s => s.Location).Distinct().OrderBy(l => l).ToList(),
+                items = snapshots.Select(s => new
+                {
+                    id = s.StockSnapshotId,
+                    itemCode = s.ItemCode,
+                    itemDescription = s.ItemDescription,
+                    location = s.Location,
+                    uom = s.Uom,
+                    qtyOnHand = s.QtyOnHand,
+                    qtyOnPO = s.QtyOnPO,
+                    qtyOnSO = s.QtyOnSO,
+                    stockAvailable = s.StockAvailable,
+                    totalCost = s.TotalCostForQOH,
+                    unitCost = s.UnitCostForQOH
+                }).ToList()
+            });
         }
     }
 }

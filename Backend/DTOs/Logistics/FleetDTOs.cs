@@ -16,6 +16,31 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? CurrentDriverName { get; set; }
         public string? CarTrackId { get; set; }
         public string? CarTrackName { get; set; }
+        
+        // TFN Integration
+        public string? TfnVehicleId { get; set; }
+        public string? TfnSubAccountNumber { get; set; }
+        public string? TfnVirtualCardNumber { get; set; }
+        public decimal? TfnCreditLimit { get; set; }
+        public decimal? TfnCurrentBalance { get; set; }
+        public DateTime? TfnLastSyncedAt { get; set; }
+        public decimal? TankSize { get; set; }
+        public string? FuelType { get; set; }
+        public decimal? AverageFuelConsumption { get; set; }
+        
+        // Live tracking data (from CarTrack)
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string? LastLocation { get; set; }
+        public double? Speed { get; set; }
+        public double? Heading { get; set; }
+        public DateTime? LastUpdate { get; set; }
+        public string? LiveStatus { get; set; }  // moving, stopped, idling, offline
+        
+        // Status flags
+        public bool IsLinkedToCarTrack => !string.IsNullOrEmpty(CarTrackId);
+        public bool IsLinkedToTfn => !string.IsNullOrEmpty(TfnVehicleId);
+        
         public string Status { get; set; } = string.Empty;
         public decimal? FuelCapacity { get; set; }
         public decimal? CurrentOdometer { get; set; }

@@ -10,7 +10,7 @@ namespace ProjectTracker.API.Models.Logistics
 
         // Foreign Keys
         public int LoadId { get; set; }
-        public int CommodityId { get; set; }
+        public int? CommodityId { get; set; }  // Nullable - may not have commodity mapped
 
         public decimal Quantity { get; set; }
 
@@ -30,6 +30,6 @@ namespace ProjectTracker.API.Models.Logistics
         public virtual Load Load { get; set; } = null!;
 
         [ForeignKey("CommodityId")]
-        public virtual Commodity Commodity { get; set; } = null!;
+        public virtual Commodity? Commodity { get; set; }
     }
 }

@@ -11,7 +11,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AuthService } from '../../../services/auth.service';
+import { AuthService, MODULE_PERMISSIONS } from '../../../services/auth.service';
 import { MessageService, User, Conversation } from '../../../services/message.service';
 import { NotificationService, UnifiedNotification } from '../../../services/notification.service';
 import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
@@ -51,50 +51,70 @@ import { Subscription } from 'rxjs';
       <button mat-button routerLink="/calendar" routerLinkActive="active-link">
         <mat-icon>calendar_month</mat-icon> Calendar
       </button>
-      <button mat-button routerLink="/crm" routerLinkActive="active-link">
-        <mat-icon>people_outline</mat-icon> CRM
-      </button>
-      <button mat-button routerLink="/departments" routerLinkActive="active-link">
-        <mat-icon>business</mat-icon> Project Management
-      </button>
-      <button mat-button routerLink="/people" routerLinkActive="active-link">
-        <mat-icon>people</mat-icon> Human Resource
-      </button>
-      <button mat-button routerLink="/stock-management" routerLinkActive="active-link">
-        <mat-icon>inventory</mat-icon> Stock Management
-      </button>
-      <button mat-button routerLink="/logistics" routerLinkActive="active-link">
-        <mat-icon>local_shipping</mat-icon> Logistics
-      </button>
-      <button mat-button routerLink="/documents" routerLinkActive="active-link">
-        <mat-icon>folder</mat-icon> Documents
-      </button>
-      <button mat-button routerLink="/support-ticket" routerLinkActive="active-link">
-        <mat-icon>support_agent</mat-icon> Support Ticket
-      </button>
+      @if (hasPermission('crm')) {
+        <button mat-button routerLink="/crm" routerLinkActive="active-link">
+          <mat-icon>people_outline</mat-icon> CRM
+        </button>
+      }
+      @if (hasPermission('sales')) {
+        <button mat-button routerLink="/sales" routerLinkActive="active-link">
+          <mat-icon>point_of_sale</mat-icon> Sales
+        </button>
+      }
+      @if (hasPermission('logistics')) {
+        <button mat-button routerLink="/logistics" routerLinkActive="active-link">
+          <mat-icon>local_shipping</mat-icon> Logistics
+        </button>
+      }
+      @if (hasPermission('project_management')) {
+        <button mat-button routerLink="/departments" routerLinkActive="active-link">
+          <mat-icon>business</mat-icon> Project Management
+        </button>
+      }
+      @if (hasPermission('human_resource')) {
+        <button mat-button routerLink="/people" routerLinkActive="active-link">
+          <mat-icon>people</mat-icon> Human Resource
+        </button>
+      }
+      @if (hasPermission('stock_management')) {
+        <button mat-button routerLink="/stock-management" routerLinkActive="active-link">
+          <mat-icon>inventory</mat-icon> Stock Management
+        </button>
+      }
+      @if (hasPermission('documents')) {
+        <button mat-button routerLink="/documents" routerLinkActive="active-link">
+          <mat-icon>folder</mat-icon> Documents
+        </button>
+      }
+      @if (hasPermission('support_tickets')) {
+        <button mat-button routerLink="/support-ticket" routerLinkActive="active-link">
+          <mat-icon>support_agent</mat-icon> Support Ticket
+        </button>
+      }
 
       <span class="spacer"></span>
 
       <!-- Messages Button -->
-      <div class="dropdown-container">
-        <button mat-icon-button 
-                [matBadge]="unreadMessagesCount" 
-                matBadgeColor="accent" 
-                [matBadgeHidden]="unreadMessagesCount === 0" 
-                (click)="toggleMessages($event)" 
-                matTooltip="Messages">
-          <mat-icon>mail</mat-icon>
-        </button>
+      @if (hasPermission('messaging')) {
+        <div class="dropdown-container">
+          <button mat-icon-button 
+                  [matBadge]="unreadMessagesCount" 
+                  matBadgeColor="accent" 
+                  [matBadgeHidden]="unreadMessagesCount === 0" 
+                  (click)="toggleMessages($event)" 
+                  matTooltip="Messages">
+            <mat-icon>mail</mat-icon>
+          </button>
 
-        @if (showMessages) {
-          <div class="dropdown-panel messages-dropdown" (click)="$event.stopPropagation()">
-            <div class="dropdown-header">
-              <h3>Messages</h3>
-              <button mat-icon-button (click)="showMessages = false">
-                <mat-icon>close</mat-icon>
-              </button>
-            </div>
-            <div class="dropdown-content">
+          @if (showMessages) {
+            <div class="dropdown-panel messages-dropdown" (click)="$event.stopPropagation()">
+              <div class="dropdown-header">
+                <h3>Messages</h3>
+                <button mat-icon-button (click)="showMessages = false">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+              <div class="dropdown-content">
               @if (recentConversations.length === 0) {
                 <div class="empty-state">
                   <mat-icon>chat_bubble_outline</mat-icon>
@@ -124,6 +144,7 @@ import { Subscription } from 'rxjs';
           </div>
         }
       </div>
+      }
 
       <!-- Notifications Button -->
       <div class="dropdown-container">
@@ -567,6 +588,13 @@ export class NavbarComponent implements OnInit, OnDestroy {
     private notificationService: NotificationService,
     private dialog: MatDialog
   ) {}
+
+  /**
+   * Check if user has permission to access a module
+   */
+  hasPermission(module: string): boolean {
+    return this.authService.hasModulePermission(module as any);
+  }
 
   ngOnInit(): void {
     this.currentUser = this.authService.currentUserValue;

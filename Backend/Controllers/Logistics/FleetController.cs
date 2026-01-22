@@ -49,6 +49,22 @@ namespace ProjectTracker.API.Controllers.Logistics
                     CurrentDriverName = v.CurrentDriver != null ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}" : null,
                     CarTrackId = v.CarTrackId,
                     CarTrackName = v.CarTrackName,
+                    // TFN Integration fields
+                    TfnVehicleId = v.TfnVehicleId,
+                    TfnSubAccountNumber = v.TfnSubAccountNumber,
+                    TfnVirtualCardNumber = v.TfnVirtualCardNumber,
+                    TfnCreditLimit = v.TfnCreditLimit,
+                    TfnCurrentBalance = v.TfnCurrentBalance,
+                    TfnLastSyncedAt = v.TfnLastSyncedAt,
+                    TankSize = v.TankSize ?? v.FuelCapacity,
+                    FuelType = v.FuelType,
+                    AverageFuelConsumption = v.AverageFuelConsumption,
+                    // Last known location from database
+                    Latitude = (double?)v.LastKnownLatitude,
+                    Longitude = (double?)v.LastKnownLongitude,
+                    LastLocation = v.LastKnownAddress ?? (v.CarTrackId != null || v.TfnVehicleId != null ? "Location pending..." : "Not tracked"),
+                    LastUpdate = v.LastLocationUpdate,
+                    LiveStatus = v.LastKnownStatus ?? "offline",
                     Status = v.Status,
                     FuelCapacity = v.FuelCapacity,
                     CurrentOdometer = v.CurrentOdometer,
@@ -56,9 +72,236 @@ namespace ProjectTracker.API.Controllers.Logistics
                     NextServiceOdometer = v.NextServiceOdometer,
                     CreatedAt = v.CreatedAt
                 })
+                // Sort: linked to both first, then linked to either, then unlinked
+                .OrderByDescending(v => v.TfnVehicleId != null && v.CarTrackId != null)
+                .ThenByDescending(v => v.TfnVehicleId != null || v.CarTrackId != null)
+                .ThenBy(v => v.RegistrationNumber)
                 .ToListAsync();
 
             return Ok(vehicles);
+        }
+
+        // Get vehicles with live CarTrack tracking data merged with TFN data
+        [HttpGet("vehicles/live")]
+        public async Task<ActionResult<IEnumerable<VehicleDto>>> GetVehiclesLive()
+        {
+            try
+            {
+                // Get all vehicles from database
+                var vehicles = await _context.Vehicles
+                    .Include(v => v.VehicleType)
+                    .Include(v => v.CurrentDriver)
+                    .ToListAsync();
+
+                // Get live locations from CarTrack
+                var liveLocations = await _carTrackService.GetAllVehicleLocationsAsync();
+                var locationLookup = liveLocations.ToDictionary(
+                    l => l.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") ?? "",
+                    l => l,
+                    StringComparer.OrdinalIgnoreCase
+                );
+
+                // Also create lookup by CarTrackId
+                var locationByIdLookup = liveLocations.ToDictionary(
+                    l => l.VehicleId ?? "",
+                    l => l,
+                    StringComparer.OrdinalIgnoreCase
+                );
+
+                var vehiclesToUpdate = new List<Vehicle>();
+                
+                var result = vehicles.Select(v => {
+                    // Try to find live data by CarTrackId first, then by registration
+                    VehicleLocationDto? liveData = null;
+                    if (!string.IsNullOrEmpty(v.CarTrackId) && locationByIdLookup.TryGetValue(v.CarTrackId, out var byId))
+                    {
+                        liveData = byId;
+                    }
+                    else
+                    {
+                        var regNormalized = v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") ?? "";
+                        if (locationLookup.TryGetValue(regNormalized, out var byReg))
+                        {
+                            liveData = byReg;
+                        }
+                    }
+
+                    // Determine location - use live data if available, otherwise use saved last known location
+                    double? latitude = liveData?.Location?.Latitude ?? (double?)v.LastKnownLatitude;
+                    double? longitude = liveData?.Location?.Longitude ?? (double?)v.LastKnownLongitude;
+                    string lastLocation = liveData?.Location?.Address 
+                        ?? v.LastKnownAddress 
+                        ?? (v.CarTrackId != null || v.TfnVehicleId != null ? "Location pending..." : "Not tracked");
+                    string liveStatus = liveData?.Status ?? v.LastKnownStatus ?? "offline";
+                    DateTime? lastUpdate = liveData?.LastUpdate ?? v.LastLocationUpdate;
+
+                    // Update saved location if we have live data with valid coordinates
+                    if (liveData?.Location?.Latitude != null && liveData?.Location?.Longitude != null)
+                    {
+                        bool needsUpdate = v.LastKnownLatitude != (decimal?)liveData.Location.Latitude ||
+                                          v.LastKnownLongitude != (decimal?)liveData.Location.Longitude ||
+                                          v.LastKnownAddress != liveData.Location.Address ||
+                                          v.LastKnownStatus != liveData.Status;
+                        
+                        if (needsUpdate)
+                        {
+                            v.LastKnownLatitude = (decimal?)liveData.Location.Latitude;
+                            v.LastKnownLongitude = (decimal?)liveData.Location.Longitude;
+                            v.LastKnownAddress = liveData.Location.Address;
+                            v.LastKnownStatus = liveData.Status;
+                            v.LastLocationUpdate = liveData.LastUpdate ?? DateTime.UtcNow;
+                            vehiclesToUpdate.Add(v);
+                        }
+                    }
+
+                    return new VehicleDto
+                    {
+                        Id = v.Id,
+                        RegistrationNumber = v.RegistrationNumber,
+                        VinNumber = v.VinNumber,
+                        Make = v.Make,
+                        Model = v.Model,
+                        Year = v.Year,
+                        Color = v.Color,
+                        VehicleTypeId = v.VehicleTypeId,
+                        VehicleTypeName = v.VehicleType?.Name,
+                        CurrentDriverId = v.CurrentDriverId,
+                        CurrentDriverName = liveData?.CurrentDriverName ?? (v.CurrentDriver != null ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}" : null),
+                        CarTrackId = v.CarTrackId,
+                        CarTrackName = v.CarTrackName,
+                        // TFN Integration fields
+                        TfnVehicleId = v.TfnVehicleId,
+                        TfnSubAccountNumber = v.TfnSubAccountNumber,
+                        TfnVirtualCardNumber = v.TfnVirtualCardNumber,
+                        TfnCreditLimit = v.TfnCreditLimit,
+                        TfnCurrentBalance = v.TfnCurrentBalance,
+                        TfnLastSyncedAt = v.TfnLastSyncedAt,
+                        TankSize = v.TankSize ?? v.FuelCapacity,
+                        FuelType = v.FuelType,
+                        AverageFuelConsumption = v.AverageFuelConsumption,
+                        // Live tracking data - use live if available, fallback to saved
+                        Latitude = latitude,
+                        Longitude = longitude,
+                        LastLocation = lastLocation,
+                        Speed = liveData?.Speed ?? 0,
+                        Heading = liveData?.Heading,
+                        LastUpdate = lastUpdate,
+                        LiveStatus = liveStatus,
+                        Status = v.Status,
+                        FuelCapacity = v.FuelCapacity,
+                        CurrentOdometer = v.CurrentOdometer,
+                        LastServiceDate = v.LastServiceDate,
+                        NextServiceOdometer = v.NextServiceOdometer,
+                        CreatedAt = v.CreatedAt
+                    };
+                })
+                // Sort: linked to both first, then linked to either, then unlinked
+                .OrderByDescending(v => v.TfnVehicleId != null && v.CarTrackId != null)
+                .ThenByDescending(v => v.TfnVehicleId != null || v.CarTrackId != null)
+                .ThenBy(v => v.RegistrationNumber)
+                .ToList();
+
+                // Save updated locations to database (async, don't wait)
+                if (vehiclesToUpdate.Any())
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _context.SaveChangesAsync();
+                            _logger.LogInformation($"Saved {vehiclesToUpdate.Count} vehicle locations to database");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error saving vehicle locations");
+                        }
+                    });
+                }
+
+                _logger.LogInformation($"Returning {result.Count} vehicles with live data. {result.Count(v => v.Speed > 0)} moving.");
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching live vehicle data");
+                // Fall back to database-only data
+                return await GetVehicles();
+            }
+        }
+
+        // Sync CarTrack vehicles - link by registration number
+        [HttpPost("sync/cartrack")]
+        public async Task<ActionResult> SyncCarTrackVehicles()
+        {
+            try
+            {
+                _logger.LogInformation("Starting CarTrack vehicle sync");
+                
+                // Get all vehicles from CarTrack
+                var carTrackVehicles = await _carTrackService.GetRawVehicleDataAsync();
+                
+                if (carTrackVehicles.Count == 0)
+                {
+                    return Ok(new { message = "No vehicles found in CarTrack", linked = 0 });
+                }
+                
+                // Get all local vehicles
+                var localVehicles = await _context.Vehicles.ToListAsync();
+                
+                int linked = 0;
+                int updated = 0;
+                
+                foreach (var ctVehicle in carTrackVehicles)
+                {
+                    if (string.IsNullOrEmpty(ctVehicle.Registration))
+                        continue;
+                    
+                    // Normalize registration for matching
+                    var regNormalized = ctVehicle.Registration.ToUpperInvariant().Replace(" ", "").Replace("-", "");
+                    
+                    // Find matching local vehicle by registration
+                    var localVehicle = localVehicles.FirstOrDefault(v => 
+                        v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") == regNormalized);
+                    
+                    if (localVehicle != null)
+                    {
+                        if (string.IsNullOrEmpty(localVehicle.CarTrackId))
+                        {
+                            localVehicle.CarTrackId = ctVehicle.VehicleId;
+                            localVehicle.CarTrackName = ctVehicle.Registration;
+                            linked++;
+                            _logger.LogInformation($"Linked vehicle {localVehicle.RegistrationNumber} to CarTrack ID {ctVehicle.VehicleId}");
+                        }
+                        else if (localVehicle.CarTrackId != ctVehicle.VehicleId)
+                        {
+                            // Update if different
+                            localVehicle.CarTrackId = ctVehicle.VehicleId;
+                            localVehicle.CarTrackName = ctVehicle.Registration;
+                            updated++;
+                        }
+                    }
+                }
+                
+                if (linked > 0 || updated > 0)
+                {
+                    await _context.SaveChangesAsync();
+                }
+                
+                _logger.LogInformation($"CarTrack sync completed: {linked} newly linked, {updated} updated out of {carTrackVehicles.Count} CarTrack vehicles");
+                
+                return Ok(new { 
+                    message = $"CarTrack sync completed",
+                    carTrackVehicles = carTrackVehicles.Count,
+                    linked,
+                    updated,
+                    totalLocalVehicles = localVehicles.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing CarTrack vehicles");
+                return StatusCode(500, new { error = "Failed to sync CarTrack vehicles", message = ex.Message });
+            }
         }
 
         [HttpGet("vehicles/{id}")]

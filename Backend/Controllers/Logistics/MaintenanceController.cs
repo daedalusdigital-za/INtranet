@@ -9,7 +9,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 {
     [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/logistics/maintenance")]
     public class MaintenanceController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

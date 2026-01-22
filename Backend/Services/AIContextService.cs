@@ -31,7 +31,8 @@ namespace ProjectTracker.API.Services
             ["announcements"] = new[] { "announcement", "announcements", "news", "notice", "notices", "update", "updates", "bulletin", "memo" },
             ["departments"] = new[] { "department", "departments", "team", "teams", "division", "unit", "group" },
             ["crm"] = new[] { "lead", "leads", "customer", "customers", "client", "clients", "prospect", "prospects", "campaign", "sales", "crm", "contact", "contacts" },
-            ["logistics"] = new[] { "load", "loads", "trip", "trips", "tripsheet", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "warehouse", "ld-", "ts-", "in transit", "delivered", "scheduled", "pending" }
+            ["logistics"] = new[] { "load", "loads", "trip", "trips", "tripsheet", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "warehouse", "ld-", "ts-", "in transit", "delivered", "scheduled", "pending" },
+            ["invoices"] = new[] { "invoice", "invoices", "tfn", "transaction", "transactions", "sales amount", "cost of sales", "billing", "billed", "revenue", "imported invoice", "product sold", "quantity sold" }
         };
 
         public AIContextService(
@@ -91,6 +92,7 @@ namespace ProjectTracker.API.Services
                         "departments" => await GetDepartmentsContextAsync(query),
                         "crm" => await GetCRMContextAsync(query),
                         "logistics" => await _logisticsService.GetLoadsContextAsync(query),
+                        "invoices" => await GetInvoicesContextAsync(query),
                         _ => null
                     };
 
@@ -663,6 +665,127 @@ namespace ProjectTracker.API.Services
             if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
                 return text;
             return text.Substring(0, maxLength) + "...";
+        }
+
+        private async Task<string?> GetInvoicesContextAsync(string query)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var builder = new StringBuilder();
+            builder.AppendLine("### Invoice Data\n");
+
+            var lowerQuery = query.ToLower();
+
+            // Check for specific transaction number
+            var txMatch = System.Text.RegularExpressions.Regex.Match(query, @"[A-Z]{2,3}-?\d{4,}", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (txMatch.Success)
+            {
+                var txNumber = txMatch.Value;
+                var invoice = await context.ImportedInvoices
+                    .Include(i => i.Customer)
+                    .FirstOrDefaultAsync(i => i.TransactionNumber.Contains(txNumber));
+
+                if (invoice != null)
+                {
+                    builder.AppendLine($"**Invoice: {invoice.TransactionNumber}**");
+                    builder.AppendLine($"- Date: {invoice.TransactionDate:dd MMM yyyy}");
+                    builder.AppendLine($"- Customer: {invoice.Customer?.Name ?? invoice.CustomerName}");
+                    builder.AppendLine($"- Product: {invoice.ProductDescription}");
+                    builder.AppendLine($"- Quantity: {invoice.Quantity:N0}");
+                    builder.AppendLine($"- Sales Amount: R{invoice.SalesAmount:N2}");
+                    builder.AppendLine($"- Cost of Sales: R{invoice.CostOfSales:N2}");
+                    builder.AppendLine($"- Status: {invoice.Status}");
+                    return builder.ToString();
+                }
+            }
+
+            // Get date range based on query
+            DateTime fromDate = DateTime.Today.AddDays(-30);
+            DateTime toDate = DateTime.Today;
+
+            if (lowerQuery.Contains("today"))
+            {
+                fromDate = DateTime.Today;
+                toDate = DateTime.Today.AddDays(1);
+            }
+            else if (lowerQuery.Contains("yesterday"))
+            {
+                fromDate = DateTime.Today.AddDays(-1);
+                toDate = DateTime.Today;
+            }
+            else if (lowerQuery.Contains("this week"))
+            {
+                fromDate = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek);
+                toDate = DateTime.Today.AddDays(1);
+            }
+            else if (lowerQuery.Contains("this month"))
+            {
+                fromDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                toDate = DateTime.Today.AddDays(1);
+            }
+
+            // Check for customer name
+            string? customerFilter = null;
+            var customerMatch = System.Text.RegularExpressions.Regex.Match(query, @"(?:customer|client|for)\s+([A-Za-z\s]+?)(?:\s+invoice|\s+transaction|\s*$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (customerMatch.Success)
+            {
+                customerFilter = customerMatch.Groups[1].Value.Trim();
+            }
+
+            // Build query
+            var invoiceQuery = context.ImportedInvoices
+                .Include(i => i.Customer)
+                .Where(i => i.TransactionDate >= fromDate && i.TransactionDate <= toDate);
+
+            if (!string.IsNullOrEmpty(customerFilter))
+            {
+                invoiceQuery = invoiceQuery.Where(i => 
+                    (i.Customer != null && i.Customer.Name.ToLower().Contains(customerFilter.ToLower())) ||
+                    i.CustomerName.ToLower().Contains(customerFilter.ToLower()));
+            }
+
+            // Get summary
+            var invoices = await invoiceQuery
+                .OrderByDescending(i => i.TransactionDate)
+                .Take(20)
+                .ToListAsync();
+
+            var totalCount = await invoiceQuery.CountAsync();
+            var totalSales = await invoiceQuery.SumAsync(i => i.SalesAmount);
+            var totalCost = await invoiceQuery.SumAsync(i => i.CostOfSales);
+
+            builder.AppendLine($"**Summary ({fromDate:dd MMM} - {toDate:dd MMM yyyy}):**");
+            builder.AppendLine($"- Total Invoices: {totalCount}");
+            builder.AppendLine($"- Total Sales: R{totalSales:N2}");
+            builder.AppendLine($"- Total Cost: R{totalCost:N2}");
+            builder.AppendLine($"- Gross Profit: R{(totalSales - totalCost):N2}");
+
+            if (invoices.Any())
+            {
+                builder.AppendLine($"\n**Recent Invoices (showing {invoices.Count} of {totalCount}):**");
+                foreach (var inv in invoices.Take(10))
+                {
+                    builder.AppendLine($"- {inv.TransactionNumber} | {inv.TransactionDate:dd MMM} | {inv.Customer?.Name ?? inv.CustomerName} | {inv.ProductDescription} | R{inv.SalesAmount:N2}");
+                }
+            }
+
+            // Status breakdown
+            var statusBreakdown = await invoiceQuery
+                .GroupBy(i => i.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count(), Total = g.Sum(i => i.SalesAmount) })
+                .ToListAsync();
+
+            if (statusBreakdown.Any())
+            {
+                builder.AppendLine($"\n**By Status:**");
+                foreach (var status in statusBreakdown)
+                {
+                    builder.AppendLine($"- {status.Status}: {status.Count} invoices (R{status.Total:N2})");
+                }
+            }
+
+            return builder.ToString();
         }
     }
 }

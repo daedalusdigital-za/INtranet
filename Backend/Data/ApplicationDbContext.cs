@@ -105,11 +105,22 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.ImportedInvoice> ImportedInvoices { get; set; }
         public DbSet<Models.Logistics.ImportBatch> ImportBatches { get; set; }
 
+        // Sales Import System
+        public DbSet<SalesImportBatch> SalesImportBatches { get; set; }
+        public DbSet<SalesTransactionStaging> SalesTransactionStagings { get; set; }
+        public DbSet<SalesImportIssue> SalesImportIssues { get; set; }
+
+        // Government Contracts
+        public DbSet<GovernmentContract> GovernmentContracts { get; set; }
+
         // TFN (TruckFuelNet) Integration
         public DbSet<Models.Logistics.TFN.TfnDepot> TfnDepots { get; set; }
         public DbSet<Models.Logistics.TFN.TfnOrder> TfnOrders { get; set; }
         public DbSet<Models.Logistics.TFN.TfnTransaction> TfnTransactions { get; set; }
         public DbSet<Models.Logistics.TFN.TfnAccountBalance> TfnAccountBalances { get; set; }
+
+        // Stock on Hand Snapshots
+        public DbSet<Models.Logistics.StockOnHandSnapshot> StockOnHandSnapshots { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

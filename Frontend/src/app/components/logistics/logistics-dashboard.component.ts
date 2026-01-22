@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject, Injector } from '@angular/core';
+import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject, Injector, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -25,6 +25,7 @@ import { MatStepperModule } from '@angular/material/stepper';
 import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
@@ -39,8 +40,8 @@ interface DashboardStats {
   availableVehicles: number;
   totalDrivers: number;
   availableDrivers: number;
-  totalWarehouses: number;
-  lowStockItems: number;
+  vehiclesInMaintenance: number;
+  upcomingMaintenance: number;
   pendingInvoices: number;
   overdueInvoices: number;
 }
@@ -62,14 +63,41 @@ interface Vehicle {
   id: number;
   registrationNumber: string;
   type: string;
+  vehicleTypeName?: string;
   status: string;
   currentDriver: string;
+  currentDriverId?: number;
+  currentDriverName?: string;
   lastLocation: string;
   fuelLevel: number;
+  fuelCapacity?: number;
   speed?: number;
   latitude?: number;
   longitude?: number;
+  heading?: number;
   lastUpdate?: Date;
+  liveStatus?: string;  // moving, stopped, idling, offline
+  // CarTrack integration
+  carTrackId?: string;
+  isLinkedToCarTrack?: boolean;
+  // TFN integration
+  tfnVehicleId?: string;
+  tfnSubAccountNumber?: string;
+  tfnVirtualCardNumber?: string;
+  tfnCreditLimit?: number;
+  tfnCurrentBalance?: number;
+  tfnLastSyncedAt?: Date;
+  tankSize?: number;
+  fuelType?: string;
+  averageFuelConsumption?: number;
+  isLinkedToTfn?: boolean;
+  // Additional fields for edit
+  make?: string;
+  model?: string;
+  year?: number;
+  color?: string;
+  vinNumber?: string;
+  vehicleTypeId?: number;
 }
 
 interface ImportedInvoice {
@@ -93,17 +121,23 @@ interface ImportedInvoice {
   importedAt: Date;
 }
 
-interface WarehouseSummary {
+interface MaintenanceRecord {
   id: number;
-  name: string;
-  location: string;
-  managerName: string;
-  totalItems: number;
-  categories: number;
-  capacityPercent: number;
-  totalCapacity: number;
-  availableCapacity: number;
-  status: string;
+  vehicleId: number;
+  vehicleReg: string;
+  vehicleType: string;
+  maintenanceType: 'scheduled' | 'repair' | 'license' | 'inspection' | 'other';
+  description: string;
+  status: 'scheduled' | 'in-progress' | 'completed' | 'overdue';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  scheduledDate: Date;
+  completedDate?: Date;
+  estimatedCost?: number;
+  actualCost?: number;
+  assignedTo?: string;
+  notes?: string;
+  licenseExpiryDate?: Date;
+  daysUntilExpiry?: number;
 }
 
 @Component({
@@ -128,6 +162,7 @@ interface WarehouseSummary {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    MatDividerModule,
     FormsModule,
     NavbarComponent
   ],
@@ -140,7 +175,7 @@ interface WarehouseSummary {
             <mat-icon>local_shipping</mat-icon>
             Logistics Management
           </h1>
-          <p class="subtitle">Fleet, Loads, Warehouses & Tracking</p>
+          <p class="subtitle">Fleet, Loads, Maintenance & Tracking</p>
         </div>
         <div class="header-actions">
           <button mat-raised-button color="accent" (click)="syncFromCarTrack()" [disabled]="syncing()">
@@ -239,14 +274,14 @@ interface WarehouseSummary {
             </mat-card-content>
           </mat-card>
 
-          <mat-card class="stat-card small">
+          <mat-card class="stat-card small clickable" (click)="scrollToMaintenanceTab()">
             <mat-card-content>
-              <div class="stat-icon warehouses">
-                <mat-icon>warehouse</mat-icon>
+              <div class="stat-icon maintenance">
+                <mat-icon>build</mat-icon>
               </div>
               <div class="stat-info">
-                <span class="stat-value">{{ stats().totalWarehouses }}</span>
-                <span class="stat-label">Warehouses</span>
+                <span class="stat-value">{{ stats().vehiclesInMaintenance }}</span>
+                <span class="stat-label">In Maintenance</span>
               </div>
             </mat-card-content>
           </mat-card>
@@ -374,6 +409,43 @@ interface WarehouseSummary {
                 Fleet (Live)
               </ng-template>
               <div class="tab-content">
+                <div class="fleet-toolbar">
+                  <div class="fleet-stats">
+                    <span class="stat-badge linked">
+                      <mat-icon>link</mat-icon>
+                      Linked: {{ getLinkedVehicleCount() }}
+                    </span>
+                    <span class="stat-badge unlinked">
+                      <mat-icon>link_off</mat-icon>
+                      Unlinked: {{ vehicles().length - getLinkedVehicleCount() }}
+                    </span>
+                  </div>
+                  <div class="fleet-actions">
+                    <button mat-stroked-button (click)="syncCarTrackVehicles()" [disabled]="carTrackSyncing()">
+                      @if (carTrackSyncing()) {
+                        <mat-spinner diameter="18"></mat-spinner>
+                      } @else {
+                        <mat-icon>gps_fixed</mat-icon>
+                      }
+                      Sync CarTrack
+                    </button>
+                    <button mat-stroked-button color="primary" (click)="syncTfnVehicles()" [disabled]="tfnSyncing()">
+                      @if (tfnSyncing()) {
+                        <mat-spinner diameter="18"></mat-spinner>
+                      } @else {
+                        <mat-icon>local_gas_station</mat-icon>
+                      }
+                      Sync TFN
+                    </button>
+                    <button mat-stroked-button (click)="loadVehiclesFromDatabase()">
+                      <mat-icon>refresh</mat-icon>
+                      Refresh
+                    </button>
+                    <button mat-raised-button color="primary" (click)="addVehicle()">
+                      <mat-icon>add</mat-icon> Add Vehicle
+                    </button>
+                  </div>
+                </div>
                 @if (vehicles().length === 0) {
                   <div class="empty-state">
                     <mat-icon>directions_car</mat-icon>
@@ -394,29 +466,121 @@ interface WarehouseSummary {
                             @if (vehicle.speed !== undefined && vehicle.speed > 0) {
                               <span class="speed-indicator">{{ vehicle.speed }} km/h</span>
                             } @else {
-                              {{ vehicle.type || 'Vehicle' }}
+                              {{ vehicle.type || vehicle.vehicleTypeName || 'Vehicle' }}
                             }
                           </mat-card-subtitle>
+                          <!-- Integration badges -->
+                          <div class="integration-badges">
+                            @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
+                              <span class="badge cartrack-badge" matTooltip="Linked to CarTrack">
+                                <mat-icon>gps_fixed</mat-icon> CT
+                              </span>
+                            }
+                            @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn || vehicle.tankSize) {
+                              <span class="badge tfn-badge" matTooltip="TruckFuelNet - Tank: {{ vehicle.tankSize || vehicle.fuelCapacity || '?' }}L">
+                                <mat-icon>local_gas_station</mat-icon> TFN
+                              </span>
+                            }
+                          </div>
+                          <!-- Actions menu -->
+                          <button mat-icon-button [matMenuTriggerFor]="vehicleMenu" class="vehicle-menu-btn" (click)="$event.stopPropagation()">
+                            <mat-icon>more_vert</mat-icon>
+                          </button>
+                          <mat-menu #vehicleMenu="matMenu">
+                            <button mat-menu-item (click)="viewVehicleDetails(vehicle)">
+                              <mat-icon>visibility</mat-icon>
+                              <span>View Details</span>
+                            </button>
+                            <button mat-menu-item (click)="editVehicle(vehicle)">
+                              <mat-icon>edit</mat-icon>
+                              <span>Edit Vehicle</span>
+                            </button>
+                            <button mat-menu-item (click)="assignDriver(vehicle)">
+                              <mat-icon>person_add</mat-icon>
+                              <span>Assign Driver</span>
+                            </button>
+                            <mat-divider></mat-divider>
+                            @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
+                              <button mat-menu-item (click)="unlinkCarTrack(vehicle)">
+                                <mat-icon>link_off</mat-icon>
+                                <span>Unlink CarTrack</span>
+                              </button>
+                            } @else {
+                              <button mat-menu-item (click)="linkCarTrack(vehicle)">
+                                <mat-icon>link</mat-icon>
+                                <span>Link to CarTrack</span>
+                              </button>
+                            }
+                            @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn) {
+                              <button mat-menu-item (click)="unlinkTfn(vehicle)">
+                                <mat-icon>link_off</mat-icon>
+                                <span>Unlink TFN</span>
+                              </button>
+                            } @else {
+                              <button mat-menu-item (click)="linkTfn(vehicle)">
+                                <mat-icon>link</mat-icon>
+                                <span>Link to TFN</span>
+                              </button>
+                            }
+                            <mat-divider></mat-divider>
+                            <button mat-menu-item (click)="trackVehicle(vehicle)">
+                              <mat-icon>gps_fixed</mat-icon>
+                              <span>Track Location</span>
+                            </button>
+                            <button mat-menu-item (click)="viewFuelHistory(vehicle)">
+                              <mat-icon>local_gas_station</mat-icon>
+                              <span>Fuel History</span>
+                            </button>
+                            <button mat-menu-item (click)="viewVehicleMaintenanceHistory(vehicle)">
+                              <mat-icon>build</mat-icon>
+                              <span>Maintenance History</span>
+                            </button>
+                            <mat-divider></mat-divider>
+                            <button mat-menu-item class="delete-action" (click)="deleteVehicle(vehicle)">
+                              <mat-icon color="warn">delete</mat-icon>
+                              <span>Delete Vehicle</span>
+                            </button>
+                          </mat-menu>
                         </mat-card-header>
                         <mat-card-content>
                           <div class="vehicle-info">
                             <div class="info-row">
                               <mat-icon>person</mat-icon>
-                              <span>{{ vehicle.currentDriver || 'No driver assigned' }}</span>
+                              <span>{{ vehicle.currentDriver || vehicle.currentDriverName || 'No driver assigned' }}</span>
                             </div>
                             <div class="info-row">
                               <mat-icon>location_on</mat-icon>
                               <span class="location-text">{{ vehicle.lastLocation || 'Unknown location' }}</span>
                             </div>
-                            @if (vehicle.speed !== undefined) {
-                              <div class="info-row">
+                            <!-- Always show speed for CarTrack linked vehicles -->
+                            @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
+                              <div class="info-row speed-row">
                                 <mat-icon>speed</mat-icon>
-                                <span>{{ vehicle.speed }} km/h</span>
-                                @if (vehicle.speed > 0) {
+                                <span class="speed-value">{{ vehicle.speed ?? 0 }} km/h</span>
+                                @if ((vehicle.speed ?? 0) > 0 || vehicle.liveStatus === 'moving') {
                                   <span class="moving-badge">MOVING</span>
+                                } @else if (vehicle.liveStatus === 'idling') {
+                                  <span class="idling-badge">IDLING</span>
+                                } @else if (vehicle.liveStatus === 'offline') {
+                                  <span class="offline-badge">OFFLINE</span>
                                 } @else {
                                   <span class="stationary-badge">STATIONARY</span>
                                 }
+                              </div>
+                            }
+                            @if (vehicle.tankSize || vehicle.fuelCapacity) {
+                              <div class="info-row">
+                                <mat-icon>local_gas_station</mat-icon>
+                                <span>Tank: {{ vehicle.tankSize || vehicle.fuelCapacity }} L</span>
+                                @if (vehicle.fuelType) {
+                                  <span class="fuel-type-badge">{{ vehicle.fuelType }}</span>
+                                }
+                              </div>
+                            }
+                            @if (vehicle.tfnCreditLimit && vehicle.tfnCurrentBalance !== undefined) {
+                              <div class="info-row tfn-balance">
+                                <mat-icon>account_balance_wallet</mat-icon>
+                                <span>Balance: R{{ vehicle.tfnCurrentBalance | number:'1.2-2' }} / R{{ vehicle.tfnCreditLimit | number:'1.2-2' }}</span>
                               </div>
                             }
                             @if (vehicle.lastUpdate) {
@@ -426,9 +590,16 @@ interface WarehouseSummary {
                               </div>
                             }
                           </div>
-                          <mat-chip class="status-chip" [ngClass]="'status-' + vehicle.status.toLowerCase().replace(' ', '-')">
-                            {{ vehicle.status }}
-                          </mat-chip>
+                          <div class="card-footer">
+                            <mat-chip class="status-chip" [ngClass]="'status-' + vehicle.status.toLowerCase().replace(' ', '-')">
+                              {{ vehicle.status }}
+                            </mat-chip>
+                            @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn) {
+                              <div class="tfn-indicator" matTooltip="TruckFuelNet Integrated">
+                                <mat-icon>local_gas_station</mat-icon>
+                              </div>
+                            }
+                          </div>
                         </mat-card-content>
                         <mat-card-actions>
                           <button mat-button color="primary" (click)="viewVehicleDetails(vehicle)">
@@ -445,76 +616,176 @@ interface WarehouseSummary {
               </div>
             </mat-tab>
 
-            <!-- Warehouses Tab -->
+            <!-- Maintenance Tab -->
             <mat-tab>
               <ng-template mat-tab-label>
-                <mat-icon>warehouse</mat-icon>
-                Warehouses
+                <mat-icon>build</mat-icon>
+                Maintenance
               </ng-template>
               <div class="tab-content">
-                @if (warehouses().length === 0) {
+                <div class="maintenance-header">
+                  <div class="maintenance-stats-row">
+                    <mat-card class="maintenance-stat-card critical">
+                      <mat-icon>warning</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getMaintenanceByStatus('overdue').length }}</span>
+                        <span class="stat-label">Overdue</span>
+                      </div>
+                    </mat-card>
+                    <mat-card class="maintenance-stat-card in-progress">
+                      <mat-icon>engineering</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getMaintenanceByStatus('in-progress').length }}</span>
+                        <span class="stat-label">In Progress</span>
+                      </div>
+                    </mat-card>
+                    <mat-card class="maintenance-stat-card scheduled">
+                      <mat-icon>schedule</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getMaintenanceByStatus('scheduled').length }}</span>
+                        <span class="stat-label">Scheduled</span>
+                      </div>
+                    </mat-card>
+                    <mat-card class="maintenance-stat-card license">
+                      <mat-icon>badge</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getExpiringLicenses().length }}</span>
+                        <span class="stat-label">Licenses Expiring</span>
+                      </div>
+                    </mat-card>
+                  </div>
+                  <div class="maintenance-actions">
+                    <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
+                      <mat-icon>add</mat-icon>
+                      Schedule Maintenance
+                    </button>
+                    <button mat-raised-button (click)="loadMaintenanceRecords()">
+                      <mat-icon>refresh</mat-icon>
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                @if (maintenanceRecords().length === 0) {
                   <div class="empty-state">
-                    <mat-icon>warehouse</mat-icon>
-                    <h3>No Warehouses Found</h3>
-                    <p>No warehouses have been configured yet</p>
-                    <button mat-raised-button color="primary">
-                      <mat-icon>add</mat-icon> Add Warehouse
+                    <mat-icon>build_circle</mat-icon>
+                    <h3>No Maintenance Records</h3>
+                    <p>No vehicles are currently scheduled for maintenance</p>
+                    <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
+                      <mat-icon>add</mat-icon> Schedule Maintenance
                     </button>
                   </div>
                 } @else {
-                  <div class="warehouses-grid">
-                    @for (warehouse of warehouses(); track warehouse.id) {
-                      <mat-card class="warehouse-card">
+                  <!-- License Expiry Alerts -->
+                  @if (getExpiringLicenses().length > 0) {
+                    <div class="license-alerts">
+                      <h4><mat-icon>notification_important</mat-icon> License Expiry Alerts</h4>
+                      <div class="license-cards">
+                        @for (record of getExpiringLicenses(); track record.id) {
+                          <mat-card class="license-card" [class.critical]="record.daysUntilExpiry! <= 7" [class.warning]="record.daysUntilExpiry! > 7 && record.daysUntilExpiry! <= 30">
+                            <div class="license-info">
+                              <mat-icon>directions_car</mat-icon>
+                              <div>
+                                <span class="vehicle-reg">{{ record.vehicleReg }}</span>
+                                <span class="expiry-text">
+                                  @if (record.daysUntilExpiry! <= 0) {
+                                    License EXPIRED!
+                                  } @else {
+                                    Expires in {{ record.daysUntilExpiry }} days
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                            <button mat-icon-button color="primary" matTooltip="Schedule License Renewal" (click)="scheduleLicenseRenewal(record)">
+                              <mat-icon>event</mat-icon>
+                            </button>
+                          </mat-card>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Maintenance Grid -->
+                  <div class="maintenance-grid">
+                    @for (record of maintenanceRecords(); track record.id) {
+                      <mat-card class="maintenance-card" [class]="'status-' + record.status">
                         <mat-card-header>
-                          <div class="warehouse-icon">
-                            <mat-icon>warehouse</mat-icon>
+                          <div class="maintenance-icon" [class]="'type-' + record.maintenanceType">
+                            @switch (record.maintenanceType) {
+                              @case ('scheduled') { <mat-icon>event</mat-icon> }
+                              @case ('repair') { <mat-icon>build</mat-icon> }
+                              @case ('license') { <mat-icon>badge</mat-icon> }
+                              @case ('inspection') { <mat-icon>fact_check</mat-icon> }
+                              @default { <mat-icon>miscellaneous_services</mat-icon> }
+                            }
                           </div>
-                          <mat-card-title>{{ warehouse.name }}</mat-card-title>
-                          <mat-card-subtitle>
-                            <mat-icon class="location-icon">place</mat-icon>
-                            {{ warehouse.location }}
-                          </mat-card-subtitle>
+                          <mat-card-title>{{ record.vehicleReg }}</mat-card-title>
+                          <mat-card-subtitle>{{ record.vehicleType }}</mat-card-subtitle>
                         </mat-card-header>
                         <mat-card-content>
-                          <div class="warehouse-stats-row">
-                            <div class="warehouse-stat">
-                              <mat-icon>inventory_2</mat-icon>
-                              <div>
-                                <span class="stat-number">{{ warehouse.totalItems | number }}</span>
-                                <span class="stat-text">Items</span>
-                              </div>
-                            </div>
-                            <div class="warehouse-stat">
-                              <mat-icon>category</mat-icon>
-                              <div>
-                                <span class="stat-number">{{ warehouse.categories }}</span>
-                                <span class="stat-text">Categories</span>
-                              </div>
-                            </div>
+                          <div class="maintenance-type-badge" [class]="record.maintenanceType">
+                            {{ record.maintenanceType | titlecase }}
                           </div>
-                          <div class="capacity-section">
-                            <div class="capacity-header">
-                              <span>Capacity</span>
-                              <span class="capacity-percent" [class.high]="warehouse.capacityPercent > 80">{{ warehouse.capacityPercent }}%</span>
+                          <p class="maintenance-description">{{ record.description }}</p>
+                          
+                          <div class="maintenance-details">
+                            <div class="detail-row">
+                              <mat-icon>calendar_today</mat-icon>
+                              <span>{{ record.scheduledDate | date:'dd MMM yyyy' }}</span>
                             </div>
-                            <mat-progress-bar 
-                              mode="determinate" 
-                              [value]="warehouse.capacityPercent"
-                              [color]="warehouse.capacityPercent > 80 ? 'warn' : 'primary'">
-                            </mat-progress-bar>
+                            @if (record.assignedTo) {
+                              <div class="detail-row">
+                                <mat-icon>person</mat-icon>
+                                <span>{{ record.assignedTo }}</span>
+                              </div>
+                            }
+                            @if (record.estimatedCost) {
+                              <div class="detail-row">
+                                <mat-icon>payments</mat-icon>
+                                <span>Est: R{{ record.estimatedCost | number:'1.2-2' }}</span>
+                              </div>
+                            }
                           </div>
-                          @if (warehouse.managerName) {
-                            <div class="manager-info">
-                              <mat-icon>person</mat-icon>
-                              <span>{{ warehouse.managerName }}</span>
-                            </div>
-                          }
+
+                          <div class="status-section">
+                            <span class="status-badge" [class]="record.status">
+                              @switch (record.status) {
+                                @case ('scheduled') { <mat-icon>schedule</mat-icon> Scheduled }
+                                @case ('in-progress') { <mat-icon>engineering</mat-icon> In Progress }
+                                @case ('completed') { <mat-icon>check_circle</mat-icon> Completed }
+                                @case ('overdue') { <mat-icon>warning</mat-icon> Overdue }
+                              }
+                            </span>
+                            <span class="priority-badge" [class]="record.priority">
+                              {{ record.priority | titlecase }}
+                            </span>
+                          </div>
                         </mat-card-content>
                         <mat-card-actions>
-                          <button mat-button color="primary" routerLink="/stock-management">
-                            <mat-icon>visibility</mat-icon>
-                            View Inventory
+                          @if (record.status === 'scheduled') {
+                            <button mat-button color="primary" (click)="startMaintenance(record)">
+                              <mat-icon>play_arrow</mat-icon> Start
+                            </button>
+                          }
+                          @if (record.status === 'in-progress') {
+                            <button mat-button color="accent" (click)="completeMaintenance(record)">
+                              <mat-icon>check</mat-icon> Complete
+                            </button>
+                          }
+                          <button mat-icon-button [matMenuTriggerFor]="maintenanceMenu">
+                            <mat-icon>more_vert</mat-icon>
                           </button>
+                          <mat-menu #maintenanceMenu="matMenu">
+                            <button mat-menu-item (click)="editMaintenance(record)">
+                              <mat-icon>edit</mat-icon> Edit
+                            </button>
+                            <button mat-menu-item (click)="viewMaintenanceHistory(record)">
+                              <mat-icon>history</mat-icon> View History
+                            </button>
+                            <button mat-menu-item class="delete-action" (click)="deleteMaintenance(record)">
+                              <mat-icon>delete</mat-icon> Delete
+                            </button>
+                          </mat-menu>
                         </mat-card-actions>
                       </mat-card>
                     }
@@ -592,12 +863,12 @@ interface WarehouseSummary {
                     <div class="invoices-actions">
                       <mat-form-field appearance="outline" class="search-field">
                         <mat-label>Search Invoices</mat-label>
-                        <input matInput [(ngModel)]="invoiceSearch" placeholder="Invoice #, customer, product...">
+                        <input matInput [value]="invoiceSearch()" (input)="invoiceSearch.set($any($event.target).value)" placeholder="Invoice #, customer, product...">
                         <mat-icon matSuffix>search</mat-icon>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
                         <mat-label>Status</mat-label>
-                        <mat-select [(ngModel)]="invoiceStatusFilter">
+                        <mat-select [value]="invoiceStatusFilter()" (selectionChange)="invoiceStatusFilter.set($event.value)">
                           <mat-option value="all">All</mat-option>
                           <mat-option value="pending">Pending</mat-option>
                           <mat-option value="assigned">Assigned</mat-option>
@@ -606,7 +877,7 @@ interface WarehouseSummary {
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
                         <mat-label>Company</mat-label>
-                        <mat-select [(ngModel)]="invoiceSourceFilter">
+                        <mat-select [value]="invoiceSourceFilter()" (selectionChange)="invoiceSourceFilter.set($event.value)">
                           <mat-option value="all">All Sources</mat-option>
                           <mat-option value="Promed Technologies">Promed Technologies</mat-option>
                           <mat-option value="Access Medical">Access Medical</mat-option>
@@ -614,10 +885,10 @@ interface WarehouseSummary {
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
                         <mat-label>Province</mat-label>
-                        <mat-select [(ngModel)]="invoiceProvinceFilter">
+                        <mat-select [value]="invoiceProvinceFilter()" (selectionChange)="invoiceProvinceFilter.set($event.value)">
                           <mat-option value="all">All Provinces</mat-option>
                           @for (province of uniqueProvinces(); track province) {
-                            <mat-option [value]="province">{{ province }}</mat-option>
+                            <mat-option [value]="province">{{ province }} ({{ getProvinceInvoiceCount(province) }})</mat-option>
                           }
                         </mat-select>
                       </mat-form-field>
@@ -708,16 +979,6 @@ interface WarehouseSummary {
                         <ng-container matColumnDef="costOfSales">
                           <th mat-header-cell *matHeaderCellDef>Cost</th>
                           <td mat-cell *matCellDef="let inv">R{{ inv.costOfSales | number:'1.2-2' }}</td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="margin">
-                          <th mat-header-cell *matHeaderCellDef>Margin</th>
-                          <td mat-cell *matCellDef="let inv">
-                            <span [class.positive-margin]="calculateMargin(inv.salesAmount, inv.costOfSales) > 0"
-                                  [class.negative-margin]="calculateMargin(inv.salesAmount, inv.costOfSales) < 0">
-                              {{ calculateMargin(inv.salesAmount, inv.costOfSales) | number:'1.1-1' }}%
-                            </span>
-                          </td>
                         </ng-container>
 
                         <ng-container matColumnDef="status">
@@ -1207,7 +1468,7 @@ interface WarehouseSummary {
     .stat-icon.tfn-orders { background: linear-gradient(135deg, #f093fb, #f5576c); }
     .stat-icon.vehicles { background: linear-gradient(135deg, #667eea, #764ba2); }
     .stat-icon.drivers { background: linear-gradient(135deg, #f093fb, #f5576c); }
-    .stat-icon.warehouses { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+    .stat-icon.maintenance { background: linear-gradient(135deg, #ff9800, #f57c00); }
     .stat-icon.stock { background: linear-gradient(135deg, #fa709a, #fee140); }
     .stat-icon.depots { background: linear-gradient(135deg, #11998e, #38ef7d); }
 
@@ -1278,31 +1539,161 @@ interface WarehouseSummary {
       margin: 0 0 24px 0;
     }
 
-    /* Warehouses Grid */
-    .warehouses-grid {
+    /* Maintenance Tab Styles */
+    .maintenance-header {
+      margin-bottom: 24px;
+    }
+
+    .maintenance-stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .maintenance-stat-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      min-width: 160px;
+      flex: 1;
+    }
+
+    .maintenance-stat-card mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .maintenance-stat-card.critical { background: linear-gradient(135deg, #ffebee, #ffcdd2); }
+    .maintenance-stat-card.critical mat-icon { color: #c62828; }
+    .maintenance-stat-card.in-progress { background: linear-gradient(135deg, #fff3e0, #ffe0b2); }
+    .maintenance-stat-card.in-progress mat-icon { color: #ef6c00; }
+    .maintenance-stat-card.scheduled { background: linear-gradient(135deg, #e3f2fd, #bbdefb); }
+    .maintenance-stat-card.scheduled mat-icon { color: #1565c0; }
+    .maintenance-stat-card.license { background: linear-gradient(135deg, #f3e5f5, #e1bee7); }
+    .maintenance-stat-card.license mat-icon { color: #7b1fa2; }
+
+    .maintenance-stat-card .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      display: block;
+    }
+
+    .maintenance-stat-card .stat-label {
+      font-size: 0.75rem;
+      color: #666;
+    }
+
+    .maintenance-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .license-alerts {
+      background: #fff3e0;
+      border-left: 4px solid #ff9800;
+      padding: 16px;
+      margin-bottom: 24px;
+      border-radius: 8px;
+    }
+
+    .license-alerts h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px 0;
+      color: #e65100;
+    }
+
+    .license-cards {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .license-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      min-width: 250px;
+      background: white;
+    }
+
+    .license-card.critical {
+      border-left: 4px solid #c62828;
+    }
+
+    .license-card.warning {
+      border-left: 4px solid #ff9800;
+    }
+
+    .license-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .license-info mat-icon {
+      color: #666;
+    }
+
+    .license-info .vehicle-reg {
+      font-weight: 600;
+      display: block;
+    }
+
+    .license-info .expiry-text {
+      font-size: 0.8rem;
+      color: #666;
+    }
+
+    .license-card.critical .expiry-text {
+      color: #c62828;
+      font-weight: 600;
+    }
+
+    .maintenance-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 24px;
       padding: 8px;
     }
 
-    .warehouse-card {
+    .maintenance-card {
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .warehouse-card:hover {
+    .maintenance-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 8px 24px rgba(0,0,0,0.15);
     }
 
-    .warehouse-card mat-card-header {
+    .maintenance-card.status-overdue {
+      border-left: 4px solid #c62828;
+    }
+
+    .maintenance-card.status-in-progress {
+      border-left: 4px solid #ff9800;
+    }
+
+    .maintenance-card.status-scheduled {
+      border-left: 4px solid #1976d2;
+    }
+
+    .maintenance-card.status-completed {
+      border-left: 4px solid #4caf50;
+    }
+
+    .maintenance-card mat-card-header {
       margin-bottom: 16px;
     }
 
-    .warehouse-card .warehouse-icon {
+    .maintenance-icon {
       width: 48px;
       height: 48px;
-      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
       border-radius: 12px;
       display: flex;
       align-items: center;
@@ -1310,97 +1701,116 @@ interface WarehouseSummary {
       margin-right: 12px;
     }
 
-    .warehouse-card .warehouse-icon mat-icon {
+    .maintenance-icon mat-icon {
       color: white;
       font-size: 28px;
       width: 28px;
       height: 28px;
     }
 
-    .warehouse-card mat-card-subtitle {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-top: 4px;
+    .maintenance-icon.type-scheduled { background: linear-gradient(135deg, #1976d2, #1565c0); }
+    .maintenance-icon.type-repair { background: linear-gradient(135deg, #ff9800, #f57c00); }
+    .maintenance-icon.type-license { background: linear-gradient(135deg, #9c27b0, #7b1fa2); }
+    .maintenance-icon.type-inspection { background: linear-gradient(135deg, #00bcd4, #0097a7); }
+    .maintenance-icon.type-other { background: linear-gradient(135deg, #607d8b, #455a64); }
+
+    .maintenance-type-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 12px;
     }
 
-    .warehouse-card .location-icon {
+    .maintenance-type-badge.scheduled { background: #e3f2fd; color: #1565c0; }
+    .maintenance-type-badge.repair { background: #fff3e0; color: #e65100; }
+    .maintenance-type-badge.license { background: #f3e5f5; color: #7b1fa2; }
+    .maintenance-type-badge.inspection { background: #e0f7fa; color: #00838f; }
+    .maintenance-type-badge.other { background: #eceff1; color: #455a64; }
+
+    .maintenance-description {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
+    .maintenance-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .maintenance-details .detail-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.875rem;
+      color: #555;
+    }
+
+    .maintenance-details .detail-row mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #888;
+    }
+
+    .status-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-badge mat-icon {
       font-size: 16px;
       width: 16px;
       height: 16px;
     }
 
-    .warehouse-stats-row {
-      display: flex;
-      gap: 24px;
-      margin-bottom: 16px;
+    .status-badge.scheduled { background: #e3f2fd; color: #1565c0; }
+    .status-badge.in-progress { background: #fff3e0; color: #e65100; }
+    .status-badge.completed { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.overdue { background: #ffebee; color: #c62828; }
+
+    .priority-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
     }
 
-    .warehouse-stat {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: #f5f5f5;
-      border-radius: 8px;
-      flex: 1;
-    }
+    .priority-badge.low { background: #e8f5e9; color: #2e7d32; }
+    .priority-badge.medium { background: #fff3e0; color: #e65100; }
+    .priority-badge.high { background: #fbe9e7; color: #d84315; }
+    .priority-badge.critical { background: #ffebee; color: #c62828; }
 
-    .warehouse-stat mat-icon {
-      color: #1e90ff;
-    }
-
-    .warehouse-stat .stat-number {
-      font-size: 1.25rem;
-      font-weight: 700;
-      display: block;
-    }
-
-    .warehouse-stat .stat-text {
-      font-size: 0.75rem;
-      color: #666;
-    }
-
-    .capacity-section {
-      margin-bottom: 16px;
-    }
-
-    .capacity-header {
+    .maintenance-card mat-card-actions {
+      padding: 12px 16px;
+      border-top: 1px solid #eee;
       display: flex;
       justify-content: space-between;
-      margin-bottom: 8px;
-      font-size: 0.875rem;
-    }
-
-    .capacity-percent {
-      font-weight: 600;
-      color: #1e90ff;
-    }
-
-    .capacity-percent.high {
-      color: #f44336;
-    }
-
-    .manager-info {
-      display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: #e3f2fd;
-      border-radius: 8px;
-      font-size: 0.875rem;
-      color: #1976d2;
     }
 
-    .manager-info mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .warehouse-card mat-card-actions {
-      padding: 16px;
-      border-top: 1px solid #eee;
+    .delete-action {
+      color: #c62828 !important;
     }
 
     .loads-table {
@@ -1452,11 +1862,169 @@ interface WarehouseSummary {
 
     .vehicle-card {
       border-left: 4px solid #1976d2;
+      position: relative;
     }
 
     .vehicle-card.status-available { border-left-color: #4caf50; }
     .vehicle-card.status-onduty, .vehicle-card.status-on-duty { border-left-color: #2196f3; }
     .vehicle-card.status-maintenance { border-left-color: #ff9800; }
+
+    /* Integration badges container */
+    .integration-badges {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+      margin-right: 8px;
+    }
+
+    /* Vehicle menu button */
+    .vehicle-menu-btn {
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      color: #666;
+      transition: all 0.2s ease;
+    }
+
+    .vehicle-menu-btn:hover {
+      color: #1976d2;
+      background: rgba(25, 118, 210, 0.1);
+    }
+
+    .vehicle-card mat-card-header {
+      position: relative;
+      padding-right: 40px;
+    }
+
+    .delete-action {
+      color: #f44336 !important;
+    }
+
+    .delete-action mat-icon {
+      color: #f44336 !important;
+    }
+
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .cartrack-badge {
+      background: linear-gradient(135deg, #2196f3, #1565c0);
+      color: white;
+    }
+
+    .tfn-badge {
+      background: linear-gradient(135deg, #4caf50, #2e7d32);
+      color: white;
+    }
+
+    .fleet-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .fleet-stats {
+      display: flex;
+      gap: 16px;
+    }
+
+    .stat-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .stat-badge mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .stat-badge.linked {
+      background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(46, 125, 50, 0.15));
+      color: #2e7d32;
+    }
+
+    .stat-badge.unlinked {
+      background: linear-gradient(135deg, rgba(158, 158, 158, 0.15), rgba(97, 97, 97, 0.15));
+      color: #616161;
+    }
+
+    .fleet-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .fleet-actions button mat-spinner {
+      margin-right: 8px;
+    }
+
+    .fuel-type-badge {
+      background: #e3f2fd;
+      color: #1565c0;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 500;
+      margin-left: 8px;
+    }
+
+    .tfn-balance {
+      background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(46, 125, 50, 0.1));
+      padding: 6px 10px;
+      border-radius: 8px;
+      margin-top: 4px;
+    }
+
+    .tfn-balance mat-icon {
+      color: #4caf50;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .tfn-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #4caf50, #2e7d32);
+      border-radius: 50%;
+      color: white;
+    }
+
+    .tfn-indicator mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
 
     .vehicle-header {
       display: flex;
@@ -1471,6 +2039,19 @@ interface WarehouseSummary {
       font-weight: 600;
     }
 
+    .speed-row {
+      background: linear-gradient(135deg, rgba(33, 150, 243, 0.08), rgba(21, 101, 192, 0.08));
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin: 4px 0;
+    }
+
+    .speed-value {
+      font-weight: 600;
+      font-size: 14px;
+      color: #1565c0;
+    }
+
     .moving-badge {
       background: linear-gradient(135deg, #4caf50, #2e7d32);
       color: white;
@@ -1479,6 +2060,7 @@ interface WarehouseSummary {
       font-size: 11px;
       font-weight: 600;
       animation: pulse 2s infinite;
+      margin-left: auto;
     }
 
     .stationary-badge {
@@ -1488,12 +2070,40 @@ interface WarehouseSummary {
       border-radius: 20px;
       font-size: 11px;
       font-weight: 600;
+      margin-left: auto;
+    }
+
+    .idling-badge {
+      background: linear-gradient(135deg, #ff9800, #f57c00);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: auto;
+      animation: pulse-orange 2s infinite;
+    }
+
+    .offline-badge {
+      background: linear-gradient(135deg, #f44336, #c62828);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: auto;
     }
 
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
       70% { box-shadow: 0 0 0 8px rgba(76, 175, 80, 0); }
       100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+    }
+
+    @keyframes pulse-orange {
+      0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4); }
+      70% { box-shadow: 0 0 0 8px rgba(255, 152, 0, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
     }
 
     .speed-indicator {
@@ -2287,18 +2897,21 @@ export class LogisticsDashboardComponent implements OnInit {
     availableVehicles: 0,
     totalDrivers: 0,
     availableDrivers: 0,
-    totalWarehouses: 0,
-    lowStockItems: 0,
+    vehiclesInMaintenance: 0,
+    upcomingMaintenance: 0,
     pendingInvoices: 0,
     overdueInvoices: 0
   });
 
   activeLoads = signal<ActiveLoad[]>([]);
   vehicles = signal<Vehicle[]>([]);
-  warehouses = signal<WarehouseSummary[]>([]);
+  maintenanceRecords = signal<MaintenanceRecord[]>([]);
   drivers = signal<any[]>([]);
   customers = signal<any[]>([]);
+  warehouses = signal<any[]>([]);
   syncing = signal(false);
+  tfnSyncing = signal(false);
+  carTrackSyncing = signal(false);
 
   // Tripsheets
   tripsheets = signal<any[]>([]);
@@ -2308,11 +2921,11 @@ export class LogisticsDashboardComponent implements OnInit {
 
   // Imported Invoices
   importedInvoices = signal<ImportedInvoice[]>([]);
-  invoiceSearch = '';
-  invoiceStatusFilter = 'all';
-  invoiceSourceFilter = 'all';
-  invoiceProvinceFilter = 'all';
-  invoiceColumns = ['transactionNumber', 'date', 'customer', 'product', 'quantity', 'salesAmount', 'costOfSales', 'margin', 'status', 'actions'];
+  invoiceSearch = signal('');
+  invoiceStatusFilter = signal('all');
+  invoiceSourceFilter = signal('all');
+  invoiceProvinceFilter = signal('all');
+  invoiceColumns = ['transactionNumber', 'date', 'customer', 'product', 'quantity', 'salesAmount', 'costOfSales', 'status', 'actions'];
 
   loadColumns = ['loadNumber', 'customer', 'route', 'vehicle', 'driver', 'status', 'progress', 'actions'];
 
@@ -2338,6 +2951,24 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadTfnDepots();
     this.loadDrivers();
     this.loadCustomers();
+    this.loadMaintenanceRecords();
+    this.loadWarehouses();
+  }
+
+  loadWarehouses(): void {
+    this.http.get<any[]>(`${this.apiUrl}/warehouses`).subscribe({
+      next: (warehouses) => {
+        this.warehouses.set(warehouses);
+      },
+      error: () => {
+        // Use fallback data
+        this.warehouses.set([
+          { id: 1, name: 'Durban Warehouse', code: 'DBN', latitude: -29.8587, longitude: 31.0218, address: 'Durban, KwaZulu-Natal' },
+          { id: 2, name: 'Johannesburg Warehouse', code: 'JHB', latitude: -26.2041, longitude: 28.0473, address: 'Johannesburg, Gauteng' },
+          { id: 3, name: 'Cape Town Warehouse', code: 'CPT', latitude: -33.9249, longitude: 18.4241, address: 'Cape Town, Western Cape' }
+        ]);
+      }
+    });
   }
 
   loadDrivers(): void {
@@ -2372,6 +3003,239 @@ export class LogisticsDashboardComponent implements OnInit {
     });
   }
 
+  // Maintenance Methods
+  loadMaintenanceRecords(): void {
+    this.http.get<MaintenanceRecord[]>(`${this.apiUrl}/logistics/maintenance`).subscribe({
+      next: (records) => {
+        this.maintenanceRecords.set(records);
+        this.updateMaintenanceStats();
+      },
+      error: () => {
+        // Load sample maintenance data
+        this.loadSampleMaintenanceData();
+      }
+    });
+  }
+
+  private loadSampleMaintenanceData(): void {
+    const sampleRecords: MaintenanceRecord[] = [
+      {
+        id: 1,
+        vehicleId: 1,
+        vehicleReg: 'GP 123 ABC',
+        vehicleType: 'Truck - 8 Ton',
+        maintenanceType: 'scheduled',
+        description: 'Regular 50,000km service - oil change, filters, brake inspection',
+        status: 'scheduled',
+        priority: 'medium',
+        scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+        estimatedCost: 4500,
+        assignedTo: 'Fleet Services'
+      },
+      {
+        id: 2,
+        vehicleId: 2,
+        vehicleReg: 'GP 456 DEF',
+        vehicleType: 'Truck - 14 Ton',
+        maintenanceType: 'repair',
+        description: 'Gearbox repair - difficulty shifting gears reported by driver',
+        status: 'in-progress',
+        priority: 'high',
+        scheduledDate: new Date(),
+        estimatedCost: 12000,
+        assignedTo: 'Heavy Duty Repairs'
+      },
+      {
+        id: 3,
+        vehicleId: 3,
+        vehicleReg: 'GP 789 GHI',
+        vehicleType: 'Bakkie',
+        maintenanceType: 'license',
+        description: 'Vehicle license renewal',
+        status: 'overdue',
+        priority: 'critical',
+        scheduledDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+        licenseExpiryDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+        daysUntilExpiry: -5
+      },
+      {
+        id: 4,
+        vehicleId: 4,
+        vehicleReg: 'GP 321 JKL',
+        vehicleType: 'Truck - 8 Ton',
+        maintenanceType: 'inspection',
+        description: 'Annual roadworthy certificate inspection',
+        status: 'scheduled',
+        priority: 'high',
+        scheduledDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
+        estimatedCost: 1200,
+        assignedTo: 'Testing Station'
+      },
+      {
+        id: 5,
+        vehicleId: 5,
+        vehicleReg: 'GP 654 MNO',
+        vehicleType: 'Truck - 14 Ton',
+        maintenanceType: 'license',
+        description: 'Vehicle license expiring soon',
+        status: 'scheduled',
+        priority: 'medium',
+        scheduledDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        licenseExpiryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        daysUntilExpiry: 14
+      }
+    ];
+    this.maintenanceRecords.set(sampleRecords);
+    this.updateMaintenanceStats();
+  }
+
+  private updateMaintenanceStats(): void {
+    const records = this.maintenanceRecords();
+    this.stats.update(s => ({
+      ...s,
+      vehiclesInMaintenance: records.filter(r => r.status === 'in-progress' || r.status === 'scheduled').length,
+      upcomingMaintenance: records.filter(r => r.status === 'scheduled').length
+    }));
+  }
+
+  getMaintenanceByStatus(status: string): MaintenanceRecord[] {
+    return this.maintenanceRecords().filter(r => r.status === status);
+  }
+
+  getExpiringLicenses(): MaintenanceRecord[] {
+    return this.maintenanceRecords()
+      .filter(r => r.maintenanceType === 'license' && r.daysUntilExpiry !== undefined && r.daysUntilExpiry <= 30)
+      .sort((a, b) => (a.daysUntilExpiry || 0) - (b.daysUntilExpiry || 0));
+  }
+
+  openAddMaintenanceDialog(): void {
+    const dialogRef = this.dialog.open(AddMaintenanceDialog, {
+      width: '600px',
+      data: { vehicles: this.vehicles() }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.http.post<MaintenanceRecord>(`${this.apiUrl}/logistics/maintenance`, result).subscribe({
+          next: (record) => {
+            this.maintenanceRecords.update(records => [...records, record]);
+            this.updateMaintenanceStats();
+          },
+          error: () => {
+            // Add to local list with generated ID
+            const newRecord: MaintenanceRecord = {
+              ...result,
+              id: Math.max(0, ...this.maintenanceRecords().map(r => r.id)) + 1
+            };
+            this.maintenanceRecords.update(records => [...records, newRecord]);
+            this.updateMaintenanceStats();
+          }
+        });
+      }
+    });
+  }
+
+  startMaintenance(record: MaintenanceRecord): void {
+    this.http.patch(`${this.apiUrl}/logistics/maintenance/${record.id}/start`, {}).subscribe({
+      next: () => {
+        this.maintenanceRecords.update(records =>
+          records.map(r => r.id === record.id ? { ...r, status: 'in-progress' as const } : r)
+        );
+        this.updateMaintenanceStats();
+      },
+      error: () => {
+        // Update locally
+        this.maintenanceRecords.update(records =>
+          records.map(r => r.id === record.id ? { ...r, status: 'in-progress' as const } : r)
+        );
+        this.updateMaintenanceStats();
+      }
+    });
+  }
+
+  completeMaintenance(record: MaintenanceRecord): void {
+    this.http.patch(`${this.apiUrl}/logistics/maintenance/${record.id}/complete`, {}).subscribe({
+      next: () => {
+        this.maintenanceRecords.update(records =>
+          records.map(r => r.id === record.id ? { ...r, status: 'completed' as const, completedDate: new Date() } : r)
+        );
+        this.updateMaintenanceStats();
+      },
+      error: () => {
+        // Update locally
+        this.maintenanceRecords.update(records =>
+          records.map(r => r.id === record.id ? { ...r, status: 'completed' as const, completedDate: new Date() } : r)
+        );
+        this.updateMaintenanceStats();
+      }
+    });
+  }
+
+  editMaintenance(record: MaintenanceRecord): void {
+    const dialogRef = this.dialog.open(AddMaintenanceDialog, {
+      width: '600px',
+      data: { vehicles: this.vehicles(), record }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.http.put<MaintenanceRecord>(`${this.apiUrl}/logistics/maintenance/${record.id}`, result).subscribe({
+          next: (updated) => {
+            this.maintenanceRecords.update(records =>
+              records.map(r => r.id === record.id ? updated : r)
+            );
+          },
+          error: () => {
+            this.maintenanceRecords.update(records =>
+              records.map(r => r.id === record.id ? { ...r, ...result } : r)
+            );
+          }
+        });
+      }
+    });
+  }
+
+  deleteMaintenance(record: MaintenanceRecord): void {
+    if (confirm(`Are you sure you want to delete this maintenance record for ${record.vehicleReg}?`)) {
+      this.http.delete(`${this.apiUrl}/logistics/maintenance/${record.id}`).subscribe({
+        next: () => {
+          this.maintenanceRecords.update(records => records.filter(r => r.id !== record.id));
+          this.updateMaintenanceStats();
+        },
+        error: () => {
+          this.maintenanceRecords.update(records => records.filter(r => r.id !== record.id));
+          this.updateMaintenanceStats();
+        }
+      });
+    }
+  }
+
+  viewMaintenanceHistory(record: MaintenanceRecord): void {
+    // Could open a dialog showing maintenance history for this vehicle
+    console.log('View history for vehicle:', record.vehicleReg);
+  }
+
+  scheduleLicenseRenewal(record: MaintenanceRecord): void {
+    // Quick action to schedule license renewal
+    const renewalRecord: Partial<MaintenanceRecord> = {
+      vehicleId: record.vehicleId,
+      vehicleReg: record.vehicleReg,
+      vehicleType: record.vehicleType,
+      maintenanceType: 'license',
+      description: 'License renewal',
+      status: 'scheduled',
+      priority: record.daysUntilExpiry! <= 7 ? 'critical' : 'high',
+      scheduledDate: new Date()
+    };
+    this.openAddMaintenanceDialog();
+  }
+
+  scrollToMaintenanceTab(): void {
+    // This would scroll to and select the maintenance tab
+    // For now, just load the data
+    this.loadMaintenanceRecords();
+  }
+
   async loadDashboardData(): Promise<void> {
     this.loading.set(true);
 
@@ -2396,51 +3260,8 @@ export class LogisticsDashboardComponent implements OnInit {
         }
       });
 
-      // Load fleet data from CarTrack via tracking controller
-      this.http.get<any>(`${this.apiUrl}/tracking/fleet-status`).subscribe({
-        next: (fleetStatus) => {
-          if (fleetStatus?.vehicles) {
-            this.vehicles.set(fleetStatus.vehicles.map((v: any) => ({
-              id: v.localVehicleId || 0,
-              registrationNumber: v.registrationNumber || v.vehicleName,
-              type: 'Vehicle',
-              status: v.status || 'Unknown',
-              currentDriver: v.currentDriverName || '',
-              lastLocation: v.location?.address || 'Unknown',
-              fuelLevel: 50, // CarTrack doesn't provide fuel level
-              speed: v.speed,
-              latitude: v.location?.latitude,
-              longitude: v.location?.longitude,
-              lastUpdate: v.lastUpdate
-            })));
-            this.stats.update(s => ({
-              ...s,
-              totalVehicles: fleetStatus.totalVehicles || fleetStatus.vehicles.length,
-              availableVehicles: fleetStatus.stationaryCount || 0
-            }));
-          }
-        },
-        error: (err) => {
-          console.error('Fleet status error:', err);
-          // Fall back to database vehicles
-          this.loadVehiclesFromDatabase();
-        }
-      });
-
-      // Load warehouses
-      this.http.get<WarehouseSummary[]>(`${this.apiUrl}/warehouses/summary`).subscribe({
-        next: (data) => {
-          this.warehouses.set(data);
-          this.stats.update(s => ({
-            ...s,
-            totalWarehouses: data.length,
-            lowStockItems: data.reduce((sum, w) => sum + (w.totalItems < 100 ? 1 : 0), 0)
-          }));
-        },
-        error: (err) => {
-          console.error('Warehouses error:', err);
-        }
-      });
+      // Load fleet data with live CarTrack + TFN data merged
+      this.loadVehiclesFromDatabase();
 
       this.loading.set(false);
     } catch (error) {
@@ -2450,17 +3271,63 @@ export class LogisticsDashboardComponent implements OnInit {
   }
 
   loadVehiclesFromDatabase(): void {
-    this.http.get<any[]>(`${this.apiUrl}/fleet/vehicles`).subscribe({
+    // Use the live endpoint that merges database + CarTrack + TFN data
+    this.http.get<any[]>(`${this.apiUrl}/fleet/vehicles/live`).subscribe({
       next: (fleet) => {
-        this.vehicles.set(fleet.map(v => ({
+        const mappedVehicles = fleet.map(v => ({
           id: v.id,
           registrationNumber: v.registrationNumber,
           type: v.vehicleTypeName || 'Truck',
+          vehicleTypeName: v.vehicleTypeName,
           status: v.status,
           currentDriver: v.currentDriverName || '',
-          lastLocation: 'Unknown',
-          fuelLevel: 50
-        })));
+          currentDriverName: v.currentDriverName,
+          // Live tracking data from CarTrack
+          lastLocation: v.lastLocation || 'Unknown',
+          latitude: v.latitude,
+          longitude: v.longitude,
+          speed: v.speed ?? 0,
+          heading: v.heading,
+          lastUpdate: v.lastUpdate,
+          liveStatus: v.liveStatus || 'offline',
+          fuelLevel: 50,
+          fuelCapacity: v.fuelCapacity,
+          // CarTrack integration
+          carTrackId: v.carTrackId,
+          isLinkedToCarTrack: v.isLinkedToCarTrack,
+          // TFN integration
+          tfnVehicleId: v.tfnVehicleId,
+          tfnSubAccountNumber: v.tfnSubAccountNumber,
+          tfnVirtualCardNumber: v.tfnVirtualCardNumber,
+          tfnCreditLimit: v.tfnCreditLimit,
+          tfnCurrentBalance: v.tfnCurrentBalance,
+          tfnLastSyncedAt: v.tfnLastSyncedAt,
+          tankSize: v.tankSize,
+          fuelType: v.fuelType,
+          averageFuelConsumption: v.averageFuelConsumption,
+          isLinkedToTfn: v.isLinkedToTfn
+        }));
+        
+        // Sort: moving > idle > stationary/stopped > offline > unlinked
+        mappedVehicles.sort((a, b) => {
+          // First check if linked to CarTrack
+          const aLinked = a.isLinkedToCarTrack || a.carTrackId ? 1 : 0;
+          const bLinked = b.isLinkedToCarTrack || b.carTrackId ? 1 : 0;
+          
+          // Unlinked vehicles go to the bottom
+          if (aLinked !== bLinked) return bLinked - aLinked;
+          
+          // For linked vehicles, sort by status: moving > idling > stopped > offline
+          const statusOrder: Record<string, number> = { 'moving': 0, 'idling': 1, 'stopped': 2, 'offline': 3 };
+          const aStatus = statusOrder[a.liveStatus] ?? 4;
+          const bStatus = statusOrder[b.liveStatus] ?? 4;
+          if (aStatus !== bStatus) return aStatus - bStatus;
+          
+          // Within same status, sort by speed (higher speed first)
+          return (b.speed ?? 0) - (a.speed ?? 0);
+        });
+        
+        this.vehicles.set(mappedVehicles);
         this.stats.update(s => ({
           ...s,
           totalVehicles: fleet.length,
@@ -2469,6 +3336,43 @@ export class LogisticsDashboardComponent implements OnInit {
       },
       error: () => {}
     });
+  }
+
+  // TFN Sync - Link vehicles by registration number
+  syncTfnVehicles(): void {
+    this.tfnSyncing.set(true);
+    this.http.post<any>(`${this.apiUrl}/logistics/tfn/sync/vehicles`, {}).subscribe({
+      next: (result) => {
+        this.tfnSyncing.set(false);
+        this.loadVehiclesFromDatabase();
+        console.log('TFN sync completed:', result);
+      },
+      error: (err) => {
+        this.tfnSyncing.set(false);
+        console.error('TFN sync failed:', err);
+      }
+    });
+  }
+
+  // CarTrack Sync - Link vehicles by registration number
+  syncCarTrackVehicles(): void {
+    this.carTrackSyncing.set(true);
+    this.http.post<any>(`${this.apiUrl}/fleet/sync/cartrack`, {}).subscribe({
+      next: (result) => {
+        this.carTrackSyncing.set(false);
+        this.loadVehiclesFromDatabase();
+        console.log('CarTrack sync completed:', result);
+      },
+      error: (err) => {
+        this.carTrackSyncing.set(false);
+        console.error('CarTrack sync failed:', err);
+      }
+    });
+  }
+
+  // Get count of vehicles linked to TFN or CarTrack
+  getLinkedVehicleCount(): number {
+    return this.vehicles().filter(v => v.isLinkedToTfn || v.isLinkedToCarTrack || v.tfnVehicleId || v.carTrackId).length;
   }
 
   loadSampleData(): void {
@@ -2482,8 +3386,8 @@ export class LogisticsDashboardComponent implements OnInit {
       availableVehicles: 6,
       totalDrivers: 12,
       availableDrivers: 4,
-      totalWarehouses: 3,
-      lowStockItems: 2,
+      vehiclesInMaintenance: 2,
+      upcomingMaintenance: 3,
       pendingInvoices: 15,
       overdueInvoices: 3
     });
@@ -2607,10 +3511,115 @@ export class LogisticsDashboardComponent implements OnInit {
 
   addVehicle(): void {
     console.log('Add vehicle');
+    this.openVehicleDialog();
   }
 
   viewVehicleDetails(vehicle: Vehicle): void {
     console.log('View vehicle details', vehicle);
+    this.openVehicleDialog(vehicle, 'view');
+  }
+
+  editVehicle(vehicle: Vehicle): void {
+    console.log('Edit vehicle', vehicle);
+    this.openVehicleDialog(vehicle, 'edit');
+  }
+
+  assignDriver(vehicle: Vehicle): void {
+    console.log('Assign driver', vehicle);
+    this.openAssignDriverDialog(vehicle);
+  }
+
+  linkCarTrack(vehicle: Vehicle): void {
+    console.log('Link CarTrack', vehicle);
+    this.openLinkDialog(vehicle, 'cartrack');
+  }
+
+  unlinkCarTrack(vehicle: Vehicle): void {
+    if (confirm(`Unlink CarTrack from ${vehicle.registrationNumber}?`)) {
+      this.http.post<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}/unlink-cartrack`, {}).subscribe({
+        next: () => {
+          this.loadVehiclesFromDatabase();
+        },
+        error: (err) => console.error('Error unlinking CarTrack:', err)
+      });
+    }
+  }
+
+  linkTfn(vehicle: Vehicle): void {
+    console.log('Link TFN', vehicle);
+    this.openLinkDialog(vehicle, 'tfn');
+  }
+
+  unlinkTfn(vehicle: Vehicle): void {
+    if (confirm(`Unlink TruckFuelNet from ${vehicle.registrationNumber}?`)) {
+      this.http.post<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}/unlink-tfn`, {}).subscribe({
+        next: () => {
+          this.loadVehiclesFromDatabase();
+        },
+        error: (err) => console.error('Error unlinking TFN:', err)
+      });
+    }
+  }
+
+  viewFuelHistory(vehicle: Vehicle): void {
+    console.log('View fuel history', vehicle);
+    // TODO: Open fuel history dialog
+  }
+
+  viewVehicleMaintenanceHistory(vehicle: Vehicle): void {
+    console.log('View vehicle maintenance history', vehicle);
+    // TODO: Open maintenance history dialog for vehicle
+  }
+
+  deleteVehicle(vehicle: Vehicle): void {
+    if (confirm(`Are you sure you want to delete vehicle ${vehicle.registrationNumber}? This action cannot be undone.`)) {
+      this.http.delete<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}`).subscribe({
+        next: () => {
+          this.loadVehiclesFromDatabase();
+        },
+        error: (err) => console.error('Error deleting vehicle:', err)
+      });
+    }
+  }
+
+  openVehicleDialog(vehicle?: Vehicle, mode: 'view' | 'edit' | 'add' = 'add'): void {
+    const dialogRef = this.dialog.open(VehicleDialogComponent, {
+      width: '600px',
+      maxHeight: '90vh',
+      data: { vehicle, mode }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.loadVehiclesFromDatabase();
+      }
+    });
+  }
+
+  openAssignDriverDialog(vehicle: Vehicle): void {
+    const dialogRef = this.dialog.open(AssignDriverDialogComponent, {
+      width: '500px',
+      data: { vehicle }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.loadVehiclesFromDatabase();
+      }
+    });
+  }
+
+  openLinkDialog(vehicle: Vehicle, type: 'cartrack' | 'tfn'): void {
+    const dialogRef = this.dialog.open(LinkVehicleDialogComponent, {
+      width: '500px',
+      data: { vehicle, type }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.loadVehiclesFromDatabase();
+      }
+    });
   }
 
   trackVehicle(vehicle: Vehicle): void {
@@ -2665,33 +3674,51 @@ export class LogisticsDashboardComponent implements OnInit {
     });
   }
 
+  // South African provinces list
+  southAfricanProvinces = [
+    'Eastern Cape',
+    'Free State',
+    'Gauteng',
+    'KwaZulu-Natal',
+    'Limpopo',
+    'Mpumalanga',
+    'North West',
+    'Northern Cape',
+    'Western Cape'
+  ];
+
   // Imported Invoice methods
   uniqueProvinces = computed(() => {
-    const provinces = this.importedInvoices()
-      .map(i => i.deliveryProvince)
-      .filter((p): p is string => !!p && p !== '')
-      .filter((value, index, self) => self.indexOf(value) === index)
-      .sort();
-    return provinces;
+    // Return all SA provinces - the filter will handle showing which ones have invoices
+    return this.southAfricanProvinces;
   });
+
+  // Get count of invoices per province for display
+  getProvinceInvoiceCount(province: string): number {
+    return this.importedInvoices().filter(i => i.deliveryProvince === province).length;
+  }
 
   filteredInvoices = computed(() => {
     let invoices = this.importedInvoices();
+    const statusFilter = this.invoiceStatusFilter();
+    const sourceFilter = this.invoiceSourceFilter();
+    const provinceFilter = this.invoiceProvinceFilter();
+    const searchTerm = this.invoiceSearch();
     
-    if (this.invoiceStatusFilter !== 'all') {
-      invoices = invoices.filter(i => i.status.toLowerCase() === this.invoiceStatusFilter);
+    if (statusFilter !== 'all') {
+      invoices = invoices.filter(i => i.status.toLowerCase() === statusFilter);
     }
     
-    if (this.invoiceSourceFilter !== 'all') {
-      invoices = invoices.filter(i => i.sourceSystem === this.invoiceSourceFilter);
+    if (sourceFilter !== 'all') {
+      invoices = invoices.filter(i => i.sourceSystem === sourceFilter);
     }
     
-    if (this.invoiceProvinceFilter !== 'all') {
-      invoices = invoices.filter(i => i.deliveryProvince === this.invoiceProvinceFilter);
+    if (provinceFilter !== 'all') {
+      invoices = invoices.filter(i => i.deliveryProvince === provinceFilter);
     }
     
-    if (this.invoiceSearch) {
-      const search = this.invoiceSearch.toLowerCase();
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
       invoices = invoices.filter(i => 
         i.transactionNumber?.toLowerCase().includes(search) ||
         i.customerNumber?.toLowerCase().includes(search) ||
@@ -2709,7 +3736,7 @@ export class LogisticsDashboardComponent implements OnInit {
   deliveredInvoiceCount = computed(() => this.importedInvoices().filter(i => i.status === 'Delivered').length);
 
   loadImportedInvoices(): void {
-    this.http.get<ImportedInvoice[]>(`${this.apiUrl}/logistics/importedinvoices`).subscribe({
+    this.http.get<ImportedInvoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=1000`).subscribe({
       next: (invoices) => {
         this.importedInvoices.set(invoices);
         this.stats.update(s => ({
@@ -2853,7 +3880,8 @@ export class LogisticsDashboardComponent implements OnInit {
         drivers: this.drivers(),
         vehicles: this.vehicles(),
         warehouses: this.warehouses(),
-        customers: this.customers()
+        customers: this.customers(),
+        apiUrl: this.apiUrl
       }
     });
 
@@ -3384,7 +4412,8 @@ export class InvoiceDetailsDialog {
     MatFormFieldModule,
     FormsModule,
     MatChipsModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatTooltipModule
   ],
   template: `
     <div class="map-dialog">
@@ -3403,6 +4432,14 @@ export class InvoiceDetailsDialog {
               }
             </mat-select>
           </mat-form-field>
+          <button mat-raised-button color="primary" 
+                  (click)="findNearestTfnDepot()" 
+                  [disabled]="!selectedVehicle || !selectedVehicle.latitude"
+                  matTooltip="Find nearest TFN depot to selected vehicle"
+                  class="nearest-tfn-btn">
+            <mat-icon>local_shipping</mat-icon>
+            Nearest TFN
+          </button>
           <button mat-icon-button (click)="refreshMap()" matTooltip="Refresh">
             <mat-icon>refresh</mat-icon>
           </button>
@@ -3502,6 +4539,27 @@ export class InvoiceDetailsDialog {
     .vehicle-select ::ng-deep .mat-mdc-text-field-wrapper {
       background: rgba(255,255,255,0.9);
       border-radius: 4px;
+    }
+
+    .nearest-tfn-btn {
+      background: #ff9800 !important;
+      color: white !important;
+      font-size: 12px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nearest-tfn-btn:disabled {
+      background: rgba(255, 255, 255, 0.3) !important;
+      color: rgba(255, 255, 255, 0.5) !important;
+    }
+
+    .nearest-tfn-btn mat-icon {
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
     }
 
     .header-controls button {
@@ -3703,6 +4761,11 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
   private markers: google.maps.Marker[] = [];
   private infoWindow: google.maps.InfoWindow | null = null;
   private mapInitialized = false;
+  private depotMarker: google.maps.Marker | null = null;
+  private depotLine: google.maps.Polyline | null = null;
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
 
   constructor(
     public dialogRef: MatDialogRef<FleetMapDialogComponent>,
@@ -3722,6 +4785,12 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     this.markers = [];
     if (this.infoWindow) {
       this.infoWindow.close();
+    }
+    if (this.depotMarker) {
+      this.depotMarker.setMap(null);
+    }
+    if (this.depotLine) {
+      this.depotLine.setMap(null);
     }
   }
 
@@ -3756,8 +4825,10 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       center: defaultCenter,
       mapTypeId: 'roadmap',
       mapTypeControl: true,
+      zoomControl: true,
       streetViewControl: false,
       fullscreenControl: true,
+      scaleControl: true,
       styles: [
         {
           featureType: 'poi',
@@ -3765,7 +4836,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
           stylers: [{ visibility: 'off' }]
         }
       ]
-    });
+    } as any);
 
     this.infoWindow = new google.maps.InfoWindow();
     this.mapInitialized = true;
@@ -3881,6 +4952,95 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
         this.showVehicleInfo(vehicle, marker);
       }
     }
+  }
+
+  findNearestTfnDepot(): void {
+    if (!this.selectedVehicle || !this.selectedVehicle.latitude || !this.selectedVehicle.longitude) {
+      this.snackBar.open('Please select a vehicle with valid coordinates', 'Close', { duration: 3000 });
+      return;
+    }
+
+    // Clear previous depot marker and line
+    if (this.depotMarker) {
+      this.depotMarker.setMap(null);
+      this.depotMarker = null;
+    }
+    if (this.depotLine) {
+      this.depotLine.setMap(null);
+      this.depotLine = null;
+    }
+
+    const lat = this.selectedVehicle.latitude;
+    const lng = this.selectedVehicle.longitude;
+
+    this.http.get<any>(`/api/logistics/tfn/depots/nearest?lat=${lat}&lng=${lng}`).subscribe({
+      next: (depot) => {
+        // Show depot on map with info window
+        if (this.map && depot.latitude && depot.longitude) {
+          // Add a marker for the depot
+          this.depotMarker = new google.maps.Marker({
+            position: { lat: depot.latitude, lng: depot.longitude },
+            map: this.map,
+            title: depot.name,
+            icon: {
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24"><path fill="#e65100" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>'
+              ),
+              scaledSize: new google.maps.Size(40, 40),
+              anchor: new google.maps.Point(20, 40)
+            }
+          });
+
+          // Draw a line from vehicle to depot
+          this.depotLine = new google.maps.Polyline({
+            path: [
+              { lat: lat, lng: lng },
+              { lat: depot.latitude, lng: depot.longitude }
+            ],
+            geodesic: true,
+            strokeColor: '#ff9800',
+            strokeOpacity: 0.8,
+            strokeWeight: 3,
+            map: this.map
+          });
+
+          // Create bounds to show both vehicle and depot
+          const bounds = new google.maps.LatLngBounds();
+          bounds.extend({ lat: lat, lng: lng });
+          bounds.extend({ lat: depot.latitude, lng: depot.longitude });
+          this.map.fitBounds(bounds, 80);
+
+          // Show info window on depot
+          const infoContent = `
+            <div style="padding: 12px; min-width: 220px;">
+              <h3 style="margin: 0 0 8px 0; color: #e65100; font-size: 16px;">
+                <span style="font-size: 20px;">🏭</span> ${depot.name}
+              </h3>
+              <p style="margin: 4px 0; font-size: 13px;"><strong>Code:</strong> ${depot.code || 'N/A'}</p>
+              <p style="margin: 4px 0; font-size: 13px;"><strong>Distance:</strong> <span style="color: #1976d2; font-weight: bold;">${depot.distanceKm} km</span></p>
+              <p style="margin: 4px 0; font-size: 12px; color: #666;"><strong>Address:</strong> ${depot.address || ''}</p>
+              <p style="margin: 4px 0; font-size: 12px; color: #666;">${depot.city || ''}, ${depot.province || ''}</p>
+              ${depot.contactPerson ? '<p style="margin: 8px 0 4px 0; font-size: 12px;"><strong>Contact:</strong> ' + depot.contactPerson + '</p>' : ''}
+              ${depot.contactPhone ? '<p style="margin: 4px 0; font-size: 12px;"><strong>Phone:</strong> <a href="tel:' + depot.contactPhone + '">' + depot.contactPhone + '</a></p>' : ''}
+              <div style="margin-top: 12px;">
+                <a href="https://www.google.com/maps/dir/${lat},${lng}/${depot.latitude},${depot.longitude}" target="_blank" style="color: #e65100; text-decoration: none; font-size: 12px;">Get Directions →</a>
+              </div>
+            </div>
+          `;
+
+          if (this.infoWindow) {
+            this.infoWindow.setContent(infoContent);
+            this.infoWindow.open(this.map, this.depotMarker);
+          }
+        }
+
+        this.snackBar.open(`Nearest TFN: ${depot.name} (${depot.distanceKm} km away)`, 'Close', { duration: 5000 });
+      },
+      error: (err) => {
+        console.error('Error finding nearest depot:', err);
+        this.snackBar.open('Failed to find nearest TFN depot', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   refreshMap(): void {
@@ -7682,8 +8842,10 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       center: defaultCenter,
       mapTypeId: 'roadmap',
       mapTypeControl: true,
+      zoomControl: true,
       streetViewControl: false,
       fullscreenControl: true,
+      scaleControl: true,
       styles: [
         {
           featureType: 'poi',
@@ -7691,7 +8853,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
           stylers: [{ visibility: 'off' }]
         }
       ]
-    });
+    } as any);
 
     this.infoWindow = new google.maps.InfoWindow();
     this.mapInitialized = true;
@@ -7867,7 +9029,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   // Trip Sheet Methods
   loadTripSheets(): void {
     this.loadingTrips = true;
-    const apiUrl = 'http://localhost:5143/api';
+    const apiUrl = environment.apiUrl;
     
     // Fetch loads with stops that have coordinates
     this.http.get<any[]>(`${apiUrl}/logistics/loads`).subscribe({
@@ -8134,13 +9296,32 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
             <div class="step-content">
               <div class="source-panel">
                 <div class="panel-header">
-                  <h3><mat-icon>receipt_long</mat-icon> Available Invoices</h3>
-                  <mat-form-field appearance="outline" class="search-field">
-                    <mat-label>Search invoices...</mat-label>
-                    <input matInput [(ngModel)]="invoiceSearch" placeholder="Customer, invoice #...">
-                    <mat-icon matSuffix>search</mat-icon>
-                  </mat-form-field>
+                  <h3><mat-icon>receipt_long</mat-icon> Available Invoices ({{ filteredInvoices().length }})</h3>
+                  <div class="filter-controls">
+                    <mat-form-field appearance="outline" class="province-filter">
+                      <mat-label>Province</mat-label>
+                      <mat-select [(ngModel)]="selectedProvince" (selectionChange)="onProvinceChange()">
+                        <mat-option value="all">All Provinces</mat-option>
+                        @for (province of provinces; track province.code) {
+                          <mat-option [value]="province.code">
+                            {{ province.name }} ({{ getProvinceInvoiceCount(province.code) }})
+                          </mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="search-field">
+                      <mat-label>Search invoices...</mat-label>
+                      <input matInput [(ngModel)]="invoiceSearch" placeholder="Customer, invoice #...">
+                      <mat-icon matSuffix>search</mat-icon>
+                    </mat-form-field>
+                  </div>
                 </div>
+                @if (loadingProvinces) {
+                  <div class="loading-provinces">
+                    <mat-spinner diameter="24"></mat-spinner>
+                    <span>Loading province data...</span>
+                  </div>
+                }
                 <div class="invoice-list">
                   @for (invoice of filteredInvoices(); track invoice.id) {
                     <div class="invoice-item" 
@@ -8150,10 +9331,18 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                       <div class="invoice-info">
                         <span class="invoice-number">{{ invoice.transactionNumber }}</span>
                         <span class="customer-name">{{ invoice.customerName }}</span>
+                        @if (invoice.province) {
+                          <span class="province-badge" [class]="'province-' + invoice.province.toLowerCase()">
+                            {{ invoice.province }}
+                          </span>
+                        }
                       </div>
                       <div class="invoice-details">
                         <span class="product">{{ invoice.productDescription | slice:0:30 }}...</span>
                         <span class="amount">R {{ invoice.salesAmount | number:'1.2-2' }}</span>
+                        @if (invoice.city) {
+                          <span class="city">{{ invoice.city }}</span>
+                        }
                       </div>
                       <mat-icon class="add-icon">add_circle</mat-icon>
                     </div>
@@ -8161,7 +9350,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                   @if (filteredInvoices().length === 0) {
                     <div class="empty-list">
                       <mat-icon>inventory_2</mat-icon>
-                      <p>No pending invoices found</p>
+                      <p>No pending invoices found{{ selectedProvince !== 'all' ? ' in ' + getProvinceName(selectedProvince) : '' }}</p>
                     </div>
                   }
                 </div>
@@ -8259,15 +9448,15 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                 </div>
 
                 <div class="optimize-section">
-                  <button mat-raised-button color="accent" (click)="optimizeRoute()" [disabled]="optimizing || selectedStops.length < 2">
+                  <button mat-raised-button color="accent" (click)="optimizeRoute()" [disabled]="optimizing || selectedStops.length < 2" matTooltip="Optimize route order using Google Routes API">
                     @if (optimizing) {
                       <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
                     } @else {
                       <mat-icon>alt_route</mat-icon>
                     }
-                    {{ optimizing ? 'Optimizing...' : 'Optimize Route' }}
+                    {{ optimizing ? 'Optimizing...' : 'Optimize Route (Google)' }}
                   </button>
-                  <button mat-stroked-button (click)="calculateDistance()" [disabled]="calculating">
+                  <button mat-stroked-button (click)="calculateDistance()" [disabled]="calculating" matTooltip="Calculate accurate distance using Google Routes API">
                     @if (calculating) {
                       <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
                     } @else {
@@ -8275,7 +9464,75 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                     }
                     {{ calculating ? 'Calculating...' : 'Calculate Distance' }}
                   </button>
+                  <button mat-stroked-button color="primary" (click)="advancedOptimization()" [disabled]="advancedOptimizing || selectedStops.length < 2" matTooltip="Advanced optimization considering time windows and vehicle capacity">
+                    @if (advancedOptimizing) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>auto_awesome</mat-icon>
+                    }
+                    {{ advancedOptimizing ? 'Analyzing...' : 'Smart Optimize' }}
+                  </button>
+                  <button mat-stroked-button color="warn" (click)="calculateDistanceMatrix()" [disabled]="calculatingMatrix || selectedStops.length < 2" matTooltip="Calculate distances between all stops using Google Distance Matrix API">
+                    @if (calculatingMatrix) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>grid_on</mat-icon>
+                    }
+                    {{ calculatingMatrix ? 'Calculating Matrix...' : 'Distance Matrix' }}
+                  </button>
                 </div>
+
+                @if (optimizationMessage) {
+                  <div class="optimization-message" [class.success]="optimizationSuccess" [class.error]="!optimizationSuccess">
+                    <mat-icon>{{ optimizationSuccess ? 'check_circle' : 'warning' }}</mat-icon>
+                    {{ optimizationMessage }}
+                  </div>
+                }
+
+                @if (showDistanceMatrix && distanceMatrix.length > 0) {
+                  <div class="distance-matrix-container">
+                    <div class="matrix-header">
+                      <h4><mat-icon>grid_on</mat-icon> Distance Matrix (km / min)</h4>
+                      <button mat-icon-button (click)="toggleDistanceMatrix()" matTooltip="Hide matrix">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+                    <div class="matrix-scroll">
+                      <table class="distance-matrix">
+                        <thead>
+                          <tr>
+                            <th class="label-cell"></th>
+                            @for (label of distanceMatrixLabels; track label; let i = $index) {
+                              <th class="header-cell" [matTooltip]="label">{{ i === 0 ? 'WH' : i }}</th>
+                            }
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (row of distanceMatrix; track $index; let i = $index) {
+                            <tr>
+                              <td class="label-cell" [matTooltip]="distanceMatrixLabels[i]">{{ i === 0 ? 'WH' : i }}</td>
+                              @for (cell of row; track $index; let j = $index) {
+                                <td class="matrix-cell" [class.diagonal]="i === j" [matTooltip]="distanceMatrixLabels[i] + ' → ' + distanceMatrixLabels[j]">
+                                  @if (i === j) {
+                                    <span class="diagonal-marker">-</span>
+                                  } @else {
+                                    <span class="distance">{{ cell.distanceKm }}</span>
+                                    <span class="duration">{{ cell.durationMin }}m</span>
+                                  }
+                                </td>
+                              }
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="matrix-legend">
+                      <span>WH = Warehouse</span>
+                      <span>Numbers = Stop sequence</span>
+                      <span>Top row: km | Bottom row: minutes</span>
+                    </div>
+                  </div>
+                }
 
                 @if (totalDistance > 0) {
                   <div class="route-summary">
@@ -8294,6 +9551,13 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                       <span class="label">Total Value:</span>
                       <span class="value">R {{ totalValue | number:'1.2-2' }}</span>
                     </div>
+                    @if (fuelEstimate > 0) {
+                      <div class="summary-item">
+                        <mat-icon>local_gas_station</mat-icon>
+                        <span class="label">Est. Fuel:</span>
+                        <span class="value">{{ fuelEstimate | number:'1.0-0' }} L (R {{ fuelCost | number:'1.2-2' }})</span>
+                      </div>
+                    }
                   </div>
                 }
 
@@ -8514,6 +9778,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       display: flex;
       flex-direction: column;
       min-width: 150px;
+      gap: 2px;
     }
     .invoice-number {
       font-weight: 600;
@@ -8524,11 +9789,53 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       font-size: 14px;
       color: #1976d2;
     }
+    .province-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+      display: inline-block;
+      width: fit-content;
+      text-transform: uppercase;
+      background: #e0e0e0;
+      color: #555;
+    }
+    .province-gp, .province-gauteng { background: #e3f2fd; color: #1565c0; }
+    .province-kzn, .province-kwazulu-natal { background: #fff3e0; color: #ef6c00; }
+    .province-wc, .province-western-cape { background: #e8f5e9; color: #2e7d32; }
+    .province-ec, .province-eastern-cape { background: #fce4ec; color: #c2185b; }
+    .province-mp, .province-mpumalanga { background: #f3e5f5; color: #7b1fa2; }
+    .province-lp, .province-limpopo { background: #e0f2f1; color: #00695c; }
+    .province-fs, .province-free-state { background: #fff8e1; color: #f9a825; }
+    .province-nw, .province-north-west { background: #efebe9; color: #5d4037; }
+    .province-nc, .province-northern-cape { background: #fbe9e7; color: #d84315; }
+    .filter-controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .province-filter {
+      min-width: 180px;
+    }
+    .loading-provinces {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: #e3f2fd;
+      color: #1565c0;
+      font-size: 13px;
+    }
+    .city {
+      font-size: 11px;
+      color: #888;
+    }
     .invoice-details {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: flex-end;
+      gap: 2px;
     }
     .product {
       font-size: 12px;
@@ -8761,6 +10068,132 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     .cdk-drag-animating {
       transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
     }
+    .optimization-message {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+    .optimization-message.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+    }
+    .optimization-message.error {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+    }
+    .optimization-message.pending {
+      background: #e3f2fd;
+      color: #1565c0;
+      border: 1px solid #90caf9;
+    }
+    .fuel-estimate {
+      padding: 8px 12px;
+      background: #fff3e0;
+      border-radius: 8px;
+      border: 1px solid #ffcc80;
+      color: #e65100;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .distance-matrix-container {
+      margin-top: 16px;
+      background: #fafafa;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      overflow: hidden;
+    }
+    .matrix-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #667eea;
+      color: white;
+    }
+    .matrix-header h4 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+    .matrix-header button {
+      color: white;
+    }
+    .matrix-scroll {
+      overflow-x: auto;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .distance-matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .distance-matrix th, .distance-matrix td {
+      padding: 6px 8px;
+      text-align: center;
+      border: 1px solid #e0e0e0;
+      min-width: 60px;
+    }
+    .distance-matrix thead th {
+      background: #f5f5f5;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .distance-matrix .label-cell {
+      background: #f5f5f5;
+      font-weight: 600;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      min-width: 40px;
+    }
+    .distance-matrix .header-cell {
+      max-width: 60px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .distance-matrix .matrix-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: white;
+    }
+    .distance-matrix .matrix-cell.diagonal {
+      background: #e0e0e0;
+    }
+    .distance-matrix .matrix-cell .distance {
+      font-weight: 600;
+      color: #1976d2;
+    }
+    .distance-matrix .matrix-cell .duration {
+      font-size: 10px;
+      color: #666;
+    }
+    .distance-matrix .diagonal-marker {
+      color: #999;
+    }
+    .matrix-legend {
+      display: flex;
+      gap: 24px;
+      padding: 8px 16px;
+      background: #f5f5f5;
+      font-size: 11px;
+      color: #666;
+      border-top: 1px solid #e0e0e0;
+    }
     @media (max-width: 1200px) {
       .config-grid, .review-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -8776,6 +10209,55 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   selectedVehicle: any = null;
   scheduledDate = new Date();
   specialInstructions = '';
+  selectedProvince = 'all';
+  loadingProvinces = false;
+  
+  // Google Maps API key
+  private readonly googleMapsApiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
+  
+  // Optimization state
+  advancedOptimizing = false;
+  optimizationMessage = '';
+  optimizationSuccess = false;
+  fuelEstimate = 0;
+  fuelCost = 0;
+  private readonly fuelPricePerLiter = 22.50; // ZAR
+  private readonly avgFuelConsumption = 12; // L/100km for delivery truck
+  
+  // Distance Matrix state
+  distanceMatrix: any[][] = [];
+  distanceMatrixLabels: string[] = [];
+  calculatingMatrix = false;
+  showDistanceMatrix = false;
+  
+  // South African provinces
+  provinces = [
+    { code: 'GP', name: 'Gauteng' },
+    { code: 'KZN', name: 'KwaZulu-Natal' },
+    { code: 'WC', name: 'Western Cape' },
+    { code: 'EC', name: 'Eastern Cape' },
+    { code: 'MP', name: 'Mpumalanga' },
+    { code: 'LP', name: 'Limpopo' },
+    { code: 'FS', name: 'Free State' },
+    { code: 'NW', name: 'North West' },
+    { code: 'NC', name: 'Northern Cape' }
+  ];
+  
+  // Province keywords for address matching (expanded with more SA cities/towns and hospitals)
+  private provinceKeywords: { [key: string]: string[] } = {
+    'GP': ['gauteng', 'johannesburg', 'pretoria', 'sandton', 'randburg', 'centurion', 'midrand', 'soweto', 'benoni', 'boksburg', 'germiston', 'edenvale', 'alberton', 'kempton park', 'roodepoort', 'krugersdorp', 'vanderbijlpark', 'vereeniging', 'springs', 'nigel', 'bronkhorstspruit', 'fourways', 'bedfordview', 'modderfontein', 'isando', 'spartan', 'jet park', 'elandsfontein', 'tshwane', 'doornpoort', 'wonderboom', 'lyttelton', 'irene', 'hatfield', 'arcadia', 'sunnyside', 'menlyn', 'brooklyn', 'pholosong', 'tembisa', 'thelle mogoerane', 'natalspruit', 'far east rand', 'kalafong', 'steve biko', 'dr george mukhari', 'charlotte maxeke', 'chris hani baragwanath', 'helen joseph', 'rahima moosa', 'leratong', 'bheki mlangeni', 'kopanong', 'sebokeng', 'heidelberg', 'carletonville', '08-gp', 'gp1-', 'gp2-', 'gp-'],
+    'KZN': ['kwazulu-natal', 'kwazulu natal', 'durban', 'pietermaritzburg', 'newcastle', 'richards bay', 'ladysmith', 'ballito', 'umhlanga', 'pinetown', 'westville', 'amanzimtoti', 'scottburgh', 'port shepstone', 'margate', 'tongaat', 'stanger', 'empangeni', 'eshowe', 'vryheid', 'verulam', 'phoenix', 'chatsworth', 'umlazi', 'kingsburgh', 'hillcrest', 'kloof', 'greytown', 'estcourt', 'mooi river', 'dundee', 'glencoe', 'dannhauser', 'utrecht', 'paulpietersburg', 'nongoma', 'ulundi', 'mtubatuba', 'hluhluwe', 'jozini', 'ingwavuma', 'kokstad', 'ixopo', 'harding', 'mount edgecombe', 'umkomaas', 'warner beach', 'hibberdene', 'pennington', 'umzinto', 'shelley beach', 'uvongo', 'ramsgate', 'southbroom', 'umtentweni', 'ozwatini', 'canelands', 'darnall', 'dalbridge', 'umbilo', 'wentworth', 'king cetshwayo', 'harry gwala', 'edendale', 'grey', 'g.j crookes', 'gj crookes', 'gjgm', 'mseleni', 'st margarets', 'ugu', 'ilembe', 'king dinuzulu', 'umgeni', 'inkosi albert luthuli', 'addington', 'prince mshiyeni', 'mahatma gandhi', 'r k khan', 'northdale', 'greys', 'edendale', '01-', 'kzn-'],
+    'WC': ['western cape', 'cape town', 'stellenbosch', 'paarl', 'george', 'knysna', 'mossel bay', 'worcester', 'bellville', 'somerset west', 'strand', 'hermanus', 'franschhoek', 'wellington', 'malmesbury', 'saldanha', 'vredenburg', 'montagu', 'robertson', 'oudtshoorn', 'beaufort west', 'atlantis', 'milnerton', 'parow', 'goodwood', 'epping', 'durbanville', 'brackenfell', 'kraaifontein', 'kuilsriver', 'eerste river', 'mitchells plain', 'grassy park', 'retreat', 'fish hoek', 'simons town', 'muizenberg', 'tokai', 'constantia', 'camps bay', 'sea point', 'green point', 'waterfront', 'woodstock', 'observatory', 'rondebosch', 'newlands', 'claremont', 'kenilworth', 'wynberg', 'plumstead', 'diep river', 'groote schuur', 'tygerberg', 'red cross', 'khayelitsha', 'mitchells plain', '05-', 'wc-'],
+    'EC': ['eastern cape', 'port elizabeth', 'gqeberha', 'east london', 'mthatha', 'uitenhage', 'grahamstown', 'makhanda', 'queenstown', 'king williams town', 'jeffreys bay', 'despatch', 'cradock', 'graaff-reinet', 'aliwal north', 'fort beaufort', 'bisho', 'bhisho', 'mdantsane', 'zwelitsha', 'alice', 'fort hare', 'stutterheim', 'komani', 'dordrecht', 'lady frere', 'cofimvaba', 'engcobo', 'ngcobo', 'libode', 'flagstaff', 'lusikisiki', 'port st johns', 'willowvale', 'centane', 'butterworth', 'idutywa', 'gcuwa', 'dutywa', 'willowmore', 'aberdeen', 'middelburg ec', 'steytlerville', 'humansdorp', 'st francis', 'colchester', 'addo', 'paterson', 'nanaga', 'kirkwood', 'sundays river', 'bathurst', 'port alfred', 'kenton', 'lukhanji', 'frere', 'cecilia makiwane', 'dora nginza', 'livingstone', 'settlers', 'frontier', 'nelson mandela bay', '06-', 'ec-', 'ech-'],
+    'MP': ['mpumalanga', 'nelspruit', 'mbombela', 'witbank', 'emalahleni', 'middelburg', 'secunda', 'ermelo', 'standerton', 'barberton', 'white river', 'hazyview', 'piet retief', 'bethal', 'lydenburg', 'sabie', 'graskop', 'komatipoort', 'malelane', 'kaapmuiden', 'matsulu', 'kabokweni', 'kanyamazane', 'nsikazi', 'bushbuckridge', 'acornhoek', 'hoedspruit', 'phalaborwa mp', 'delmas', 'ogies', 'kriel', 'trichardt', 'evander', 'leandra', 'kinross', 'charl cilliers', 'morgenzon', 'volksrust', 'wakkerstroom', 'amsterdam', 'carolina', 'badplaas', 'chrissiesmeer', 'dullstroom', 'machadodorp', 'waterval boven', 'waterval onder', 'schoemanskloof', 'rob ferreira', 'themba', 'mapulaneng', 'matikwana', 'shongwe', 'tintswalo', 'mmametlhake', '09-', 'mp-'],
+    'LP': ['limpopo', 'polokwane', 'pietersburg', 'tzaneen', 'louis trichardt', 'makhado', 'thohoyandou', 'mokopane', 'potgietersrus', 'phalaborwa', 'bela-bela', 'warmbaths', 'modimolle', 'nylstroom', 'lephalale', 'ellisras', 'musina', 'messina', 'groblersdal', 'lebowakgomo', 'seshego', 'mankweng', 'turfloop', 'burgersfort', 'steelpoort', 'jane furse', 'nebo', 'marble hall', 'roedtan', 'settlers', 'naboomspruit', 'mookgophong', 'vaalwater', 'thabazimbi', 'northam', 'gilead', 'senwabarwana', 'bochum', 'dendron', 'botlokwa', 'morebeng', 'soekmekaar', 'duiwelskloof', 'modjadjiskloof', 'giyani', 'malamulele', 'elim', 'levubu', 'sibasa', 'vuwani', 'mutale', 'masisi', 'alldays', 'waterpoort', 'vivo', 'mara', 'namakgale', 'hoedspruit', 'maphutha malatji', 'letaba', 'st ritas', 'voortrekker', 'mokopane', 'tshilidzini', 'donald fraser', 'elim', 'louis trichardt', 'siloam', 'lppd', '02-', 'lp-'],
+    'FS': ['free state', 'bloemfontein', 'welkom', 'bethlehem', 'kroonstad', 'sasolburg', 'parys', 'phuthaditjhaba', 'harrismith', 'virginia', 'bothaville', 'ladybrand', 'ficksburg', 'zastron', 'mangaung', 'botshabelo', 'thaba nchu', 'dewetsdorp', 'wepener', 'hobhouse', 'senekal', 'marquard', 'clocolan', 'fouriesburg', 'clarens', 'golden gate', 'paul roux', 'rosendal', 'memel', 'vrede', 'frankfort', 'villiers', 'cornelia', 'reitz', 'lindley', 'heilbron', 'petrus steyn', 'edenville', 'steynsrus', 'hennenman', 'ventersburg', 'theunissen', 'brandfort', 'winburg', 'verkeerdevlei', 'soutpan', 'bultfontein', 'wesselsbron', 'hoopstad', 'dealesville', 'boshof', 'hertzogville', 'jacobsdal', 'koffiefontein', 'jagersfontein', 'fauresmith', 'trompsburg', 'philippolis', 'springfontein', 'edenburg', 'reddersburg', 'excelsior', 'tweespruit', 'pelonomi', 'universitas', 'national', 'boitumelo', 'bongani', 'dihlabeng', 'fsh-', 'fs health', '04-'],
+    'NW': ['north west', 'rustenburg', 'potchefstroom', 'klerksdorp', 'mafikeng', 'mahikeng', 'brits', 'hartbeespoort', 'vryburg', 'lichtenburg', 'orkney', 'stilfontein', 'zeerust', 'koster', 'coligny', 'mogwase', 'sun city', 'pilanesberg', 'phokeng', 'tlhabane', 'moruleng', 'swartruggens', 'groot marico', 'madibogo', 'mmabatho', 'montshioa', 'rooigrond', 'stella', 'schweizer-reneke', 'bloemhof', 'christiana', 'warrenton', 'jan kempdorp', 'pampierstad', 'hartswater', 'taung', 'ventersdorp', 'tlokwe', 'potch', 'mooirivier', 'fochville', 'carletonville', 'westonaria', 'merafong', 'oberholzer', 'randfontein', 'mogale', 'kagiso', 'munsieville', 'mooinooi', 'marikana', 'job shimankana', 'tshepong', 'klerksdorp', 'potchefstroom', '03-', 'nw-'],
+    'NC': ['northern cape', 'kimberley', 'upington', 'springbok', 'kathu', 'de aar', 'kuruman', 'colesberg', 'carnarvon', 'calvinia', 'port nolloth', 'sutherland', 'prieska', 'victoria west', 'hanover', 'richmond', 'middelburg nc', 'graaff reinet', 'nieu bethesda', 'graaf reinet', 'britstown', 'hopetown', 'strydenburg', 'petrusville', 'philipstown', 'douglas', 'griekwastad', 'campbell', 'danielskuil', 'postmasburg', 'olifantshoek', 'hotazel', 'black rock', 'sishen', 'dingleton', 'askham', 'mier', 'rietfontein', 'noenieput', 'twee rivieren', 'nababeep', 'okiep', 'concordia', 'bulletrap', 'komaggas', 'steinkopf', 'vioolsdrif', 'pofadder', 'aggeneys', 'pella', 'onseepkans', 'kakamas', 'keimoes', 'kenhardt', 'brandvlei', 'vanwyksvlei', 'loeriesfontein', 'nieuwoudtville', 'garies', 'kamieskroon', 'hondeklipbaai', 'robert mangaliso', 'pixley ka seme', 'pixley ke seme', 'nc health', 'nch-', '07-']
+  };
+  
+  // Cache for customer provinces
+  private customerProvinceCache: Map<string, { province: string, city: string }> = new Map();
   
   totalDistance = 0;
   estimatedTime = '';
@@ -8799,7 +10281,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       drivers: any[], 
       vehicles: any[], 
       warehouses: any[],
-      customers: any[]
+      customers: any[],
+      apiUrl: string
     },
     private dialogRef: MatDialogRef<CreateTripsheetDialog>,
     private injector: Injector
@@ -8809,6 +10292,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     if (data.warehouses && data.warehouses.length > 0) {
       this.selectedWarehouse = data.warehouses[0];
     }
+    // Initialize province data for invoices
+    this.initializeProvinceData();
   }
 
   ngAfterViewInit(): void {
@@ -8822,17 +10307,246 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     this.stopMarkers.forEach(m => m.setMap(null));
   }
 
+  // Initialize province data for all invoices based on customer addresses
+  private initializeProvinceData(): void {
+    this.loadingProvinces = true;
+    
+    const invoicesToGeocode: any[] = [];
+    
+    // First pass: try to match using keywords from address data and customer name
+    this.data.invoices.forEach(invoice => {
+      // Find customer by customerCode or name
+      const customer = this.data.customers?.find(c => 
+        c.customerCode === invoice.customerNumber || 
+        c.name === invoice.customerName ||
+        c.shortName === invoice.customerName
+      );
+      
+      const cacheKey = invoice.customerNumber || invoice.customerName;
+      
+      // Check cache first
+      if (this.customerProvinceCache.has(cacheKey)) {
+        const cached = this.customerProvinceCache.get(cacheKey)!;
+        invoice.province = cached.province;
+        invoice.city = cached.city;
+        return;
+      }
+      
+      // Build address string from multiple sources
+      let addressParts: string[] = [];
+      
+      // Add customer name (often contains location like "DURBAN HOSPITAL")
+      if (invoice.customerName) addressParts.push(invoice.customerName);
+      
+      if (customer) {
+        // Use addressLines array if available
+        if (customer.addressLines && Array.isArray(customer.addressLines)) {
+          addressParts = [...addressParts, ...customer.addressLines];
+        }
+        
+        // Also add other address fields
+        if (customer.physicalAddress) addressParts.push(customer.physicalAddress);
+        if (customer.deliveryAddress) addressParts.push(customer.deliveryAddress);
+        if (customer.deliveryCity) addressParts.push(customer.deliveryCity);
+        if (customer.city) addressParts.push(customer.city);
+        if (customer.province) addressParts.push(customer.province);
+        if (customer.deliveryProvince) addressParts.push(customer.deliveryProvince);
+        if (customer.name) addressParts.push(customer.name);
+      }
+      
+      const fullAddress = addressParts.join(' ').toLowerCase();
+      const provinceData = this.detectProvinceFromAddress(fullAddress);
+      
+      if (provinceData.province) {
+        invoice.province = provinceData.province;
+        invoice.city = provinceData.city || (customer?.deliveryCity) || (customer?.city) || '';
+        
+        // Cache the result
+        this.customerProvinceCache.set(cacheKey, { 
+          province: provinceData.province, 
+          city: invoice.city 
+        });
+      } else {
+        // Queue for geocoding
+        invoicesToGeocode.push(invoice);
+      }
+    });
+    
+    // Second pass: use Google Maps Geocoding for unmatched invoices
+    if (invoicesToGeocode.length > 0) {
+      this.geocodeInvoices(invoicesToGeocode);
+    } else {
+      this.loadingProvinces = false;
+    }
+  }
+  
+  // Geocode invoices using Google Maps API
+  private async geocodeInvoices(invoices: any[]): Promise<void> {
+    const geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
+    
+    // Process in batches to avoid rate limiting
+    const batchSize = 5;
+    for (let i = 0; i < invoices.length; i += batchSize) {
+      const batch = invoices.slice(i, i + batchSize);
+      
+      await Promise.all(batch.map(async (invoice) => {
+        const cacheKey = invoice.customerNumber || invoice.customerName;
+        
+        // Skip if already cached
+        if (this.customerProvinceCache.has(cacheKey)) {
+          const cached = this.customerProvinceCache.get(cacheKey)!;
+          invoice.province = cached.province;
+          invoice.city = cached.city;
+          return;
+        }
+        
+        // Build search query
+        const customer = this.data.customers?.find(c => 
+          c.customerCode === invoice.customerNumber || 
+          c.name === invoice.customerName
+        );
+        
+        let searchQuery = invoice.customerName + ' South Africa';
+        if (customer?.addressLines?.length) {
+          searchQuery = customer.addressLines.join(', ') + ', South Africa';
+        }
+        
+        try {
+          const response = await fetch(
+            `${geocodeUrl}?address=${encodeURIComponent(searchQuery)}&key=${this.googleMapsApiKey}&components=country:ZA`
+          );
+          const data = await response.json();
+          
+          if (data.status === 'OK' && data.results?.length > 0) {
+            const result = data.results[0];
+            const addressComponents = result.address_components || [];
+            
+            // Find province from address components
+            const provinceComponent = addressComponents.find((c: any) => 
+              c.types.includes('administrative_area_level_1')
+            );
+            const cityComponent = addressComponents.find((c: any) => 
+              c.types.includes('locality') || c.types.includes('sublocality')
+            );
+            
+            if (provinceComponent) {
+              const provinceName = provinceComponent.long_name.toLowerCase();
+              const provinceCode = this.getProvinceCodeFromName(provinceName);
+              
+              if (provinceCode) {
+                invoice.province = provinceCode;
+                invoice.city = cityComponent?.long_name || '';
+                
+                // Cache the result
+                this.customerProvinceCache.set(cacheKey, {
+                  province: provinceCode,
+                  city: invoice.city
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Geocoding failed for:', searchQuery, error);
+        }
+      }));
+      
+      // Small delay between batches to avoid rate limiting
+      if (i + batchSize < invoices.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    this.loadingProvinces = false;
+  }
+  
+  // Get province code from province name
+  private getProvinceCodeFromName(provinceName: string): string {
+    const lower = provinceName.toLowerCase();
+    const mapping: { [key: string]: string } = {
+      'gauteng': 'GP',
+      'kwazulu-natal': 'KZN',
+      'kwazulu natal': 'KZN',
+      'kwa-zulu natal': 'KZN',
+      'western cape': 'WC',
+      'eastern cape': 'EC',
+      'mpumalanga': 'MP',
+      'limpopo': 'LP',
+      'free state': 'FS',
+      'north west': 'NW',
+      'north-west': 'NW',
+      'northern cape': 'NC'
+    };
+    
+    for (const [name, code] of Object.entries(mapping)) {
+      if (lower.includes(name)) {
+        return code;
+      }
+    }
+    return '';
+  }
+
+  // Detect province from address using keyword matching
+  private detectProvinceFromAddress(address: string): { province: string, city: string } {
+    const lowerAddress = address.toLowerCase();
+    
+    // Check each province's keywords
+    for (const [provinceCode, keywords] of Object.entries(this.provinceKeywords)) {
+      for (const keyword of keywords) {
+        if (lowerAddress.includes(keyword)) {
+          // Try to extract city from the matched keyword
+          const city = this.capitalizeWords(keyword);
+          return { province: provinceCode, city };
+        }
+      }
+    }
+    
+    return { province: '', city: '' };
+  }
+
+  private capitalizeWords(str: string): string {
+    return str.split(' ').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+
+  // Get province name from code
+  getProvinceName(code: string): string {
+    const province = this.provinces.find(p => p.code === code);
+    return province?.name || code;
+  }
+
+  // Get count of invoices for a province
+  getProvinceInvoiceCount(provinceCode: string): number {
+    return this.data.invoices.filter(inv => 
+      inv.status === 'Pending' && 
+      !this.isInvoiceSelected(inv) && 
+      inv.province === provinceCode
+    ).length;
+  }
+
+  // Handle province selection change
+  onProvinceChange(): void {
+    this.invoiceSearch = ''; // Clear search when province changes
+  }
+
   filteredInvoices(): any[] {
     let invoices = this.data.invoices.filter(inv => 
       inv.status === 'Pending' && !this.isInvoiceSelected(inv)
     );
     
+    // Filter by province
+    if (this.selectedProvince !== 'all') {
+      invoices = invoices.filter(inv => inv.province === this.selectedProvince);
+    }
+    
+    // Filter by search term
     if (this.invoiceSearch) {
       const search = this.invoiceSearch.toLowerCase();
       invoices = invoices.filter(inv =>
         inv.transactionNumber?.toLowerCase().includes(search) ||
         inv.customerName?.toLowerCase().includes(search) ||
-        inv.productDescription?.toLowerCase().includes(search)
+        inv.productDescription?.toLowerCase().includes(search) ||
+        inv.city?.toLowerCase().includes(search)
       );
     }
     
@@ -8903,16 +10617,89 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
     
     if (stopsWithCoords.length < 2) {
-      // Simple sort by customer name if no coordinates
+      // Fallback to simple sort if no coordinates
       this.selectedStops.sort((a, b) => a.customerName.localeCompare(b.customerName));
       this.optimizing = false;
       return;
     }
     
-    // Nearest neighbor algorithm for route optimization
+    // Use Google Routes API via backend for optimal route
+    const origin = {
+      latitude: this.selectedWarehouse?.latitude || -29.8587, // Default to Durban
+      longitude: this.selectedWarehouse?.longitude || 31.0218,
+      label: this.selectedWarehouse?.name || 'Warehouse'
+    };
+    
+    const waypoints = this.selectedStops
+      .filter(s => s.latitude && s.longitude)
+      .map(s => ({
+        latitude: s.latitude,
+        longitude: s.longitude,
+        label: s.customerName,
+        referenceId: s.id
+      }));
+    
+    // Use the last stop as destination, rest as waypoints
+    const destination = waypoints.pop();
+    
+    const routeRequest = {
+      origin: origin,
+      destination: destination,
+      waypoints: waypoints,
+      optimizeWaypoints: true,
+      departureTime: new Date(Date.now() + 3600000).toISOString() // 1 hour from now
+    };
+    
+    this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/calculate-route`, routeRequest).subscribe({
+      next: (result) => {
+        if (result.success && result.optimizedWaypointOrder) {
+          // Reorder stops based on optimized order
+          const optimizedStops: any[] = [];
+          const originalStops = [...this.selectedStops.filter(s => s.latitude && s.longitude)];
+          const stopsWithoutCoords = this.selectedStops.filter(s => !s.latitude || !s.longitude);
+          
+          // Build optimized order: first the waypoints, then the destination
+          result.optimizedWaypointOrder.forEach((index: number) => {
+            if (index < originalStops.length - 1) {
+              optimizedStops.push(originalStops[index]);
+            }
+          });
+          // Add the destination (last stop)
+          optimizedStops.push(originalStops[originalStops.length - 1]);
+          
+          // Add any stops without coordinates at the end
+          optimizedStops.push(...stopsWithoutCoords);
+          
+          this.selectedStops = optimizedStops;
+          
+          // Update distance and time from API response
+          this.totalDistance = Math.round(result.distanceMeters / 1000);
+          const totalMins = Math.round(result.durationSeconds / 60);
+          const hours = Math.floor(totalMins / 60);
+          const mins = totalMins % 60;
+          this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+          
+          // Update map
+          this.updateRouteMap();
+        } else {
+          // Fallback to local nearest neighbor algorithm
+          this.optimizeRouteLocally();
+        }
+        this.optimizing = false;
+      },
+      error: (err) => {
+        console.warn('Google Routes API failed, using local optimization:', err);
+        this.optimizeRouteLocally();
+        this.optimizing = false;
+      }
+    });
+  }
+  
+  // Fallback local optimization using nearest neighbor
+  private optimizeRouteLocally(): void {
     const start = this.selectedWarehouse;
-    const startLat = start?.latitude || -26.2041; // Default to JHB
-    const startLng = start?.longitude || 28.0473;
+    const startLat = start?.latitude || -29.8587;
+    const startLng = start?.longitude || 31.0218;
     
     const optimized: any[] = [];
     const remaining = [...this.selectedStops];
@@ -8944,10 +10731,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     }
     
     this.selectedStops = optimized;
-    this.optimizing = false;
-    
-    // Auto-calculate distance after optimization
-    this.calculateDistance();
+    this.calculateDistanceLocally();
   }
 
   calculateDistance(): void {
@@ -8960,9 +10744,72 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       return;
     }
     
+    // Use Google Routes API for accurate distance
+    const origin = {
+      latitude: this.selectedWarehouse?.latitude || -29.8587,
+      longitude: this.selectedWarehouse?.longitude || 31.0218,
+      label: this.selectedWarehouse?.name || 'Warehouse'
+    };
+    
+    const waypoints = stopsWithCoords.slice(0, -1).map(s => ({
+      latitude: s.latitude,
+      longitude: s.longitude,
+      label: s.customerName
+    }));
+    
+    const lastStop = stopsWithCoords[stopsWithCoords.length - 1];
+    const destination = {
+      latitude: lastStop.latitude,
+      longitude: lastStop.longitude,
+      label: lastStop.customerName
+    };
+    
+    const routeRequest = {
+      origin: origin,
+      destination: destination,
+      waypoints: waypoints,
+      optimizeWaypoints: false, // Keep current order
+      departureTime: new Date(Date.now() + 3600000).toISOString()
+    };
+    
+    this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/calculate-route`, routeRequest).subscribe({
+      next: (result) => {
+        if (result.success) {
+          this.totalDistance = Math.round(result.distanceMeters / 1000);
+          
+          // Add service time at each stop (15 min)
+          const driveTimeSeconds = result.durationSeconds;
+          const serviceTimeSeconds = this.selectedStops.length * 15 * 60;
+          const totalSeconds = driveTimeSeconds + serviceTimeSeconds;
+          
+          const totalMins = Math.round(totalSeconds / 60);
+          const hours = Math.floor(totalMins / 60);
+          const mins = totalMins % 60;
+          this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        } else {
+          // Fallback to local calculation
+          this.calculateDistanceLocally();
+        }
+        this.calculating = false;
+        this.updateRouteMap();
+      },
+      error: (err) => {
+        console.warn('Google Routes API failed, using local calculation:', err);
+        this.calculateDistanceLocally();
+        this.calculating = false;
+      }
+    });
+  }
+  
+  // Fallback local distance calculation
+  private calculateDistanceLocally(): void {
+    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+    
+    if (stopsWithCoords.length < 1) return;
+    
     // Start from warehouse
-    const startLat = this.selectedWarehouse?.latitude || -26.2041;
-    const startLng = this.selectedWarehouse?.longitude || 28.0473;
+    const startLat = this.selectedWarehouse?.latitude || -29.8587;
+    const startLng = this.selectedWarehouse?.longitude || 31.0218;
     
     let totalDist = 0;
     let prevLat = startLat;
@@ -8974,11 +10821,11 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       prevLng = stop.longitude;
     });
     
-    // Add 20% for road vs straight line
-    this.totalDistance = Math.round(totalDist * 1.2);
+    // Add 25% for road vs straight line (more realistic)
+    this.totalDistance = Math.round(totalDist * 1.25);
     
-    // Estimate time: 60km/h average + 15min per stop
-    const driveTimeMinutes = (this.totalDistance / 60) * 60;
+    // Estimate time: 55km/h average (accounting for traffic) + 15min per stop
+    const driveTimeMinutes = (this.totalDistance / 55) * 60;
     const stopTimeMinutes = this.selectedStops.length * 15;
     const totalMinutes = Math.round(driveTimeMinutes + stopTimeMinutes);
     
@@ -8986,10 +10833,177 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const mins = totalMinutes % 60;
     this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
     
-    this.calculating = false;
-    
-    // Update map
     this.updateRouteMap();
+  }
+
+  // Advanced route optimization using Google Route Optimization API
+  advancedOptimization(): void {
+    if (this.selectedStops.length < 2) {
+      this.optimizationMessage = 'Need at least 2 stops to optimize';
+      this.optimizationSuccess = false;
+      return;
+    }
+    
+    this.advancedOptimizing = true;
+    this.optimizationMessage = 'Running Google AI route optimization...';
+    this.optimizationSuccess = false;
+    
+    // Build list of invoice IDs for optimization
+    const invoiceIds = this.selectedStops.map(s => s.invoiceId || s.id);
+    
+    // Get departure time (scheduled date + 8am)
+    const departureDate = new Date(this.scheduledDate);
+    departureDate.setHours(8, 0, 0, 0);
+    
+    const optimizationRequest = {
+      invoiceIds: invoiceIds,
+      depotLatitude: this.selectedWarehouse?.latitude || -29.8587,
+      depotLongitude: this.selectedWarehouse?.longitude || 31.0218,
+      departureTime: departureDate.toISOString(),
+      vehicleCapacity: this.selectedVehicle?.capacity || 10000,
+      maxDrivingHours: 10,
+      serviceTimeMinutes: 15
+    };
+    
+    this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/optimize-invoices`, optimizationRequest).subscribe({
+      next: (result) => {
+        if (result.success) {
+          // Reorder stops based on optimized sequence
+          const optimizedStops: any[] = [];
+          
+          result.optimizedStops?.forEach((optStop: any) => {
+            const matchingStop = this.selectedStops.find(s => 
+              (s.invoiceId || s.id) === optStop.invoiceId ||
+              s.customerName?.toLowerCase().includes(optStop.customerName?.toLowerCase()) ||
+              optStop.customerName?.toLowerCase().includes(s.customerName?.toLowerCase())
+            );
+            if (matchingStop && !optimizedStops.includes(matchingStop)) {
+              optimizedStops.push(matchingStop);
+            }
+          });
+          
+          // Add any stops that weren't in the optimization result
+          this.selectedStops.forEach(s => {
+            if (!optimizedStops.includes(s)) {
+              optimizedStops.push(s);
+            }
+          });
+          
+          this.selectedStops = optimizedStops;
+          
+          // Update metrics
+          this.totalDistance = Math.round(result.totalDistanceKm);
+          
+          const totalMins = Math.round((result.totalDurationMinutes || 0));
+          const hours = Math.floor(totalMins / 60);
+          const mins = totalMins % 60;
+          this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+          
+          // Calculate fuel estimates
+          this.fuelEstimate = Math.round((this.totalDistance / 100) * this.avgFuelConsumption);
+          this.fuelCost = Math.round(this.fuelEstimate * this.fuelPricePerLiter);
+          
+          this.optimizationMessage = `✓ Route optimized: ${this.totalDistance}km, ${this.estimatedTime}, ~R${this.fuelCost} fuel`;
+          this.optimizationSuccess = true;
+          
+          // Update map
+          this.updateRouteMap();
+        } else {
+          this.optimizationMessage = 'Optimization failed: ' + (result.message || 'Unknown error');
+          this.optimizationSuccess = false;
+        }
+        this.advancedOptimizing = false;
+      },
+      error: (err) => {
+        console.error('Route optimization error:', err);
+        this.optimizationMessage = 'Optimization failed: ' + (err.error?.message || err.message || 'API error');
+        this.optimizationSuccess = false;
+        this.advancedOptimizing = false;
+      }
+    });
+  }
+
+  // Calculate distance matrix between all stops using Google Distance Matrix API
+  calculateDistanceMatrix(): void {
+    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+    
+    if (stopsWithCoords.length < 2) {
+      this.optimizationMessage = 'Need at least 2 stops with coordinates for distance matrix';
+      this.optimizationSuccess = false;
+      return;
+    }
+    
+    this.calculatingMatrix = true;
+    this.optimizationMessage = 'Calculating distance matrix using Google API...';
+    
+    // Build origins and destinations (warehouse + all stops)
+    const locations: any[] = [];
+    
+    // Add warehouse as first location
+    const warehouseLoc = {
+      latitude: this.selectedWarehouse?.latitude || -29.8587,
+      longitude: this.selectedWarehouse?.longitude || 31.0218,
+      label: this.selectedWarehouse?.name || 'Warehouse'
+    };
+    locations.push(warehouseLoc);
+    
+    // Add all stops
+    stopsWithCoords.forEach(s => {
+      locations.push({
+        latitude: s.latitude,
+        longitude: s.longitude,
+        label: s.customerName?.substring(0, 20) || `Stop ${locations.length}`
+      });
+    });
+    
+    const matrixRequest = {
+      origins: locations,
+      destinations: locations
+    };
+    
+    this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/distance-matrix`, matrixRequest).subscribe({
+      next: (result) => {
+        if (result.success && result.rows) {
+          // Build matrix data
+          this.distanceMatrixLabels = locations.map(l => l.label);
+          this.distanceMatrix = result.rows.map((row: any) => 
+            row.elements.map((el: any) => ({
+              distanceKm: Math.round(el.distanceMeters / 1000 * 10) / 10,
+              durationMin: Math.round(el.durationSeconds / 60),
+              durationText: this.formatDuration(el.durationSeconds)
+            }))
+          );
+          
+          this.showDistanceMatrix = true;
+          this.optimizationMessage = `✓ Distance matrix calculated: ${locations.length}x${locations.length} (${locations.length * locations.length} routes)`;
+          this.optimizationSuccess = true;
+        } else {
+          this.optimizationMessage = 'Matrix calculation failed: ' + (result.error || 'Unknown error');
+          this.optimizationSuccess = false;
+        }
+        this.calculatingMatrix = false;
+      },
+      error: (err) => {
+        console.error('Distance matrix error:', err);
+        this.optimizationMessage = 'Matrix calculation failed: ' + (err.error?.message || err.message || 'API error');
+        this.optimizationSuccess = false;
+        this.calculatingMatrix = false;
+      }
+    });
+  }
+  
+  private formatDuration(seconds: number): string {
+    if (!seconds) return '-';
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.round((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  }
+  
+  toggleDistanceMatrix(): void {
+    this.showDistanceMatrix = !this.showDistanceMatrix;
   }
 
   private haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -9036,9 +11050,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       zoom: 6,
       center: { lat: -28.5, lng: 25.5 },
       mapTypeId: 'roadmap',
-      mapTypeControl: false,
-      streetViewControl: false
-    });
+      mapTypeControl: true,
+      zoomControl: true,
+      streetViewControl: false,
+      fullscreenControl: true,
+      scaleControl: true
+    } as any);
     this.mapInitialized = true;
     this.updateRouteMap();
   }
@@ -9167,10 +11184,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       invoiceIds: this.selectedStops.map(s => s.id)
     };
     
-    this.http.post('http://localhost:5143/api/logistics/loads', payload).subscribe({
+    this.http.post(`${environment.apiUrl}/logistics/loads`, payload).subscribe({
       next: (result: any) => {
         // Download the PDF
-        this.http.get(`http://localhost:5143/api/logistics/tripsheet/${result.id}/pdf`, { responseType: 'text' }).subscribe({
+        this.http.get(`${environment.apiUrl}/logistics/tripsheet/${result.id}/pdf`, { responseType: 'text' }).subscribe({
           next: (html) => {
             const printWindow = window.open('', '_blank');
             if (printWindow) {
@@ -9304,5 +11321,648 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       </body>
       </html>
     `;
+  }
+}
+
+// Add Maintenance Dialog
+@Component({
+  selector: 'add-maintenance-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatIconModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>build</mat-icon>
+      {{ data.record ? 'Edit' : 'Schedule' }} Maintenance
+    </h2>
+    <mat-dialog-content>
+      <form class="maintenance-form">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Vehicle</mat-label>
+          <mat-select [(ngModel)]="formData.vehicleId" name="vehicleId" required (selectionChange)="onVehicleChange($event)">
+            @for (vehicle of data.vehicles; track vehicle.id) {
+              <mat-option [value]="vehicle.id">
+                {{ vehicle.registrationNumber }} - {{ vehicle.type || 'Vehicle' }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Maintenance Type</mat-label>
+          <mat-select [(ngModel)]="formData.maintenanceType" name="maintenanceType" required>
+            <mat-option value="scheduled">Scheduled Service</mat-option>
+            <mat-option value="repair">Repair</mat-option>
+            <mat-option value="license">License Renewal</mat-option>
+            <mat-option value="inspection">Inspection/Roadworthy</mat-option>
+            <mat-option value="other">Other</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Description</mat-label>
+          <textarea matInput [(ngModel)]="formData.description" name="description" rows="3" required
+                    placeholder="Describe the maintenance required..."></textarea>
+        </mat-form-field>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Scheduled Date</mat-label>
+            <input matInput [matDatepicker]="picker" [(ngModel)]="formData.scheduledDate" name="scheduledDate" required>
+            <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+            <mat-datepicker #picker></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Priority</mat-label>
+            <mat-select [(ngModel)]="formData.priority" name="priority" required>
+              <mat-option value="low">Low</mat-option>
+              <mat-option value="medium">Medium</mat-option>
+              <mat-option value="high">High</mat-option>
+              <mat-option value="critical">Critical</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Estimated Cost (R)</mat-label>
+            <input matInput type="number" [(ngModel)]="formData.estimatedCost" name="estimatedCost" placeholder="0.00">
+            <span matPrefix>R&nbsp;</span>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Assigned To</mat-label>
+            <input matInput [(ngModel)]="formData.assignedTo" name="assignedTo" placeholder="Service provider or technician">
+          </mat-form-field>
+        </div>
+
+        @if (formData.maintenanceType === 'license') {
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>License Expiry Date</mat-label>
+            <input matInput [matDatepicker]="expiryPicker" [(ngModel)]="formData.licenseExpiryDate" name="licenseExpiryDate">
+            <mat-datepicker-toggle matSuffix [for]="expiryPicker"></mat-datepicker-toggle>
+            <mat-datepicker #expiryPicker></mat-datepicker>
+          </mat-form-field>
+        }
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Notes</mat-label>
+          <textarea matInput [(ngModel)]="formData.notes" name="notes" rows="2" placeholder="Additional notes..."></textarea>
+        </mat-form-field>
+      </form>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="!isValid()">
+        <mat-icon>{{ data.record ? 'save' : 'add' }}</mat-icon>
+        {{ data.record ? 'Save Changes' : 'Schedule' }}
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .maintenance-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 500px;
+    }
+    .full-width {
+      width: 100%;
+    }
+    .form-row {
+      display: flex;
+      gap: 16px;
+    }
+    .form-row mat-form-field {
+      flex: 1;
+    }
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2 mat-icon {
+      color: #ff9800;
+    }
+  `]
+})
+export class AddMaintenanceDialog {
+  formData: Partial<MaintenanceRecord> = {
+    maintenanceType: 'scheduled',
+    status: 'scheduled',
+    priority: 'medium',
+    scheduledDate: new Date()
+  };
+
+  constructor(
+    public dialogRef: MatDialogRef<AddMaintenanceDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { vehicles: any[], record?: MaintenanceRecord }
+  ) {
+    if (data.record) {
+      this.formData = { ...data.record };
+    }
+  }
+
+  onVehicleChange(event: any): void {
+    const vehicle = this.data.vehicles.find(v => v.id === event.value);
+    if (vehicle) {
+      this.formData.vehicleReg = vehicle.registrationNumber;
+      this.formData.vehicleType = vehicle.type || 'Vehicle';
+    }
+  }
+
+  isValid(): boolean {
+    return !!(
+      this.formData.vehicleId &&
+      this.formData.maintenanceType &&
+      this.formData.description &&
+      this.formData.scheduledDate &&
+      this.formData.priority
+    );
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onSubmit(): void {
+    if (this.isValid()) {
+      // Calculate days until expiry for license type
+      if (this.formData.maintenanceType === 'license' && this.formData.licenseExpiryDate) {
+        const today = new Date();
+        const expiryDate = new Date(this.formData.licenseExpiryDate);
+        this.formData.daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      }
+      this.dialogRef.close(this.formData);
+    }
+  }
+}
+
+// Vehicle Dialog Component - View/Edit/Add vehicle
+@Component({
+  selector: 'app-vehicle-dialog',
+  standalone: true,
+  imports: [
+    CommonModule, FormsModule, ReactiveFormsModule,
+    MatDialogModule, MatButtonModule, MatIconModule,
+    MatFormFieldModule, MatInputModule, MatSelectModule,
+    MatDividerModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>{{ data.mode === 'add' ? 'add' : data.mode === 'edit' ? 'edit' : 'visibility' }}</mat-icon>
+      {{ data.mode === 'add' ? 'Add Vehicle' : data.mode === 'edit' ? 'Edit Vehicle' : 'Vehicle Details' }}
+    </h2>
+    <mat-dialog-content>
+      <form class="vehicle-form">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Registration Number</mat-label>
+          <input matInput [(ngModel)]="formData.registrationNumber" name="registrationNumber" 
+                 [readonly]="data.mode === 'view'" placeholder="e.g., ABC123GP">
+        </mat-form-field>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Make</mat-label>
+            <input matInput [(ngModel)]="formData.make" name="make" [readonly]="data.mode === 'view'">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Model</mat-label>
+            <input matInput [(ngModel)]="formData.model" name="model" [readonly]="data.mode === 'view'">
+          </mat-form-field>
+        </div>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Year</mat-label>
+            <input matInput type="number" [(ngModel)]="formData.year" name="year" [readonly]="data.mode === 'view'">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Color</mat-label>
+            <input matInput [(ngModel)]="formData.color" name="color" [readonly]="data.mode === 'view'">
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>VIN Number</mat-label>
+          <input matInput [(ngModel)]="formData.vinNumber" name="vinNumber" [readonly]="data.mode === 'view'">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Vehicle Type</mat-label>
+          <mat-select [(ngModel)]="formData.vehicleTypeId" name="vehicleTypeId" [disabled]="data.mode === 'view'">
+            <mat-option [value]="1">Truck</mat-option>
+            <mat-option [value]="2">Van</mat-option>
+            <mat-option [value]="3">Car</mat-option>
+            <mat-option [value]="4">Motorcycle</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Tank Size (L)</mat-label>
+            <input matInput type="number" [(ngModel)]="formData.tankSize" name="tankSize" [readonly]="data.mode === 'view'">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Fuel Type</mat-label>
+            <mat-select [(ngModel)]="formData.fuelType" name="fuelType" [disabled]="data.mode === 'view'">
+              <mat-option value="Diesel">Diesel</mat-option>
+              <mat-option value="Petrol">Petrol</mat-option>
+              <mat-option value="LPG">LPG</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Status</mat-label>
+          <mat-select [(ngModel)]="formData.status" name="status" [disabled]="data.mode === 'view'">
+            <mat-option value="Available">Available</mat-option>
+            <mat-option value="In Use">In Use</mat-option>
+            <mat-option value="Maintenance">Maintenance</mat-option>
+            <mat-option value="Inactive">Inactive</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        @if (data.mode === 'view' && data.vehicle) {
+          <mat-divider></mat-divider>
+          <div class="integration-info">
+            <h4>Integration Status</h4>
+            <div class="integration-row">
+              <span class="label">CarTrack:</span>
+              <span [class.linked]="data.vehicle.carTrackId">
+                {{ data.vehicle.carTrackId ? 'Linked (' + data.vehicle.carTrackId + ')' : 'Not Linked' }}
+              </span>
+            </div>
+            <div class="integration-row">
+              <span class="label">TFN:</span>
+              <span [class.linked]="data.vehicle.tfnVehicleId">
+                {{ data.vehicle.tfnVehicleId ? 'Linked' : 'Not Linked' }}
+              </span>
+            </div>
+            @if (data.vehicle.lastLocation) {
+              <div class="integration-row">
+                <span class="label">Last Location:</span>
+                <span>{{ data.vehicle.lastLocation }}</span>
+              </div>
+            }
+            @if (data.vehicle.lastUpdate) {
+              <div class="integration-row">
+                <span class="label">Last Update:</span>
+                <span>{{ data.vehicle.lastUpdate | date:'medium' }}</span>
+              </div>
+            }
+          </div>
+        }
+      </form>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">{{ data.mode === 'view' ? 'Close' : 'Cancel' }}</button>
+      @if (data.mode !== 'view') {
+        <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="!isValid()">
+          <mat-icon>{{ data.mode === 'add' ? 'add' : 'save' }}</mat-icon>
+          {{ data.mode === 'add' ? 'Add Vehicle' : 'Save Changes' }}
+        </button>
+      }
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .vehicle-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 500px;
+    }
+    .full-width { width: 100%; }
+    .form-row {
+      display: flex;
+      gap: 16px;
+    }
+    .form-row mat-form-field { flex: 1; }
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2 mat-icon { color: #1976d2; }
+    .integration-info {
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    .integration-info h4 {
+      margin: 0 0 12px 0;
+      color: #666;
+    }
+    .integration-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .integration-row:last-child { border-bottom: none; }
+    .label { font-weight: 500; color: #666; }
+    .linked { color: #4caf50; font-weight: 500; }
+  `]
+})
+export class VehicleDialogComponent {
+  formData: any = {};
+  
+  constructor(
+    public dialogRef: MatDialogRef<VehicleDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: { vehicle?: Vehicle, mode: 'view' | 'edit' | 'add' },
+    private http: HttpClient
+  ) {
+    if (data.vehicle) {
+      this.formData = { ...data.vehicle };
+    } else {
+      this.formData = { status: 'Available', vehicleTypeId: 1 };
+    }
+  }
+
+  isValid(): boolean {
+    return !!this.formData.registrationNumber;
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onSubmit(): void {
+    if (this.isValid()) {
+      const apiUrl = 'http://192.168.10.151:5143/api';
+      if (this.data.mode === 'add') {
+        this.http.post(`${apiUrl}/fleet/vehicles`, this.formData).subscribe({
+          next: () => this.dialogRef.close(true),
+          error: (err) => console.error('Error adding vehicle:', err)
+        });
+      } else {
+        this.http.put(`${apiUrl}/fleet/vehicles/${this.formData.id}`, this.formData).subscribe({
+          next: () => this.dialogRef.close(true),
+          error: (err) => console.error('Error updating vehicle:', err)
+        });
+      }
+    }
+  }
+}
+
+// Assign Driver Dialog Component
+@Component({
+  selector: 'app-assign-driver-dialog',
+  standalone: true,
+  imports: [
+    CommonModule, FormsModule,
+    MatDialogModule, MatButtonModule, MatIconModule,
+    MatFormFieldModule, MatSelectModule, MatInputModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>person_add</mat-icon>
+      Assign Driver to {{ data.vehicle.registrationNumber }}
+    </h2>
+    <mat-dialog-content>
+      <div class="assign-form">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Select Driver</mat-label>
+          <mat-select [(ngModel)]="selectedDriverId" name="driverId">
+            <mat-option [value]="null">No Driver (Unassign)</mat-option>
+            @for (driver of drivers; track driver.id) {
+              <mat-option [value]="driver.id">
+                {{ driver.name }} {{ driver.surname }} - {{ driver.licenseNumber || 'No License' }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        @if (data.vehicle.currentDriverName) {
+          <div class="current-driver">
+            <mat-icon>info</mat-icon>
+            <span>Currently assigned to: <strong>{{ data.vehicle.currentDriverName }}</strong></span>
+          </div>
+        }
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onSubmit()">
+        <mat-icon>check</mat-icon>
+        {{ selectedDriverId ? 'Assign Driver' : 'Unassign Driver' }}
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .assign-form {
+      min-width: 400px;
+    }
+    .full-width { width: 100%; }
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2 mat-icon { color: #1976d2; }
+    .current-driver {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: #fff3e0;
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+    .current-driver mat-icon { color: #ff9800; }
+  `]
+})
+export class AssignDriverDialogComponent implements OnInit {
+  selectedDriverId: number | null = null;
+  drivers: any[] = [];
+
+  constructor(
+    public dialogRef: MatDialogRef<AssignDriverDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: { vehicle: Vehicle },
+    private http: HttpClient
+  ) {
+    if (data.vehicle.currentDriverId) {
+      this.selectedDriverId = data.vehicle.currentDriverId;
+    }
+  }
+
+  ngOnInit(): void {
+    this.loadDrivers();
+  }
+
+  loadDrivers(): void {
+    const apiUrl = 'http://192.168.10.151:5143/api';
+    this.http.get<any[]>(`${apiUrl}/logistics/drivers`).subscribe({
+      next: (drivers) => this.drivers = drivers,
+      error: () => this.drivers = []
+    });
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onSubmit(): void {
+    const apiUrl = 'http://192.168.10.151:5143/api';
+    this.http.post(`${apiUrl}/fleet/vehicles/${this.data.vehicle.id}/assign-driver`, {
+      driverId: this.selectedDriverId
+    }).subscribe({
+      next: () => this.dialogRef.close(true),
+      error: (err) => console.error('Error assigning driver:', err)
+    });
+  }
+}
+
+// Link Vehicle Dialog Component - Link to CarTrack or TFN
+@Component({
+  selector: 'app-link-vehicle-dialog',
+  standalone: true,
+  imports: [
+    CommonModule, FormsModule,
+    MatDialogModule, MatButtonModule, MatIconModule,
+    MatFormFieldModule, MatSelectModule, MatInputModule,
+    MatProgressSpinnerModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>link</mat-icon>
+      Link {{ data.vehicle.registrationNumber }} to {{ data.type === 'cartrack' ? 'CarTrack' : 'TruckFuelNet' }}
+    </h2>
+    <mat-dialog-content>
+      <div class="link-form">
+        @if (loading) {
+          <div class="loading">
+            <mat-spinner diameter="40"></mat-spinner>
+            <span>Loading available {{ data.type === 'cartrack' ? 'CarTrack' : 'TFN' }} vehicles...</span>
+          </div>
+        } @else {
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Select {{ data.type === 'cartrack' ? 'CarTrack' : 'TFN' }} Vehicle</mat-label>
+            <mat-select [(ngModel)]="selectedExternalId" name="externalId">
+              @for (item of availableItems; track item.id) {
+                <mat-option [value]="item.id">
+                  {{ item.name || item.registrationNumber }} 
+                  @if (item.description) {
+                    - {{ item.description }}
+                  }
+                </mat-option>
+              }
+            </mat-select>
+            <mat-hint>{{ availableItems.length }} unlinked vehicles available</mat-hint>
+          </mat-form-field>
+
+          @if (data.type === 'cartrack') {
+            <div class="manual-entry">
+              <span>Or enter CarTrack ID manually:</span>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>CarTrack ID</mat-label>
+                <input matInput [(ngModel)]="manualId" name="manualId" placeholder="e.g., 339321264">
+              </mat-form-field>
+            </div>
+          }
+        }
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="!selectedExternalId && !manualId">
+        <mat-icon>link</mat-icon>
+        Link Vehicle
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .link-form {
+      min-width: 450px;
+    }
+    .full-width { width: 100%; }
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2 mat-icon { color: #1976d2; }
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 32px;
+    }
+    .manual-entry {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .manual-entry span {
+      display: block;
+      margin-bottom: 8px;
+      color: #666;
+      font-size: 13px;
+    }
+  `]
+})
+export class LinkVehicleDialogComponent implements OnInit {
+  selectedExternalId: string | null = null;
+  manualId: string = '';
+  availableItems: any[] = [];
+  loading = true;
+
+  constructor(
+    public dialogRef: MatDialogRef<LinkVehicleDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: { vehicle: Vehicle, type: 'cartrack' | 'tfn' },
+    private http: HttpClient
+  ) {}
+
+  ngOnInit(): void {
+    this.loadAvailableItems();
+  }
+
+  loadAvailableItems(): void {
+    const apiUrl = 'http://192.168.10.151:5143/api';
+    const endpoint = this.data.type === 'cartrack' 
+      ? `${apiUrl}/cartrack/vehicles/unlinked`
+      : `${apiUrl}/logistics/tfn/vehicles/unlinked`;
+
+    this.http.get<any[]>(endpoint).subscribe({
+      next: (items) => {
+        this.availableItems = items;
+        this.loading = false;
+      },
+      error: () => {
+        this.availableItems = [];
+        this.loading = false;
+      }
+    });
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onSubmit(): void {
+    const apiUrl = 'http://192.168.10.151:5143/api';
+    const externalId = this.selectedExternalId || this.manualId;
+    
+    const endpoint = this.data.type === 'cartrack'
+      ? `${apiUrl}/fleet/vehicles/${this.data.vehicle.id}/link-cartrack`
+      : `${apiUrl}/fleet/vehicles/${this.data.vehicle.id}/link-tfn`;
+
+    this.http.post(endpoint, { externalId }).subscribe({
+      next: () => this.dialogRef.close(true),
+      error: (err) => console.error('Error linking vehicle:', err)
+    });
   }
 }

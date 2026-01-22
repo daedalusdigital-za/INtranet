@@ -30,7 +30,7 @@ namespace ProjectTracker.API.Controllers.CRM
         private bool IsAdmin()
         {
             var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
-            return roleClaim == "Admin";
+            return roleClaim == "Admin" || roleClaim == "Super Admin";
         }
 
         // GET: api/crm/operating-companies

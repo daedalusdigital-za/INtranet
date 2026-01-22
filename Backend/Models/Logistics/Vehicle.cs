@@ -55,6 +55,33 @@ namespace ProjectTracker.API.Models.Logistics
         [Column(TypeName = "decimal(18,2)")]
         public decimal? TfnCurrentBalance { get; set; }
         public DateTime? TfnLastSyncedAt { get; set; }
+        
+        // Additional TFN fields
+        [MaxLength(100)]
+        public string? TfnFleetNumber { get; set; }
+        
+        [MaxLength(100)]
+        public string? TfnExternalNumber { get; set; }
+        
+        [MaxLength(50)]
+        public string? TfnStatus { get; set; }
+        
+        public bool IsLinkedToTfn { get; set; } = false;
+
+        // Last Known Location (persisted from CarTrack)
+        [Column(TypeName = "decimal(18,10)")]
+        public decimal? LastKnownLatitude { get; set; }
+        
+        [Column(TypeName = "decimal(18,10)")]
+        public decimal? LastKnownLongitude { get; set; }
+        
+        [MaxLength(500)]
+        public string? LastKnownAddress { get; set; }
+        
+        public DateTime? LastLocationUpdate { get; set; }
+        
+        [MaxLength(50)]
+        public string? LastKnownStatus { get; set; }  // moving, stopped, idling, offline
 
         // Vehicle Status
         [MaxLength(50)]

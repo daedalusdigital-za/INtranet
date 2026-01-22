@@ -116,7 +116,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     DeliveryNotes = i.DeliveryNotes,
                     ImportedAt = i.ImportedAt,
                     ImportBatchId = i.ImportBatchId,
-                    SourceSystem = i.SourceSystem
+                    SourceSystem = i.SourceSystem,
+                    SourceCompany = i.SourceCompany
                 })
                 .ToListAsync();
 
@@ -173,7 +174,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     DeliveryNotes = i.DeliveryNotes,
                     ImportedAt = i.ImportedAt,
                     ImportBatchId = i.ImportBatchId,
-                    SourceSystem = i.SourceSystem
+                    SourceSystem = i.SourceSystem,
+                    SourceCompany = i.SourceCompany
                 })
                 .FirstOrDefaultAsync();
 
@@ -693,7 +695,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     DeliveryNotes = i.DeliveryNotes,
                     ImportedAt = i.ImportedAt,
                     ImportBatchId = i.ImportBatchId,
-                    SourceSystem = i.SourceSystem
+                    SourceSystem = i.SourceSystem,
+                    SourceCompany = i.SourceCompany
                 })
                 .FirstOrDefaultAsync();
         }

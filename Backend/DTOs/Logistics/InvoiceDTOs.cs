@@ -203,6 +203,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public DateTime ImportedAt { get; set; }
         public string? ImportBatchId { get; set; }
         public string? SourceSystem { get; set; }
+        public string? SourceCompany { get; set; }
     }
 
     /// <summary>

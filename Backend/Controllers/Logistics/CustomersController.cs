@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services;
 using System.Globalization;
 using System.Text.Json;
 
@@ -11,16 +12,21 @@ namespace ProjectTracker.API.Controllers.Logistics
 {
     [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/logistics/customers")]
     public class CustomersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<CustomersController> _logger;
+        private readonly CustomerAddressCleanupService _cleanupService;
 
-        public CustomersController(ApplicationDbContext context, ILogger<CustomersController> logger)
+        public CustomersController(
+            ApplicationDbContext context, 
+            ILogger<CustomersController> logger,
+            CustomerAddressCleanupService cleanupService)
         {
             _context = context;
             _logger = logger;
+            _cleanupService = cleanupService;
         }
 
         [HttpGet]
@@ -514,6 +520,77 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Where(c => c.Id == id)
                 .Select(c => MapToCustomerDto(c))
                 .FirstOrDefaultAsync();
+        }
+
+        #endregion
+
+        #region Address Cleanup
+
+        /// <summary>
+        /// Clean up and enrich customer addresses using Google Maps Geocoding API
+        /// </summary>
+        /// <param name="batchSize">Number of customers to process (default: all)</param>
+        /// <param name="dryRun">If true, only preview changes without saving</param>
+        [HttpPost("cleanup-addresses")]
+        public async Task<ActionResult<CustomerAddressCleanupService.CleanupResult>> CleanupAddresses(
+            [FromQuery] int? batchSize = null,
+            [FromQuery] bool dryRun = false)
+        {
+            _logger.LogInformation($"Starting address cleanup. BatchSize: {batchSize}, DryRun: {dryRun}");
+            
+            var result = await _cleanupService.CleanupCustomerAddresses(batchSize, updateDatabase: !dryRun);
+            
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Map customer provinces using code prefixes and name keywords (no Google API required)
+        /// </summary>
+        /// <param name="limit">Number of customers to process (default: all)</param>
+        /// <param name="dryRun">If true, only preview changes without saving</param>
+        [HttpPost("map-provinces")]
+        public async Task<ActionResult<CustomerProvinceMapperService.MappingResult>> MapProvinces(
+            [FromQuery] int? limit = null,
+            [FromQuery] bool dryRun = false,
+            [FromServices] CustomerProvinceMapperService mapperService = null!)
+        {
+            _logger.LogInformation($"Starting province mapping. Limit: {limit}, DryRun: {dryRun}");
+            
+            var result = await mapperService.MapCustomerProvinces(updateDatabase: !dryRun, limit: limit);
+            
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Get statistics about customer address data quality
+        /// </summary>
+        [HttpGet("address-stats")]
+        public async Task<ActionResult> GetAddressStats()
+        {
+            var total = await _context.LogisticsCustomers.CountAsync();
+            var withProvince = await _context.LogisticsCustomers.CountAsync(c => c.Province != null && c.Province != "");
+            var withCity = await _context.LogisticsCustomers.CountAsync(c => c.City != null && c.City != "");
+            var withAddressLines = await _context.LogisticsCustomers.CountAsync(c => c.AddressLinesJson != null && c.AddressLinesJson != "");
+            var withDeliveryProvince = await _context.LogisticsCustomers.CountAsync(c => c.DeliveryProvince != null && c.DeliveryProvince != "");
+
+            // Get breakdown by province
+            var provinceBreakdown = await _context.LogisticsCustomers
+                .Where(c => c.Province != null && c.Province != "")
+                .GroupBy(c => c.Province)
+                .Select(g => new { Province = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                total,
+                withProvince,
+                withCity,
+                withAddressLines,
+                withDeliveryProvince,
+                missingProvince = total - withProvince,
+                missingCity = total - withCity,
+                provinceBreakdown
+            });
         }
 
         #endregion

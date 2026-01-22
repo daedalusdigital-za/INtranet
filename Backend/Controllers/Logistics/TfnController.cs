@@ -335,6 +335,83 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // GET: api/logistics/tfn/depots/nearest?lat={lat}&lng={lng}
+        [HttpGet("depots/nearest")]
+        public async Task<ActionResult> GetNearestDepot([FromQuery] double lat, [FromQuery] double lng)
+        {
+            try
+            {
+                var depots = await _context.TfnDepots
+                    .Where(d => d.IsActive && d.Latitude.HasValue && d.Longitude.HasValue)
+                    .Select(d => new
+                    {
+                        d.TfnDepotId,
+                        d.Code,
+                        d.Name,
+                        d.Address,
+                        d.City,
+                        d.Province,
+                        d.PostalCode,
+                        Latitude = d.Latitude!.Value,
+                        Longitude = d.Longitude!.Value,
+                        d.ContactPerson,
+                        d.ContactPhone
+                    })
+                    .ToListAsync();
+
+                if (!depots.Any())
+                {
+                    return NotFound(new { error = "No depots with coordinates found" });
+                }
+
+                // Calculate distance using Haversine formula
+                var nearest = depots
+                    .Select(d => new
+                    {
+                        Depot = d,
+                        Distance = CalculateHaversineDistance(lat, lng, (double)d.Latitude, (double)d.Longitude)
+                    })
+                    .OrderBy(x => x.Distance)
+                    .First();
+
+                return Ok(new
+                {
+                    nearest.Depot.TfnDepotId,
+                    nearest.Depot.Code,
+                    nearest.Depot.Name,
+                    nearest.Depot.Address,
+                    nearest.Depot.City,
+                    nearest.Depot.Province,
+                    nearest.Depot.PostalCode,
+                    nearest.Depot.Latitude,
+                    nearest.Depot.Longitude,
+                    nearest.Depot.ContactPerson,
+                    nearest.Depot.ContactPhone,
+                    DistanceKm = Math.Round(nearest.Distance, 2)
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error finding nearest depot");
+                return StatusCode(500, new { error = "Failed to find nearest depot", details = ex.Message });
+            }
+        }
+
+        // Haversine formula to calculate distance between two GPS coordinates
+        private static double CalculateHaversineDistance(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double R = 6371; // Earth's radius in kilometers
+            var dLat = ToRadians(lat2 - lat1);
+            var dLon = ToRadians(lon2 - lon1);
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
+                    Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return R * c;
+        }
+
+        private static double ToRadians(double degrees) => degrees * Math.PI / 180;
+
         // GET: api/logistics/tfn/dashboard-summary
         [HttpGet("dashboard-summary")]
         public async Task<ActionResult> GetDashboardSummary()

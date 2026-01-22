@@ -45,65 +45,6 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     <app-navbar></app-navbar>
 
     <div class="dashboard-container">
-      <!-- Announcements Section -->
-      @if (announcements.length > 0) {
-        <div class="announcements-section">
-          <div class="section-header">
-            <h2>
-              <mat-icon>campaign</mat-icon>
-              Announcements
-            </h2>
-          </div>
-          <div class="announcements-grid">
-            @for (announcement of announcements.slice(0, 3); track announcement.announcementId) {
-              <mat-card class="announcement-card" [class.unread]="!announcement.isRead"
-                        [class.priority-urgent]="announcement.priority === 'Urgent'"
-                        [class.priority-high]="announcement.priority === 'High'"
-                        (click)="markAnnouncementAsRead(announcement)">
-                <mat-card-header>
-                  <div class="announcement-header">
-                    <div class="announcement-title-row">
-                      @if (!announcement.isRead) {
-                        <span class="unread-indicator"></span>
-                      }
-                      <h3>{{ announcement.title }}</h3>
-                    </div>
-                    @if (announcement.priority !== 'Normal') {
-                      <mat-chip class="priority-chip" [class]="'priority-' + announcement.priority.toLowerCase()">
-                        @if (announcement.priority === 'Urgent') {
-                          <mat-icon>priority_high</mat-icon>
-                        } @else if (announcement.priority === 'High') {
-                          <mat-icon>arrow_upward</mat-icon>
-                        } @else if (announcement.priority === 'Low') {
-                          <mat-icon>arrow_downward</mat-icon>
-                        }
-                        {{ announcement.priority }}
-                      </mat-chip>
-                    }
-                  </div>
-                </mat-card-header>
-                <mat-card-content>
-                  <p class="announcement-content">{{ announcement.content }}</p>
-                  <div class="announcement-meta">
-                    <span class="created-by">
-                      <mat-icon>person</mat-icon>
-                      {{ announcement.createdByName }}
-                    </span>
-                    <span class="created-date">
-                      <mat-icon>schedule</mat-icon>
-                      {{ formatDate(announcement.createdAt) }}
-                    </span>
-                    @if (announcement.category) {
-                      <mat-chip class="category-chip">{{ announcement.category }}</mat-chip>
-                    }
-                  </div>
-                </mat-card-content>
-              </mat-card>
-            }
-          </div>
-        </div>
-      }
-
       <div class="page-header">
         <h1>Project Management</h1>
         <button mat-raised-button color="accent" (click)="openCreateBoardDialog()">

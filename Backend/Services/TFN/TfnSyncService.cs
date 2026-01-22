@@ -75,6 +75,7 @@ namespace ProjectTracker.API.Services.TFN
 
         /// <summary>
         /// Sync vehicles from TFN and link to our Vehicle table
+        /// Uses normalized registration numbers (no dashes/spaces) for matching
         /// </summary>
         public async Task<SyncResult> SyncVehiclesAsync()
         {
@@ -89,46 +90,53 @@ namespace ProjectTracker.API.Services.TFN
                     return result;
                 }
 
+                _logger.LogInformation("Retrieved {Count} vehicles from TFN for syncing", tfnVehicles.Count);
+
+                // Get all our vehicles once for normalized matching
+                var allVehicles = await _context.Vehicles.ToListAsync();
+                
                 foreach (var tfnVehicle in tfnVehicles)
                 {
-                    // Find or create our Vehicle record
-                    var vehicle = await _context.Vehicles
-                        .FirstOrDefaultAsync(v => v.RegistrationNumber == tfnVehicle.VehicleRegistration);
+                    // Get normalized TFN registration (no dashes/spaces, uppercase)
+                    var tfnRegNormalized = tfnVehicle.NormalizedRegistration;
+                    
+                    if (string.IsNullOrEmpty(tfnRegNormalized))
+                    {
+                        _logger.LogWarning("Skipping TFN vehicle with empty registration");
+                        continue;
+                    }
+
+                    // Find our Vehicle by normalized registration
+                    var vehicle = allVehicles.FirstOrDefault(v => 
+                        (v.RegistrationNumber?.Replace("-", "").Replace(" ", "").ToUpper() ?? "") == tfnRegNormalized);
 
                     if (vehicle == null)
                     {
-                        // Create new vehicle
-                        vehicle = new Vehicle
-                        {
-                            RegistrationNumber = tfnVehicle.VehicleRegistration,
-                            Make = tfnVehicle.VehicleMake ?? "Unknown",
-                            Model = tfnVehicle.VehicleModel ?? "Unknown",
-                            VehicleTypeId = 1, // Default, should be set properly
-                            Status = tfnVehicle.IsActive ? "Available" : "Inactive"
-                        };
-                        _context.Vehicles.Add(vehicle);
-                        result.Created++;
+                        // Don't auto-create vehicles - only link to existing ones
+                        _logger.LogDebug("No matching vehicle found for TFN registration: {Reg}", tfnVehicle.Registration);
+                        continue;
                     }
-                    else
-                    {
-                        result.Updated++;
-                    }
+                    
+                    result.Updated++;
 
                     // Update TFN-specific fields
-                    vehicle.TfnVehicleId = tfnVehicle.VehicleRegistration;
-                    vehicle.TfnSubAccountNumber = tfnVehicle.SubAccountNumber;
-                    vehicle.TfnVirtualCardNumber = tfnVehicle.VirtualCardNumber;
-                    vehicle.TfnCreditLimit = tfnVehicle.CreditLimit;
+                    vehicle.TfnVehicleId = tfnVehicle.Registration;  // Store original TFN registration
+                    vehicle.TfnFleetNumber = tfnVehicle.FleetNumber;
+                    vehicle.TfnExternalNumber = tfnVehicle.ExternalNumber;
+                    vehicle.TfnStatus = tfnVehicle.Status;
                     vehicle.TankSize = tfnVehicle.TankSize;
-                    vehicle.FuelType = tfnVehicle.FuelType;
                     vehicle.TfnLastSyncedAt = DateTime.UtcNow;
+                    vehicle.IsLinkedToTfn = true;
+                    
+                    _logger.LogDebug("Linked TFN vehicle {TfnReg} to DB vehicle {DbReg}", 
+                        tfnVehicle.Registration, vehicle.RegistrationNumber);
                 }
 
                 await _context.SaveChangesAsync();
-                result.Synced = result.Created + result.Updated;
+                result.Synced = result.Updated;
 
-                _logger.LogInformation("Synced {Count} vehicles from TFN ({Created} created, {Updated} updated)",
-                    result.Synced, result.Created, result.Updated);
+                _logger.LogInformation("Synced {Count} vehicles from TFN ({Updated} linked to existing vehicles)",
+                    result.Synced, result.Updated);
 
                 return result;
             }

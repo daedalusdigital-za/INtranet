@@ -121,6 +121,10 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(200)]
         public string? SourceSystem { get; set; }
 
+        // Company/Division that owns this invoice
+        [MaxLength(10)]
+        public string? SourceCompany { get; set; } // PMT, ACM, PHT, SBT
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 

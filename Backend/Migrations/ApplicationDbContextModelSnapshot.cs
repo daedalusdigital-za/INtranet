@@ -3703,6 +3703,12 @@ namespace ProjectTracker.API.Migrations
                     b.Property<string>("AddressLinesJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool?>("AddressVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("AddressVerifiedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("City")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -3765,12 +3771,22 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("GooglePlaceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("ImportBatchId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("LastMaintained")
                         .HasColumnType("datetime2");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
 
                     b.Property<string>("MobileNumber")
                         .HasMaxLength(50)
@@ -4133,6 +4149,10 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime?>("ScheduledDeliveryDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("SourceCompany")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("SourceSystem")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -4427,7 +4447,7 @@ namespace ProjectTracker.API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CommodityId")
+                    b.Property<int?>("CommodityId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
@@ -4913,11 +4933,19 @@ namespace ProjectTracker.API.Migrations
                     b.Property<decimal>("AllocatedLitres")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CardNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("CreatedByUserId")
                         .HasColumnType("int");
+
+                    b.Property<string>("CustomerReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int?>("DriverId")
                         .HasColumnType("int");
@@ -4928,6 +4956,9 @@ namespace ProjectTracker.API.Migrations
                     b.Property<string>("FuelType")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsPlanned")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastSyncedAt")
                         .HasColumnType("datetime2");
@@ -4946,6 +4977,14 @@ namespace ProjectTracker.API.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PlannedReasons")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ProductCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<decimal?>("RemainingAmount")
                         .HasColumnType("decimal(18,2)");
@@ -4973,6 +5012,10 @@ namespace ProjectTracker.API.Migrations
 
                     b.Property<int?>("VehicleId")
                         .HasColumnType("int");
+
+                    b.Property<string>("VehicleRegistration")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("VirtualCardNumber")
                         .HasMaxLength(100)
@@ -5140,6 +5183,26 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<bool>("IsLinkedToTfn")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LastKnownAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("LastKnownLatitude")
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<decimal?>("LastKnownLongitude")
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<string>("LastKnownStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("LastLocationUpdate")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("LastServiceDate")
                         .HasColumnType("datetime2");
 
@@ -5175,8 +5238,20 @@ namespace ProjectTracker.API.Migrations
                     b.Property<decimal?>("TfnCurrentBalance")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("TfnExternalNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TfnFleetNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime?>("TfnLastSyncedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("TfnStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("TfnSubAccountNumber")
                         .HasMaxLength(100)
@@ -6647,8 +6722,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasOne("ProjectTracker.API.Models.Logistics.Commodity", "Commodity")
                         .WithMany("LoadItems")
                         .HasForeignKey("CommodityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ProjectTracker.API.Models.Logistics.Load", "Load")
                         .WithMany("LoadItems")

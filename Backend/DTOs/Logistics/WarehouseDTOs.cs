@@ -27,7 +27,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? Location { get; set; }
         public string? ManagerName { get; set; }
         public int TotalItems { get; set; }
-        public int Categories { get; set; }
+        public decimal TotalStockValue { get; set; }
         public int CapacityPercent { get; set; }
         public decimal? TotalCapacity { get; set; }
         public decimal? AvailableCapacity { get; set; }

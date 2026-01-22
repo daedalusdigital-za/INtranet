@@ -145,7 +145,7 @@ namespace ProjectTracker.API.Services.TFN.Clients
                 }
 
                 _logger.LogInformation("Successfully {Action} vehicle {Registration} in TFN", 
-                    isUpdate ? "updated" : "added", vehicle.VehicleRegistration);
+                    isUpdate ? "updated" : "added", vehicle.Registration);
                 return true;
             }
             catch (Exception ex)
@@ -156,18 +156,31 @@ namespace ProjectTracker.API.Services.TFN.Clients
         }
     }
 
+    /// <summary>
+    /// DTO matching TFN API /api/Vehicle response
+    /// API returns: Registration, FleetNumber, TankSize, Status, ExternalNumber
+    /// </summary>
     public class TfnVehicleDto
     {
-        public string VehicleRegistration { get; set; } = string.Empty;
+        // API field name is "Registration" - use JsonPropertyName
+        public string Registration { get; set; } = string.Empty;
+        public string? FleetNumber { get; set; }
+        public decimal? TankSize { get; set; }
+        public string? Status { get; set; }
+        public string? ExternalNumber { get; set; }
+        
+        // Legacy fields that may still be used
         public string? VehicleDescription { get; set; }
         public string? VehicleMake { get; set; }
         public string? VehicleModel { get; set; }
         public string? VIN { get; set; }
         public string? FuelType { get; set; }
-        public decimal? TankSize { get; set; }
         public string? SubAccountNumber { get; set; }
         public string? VirtualCardNumber { get; set; }
         public decimal? CreditLimit { get; set; }
         public bool IsActive { get; set; }
+        
+        // Helper property to get normalized registration (no dashes/spaces)
+        public string NormalizedRegistration => Registration?.Replace("-", "").Replace(" ", "").ToUpper() ?? "";
     }
 }

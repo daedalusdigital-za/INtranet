@@ -197,7 +197,7 @@ namespace ProjectTracker.API.DTOs.Logistics
     public class LoadItemDto
     {
         public int Id { get; set; }
-        public int CommodityId { get; set; }
+        public int? CommodityId { get; set; }
         public string CommodityName { get; set; } = string.Empty;
         public decimal Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }
@@ -208,7 +208,7 @@ namespace ProjectTracker.API.DTOs.Logistics
 
     public class CreateLoadItemDto
     {
-        public int CommodityId { get; set; }
+        public int? CommodityId { get; set; }
         public decimal Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }
         public decimal? Weight { get; set; }

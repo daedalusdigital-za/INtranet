@@ -99,6 +99,19 @@ mat-toolbar mat-icon {
   display: none !important;
 }
 
+/* Fix mat-select dropdown appearing behind dialogs */
+.cdk-overlay-container {
+  z-index: 1100 !important;
+}
+
+.cdk-overlay-pane {
+  z-index: 1100 !important;
+}
+
+.mat-mdc-select-panel {
+  z-index: 1200 !important;
+}
+
 /* Google Places autocomplete dropdown styling */
 .pac-container {
   z-index: 10000 !important;
