@@ -1,7 +1,6 @@
 node_modules
 npm-debug.log
 .angular
-dist
 .git
 .gitignore
 .editorconfig

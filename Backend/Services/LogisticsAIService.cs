@@ -111,7 +111,7 @@ namespace ProjectTracker.API.Services
             var lowerQuery = query.ToLower();
 
             // Check for load number pattern
-            var loadMatch = System.Text.RegularExpressions.Regex.Match(query, @"LD-?(\d{6})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var loadMatch = System.Text.RegularExpressions.Regex.Match(query, @"(LD|RF)-?(\d{6})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (loadMatch.Success)
             {
                 searchParams.LoadNumber = loadMatch.Value.ToUpper();

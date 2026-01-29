@@ -236,6 +236,15 @@ export class MessageService {
     );
   }
 
+  // Add attachment to an existing message
+  addAttachmentToMessage(messageId: number, attachment: { fileName: string; mimeType: string; base64Data: string }, userId: number): Observable<MessageAttachment> {
+    return this.http.post<MessageAttachment>(
+      `${this.apiUrl}/${messageId}/attachments?userId=${userId}`,
+      attachment,
+      { headers: this.getHeaders() }
+    );
+  }
+
   // Chat bubble management
   openChatBubble(conversation: Conversation): void {
     const currentChats = this.activeChatBubblesSubject.value;

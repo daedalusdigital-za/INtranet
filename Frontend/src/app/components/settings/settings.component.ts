@@ -717,29 +717,37 @@ import * as XLSX from 'xlsx';
                        [class.selected]="selectedImportType === 'invoices'"
                        (click)="selectImportType('invoices')">
                     <mat-icon>receipt_long</mat-icon>
-                    <span>Sales/Invoices</span>
-                    <small>Import sales transactions</small>
+                    <div class="type-info">
+                      <span>Sales/Invoices</span>
+                      <small>Import sales transactions</small>
+                    </div>
                   </div>
                   <div class="import-type-card"
                        [class.selected]="selectedImportType === 'customers'"
                        (click)="selectImportType('customers')">
                     <mat-icon>people</mat-icon>
-                    <span>Customers</span>
-                    <small>Import customer data</small>
+                    <div class="type-info">
+                      <span>Customers</span>
+                      <small>Import customer data</small>
+                    </div>
                   </div>
                   <div class="import-type-card"
                        [class.selected]="selectedImportType === 'products'"
                        (click)="selectImportType('products')">
                     <mat-icon>inventory_2</mat-icon>
-                    <span>Products</span>
-                    <small>Import product catalog</small>
+                    <div class="type-info">
+                      <span>Products</span>
+                      <small>Import product catalog</small>
+                    </div>
                   </div>
                   <div class="import-type-card"
                        [class.selected]="selectedImportType === 'employees'"
                        (click)="selectImportType('employees')">
                     <mat-icon>badge</mat-icon>
-                    <span>Employees</span>
-                    <small>Import employee records</small>
+                    <div class="type-info">
+                      <span>Employees</span>
+                      <small>Import employee records</small>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -939,19 +947,39 @@ import * as XLSX from 'xlsx';
               <div class="templates-section">
                 <h4><mat-icon>download</mat-icon> Download Templates</h4>
                 <p>Download sample templates with the correct column format</p>
-                <div class="template-buttons">
-                  <button mat-stroked-button (click)="downloadTemplate('invoices')">
-                    <mat-icon>receipt_long</mat-icon> Invoices Template
-                  </button>
-                  <button mat-stroked-button (click)="downloadTemplate('customers')">
-                    <mat-icon>people</mat-icon> Customers Template
-                  </button>
-                  <button mat-stroked-button (click)="downloadTemplate('products')">
-                    <mat-icon>inventory_2</mat-icon> Products Template
-                  </button>
-                  <button mat-stroked-button (click)="downloadTemplate('employees')">
-                    <mat-icon>badge</mat-icon> Employees Template
-                  </button>
+                <div class="template-cards-grid">
+                  <div class="template-card" (click)="downloadTemplate('invoices')">
+                    <mat-icon>receipt_long</mat-icon>
+                    <div class="template-info">
+                      <span>Invoices Template</span>
+                      <small>Sales transaction import format</small>
+                    </div>
+                    <mat-icon class="download-icon">download</mat-icon>
+                  </div>
+                  <div class="template-card" (click)="downloadTemplate('customers')">
+                    <mat-icon>people</mat-icon>
+                    <div class="template-info">
+                      <span>Customers Template</span>
+                      <small>Customer data import format</small>
+                    </div>
+                    <mat-icon class="download-icon">download</mat-icon>
+                  </div>
+                  <div class="template-card" (click)="downloadTemplate('products')">
+                    <mat-icon>inventory_2</mat-icon>
+                    <div class="template-info">
+                      <span>Products Template</span>
+                      <small>Product catalog import format</small>
+                    </div>
+                    <mat-icon class="download-icon">download</mat-icon>
+                  </div>
+                  <div class="template-card" (click)="downloadTemplate('employees')">
+                    <mat-icon>badge</mat-icon>
+                    <div class="template-info">
+                      <span>Employees Template</span>
+                      <small>Employee records import format</small>
+                    </div>
+                    <mat-icon class="download-icon">download</mat-icon>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1216,13 +1244,19 @@ import * as XLSX from 'xlsx';
               
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>New Password</mat-label>
-                <input matInput formControlName="newPassword" type="password" required>
+                <input matInput formControlName="newPassword" [type]="showNewPassword ? 'text' : 'password'" required>
+                <button mat-icon-button matSuffix type="button" (click)="showNewPassword = !showNewPassword">
+                  <mat-icon>{{ showNewPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+                </button>
                 <mat-hint>Minimum 6 characters</mat-hint>
               </mat-form-field>
 
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Confirm Password</mat-label>
-                <input matInput formControlName="confirmPassword" type="password" required>
+                <input matInput formControlName="confirmPassword" [type]="showConfirmPassword ? 'text' : 'password'" required>
+                <button mat-icon-button matSuffix type="button" (click)="showConfirmPassword = !showConfirmPassword">
+                  <mat-icon>{{ showConfirmPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+                </button>
               </mat-form-field>
             </div>
             <div class="dialog-actions">
@@ -1299,6 +1333,15 @@ import * as XLSX from 'xlsx';
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    /* Fix for mat-select dropdown appearing behind dialog */
+    ::ng-deep .cdk-overlay-container {
+      z-index: 2100 !important;
+    }
+
+    ::ng-deep .mat-mdc-select-panel {
+      max-height: 300px !important;
     }
 
     .tab-badge {
@@ -1939,15 +1982,15 @@ import * as XLSX from 'xlsx';
       padding: 24px;
     }
 
-    .import-type-selector h3 {
+    .import-type-selector h4 {
       margin: 0 0 16px 0;
       color: #333;
       font-size: 18px;
     }
 
-    .import-types {
+    .import-types-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 16px;
     }
 
@@ -1955,8 +1998,10 @@ import * as XLSX from 'xlsx';
       background: white;
       border: 2px solid #e0e0e0;
       border-radius: 12px;
-      padding: 24px;
-      text-align: center;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
@@ -1973,22 +2018,28 @@ import * as XLSX from 'xlsx';
     }
 
     .import-type-card mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
       color: #1976d2;
-      margin-bottom: 12px;
+      flex-shrink: 0;
     }
 
-    .import-type-card h4 {
-      margin: 0 0 4px 0;
+    .import-type-card .type-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .import-type-card .type-info span {
+      font-weight: 600;
       color: #333;
+      font-size: 1rem;
     }
 
-    .import-type-card p {
-      margin: 0;
-      font-size: 12px;
+    .import-type-card .type-info small {
+      font-size: 0.8rem;
       color: #666;
+      margin-top: 2px;
     }
 
     .import-config {
@@ -2241,14 +2292,80 @@ import * as XLSX from 'xlsx';
     }
 
     .templates-section h4 {
-      margin: 0 0 16px 0;
+      margin: 0 0 8px 0;
       color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .template-buttons {
+    .templates-section > p {
+      margin: 0 0 16px 0;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .template-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .template-card {
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+      border: 2px solid #ffe082;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .template-card:hover {
+      border-color: #ffc107;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+    }
+
+    .template-card > mat-icon:first-child {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: #f57c00;
+      flex-shrink: 0;
+    }
+
+    .template-card .template-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .template-card .template-info span {
+      font-weight: 600;
+      color: #333;
+      font-size: 0.95rem;
+    }
+
+    .template-card .template-info small {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    .template-card .download-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: #f57c00;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .template-card:hover .download-icon {
+      opacity: 1;
     }
 
     /* Database & Backup Styles */
@@ -2684,6 +2801,8 @@ export class SettingsComponent implements OnInit {
   showResetPasswordDialog = false;
   resetPasswordUser: User | null = null;
   resetPasswordForm!: FormGroup;
+  showNewPassword = false;
+  showConfirmPassword = false;
 
   // Logs
   logs: SystemLog[] = [];
@@ -3174,12 +3293,16 @@ export class SettingsComponent implements OnInit {
   openResetPasswordDialog(user: User): void {
     this.resetPasswordUser = user;
     this.resetPasswordForm.reset();
+    this.showNewPassword = false;
+    this.showConfirmPassword = false;
     this.showResetPasswordDialog = true;
   }
 
   closeResetPasswordDialog(): void {
     this.showResetPasswordDialog = false;
     this.resetPasswordUser = null;
+    this.showNewPassword = false;
+    this.showConfirmPassword = false;
   }
 
   resetPassword(): void {

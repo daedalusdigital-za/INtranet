@@ -1304,12 +1304,18 @@ export class UserFormDialogComponent {
       
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>New Password</mat-label>
-        <input matInput [(ngModel)]="newPassword" type="password" required>
+        <input matInput [(ngModel)]="newPassword" [type]="showNewPassword ? 'text' : 'password'" required>
+        <button mat-icon-button matSuffix type="button" (click)="showNewPassword = !showNewPassword">
+          <mat-icon>{{ showNewPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Confirm Password</mat-label>
-        <input matInput [(ngModel)]="confirmPassword" type="password" required>
+        <input matInput [(ngModel)]="confirmPassword" [type]="showConfirmPassword ? 'text' : 'password'" required>
+        <button mat-icon-button matSuffix type="button" (click)="showConfirmPassword = !showConfirmPassword">
+          <mat-icon>{{ showConfirmPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
         @if (confirmPassword && newPassword !== confirmPassword) {
           <mat-error>Passwords do not match</mat-error>
         }
@@ -1349,6 +1355,8 @@ export class UserFormDialogComponent {
 export class ResetPasswordDialogComponent {
   newPassword = '';
   confirmPassword = '';
+  showNewPassword = false;
+  showConfirmPassword = false;
 
   constructor(
     private dialogRef: MatDialogRef<ResetPasswordDialogComponent>,

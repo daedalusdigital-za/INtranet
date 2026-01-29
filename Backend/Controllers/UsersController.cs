@@ -317,7 +317,7 @@ namespace ProjectTracker.API.Controllers
                 user.Title = dto.Title;
 
             if (dto.Permissions != null)
-                user.Permissions = dto.Permissions;
+                user.Permissions = System.Text.Json.JsonSerializer.Serialize(dto.Permissions);
 
             if (dto.DepartmentId.HasValue)
                 user.DepartmentId = dto.DepartmentId.Value == 0 ? null : dto.DepartmentId;
@@ -587,7 +587,7 @@ namespace ProjectTracker.API.Controllers
         public string? Email { get; set; }
         public string? Role { get; set; }
         public string? Title { get; set; }
-        public string? Permissions { get; set; }
+        public List<string>? Permissions { get; set; }
         public int? DepartmentId { get; set; }
         public bool? IsActive { get; set; }
         public List<int>? CompanyIds { get; set; }

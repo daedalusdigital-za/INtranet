@@ -532,7 +532,7 @@ namespace ProjectTracker.API.Controllers
             var users = await usersQuery
                 .OrderBy(u => u.Name)
                 .ThenBy(u => u.Surname)
-                .Take(50)
+                .Take(200)
                 .ToListAsync();
 
             var result = users.Select(u => new UserSearchDto

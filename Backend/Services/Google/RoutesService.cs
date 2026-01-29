@@ -290,9 +290,21 @@ namespace ProjectTracker.API.Services.Google
                 var optimizedOrder = routeResult.OptimizedWaypointOrder ?? 
                     Enumerable.Range(0, stops.Count).ToList();
 
+                _logger.LogInformation("OptimizedOrder: {Order}, Stops count: {Count}", 
+                    string.Join(",", optimizedOrder), stops.Count);
+
                 for (int i = 0; i < optimizedOrder.Count; i++)
                 {
                     var originalIndex = optimizedOrder[i];
+                    
+                    // Bounds check to prevent index out of range
+                    if (originalIndex < 0 || originalIndex >= stops.Count)
+                    {
+                        _logger.LogWarning("Skipping invalid stop index {Index}, stops count is {Count}", 
+                            originalIndex, stops.Count);
+                        continue;
+                    }
+                    
                     var leg = routeResult.Legs.Count > i ? routeResult.Legs[i] : null;
 
                     cumulativeDistance += leg?.DistanceMeters ?? 0;

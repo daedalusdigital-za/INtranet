@@ -87,6 +87,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public int? VehicleId { get; set; }
         public int? DriverId { get; set; }
         public int? VehicleTypeId { get; set; }
+        public int? WarehouseId { get; set; }
         public string? Status { get; set; }
         public string? Priority { get; set; }
         public DateTime? ScheduledPickupDate { get; set; }
@@ -99,8 +100,14 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal? ActualCost { get; set; }
         public decimal? ChargeAmount { get; set; }
         public decimal? ActualDistance { get; set; }
+        public decimal? EstimatedDistance { get; set; }
         public int? ActualTimeMinutes { get; set; }
+        public int? EstimatedTimeMinutes { get; set; }
         public string? Notes { get; set; }
+        public string? SpecialInstructions { get; set; }
+        
+        // Stops for full tripsheet update
+        public List<CreateLoadStopDto>? Stops { get; set; }
     }
 
     public class LoadStopDto
@@ -187,11 +194,14 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }
         public decimal? UnitPrice { get; set; }
+        public decimal? TotalPrice { get; set; }
         public decimal? Weight { get; set; }
         public decimal? Volume { get; set; }
         public string? OrderNumber { get; set; }
         public string? InvoiceNumber { get; set; }
         public string? Comment { get; set; }
+        public string? CommodityName { get; set; }
+        public string? CommodityCode { get; set; }
     }
 
     public class LoadItemDto
@@ -243,5 +253,14 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? PhotoUrls { get; set; }
         public string? ConditionOnDelivery { get; set; }
         public string? DamageNotes { get; set; }
+    }
+
+    // TripSheet assignment DTO
+    public class AssignTripSheetDto
+    {
+        public int? DriverId { get; set; }
+        public int? VehicleId { get; set; }
+        public DateTime? ScheduledDate { get; set; }
+        public DateTime? ScheduledTime { get; set; }
     }
 }

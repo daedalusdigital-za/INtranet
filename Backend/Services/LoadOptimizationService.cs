@@ -60,7 +60,7 @@ namespace ProjectTracker.API.Services
                     var suggestedLoad = new SuggestedLoadDto
                     {
                         LoadSequence = loadSequence++,
-                        SuggestedLoadNumber = $"LD-{DateTime.UtcNow:yyyyMMdd}-{loadSequence:D3}",
+                        SuggestedLoadNumber = $"RF-{DateTime.UtcNow:yyyyMMdd}-{loadSequence:D3}",
                         Province = provinceGroup.Key,
                         PrimaryCity = cityGroup.Key,
                         TotalInvoices = totalItems,

@@ -69,6 +69,32 @@ namespace ProjectTracker.API.Constants
         public const string SupportView = "support.view";
         public const string SupportManage = "support.manage";
 
+        // Logistics permissions
+        public const string LogisticsView = "logistics.view";
+        public const string LogisticsManage = "logistics.manage";
+        public const string LogisticsTripsheets = "logistics.tripsheets";
+        public const string LogisticsDrivers = "logistics.drivers";
+        public const string LogisticsVehicles = "logistics.vehicles";
+        public const string LogisticsWarehouses = "logistics.warehouses";
+        public const string LogisticsImport = "logistics.import";
+        public const string LogisticsTracking = "logistics.tracking";
+
+        // CRM permissions
+        public const string CrmView = "crm.view";
+        public const string CrmManage = "crm.manage";
+        public const string CrmCustomers = "crm.customers";
+        public const string CrmLeads = "crm.leads";
+
+        // Stock Management permissions
+        public const string StockView = "stock.view";
+        public const string StockManage = "stock.manage";
+        public const string StockTransfers = "stock.transfers";
+
+        // Sales permissions
+        public const string SalesView = "sales.view";
+        public const string SalesManage = "sales.manage";
+        public const string SalesInvoices = "sales.invoices";
+
         public static readonly PermissionInfo[] AllPermissions =
         {
             new(UsersView, "View Users", "Users"),
@@ -90,7 +116,29 @@ namespace ProjectTracker.API.Constants
             new(KnowledgeBaseView, "View Knowledge Base", "Knowledge Base"),
             new(KnowledgeBaseEdit, "Edit Knowledge Base", "Knowledge Base"),
             new(SupportView, "View Support Tickets", "Support"),
-            new(SupportManage, "Manage Support Tickets", "Support")
+            new(SupportManage, "Manage Support Tickets", "Support"),
+            // Logistics
+            new(LogisticsView, "View Logistics", "Logistics"),
+            new(LogisticsManage, "Manage Logistics", "Logistics"),
+            new(LogisticsTripsheets, "Manage Tripsheets", "Logistics"),
+            new(LogisticsDrivers, "Manage Drivers", "Logistics"),
+            new(LogisticsVehicles, "Manage Vehicles", "Logistics"),
+            new(LogisticsWarehouses, "Manage Warehouses", "Logistics"),
+            new(LogisticsImport, "Import Invoices", "Logistics"),
+            new(LogisticsTracking, "View Tracking", "Logistics"),
+            // CRM
+            new(CrmView, "View CRM", "CRM"),
+            new(CrmManage, "Manage CRM", "CRM"),
+            new(CrmCustomers, "Manage Customers", "CRM"),
+            new(CrmLeads, "Manage Leads", "CRM"),
+            // Stock
+            new(StockView, "View Stock", "Stock Management"),
+            new(StockManage, "Manage Stock", "Stock Management"),
+            new(StockTransfers, "Manage Transfers", "Stock Management"),
+            // Sales
+            new(SalesView, "View Sales", "Sales"),
+            new(SalesManage, "Manage Sales", "Sales"),
+            new(SalesInvoices, "Manage Invoices", "Sales")
         };
     }
 

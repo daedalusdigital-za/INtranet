@@ -10,7 +10,7 @@ namespace ProjectTracker.API.Models.Logistics
 
         [Required]
         [MaxLength(50)]
-        public string LoadNumber { get; set; } = string.Empty; // e.g., LD-000001
+        public string LoadNumber { get; set; } = string.Empty; // e.g., RF-000001
 
         // Foreign Keys
         public int? CustomerId { get; set; }

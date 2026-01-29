@@ -1,6 +1,7 @@
-import { Component, OnInit, OnDestroy, Inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -261,7 +262,7 @@ import { environment } from '../../../environments/environment';
         <!-- Weather & Time Card (Rotating Locations) -->
         <mat-card class="widget weather-rotating-card">
           <mat-card-content>
-            @if (locations.length > 0) {
+            @if (locations.length > 0 && !weatherLoading) {
               <div class="weather-content">
                 <div class="weather-header">
                   <mat-icon class="location-icon">location_on</mat-icon>
@@ -273,11 +274,27 @@ import { environment } from '../../../environments/environment';
                   </div>
                   <div class="temperature-large">{{ locations[currentLocationIndex].temperature }}°C</div>
                   <div class="weather-condition-text">{{ locations[currentLocationIndex].condition }}</div>
-                  <div class="local-time-display">
-                    <mat-icon>access_time</mat-icon>
-                    <span>{{ locations[currentLocationIndex].time }}</span>
+                  <div class="weather-details">
+                    <div class="weather-detail-item">
+                      <mat-icon>air</mat-icon>
+                      <span>{{ locations[currentLocationIndex].windSpeed }} km/h</span>
+                    </div>
+                    <div class="weather-detail-item">
+                      <mat-icon>access_time</mat-icon>
+                      <span>{{ locations[currentLocationIndex].time }}</span>
+                    </div>
                   </div>
                 </div>
+                <div class="weather-indicators">
+                  @for (loc of locations; track loc.id; let i = $index) {
+                    <span class="indicator" [class.active]="i === currentLocationIndex"></span>
+                  }
+                </div>
+              </div>
+            } @else if (weatherLoading) {
+              <div class="weather-loading">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p>Loading weather...</p>
               </div>
             }
           </mat-card-content>
@@ -1230,6 +1247,72 @@ import { environment } from '../../../environments/environment';
       font-weight: 500;
     }
 
+    .weather-details {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .weather-detail-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      backdrop-filter: blur(10px);
+    }
+
+    .weather-detail-item mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .weather-indicators {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .weather-indicators .indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    .weather-indicators .indicator.active {
+      background: white;
+      transform: scale(1.3);
+    }
+
+    .weather-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      min-height: 180px;
+      color: white;
+    }
+
+    .weather-loading p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .weather-loading mat-spinner ::ng-deep circle {
+      stroke: white !important;
+    }
+
     .local-time-display {
       display: inline-flex;
       align-items: center;
@@ -1248,8 +1331,6 @@ import { environment } from '../../../environments/environment';
       width: 20px;
       height: 20px;
     }
-
-    /* Quote Widget */
 
     /* Quote Widget */
     .quote-widget {
@@ -1395,71 +1476,13 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
   // Weather & Time for Locations
   locations: any[] = [
-    {
-      id: 1,
-      name: 'Main Office',
-      temperature: 24,
-      condition: 'Sunny',
-      weatherIcon: 'wb_sunny',
-      time: '14:35'
-    },
-    {
-      id: 2,
-      name: 'Condom Factory',
-      temperature: 23,
-      condition: 'Partly Cloudy',
-      weatherIcon: 'cloud',
-      time: '14:35'
-    },
-    {
-      id: 3,
-      name: 'Sanitary Pads',
-      temperature: 25,
-      condition: 'Clear',
-      weatherIcon: 'wb_sunny',
-      time: '14:35'
-    },
-    {
-      id: 4,
-      name: 'New Road',
-      temperature: 22,
-      condition: 'Cloudy',
-      weatherIcon: 'cloud',
-      time: '14:35'
-    },
-    {
-      id: 5,
-      name: 'Cape Town',
-      temperature: 21,
-      condition: 'Windy',
-      weatherIcon: 'air',
-      time: '14:35'
-    },
-    {
-      id: 6,
-      name: 'Brionkhorspruit',
-      temperature: 26,
-      condition: 'Hot',
-      weatherIcon: 'wb_sunny',
-      time: '14:35'
-    },
-    {
-      id: 7,
-      name: 'Port Elizabeth',
-      temperature: 20,
-      condition: 'Mild',
-      weatherIcon: 'cloud',
-      time: '14:35'
-    },
-    {
-      id: 8,
-      name: 'Logistics',
-      temperature: 24,
-      condition: 'Clear',
-      weatherIcon: 'wb_sunny',
-      time: '14:35'
-    }
+    { id: 1, name: 'Durban', temperature: 26, condition: 'Loading...', weatherIcon: 'cloud', time: '--:--', windSpeed: 0 },
+    { id: 2, name: 'Cape Town', temperature: 22, condition: 'Loading...', weatherIcon: 'cloud', time: '--:--', windSpeed: 0 },
+    { id: 3, name: 'Gqeberha', temperature: 24, condition: 'Loading...', weatherIcon: 'cloud', time: '--:--', windSpeed: 0 },
+    { id: 4, name: 'Johannesburg', temperature: 25, condition: 'Loading...', weatherIcon: 'cloud', time: '--:--', windSpeed: 0 }
   ];
+  weatherLoading = true;
+  private http = inject(HttpClient);
 
   // Daily Quote
   dailyQuote: any = {
@@ -1489,6 +1512,9 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
     // Start hero card rotation
     this.startHeroRotation();
+
+    // Load weather data from API
+    this.loadWeatherData();
 
     // Start weather card rotation
     this.startWeatherRotation();
@@ -1590,6 +1616,24 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     if (this.locations.length > 0) {
       this.currentLocationIndex = (this.currentLocationIndex + 1) % this.locations.length;
     }
+  }
+
+  // Load weather data from API
+  loadWeatherData(): void {
+    this.weatherLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/weather`).subscribe({
+      next: (data) => {
+        if (data && data.length > 0) {
+          this.locations = data;
+        }
+        this.weatherLoading = false;
+      },
+      error: (error) => {
+        console.error('Error loading weather data:', error);
+        this.weatherLoading = false;
+        // Keep default fallback data
+      }
+    });
   }
 
   // Load announcements from database

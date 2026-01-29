@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
 using ProjectTracker.API.Models.CRM;
+using ProjectTracker.API.Models.Logistics;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -31,8 +32,10 @@ namespace ProjectTracker.API.Services
             ["announcements"] = new[] { "announcement", "announcements", "news", "notice", "notices", "update", "updates", "bulletin", "memo" },
             ["departments"] = new[] { "department", "departments", "team", "teams", "division", "unit", "group" },
             ["crm"] = new[] { "lead", "leads", "customer", "customers", "client", "clients", "prospect", "prospects", "campaign", "sales", "crm", "contact", "contacts" },
-            ["logistics"] = new[] { "load", "loads", "trip", "trips", "tripsheet", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "warehouse", "ld-", "ts-", "in transit", "delivered", "scheduled", "pending" },
-            ["invoices"] = new[] { "invoice", "invoices", "tfn", "transaction", "transactions", "sales amount", "cost of sales", "billing", "billed", "revenue", "imported invoice", "product sold", "quantity sold" }
+            ["logistics"] = new[] { "load", "loads", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "rf-", "ld-", "in transit", "delivered" },
+            ["tripsheets"] = new[] { "tripsheet", "tripsheets", "trip sheet", "trip sheets", "ts-", "trip", "trips", "generate load", "available tripsheet", "active tripsheet" },
+            ["invoices"] = new[] { "invoice", "invoices", "tfn", "transaction", "transactions", "sales amount", "cost of sales", "billing", "billed", "revenue", "imported invoice", "product sold", "quantity sold" },
+            ["stock"] = new[] { "stock", "inventory", "stock on hand", "soh", "warehouse", "warehouses", "stock level", "stock available", "item", "items", "qty", "quantity", "stock management", "gauteng", "kzn", "cape town", "pe", "gqeberha", "durban", "johannesburg" }
         };
 
         public AIContextService(
@@ -92,7 +95,9 @@ namespace ProjectTracker.API.Services
                         "departments" => await GetDepartmentsContextAsync(query),
                         "crm" => await GetCRMContextAsync(query),
                         "logistics" => await _logisticsService.GetLoadsContextAsync(query),
+                        "tripsheets" => await GetTripSheetsContextAsync(query),
                         "invoices" => await GetInvoicesContextAsync(query),
+                        "stock" => await GetStockContextAsync(query),
                         _ => null
                     };
 
@@ -784,6 +789,221 @@ namespace ProjectTracker.API.Services
                     builder.AppendLine($"- {status.Status}: {status.Count} invoices (R{status.Total:N2})");
                 }
             }
+
+            return builder.ToString();
+        }
+
+        private async Task<string?> GetTripSheetsContextAsync(string query)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var builder = new StringBuilder();
+            builder.AppendLine("### TripSheet/Load Data\n");
+
+            var lowerQuery = query.ToLower();
+
+            // TripSheets are generated from Loads - check for load numbers
+            var loadMatch = System.Text.RegularExpressions.Regex.Match(query, @"(TS|LD|RF)-?\d{6}", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            IQueryable<Models.Logistics.Load> loadsQuery = context.Loads
+                .Include(l => l.Driver)
+                .Include(l => l.Vehicle)
+                .Include(l => l.Warehouse)
+                .Include(l => l.Customer)
+                .Include(l => l.Stops);
+
+            if (loadMatch.Success)
+            {
+                var loadNumber = loadMatch.Value.ToUpper();
+                loadsQuery = loadsQuery.Where(l => l.LoadNumber.Contains(loadNumber));
+            }
+
+            // Filter by status
+            if (lowerQuery.Contains("available"))
+                loadsQuery = loadsQuery.Where(l => l.Status == "Available");
+            else if (lowerQuery.Contains("active") || lowerQuery.Contains("assigned"))
+                loadsQuery = loadsQuery.Where(l => l.Status == "Assigned" || l.Status == "Active");
+            else if (lowerQuery.Contains("in transit") || lowerQuery.Contains("intransit"))
+                loadsQuery = loadsQuery.Where(l => l.Status == "InTransit");
+            else if (lowerQuery.Contains("completed") || lowerQuery.Contains("delivered"))
+                loadsQuery = loadsQuery.Where(l => l.Status == "Delivered");
+            else if (lowerQuery.Contains("cancelled"))
+                loadsQuery = loadsQuery.Where(l => l.Status == "Cancelled");
+
+            // Filter by driver
+            var driverMatch = System.Text.RegularExpressions.Regex.Match(query, @"(?:driver|for)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (driverMatch.Success)
+            {
+                var driverName = driverMatch.Groups[1].Value.Trim().ToLower();
+                if (!new[] { "today", "available", "active" }.Contains(driverName))
+                {
+                    loadsQuery = loadsQuery.Where(l => l.Driver != null &&
+                        (l.Driver.FirstName.ToLower().Contains(driverName) ||
+                         l.Driver.LastName.ToLower().Contains(driverName)));
+                }
+            }
+
+            // Date filtering
+            if (lowerQuery.Contains("today"))
+            {
+                loadsQuery = loadsQuery.Where(l => l.ScheduledPickupDate.HasValue && l.ScheduledPickupDate.Value.Date == DateTime.Today);
+            }
+            else if (lowerQuery.Contains("this week"))
+            {
+                var startOfWeek = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek);
+                loadsQuery = loadsQuery.Where(l => l.ScheduledPickupDate.HasValue && l.ScheduledPickupDate.Value.Date >= startOfWeek);
+            }
+            else if (lowerQuery.Contains("this month"))
+            {
+                var startOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                loadsQuery = loadsQuery.Where(l => l.ScheduledPickupDate.HasValue && l.ScheduledPickupDate.Value.Date >= startOfMonth);
+            }
+
+            var loads = await loadsQuery
+                .OrderByDescending(l => l.ScheduledPickupDate ?? l.CreatedAt)
+                .Take(20)
+                .ToListAsync();
+
+            // Summary stats
+            var totalCount = await context.Loads.CountAsync();
+            var availableCount = await context.Loads.CountAsync(l => l.Status == "Available");
+            var assignedCount = await context.Loads.CountAsync(l => l.Status == "Assigned" || l.Status == "Active");
+            var inTransitCount = await context.Loads.CountAsync(l => l.Status == "InTransit");
+            var deliveredToday = await context.Loads.CountAsync(l => l.Status == "Delivered" && l.ActualDeliveryDate.HasValue && l.ActualDeliveryDate.Value.Date == DateTime.Today);
+
+            builder.AppendLine($"**Summary:**");
+            builder.AppendLine($"- Total Loads: {totalCount}");
+            builder.AppendLine($"- Available: {availableCount}");
+            builder.AppendLine($"- Assigned/Active: {assignedCount}");
+            builder.AppendLine($"- In Transit: {inTransitCount}");
+            builder.AppendLine($"- Delivered Today: {deliveredToday}");
+
+            if (loads.Any())
+            {
+                builder.AppendLine($"\n**Loads/TripSheets (showing {loads.Count}):**");
+                foreach (var load in loads.Take(10))
+                {
+                    builder.AppendLine($"\n**{load.LoadNumber}**");
+                    builder.AppendLine($"- Status: {load.Status}");
+                    builder.AppendLine($"- Date: {load.ScheduledPickupDate?.ToString("dd MMM yyyy") ?? "Not scheduled"}");
+                    builder.AppendLine($"- Driver: {(load.Driver != null ? $"{load.Driver.FirstName} {load.Driver.LastName}" : "Unassigned")}");
+                    builder.AppendLine($"- Vehicle: {load.Vehicle?.RegistrationNumber ?? "Unassigned"}");
+                    builder.AppendLine($"- Warehouse: {load.Warehouse?.Name ?? "N/A"}");
+                    builder.AppendLine($"- Customer: {load.Customer?.Name ?? "N/A"}");
+                    builder.AppendLine($"- Route: {load.PickupLocation ?? "N/A"} → {load.DeliveryLocation ?? "N/A"}");
+                    builder.AppendLine($"- Stops: {load.Stops.Count}");
+                    if (load.EstimatedDistance.HasValue)
+                    {
+                        builder.AppendLine($"- Distance: {load.EstimatedDistance:N0} km");
+                    }
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private async Task<string?> GetStockContextAsync(string query)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var builder = new StringBuilder();
+            builder.AppendLine("### Stock On Hand Data\n");
+
+            var lowerQuery = query.ToLower();
+
+            // Get warehouses info
+            var warehouses = await context.Warehouses.ToListAsync();
+
+            // Determine which warehouse to filter
+            string? locationFilter = null;
+            if (lowerQuery.Contains("gauteng") || lowerQuery.Contains("johannesburg") || lowerQuery.Contains("gp"))
+                locationFilter = "GP";
+            else if (lowerQuery.Contains("kzn") || lowerQuery.Contains("durban"))
+                locationFilter = "KZN";
+            else if (lowerQuery.Contains("cape town") || lowerQuery.Contains("capetown") || lowerQuery.Contains("cpt"))
+                locationFilter = "CPT";
+            else if (lowerQuery.Contains("pe") || lowerQuery.Contains("gqeberha") || lowerQuery.Contains("port elizabeth"))
+                locationFilter = "PE";
+
+            // Get latest snapshot date
+            var latestDate = await context.StockOnHandSnapshots
+                .MaxAsync(s => (DateTime?)s.AsAtDate) ?? DateTime.Today;
+
+            IQueryable<StockOnHandSnapshot> stockQuery = context.StockOnHandSnapshots
+                .Where(s => s.AsAtDate == latestDate);
+
+            if (!string.IsNullOrEmpty(locationFilter))
+            {
+                stockQuery = stockQuery.Where(s => s.Location == locationFilter);
+            }
+
+            // Check for specific item search
+            var itemMatch = System.Text.RegularExpressions.Regex.Match(query, @"(?:item|product|stock for)\s+[""']?([^""']+)[""']?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (itemMatch.Success)
+            {
+                var searchItem = itemMatch.Groups[1].Value.Trim().ToLower();
+                stockQuery = stockQuery.Where(s => s.ItemCode.ToLower().Contains(searchItem) || 
+                                                   s.ItemDescription.ToLower().Contains(searchItem));
+            }
+
+            // Get summary by location
+            var summaryByLocation = await context.StockOnHandSnapshots
+                .Where(s => s.AsAtDate == latestDate)
+                .GroupBy(s => s.Location)
+                .Select(g => new
+                {
+                    Location = g.Key,
+                    ItemCount = g.Count(),
+                    TotalQty = g.Sum(s => s.QtyOnHand),
+                    TotalValue = g.Sum(s => s.TotalCostForQOH)
+                })
+                .ToListAsync();
+
+            builder.AppendLine($"**Stock Summary as at {latestDate:dd MMM yyyy}:**\n");
+
+            // Show warehouse managers
+            builder.AppendLine("**Warehouses:**");
+            foreach (var wh in warehouses)
+            {
+                var summary = summaryByLocation.FirstOrDefault(s => s.Location == wh.Code);
+                builder.AppendLine($"- **{wh.Name}** ({wh.Code})");
+                builder.AppendLine($"  - Manager: {wh.ManagerName ?? "Not assigned"}");
+                if (summary != null)
+                {
+                    builder.AppendLine($"  - Items: {summary.ItemCount:N0}");
+                    builder.AppendLine($"  - Total Qty: {summary.TotalQty:N0}");
+                    builder.AppendLine($"  - Total Value: R{summary.TotalValue:N2}");
+                }
+            }
+
+            // If specific location was queried, show top items
+            if (!string.IsNullOrEmpty(locationFilter) || itemMatch.Success)
+            {
+                var items = await stockQuery
+                    .OrderByDescending(s => s.TotalCostForQOH)
+                    .Take(15)
+                    .ToListAsync();
+
+                if (items.Any())
+                {
+                    builder.AppendLine($"\n**Top Items{(locationFilter != null ? $" at {locationFilter}" : "")}:**");
+                    foreach (var item in items)
+                    {
+                        builder.AppendLine($"- {item.ItemCode}: {item.ItemDescription}");
+                        builder.AppendLine($"  - Location: {item.Location} | Qty: {item.QtyOnHand:N0} {item.Uom}");
+                        builder.AppendLine($"  - Available: {item.StockAvailable:N0} | Value: R{item.TotalCostForQOH:N2}");
+                    }
+                }
+            }
+
+            // Overall totals
+            var overallTotal = summaryByLocation.Sum(s => s.TotalValue);
+            var overallQty = summaryByLocation.Sum(s => s.TotalQty);
+            builder.AppendLine($"\n**Overall Totals:**");
+            builder.AppendLine($"- Total Stock Value: R{overallTotal:N2}");
+            builder.AppendLine($"- Total Quantity: {overallQty:N0}");
 
             return builder.ToString();
         }

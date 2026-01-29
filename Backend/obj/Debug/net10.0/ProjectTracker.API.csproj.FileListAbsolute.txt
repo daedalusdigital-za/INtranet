@@ -323,3 +323,11 @@ C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publi
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.deps.json
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.runtimeconfig.json
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.staticwebassets.endpoints.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\ClosedXML.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\ClosedXML.Parser.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\DocumentFormat.OpenXml.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\DocumentFormat.OpenXml.Framework.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\ExcelNumberFormat.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\RBush.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\SixLabors.Fonts.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\System.IO.Packaging.dll

@@ -112,6 +112,9 @@ builder.Services.AddScoped<SalesReportImportService>();
 // Stock on Hand Import Service
 builder.Services.AddScoped<StockOnHandImportService>();
 
+// Trip Sheet Import Service
+builder.Services.AddScoped<TripSheetImportService>();
+
 // Add comprehensive AI Context Service for database access
 builder.Services.AddScoped<IAIContextService, AIContextService>();
 

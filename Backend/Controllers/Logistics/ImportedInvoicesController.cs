@@ -44,6 +44,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] int pageSize = 50)
         {
             var query = _context.ImportedInvoices
+                .AsNoTracking() // Read-only query optimization
                 .Include(i => i.Load)
                 .Include(i => i.Customer)
                 .AsQueryable();
@@ -356,7 +357,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .OrderByDescending(l => l.Id)
                 .FirstOrDefaultAsync();
             var nextNumber = (lastLoad?.Id ?? 0) + 1;
-            var loadNumber = $"LD-{nextNumber:D6}";
+            var loadNumber = $"RF-{nextNumber:D6}";
 
             // Create the load
             var load = new Load

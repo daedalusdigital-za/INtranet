@@ -33,8 +33,8 @@ IF NOT EXISTS (SELECT 1 FROM Warehouses WHERE Code = 'WH-KZN')
 BEGIN
     INSERT INTO Warehouses (Name, Code, Address, City, PostalCode, Province, Latitude, Longitude, ManagerName, PhoneNumber, Email, TotalCapacity, AvailableCapacity, Status, CreatedAt)
     VALUES 
-    ('KZN Distribution Centre', 'WH-KZN', '123 Industrial Road, Pinetown', 'Durban', '3610', 'KwaZulu-Natal', -29.8167, 30.8500, 'John Dlamini', '031-555-0001', 'kzn.warehouse@company.co.za', 10000, 2200, 'Active', GETUTCDATE()),
-    ('Gauteng Main Warehouse', 'WH-GP', '456 Logistics Park, Midrand', 'Johannesburg', '1685', 'Gauteng', -25.9792, 28.1350, 'Sarah Mokwena', '011-555-0002', 'gauteng.warehouse@company.co.za', 15000, 5500, 'Active', GETUTCDATE()),
+    ('KZN Distribution Centre', 'WH-KZN', '123 Industrial Road, Pinetown', 'Durban', '3610', 'KwaZulu-Natal', -29.63489, 31.0510151, 'John Dlamini', '031-555-0001', 'kzn.warehouse@company.co.za', 10000, 2200, 'Active', GETUTCDATE()),
+    ('Gauteng Main Warehouse', 'WH-GP', '456 Logistics Park, Midrand', 'Johannesburg', '1685', 'Gauteng', -25.6963, 28.7023, 'Sarah Mokwena', '011-555-0002', 'gauteng.warehouse@company.co.za', 15000, 5500, 'Active', GETUTCDATE()),
     ('Cape Town Hub', 'WH-WC', '789 Harbour Drive, Paarden Eiland', 'Cape Town', '7405', 'Western Cape', -33.9167, 18.4500, 'Michael van der Berg', '021-555-0003', 'capetown.warehouse@company.co.za', 8000, 3200, 'Active', GETUTCDATE()),
     ('Eastern Cape Depot', 'WH-EC', '321 Port Road, Gqeberha', 'Gqeberha', '6001', 'Eastern Cape', -33.9608, 25.6022, 'Nomsa Hendricks', '041-555-0004', 'ec.warehouse@company.co.za', 5000, 2800, 'Active', GETUTCDATE());
 END

@@ -509,6 +509,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 CreditLimit = c.CreditLimit,
                 LastMaintained = c.LastMaintained,
                 SourceSystem = c.SourceSystem,
+                Latitude = c.Latitude,
+                Longitude = c.Longitude,
                 CreatedAt = c.CreatedAt,
                 UpdatedAt = c.UpdatedAt
             };
@@ -520,6 +522,613 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Where(c => c.Id == id)
                 .Select(c => MapToCustomerDto(c))
                 .FirstOrDefaultAsync();
+        }
+
+        #endregion
+
+        #region Customer Delivery Addresses
+
+        /// <summary>
+        /// Get all delivery addresses for a customer
+        /// </summary>
+        [HttpGet("{customerId}/delivery-addresses")]
+        public async Task<ActionResult<IEnumerable<CustomerDeliveryAddressDto>>> GetDeliveryAddresses(int customerId)
+        {
+            var addresses = await _context.CustomerDeliveryAddresses
+                .Where(a => a.CustomerId == customerId && a.IsActive)
+                .OrderByDescending(a => a.IsDefault)
+                .ThenByDescending(a => a.UsageCount)
+                .ThenByDescending(a => a.LastUsedAt)
+                .Select(a => new CustomerDeliveryAddressDto
+                {
+                    Id = a.Id,
+                    CustomerId = a.CustomerId,
+                    CustomerName = a.Customer != null ? a.Customer.Name : null,
+                    AddressLabel = a.AddressLabel,
+                    Address = a.Address,
+                    City = a.City,
+                    Province = a.Province,
+                    PostalCode = a.PostalCode,
+                    Country = a.Country,
+                    ContactPerson = a.ContactPerson,
+                    ContactPhone = a.ContactPhone,
+                    Latitude = a.Latitude,
+                    Longitude = a.Longitude,
+                    GooglePlaceId = a.GooglePlaceId,
+                    FormattedAddress = a.FormattedAddress,
+                    IsDefault = a.IsDefault,
+                    IsActive = a.IsActive,
+                    DeliveryInstructions = a.DeliveryInstructions,
+                    UsageCount = a.UsageCount,
+                    LastUsedAt = a.LastUsedAt,
+                    CreatedAt = a.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(addresses);
+        }
+
+        /// <summary>
+        /// Get delivery addresses for multiple customers (for batch loading in tripsheet creation)
+        /// </summary>
+        [HttpGet("delivery-addresses/batch")]
+        public async Task<ActionResult<Dictionary<int, List<CustomerDeliveryAddressDto>>>> GetDeliveryAddressesBatch(
+            [FromQuery] List<int> customerIds)
+        {
+            if (customerIds == null || !customerIds.Any())
+                return Ok(new Dictionary<int, List<CustomerDeliveryAddressDto>>());
+
+            var addresses = await _context.CustomerDeliveryAddresses
+                .Where(a => customerIds.Contains(a.CustomerId) && a.IsActive)
+                .OrderByDescending(a => a.IsDefault)
+                .ThenByDescending(a => a.UsageCount)
+                .Select(a => new CustomerDeliveryAddressDto
+                {
+                    Id = a.Id,
+                    CustomerId = a.CustomerId,
+                    CustomerName = a.Customer != null ? a.Customer.Name : null,
+                    AddressLabel = a.AddressLabel,
+                    Address = a.Address,
+                    City = a.City,
+                    Province = a.Province,
+                    PostalCode = a.PostalCode,
+                    Country = a.Country,
+                    ContactPerson = a.ContactPerson,
+                    ContactPhone = a.ContactPhone,
+                    Latitude = a.Latitude,
+                    Longitude = a.Longitude,
+                    GooglePlaceId = a.GooglePlaceId,
+                    FormattedAddress = a.FormattedAddress,
+                    IsDefault = a.IsDefault,
+                    IsActive = a.IsActive,
+                    DeliveryInstructions = a.DeliveryInstructions,
+                    UsageCount = a.UsageCount,
+                    LastUsedAt = a.LastUsedAt,
+                    CreatedAt = a.CreatedAt
+                })
+                .ToListAsync();
+
+            var result = addresses.GroupBy(a => a.CustomerId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Create a new delivery address for a customer
+        /// </summary>
+        [HttpPost("{customerId}/delivery-addresses")]
+        public async Task<ActionResult<CustomerDeliveryAddressDto>> CreateDeliveryAddress(
+            int customerId,
+            [FromBody] CreateCustomerDeliveryAddressDto dto)
+        {
+            // Verify customer exists
+            var customer = await _context.LogisticsCustomers.FindAsync(customerId);
+            if (customer == null)
+                return NotFound(new { error = "Customer not found" });
+
+            // If setting as default, unset other defaults
+            if (dto.IsDefault)
+            {
+                var existingDefaults = await _context.CustomerDeliveryAddresses
+                    .Where(a => a.CustomerId == customerId && a.IsDefault)
+                    .ToListAsync();
+                existingDefaults.ForEach(a => a.IsDefault = false);
+            }
+
+            // Check for duplicate address
+            var existingAddress = await _context.CustomerDeliveryAddresses
+                .FirstOrDefaultAsync(a => 
+                    a.CustomerId == customerId && 
+                    a.Address.ToLower() == dto.Address.ToLower() &&
+                    a.IsActive);
+
+            if (existingAddress != null)
+            {
+                // Update existing address instead of creating duplicate
+                existingAddress.UsageCount++;
+                existingAddress.LastUsedAt = DateTime.UtcNow;
+                if (dto.Latitude.HasValue) existingAddress.Latitude = dto.Latitude;
+                if (dto.Longitude.HasValue) existingAddress.Longitude = dto.Longitude;
+                if (!string.IsNullOrEmpty(dto.FormattedAddress)) existingAddress.FormattedAddress = dto.FormattedAddress;
+                if (!string.IsNullOrEmpty(dto.GooglePlaceId)) existingAddress.GooglePlaceId = dto.GooglePlaceId;
+                existingAddress.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new CustomerDeliveryAddressDto
+                {
+                    Id = existingAddress.Id,
+                    CustomerId = existingAddress.CustomerId,
+                    CustomerName = customer.Name,
+                    AddressLabel = existingAddress.AddressLabel,
+                    Address = existingAddress.Address,
+                    City = existingAddress.City,
+                    Province = existingAddress.Province,
+                    Latitude = existingAddress.Latitude,
+                    Longitude = existingAddress.Longitude,
+                    FormattedAddress = existingAddress.FormattedAddress,
+                    IsDefault = existingAddress.IsDefault,
+                    IsActive = existingAddress.IsActive,
+                    UsageCount = existingAddress.UsageCount,
+                    LastUsedAt = existingAddress.LastUsedAt,
+                    CreatedAt = existingAddress.CreatedAt
+                });
+            }
+
+            // Get user ID from token
+            var userIdClaim = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            int.TryParse(userIdClaim, out int createdByUserId);
+
+            var address = new CustomerDeliveryAddress
+            {
+                CustomerId = customerId,
+                AddressLabel = dto.AddressLabel,
+                Address = dto.Address,
+                City = dto.City,
+                Province = dto.Province,
+                PostalCode = dto.PostalCode,
+                Country = dto.Country ?? "South Africa",
+                ContactPerson = dto.ContactPerson,
+                ContactPhone = dto.ContactPhone,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                GooglePlaceId = dto.GooglePlaceId,
+                FormattedAddress = dto.FormattedAddress,
+                IsDefault = dto.IsDefault,
+                IsActive = true,
+                DeliveryInstructions = dto.DeliveryInstructions,
+                UsageCount = 1,
+                LastUsedAt = DateTime.UtcNow,
+                CreatedByUserId = createdByUserId > 0 ? createdByUserId : null,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.CustomerDeliveryAddresses.Add(address);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Created delivery address for customer {CustomerId}: {Address}", customerId, dto.Address);
+
+            return CreatedAtAction(nameof(GetDeliveryAddresses), new { customerId }, new CustomerDeliveryAddressDto
+            {
+                Id = address.Id,
+                CustomerId = address.CustomerId,
+                CustomerName = customer.Name,
+                AddressLabel = address.AddressLabel,
+                Address = address.Address,
+                City = address.City,
+                Province = address.Province,
+                PostalCode = address.PostalCode,
+                Country = address.Country,
+                ContactPerson = address.ContactPerson,
+                ContactPhone = address.ContactPhone,
+                Latitude = address.Latitude,
+                Longitude = address.Longitude,
+                GooglePlaceId = address.GooglePlaceId,
+                FormattedAddress = address.FormattedAddress,
+                IsDefault = address.IsDefault,
+                IsActive = address.IsActive,
+                DeliveryInstructions = address.DeliveryInstructions,
+                UsageCount = address.UsageCount,
+                LastUsedAt = address.LastUsedAt,
+                CreatedAt = address.CreatedAt
+            });
+        }
+
+        /// <summary>
+        /// Save delivery address during tripsheet creation (finds or creates customer)
+        /// </summary>
+        [HttpPost("delivery-addresses/save")]
+        public async Task<ActionResult<CustomerDeliveryAddressDto>> SaveDeliveryAddress([FromBody] SaveDeliveryAddressDto dto)
+        {
+            // Find customer by ID, code, or name
+            Customer? customer = null;
+            
+            if (dto.CustomerId > 0)
+            {
+                customer = await _context.LogisticsCustomers.FindAsync(dto.CustomerId);
+            }
+            else if (!string.IsNullOrEmpty(dto.CustomerCode))
+            {
+                customer = await _context.LogisticsCustomers
+                    .FirstOrDefaultAsync(c => c.CustomerCode == dto.CustomerCode);
+            }
+            else if (!string.IsNullOrEmpty(dto.CustomerName))
+            {
+                customer = await _context.LogisticsCustomers
+                    .FirstOrDefaultAsync(c => c.Name == dto.CustomerName || c.ShortName == dto.CustomerName);
+            }
+
+            if (customer == null)
+            {
+                // Create new customer if not found
+                if (!string.IsNullOrEmpty(dto.CustomerName))
+                {
+                    customer = new Customer
+                    {
+                        Name = dto.CustomerName,
+                        CustomerCode = dto.CustomerCode,
+                        City = dto.City,
+                        Province = dto.Province,
+                        Status = "Active",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.LogisticsCustomers.Add(customer);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Created new customer from tripsheet: {CustomerName}", dto.CustomerName);
+                }
+                else
+                {
+                    return BadRequest(new { error = "Customer not found and no customer name provided" });
+                }
+            }
+
+            // Check for existing address
+            var existingAddress = await _context.CustomerDeliveryAddresses
+                .FirstOrDefaultAsync(a => 
+                    a.CustomerId == customer.Id && 
+                    (a.Address.ToLower() == dto.Address.ToLower() ||
+                     (a.FormattedAddress != null && a.FormattedAddress.ToLower() == dto.Address.ToLower())) &&
+                    a.IsActive);
+
+            if (existingAddress != null)
+            {
+                // Update existing address usage
+                existingAddress.UsageCount++;
+                existingAddress.LastUsedAt = DateTime.UtcNow;
+                if (dto.Latitude.HasValue && dto.Latitude != 0) existingAddress.Latitude = dto.Latitude;
+                if (dto.Longitude.HasValue && dto.Longitude != 0) existingAddress.Longitude = dto.Longitude;
+                if (!string.IsNullOrEmpty(dto.FormattedAddress)) existingAddress.FormattedAddress = dto.FormattedAddress;
+                if (!string.IsNullOrEmpty(dto.GooglePlaceId)) existingAddress.GooglePlaceId = dto.GooglePlaceId;
+                existingAddress.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new CustomerDeliveryAddressDto
+                {
+                    Id = existingAddress.Id,
+                    CustomerId = existingAddress.CustomerId,
+                    CustomerName = customer.Name,
+                    AddressLabel = existingAddress.AddressLabel,
+                    Address = existingAddress.Address,
+                    City = existingAddress.City,
+                    Province = existingAddress.Province,
+                    Latitude = existingAddress.Latitude,
+                    Longitude = existingAddress.Longitude,
+                    FormattedAddress = existingAddress.FormattedAddress,
+                    IsDefault = existingAddress.IsDefault,
+                    IsActive = existingAddress.IsActive,
+                    UsageCount = existingAddress.UsageCount,
+                    LastUsedAt = existingAddress.LastUsedAt,
+                    CreatedAt = existingAddress.CreatedAt
+                });
+            }
+
+            // Get user ID from token
+            var userIdClaim = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            int.TryParse(userIdClaim, out int createdByUserId);
+
+            // Check if this is the first address for the customer
+            var addressCount = await _context.CustomerDeliveryAddresses
+                .CountAsync(a => a.CustomerId == customer.Id && a.IsActive);
+
+            var address = new CustomerDeliveryAddress
+            {
+                CustomerId = customer.Id,
+                AddressLabel = dto.AddressLabel ?? "Delivery Address",
+                Address = dto.Address,
+                City = dto.City,
+                Province = dto.Province,
+                Country = "South Africa",
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                GooglePlaceId = dto.GooglePlaceId,
+                FormattedAddress = dto.FormattedAddress ?? dto.Address,
+                IsDefault = addressCount == 0, // First address is default
+                IsActive = true,
+                UsageCount = 1,
+                LastUsedAt = DateTime.UtcNow,
+                CreatedByUserId = createdByUserId > 0 ? createdByUserId : null,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.CustomerDeliveryAddresses.Add(address);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Saved delivery address for customer {CustomerName}: {Address}", customer.Name, dto.Address);
+
+            return Ok(new CustomerDeliveryAddressDto
+            {
+                Id = address.Id,
+                CustomerId = address.CustomerId,
+                CustomerName = customer.Name,
+                AddressLabel = address.AddressLabel,
+                Address = address.Address,
+                City = address.City,
+                Province = address.Province,
+                PostalCode = address.PostalCode,
+                Country = address.Country,
+                Latitude = address.Latitude,
+                Longitude = address.Longitude,
+                GooglePlaceId = address.GooglePlaceId,
+                FormattedAddress = address.FormattedAddress,
+                IsDefault = address.IsDefault,
+                IsActive = address.IsActive,
+                UsageCount = address.UsageCount,
+                LastUsedAt = address.LastUsedAt,
+                CreatedAt = address.CreatedAt
+            });
+        }
+
+        /// <summary>
+        /// Batch save delivery addresses (for tripsheet creation)
+        /// </summary>
+        [HttpPost("delivery-addresses/batch-save")]
+        public async Task<ActionResult<List<CustomerDeliveryAddressDto>>> BatchSaveDeliveryAddresses(
+            [FromBody] BatchSaveDeliveryAddressesDto dto)
+        {
+            var results = new List<CustomerDeliveryAddressDto>();
+            var errors = new List<string>();
+
+            foreach (var addressDto in dto.Addresses)
+            {
+                try
+                {
+                    // Find customer
+                    Customer? customer = null;
+                    
+                    if (addressDto.CustomerId > 0)
+                    {
+                        customer = await _context.LogisticsCustomers.FindAsync(addressDto.CustomerId);
+                    }
+                    else if (!string.IsNullOrEmpty(addressDto.CustomerCode))
+                    {
+                        customer = await _context.LogisticsCustomers
+                            .FirstOrDefaultAsync(c => c.CustomerCode == addressDto.CustomerCode);
+                    }
+                    else if (!string.IsNullOrEmpty(addressDto.CustomerName))
+                    {
+                        customer = await _context.LogisticsCustomers
+                            .FirstOrDefaultAsync(c => c.Name == addressDto.CustomerName || c.ShortName == addressDto.CustomerName);
+                    }
+
+                    if (customer == null)
+                    {
+                        // Create new customer
+                        if (!string.IsNullOrEmpty(addressDto.CustomerName))
+                        {
+                            customer = new Customer
+                            {
+                                Name = addressDto.CustomerName,
+                                CustomerCode = addressDto.CustomerCode,
+                                City = addressDto.City,
+                                Province = addressDto.Province,
+                                Status = "Active",
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            _context.LogisticsCustomers.Add(customer);
+                            await _context.SaveChangesAsync();
+                        }
+                        else
+                        {
+                            errors.Add($"Customer not found for address: {addressDto.Address}");
+                            continue;
+                        }
+                    }
+
+                    // Check for existing address
+                    var existingAddress = await _context.CustomerDeliveryAddresses
+                        .FirstOrDefaultAsync(a => 
+                            a.CustomerId == customer.Id && 
+                            a.Address.ToLower() == addressDto.Address.ToLower() &&
+                            a.IsActive);
+
+                    if (existingAddress != null)
+                    {
+                        // Update existing
+                        existingAddress.UsageCount++;
+                        existingAddress.LastUsedAt = DateTime.UtcNow;
+                        if (addressDto.Latitude.HasValue) existingAddress.Latitude = addressDto.Latitude;
+                        if (addressDto.Longitude.HasValue) existingAddress.Longitude = addressDto.Longitude;
+                        if (!string.IsNullOrEmpty(addressDto.FormattedAddress)) existingAddress.FormattedAddress = addressDto.FormattedAddress;
+                        existingAddress.UpdatedAt = DateTime.UtcNow;
+
+                        results.Add(new CustomerDeliveryAddressDto
+                        {
+                            Id = existingAddress.Id,
+                            CustomerId = existingAddress.CustomerId,
+                            CustomerName = customer.Name,
+                            Address = existingAddress.Address,
+                            City = existingAddress.City,
+                            Province = existingAddress.Province,
+                            Latitude = existingAddress.Latitude,
+                            Longitude = existingAddress.Longitude,
+                            UsageCount = existingAddress.UsageCount
+                        });
+                    }
+                    else
+                    {
+                        // Create new
+                        var addressCount = await _context.CustomerDeliveryAddresses
+                            .CountAsync(a => a.CustomerId == customer.Id && a.IsActive);
+
+                        var address = new CustomerDeliveryAddress
+                        {
+                            CustomerId = customer.Id,
+                            AddressLabel = addressDto.AddressLabel ?? "Delivery Address",
+                            Address = addressDto.Address,
+                            City = addressDto.City,
+                            Province = addressDto.Province,
+                            Latitude = addressDto.Latitude,
+                            Longitude = addressDto.Longitude,
+                            FormattedAddress = addressDto.FormattedAddress,
+                            GooglePlaceId = addressDto.GooglePlaceId,
+                            IsDefault = addressCount == 0,
+                            IsActive = true,
+                            UsageCount = 1,
+                            LastUsedAt = DateTime.UtcNow,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _context.CustomerDeliveryAddresses.Add(address);
+                        await _context.SaveChangesAsync();
+
+                        results.Add(new CustomerDeliveryAddressDto
+                        {
+                            Id = address.Id,
+                            CustomerId = address.CustomerId,
+                            CustomerName = customer.Name,
+                            Address = address.Address,
+                            City = address.City,
+                            Province = address.Province,
+                            Latitude = address.Latitude,
+                            Longitude = address.Longitude,
+                            UsageCount = address.UsageCount
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Error saving address '{addressDto.Address}': {ex.Message}");
+                }
+            }
+
+            _logger.LogInformation("Batch saved {Count} delivery addresses, {Errors} errors", results.Count, errors.Count);
+
+            return Ok(new { saved = results, errors });
+        }
+
+        /// <summary>
+        /// Update a delivery address
+        /// </summary>
+        [HttpPut("delivery-addresses/{id}")]
+        public async Task<ActionResult<CustomerDeliveryAddressDto>> UpdateDeliveryAddress(
+            int id,
+            [FromBody] UpdateCustomerDeliveryAddressDto dto)
+        {
+            var address = await _context.CustomerDeliveryAddresses
+                .Include(a => a.Customer)
+                .FirstOrDefaultAsync(a => a.Id == id);
+
+            if (address == null)
+                return NotFound(new { error = "Delivery address not found" });
+
+            // If setting as default, unset other defaults
+            if (dto.IsDefault == true && !address.IsDefault)
+            {
+                var existingDefaults = await _context.CustomerDeliveryAddresses
+                    .Where(a => a.CustomerId == address.CustomerId && a.IsDefault && a.Id != id)
+                    .ToListAsync();
+                existingDefaults.ForEach(a => a.IsDefault = false);
+            }
+
+            // Update fields
+            if (!string.IsNullOrEmpty(dto.AddressLabel)) address.AddressLabel = dto.AddressLabel;
+            if (!string.IsNullOrEmpty(dto.Address)) address.Address = dto.Address;
+            if (dto.City != null) address.City = dto.City;
+            if (dto.Province != null) address.Province = dto.Province;
+            if (dto.PostalCode != null) address.PostalCode = dto.PostalCode;
+            if (dto.ContactPerson != null) address.ContactPerson = dto.ContactPerson;
+            if (dto.ContactPhone != null) address.ContactPhone = dto.ContactPhone;
+            if (dto.Latitude.HasValue) address.Latitude = dto.Latitude;
+            if (dto.Longitude.HasValue) address.Longitude = dto.Longitude;
+            if (dto.GooglePlaceId != null) address.GooglePlaceId = dto.GooglePlaceId;
+            if (dto.FormattedAddress != null) address.FormattedAddress = dto.FormattedAddress;
+            if (dto.IsDefault.HasValue) address.IsDefault = dto.IsDefault.Value;
+            if (dto.IsActive.HasValue) address.IsActive = dto.IsActive.Value;
+            if (dto.DeliveryInstructions != null) address.DeliveryInstructions = dto.DeliveryInstructions;
+            
+            address.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Updated delivery address {Id} for customer {CustomerId}", id, address.CustomerId);
+
+            return Ok(new CustomerDeliveryAddressDto
+            {
+                Id = address.Id,
+                CustomerId = address.CustomerId,
+                CustomerName = address.Customer?.Name,
+                AddressLabel = address.AddressLabel,
+                Address = address.Address,
+                City = address.City,
+                Province = address.Province,
+                PostalCode = address.PostalCode,
+                Country = address.Country,
+                ContactPerson = address.ContactPerson,
+                ContactPhone = address.ContactPhone,
+                Latitude = address.Latitude,
+                Longitude = address.Longitude,
+                GooglePlaceId = address.GooglePlaceId,
+                FormattedAddress = address.FormattedAddress,
+                IsDefault = address.IsDefault,
+                IsActive = address.IsActive,
+                DeliveryInstructions = address.DeliveryInstructions,
+                UsageCount = address.UsageCount,
+                LastUsedAt = address.LastUsedAt,
+                CreatedAt = address.CreatedAt
+            });
+        }
+
+        /// <summary>
+        /// Delete (soft-delete) a delivery address
+        /// </summary>
+        [HttpDelete("delivery-addresses/{id}")]
+        public async Task<ActionResult> DeleteDeliveryAddress(int id)
+        {
+            var address = await _context.CustomerDeliveryAddresses.FindAsync(id);
+
+            if (address == null)
+                return NotFound(new { error = "Delivery address not found" });
+
+            // Soft delete
+            address.IsActive = false;
+            address.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Deleted delivery address {Id}", id);
+
+            return NoContent();
+        }
+
+        /// <summary>
+        /// Record usage of a delivery address (increment usage count)
+        /// </summary>
+        [HttpPost("delivery-addresses/{id}/use")]
+        public async Task<ActionResult> RecordAddressUsage(int id)
+        {
+            var address = await _context.CustomerDeliveryAddresses.FindAsync(id);
+
+            if (address == null)
+                return NotFound(new { error = "Delivery address not found" });
+
+            address.UsageCount++;
+            address.LastUsedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { usageCount = address.UsageCount });
         }
 
         #endregion

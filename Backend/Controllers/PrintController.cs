@@ -127,46 +127,22 @@ namespace ProjectTracker.API.Controllers
                     fileBytes = memoryStream.ToArray();
                 }
 
-                // For PDF files, we can send directly to the printer
-                // Most Ricoh printers support direct PDF printing on port 9100
                 var extension = Path.GetExtension(file.FileName).ToLower();
                 
-                if (extension == ".pdf")
+                // For Ricoh printers, use IPP (Internet Printing Protocol) which properly handles PDF
+                // This is the preferred method as it handles format conversion properly
+                var printed = await TryIppPrinting(printer, fileBytes, file.FileName, extension);
+                
+                if (!printed)
                 {
-                    // Send PDF directly to printer via raw socket (port 9100)
-                    await SendRawToPrinter(printer, fileBytes);
-                }
-                else if (extension == ".txt")
-                {
-                    // Text files can be sent directly
-                    await SendRawToPrinter(printer, fileBytes);
-                }
-                else if (extension == ".prn" || extension == ".ps")
-                {
-                    // PostScript/PRN files can be sent directly
-                    await SendRawToPrinter(printer, fileBytes);
-                }
-                else
-                {
-                    // For other file types (Word, Excel, Images), we need to convert to PDF first
-                    // For now, we'll save the file and let Windows handle the conversion
-                    // In production, you'd use a library like Aspose or a service
-                    
-                    var tempPath = Path.Combine(Path.GetTempPath(), $"print_{Guid.NewGuid()}{extension}");
-                    await System.IO.File.WriteAllBytesAsync(tempPath, fileBytes);
-                    
-                    try
+                    // Fallback: Try direct raw socket printing for PostScript/PCL files only
+                    if (extension == ".ps" || extension == ".pcl" || extension == ".prn")
                     {
-                        // Try to print using Windows Print system
-                        await PrintUsingWindowsSpooler(tempPath, printer);
+                        await SendRawToPrinter(printer, fileBytes);
                     }
-                    finally
+                    else
                     {
-                        // Clean up temp file
-                        if (System.IO.File.Exists(tempPath))
-                        {
-                            System.IO.File.Delete(tempPath);
-                        }
+                        throw new Exception($"Could not print {extension} file. The printer may not support this format directly.");
                     }
                 }
 
@@ -233,59 +209,224 @@ namespace ProjectTracker.API.Controllers
             _logger.LogDebug("Sent {Bytes} bytes to {IP}:{Port}", 
                 data.Length, printer.IpAddress, printer.Port);
         }
-
         /// <summary>
-        /// Print using Windows Print Spooler (for non-PDF files)
+        /// Try printing via IPP (Internet Printing Protocol) - preferred method for PDF files
+        /// IPP properly handles PDF conversion on the printer side
         /// </summary>
-        private async Task PrintUsingWindowsSpooler(string filePath, PrinterInfo printer)
+        private async Task<bool> TryIppPrinting(PrinterInfo printer, byte[] data, string fileName, string extension)
         {
-            // This uses the Windows print subsystem
-            // The printer needs to be added to Windows first, or we use IPP
-            
-            // For Ricoh printers, we can try to use the HTTP printing interface
-            // Ricoh printers often support printing via HTTP POST to port 80 or 631
-            
-            var extension = Path.GetExtension(filePath).ToLower();
-            
-            // Read the file
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-            
-            // Try sending via raw socket first
-            // Many printers can handle various file formats directly
             try
             {
-                await SendRawToPrinter(printer, fileBytes);
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Raw printing failed, trying alternative method: {Error}", ex.Message);
-            }
-
-            // If raw printing fails, try IPP (Internet Printing Protocol) on port 631
-            try
-            {
-                using var httpClient = new HttpClient();
-                httpClient.Timeout = TimeSpan.FromSeconds(30);
+                // Ricoh printers typically support IPP on port 631 or via HTTP port 80
+                // Try the standard IPP port first
+                var ippPorts = new[] { 631, 80 };
                 
-                var content = new ByteArrayContent(fileBytes);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
-                    GetMimeType(extension));
-                
-                // Try IPP endpoint
-                var ippUrl = $"http://{printer.IpAddress}:631/ipp/print";
-                var response = await httpClient.PostAsync(ippUrl, content);
-                
-                if (!response.IsSuccessStatusCode)
+                foreach (var port in ippPorts)
                 {
-                    throw new Exception($"IPP printing failed with status {response.StatusCode}");
+                    try
+                    {
+                        using var client = new HttpClient();
+                        client.Timeout = TimeSpan.FromSeconds(30);
+                        
+                        var ippUrl = $"http://{printer.IpAddress}:{port}/ipp/print";
+                        
+                        // Build IPP request for Print-Job operation
+                        var ippRequest = BuildIppPrintJobRequest(data, fileName, extension);
+                        
+                        var content = new ByteArrayContent(ippRequest);
+                        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/ipp");
+                        
+                        var response = await client.PostAsync(ippUrl, content);
+                        
+                        if (response.IsSuccessStatusCode)
+                        {
+                            _logger.LogInformation("Successfully sent via IPP on port {Port}", port);
+                            return true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug("IPP on port {Port} failed: {Message}", port, ex.Message);
+                    }
                 }
+                
+                // If IPP fails, try direct LPD (port 515) - common on network printers
+                if (await TryLpdPrinting(printer, data, fileName))
+                {
+                    return true;
+                }
+                
+                // Last resort: Try raw socket with PJL wrapper for PDF
+                if (extension == ".pdf")
+                {
+                    await SendPdfWithPjlWrapper(printer, data, fileName);
+                    return true;
+                }
+                
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("IPP printing failed: {Error}", ex.Message);
-                throw new Exception($"Could not print file. The file type '{extension}' may not be supported for direct printing. Please convert to PDF first.");
+                _logger.LogDebug("IPP printing failed: {Message}", ex.Message);
+                return false;
             }
+        }
+        
+        /// <summary>
+        /// Build a minimal IPP Print-Job request
+        /// </summary>
+        private byte[] BuildIppPrintJobRequest(byte[] documentData, string fileName, string extension)
+        {
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+            
+            // IPP version 1.1
+            writer.Write((byte)1); // Major version
+            writer.Write((byte)1); // Minor version
+            
+            // Operation ID: Print-Job = 0x0002
+            writer.Write((byte)0x00);
+            writer.Write((byte)0x02);
+            
+            // Request ID
+            writer.Write((byte)0x00);
+            writer.Write((byte)0x00);
+            writer.Write((byte)0x00);
+            writer.Write((byte)0x01);
+            
+            // Operation attributes tag
+            writer.Write((byte)0x01);
+            
+            // attributes-charset
+            WriteIppAttribute(writer, 0x47, "attributes-charset", "utf-8");
+            
+            // attributes-natural-language
+            WriteIppAttribute(writer, 0x48, "attributes-natural-language", "en");
+            
+            // printer-uri
+            WriteIppAttribute(writer, 0x45, "printer-uri", "ipp://localhost/ipp/print");
+            
+            // document-format
+            var mimeType = GetMimeType(extension);
+            WriteIppAttribute(writer, 0x49, "document-format", mimeType);
+            
+            // job-name
+            WriteIppAttribute(writer, 0x42, "job-name", fileName);
+            
+            // End of attributes
+            writer.Write((byte)0x03);
+            
+            // Document data
+            writer.Write(documentData);
+            
+            return ms.ToArray();
+        }
+        
+        private void WriteIppAttribute(BinaryWriter writer, byte valueTag, string name, string value)
+        {
+            writer.Write(valueTag);
+            
+            // Name length (big endian)
+            var nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
+            writer.Write((byte)(nameBytes.Length >> 8));
+            writer.Write((byte)(nameBytes.Length & 0xFF));
+            writer.Write(nameBytes);
+            
+            // Value length (big endian)
+            var valueBytes = System.Text.Encoding.UTF8.GetBytes(value);
+            writer.Write((byte)(valueBytes.Length >> 8));
+            writer.Write((byte)(valueBytes.Length & 0xFF));
+            writer.Write(valueBytes);
+        }
+        
+        /// <summary>
+        /// Try LPD printing (Line Printer Daemon) - port 515
+        /// </summary>
+        private async Task<bool> TryLpdPrinting(PrinterInfo printer, byte[] data, string fileName)
+        {
+            try
+            {
+                using var client = new TcpClient();
+                await client.ConnectAsync(printer.IpAddress, 515);
+                using var stream = client.GetStream();
+                
+                // LPD protocol: Send print job
+                var queueName = "lp";
+                var controlFile = $"Hproject-tracker\nP{Environment.UserName}\nf{fileName}\n";
+                var dataFileSize = data.Length;
+                
+                // Send receive job command
+                var receiveCmd = $"\x02{queueName}\n";
+                await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(receiveCmd));
+                
+                // Wait for acknowledgment
+                var ack = new byte[1];
+                await stream.ReadAsync(ack);
+                if (ack[0] != 0) return false;
+                
+                // Send control file
+                var ctrlCmd = $"\x02{controlFile.Length} cfA001{Environment.MachineName}\n";
+                await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(ctrlCmd));
+                await stream.ReadAsync(ack);
+                if (ack[0] != 0) return false;
+                
+                await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(controlFile));
+                await stream.WriteAsync(new byte[] { 0 });
+                await stream.ReadAsync(ack);
+                if (ack[0] != 0) return false;
+                
+                // Send data file
+                var dataCmd = $"\x03{dataFileSize} dfA001{Environment.MachineName}\n";
+                await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(dataCmd));
+                await stream.ReadAsync(ack);
+                if (ack[0] != 0) return false;
+                
+                await stream.WriteAsync(data);
+                await stream.WriteAsync(new byte[] { 0 });
+                await stream.ReadAsync(ack);
+                
+                _logger.LogInformation("Successfully sent via LPD");
+                return ack[0] == 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("LPD printing failed: {Message}", ex.Message);
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Send PDF with PJL wrapper for direct printing
+        /// This wraps the PDF data with proper PJL commands that Ricoh printers understand
+        /// </summary>
+        private async Task SendPdfWithPjlWrapper(PrinterInfo printer, byte[] pdfData, string fileName)
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(printer.IpAddress, printer.Port);
+            using var stream = client.GetStream();
+            
+            // PJL Universal Exit Language command to ensure clean state
+            var pjlHeader = "\x1B%-12345X@PJL JOB NAME=\"" + fileName + "\"\r\n" +
+                           "@PJL SET COPIES=1\r\n" +
+                           "@PJL ENTER LANGUAGE=PDF\r\n";
+            
+            var pjlFooter = "\x1B%-12345X@PJL EOJ NAME=\"" + fileName + "\"\r\n" +
+                           "\x1B%-12345X";
+            
+            // Write PJL header
+            var headerBytes = System.Text.Encoding.ASCII.GetBytes(pjlHeader);
+            await stream.WriteAsync(headerBytes);
+            
+            // Write PDF data
+            await stream.WriteAsync(pdfData);
+            
+            // Write PJL footer
+            var footerBytes = System.Text.Encoding.ASCII.GetBytes(pjlFooter);
+            await stream.WriteAsync(footerBytes);
+            
+            await stream.FlushAsync();
+            
+            _logger.LogInformation("Successfully sent PDF with PJL wrapper");
         }
 
         private string GetMimeType(string extension)

@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,9 +18,10 @@ import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { Subscription, interval } from 'rxjs';
-import { MessageService, Conversation, Message, User, SendMessageRequest } from '../../services/message.service';
+import { MessageService, Conversation, Message, User, SendMessageRequest, MessageAttachment } from '../../services/message.service';
 import { UserSearchPopupComponent } from '../user-search-popup/user-search-popup.component';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-messages',
@@ -187,7 +189,36 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
                 </div>
                 
                 <div class="message-bubble">
-                  <p>{{ message.content }}</p>
+                  <p *ngIf="message.content">{{ message.content }}</p>
+                  
+                  <!-- Attachments Display -->
+                  <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
+                    <div *ngFor="let attachment of message.attachments" class="attachment-item">
+                      <!-- Image Preview -->
+                      <div *ngIf="isImageFile(attachment.fileType)" class="attachment-image">
+                        <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)">
+                      </div>
+                      
+                      <!-- PDF/Document Preview -->
+                      <div *ngIf="!isImageFile(attachment.fileType)" class="attachment-file">
+                        <mat-icon class="file-icon">{{ getFileIcon(attachment.fileType) }}</mat-icon>
+                        <div class="file-info">
+                          <span class="file-name">{{ attachment.fileName }}</span>
+                          <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
+                        </div>
+                      </div>
+                      
+                      <!-- Attachment Actions -->
+                      <div class="attachment-actions">
+                        <button mat-icon-button (click)="previewAttachment(attachment)" matTooltip="Preview">
+                          <mat-icon>visibility</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="downloadAttachment(attachment)" matTooltip="Download">
+                          <mat-icon>download</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   
                   <div class="message-meta">
                     <span class="time">{{ formatMessageTime(message.sentAt) }}</span>
@@ -232,15 +263,32 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
             </button>
           </div>
 
+          <!-- Pending Attachments Preview -->
+          <div *ngIf="pendingAttachments.length > 0" class="pending-attachments">
+            <div *ngFor="let file of pendingAttachments; let i = index" class="pending-file">
+              <mat-icon>{{ getFileIconByName(file.name) }}</mat-icon>
+              <span class="file-name">{{ file.name }}</span>
+              <span class="file-size">{{ formatFileSize(file.size) }}</span>
+              <button mat-icon-button (click)="removePendingAttachment(i)">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          </div>
+
           <!-- Message Input -->
           <div class="message-input-area">
+            <input type="file" #fileInput hidden multiple (change)="onFilesSelected($event)" 
+                   accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv">
+            <button mat-icon-button (click)="fileInput.click()" matTooltip="Attach file">
+              <mat-icon>attach_file</mat-icon>
+            </button>
             <mat-form-field appearance="outline" class="message-input">
               <input matInput 
                      placeholder="Type a message..." 
                      [(ngModel)]="newMessage"
                      (keyup.enter)="sendMessage()">
             </mat-form-field>
-            <button mat-fab color="primary" (click)="sendMessage()" [disabled]="!newMessage.trim()">
+            <button mat-fab color="primary" (click)="sendMessage()" [disabled]="!newMessage.trim() && pendingAttachments.length === 0">
               <mat-icon>send</mat-icon>
             </button>
           </div>
@@ -255,6 +303,42 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       (close)="showNewConversation = false"
       (userSelected)="startConversationWithUser($event)">
     </app-user-search-popup>
+
+    <!-- Attachment Preview Overlay -->
+    <div *ngIf="previewingAttachment" class="attachment-preview-overlay" (click)="closePreview()">
+      <div class="preview-container" (click)="$event.stopPropagation()">
+        <div class="preview-header">
+          <h3>{{ previewingAttachment.fileName }}</h3>
+          <div class="preview-actions">
+            <button mat-icon-button (click)="downloadAttachment(previewingAttachment)" matTooltip="Download">
+              <mat-icon>download</mat-icon>
+            </button>
+            <button mat-icon-button (click)="closePreview()" matTooltip="Close">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+        <div class="preview-content">
+          <!-- Image Preview -->
+          <img *ngIf="isImageFile(previewingAttachment.fileType)" [src]="getAttachmentUrl(previewingAttachment)" [alt]="previewingAttachment.fileName">
+          
+          <!-- PDF Preview -->
+          <iframe *ngIf="isPdfFile(previewingAttachment.fileType)" [src]="getSafeUrl(previewingAttachment)" frameborder="0"></iframe>
+          
+          <!-- Excel/Other Files - Show download prompt -->
+          <div *ngIf="!isImageFile(previewingAttachment.fileType) && !isPdfFile(previewingAttachment.fileType)" class="no-preview">
+            <mat-icon>{{ getFileIcon(previewingAttachment.fileType) }}</mat-icon>
+            <h4>{{ previewingAttachment.fileName }}</h4>
+            <p>Preview not available for this file type</p>
+            <p class="file-size">Size: {{ formatFileSize(previewingAttachment.fileSize) }}</p>
+            <button mat-raised-button color="primary" (click)="downloadAttachment(previewingAttachment)">
+              <mat-icon>download</mat-icon>
+              Download File
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   `,
   styles: [`
     .messages-container {
@@ -735,6 +819,255 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       }
     }
 
+    /* Attachment Styles */
+    .message-attachments {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .attachment-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+      max-width: 300px;
+    }
+
+    .sent .attachment-item {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .attachment-image {
+      width: 100%;
+      max-width: 250px;
+      cursor: pointer;
+
+      img {
+        width: 100%;
+        border-radius: 8px;
+        max-height: 200px;
+        object-fit: cover;
+      }
+    }
+
+    .attachment-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+
+      .file-icon {
+        font-size: 32px;
+        width: 32px;
+        height: 32px;
+        color: #1976d2;
+      }
+
+      .file-info {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+
+        .file-name {
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .file-size {
+          font-size: 11px;
+          color: #757575;
+        }
+      }
+    }
+
+    .sent .attachment-file .file-icon {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .sent .attachment-file .file-info .file-size {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .attachment-actions {
+      display: flex;
+      gap: 4px;
+
+      button {
+        width: 28px;
+        height: 28px;
+
+        mat-icon {
+          font-size: 16px;
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+
+    .sent .attachment-actions button {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    /* Pending Attachments */
+    .pending-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #f5f5f5;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .pending-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e0e0e0;
+
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+        color: #1976d2;
+      }
+
+      .file-name {
+        font-size: 13px;
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .file-size {
+        font-size: 11px;
+        color: #757575;
+      }
+
+      button {
+        width: 20px;
+        height: 20px;
+        line-height: 20px;
+
+        mat-icon {
+          font-size: 14px;
+          width: 14px;
+          height: 14px;
+        }
+      }
+    }
+
+    /* Preview Overlay */
+    .attachment-preview-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preview-container {
+      background: white;
+      border-radius: 8px;
+      max-width: 90vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f5f5f5;
+      border-bottom: 1px solid #e0e0e0;
+
+      h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+        max-width: 400px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .preview-actions {
+        display: flex;
+        gap: 4px;
+      }
+    }
+
+    .preview-content {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #333;
+      min-width: 400px;
+      min-height: 300px;
+
+      img {
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+      }
+
+      iframe {
+        width: 80vw;
+        height: 80vh;
+        background: white;
+      }
+
+      .no-preview {
+        text-align: center;
+        padding: 40px;
+        color: white;
+
+        mat-icon {
+          font-size: 72px;
+          width: 72px;
+          height: 72px;
+          margin-bottom: 16px;
+          color: #bdbdbd;
+        }
+
+        h4 {
+          margin: 0 0 8px;
+          font-weight: 500;
+        }
+
+        p {
+          margin: 0 0 8px;
+          color: #bdbdbd;
+        }
+
+        .file-size {
+          font-size: 13px;
+          margin-bottom: 24px;
+        }
+      }
+    }
+
     @media (max-width: 768px) {
       .conversations-sidebar {
         width: 100%;
@@ -775,13 +1108,18 @@ export class MessagesComponent implements OnInit, OnDestroy {
   
   replyingTo: Message | null = null;
   
+  // Attachment properties
+  pendingAttachments: File[] = [];
+  previewingAttachment: MessageAttachment | null = null;
+  
   private refreshSubscription?: Subscription;
   private signalRSubscriptions: Subscription[] = [];
 
   constructor(
     private messageService: MessageService,
     private snackBar: MatSnackBar,
-    private router: Router
+    private router: Router,
+    private sanitizer: DomSanitizer
   ) {}
 
   ngOnInit(): void {
@@ -981,6 +1319,12 @@ export class MessagesComponent implements OnInit, OnDestroy {
   }
 
   sendMessage(): void {
+    // If there are pending attachments, use the upload flow
+    if (this.pendingAttachments.length > 0) {
+      this.uploadAttachmentsAndSend();
+      return;
+    }
+    
     if (!this.newMessage.trim() || !this.selectedConversation) return;
 
     const request: SendMessageRequest = {
@@ -1150,5 +1494,208 @@ export class MessagesComponent implements OnInit, OnDestroy {
         this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
       }
     }, 100);
+  }
+
+  // ============================================
+  // Attachment Methods
+  // ============================================
+
+  onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files) {
+      const files = Array.from(input.files);
+      const maxSize = 10 * 1024 * 1024; // 10MB limit
+      
+      for (const file of files) {
+        if (file.size > maxSize) {
+          this.snackBar.open(`File "${file.name}" is too large. Maximum size is 10MB.`, 'Close', { duration: 3000 });
+          continue;
+        }
+        this.pendingAttachments.push(file);
+      }
+      
+      // Clear input so same file can be selected again
+      input.value = '';
+    }
+  }
+
+  removePendingAttachment(index: number): void {
+    this.pendingAttachments.splice(index, 1);
+  }
+
+  isImageFile(mimeType: string): boolean {
+    return mimeType?.startsWith('image/') || false;
+  }
+
+  isPdfFile(mimeType: string): boolean {
+    return mimeType === 'application/pdf';
+  }
+
+  getFileIcon(mimeType: string): string {
+    if (!mimeType) return 'insert_drive_file';
+    
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType === 'application/pdf') return 'picture_as_pdf';
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType === 'application/vnd.ms-excel' || mimeType.includes('sheet')) return 'table_chart';
+    if (mimeType.includes('word') || mimeType.includes('document')) return 'description';
+    if (mimeType.includes('text')) return 'article';
+    if (mimeType.includes('zip') || mimeType.includes('archive') || mimeType.includes('compressed')) return 'folder_zip';
+    
+    return 'insert_drive_file';
+  }
+
+  getFileIconByName(fileName: string): string {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+      case 'bmp':
+        return 'image';
+      case 'pdf':
+        return 'picture_as_pdf';
+      case 'xls':
+      case 'xlsx':
+      case 'csv':
+        return 'table_chart';
+      case 'doc':
+      case 'docx':
+        return 'description';
+      case 'txt':
+        return 'article';
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return 'folder_zip';
+      default:
+        return 'insert_drive_file';
+    }
+  }
+
+  formatFileSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  getAttachmentUrl(attachment: MessageAttachment): string {
+    if (attachment.fileUrl) {
+      // If it starts with /api, prepend the base URL
+      if (attachment.fileUrl.startsWith('/api')) {
+        return `${environment.apiUrl.replace('/api', '')}${attachment.fileUrl}`;
+      }
+      return attachment.fileUrl;
+    }
+    return `${environment.apiUrl}/messages/attachments/${attachment.attachmentId}`;
+  }
+
+  getSafeUrl(attachment: MessageAttachment): SafeResourceUrl {
+    const url = this.getAttachmentUrl(attachment);
+    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  }
+
+  previewAttachment(attachment: MessageAttachment): void {
+    this.previewingAttachment = attachment;
+  }
+
+  closePreview(): void {
+    this.previewingAttachment = null;
+  }
+
+  downloadAttachment(attachment: MessageAttachment): void {
+    const url = this.getAttachmentUrl(attachment);
+    
+    // Create a temporary anchor element to trigger download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = attachment.fileName;
+    a.target = '_blank';
+    
+    // For cross-origin requests, we need to fetch and create a blob
+    fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+      }
+    })
+    .then(response => response.blob())
+    .then(blob => {
+      const blobUrl = window.URL.createObjectURL(blob);
+      a.href = blobUrl;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    })
+    .catch(() => {
+      // Fallback: just open in new tab
+      window.open(url, '_blank');
+    });
+  }
+
+  async uploadAttachmentsAndSend(): Promise<void> {
+    if (!this.selectedConversation || (this.pendingAttachments.length === 0 && !this.newMessage.trim())) {
+      return;
+    }
+
+    // First send the message
+    const request: SendMessageRequest = {
+      conversationId: this.selectedConversation.conversationId,
+      content: this.newMessage.trim() || (this.pendingAttachments.length > 0 ? `Sent ${this.pendingAttachments.length} attachment(s)` : ''),
+      replyToMessageId: this.replyingTo?.messageId
+    };
+
+    try {
+      const message = await this.messageService.sendMessage(request, this.currentUserId).toPromise();
+      
+      if (message) {
+        // Upload attachments to this message
+        for (const file of this.pendingAttachments) {
+          try {
+            await this.uploadFileAsAttachment(message.messageId, file);
+          } catch (err) {
+            console.error('Error uploading attachment:', err);
+            this.snackBar.open(`Failed to upload ${file.name}`, 'Close', { duration: 3000 });
+          }
+        }
+        
+        // Reload messages to show attachments
+        this.loadMessages();
+      }
+      
+      this.newMessage = '';
+      this.pendingAttachments = [];
+      this.replyingTo = null;
+      
+    } catch (err) {
+      console.error('Error sending message:', err);
+      this.snackBar.open('Failed to send message', 'Close', { duration: 3000 });
+    }
+  }
+
+  private async uploadFileAsAttachment(messageId: number, file: File): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        
+        try {
+          await this.messageService.addAttachmentToMessage(messageId, {
+            fileName: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            base64Data: base64
+          }, this.currentUserId).toPromise();
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   }
 }

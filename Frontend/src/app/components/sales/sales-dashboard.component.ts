@@ -184,9 +184,9 @@ interface SalesStats {
         </div>
       </div>
 
-      <!-- Company Sales Comparison - Yesterday vs Today -->
+      <!-- Company Sales Comparison - Business Day Comparison -->
       <div class="company-sales-section">
-        <h3 class="section-title"><mat-icon>business</mat-icon> Company Sales: Yesterday vs Today</h3>
+        <h3 class="section-title"><mat-icon>business</mat-icon> Company Sales: {{ lastBusinessDayLabel() }} vs {{ currentBusinessDayLabel() }}</h3>
         <div class="company-cards-grid">
           @for (cs of companySalesData(); track cs.company.code) {
             <mat-card class="company-card clickable" [style.border-left-color]="cs.company.color" (click)="openCompanySalesDialog(cs.company)">
@@ -200,13 +200,13 @@ interface SalesStats {
                 </div>
                 <div class="company-sales-row">
                   <div class="sales-item yesterday">
-                    <span class="day-label">Yesterday</span>
+                    <span class="day-label">{{ lastBusinessDayLabel() }}</span>
                     <span class="day-value">R{{ formatCurrency(cs.yesterdaySales) }}</span>
                     <span class="day-orders">{{ cs.yesterdayOrders }} orders</span>
                   </div>
                   <mat-icon class="vs-icon">arrow_forward</mat-icon>
                   <div class="sales-item today">
-                    <span class="day-label">Today</span>
+                    <span class="day-label">{{ currentBusinessDayLabel() }}</span>
                     <span class="day-value">R{{ formatCurrency(cs.todaySales) }}</span>
                     <span class="day-orders">{{ cs.todayOrders }} orders</span>
                   </div>
@@ -348,8 +348,8 @@ interface SalesStats {
                             <span class="value">{{ order.items }}</span>
                           </div>
                           <div class="detail-item">
-                            <span class="label">Total</span>
-                            <span class="value amount">R{{ order.totalAmount | number:'1.2-2' }}</span>
+                            <span class="label">Total (incl. VAT)</span>
+                            <span class="value amount">R{{ order.totalAmount * 1.15 | number:'1.2-2' }}</span>
                           </div>
                           <div class="detail-item">
                             <span class="label">Priority</span>
@@ -611,10 +611,10 @@ interface SalesStats {
                     </ng-container>
 
                     <ng-container matColumnDef="amount">
-                      <th mat-header-cell *matHeaderCellDef>Amount</th>
+                      <th mat-header-cell *matHeaderCellDef>Amount (incl. VAT)</th>
                       <td mat-cell *matCellDef="let inv">
                         <div class="amount-cell">
-                          <span class="sales">R{{ inv.salesAmount | number:'1.2-2' }}</span>
+                          <span class="sales">R{{ inv.salesAmount * 1.15 | number:'1.2-2' }}</span>
                           <span class="margin" [class.positive]="inv.salesAmount > inv.costOfSales">
                             {{ calculateMargin(inv.salesAmount, inv.costOfSales) | number:'1.1-1' }}%
                           </span>
@@ -865,7 +865,17 @@ interface SalesStats {
                       <p>All customers have location data set.</p>
                     </div>
                   } @else {
-                    <p class="attention-desc">These customers don't have GPS coordinates set. Click to edit and add location.</p>
+                    <div class="attention-desc-row">
+                      <p class="attention-desc">These customers don't have GPS coordinates set. Click to edit and add location.</p>
+                      <button mat-raised-button color="accent" (click)="geocodeAllCustomers()" [disabled]="isGeocoding">
+                        @if (isGeocoding) {
+                          <mat-spinner diameter="18"></mat-spinner>
+                          Geocoding {{ geocodeProgress }}...
+                        } @else {
+                          <mat-icon>my_location</mat-icon> Geocode All ({{ customersWithoutLocation().length }})
+                        }
+                      </button>
+                    </div>
                     <div class="attention-list">
                       @for (customer of customersWithoutLocation(); track customer.id) {
                         <div class="attention-item">
@@ -912,7 +922,7 @@ interface SalesStats {
                           <div class="attention-item-info">
                             <strong>{{ invoice.transactionNumber }}</strong>
                             <span class="customer">{{ invoice.customerName }}</span>
-                            <span class="amount">R{{ invoice.salesAmount | number:'1.2-2' }}</span>
+                            <span class="amount">R{{ invoice.salesAmount * 1.15 | number:'1.2-2' }}</span>
                           </div>
                           <div class="attention-item-actions">
                             <mat-form-field class="province-select">
@@ -1105,8 +1115,8 @@ interface SalesStats {
                       <td mat-cell *matCellDef="let row">{{ row.quantity }}</td>
                     </ng-container>
                     <ng-container matColumnDef="amount">
-                      <th mat-header-cell *matHeaderCellDef>Amount</th>
-                      <td mat-cell *matCellDef="let row" class="amount-cell">R{{ row.salesAmount | number:'1.2-2' }}</td>
+                      <th mat-header-cell *matHeaderCellDef>Amount (incl. VAT)</th>
+                      <td mat-cell *matCellDef="let row" class="amount-cell">R{{ row.salesAmount * 1.15 | number:'1.2-2' }}</td>
                     </ng-container>
 
                     <tr mat-header-row *matHeaderRowDef="['date', 'transaction', 'customer', 'product', 'quantity', 'amount']"></tr>
@@ -1891,6 +1901,26 @@ interface SalesStats {
       max-height: 60vh;
     }
 
+    .attention-desc-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      gap: 16px;
+    }
+
+    .attention-desc-row .attention-desc {
+      margin-bottom: 0;
+    }
+
+    .attention-desc-row button {
+      white-space: nowrap;
+    }
+
+    .attention-desc-row mat-spinner {
+      margin-right: 8px;
+    }
+
     .attention-desc {
       color: #666;
       margin-bottom: 16px;
@@ -2362,6 +2392,9 @@ export class SalesDashboardComponent implements OnInit {
   loadingInvoices = signal(false);
   loadingOrders = signal(false);
 
+  // Total counts from API headers (for accurate stats)
+  totalCustomerCount = 0;
+
   // Filter signals
   customerSearch = signal('');
   customerProvinceFilter = signal('all');
@@ -2378,6 +2411,8 @@ export class SalesDashboardComponent implements OnInit {
   showAttentionDialog = false;
   attentionTabIndex = 0;
   bulkProvince = '';
+  isGeocoding = false;
+  geocodeProgress = '';
 
   // Company Sales Dialog
   showCompanySalesDialog = false;
@@ -2481,7 +2516,24 @@ export class SalesDashboardComponent implements OnInit {
 
   // Attention computed values
   customersWithoutLocation = computed(() => {
-    return this.customers().filter(c => !c.latitude || !c.longitude);
+    // Default centroid for South Africa (used as placeholder when no address data)
+    const defaultLat = -30.559482;
+    const defaultLng = 22.937506;
+    
+    return this.customers().filter(c => {
+      // No coordinates at all
+      if (!c.latitude || !c.longitude) return true;
+      
+      // Has the default placeholder coordinates (meaning not properly geocoded)
+      const isDefault = Math.abs(c.latitude - defaultLat) < 0.001 && 
+                        Math.abs(c.longitude - defaultLng) < 0.001;
+      if (isDefault) return true;
+      
+      // Missing province/city even though has coordinates
+      if (!c.province || !c.city) return true;
+      
+      return false;
+    });
   });
 
   invoicesWithoutProvince = computed(() => {
@@ -2492,13 +2544,70 @@ export class SalesDashboardComponent implements OnInit {
     return this.customersWithoutLocation().length + this.invoicesWithoutProvince().length;
   });
 
-  // Company sales comparison - Yesterday vs Today
+  // Helper function to get the last business day (Mon-Fri)
+  private getLastBusinessDay(fromDate: Date): Date {
+    const result = new Date(fromDate);
+    result.setDate(result.getDate() - 1);
+    
+    // If Saturday (6), go back to Friday
+    // If Sunday (0), go back to Friday
+    const dayOfWeek = result.getDay();
+    if (dayOfWeek === 6) { // Saturday
+      result.setDate(result.getDate() - 1); // Go to Friday
+    } else if (dayOfWeek === 0) { // Sunday
+      result.setDate(result.getDate() - 2); // Go to Friday
+    }
+    
+    return result;
+  }
+
+  // Get the current business day (if weekend, show Friday)
+  private getCurrentBusinessDay(date: Date): Date {
+    const result = new Date(date);
+    const dayOfWeek = result.getDay();
+    
+    // If Saturday (6), go back to Friday
+    // If Sunday (0), go back to Friday
+    if (dayOfWeek === 6) { // Saturday
+      result.setDate(result.getDate() - 1);
+    } else if (dayOfWeek === 0) { // Sunday
+      result.setDate(result.getDate() - 2);
+    }
+    
+    return result;
+  }
+
+  // Get label for the comparison days
+  lastBusinessDayLabel = computed(() => {
+    const today = new Date();
+    const currentBizDay = this.getCurrentBusinessDay(today);
+    const lastBizDay = this.getLastBusinessDay(currentBizDay);
+    return lastBizDay.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' });
+  });
+
+  currentBusinessDayLabel = computed(() => {
+    const today = new Date();
+    const currentBizDay = this.getCurrentBusinessDay(today);
+    const isToday = currentBizDay.toDateString() === today.toDateString();
+    if (isToday) {
+      return 'Today';
+    }
+    return currentBizDay.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' });
+  });
+
+  // Company sales comparison - Last Business Day vs Current Business Day
   companySalesData = computed(() => {
     const invoices = this.invoices();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Get current business day (today if weekday, Friday if weekend)
+    const currentBizDay = this.getCurrentBusinessDay(today);
+    currentBizDay.setHours(0, 0, 0, 0);
+    
+    // Get last business day (previous weekday)
+    const lastBizDay = this.getLastBusinessDay(currentBizDay);
+    lastBizDay.setHours(0, 0, 0, 0);
 
     return this.companies.map(company => {
       const companyInvoices = invoices.filter(i => 
@@ -2506,20 +2615,20 @@ export class SalesDashboardComponent implements OnInit {
         i.sourceSystem?.toLowerCase().includes(company.shortName.toLowerCase())
       );
 
-      const todayInvoices = companyInvoices.filter(i => {
+      const currentDayInvoices = companyInvoices.filter(i => {
         const date = new Date(i.transactionDate);
         date.setHours(0, 0, 0, 0);
-        return date.getTime() === today.getTime();
+        return date.getTime() === currentBizDay.getTime();
       });
 
-      const yesterdayInvoices = companyInvoices.filter(i => {
+      const lastDayInvoices = companyInvoices.filter(i => {
         const date = new Date(i.transactionDate);
         date.setHours(0, 0, 0, 0);
-        return date.getTime() === yesterday.getTime();
+        return date.getTime() === lastBizDay.getTime();
       });
 
-      const todaySales = todayInvoices.reduce((sum, i) => sum + (i.salesAmount || 0), 0);
-      const yesterdaySales = yesterdayInvoices.reduce((sum, i) => sum + (i.salesAmount || 0), 0);
+      const todaySales = currentDayInvoices.reduce((sum, i) => sum + (i.salesAmount || 0), 0);
+      const yesterdaySales = lastDayInvoices.reduce((sum, i) => sum + (i.salesAmount || 0), 0);
 
       const percentChange = yesterdaySales > 0 
         ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 
@@ -2529,8 +2638,8 @@ export class SalesDashboardComponent implements OnInit {
         company,
         todaySales,
         yesterdaySales,
-        todayOrders: todayInvoices.length,
-        yesterdayOrders: yesterdayInvoices.length,
+        todayOrders: currentDayInvoices.length,
+        yesterdayOrders: lastDayInvoices.length,
         percentChange
       } as CompanySales;
     });
@@ -2544,15 +2653,19 @@ export class SalesDashboardComponent implements OnInit {
     this.loadCustomers();
     this.loadInvoices();
     this.loadOrders();
-    this.loadStats();
+    // Stats are now calculated reactively when data loads
   }
 
   loadCustomers(): void {
     this.loadingCustomers.set(true);
-    this.http.get<Customer[]>(`${this.apiUrl}/logistics/customers?pageSize=500`).subscribe({
-      next: (customers) => {
+    this.http.get<Customer[]>(`${this.apiUrl}/logistics/customers?pageSize=2000`, { observe: 'response' }).subscribe({
+      next: (response) => {
+        const customers = response.body || [];
+        const totalCount = parseInt(response.headers.get('X-Total-Count') || '0', 10);
         this.customers.set(customers);
+        this.totalCustomerCount = totalCount; // Store actual total from header
         this.loadingCustomers.set(false);
+        this.updateStats();
       },
       error: (err) => {
         console.error('Failed to load customers:', err);
@@ -2568,6 +2681,7 @@ export class SalesDashboardComponent implements OnInit {
       next: (invoices) => {
         this.invoices.set(invoices);
         this.loadingInvoices.set(false);
+        this.updateStats();
       },
       error: (err) => {
         console.error('Failed to load invoices:', err);
@@ -2590,17 +2704,19 @@ export class SalesDashboardComponent implements OnInit {
     setTimeout(() => {
       this.orders.set(mockOrders);
       this.loadingOrders.set(false);
+      this.updateStats();
     }, 500);
   }
 
-  loadStats(): void {
+  updateStats(): void {
     // Calculate stats from loaded data
     const customers = this.customers();
     const invoices = this.invoices();
     const orders = this.orders();
 
     this.stats.set({
-      totalCustomers: customers.length,
+      // Use totalCustomerCount from API header for accurate total, fallback to loaded customers length
+      totalCustomers: this.totalCustomerCount > 0 ? this.totalCustomerCount : customers.length,
       activeCustomers: customers.filter(c => c.status === 'Active').length,
       totalInvoices: invoices.length,
       pendingInvoices: invoices.filter(i => i.status === 'Pending').length,
@@ -2787,6 +2903,39 @@ export class SalesDashboardComponent implements OnInit {
 
   closeAttentionDialog(): void {
     this.showAttentionDialog = false;
+  }
+
+  geocodeAllCustomers(): void {
+    const customers = this.customersWithoutLocation();
+    if (customers.length === 0) {
+      this.snackBar.open('No customers need geocoding', 'Close', { duration: 2000 });
+      return;
+    }
+
+    const confirmMsg = `This will geocode ${customers.length} customers using their names/addresses.\\n\\nThis uses Google Maps API and may take a few minutes. Continue?`;
+    if (!confirm(confirmMsg)) return;
+
+    this.isGeocoding = true;
+    this.geocodeProgress = `0/${customers.length}`;
+
+    this.http.post<any>(`${this.apiUrl}/logistics/googlemaps/geocode-customers?limit=${customers.length}&updateDatabase=true`, {}).subscribe({
+      next: (result) => {
+        this.isGeocoding = false;
+        this.geocodeProgress = '';
+        
+        const message = `Geocoding complete: ${result.updated} updated, ${result.failed} failed`;
+        this.snackBar.open(message, 'Close', { duration: 5000 });
+        
+        // Reload customers to reflect changes
+        this.loadCustomers();
+      },
+      error: (err) => {
+        this.isGeocoding = false;
+        this.geocodeProgress = '';
+        console.error('Geocode all failed:', err);
+        this.snackBar.open('Geocoding failed. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   geocodeCustomerFromAttention(customer: Customer): void {

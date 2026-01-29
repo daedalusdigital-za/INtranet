@@ -124,5 +124,6 @@ namespace ProjectTracker.API.Models.Logistics
         public virtual ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
         public virtual ICollection<CustomerContract> Contracts { get; set; } = new List<CustomerContract>();
         public virtual ICollection<ImportedInvoice> ImportedInvoices { get; set; } = new List<ImportedInvoice>();
+        public virtual ICollection<CustomerDeliveryAddress> DeliveryAddresses { get; set; } = new List<CustomerDeliveryAddress>();
     }
 }

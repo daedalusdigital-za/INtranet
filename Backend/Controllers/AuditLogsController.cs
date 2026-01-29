@@ -20,7 +20,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<ActionResult<AuditLogPagedResult>> GetLogs([FromQuery] AuditLogFilterDto filter)
         {
             try
@@ -37,7 +37,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpGet("recent")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<ActionResult<List<AuditLogDto>>> GetRecentLogs([FromQuery] int count = 100)
         {
             try
@@ -53,7 +53,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpGet("stats")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<ActionResult<AuditLogStatsDto>> GetStats()
         {
             try
@@ -69,7 +69,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpGet("user/{userId}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<ActionResult<List<AuditLogDto>>> GetUserActivity(int userId, [FromQuery] int count = 50)
         {
             try
@@ -119,7 +119,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpGet("export")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Super Admin,Admin")]
         public async Task<ActionResult> ExportLogs([FromQuery] AuditLogFilterDto filter)
         {
             try

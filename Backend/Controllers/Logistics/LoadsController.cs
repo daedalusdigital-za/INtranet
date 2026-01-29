@@ -23,7 +23,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
-        /// Generates a unique load number in the format LD-XXXXXX
+        /// Generates a unique load number in the format RF-XXXXXX
         /// </summary>
         private async Task<string> GenerateLoadNumberAsync()
         {
@@ -34,9 +34,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             int nextNumber = 1;
             if (lastLoad != null && !string.IsNullOrEmpty(lastLoad.LoadNumber))
             {
-                // Extract number from existing format (LD-000001 or LD20240101XXXX)
+                // Extract number from existing format (RF-000001 or LD-000001 legacy)
                 var currentNumber = lastLoad.LoadNumber;
-                if (currentNumber.StartsWith("LD-") && currentNumber.Length == 9)
+                if ((currentNumber.StartsWith("RF-") || currentNumber.StartsWith("LD-")) && currentNumber.Length == 9)
                 {
                     if (int.TryParse(currentNumber.Substring(3), out int num))
                     {
@@ -49,7 +49,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
             }
 
-            return $"LD-{nextNumber:D6}";
+            return $"RF-{nextNumber:D6}";
         }
 
         [HttpGet]
@@ -301,13 +301,18 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateLoad(int id, UpdateLoadDto dto)
         {
-            var load = await _context.Loads.FindAsync(id);
+            var load = await _context.Loads
+                .Include(l => l.Stops)
+                    .ThenInclude(s => s.Commodities)
+                .FirstOrDefaultAsync(l => l.Id == id);
+                
             if (load == null)
                 return NotFound();
 
             if (dto.VehicleId.HasValue) load.VehicleId = dto.VehicleId;
             if (dto.DriverId.HasValue) load.DriverId = dto.DriverId;
             if (dto.VehicleTypeId.HasValue) load.VehicleTypeId = dto.VehicleTypeId;
+            if (dto.WarehouseId.HasValue) load.WarehouseId = dto.WarehouseId;
             if (dto.Status != null) load.Status = dto.Status;
             if (dto.Priority != null) load.Priority = dto.Priority;
             if (dto.ScheduledPickupDate.HasValue) load.ScheduledPickupDate = dto.ScheduledPickupDate;
@@ -320,8 +325,68 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.ActualCost.HasValue) load.ActualCost = dto.ActualCost;
             if (dto.ChargeAmount.HasValue) load.ChargeAmount = dto.ChargeAmount;
             if (dto.ActualDistance.HasValue) load.ActualDistance = dto.ActualDistance;
+            if (dto.EstimatedDistance.HasValue) load.EstimatedDistance = (int)dto.EstimatedDistance;
             if (dto.ActualTimeMinutes.HasValue) load.ActualTimeMinutes = dto.ActualTimeMinutes;
+            if (dto.EstimatedTimeMinutes.HasValue) load.EstimatedTimeMinutes = dto.EstimatedTimeMinutes;
             if (dto.Notes != null) load.Notes = dto.Notes;
+            if (dto.SpecialInstructions != null) load.SpecialInstructions = dto.SpecialInstructions;
+
+            // Update stops if provided
+            if (dto.Stops != null && dto.Stops.Any())
+            {
+                // Remove existing stops and their commodities
+                foreach (var stop in load.Stops.ToList())
+                {
+                    _context.StopCommodities.RemoveRange(stop.Commodities);
+                    _context.LoadStops.Remove(stop);
+                }
+                
+                // Add new stops
+                foreach (var stopDto in dto.Stops)
+                {
+                    var stop = new LoadStop
+                    {
+                        LoadId = load.Id,
+                        StopSequence = stopDto.StopSequence,
+                        StopType = stopDto.StopType ?? "Delivery",
+                        CustomerId = stopDto.CustomerId,
+                        CompanyName = stopDto.CompanyName,
+                        Address = stopDto.Address ?? "Unknown",
+                        City = stopDto.City,
+                        Province = stopDto.Province,
+                        Latitude = stopDto.Latitude,
+                        Longitude = stopDto.Longitude,
+                        ContactPerson = stopDto.ContactPerson,
+                        ContactPhone = stopDto.ContactPhone,
+                        OrderNumber = stopDto.OrderNumber,
+                        InvoiceNumber = stopDto.InvoiceNumber,
+                        ScheduledArrival = stopDto.ScheduledArrival
+                    };
+                    
+                    _context.LoadStops.Add(stop);
+                    await _context.SaveChangesAsync(); // Save to get the stop ID
+                    
+                    // Add commodities for this stop
+                    if (stopDto.Commodities != null)
+                    {
+                        foreach (var commDto in stopDto.Commodities)
+                        {
+                            var commodity = new StopCommodity
+                            {
+                                LoadStopId = stop.Id,
+                                CommodityId = commDto.CommodityId,
+                                Quantity = commDto.Quantity,
+                                UnitPrice = commDto.UnitPrice,
+                                TotalPrice = commDto.TotalPrice ?? (commDto.Quantity * (commDto.UnitPrice ?? 0)),
+                                Weight = commDto.Weight,
+                                Volume = commDto.Volume,
+                                Comment = commDto.CommodityName ?? commDto.Comment
+                            };
+                            _context.StopCommodities.Add(commodity);
+                        }
+                    }
+                }
+            }
 
             // Update status to Assigned if driver is now set
             if (dto.DriverId.HasValue && load.Status == "Available")

@@ -102,8 +102,10 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.InvoiceLineItem> InvoiceLineItems { get; set; }
         public DbSet<Models.Logistics.VehicleMaintenance> VehicleMaintenance { get; set; }
         public DbSet<Models.Logistics.CustomerContract> CustomerContracts { get; set; }
+        public DbSet<Models.Logistics.CustomerDeliveryAddress> CustomerDeliveryAddresses { get; set; }
         public DbSet<Models.Logistics.ImportedInvoice> ImportedInvoices { get; set; }
         public DbSet<Models.Logistics.ImportBatch> ImportBatches { get; set; }
+        public DbSet<Models.Logistics.SleepOut> SleepOuts { get; set; }
 
         // Sales Import System
         public DbSet<SalesImportBatch> SalesImportBatches { get; set; }

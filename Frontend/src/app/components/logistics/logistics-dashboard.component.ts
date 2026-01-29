@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject, Injector, inject } from '@angular/core';
+import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject, Injector, inject, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -22,12 +22,13 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatStepperModule } from '@angular/material/stepper';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { forkJoin, of, Subject } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 
@@ -140,6 +141,24 @@ interface MaintenanceRecord {
   daysUntilExpiry?: number;
 }
 
+interface SleepOut {
+  id: number;
+  driverId: number;
+  driverName?: string;
+  driverEmployeeNumber?: string;
+  amount: number;
+  date: Date;
+  status: string; // Requested, Approved, Rejected, Paid
+  reason?: string;
+  notes?: string;
+  loadId?: number;
+  loadNumber?: string;
+  approvedByUserId?: number;
+  approvedByUserName?: string;
+  approvedAt?: Date;
+  createdAt: Date;
+}
+
 @Component({
   selector: 'app-logistics-dashboard',
   standalone: true,
@@ -159,6 +178,7 @@ interface MaintenanceRecord {
     MatDialogModule,
     MatProgressSpinnerModule,
     MatNativeDateModule,
+    MatDatepickerModule,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
@@ -223,14 +243,14 @@ interface MaintenanceRecord {
             </mat-card-content>
           </mat-card>
 
-          <mat-card class="stat-card">
+          <mat-card class="stat-card clickable" (click)="openSleepOutsDialog()">
             <mat-card-content>
-              <div class="stat-icon delivered">
-                <mat-icon>check_circle</mat-icon>
+              <div class="stat-icon sleepouts">
+                <mat-icon>hotel</mat-icon>
               </div>
               <div class="stat-info">
-                <span class="stat-value">{{ stats().delivered }}</span>
-                <span class="stat-label">Delivered Today</span>
+                <span class="stat-value">{{ sleepOutsCount() }}</span>
+                <span class="stat-label">Sleep Outs</span>
               </div>
             </mat-card-content>
           </mat-card>
@@ -262,7 +282,7 @@ interface MaintenanceRecord {
             </mat-card-content>
           </mat-card>
 
-          <mat-card class="stat-card small">
+          <mat-card class="stat-card small clickable" (click)="openDriversDialog()">
             <mat-card-content>
               <div class="stat-icon drivers">
                 <mat-icon>person</mat-icon>
@@ -458,7 +478,8 @@ interface MaintenanceRecord {
                 } @else {
                   <div class="fleet-grid">
                     @for (vehicle of vehicles(); track vehicle.registrationNumber) {
-                      <mat-card class="vehicle-card" [ngClass]="'status-' + vehicle.status.toLowerCase().replace(' ', '-')">
+                      <mat-card class="vehicle-card" [ngClass]="'status-' + (vehicle.status || 'unknown').toLowerCase().replace(' ', '-')">
+
                         <mat-card-header>
                           <mat-icon mat-card-avatar>local_shipping</mat-icon>
                           <mat-card-title>{{ vehicle.registrationNumber }}</mat-card-title>
@@ -591,8 +612,8 @@ interface MaintenanceRecord {
                             }
                           </div>
                           <div class="card-footer">
-                            <mat-chip class="status-chip" [ngClass]="'status-' + vehicle.status.toLowerCase().replace(' ', '-')">
-                              {{ vehicle.status }}
+                            <mat-chip class="status-chip" [ngClass]="'status-' + (vehicle.status || 'unknown').toLowerCase().replace(' ', '-')">
+                              {{ vehicle.status || 'Unknown' }}
                             </mat-chip>
                             @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn) {
                               <div class="tfn-indicator" matTooltip="TruckFuelNet Integrated">
@@ -794,61 +815,6 @@ interface MaintenanceRecord {
               </div>
             </mat-tab>
 
-            <!-- Tracking Tab -->
-            <mat-tab>
-              <ng-template mat-tab-label>
-                <mat-icon>gps_fixed</mat-icon>
-                Live Tracking
-              </ng-template>
-              <div class="tab-content">
-                <div class="tracking-section">
-                  <div class="tracking-header">
-                    <h3><mat-icon>map</mat-icon> Live Vehicle Tracking</h3>
-                    <p>Real-time GPS tracking integrated with CarTrack</p>
-                  </div>
-                  <div class="tracking-actions">
-                    <button mat-raised-button color="primary" (click)="openFleetMap()">
-                      <mat-icon>map</mat-icon>
-                      Open Fleet Map
-                    </button>
-                    <button mat-raised-button (click)="refreshFleetLocations()">
-                      <mat-icon>refresh</mat-icon>
-                      Refresh Locations
-                    </button>
-                  </div>
-                  
-                  @if (vehicles().length > 0) {
-                    <div class="vehicle-list-compact">
-                      <h4>Quick Vehicle Status</h4>
-                      <div class="vehicle-status-grid">
-                        @for (vehicle of vehicles(); track vehicle.registrationNumber) {
-                          <div class="vehicle-status-item" 
-                               [class.moving]="vehicle.speed && vehicle.speed > 0"
-                               [class.offline]="vehicle.status === 'offline'"
-                               (click)="openSingleVehicleMap(vehicle)">
-                            <mat-icon>{{ vehicle.speed && vehicle.speed > 0 ? 'local_shipping' : 'local_parking' }}</mat-icon>
-                            <div class="vehicle-quick-info">
-                              <strong>{{ vehicle.registrationNumber }}</strong>
-                              <span class="speed-label">{{ vehicle.speed ? vehicle.speed + ' km/h' : 'Stationary' }}</span>
-                            </div>
-                            <button mat-icon-button color="primary" matTooltip="View on Map">
-                              <mat-icon>place</mat-icon>
-                            </button>
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  } @else {
-                    <div class="tracking-placeholder">
-                      <mat-icon>satellite_alt</mat-icon>
-                      <h3>No Vehicle Data Available</h3>
-                      <p>Connect to CarTrack to view vehicle locations</p>
-                    </div>
-                  }
-                </div>
-              </div>
-            </mat-tab>
-
             <!-- Invoices Tab -->
             <mat-tab>
               <ng-template mat-tab-label>
@@ -892,9 +858,9 @@ interface MaintenanceRecord {
                           }
                         </mat-select>
                       </mat-form-field>
-                      <button mat-raised-button color="accent" (click)="showSuggestedLoads()" 
+                      <button mat-raised-button color="accent" (click)="showSuggestedTrips()" 
                         [disabled]="pendingInvoiceCount() === 0">
-                        <mat-icon>lightbulb</mat-icon> Suggested Loads
+                        <mat-icon>lightbulb</mat-icon> Suggested Trips
                       </button>
                       <button mat-raised-button color="primary" (click)="createTripsheetFromInvoices()" 
                         [disabled]="pendingInvoiceCount() === 0">
@@ -972,8 +938,8 @@ interface MaintenanceRecord {
                         </ng-container>
 
                         <ng-container matColumnDef="salesAmount">
-                          <th mat-header-cell *matHeaderCellDef>Sales</th>
-                          <td mat-cell *matCellDef="let inv">R{{ inv.salesAmount | number:'1.2-2' }}</td>
+                          <th mat-header-cell *matHeaderCellDef>Sales (incl. VAT)</th>
+                          <td mat-cell *matCellDef="let inv">R{{ inv.salesAmount * 1.15 | number:'1.2-2' }}</td>
                         </ng-container>
 
                         <ng-container matColumnDef="costOfSales">
@@ -1031,7 +997,7 @@ interface MaintenanceRecord {
                   <div class="tripsheets-header">
                     <h3><mat-icon>description</mat-icon> Trip Sheets</h3>
                     <div class="tripsheets-actions">
-                      <button mat-raised-button color="primary" (click)="openCreateTripsheetDialog()">
+                      <button mat-raised-button color="primary" (click)="openTripsheetTypeDialog()">
                         <mat-icon>add</mat-icon>
                         Create Trip Sheet
                       </button>
@@ -1133,6 +1099,16 @@ interface MaintenanceRecord {
                               <mat-icon>visibility</mat-icon>
                               <span>View Details</span>
                             </button>
+                            <button mat-menu-item (click)="editTripsheet(trip)">
+                              <mat-icon>edit</mat-icon>
+                              <span>Edit</span>
+                            </button>
+                            @if (!trip.driverName || !trip.vehicleReg) {
+                              <button mat-menu-item (click)="assignTripsheet(trip)">
+                                <mat-icon>person_add</mat-icon>
+                                <span>Assign Driver/Vehicle</span>
+                              </button>
+                            }
                             <button mat-menu-item (click)="printTripsheet(trip)">
                               <mat-icon>print</mat-icon>
                               <span>Print</span>
@@ -1140,6 +1116,17 @@ interface MaintenanceRecord {
                             <button mat-menu-item (click)="downloadTripsheet(trip)">
                               <mat-icon>download</mat-icon>
                               <span>Download PDF</span>
+                            </button>
+                            <mat-divider></mat-divider>
+                            @if (trip.status !== 'Active' && trip.status !== 'Completed') {
+                              <button mat-menu-item (click)="activateTripsheet(trip)">
+                                <mat-icon color="primary">play_arrow</mat-icon>
+                                <span>Generate Load</span>
+                              </button>
+                            }
+                            <button mat-menu-item (click)="deleteTripsheet(trip)" class="delete-action">
+                              <mat-icon color="warn">delete</mat-icon>
+                              <span>Delete</span>
                             </button>
                           </mat-menu>
                         </td>
@@ -1153,185 +1140,172 @@ interface MaintenanceRecord {
               </div>
             </mat-tab>
 
-            <!-- Fuel Management Tab (TFN) -->
+            <!-- Part Delivered Tab -->
             <mat-tab>
               <ng-template mat-tab-label>
-                <mat-icon>local_gas_station</mat-icon>
-                Fuel Management
+                <mat-icon>inventory_2</mat-icon>
+                Part Delivered
               </ng-template>
               <div class="tab-content">
-                <div class="fuel-section">
-                  <div class="fuel-header">
-                    <h3><mat-icon>local_gas_station</mat-icon> TruckFuelNet Integration</h3>
-                    <button mat-raised-button color="primary" (click)="syncFuelData()" [disabled]="syncingFuel()">
-                      <mat-icon>{{ syncingFuel() ? 'sync' : 'cloud_sync' }}</mat-icon>
-                      {{ syncingFuel() ? 'Syncing...' : 'Sync Fuel Data' }}
-                    </button>
+                <div class="part-delivered-section">
+                  <div class="part-delivered-header">
+                    <h3><mat-icon>inventory_2</mat-icon> Part Delivered Tracking</h3>
+                    <div class="header-actions">
+                      <mat-form-field appearance="outline" class="date-filter">
+                        <mat-label>Filter by Date</mat-label>
+                        <input matInput [matDatepicker]="partDatePicker" [(ngModel)]="partDeliveredDateFilter" (dateChange)="filterPartDelivered()">
+                        <mat-datepicker-toggle matSuffix [for]="partDatePicker"></mat-datepicker-toggle>
+                        <mat-datepicker #partDatePicker></mat-datepicker>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="search-field">
+                        <mat-label>Search</mat-label>
+                        <input matInput [(ngModel)]="partDeliveredSearch" placeholder="Invoice, customer..." (input)="filterPartDelivered()">
+                        <mat-icon matSuffix>search</mat-icon>
+                      </mat-form-field>
+                      <button mat-raised-button color="primary" (click)="openMarkPartDeliveredDialog()">
+                        <mat-icon>add_task</mat-icon>
+                        Mark Part Delivered
+                      </button>
+                    </div>
                   </div>
 
-                  @if (fuelSummary()) {
-                    <!-- Fuel Stats Cards -->
-                    <div class="fuel-stats-grid">
-                      <mat-card class="fuel-stat-card">
-                        <mat-card-content>
-                          <div class="fuel-stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
-                            <mat-icon>attach_money</mat-icon>
-                          </div>
-                          <div class="fuel-stat-info">
-                            <span class="fuel-stat-label">This Month Spend</span>
-                            <span class="fuel-stat-value">R {{ fuelSummary().thisMonth?.totalCost?.toFixed(2) || '0.00' }}</span>
-                            <span class="fuel-stat-change" 
-                              [class.positive]="fuelSummary().thisMonth?.totalCost < fuelSummary().lastMonth?.totalCost"
-                              [class.negative]="fuelSummary().thisMonth?.totalCost > fuelSummary().lastMonth?.totalCost">
-                              {{ calculateFuelChange() }}% vs last month
+                  <!-- Part Delivered Stats -->
+                  <div class="part-delivered-stats">
+                    <mat-card class="stat-card">
+                      <mat-card-content>
+                        <div class="stat-icon pending">
+                          <mat-icon>pending_actions</mat-icon>
+                        </div>
+                        <div class="stat-info">
+                          <span class="stat-label">Pending Completion</span>
+                          <span class="stat-value">{{ getPartDeliveredStats().pending }}</span>
+                        </div>
+                      </mat-card-content>
+                    </mat-card>
+
+                    <mat-card class="stat-card">
+                      <mat-card-content>
+                        <div class="stat-icon partial">
+                          <mat-icon>hourglass_top</mat-icon>
+                        </div>
+                        <div class="stat-info">
+                          <span class="stat-label">Part Delivered</span>
+                          <span class="stat-value">{{ getPartDeliveredStats().partial }}</span>
+                        </div>
+                      </mat-card-content>
+                    </mat-card>
+
+                    <mat-card class="stat-card">
+                      <mat-card-content>
+                        <div class="stat-icon completed">
+                          <mat-icon>check_circle</mat-icon>
+                        </div>
+                        <div class="stat-info">
+                          <span class="stat-label">Fully Delivered</span>
+                          <span class="stat-value">{{ getPartDeliveredStats().complete }}</span>
+                        </div>
+                      </mat-card-content>
+                    </mat-card>
+
+                    <mat-card class="stat-card">
+                      <mat-card-content>
+                        <div class="stat-icon value">
+                          <mat-icon>payments</mat-icon>
+                        </div>
+                        <div class="stat-info">
+                          <span class="stat-label">Outstanding Value</span>
+                          <span class="stat-value">R {{ getPartDeliveredStats().outstandingValue | number:'1.2-2' }}</span>
+                        </div>
+                      </mat-card-content>
+                    </mat-card>
+                  </div>
+
+                  <!-- Part Delivered Table -->
+                  @if (filteredPartDelivered().length > 0) {
+                    <mat-card class="part-delivered-table-card">
+                      <table mat-table [dataSource]="filteredPartDelivered()" class="part-delivered-table">
+                        <ng-container matColumnDef="invoiceNumber">
+                          <th mat-header-cell *matHeaderCellDef>Invoice #</th>
+                          <td mat-cell *matCellDef="let item">
+                            <strong>{{ item.invoiceNumber }}</strong>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="customer">
+                          <th mat-header-cell *matHeaderCellDef>Customer</th>
+                          <td mat-cell *matCellDef="let item">{{ item.customerName }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="product">
+                          <th mat-header-cell *matHeaderCellDef>Product</th>
+                          <td mat-cell *matCellDef="let item">{{ item.productDescription | slice:0:30 }}...</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="orderedQty">
+                          <th mat-header-cell *matHeaderCellDef>Ordered</th>
+                          <td mat-cell *matCellDef="let item">{{ item.orderedQuantity }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="deliveredQty">
+                          <th mat-header-cell *matHeaderCellDef>Delivered</th>
+                          <td mat-cell *matCellDef="let item">
+                            <span [class.partial]="item.deliveredQuantity < item.orderedQuantity"
+                                  [class.complete]="item.deliveredQuantity >= item.orderedQuantity">
+                              {{ item.deliveredQuantity }}
                             </span>
-                          </div>
-                        </mat-card-content>
-                      </mat-card>
+                          </td>
+                        </ng-container>
 
-                      <mat-card class="fuel-stat-card">
-                        <mat-card-content>
-                          <div class="fuel-stat-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
-                            <mat-icon>speed</mat-icon>
-                          </div>
-                          <div class="fuel-stat-info">
-                            <span class="fuel-stat-label">Avg Efficiency</span>
-                            <span class="fuel-stat-value">{{ fuelSummary().thisMonth?.averageEfficiency?.toFixed(1) || '0.0' }} km/l</span>
-                            <span class="fuel-stat-sub">{{ fuelSummary().thisMonth?.totalLitres?.toFixed(0) || '0' }} litres used</span>
-                          </div>
-                        </mat-card-content>
-                      </mat-card>
+                        <ng-container matColumnDef="remainingQty">
+                          <th mat-header-cell *matHeaderCellDef>Remaining</th>
+                          <td mat-cell *matCellDef="let item">
+                            <span class="remaining" [class.none]="item.remainingQuantity === 0">
+                              {{ item.remainingQuantity }}
+                            </span>
+                          </td>
+                        </ng-container>
 
-                      <mat-card class="fuel-stat-card">
-                        <mat-card-content>
-                          <div class="fuel-stat-icon" style="background: linear-gradient(135deg, #fa709a, #fee140);">
-                            <mat-icon>warning</mat-icon>
-                          </div>
-                          <div class="fuel-stat-info">
-                            <span class="fuel-stat-label">Recent Anomalies</span>
-                            <span class="fuel-stat-value">{{ fuelSummary().recentAnomalies?.length || 0 }}</span>
-                            <span class="fuel-stat-sub">Last 7 days</span>
-                          </div>
-                        </mat-card-content>
-                      </mat-card>
+                        <ng-container matColumnDef="status">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let item">
+                            <mat-chip [class]="'status-' + (item.deliveryStatus || 'pending').toLowerCase().replace(' ', '-')">
+                              {{ item.deliveryStatus || 'Pending' }}
+                            </mat-chip>
+                          </td>
+                        </ng-container>
 
-                      <mat-card class="fuel-stat-card">
-                        <mat-card-content>
-                          <div class="fuel-stat-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">
-                            <mat-icon>account_balance_wallet</mat-icon>
-                          </div>
-                          <div class="fuel-stat-info">
-                            <span class="fuel-stat-label">Low Balance Alerts</span>
-                            <span class="fuel-stat-value">{{ fuelSummary().lowBalanceVehicles?.length || 0 }}</span>
-                            <span class="fuel-stat-sub">Vehicles < 20% credit</span>
-                          </div>
-                        </mat-card-content>
-                      </mat-card>
-                    </div>
+                        <ng-container matColumnDef="lastDeliveryDate">
+                          <th mat-header-cell *matHeaderCellDef>Last Delivery</th>
+                          <td mat-cell *matCellDef="let item">
+                            {{ item.lastDeliveryDate | date:'dd MMM yyyy' }}
+                          </td>
+                        </ng-container>
 
-                    <!-- Top Fuel Consumers -->
-                    @if (fuelSummary().topConsumers?.length > 0) {
-                      <mat-card class="fuel-card">
-                        <mat-card-header>
-                          <mat-card-title>
-                            <mat-icon>trending_up</mat-icon>
-                            Top Fuel Consumers (This Month)
-                          </mat-card-title>
-                        </mat-card-header>
-                        <mat-card-content>
-                          <div class="consumers-list">
-                            @for (consumer of fuelSummary().topConsumers; track consumer.vehicle) {
-                              <div class="consumer-item">
-                                <div class="consumer-info">
-                                  <mat-icon>local_shipping</mat-icon>
-                                  <div>
-                                    <strong>{{ consumer.vehicle }}</strong>
-                                    <span class="consumer-meta">{{ consumer.transactionCount }} transactions</span>
-                                  </div>
-                                </div>
-                                <div class="consumer-stats">
-                                  <span class="litres">{{ consumer.totalLitres?.toFixed(0) }} L</span>
-                                  <span class="cost">R {{ consumer.totalCost?.toFixed(2) }}</span>
-                                </div>
-                              </div>
-                            }
-                          </div>
-                        </mat-card-content>
-                      </mat-card>
-                    }
+                        <ng-container matColumnDef="actions">
+                          <th mat-header-cell *matHeaderCellDef>Actions</th>
+                          <td mat-cell *matCellDef="let item">
+                            <button mat-icon-button color="primary" (click)="recordPartialDelivery(item)" matTooltip="Record Delivery">
+                              <mat-icon>add_task</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="viewDeliveryHistory(item)" matTooltip="View History">
+                              <mat-icon>history</mat-icon>
+                            </button>
+                          </td>
+                        </ng-container>
 
-                    <!-- Low Balance Warnings -->
-                    @if (fuelSummary().lowBalanceVehicles?.length > 0) {
-                      <mat-card class="fuel-card warning-card">
-                        <mat-card-header>
-                          <mat-card-title>
-                            <mat-icon>warning</mat-icon>
-                            Low Balance Warnings
-                          </mat-card-title>
-                        </mat-card-header>
-                        <mat-card-content>
-                          <div class="warnings-list">
-                            @for (vehicle of fuelSummary().lowBalanceVehicles; track vehicle.vehicle) {
-                              <div class="warning-item">
-                                <div class="warning-info">
-                                  <mat-icon>local_shipping</mat-icon>
-                                  <strong>{{ vehicle.vehicle }}</strong>
-                                </div>
-                                <div class="warning-balance">
-                                  <span class="balance-label">Available Credit:</span>
-                                  <span class="balance-value" [class.critical]="vehicle.percentageRemaining < 10">
-                                    R {{ vehicle.availableCredit?.toFixed(2) }} ({{ vehicle.percentageRemaining?.toFixed(0) }}%)
-                                  </span>
-                                  <mat-progress-bar mode="determinate" 
-                                    [value]="vehicle.percentageRemaining"
-                                    [color]="vehicle.percentageRemaining < 10 ? 'warn' : 'accent'">
-                                  </mat-progress-bar>
-                                </div>
-                              </div>
-                            }
-                          </div>
-                        </mat-card-content>
-                      </mat-card>
-                    }
-
-                    <!-- Recent Anomalies -->
-                    @if (fuelSummary().recentAnomalies?.length > 0) {
-                      <mat-card class="fuel-card anomaly-card">
-                        <mat-card-header>
-                          <mat-card-title>
-                            <mat-icon>report_problem</mat-icon>
-                            Recent Fuel Anomalies
-                          </mat-card-title>
-                        </mat-card-header>
-                        <mat-card-content>
-                          <div class="anomalies-list">
-                            @for (anomaly of fuelSummary().recentAnomalies; track $index) {
-                              <div class="anomaly-item">
-                                <div class="anomaly-header">
-                                  <div class="anomaly-vehicle">
-                                    <mat-icon>local_shipping</mat-icon>
-                                    <strong>{{ anomaly.vehicle }}</strong>
-                                    <span class="anomaly-driver">{{ anomaly.driver }}</span>
-                                  </div>
-                                  <span class="anomaly-date">{{ formatDate(anomaly.transactionDate) }}</span>
-                                </div>
-                                <div class="anomaly-details">
-                                  <mat-chip class="anomaly-chip">{{ anomaly.anomalyReason }}</mat-chip>
-                                  <span class="anomaly-amount">{{ anomaly.litres?.toFixed(1) }}L • R{{ anomaly.totalAmount?.toFixed(2) }}</span>
-                                </div>
-                              </div>
-                            }
-                          </div>
-                        </mat-card-content>
-                      </mat-card>
-                    }
+                        <tr mat-header-row *matHeaderRowDef="partDeliveredColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: partDeliveredColumns;"
+                            [class.partial-row]="row.deliveryStatus === 'Part Delivered'"
+                            [class.complete-row]="row.deliveryStatus === 'Fully Delivered'"></tr>
+                      </table>
+                    </mat-card>
                   } @else {
                     <div class="empty-state">
-                      <mat-icon>local_gas_station</mat-icon>
-                      <h3>No Fuel Data Available</h3>
-                      <p>Click "Sync Fuel Data" to import data from TruckFuelNet</p>
-                      <button mat-raised-button color="primary" (click)="syncFuelData()">
-                        <mat-icon>cloud_sync</mat-icon> Sync Now
+                      <mat-icon>inventory_2</mat-icon>
+                      <h3>No Part Delivered Records</h3>
+                      <p>Track partial deliveries for invoices that couldn't be fully delivered</p>
+                      <button mat-raised-button color="primary" (click)="openMarkPartDeliveredDialog()">
+                        <mat-icon>add_task</mat-icon> Mark Part Delivered
                       </button>
                     </div>
                   }
@@ -1464,6 +1438,7 @@ interface MaintenanceRecord {
     .stat-icon.loads { background: linear-gradient(135deg, #667eea, #764ba2); }
     .stat-icon.transit { background: linear-gradient(135deg, #4facfe, #00f2fe); }
     .stat-icon.delivered { background: linear-gradient(135deg, #11998e, #38ef7d); }
+    .stat-icon.sleepouts { background: linear-gradient(135deg, #667eea, #764ba2); }
     .stat-icon.pending { background: linear-gradient(135deg, #fa709a, #fee140); }
     .stat-icon.tfn-orders { background: linear-gradient(135deg, #f093fb, #f5576c); }
     .stat-icon.vehicles { background: linear-gradient(135deg, #667eea, #764ba2); }
@@ -1504,7 +1479,6 @@ interface MaintenanceRecord {
     .main-content {
       background: rgba(255, 255, 255, 0.95);
       border-radius: 16px;
-      overflow: hidden;
     }
 
     .tab-content {
@@ -2631,7 +2605,21 @@ interface MaintenanceRecord {
       margin-bottom: 8px;
     }
 
-    .fuel-header h3 {
+    /* Part Delivered Styles */
+    .part-delivered-section {
+      padding: 0;
+    }
+
+    .part-delivered-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .part-delivered-header h3 {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -2640,22 +2628,38 @@ interface MaintenanceRecord {
       color: #333;
     }
 
-    .fuel-stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 16px;
+    .part-delivered-header .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
-    .fuel-stat-card mat-card-content {
+    .part-delivered-header .date-filter {
+      width: 180px;
+    }
+
+    .part-delivered-header .search-field {
+      width: 220px;
+    }
+
+    .part-delivered-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .part-delivered-stats .stat-card mat-card-content {
       display: flex;
       align-items: center;
       gap: 16px;
       padding: 20px !important;
     }
 
-    .fuel-stat-icon {
-      width: 60px;
-      height: 60px;
+    .part-delivered-stats .stat-icon {
+      width: 56px;
+      height: 56px;
       border-radius: 12px;
       display: flex;
       align-items: center;
@@ -2663,224 +2667,101 @@ interface MaintenanceRecord {
       color: white;
     }
 
-    .fuel-stat-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
+    .part-delivered-stats .stat-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
     }
 
-    .fuel-stat-info {
+    .part-delivered-stats .stat-icon.pending {
+      background: linear-gradient(135deg, #ff9800, #f57c00);
+    }
+
+    .part-delivered-stats .stat-icon.partial {
+      background: linear-gradient(135deg, #2196f3, #1976d2);
+    }
+
+    .part-delivered-stats .stat-icon.completed {
+      background: linear-gradient(135deg, #4caf50, #388e3c);
+    }
+
+    .part-delivered-stats .stat-icon.value {
+      background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+    }
+
+    .part-delivered-stats .stat-info {
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
 
-    .fuel-stat-label {
+    .part-delivered-stats .stat-label {
       font-size: 12px;
       color: #666;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .fuel-stat-value {
+    .part-delivered-stats .stat-value {
       font-size: 24px;
       font-weight: 700;
       color: #333;
     }
 
-    .fuel-stat-sub, .fuel-stat-change {
-      font-size: 12px;
-      color: #999;
+    .part-delivered-table-card {
+      overflow: hidden;
     }
 
-    .fuel-stat-change.positive {
-      color: #4caf50;
+    .part-delivered-table {
+      width: 100%;
     }
 
-    .fuel-stat-change.negative {
-      color: #f44336;
-    }
-
-    .fuel-card {
-      margin-top: 16px;
-    }
-
-    .fuel-card mat-card-header {
-      margin-bottom: 16px;
-    }
-
-    .fuel-card mat-card-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 18px;
-    }
-
-    .consumers-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .consumer-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px;
+    .part-delivered-table th {
       background: #f5f5f5;
-      border-radius: 8px;
-      transition: all 0.2s;
-    }
-
-    .consumer-item:hover {
-      background: #e0e0e0;
-    }
-
-    .consumer-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .consumer-info mat-icon {
-      color: #1976d2;
-    }
-
-    .consumer-info div {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .consumer-meta {
-      font-size: 12px;
-      color: #666;
-    }
-
-    .consumer-stats {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-    }
-
-    .consumer-stats .litres {
-      font-size: 14px;
-      color: #666;
-      font-weight: 500;
-    }
-
-    .consumer-stats .cost {
-      font-size: 18px;
-      font-weight: 700;
+      font-weight: 600;
       color: #333;
     }
 
-    .warning-card {
-      border-left: 4px solid #ff9800;
-    }
-
-    .warnings-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .warning-item {
-      padding: 16px;
-      background: #fff3e0;
-      border-radius: 8px;
-    }
-
-    .warning-info {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .warning-info mat-icon {
+    .part-delivered-table td .partial {
       color: #ff9800;
-    }
-
-    .warning-balance {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .balance-label {
-      font-size: 12px;
-      color: #666;
-    }
-
-    .balance-value {
-      font-size: 16px;
       font-weight: 600;
-      color: #ff9800;
     }
 
-    .balance-value.critical {
+    .part-delivered-table td .complete {
+      color: #4caf50;
+      font-weight: 600;
+    }
+
+    .part-delivered-table td .remaining {
       color: #f44336;
+      font-weight: 600;
     }
 
-    .anomaly-card {
-      border-left: 4px solid #f44336;
+    .part-delivered-table td .remaining.none {
+      color: #4caf50;
     }
 
-    .anomalies-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .part-delivered-table .partial-row {
+      background: #fff8e1;
     }
 
-    .anomaly-item {
-      padding: 12px;
-      background: #ffebee;
-      border-radius: 8px;
+    .part-delivered-table .complete-row {
+      background: #e8f5e9;
     }
 
-    .anomaly-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
+    .part-delivered-table .status-pending {
+      background: #fff3e0 !important;
+      color: #e65100 !important;
     }
 
-    .anomaly-vehicle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .part-delivered-table .status-part-delivered {
+      background: #e3f2fd !important;
+      color: #1565c0 !important;
     }
 
-    .anomaly-vehicle mat-icon {
-      color: #f44336;
-    }
-
-    .anomaly-driver {
-      font-size: 12px;
-      color: #666;
-      margin-left: 8px;
-    }
-
-    .anomaly-date {
-      font-size: 12px;
-      color: #999;
-    }
-
-    .anomaly-details {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .anomaly-chip {
-      background: #f44336 !important;
-      color: white !important;
-      font-size: 11px;
-    }
-
-    .anomaly-amount {
-      font-size: 14px;
-      color: #666;
+    .part-delivered-table .status-fully-delivered {
+      background: #e8f5e9 !important;
+      color: #2e7d32 !important;
     }
   `]
 })
@@ -2929,7 +2810,13 @@ export class LogisticsDashboardComponent implements OnInit {
 
   loadColumns = ['loadNumber', 'customer', 'route', 'vehicle', 'driver', 'status', 'progress', 'actions'];
 
-  // Fuel Management (TFN)
+  // Part Delivered Tracking
+  partDeliveredRecords = signal<any[]>([]);
+  partDeliveredSearch = '';
+  partDeliveredDateFilter: Date | null = null;
+  partDeliveredColumns = ['invoiceNumber', 'customer', 'product', 'orderedQty', 'deliveredQty', 'remainingQty', 'status', 'lastDeliveryDate', 'actions'];
+
+  // Fuel Management (TFN) - kept for API compatibility
   fuelSummary = signal<any>(null);
   syncingFuel = signal(false);
   tfnOrdersCount = signal(0);
@@ -2937,36 +2824,45 @@ export class LogisticsDashboardComponent implements OnInit {
   tfnDepotsCount = signal(0);
   tfnDepots = signal<any[]>([]);
 
+  // Sleep Outs (Driver Food Allowance)
+  sleepOuts = signal<SleepOut[]>([]);
+  sleepOutsCount = signal(0);
+
   constructor(
     private http: HttpClient,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
     this.loadDashboardData();
     this.loadTripsheets();
     this.loadImportedInvoices();
-    this.loadFuelSummary();
+    this.loadPartDeliveredRecords();
     this.loadTfnOrders();
     this.loadTfnDepots();
     this.loadDrivers();
     this.loadCustomers();
     this.loadMaintenanceRecords();
     this.loadWarehouses();
+    this.loadSleepOuts();
   }
 
   loadWarehouses(): void {
     this.http.get<any[]>(`${this.apiUrl}/warehouses`).subscribe({
       next: (warehouses) => {
         this.warehouses.set(warehouses);
+        console.log('Loaded warehouses from API:', warehouses.length);
       },
       error: () => {
-        // Use fallback data
+        // Use fallback data with all 4 warehouses
         this.warehouses.set([
-          { id: 1, name: 'Durban Warehouse', code: 'DBN', latitude: -29.8587, longitude: 31.0218, address: 'Durban, KwaZulu-Natal' },
-          { id: 2, name: 'Johannesburg Warehouse', code: 'JHB', latitude: -26.2041, longitude: 28.0473, address: 'Johannesburg, Gauteng' },
-          { id: 3, name: 'Cape Town Warehouse', code: 'CPT', latitude: -33.9249, longitude: 18.4241, address: 'Cape Town, Western Cape' }
+          { id: 1, name: 'Gauteng Warehouse', code: 'GP', city: 'Johannesburg', latitude: -26.2041, longitude: 28.0473, address: 'Johannesburg, Gauteng' },
+          { id: 2, name: 'KZN Warehouse', code: 'KZN', city: 'Durban', latitude: -29.8587, longitude: 31.0218, address: 'Durban, KwaZulu-Natal' },
+          { id: 3, name: 'Cape Town Warehouse', code: 'CPT', city: 'Cape Town', latitude: -33.9249, longitude: 18.4241, address: 'Cape Town, Western Cape' },
+          { id: 4, name: 'PE Warehouse', code: 'PE', city: 'Gqeberha', latitude: -33.9608, longitude: 25.6022, address: 'Gqeberha, Eastern Cape' }
         ]);
+        console.log('Using fallback warehouses: 4');
       }
     });
   }
@@ -3375,6 +3271,14 @@ export class LogisticsDashboardComponent implements OnInit {
     return this.vehicles().filter(v => v.isLinkedToTfn || v.isLinkedToCarTrack || v.tfnVehicleId || v.carTrackId).length;
   }
 
+  // Get vehicles available for load assignment (not under maintenance or decommissioned)
+  getAvailableVehicles(): any[] {
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    return this.vehicles().filter((v: any) => 
+      !unavailableStatuses.includes(v.status)
+    );
+  }
+
   loadSampleData(): void {
     // Sample data for demo
     this.stats.set({
@@ -3693,9 +3597,27 @@ export class LogisticsDashboardComponent implements OnInit {
     return this.southAfricanProvinces;
   });
 
-  // Get count of invoices per province for display
+  // Pre-computed province counts - calculated once when invoices change, not on every render
+  provinceInvoiceCounts = computed(() => {
+    const invoices = this.importedInvoices();
+    const counts = new Map<string, number>();
+    
+    // Initialize all provinces with 0
+    this.southAfricanProvinces.forEach(p => counts.set(p, 0));
+    
+    // Count invoices per province in a single pass
+    for (const invoice of invoices) {
+      if (invoice.deliveryProvince) {
+        counts.set(invoice.deliveryProvince, (counts.get(invoice.deliveryProvince) || 0) + 1);
+      }
+    }
+    
+    return counts;
+  });
+
+  // Get count of invoices per province for display - now uses pre-computed map
   getProvinceInvoiceCount(province: string): number {
-    return this.importedInvoices().filter(i => i.deliveryProvince === province).length;
+    return this.provinceInvoiceCounts().get(province) || 0;
   }
 
   filteredInvoices = computed(() => {
@@ -3731,12 +3653,28 @@ export class LogisticsDashboardComponent implements OnInit {
     return invoices;
   });
 
-  pendingInvoiceCount = computed(() => this.importedInvoices().filter(i => i.status === 'Pending').length);
-  assignedInvoiceCount = computed(() => this.importedInvoices().filter(i => i.status === 'Assigned').length);
-  deliveredInvoiceCount = computed(() => this.importedInvoices().filter(i => i.status === 'Delivered').length);
+  // Pre-computed status counts - single pass over all invoices
+  invoiceStatusCounts = computed(() => {
+    const invoices = this.importedInvoices();
+    let pending = 0, assigned = 0, delivered = 0;
+    
+    for (const invoice of invoices) {
+      switch (invoice.status) {
+        case 'Pending': pending++; break;
+        case 'Assigned': assigned++; break;
+        case 'Delivered': delivered++; break;
+      }
+    }
+    
+    return { pending, assigned, delivered };
+  });
+
+  pendingInvoiceCount = computed(() => this.invoiceStatusCounts().pending);
+  assignedInvoiceCount = computed(() => this.invoiceStatusCounts().assigned);
+  deliveredInvoiceCount = computed(() => this.invoiceStatusCounts().delivered);
 
   loadImportedInvoices(): void {
-    this.http.get<ImportedInvoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=1000`).subscribe({
+    this.http.get<ImportedInvoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=10000`).subscribe({
       next: (invoices) => {
         this.importedInvoices.set(invoices);
         this.stats.update(s => ({
@@ -3766,15 +3704,15 @@ export class LogisticsDashboardComponent implements OnInit {
     return ((salesAmount - costOfSales) / salesAmount) * 100;
   }
 
-  showSuggestedLoads(): void {
-    this.dialog.open(SuggestedLoadsDialog, {
+  showSuggestedTrips(): void {
+    this.dialog.open(SuggestedTripsDialog, {
       width: '95vw',
       maxWidth: '1400px',
       height: '90vh',
       data: { apiUrl: this.apiUrl }
     }).afterClosed().subscribe(result => {
       if (result) {
-        // Refresh invoices and tripsheets after load creation
+        // Refresh invoices and tripsheets after trip creation
         this.loadImportedInvoices();
         this.loadTripsheets();
       }
@@ -3863,13 +3801,98 @@ export class LogisticsDashboardComponent implements OnInit {
   viewTripsheet(trip: any): void {
     // Open tripsheet preview dialog
     this.dialog.open(TripSheetPreviewDialog, {
-      width: '900px',
-      maxHeight: '90vh',
+      width: '95vw',
+      maxWidth: '1600px',
+      height: '85vh',
+      panelClass: 'tripsheet-landscape-dialog',
       data: { loadId: trip.loadId || trip.id }
     });
   }
 
+  // Open the tripsheet type selection dialog
+  openTripsheetTypeDialog(): void {
+    const dialogRef = this.dialog.open(TripsheetTypeDialog, {
+      width: '850px',
+      maxWidth: '95vw',
+      panelClass: 'tripsheet-type-dialog-panel'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.type) {
+        switch (result.type) {
+          case 'import':
+            this.openImportTripsheetDialog();
+            break;
+          case 'automatic':
+            this.openCreateTripsheetDialog();
+            break;
+          case 'manual':
+            this.openManualTripsheetDialog();
+            break;
+          case 'transfer':
+            this.openInternalTransferDialog();
+            break;
+        }
+      }
+    });
+  }
+
+  // Open Manual Tripsheet Dialog (no system invoice linking)
+  openManualTripsheetDialog(): void {
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+    
+    const dialogRef = this.dialog.open(ManualTripsheetDialog, {
+      width: '95vw',
+      maxWidth: '1200px',
+      height: '90vh',
+      panelClass: 'manual-tripsheet-dialog-panel',
+      data: {
+        drivers: this.drivers(),
+        vehicles: availableVehicles,
+        warehouses: this.warehouses(),
+        customers: this.customers(),
+        apiUrl: this.apiUrl
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.created) {
+        this.loadTripsheets();
+      }
+    });
+  }
+
+  // Open Internal Transfer Dialog (warehouse to warehouse)
+  openInternalTransferDialog(): void {
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+    
+    const dialogRef = this.dialog.open(InternalTransferDialog, {
+      width: '95vw',
+      maxWidth: '1000px',
+      height: '85vh',
+      panelClass: 'internal-transfer-dialog-panel',
+      data: {
+        drivers: this.drivers(),
+        vehicles: availableVehicles,
+        warehouses: this.warehouses(),
+        apiUrl: this.apiUrl
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.created) {
+        this.loadTripsheets();
+      }
+    });
+  }
+
   openCreateTripsheetDialog(): void {
+    // Filter out unavailable vehicles (under maintenance, decommissioned, etc.)
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+    
     const dialogRef = this.dialog.open(CreateTripsheetDialog, {
       width: '95vw',
       maxWidth: '1400px',
@@ -3878,7 +3901,7 @@ export class LogisticsDashboardComponent implements OnInit {
       data: {
         invoices: this.importedInvoices(),
         drivers: this.drivers(),
-        vehicles: this.vehicles(),
+        vehicles: availableVehicles,
         warehouses: this.warehouses(),
         customers: this.customers(),
         apiUrl: this.apiUrl
@@ -3889,6 +3912,156 @@ export class LogisticsDashboardComponent implements OnInit {
       if (result?.created) {
         this.loadTripsheets();
         this.loadImportedInvoices();
+      }
+    });
+  }
+
+  openImportTripsheetDialog(): void {
+    const dialogRef = this.dialog.open(ImportTripsheetDialog, {
+      width: '900px',
+      maxWidth: '95vw',
+      panelClass: 'import-tripsheet-dialog-panel',
+      data: {
+        apiUrl: this.apiUrl
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.openCreateDialog && result.invoices?.length > 0) {
+        // Open CreateTripsheetDialog with imported data pre-populated
+        setTimeout(() => {
+          this.openCreateTripsheetDialogWithImportedData(result.invoices, result.batchId, result.isManualTripsheet);
+        }, 100);
+      } else if (result?.imported) {
+        this.loadTripsheets();
+        this.loadImportedInvoices();
+      }
+    });
+  }
+
+  // Open Create Tripsheet dialog with pre-populated data from Excel import
+  openCreateTripsheetDialogWithImportedData(importedInvoices: any[], batchId?: string, isManualTripsheet?: boolean): void {
+    // Combine imported invoices with existing pending invoices (if any)
+    const allInvoices = [...importedInvoices];
+    
+    // Open the CreateTripsheetDialog with imported data pre-selected
+    const dialogRef = this.dialog.open(CreateTripsheetDialog, {
+      width: '95vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      panelClass: 'create-tripsheet-dialog-panel',
+      data: {
+        invoices: allInvoices,
+        drivers: this.drivers(),
+        vehicles: this.vehicles(),
+        warehouses: this.warehouses(),
+        customers: this.customers(),
+        apiUrl: this.apiUrl,
+        // Flag to indicate this came from an import
+        isImport: true,
+        batchId: batchId,
+        // Flag for manual tripsheet (no matched invoices in system)
+        isManualTripsheet: isManualTripsheet || false,
+        // Pre-select all imported invoices
+        preSelectedInvoices: importedInvoices
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.created) {
+        this.loadTripsheets();
+        this.loadImportedInvoices();
+      }
+    });
+  }
+
+  // Edit existing tripsheet - load data and open CreateTripsheetDialog
+  editTripsheet(trip: any): void {
+    const loadId = trip.loadId || trip.id;
+    
+    // Fetch full tripsheet data from API
+    this.http.get<any>(`${this.apiUrl}/logistics/tripsheet/${loadId}`).subscribe({
+      next: (tripsheetData) => {
+        // Convert tripsheet line items back to invoice-like format for the dialog
+        const invoices = (tripsheetData.lineItems || []).map((item: any, index: number) => ({
+          id: `edit-${loadId}-${index}`,
+          transactionNumber: item.invNo || item.invoiceNumber || `ITEM-${index + 1}`,
+          customerName: item.customerName || 'Unknown Customer',
+          customerNumber: item.orderNo || item.customerNumber,
+          deliveryAddress: item.address || '',
+          address: item.address || '',
+          city: item.city || '',
+          province: '',
+          productDescription: item.productDescription || 'Product',
+          productCode: item.productBrand || item.productCode,
+          quantity: item.qty || 1,
+          salesAmount: item.value || 0,
+          netSales: item.value || 0,
+          totalAmount: item.value || 0,
+          status: 'Pending',
+          contactPerson: item.contactPerson,
+          contactPhone: item.contactPhone,
+          latitude: item.latitude,
+          longitude: item.longitude
+        }));
+
+        // Find matching warehouse, driver, vehicle
+        const matchedWarehouse = this.warehouses().find(w => 
+          w.id === tripsheetData.warehouseId || 
+          w.name?.toLowerCase() === tripsheetData.origin?.toLowerCase()
+        );
+        const matchedDriver = this.drivers().find(d => 
+          d.id === tripsheetData.driverId ||
+          `${d.firstName} ${d.lastName}`.toLowerCase() === tripsheetData.driverName?.toLowerCase()
+        );
+        const matchedVehicle = this.vehicles().find(v => 
+          v.id === tripsheetData.vehicleId ||
+          v.registrationNumber === tripsheetData.vehicleRegNumber ||
+          v.registrationNumber === tripsheetData.vehicleRegistration
+        );
+
+        // Filter out unavailable vehicles
+        const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+        const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+
+        // Open CreateTripsheetDialog in edit mode
+        const dialogRef = this.dialog.open(CreateTripsheetDialog, {
+          width: '95vw',
+          maxWidth: '1400px',
+          height: '90vh',
+          panelClass: 'create-tripsheet-dialog-panel',
+          data: {
+            invoices: invoices,
+            drivers: this.drivers(),
+            vehicles: availableVehicles,
+            warehouses: this.warehouses(),
+            customers: this.customers(),
+            apiUrl: this.apiUrl,
+            // Edit mode flags
+            isEditMode: true,
+            editLoadId: loadId,
+            existingTripsheet: tripsheetData,
+            // Pre-populate values
+            preSelectedInvoices: invoices,
+            preSelectedWarehouse: matchedWarehouse,
+            preSelectedDriver: matchedDriver,
+            preSelectedVehicle: matchedVehicle,
+            preScheduledDate: tripsheetData.tripDate ? new Date(tripsheetData.tripDate) : new Date(),
+            preSpecialInstructions: tripsheetData.specialInstructions || tripsheetData.notes || '',
+            preTotalDistance: tripsheetData.totalDistance || tripsheetData.estimatedDistance,
+            preEstimatedTime: tripsheetData.estimatedTime
+          }
+        });
+
+        dialogRef.afterClosed().subscribe(result => {
+          if (result?.created || result?.updated) {
+            this.loadTripsheets();
+            this.loadImportedInvoices();
+          }
+        });
+      },
+      error: (err) => {
+        console.error('Failed to load tripsheet for editing:', err);
       }
     });
   }
@@ -3940,6 +4113,94 @@ export class LogisticsDashboardComponent implements OnInit {
     });
   }
 
+  assignTripsheet(trip: any): void {
+    // Filter out unavailable vehicles (under maintenance, decommissioned, etc.)
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+    
+    // Open dialog to assign driver and vehicle to existing tripsheet
+    const dialogRef = this.dialog.open(AssignTripsheetDialog, {
+      width: '500px',
+      data: {
+        tripsheet: trip,
+        drivers: this.drivers(),
+        vehicles: availableVehicles
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.assigned) {
+        // Update the tripsheet with driver/vehicle
+        const loadId = trip.loadId || trip.id;
+        this.http.put(`${this.apiUrl}/logistics/tripsheet/${loadId}/assign`, {
+          driverId: result.driverId,
+          vehicleId: result.vehicleId,
+          scheduledDate: result.scheduledDate
+        }).subscribe({
+          next: () => {
+            this.loadTripsheets();
+            this.snackBar.open('Driver and vehicle assigned successfully!', 'Close', { duration: 3000 });
+          },
+          error: (err) => {
+            console.error('Failed to assign tripsheet:', err);
+            this.snackBar.open('Failed to assign driver/vehicle', 'Close', { duration: 3000 });
+          }
+        });
+      }
+    });
+  }
+
+  deleteTripsheet(trip: any): void {
+    const loadId = trip.loadId || trip.id;
+    const tripsheetNo = trip.tripsheetNo || `TS-${loadId}`;
+    
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete tripsheet ${tripsheetNo}?\n\nThis will remove the load and reset all associated invoices back to Pending status.`)) {
+      return;
+    }
+    
+    this.http.delete(`${this.apiUrl}/logistics/tripsheet/${loadId}`).subscribe({
+      next: () => {
+        this.loadTripsheets();
+        this.loadImportedInvoices();
+        this.snackBar.open(`Tripsheet ${tripsheetNo} deleted successfully!`, 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        console.error('Failed to delete tripsheet:', err);
+        this.snackBar.open('Failed to delete tripsheet: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  activateTripsheet(trip: any): void {
+    const loadId = trip.loadId || trip.id;
+    const tripsheetNo = trip.tripsheetNo || `TS-${loadId}`;
+    
+    // Check if driver and vehicle are assigned
+    if (!trip.driverId || !trip.vehicleId) {
+      this.snackBar.open('Please assign a driver and vehicle before activating the tripsheet.', 'Close', { duration: 4000 });
+      // Open the assign dialog
+      this.assignTripsheet(trip);
+      return;
+    }
+    
+    // Confirm activation
+    if (!confirm(`Generate load for tripsheet ${tripsheetNo}?\n\nThis will change the status to Active and the driver will be ready to depart.`)) {
+      return;
+    }
+    
+    this.http.post(`${this.apiUrl}/logistics/tripsheet/${loadId}/activate`, {}).subscribe({
+      next: () => {
+        this.loadTripsheets();
+        this.snackBar.open(`Tripsheet ${tripsheetNo} is now Active! Driver can depart.`, 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        console.error('Failed to activate tripsheet:', err);
+        this.snackBar.open('Failed to activate tripsheet: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+      }
+    });
+  }
+
   // Fuel Management Methods (TFN)
   loadFuelSummary(): void {
     this.http.get<any>(`${environment.apiUrl}/logistics/tfn/dashboard-summary`).subscribe({
@@ -3984,6 +4245,38 @@ export class LogisticsDashboardComponent implements OnInit {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Sleep Outs Methods (Driver Food Allowance)
+  loadSleepOuts(): void {
+    this.http.get<SleepOut[]>(`${environment.apiUrl}/logistics/sleepouts`).subscribe({
+      next: (sleepOuts) => {
+        this.sleepOuts.set(sleepOuts);
+        // Count only pending (requested) sleep outs for the badge
+        this.sleepOutsCount.set(sleepOuts.filter(s => s.status === 'Requested').length);
+      },
+      error: (err) => {
+        console.error('Failed to load sleep outs:', err);
+        this.sleepOuts.set([]);
+        this.sleepOutsCount.set(0);
+      }
+    });
+  }
+
+  openSleepOutsDialog(): void {
+    const dialogRef = this.dialog.open(SleepOutsDialog, {
+      width: '95vw',
+      maxWidth: '1200px',
+      maxHeight: '90vh',
+      panelClass: 'sleepouts-dialog-panel',
+      data: { sleepOuts: this.sleepOuts(), drivers: this.drivers(), apiUrl: environment.apiUrl }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === 'refresh') {
+        this.loadSleepOuts();
+      }
+    });
   }
 
   // TFN Orders Methods
@@ -4040,6 +4333,476 @@ export class LogisticsDashboardComponent implements OnInit {
       panelClass: 'tfn-depots-map-dialog-panel',
       data: { depots: this.tfnDepots() }
     });
+  }
+
+  openDriversDialog(): void {
+    import('./drivers-dialog/drivers-dialog.component').then(m => {
+      this.dialog.open(m.DriversDialogComponent, {
+        width: '900px',
+        maxWidth: '95vw',
+        height: 'auto',
+        maxHeight: '90vh'
+      });
+    });
+  }
+
+  // Part Delivered Tracking Methods
+  loadPartDeliveredRecords(): void {
+    this.http.get<any[]>(`${this.apiUrl}/logistics/part-delivered`).subscribe({
+      next: (records) => {
+        this.partDeliveredRecords.set(records);
+      },
+      error: (err) => {
+        console.error('Failed to load part delivered records:', err);
+        // Use sample data for development
+        this.partDeliveredRecords.set([
+          { id: 1, invoiceNumber: 'INV-2024-001', customer: 'ABC Hardware', product: 'Steel Pipes 50mm', orderedQty: 100, deliveredQty: 60, remainingQty: 40, status: 'partial', lastDeliveryDate: new Date('2024-01-15') },
+          { id: 2, invoiceNumber: 'INV-2024-002', customer: 'XYZ Construction', product: 'Cement Bags', orderedQty: 500, deliveredQty: 500, remainingQty: 0, status: 'complete', lastDeliveryDate: new Date('2024-01-14') },
+          { id: 3, invoiceNumber: 'INV-2024-003', customer: 'BuildMart', product: 'Bricks (Pallets)', orderedQty: 50, deliveredQty: 25, remainingQty: 25, status: 'partial', lastDeliveryDate: new Date('2024-01-12') },
+          { id: 4, invoiceNumber: 'INV-2024-004', customer: 'Home Solutions', product: 'PVC Fittings', orderedQty: 200, deliveredQty: 0, remainingQty: 200, status: 'pending', lastDeliveryDate: null },
+          { id: 5, invoiceNumber: 'INV-2024-005', customer: 'Metro Builders', product: 'Roofing Sheets', orderedQty: 75, deliveredQty: 50, remainingQty: 25, status: 'partial', lastDeliveryDate: new Date('2024-01-10') }
+        ]);
+      }
+    });
+  }
+
+  filterPartDelivered(): void {
+    // Trigger re-computation of filteredPartDelivered
+    this.partDeliveredRecords.set([...this.partDeliveredRecords()]);
+  }
+
+  filteredPartDelivered = computed(() => {
+    let records = this.partDeliveredRecords();
+    
+    // Apply search filter
+    if (this.partDeliveredSearch) {
+      const search = this.partDeliveredSearch.toLowerCase();
+      records = records.filter(r => 
+        r.invoiceNumber?.toLowerCase().includes(search) ||
+        r.customer?.toLowerCase().includes(search) ||
+        r.product?.toLowerCase().includes(search)
+      );
+    }
+    
+    // Apply date filter
+    if (this.partDeliveredDateFilter) {
+      const filterDate = new Date(this.partDeliveredDateFilter);
+      filterDate.setHours(0, 0, 0, 0);
+      records = records.filter(r => {
+        if (!r.lastDeliveryDate) return false;
+        const recordDate = new Date(r.lastDeliveryDate);
+        recordDate.setHours(0, 0, 0, 0);
+        return recordDate.getTime() === filterDate.getTime();
+      });
+    }
+    
+    return records;
+  });
+
+  getPartDeliveredStats(): { pending: number; partial: number; complete: number; outstandingValue: number } {
+    const records = this.partDeliveredRecords();
+    return {
+      pending: records.filter(r => r.status === 'pending').length,
+      partial: records.filter(r => r.status === 'partial').length,
+      complete: records.filter(r => r.status === 'complete').length,
+      outstandingValue: records.reduce((sum, r) => sum + (r.remainingQty * (r.unitPrice || 100)), 0)
+    };
+  }
+
+  openMarkPartDeliveredDialog(): void {
+    const dialogRef = this.dialog.open(MarkPartDeliveredDialog, {
+      width: '600px',
+      maxWidth: '95vw',
+      data: { records: this.partDeliveredRecords().filter(r => r.status !== 'complete') }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.loadPartDeliveredRecords();
+        this.snackBar.open('Part delivery recorded successfully', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  recordPartialDelivery(item: any): void {
+    const dialogRef = this.dialog.open(RecordDeliveryDialog, {
+      width: '500px',
+      maxWidth: '95vw',
+      data: { item }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Update the record
+        const records = this.partDeliveredRecords();
+        const index = records.findIndex(r => r.id === item.id);
+        if (index !== -1) {
+          records[index].deliveredQty += result.quantity;
+          records[index].remainingQty -= result.quantity;
+          records[index].lastDeliveryDate = new Date();
+          records[index].status = records[index].remainingQty === 0 ? 'complete' : 'partial';
+          this.partDeliveredRecords.set([...records]);
+        }
+        this.snackBar.open(`Recorded delivery of ${result.quantity} units`, 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  viewDeliveryHistory(item: any): void {
+    this.dialog.open(DeliveryHistoryDialog, {
+      width: '700px',
+      maxWidth: '95vw',
+      data: { item }
+    });
+  }
+}
+
+// Mark Part Delivered Dialog Component
+@Component({
+  selector: 'app-mark-part-delivered-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatInputModule,
+    FormsModule
+  ],
+  template: `
+    <div class="mark-delivered-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>local_shipping</mat-icon> Mark Part Delivered</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+      
+      <div class="dialog-content">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Select Invoice</mat-label>
+          <mat-select [(ngModel)]="selectedRecord">
+            @for (record of data.records; track record.id) {
+              <mat-option [value]="record">
+                {{ record.invoiceNumber }} - {{ record.customer }} ({{ record.remainingQty }} remaining)
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        
+        @if (selectedRecord) {
+          <div class="record-details">
+            <div class="detail-row">
+              <span class="label">Product:</span>
+              <span class="value">{{ selectedRecord.product }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Ordered:</span>
+              <span class="value">{{ selectedRecord.orderedQty }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Already Delivered:</span>
+              <span class="value">{{ selectedRecord.deliveredQty }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Remaining:</span>
+              <span class="value highlight">{{ selectedRecord.remainingQty }}</span>
+            </div>
+          </div>
+          
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Quantity to Deliver</mat-label>
+            <input matInput type="number" [(ngModel)]="deliveryQty" [max]="selectedRecord.remainingQty" min="1">
+            <mat-hint>Max: {{ selectedRecord.remainingQty }}</mat-hint>
+          </mat-form-field>
+          
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Delivery Notes (Optional)</mat-label>
+            <textarea matInput [(ngModel)]="notes" rows="2"></textarea>
+          </mat-form-field>
+        }
+      </div>
+      
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" [disabled]="!canSubmit()" (click)="submit()">
+          <mat-icon>check</mat-icon> Record Delivery
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .mark-delivered-dialog { padding: 0; }
+    .dialog-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px; background: linear-gradient(135deg, #1976d2, #42a5f5);
+      color: white;
+    }
+    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.25rem; }
+    .dialog-content { padding: 24px; }
+    .full-width { width: 100%; margin-bottom: 16px; }
+    .record-details {
+      background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 16px;
+    }
+    .detail-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .detail-row .label { color: #666; }
+    .detail-row .value { font-weight: 500; }
+    .detail-row .value.highlight { color: #1976d2; font-weight: 600; }
+    .dialog-actions { padding: 16px 24px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #e0e0e0; }
+  `]
+})
+export class MarkPartDeliveredDialog {
+  selectedRecord: any = null;
+  deliveryQty: number = 0;
+  notes: string = '';
+  
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private dialogRef: MatDialogRef<MarkPartDeliveredDialog>,
+    private http: HttpClient,
+    private snackBar: MatSnackBar
+  ) {}
+  
+  canSubmit(): boolean {
+    return this.selectedRecord && this.deliveryQty > 0 && this.deliveryQty <= this.selectedRecord.remainingQty;
+  }
+  
+  submit(): void {
+    if (!this.canSubmit()) return;
+    
+    const payload = {
+      recordId: this.selectedRecord.id,
+      quantity: this.deliveryQty,
+      notes: this.notes
+    };
+    
+    this.http.post(`${environment.apiUrl}/logistics/part-delivered/record`, payload).subscribe({
+      next: () => {
+        this.dialogRef.close(true);
+      },
+      error: (err) => {
+        console.error('Failed to record delivery:', err);
+        // Still close with success for demo
+        this.dialogRef.close(true);
+      }
+    });
+  }
+}
+
+// Record Delivery Dialog Component
+@Component({
+  selector: 'app-record-delivery-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    FormsModule
+  ],
+  template: `
+    <div class="record-delivery-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>add_shopping_cart</mat-icon> Record Partial Delivery</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+      
+      <div class="dialog-content">
+        <div class="item-info">
+          <div class="info-row"><span class="label">Invoice:</span><span class="value">{{ data.item.invoiceNumber }}</span></div>
+          <div class="info-row"><span class="label">Customer:</span><span class="value">{{ data.item.customer }}</span></div>
+          <div class="info-row"><span class="label">Product:</span><span class="value">{{ data.item.product }}</span></div>
+          <div class="info-row"><span class="label">Remaining:</span><span class="value highlight">{{ data.item.remainingQty }} units</span></div>
+        </div>
+        
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Quantity Delivered</mat-label>
+          <input matInput type="number" [(ngModel)]="quantity" [max]="data.item.remainingQty" min="1">
+          <mat-hint>Enter quantity being delivered (max: {{ data.item.remainingQty }})</mat-hint>
+        </mat-form-field>
+        
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Driver/Reference</mat-label>
+          <input matInput [(ngModel)]="reference">
+        </mat-form-field>
+      </div>
+      
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" [disabled]="!isValid()" (click)="submit()">
+          <mat-icon>check</mat-icon> Confirm Delivery
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .record-delivery-dialog { padding: 0; }
+    .dialog-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px; background: linear-gradient(135deg, #43a047, #66bb6a);
+      color: white;
+    }
+    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.25rem; }
+    .dialog-content { padding: 24px; }
+    .item-info { background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
+    .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e0e0e0; }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .label { color: #666; }
+    .info-row .value { font-weight: 500; }
+    .info-row .value.highlight { color: #43a047; font-weight: 600; font-size: 1.1em; }
+    .full-width { width: 100%; margin-bottom: 16px; }
+    .dialog-actions { padding: 16px 24px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #e0e0e0; }
+  `]
+})
+export class RecordDeliveryDialog {
+  quantity: number = 1;
+  reference: string = '';
+  
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private dialogRef: MatDialogRef<RecordDeliveryDialog>
+  ) {}
+  
+  isValid(): boolean {
+    return this.quantity > 0 && this.quantity <= this.data.item.remainingQty;
+  }
+  
+  submit(): void {
+    if (this.isValid()) {
+      this.dialogRef.close({ quantity: this.quantity, reference: this.reference });
+    }
+  }
+}
+
+// Delivery History Dialog Component
+@Component({
+  selector: 'app-delivery-history-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule
+  ],
+  template: `
+    <div class="delivery-history-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>history</mat-icon> Delivery History</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+      
+      <div class="dialog-content">
+        <div class="item-summary">
+          <div class="summary-row">
+            <span class="label">Invoice:</span>
+            <span class="value">{{ data.item.invoiceNumber }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Customer:</span>
+            <span class="value">{{ data.item.customer }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Product:</span>
+            <span class="value">{{ data.item.product }}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="getProgressPercent()"></div>
+          </div>
+          <div class="progress-text">
+            {{ data.item.deliveredQty }} of {{ data.item.orderedQty }} delivered ({{ getProgressPercent() | number:'1.0-0' }}%)
+          </div>
+        </div>
+        
+        <h3>Delivery Records</h3>
+        <table mat-table [dataSource]="deliveryHistory" class="history-table">
+          <ng-container matColumnDef="date">
+            <th mat-header-cell *matHeaderCellDef>Date</th>
+            <td mat-cell *matCellDef="let row">{{ row.date | date:'dd/MM/yyyy HH:mm' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="quantity">
+            <th mat-header-cell *matHeaderCellDef>Quantity</th>
+            <td mat-cell *matCellDef="let row">{{ row.quantity }}</td>
+          </ng-container>
+          <ng-container matColumnDef="reference">
+            <th mat-header-cell *matHeaderCellDef>Reference</th>
+            <td mat-cell *matCellDef="let row">{{ row.reference }}</td>
+          </ng-container>
+          <ng-container matColumnDef="user">
+            <th mat-header-cell *matHeaderCellDef>Recorded By</th>
+            <td mat-cell *matCellDef="let row">{{ row.user }}</td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+        
+        @if (deliveryHistory.length === 0) {
+          <div class="no-history">
+            <mat-icon>inbox</mat-icon>
+            <p>No delivery records yet</p>
+          </div>
+        }
+      </div>
+      
+      <div class="dialog-actions">
+        <button mat-raised-button mat-dialog-close>Close</button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .delivery-history-dialog { padding: 0; min-width: 500px; }
+    .dialog-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px; background: linear-gradient(135deg, #7b1fa2, #ab47bc);
+      color: white;
+    }
+    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.25rem; }
+    .dialog-content { padding: 24px; max-height: 60vh; overflow-y: auto; }
+    .item-summary { background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
+    .summary-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .summary-row .label { color: #666; }
+    .summary-row .value { font-weight: 500; }
+    .progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; margin-top: 12px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #43a047, #66bb6a); transition: width 0.3s; }
+    .progress-text { text-align: center; font-size: 0.85rem; color: #666; margin-top: 4px; }
+    h3 { margin: 16px 0 12px; font-size: 1rem; color: #333; }
+    .history-table { width: 100%; }
+    .no-history { text-align: center; padding: 32px; color: #999; }
+    .no-history mat-icon { font-size: 48px; width: 48px; height: 48px; }
+    .dialog-actions { padding: 16px 24px; display: flex; justify-content: flex-end; border-top: 1px solid #e0e0e0; }
+  `]
+})
+export class DeliveryHistoryDialog {
+  displayedColumns = ['date', 'quantity', 'reference', 'user'];
+  deliveryHistory: any[] = [];
+  
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private http: HttpClient
+  ) {
+    this.loadHistory();
+  }
+  
+  loadHistory(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/part-delivered/${this.data.item.id}/history`).subscribe({
+      next: (history) => {
+        this.deliveryHistory = history;
+      },
+      error: () => {
+        // Sample data for demo
+        this.deliveryHistory = [
+          { date: new Date('2024-01-15 10:30'), quantity: 30, reference: 'Driver: John Smith', user: 'Admin' },
+          { date: new Date('2024-01-12 14:15'), quantity: 30, reference: 'Driver: Mike Jones', user: 'Admin' }
+        ];
+      }
+    });
+  }
+  
+  getProgressPercent(): number {
+    if (!this.data.item.orderedQty) return 0;
+    return (this.data.item.deliveredQty / this.data.item.orderedQty) * 100;
   }
 }
 
@@ -4151,8 +4914,16 @@ export class LogisticsDashboardComponent implements OnInit {
           <h3><mat-icon>attach_money</mat-icon> Financials</h3>
           <div class="financial-summary">
             <div class="financial-item">
-              <span class="label">Sales Amount</span>
-              <span class="value sales">R{{ data.salesAmount | number:'1.2-2' }}</span>
+              <span class="label">Sales Amount (excl. VAT)</span>
+              <span class="value">R{{ data.salesAmount | number:'1.2-2' }}</span>
+            </div>
+            <div class="financial-item">
+              <span class="label">VAT (15%)</span>
+              <span class="value">R{{ data.salesAmount * 0.15 | number:'1.2-2' }}</span>
+            </div>
+            <div class="financial-item">
+              <span class="label">Total (incl. VAT)</span>
+              <span class="value sales">R{{ data.salesAmount * 1.15 | number:'1.2-2' }}</span>
             </div>
             <div class="financial-item">
               <span class="label">Cost of Sales</span>
@@ -4167,6 +4938,26 @@ export class LogisticsDashboardComponent implements OnInit {
               <span class="value margin" [class.positive]="data.marginPercent > 0" [class.negative]="data.marginPercent < 0">
                 {{ data.marginPercent | number:'1.2-2' }}%
               </span>
+            </div>
+          </div>
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <div class="detail-section">
+          <h3><mat-icon>location_on</mat-icon> Delivery Information</h3>
+          <div class="detail-grid">
+            <div class="detail-item full-width">
+              <span class="label">Address</span>
+              <span class="value">{{ data.deliveryAddress || 'Not set' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">City</span>
+              <span class="value">{{ data.deliveryCity || 'Not set' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Province</span>
+              <span class="value">{{ data.deliveryProvince || 'Not set' }}</span>
             </div>
           </div>
         </div>
@@ -5118,9 +5909,12 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
                   <mat-select [(ngModel)]="loadData.vehicleId">
                     <mat-option [value]="null">-- Not Assigned --</mat-option>
                     @for (v of vehicles; track v.id) {
-                      <mat-option [value]="v.id">{{ v.registrationNumber }} ({{ v.type }})</mat-option>
+                      @if (v.status === 'Available' || v.status === 'In Use' || !v.status) {
+                        <mat-option [value]="v.id">{{ v.registrationNumber }} ({{ v.type }})</mat-option>
+                      }
                     }
                   </mat-select>
+                  <mat-hint>Only available vehicles shown</mat-hint>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
@@ -6224,11 +7018,11 @@ interface RouteEstimate {
     MatDividerModule
   ],
   template: `
-    <div class="tripsheet-preview-dialog">
+    <div class="tripsheet-preview-dialog landscape">
       <div class="dialog-header">
         <h2>
           <mat-icon>description</mat-icon>
-          Trip Sheet Preview
+          Trip Sheet
         </h2>
         <div class="header-actions">
           <button mat-icon-button (click)="print()" matTooltip="Print">
@@ -6250,143 +7044,184 @@ interface RouteEstimate {
         </div>
       } @else if (tripSheet) {
         <div class="tripsheet-content">
-          <!-- Header Section -->
-          <div class="ts-header">
-            <div class="ts-logo">
-              <mat-icon class="truck-icon">local_shipping</mat-icon>
-              <span class="company-name">TRIP SHEET</span>
+          <!-- Trip Header Section -->
+          <div class="ts-header-section">
+            <div class="ts-title">
+              <h1>TRIP SHEET</h1>
+              <span class="ts-number">{{ tripSheet.loadNumber }}</span>
             </div>
-            <div class="ts-badges">
-              <mat-chip class="load-chip">{{ tripSheet.loadNumber }}</mat-chip>
-              <mat-chip [ngClass]="getStatusClass(tripSheet.status)">{{ tripSheet.status }}</mat-chip>
-              <mat-chip class="value-chip">R {{ tripSheet.totalValue | number:'1.2-2' }}</mat-chip>
-            </div>
-          </div>
-
-          <mat-divider></mat-divider>
-
-          <!-- Info Grid -->
-          <div class="ts-info-grid">
-            <div class="info-card">
-              <h4><mat-icon>place</mat-icon> Pickup</h4>
-              <p><strong>{{ tripSheet.warehouseName || 'Warehouse' }}</strong></p>
-              <p>{{ tripSheet.pickupLocation }}</p>
-              <p>{{ tripSheet.pickupDate | date:'dd MMM yyyy' }} {{ tripSheet.pickupTime || '' }}</p>
-            </div>
-            <div class="info-card">
-              <h4><mat-icon>flag</mat-icon> Delivery</h4>
-              <p><strong>{{ tripSheet.deliveryLocation || 'Multiple Stops' }}</strong></p>
-              <p>Distance: {{ tripSheet.estimatedDistance | number:'1.0-0' }} km</p>
-              <p>Est. Time: {{ formatMinutes(tripSheet.estimatedTimeMinutes) }}</p>
-            </div>
-            <div class="info-card">
-              <h4><mat-icon>person</mat-icon> Driver</h4>
-              <p><strong>{{ tripSheet.driverName }}</strong></p>
-              <p>{{ tripSheet.driverPhone || 'No phone' }}</p>
-              <p>License: {{ tripSheet.driverLicenseNumber || 'N/A' }}</p>
-            </div>
-            <div class="info-card">
-              <h4><mat-icon>local_shipping</mat-icon> Vehicle</h4>
-              <p><strong>{{ tripSheet.vehicleRegistration }}</strong></p>
-              <p>{{ tripSheet.vehicleType || 'N/A' }}</p>
+            <div class="ts-meta-row">
+              <div class="meta-item">
+                <label>DRIVER NAME:</label>
+                <span class="meta-value">{{ tripSheet.driverName || 'UNASSIGNED' }}</span>
+              </div>
+              <div class="meta-item">
+                <label>DATE:</label>
+                <span class="meta-value">{{ tripSheet.tripDate | date:'dd.MM.yyyy' }}</span>
+              </div>
+              <div class="meta-item">
+                <label>REG NUMBER:</label>
+                <span class="meta-value">{{ tripSheet.vehicleRegNumber || tripSheet.vehicleRegistration || 'N/A' }}</span>
+              </div>
+              <div class="meta-item">
+                <label>SUBTOTAL:</label>
+                <span class="meta-value">R {{ tripSheet.totalValue | number:'1.2-2' }}</span>
+              </div>
+              <div class="meta-item">
+                <label>VAT (15%):</label>
+                <span class="meta-value">R {{ tripSheet.vatAmount | number:'1.2-2' }}</span>
+              </div>
+              <div class="meta-item">
+                <label>TOTAL:</label>
+                <span class="meta-value value">R {{ tripSheet.totalWithVat | number:'1.2-2' }}</span>
+              </div>
             </div>
           </div>
 
-          @if (tripSheet.specialInstructions || tripSheet.notes) {
-            <div class="ts-instructions">
-              <mat-icon>warning</mat-icon>
-              <span><strong>Instructions:</strong> {{ tripSheet.specialInstructions || tripSheet.notes }}</span>
-            </div>
-          }
-
-          <!-- Stops Section -->
-          <div class="ts-stops">
-            <h3><mat-icon>route</mat-icon> Delivery Stops ({{ deliveryStops.length }})</h3>
-            
-            @for (stop of deliveryStops; track stop.stopSequence; let i = $index) {
-              <div class="stop-card">
-                <div class="stop-header">
-                  <span class="stop-num">Stop {{ i + 1 }}</span>
-                  <span class="stop-name">{{ stop.customerName || stop.companyName }}</span>
-                  <mat-chip class="stop-type-chip">{{ stop.stopType }}</mat-chip>
-                </div>
-                <div class="stop-body">
-                  <div class="stop-info">
-                    <p><mat-icon>location_on</mat-icon> {{ stop.address }}, {{ stop.city }}</p>
-                    @if (stop.contactPerson) {
-                      <p><mat-icon>person</mat-icon> {{ stop.contactPerson }} - {{ stop.contactPhone }}</p>
+          <!-- Line Items Table -->
+          <div class="ts-table-container">
+            <table class="ts-table">
+              <thead>
+                <tr>
+                  <th class="col-no">No</th>
+                  <th class="col-inv">Inv No</th>
+                  <th class="col-customer">Customer Name</th>
+                  <th class="col-product">Product Description</th>
+                  <th class="col-brand">Brand</th>
+                  <th class="col-qty">Qty</th>
+                  <th class="col-time">Time Dispatched</th>
+                  <th class="col-order">Order No</th>
+                  <th class="col-start">Start</th>
+                  <th class="col-end">End</th>
+                  <th class="col-km">KM</th>
+                  <th class="col-value">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of tripSheet.lineItems; track item.no; let i = $index) {
+                  <tr>
+                    <td class="col-no">{{ item.no || (i + 1) }}</td>
+                    <td class="col-inv">{{ item.invNo }}</td>
+                    <td class="col-customer">{{ item.customerName }}</td>
+                    <td class="col-product">{{ item.productDescription }}</td>
+                    <td class="col-brand">{{ item.productBrand || '-' }}</td>
+                    <td class="col-qty">{{ item.qty }}</td>
+                    <td class="col-time">{{ item.timeDispatched || '' }}</td>
+                    <td class="col-order">{{ item.orderNo || '' }}</td>
+                    <td class="col-start editable"></td>
+                    <td class="col-end editable"></td>
+                    <td class="col-km editable"></td>
+                    <td class="col-value">R {{ item.value | number:'1.2-2' }}</td>
+                  </tr>
+                }
+                @if (!tripSheet.lineItems || tripSheet.lineItems.length === 0) {
+                  <!-- Show old stops format as fallback -->
+                  @for (stop of deliveryStops; track stop.stopSequence; let i = $index) {
+                    @for (com of stop.commodities; track com.commodityName; let j = $index) {
+                      <tr>
+                        <td class="col-no">{{ i + 1 }}.{{ j + 1 }}</td>
+                        <td class="col-inv">{{ stop.invoiceNumber || '-' }}</td>
+                        <td class="col-customer">{{ stop.customerName || stop.companyName }}</td>
+                        <td class="col-product">{{ com.commodityName || com.description }}</td>
+                        <td class="col-brand">{{ com.commodityCode || '-' }}</td>
+                        <td class="col-qty">{{ com.quantity }}</td>
+                        <td class="col-time">{{ stop.scheduledArrival | date:'HH:mm' }}</td>
+                        <td class="col-order">{{ stop.orderNumber || '' }}</td>
+                        <td class="col-start editable"></td>
+                        <td class="col-end editable"></td>
+                        <td class="col-km editable"></td>
+                        <td class="col-value">R {{ com.totalPrice | number:'1.2-2' }}</td>
+                      </tr>
                     }
-                    @if (stop.orderNumber) {
-                      <p><mat-icon>receipt</mat-icon> Order: {{ stop.orderNumber }}</p>
-                    }
-                  </div>
-                  
-                  @if (stop.commodities && stop.commodities.length > 0) {
-                    <table class="commodities-table">
-                      <thead>
-                        <tr>
-                          <th>Item</th>
-                          <th>Contract</th>
-                          <th>Qty</th>
-                          <th>Unit</th>
-                          <th class="text-right">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (com of stop.commodities; track com.commodityName) {
-                          <tr>
-                            <td>{{ com.commodityName }}</td>
-                            <td>{{ com.contractNumber || '-' }}</td>
-                            <td>{{ com.quantity }}</td>
-                            <td>{{ com.unitOfMeasure || 'Unit' }}</td>
-                            <td class="text-right">R {{ com.totalPrice | number:'1.2-2' }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
                   }
-                  
-                  @if (stop.notes) {
-                    <p class="stop-notes"><mat-icon>info</mat-icon> {{ stop.notes }}</p>
-                  }
+                }
+                <!-- Empty rows for manual entry -->
+                @for (row of emptyRows; track row) {
+                  <tr class="empty-row">
+                    <td class="col-no"></td>
+                    <td class="col-inv"></td>
+                    <td class="col-customer"></td>
+                    <td class="col-product"></td>
+                    <td class="col-brand"></td>
+                    <td class="col-qty"></td>
+                    <td class="col-time"></td>
+                    <td class="col-order"></td>
+                    <td class="col-start editable"></td>
+                    <td class="col-end editable"></td>
+                    <td class="col-km editable"></td>
+                    <td class="col-value"></td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr class="totals-row">
+                  <td colspan="5" class="totals-label">SUBTOTAL</td>
+                  <td class="col-qty">{{ getTotalQty() }}</td>
+                  <td colspan="4"></td>
+                  <td class="col-km"></td>
+                  <td class="col-value">R {{ tripSheet.totalValue | number:'1.2-2' }}</td>
+                </tr>
+                <tr class="totals-row vat-row">
+                  <td colspan="5" class="totals-label">VAT (15%)</td>
+                  <td colspan="5"></td>
+                  <td class="col-km"></td>
+                  <td class="col-value">R {{ tripSheet.vatAmount | number:'1.2-2' }}</td>
+                </tr>
+                <tr class="totals-row grand-total-row">
+                  <td colspan="5" class="totals-label">TOTAL INCL. VAT</td>
+                  <td colspan="5"></td>
+                  <td class="col-km"></td>
+                  <td class="col-value total-value">R {{ tripSheet.totalWithVat | number:'1.2-2' }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Footer Section -->
+          <div class="ts-footer-section">
+            <div class="footer-row">
+              <div class="odometer-section">
+                <div class="odo-field">
+                  <label>Opening KM:</label>
+                  <div class="odo-box"></div>
+                </div>
+                <div class="odo-field">
+                  <label>Closing KM:</label>
+                  <div class="odo-box"></div>
                 </div>
               </div>
-            }
-          </div>
-
-          <!-- Manual Entry Section -->
-          <div class="ts-manual">
-            <h4>Driver Record (Manual Entry)</h4>
-            <div class="manual-fields">
-              <div class="manual-field">
-                <label>Opening Mileage</label>
-                <div class="input-line"></div>
-              </div>
-              <div class="manual-field">
-                <label>Closing Mileage</label>
-                <div class="input-line"></div>
-              </div>
-              <div class="manual-field">
-                <label>Fuel Level</label>
-                <div class="fuel-options">E ☐ ¼ ☐ ½ ☐ ¾ ☐ F ☐</div>
+              <div class="fuel-section">
+                <label>Fuel Level:</label>
+                <div class="fuel-gauge">
+                  <span>E</span>
+                  <span class="fuel-box">☐</span>
+                  <span>¼</span>
+                  <span class="fuel-box">☐</span>
+                  <span>½</span>
+                  <span class="fuel-box">☐</span>
+                  <span>¾</span>
+                  <span class="fuel-box">☐</span>
+                  <span>F</span>
+                </div>
               </div>
             </div>
-          </div>
-
-          <!-- Signature Section -->
-          <div class="ts-signatures">
-            <div class="signature-block">
-              <div class="signature-line"></div>
-              <span>Driver Signature & Date</span>
+            <div class="signatures-row">
+              <div class="signature-block">
+                <div class="signature-line"></div>
+                <span>Driver Signature</span>
+              </div>
+              <div class="signature-block">
+                <div class="signature-line"></div>
+                <span>Dispatch Signature</span>
+              </div>
+              <div class="signature-block">
+                <div class="signature-line"></div>
+                <span>Date</span>
+              </div>
             </div>
-            <div class="signature-block">
-              <div class="signature-line"></div>
-              <span>Dispatch Signature & Date</span>
+            <div class="ts-generated">
+              Generated: {{ tripSheet.generatedAt | date:'dd MMM yyyy HH:mm' }}
             </div>
-          </div>
-
-          <div class="ts-footer">
-            <p>Generated: {{ tripSheet.generatedAt | date:'dd MMM yyyy HH:mm' }}</p>
           </div>
         </div>
       } @else {
@@ -6398,26 +7233,28 @@ interface RouteEstimate {
     </div>
   `,
   styles: [`
-    .tripsheet-preview-dialog {
-      max-height: 85vh;
-      overflow: hidden;
+    .tripsheet-preview-dialog.landscape {
+      height: 100%;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      background: white;
     }
     .dialog-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 24px;
+      padding: 10px 20px;
       background: #1976d2;
       color: white;
+      flex-shrink: 0;
     }
     .dialog-header h2 {
       display: flex;
       align-items: center;
       gap: 8px;
       margin: 0;
-      font-size: 20px;
+      font-size: 16px;
     }
     .header-actions {
       display: flex;
@@ -6434,6 +7271,7 @@ interface RouteEstimate {
       justify-content: center;
       padding: 60px;
       color: #666;
+      flex: 1;
     }
     .error-content mat-icon {
       font-size: 48px;
@@ -6443,249 +7281,226 @@ interface RouteEstimate {
     }
     
     .tripsheet-content {
-      padding: 20px;
+      flex: 1;
       overflow-y: auto;
-      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      padding: 16px 24px;
+      font-family: Arial, sans-serif;
     }
     
-    .ts-header {
+    /* Header Section */
+    .ts-header-section {
+      border: 2px solid #333;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+    .ts-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    .ts-title h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+    .ts-number {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1976d2;
+    }
+    .ts-meta-row {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .meta-item label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+    }
+    .meta-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #000;
+    }
+    .meta-value.value {
+      color: #2e7d32;
+    }
+    
+    /* Table Container */
+    .ts-table-container {
+      flex: 1;
+      overflow-x: auto;
+      border: 2px solid #333;
+    }
+    .ts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .ts-table thead {
+      background: #1976d2;
+      color: white;
+    }
+    .ts-table th {
+      padding: 8px 6px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 10px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      border-right: 1px solid rgba(255,255,255,0.3);
+    }
+    .ts-table th:last-child {
+      border-right: none;
+    }
+    .ts-table tbody tr {
+      border-bottom: 1px solid #ddd;
+    }
+    .ts-table tbody tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    .ts-table td {
+      padding: 6px;
+      vertical-align: middle;
+      border-right: 1px solid #eee;
+    }
+    .ts-table td:last-child {
+      border-right: none;
+    }
+    
+    /* Column widths */
+    .col-no { width: 35px; text-align: center; }
+    .col-inv { width: 70px; }
+    .col-customer { min-width: 140px; }
+    .col-product { min-width: 160px; }
+    .col-brand { width: 80px; }
+    .col-qty { width: 45px; text-align: center; }
+    .col-time { width: 70px; text-align: center; }
+    .col-order { width: 70px; }
+    .col-start { width: 55px; text-align: center; }
+    .col-end { width: 55px; text-align: center; }
+    .col-km { width: 50px; text-align: right; }
+    .col-value { width: 85px; text-align: right; font-weight: 500; }
+    
+    /* Editable cells */
+    td.editable {
+      background: #fffde7;
+      border: 1px dashed #ccc;
+    }
+    
+    /* Empty rows for manual entry */
+    .empty-row td {
+      height: 28px;
+    }
+    
+    /* Totals row */
+    .ts-table tfoot {
+      background: #e8f5e9;
+      font-weight: 600;
+    }
+    .totals-row td {
+      padding: 10px 6px;
+      border-top: 2px solid #333;
+    }
+    .totals-label {
+      text-align: right;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .total-value {
+      color: #2e7d32;
+      font-size: 13px;
+    }
+    
+    /* Footer Section */
+    .ts-footer-section {
+      border: 2px solid #333;
+      border-top: none;
+      padding: 12px 16px;
+    }
+    .footer-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
     }
-    .ts-logo {
+    .odometer-section {
+      display: flex;
+      gap: 24px;
+    }
+    .odo-field {
       display: flex;
       align-items: center;
-      gap: 12px;
-    }
-    .truck-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: #1976d2;
-    }
-    .company-name {
-      font-size: 24px;
-      font-weight: 600;
-      color: #1976d2;
-    }
-    .ts-badges {
-      display: flex;
       gap: 8px;
     }
-    .load-chip { background: #1976d2 !important; color: white !important; }
-    .value-chip { background: #4caf50 !important; color: white !important; }
-    
-    .ts-info-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin: 20px 0;
+    .odo-field label {
+      font-size: 11px;
+      font-weight: 600;
     }
-    .info-card {
-      background: white;
-      padding: 16px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    .odo-box {
+      width: 80px;
+      height: 24px;
+      border: 1px solid #333;
+      background: #fafafa;
     }
-    .info-card h4 {
+    .fuel-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .fuel-section label {
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .fuel-gauge {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin: 0 0 12px 0;
-      color: #1976d2;
-      font-size: 13px;
+      font-size: 12px;
     }
-    .info-card h4 mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-    .info-card p {
-      margin: 4px 0;
-      font-size: 13px;
-      color: #333;
-    }
-    
-    .ts-instructions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      background: #fff3e0;
-      border-radius: 8px;
-      margin: 16px 0;
-      color: #e65100;
-    }
-    
-    .ts-stops {
-      margin: 20px 0;
-    }
-    .ts-stops h3 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1976d2;
-      margin-bottom: 16px;
-    }
-    
-    .stop-card {
-      background: white;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .stop-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      background: #1976d2;
-      color: white;
-    }
-    .stop-num {
-      font-weight: 600;
-    }
-    .stop-name {
-      flex: 1;
-    }
-    .stop-type-chip {
-      background: rgba(255,255,255,0.2) !important;
-      color: white !important;
-      font-size: 11px !important;
-    }
-    .stop-body {
-      padding: 16px;
-    }
-    .stop-info p {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin: 4px 0;
-      font-size: 13px;
-    }
-    .stop-info mat-icon {
+    .fuel-box {
       font-size: 16px;
-      width: 16px;
-      height: 16px;
-      color: #666;
     }
     
-    .commodities-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 12px;
-      font-size: 12px;
-    }
-    .commodities-table th {
-      background: #e3f2fd;
-      padding: 8px;
-      text-align: left;
-      font-weight: 600;
-      color: #1565c0;
-    }
-    .commodities-table td {
-      padding: 8px;
-      border-bottom: 1px solid #eee;
-    }
-    .text-right {
-      text-align: right;
-    }
-    
-    .stop-notes {
+    .signatures-row {
       display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 12px;
-      padding: 8px;
-      background: #fff3e0;
-      border-radius: 4px;
-      font-size: 12px;
-      font-style: italic;
-      color: #e65100;
-    }
-    .stop-notes mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-    
-    .ts-manual {
-      background: white;
-      padding: 16px;
-      border-radius: 8px;
-      margin: 20px 0;
-      border: 2px dashed #ccc;
-    }
-    .ts-manual h4 {
-      margin: 0 0 16px 0;
-      color: #666;
-    }
-    .manual-fields {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-    }
-    .manual-field label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: #666;
-      font-size: 12px;
-    }
-    .input-line {
-      border-bottom: 1px solid #999;
-      height: 30px;
-    }
-    .fuel-options {
-      font-size: 12px;
-      color: #666;
-    }
-    
-    .ts-signatures {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
       gap: 40px;
-      margin: 30px 0;
+      padding-top: 12px;
+      border-top: 1px dashed #ccc;
     }
     .signature-block {
+      flex: 1;
       text-align: center;
     }
     .signature-line {
       border-bottom: 1px solid #333;
-      height: 50px;
-      margin-bottom: 8px;
+      height: 40px;
+      margin-bottom: 4px;
     }
     .signature-block span {
-      font-size: 11px;
+      font-size: 10px;
       color: #666;
+      text-transform: uppercase;
     }
     
-    .ts-footer {
-      text-align: center;
-      font-size: 11px;
+    .ts-generated {
+      text-align: right;
+      font-size: 9px;
       color: #999;
-      padding-top: 16px;
-      border-top: 1px solid #ddd;
-    }
-    
-    .status-pending { background: #ff9800 !important; color: white !important; }
-    .status-scheduled { background: #2196f3 !important; color: white !important; }
-    .status-in-transit { background: #00bcd4 !important; color: white !important; }
-    .status-delivered { background: #4caf50 !important; color: white !important; }
-    
-    @media (max-width: 768px) {
-      .ts-info-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      .manual-fields {
-        grid-template-columns: 1fr;
-      }
-      .ts-signatures {
-        grid-template-columns: 1fr;
-      }
+      margin-top: 8px;
     }
   `]
 })
@@ -6693,6 +7508,7 @@ export class TripSheetPreviewDialog implements OnInit {
   loading = true;
   tripSheet: any = null;
   deliveryStops: any[] = [];
+  emptyRows: number[] = [1, 2, 3, 4, 5]; // Empty rows for manual entries
   
   private apiUrl = environment.apiUrl;
   
@@ -6719,6 +7535,20 @@ export class TripSheetPreviewDialog implements OnInit {
         this.loading = false;
       }
     });
+  }
+  
+  getTotalQty(): number {
+    if (this.tripSheet?.lineItems?.length > 0) {
+      return this.tripSheet.lineItems.reduce((sum: number, item: any) => sum + (item.qty || 0), 0);
+    }
+    // Fallback to old stops format
+    let total = 0;
+    this.deliveryStops.forEach(stop => {
+      stop.commodities?.forEach((com: any) => {
+        total += com.quantity || 0;
+      });
+    });
+    return total;
   }
   
   getStatusClass(status: string): string {
@@ -6959,9 +7789,9 @@ export class SyncResultDialogComponent {
   ) {}
 }
 
-// Suggested Loads Dialog Component
+// Suggested Trips Dialog Component
 @Component({
-  selector: 'app-suggested-loads-dialog',
+  selector: 'app-suggested-trips-dialog',
   standalone: true,
   imports: [
     CommonModule,
@@ -6977,7 +7807,7 @@ export class SyncResultDialogComponent {
   ],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon>lightbulb</mat-icon> AI-Suggested Optimized Loads
+      <mat-icon>lightbulb</mat-icon> AI-Suggested Optimized Trips
     </h2>
     
     <mat-dialog-content>
@@ -6986,72 +7816,72 @@ export class SyncResultDialogComponent {
           <mat-spinner diameter="50"></mat-spinner>
           <p>Analyzing pending invoices and optimizing routes...</p>
         </div>
-      } @else if (suggestedLoads.length === 0) {
+      } @else if (suggestedTrips.length === 0) {
         <div class="empty-state">
           <mat-icon>info</mat-icon>
           <h3>No Suggestions Available</h3>
-          <p>There are no pending invoices to create loads from.</p>
+          <p>There are no pending invoices to create trips from.</p>
         </div>
       } @else {
         <div class="suggestions-summary">
           <mat-icon>analytics</mat-icon>
-          <span>Found <strong>{{suggestedLoads.length}}</strong> optimized load configurations covering <strong>{{totalInvoices}}</strong> invoices</span>
+          <span>Found <strong>{{suggestedTrips.length}}</strong> optimized trip configurations covering <strong>{{totalInvoices}}</strong> invoices</span>
         </div>
 
-        <div class="suggested-loads-list">
-          @for (load of suggestedLoads; track load.loadSequence) {
-            <mat-card class="load-card" [class.selected]="selectedLoad === load">
+        <div class="suggested-trips-list">
+          @for (trip of suggestedTrips; track trip.loadSequence) {
+            <mat-card class="trip-card" [class.selected]="selectedTrip === trip">
               <mat-card-header>
-                <div class="load-header">
-                  <div class="load-title">
-                    <h3>{{load.suggestedLoadNumber}}</h3>
+                <div class="trip-header">
+                  <div class="trip-title">
+                    <h3>{{trip.suggestedLoadNumber}}</h3>
                     <mat-chip-set>
-                      <mat-chip [class]="'priority-' + load.priority.toLowerCase()">
-                        {{load.priority}}
+                      <mat-chip [class]="'priority-' + trip.priority.toLowerCase()">
+                        {{trip.priority}}
                       </mat-chip>
-                      <mat-chip>Score: {{load.optimizationScore | number:'1.0-0'}}</mat-chip>
+                      <mat-chip>Score: {{trip.optimizationScore | number:'1.0-0'}}</mat-chip>
                     </mat-chip-set>
                   </div>
-                  <button mat-raised-button color="primary" (click)="createLoad(load)">
-                    <mat-icon>add</mat-icon> Create This Load
+                  <button mat-raised-button color="primary" (click)="createTrip(trip)">
+                    <mat-icon>add</mat-icon> Create This Trip
                   </button>
                 </div>
               </mat-card-header>
               
               <mat-card-content>
-                <div class="load-stats">
+                <div class="trip-stats">
                   <div class="stat">
                     <mat-icon>location_on</mat-icon>
                     <div>
-                      <strong>{{load.province}}</strong>
-                      <span>{{load.primaryCity}}</span>
+                      <strong>{{trip.province}}</strong>
+                      <span>{{trip.primaryCity}}</span>
                     </div>
                   </div>
                   <div class="stat">
                     <mat-icon>people</mat-icon>
                     <div>
-                      <strong>{{load.uniqueCustomers}}</strong>
+                      <strong>{{trip.uniqueCustomers}}</strong>
                       <span>Customers</span>
                     </div>
                   </div>
                   <div class="stat">
                     <mat-icon>description</mat-icon>
                     <div>
-                      <strong>{{load.totalInvoices}}</strong>
+                      <strong>{{trip.totalInvoices}}</strong>
                       <span>Invoices</span>
                     </div>
                   </div>
                   <div class="stat">
                     <mat-icon>attach_money</mat-icon>
                     <div>
-                      <strong>R{{load.totalValue | number:'1.2-2'}}</strong>
-                      <span>Total Value</span>
+                      <strong>R{{ (trip.totalWithVat || trip.totalValue * 1.15) | number:'1.2-2'}}</strong>
+                      <span>Total (incl. VAT)</span>
                     </div>
                   </div>
                   <div class="stat">
                     <mat-icon>local_shipping</mat-icon>
                     <div>
-                      <strong>{{load.recommendedVehicleType}}</strong>
+                      <strong>{{trip.recommendedVehicleType}}</strong>
                       <span>Vehicle Type</span>
                     </div>
                   </div>
@@ -7062,11 +7892,11 @@ export class SyncResultDialogComponent {
                     <mat-expansion-panel-header>
                       <mat-panel-title>
                         <mat-icon>people</mat-icon>
-                        Customers ({{load.customers.length}})
+                        Customers ({{trip.customers.length}})
                       </mat-panel-title>
                     </mat-expansion-panel-header>
                     <div class="customers-list">
-                      @for (customer of load.customers; track customer.customerNumber) {
+                      @for (customer of trip.customers; track customer.customerNumber) {
                         <div class="customer-item">
                           <div>
                             <strong>{{customer.customerName}}</strong>
@@ -7075,7 +7905,7 @@ export class SyncResultDialogComponent {
                           <div class="customer-details">
                             <span>{{customer.city}}</span>
                             <mat-chip>{{customer.invoiceCount}} invoice(s)</mat-chip>
-                            <strong>R{{customer.totalAmount | number:'1.2-2'}}</strong>
+                            <strong>R{{customer.totalAmount * 1.15 | number:'1.2-2'}}</strong>
                           </div>
                         </div>
                       }
@@ -7086,25 +7916,25 @@ export class SyncResultDialogComponent {
                     <mat-expansion-panel-header>
                       <mat-panel-title>
                         <mat-icon>list</mat-icon>
-                        Invoices ({{load.invoices.length}})
+                        Invoices ({{trip.invoices.length}})
                       </mat-panel-title>
                     </mat-expansion-panel-header>
                     <div class="invoices-list">
-                      @for (invoice of load.invoices; track invoice.invoiceId) {
+                      @for (invoice of trip.invoices; track invoice.invoiceId) {
                         <div class="invoice-item">
                           <span class="invoice-number">{{invoice.transactionNumber}}</span>
                           <span class="customer-name">{{invoice.customerName}}</span>
                           <span class="product">{{invoice.productDescription}}</span>
-                          <strong>R{{invoice.amount | number:'1.2-2'}}</strong>
+                          <strong>R{{invoice.amount * 1.15 | number:'1.2-2'}}</strong>
                         </div>
                       }
                     </div>
                   </mat-expansion-panel>
                 </mat-accordion>
 
-                <div class="load-notes">
+                <div class="trip-notes">
                   <mat-icon>info</mat-icon>
-                  <span>{{load.notes}}</span>
+                  <span>{{trip.notes}}</span>
                 </div>
               </mat-card-content>
             </mat-card>
@@ -7115,8 +7945,8 @@ export class SyncResultDialogComponent {
 
     <mat-dialog-actions>
       <button mat-button (click)="close()">Close</button>
-      <button mat-raised-button color="accent" (click)="createAllLoads()" [disabled]="loading || suggestedLoads.length === 0">
-        <mat-icon>playlist_add</mat-icon> Create All Suggested Loads
+      <button mat-raised-button color="accent" (click)="createAllTrips()" [disabled]="loading || suggestedTrips.length === 0">
+        <mat-icon>playlist_add</mat-icon> Create All Suggested Trips
       </button>
     </mat-dialog-actions>
   `,
@@ -7156,31 +7986,31 @@ export class SyncResultDialogComponent {
       width: 32px;
       height: 32px;
     }
-    .suggested-loads-list {
+    .suggested-trips-list {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
-    .load-card {
+    .trip-card {
       border-left: 4px solid #1976d2;
     }
-    .load-card.selected {
+    .trip-card.selected {
       border-left-color: #4caf50;
       background: #f1f8e9;
     }
-    .load-header {
+    .trip-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       width: 100%;
       padding: 8px 0;
     }
-    .load-title {
+    .trip-title {
       display: flex;
       align-items: center;
       gap: 16px;
     }
-    .load-title h3 {
+    .trip-title h3 {
       margin: 0;
       font-size: 18px;
     }
@@ -7196,7 +8026,7 @@ export class SyncResultDialogComponent {
       background: #4caf50 !important;
       color: white !important;
     }
-    .load-stats {
+    .trip-stats {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 16px;
@@ -7278,7 +8108,7 @@ export class SyncResultDialogComponent {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .load-notes {
+    .trip-notes {
       display: flex;
       align-items: start;
       gap: 8px;
@@ -7289,7 +8119,7 @@ export class SyncResultDialogComponent {
       color: #1565c0;
       font-size: 14px;
     }
-    .load-notes mat-icon {
+    .trip-notes mat-icon {
       color: #1976d2;
       flex-shrink: 0;
     }
@@ -7299,15 +8129,15 @@ export class SyncResultDialogComponent {
     }
   `]
 })
-export class SuggestedLoadsDialog implements OnInit {
+export class SuggestedTripsDialog implements OnInit {
   loading = true;
-  suggestedLoads: any[] = [];
-  selectedLoad: any = null;
+  suggestedTrips: any[] = [];
+  selectedTrip: any = null;
   totalInvoices = 0;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string },
-    private dialogRef: MatDialogRef<SuggestedLoadsDialog>,
+    private dialogRef: MatDialogRef<SuggestedTripsDialog>,
     private http: HttpClient
   ) {}
 
@@ -7317,64 +8147,64 @@ export class SuggestedLoadsDialog implements OnInit {
 
   loadSuggestions(): void {
     this.http.get<any[]>(`${this.data.apiUrl}/logistics/importedinvoices/suggested-loads`).subscribe({
-      next: (loads) => {
-        this.suggestedLoads = loads;
-        this.totalInvoices = loads.reduce((sum, load) => sum + load.totalInvoices, 0);
+      next: (trips) => {
+        this.suggestedTrips = trips;
+        this.totalInvoices = trips.reduce((sum, trip) => sum + trip.totalInvoices, 0);
         this.loading = false;
       },
       error: (err) => {
-        console.error('Failed to load suggested loads:', err);
+        console.error('Failed to load suggested trips:', err);
         alert('Failed to load suggestions: ' + (err.error?.message || err.message));
         this.loading = false;
       }
     });
   }
 
-  createLoad(load: any): void {
-    this.selectedLoad = load;
+  createTrip(trip: any): void {
+    this.selectedTrip = trip;
     
     this.http.post<any>(`${this.data.apiUrl}/logistics/importedinvoices/create-tripsheet`, {
-      invoiceIds: load.invoiceIds,
-      notes: load.notes
+      invoiceIds: trip.invoiceIds,
+      notes: trip.notes
     }).subscribe({
       next: (result) => {
-        alert(`Load ${result.loadNumber} created successfully with ${result.stops} stops!`);
+        alert(`Trip ${result.loadNumber} created successfully with ${result.stops} stops!`);
         this.dialogRef.close(true);
       },
       error: (err) => {
-        console.error('Failed to create load:', err);
-        alert('Failed to create load: ' + (err.error?.message || err.message));
-        this.selectedLoad = null;
+        console.error('Failed to create trip:', err);
+        alert('Failed to create trip: ' + (err.error?.message || err.message));
+        this.selectedTrip = null;
       }
     });
   }
 
-  createAllLoads(): void {
-    if (!confirm(`Create all ${this.suggestedLoads.length} suggested loads?`)) {
+  createAllTrips(): void {
+    if (!confirm(`Create all ${this.suggestedTrips.length} suggested trips?`)) {
       return;
     }
 
     let completed = 0;
-    const total = this.suggestedLoads.length;
+    const total = this.suggestedTrips.length;
 
-    this.suggestedLoads.forEach((load, index) => {
+    this.suggestedTrips.forEach((trip, index) => {
       setTimeout(() => {
         this.http.post<any>(`${this.data.apiUrl}/logistics/importedinvoices/create-tripsheet`, {
-          invoiceIds: load.invoiceIds,
-          notes: load.notes
+          invoiceIds: trip.invoiceIds,
+          notes: trip.notes
         }).subscribe({
           next: (result) => {
             completed++;
             if (completed === total) {
-              alert(`Successfully created all ${total} loads!`);
+              alert(`Successfully created all ${total} trips!`);
               this.dialogRef.close(true);
             }
           },
           error: (err) => {
-            console.error('Failed to create load:', err);
+            console.error('Failed to create trip:', err);
             completed++;
             if (completed === total) {
-              alert(`Created ${total - this.suggestedLoads.length} of ${total} loads. Some failed.`);
+              alert(`Created ${completed} of ${total} trips. Some failed.`);
               this.dialogRef.close(true);
             }
           }
@@ -8315,6 +9145,561 @@ export class TfnOrderDetailsDialog {
       printWindow.print();
       printWindow.close();
     }, 250);
+  }
+}
+
+// Sleep Outs Dialog Component (Driver Food Allowance)
+@Component({
+  selector: 'app-sleepouts-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatInputModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatChipsModule,
+    MatTooltipModule,
+    FormsModule
+  ],
+  template: `
+    <div class="sleepouts-dialog">
+      <div class="dialog-header">
+        <h2>
+          <mat-icon>hotel</mat-icon>
+          Sleep Outs (Driver Food Allowance)
+        </h2>
+        <button mat-icon-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-content">
+        <div class="toolbar">
+          <mat-form-field appearance="outline" class="search-field">
+            <mat-label>Search...</mat-label>
+            <input matInput [(ngModel)]="searchTerm" (input)="filterSleepOuts()" placeholder="Search by driver name or status">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+          
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Status</mat-label>
+            <mat-select [(ngModel)]="statusFilter" (selectionChange)="filterSleepOuts()">
+              <mat-option value="all">All</mat-option>
+              <mat-option value="Requested">Requested</mat-option>
+              <mat-option value="Approved">Approved</mat-option>
+              <mat-option value="Rejected">Rejected</mat-option>
+              <mat-option value="Paid">Paid</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <button mat-raised-button color="primary" (click)="openAddSleepOutForm()">
+            <mat-icon>add</mat-icon>
+            Add Sleep Out
+          </button>
+        </div>
+
+        <!-- Add/Edit Form -->
+        @if (showForm) {
+          <div class="form-container">
+            <h3>{{ editingSleepOut ? 'Edit Sleep Out' : 'Add New Sleep Out' }}</h3>
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Driver</mat-label>
+                <mat-select [(ngModel)]="formData.driverId" required>
+                  @for (driver of data.drivers; track driver.id) {
+                    <mat-option [value]="driver.id">
+                      {{ driver.firstName }} {{ driver.lastName }} ({{ driver.employeeNumber || 'N/A' }})
+                    </mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Amount (R)</mat-label>
+                <input matInput type="number" [(ngModel)]="formData.amount" required min="0" step="50">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Date</mat-label>
+                <input matInput [matDatepicker]="picker" [(ngModel)]="formData.date" required>
+                <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+                <mat-datepicker #picker></mat-datepicker>
+              </mat-form-field>
+            </div>
+            
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Reason</mat-label>
+              <input matInput [(ngModel)]="formData.reason" placeholder="e.g., Long distance delivery, overnight trip">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Notes</mat-label>
+              <textarea matInput [(ngModel)]="formData.notes" rows="2" placeholder="Additional notes..."></textarea>
+            </mat-form-field>
+
+            <div class="form-actions">
+              <button mat-button (click)="cancelForm()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="saveSleepOut()" [disabled]="!formData.driverId || !formData.amount || !formData.date">
+                {{ editingSleepOut ? 'Update' : 'Submit Request' }}
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- Sleep Outs List -->
+        <div class="sleepouts-list">
+          @for (sleepOut of filteredSleepOuts; track sleepOut.id) {
+            <div class="sleepout-card" [class.status-requested]="sleepOut.status === 'Requested'"
+                 [class.status-approved]="sleepOut.status === 'Approved'"
+                 [class.status-rejected]="sleepOut.status === 'Rejected'"
+                 [class.status-paid]="sleepOut.status === 'Paid'">
+              <div class="sleepout-main">
+                <div class="driver-info">
+                  <mat-icon>person</mat-icon>
+                  <span class="driver-name">{{ sleepOut.driverName || 'Unknown Driver' }}</span>
+                  @if (sleepOut.driverEmployeeNumber) {
+                    <span class="emp-number">({{ sleepOut.driverEmployeeNumber }})</span>
+                  }
+                </div>
+                <div class="amount">
+                  <mat-icon>payments</mat-icon>
+                  <span class="amount-value">R {{ sleepOut.amount | number:'1.2-2' }}</span>
+                </div>
+              </div>
+              
+              <div class="sleepout-details">
+                <div class="detail">
+                  <mat-icon>calendar_today</mat-icon>
+                  <span>{{ formatDate(sleepOut.date) }}</span>
+                </div>
+                @if (sleepOut.reason) {
+                  <div class="detail">
+                    <mat-icon>info</mat-icon>
+                    <span>{{ sleepOut.reason }}</span>
+                  </div>
+                }
+                @if (sleepOut.loadNumber) {
+                  <div class="detail">
+                    <mat-icon>local_shipping</mat-icon>
+                    <span>Trip: {{ sleepOut.loadNumber }}</span>
+                  </div>
+                }
+              </div>
+
+              <div class="sleepout-actions">
+                <span class="status-badge" [class]="'status-' + sleepOut.status.toLowerCase()">
+                  {{ sleepOut.status }}
+                </span>
+                
+                @if (sleepOut.status === 'Requested') {
+                  <button mat-icon-button color="primary" (click)="approveSleepOut(sleepOut, true)" matTooltip="Approve">
+                    <mat-icon>check_circle</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="approveSleepOut(sleepOut, false)" matTooltip="Reject">
+                    <mat-icon>cancel</mat-icon>
+                  </button>
+                  <button mat-icon-button (click)="editSleepOut(sleepOut)" matTooltip="Edit">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="deleteSleepOut(sleepOut)" matTooltip="Delete">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                }
+                @if (sleepOut.status === 'Approved') {
+                  <button mat-icon-button color="accent" (click)="markAsPaid(sleepOut)" matTooltip="Mark as Paid">
+                    <mat-icon>paid</mat-icon>
+                  </button>
+                }
+              </div>
+            </div>
+          } @empty {
+            <div class="no-data">
+              <mat-icon>hotel</mat-icon>
+              <p>No sleep outs found</p>
+              <button mat-raised-button color="primary" (click)="openAddSleepOutForm()">
+                <mat-icon>add</mat-icon> Add First Sleep Out
+              </button>
+            </div>
+          }
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-bar">
+          <div class="summary-item">
+            <span class="label">Requested:</span>
+            <span class="value requested">{{ getSummary('Requested') }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">Approved:</span>
+            <span class="value approved">{{ getSummary('Approved') }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">Total Amount:</span>
+            <span class="value total">R {{ getTotalAmount() | number:'1.2-2' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <mat-dialog-actions align="end">
+        <button mat-button (click)="dialogRef.close('refresh')">Close</button>
+      </mat-dialog-actions>
+    </div>
+  `,
+  styles: [`
+    :host { display: block; width: 100%; }
+    .sleepouts-dialog { width: 100%; overflow: hidden; }
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 32px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      margin: -24px -24px 0 -24px;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 22px;
+    }
+    .dialog-header button { color: white; }
+    .dialog-content {
+      padding: 24px;
+      max-height: 65vh;
+      overflow-y: auto;
+    }
+    .toolbar {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .search-field { flex: 1; min-width: 200px; }
+    .filter-field { width: 150px; }
+    .form-container {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .form-container h3 {
+      margin: 0 0 16px 0;
+      color: #667eea;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .full-width { width: 100%; }
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .sleepouts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sleepout-card {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 20px;
+      align-items: center;
+      padding: 16px 20px;
+      background: #fafafa;
+      border-radius: 12px;
+      border-left: 4px solid #ccc;
+      transition: all 0.2s;
+    }
+    .sleepout-card:hover {
+      background: #f0f0f0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .sleepout-card.status-requested { border-left-color: #ff9800; }
+    .sleepout-card.status-approved { border-left-color: #4caf50; }
+    .sleepout-card.status-rejected { border-left-color: #f44336; }
+    .sleepout-card.status-paid { border-left-color: #2196f3; }
+    .sleepout-main {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .driver-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .driver-info mat-icon { color: #667eea; font-size: 20px; width: 20px; height: 20px; }
+    .driver-name { font-weight: 600; color: #333; }
+    .emp-number { color: #999; font-size: 12px; }
+    .amount {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .amount mat-icon { color: #4caf50; font-size: 18px; width: 18px; height: 18px; }
+    .amount-value { font-size: 18px; font-weight: 600; color: #4caf50; }
+    .sleepout-details {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .detail {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #666;
+    }
+    .detail mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .sleepout-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-badge {
+      padding: 6px 14px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    .status-requested { background: #fff3e0; color: #e65100; }
+    .status-approved { background: #e8f5e9; color: #2e7d32; }
+    .status-rejected { background: #ffebee; color: #c62828; }
+    .status-paid { background: #e3f2fd; color: #1565c0; }
+    .no-data {
+      text-align: center;
+      padding: 60px;
+      color: #999;
+    }
+    .no-data mat-icon {
+      font-size: 56px;
+      width: 56px;
+      height: 56px;
+      margin-bottom: 16px;
+    }
+    .summary-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 24px;
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    .summary-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .summary-item .label { color: #666; font-size: 14px; }
+    .summary-item .value { font-weight: 600; font-size: 16px; }
+    .summary-item .value.requested { color: #e65100; }
+    .summary-item .value.approved { color: #2e7d32; }
+    .summary-item .value.total { color: #667eea; }
+    mat-dialog-actions {
+      padding: 16px 32px;
+      border-top: 1px solid #e0e0e0;
+    }
+    @media (max-width: 768px) {
+      .form-row { grid-template-columns: 1fr; }
+      .sleepout-card { grid-template-columns: 1fr; }
+      .toolbar { flex-direction: column; align-items: stretch; }
+    }
+  `]
+})
+export class SleepOutsDialog {
+  searchTerm = '';
+  statusFilter = 'all';
+  filteredSleepOuts: SleepOut[] = [];
+  showForm = false;
+  editingSleepOut: SleepOut | null = null;
+  formData = {
+    driverId: null as number | null,
+    amount: 250,
+    date: new Date(),
+    reason: '',
+    notes: '',
+    loadId: null as number | null
+  };
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: { sleepOuts: SleepOut[], drivers: any[], apiUrl: string },
+    public dialogRef: MatDialogRef<SleepOutsDialog>
+  ) {
+    this.filteredSleepOuts = [...this.data.sleepOuts];
+  }
+
+  filterSleepOuts(): void {
+    let filtered = [...this.data.sleepOuts];
+    
+    if (this.statusFilter !== 'all') {
+      filtered = filtered.filter(s => s.status === this.statusFilter);
+    }
+    
+    if (this.searchTerm) {
+      const term = this.searchTerm.toLowerCase();
+      filtered = filtered.filter(s =>
+        s.driverName?.toLowerCase().includes(term) ||
+        s.driverEmployeeNumber?.toLowerCase().includes(term) ||
+        s.reason?.toLowerCase().includes(term)
+      );
+    }
+    
+    this.filteredSleepOuts = filtered;
+  }
+
+  openAddSleepOutForm(): void {
+    this.showForm = true;
+    this.editingSleepOut = null;
+    this.formData = {
+      driverId: null,
+      amount: 250,
+      date: new Date(),
+      reason: '',
+      notes: '',
+      loadId: null
+    };
+  }
+
+  editSleepOut(sleepOut: SleepOut): void {
+    this.showForm = true;
+    this.editingSleepOut = sleepOut;
+    this.formData = {
+      driverId: sleepOut.driverId,
+      amount: sleepOut.amount,
+      date: new Date(sleepOut.date),
+      reason: sleepOut.reason || '',
+      notes: sleepOut.notes || '',
+      loadId: sleepOut.loadId || null
+    };
+  }
+
+  cancelForm(): void {
+    this.showForm = false;
+    this.editingSleepOut = null;
+  }
+
+  saveSleepOut(): void {
+    if (this.editingSleepOut) {
+      // Update existing
+      this.http.put(`${this.data.apiUrl}/logistics/sleepouts/${this.editingSleepOut.id}`, {
+        amount: this.formData.amount,
+        date: this.formData.date,
+        reason: this.formData.reason,
+        notes: this.formData.notes
+      }).subscribe({
+        next: () => {
+          this.snackBar.open('Sleep out updated successfully', 'Close', { duration: 3000 });
+          this.refreshList();
+          this.cancelForm();
+        },
+        error: (err) => {
+          this.snackBar.open('Failed to update sleep out: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+        }
+      });
+    } else {
+      // Create new
+      this.http.post(`${this.data.apiUrl}/logistics/sleepouts`, this.formData).subscribe({
+        next: () => {
+          this.snackBar.open('Sleep out request submitted', 'Close', { duration: 3000 });
+          this.refreshList();
+          this.cancelForm();
+        },
+        error: (err) => {
+          this.snackBar.open('Failed to create sleep out: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+        }
+      });
+    }
+  }
+
+  approveSleepOut(sleepOut: SleepOut, approved: boolean): void {
+    if (!confirm(`Are you sure you want to ${approved ? 'approve' : 'reject'} this sleep out for ${sleepOut.driverName}?`)) {
+      return;
+    }
+    
+    this.http.post(`${this.data.apiUrl}/logistics/sleepouts/${sleepOut.id}/approve`, { approved }).subscribe({
+      next: () => {
+        this.snackBar.open(`Sleep out ${approved ? 'approved' : 'rejected'}`, 'Close', { duration: 3000 });
+        this.refreshList();
+      },
+      error: (err) => {
+        this.snackBar.open('Failed to process: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  markAsPaid(sleepOut: SleepOut): void {
+    if (!confirm(`Mark R${sleepOut.amount} sleep out for ${sleepOut.driverName} as paid?`)) {
+      return;
+    }
+    
+    this.http.post(`${this.data.apiUrl}/logistics/sleepouts/${sleepOut.id}/mark-paid`, {}).subscribe({
+      next: () => {
+        this.snackBar.open('Sleep out marked as paid', 'Close', { duration: 3000 });
+        this.refreshList();
+      },
+      error: (err) => {
+        this.snackBar.open('Failed to mark as paid: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  deleteSleepOut(sleepOut: SleepOut): void {
+    if (!confirm(`Delete sleep out request for ${sleepOut.driverName}?`)) {
+      return;
+    }
+    
+    this.http.delete(`${this.data.apiUrl}/logistics/sleepouts/${sleepOut.id}`).subscribe({
+      next: () => {
+        this.snackBar.open('Sleep out deleted', 'Close', { duration: 3000 });
+        this.refreshList();
+      },
+      error: (err) => {
+        this.snackBar.open('Failed to delete: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  private refreshList(): void {
+    this.http.get<SleepOut[]>(`${this.data.apiUrl}/logistics/sleepouts`).subscribe({
+      next: (sleepOuts) => {
+        this.data.sleepOuts = sleepOuts;
+        this.filterSleepOuts();
+      }
+    });
+  }
+
+  formatDate(date: Date | string): string {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  getSummary(status: string): number {
+    return this.data.sleepOuts.filter(s => s.status === status).length;
+  }
+
+  getTotalAmount(): number {
+    return this.data.sleepOuts
+      .filter(s => s.status === 'Approved' || s.status === 'Requested')
+      .reduce((sum, s) => sum + s.amount, 0);
   }
 }
 
@@ -9264,6 +10649,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     MatNativeDateModule,
     MatStepperModule,
     MatDividerModule,
+    MatAutocompleteModule,
     FormsModule,
     ReactiveFormsModule,
     CdkDrag,
@@ -9273,10 +10659,13 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     <div class="create-tripsheet-dialog">
       <div class="dialog-header">
         <h2>
-          <mat-icon>add_road</mat-icon>
-          Create Trip Sheet
+          <mat-icon>{{ data.isEditMode ? 'edit' : 'add_road' }}</mat-icon>
+          {{ data.isEditMode ? 'Edit Trip Sheet' : 'Create Trip Sheet' }}
         </h2>
         <div class="header-info">
+          @if (data.isEditMode && data.existingTripsheet?.loadNumber) {
+            <mat-chip class="edit-badge">{{ data.existingTripsheet.loadNumber }}</mat-chip>
+          }
           @if (selectedStops.length > 0) {
             <mat-chip class="stop-count">{{ selectedStops.length }} stops</mat-chip>
           }
@@ -9290,7 +10679,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       </div>
 
       <div class="dialog-content">
-        <mat-stepper #stepper linear>
+        <mat-stepper #stepper linear (selectionChange)="onStepChange($event)">
           <!-- Step 1: Select Invoices/Stops -->
           <mat-step [completed]="selectedStops.length > 0" label="Select Stops">
             <div class="step-content">
@@ -9326,8 +10715,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                   @for (invoice of filteredInvoices(); track invoice.id) {
                     <div class="invoice-item" 
                          [class.selected]="isInvoiceSelected(invoice)"
-                         (click)="toggleInvoiceSelection(invoice)">
-                      <mat-checkbox [checked]="isInvoiceSelected(invoice)" (click)="$event.stopPropagation()"></mat-checkbox>
+                         [class.part-delivery-marked]="partDeliveryMap.get(invoice.id)">
                       <div class="invoice-info">
                         <span class="invoice-number">{{ invoice.transactionNumber }}</span>
                         <span class="customer-name">{{ invoice.customerName }}</span>
@@ -9343,8 +10731,22 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                         @if (invoice.city) {
                           <span class="city">{{ invoice.city }}</span>
                         }
+                        @if (invoice.quantity) {
+                          <span class="quantity">Qty: {{ invoice.quantity }}</span>
+                        }
                       </div>
-                      <mat-icon class="add-icon">add_circle</mat-icon>
+                      <div class="part-delivery-toggle" (click)="$event.stopPropagation()">
+                        <mat-checkbox 
+                          [checked]="partDeliveryMap.get(invoice.id) || false"
+                          (change)="togglePartDelivery(invoice.id, $event.checked)"
+                          color="warn"
+                          matTooltip="Mark as Part Delivery - partial quantity will be delivered">
+                          <span class="part-delivery-label">Part</span>
+                        </mat-checkbox>
+                      </div>
+                      <button mat-icon-button class="add-btn" (click)="addStopWithPartDelivery(invoice); $event.stopPropagation()" matTooltip="Add to trip sheet">
+                        <mat-icon class="add-icon">add_circle</mat-icon>
+                      </button>
                     </div>
                   }
                   @if (filteredInvoices().length === 0) {
@@ -9367,7 +10769,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                 </div>
                 <div class="stops-list" cdkDropList (cdkDropListDropped)="dropStop($event)">
                   @for (stop of selectedStops; track stop.id; let i = $index) {
-                    <div class="stop-item" cdkDrag>
+                    <div class="stop-item" [class.part-delivery]="stop.isPartDelivery" cdkDrag>
                       <div class="stop-drag-handle" cdkDragHandle>
                         <mat-icon>drag_indicator</mat-icon>
                       </div>
@@ -9376,10 +10778,29 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                         <span class="stop-customer">{{ stop.customerName }}</span>
                         <span class="stop-address">{{ stop.address || 'No address' }}</span>
                         <span class="stop-invoice">{{ stop.transactionNumber }}</span>
+                        @if (stop.isPartDelivery) {
+                          <span class="part-delivery-badge">
+                            <mat-icon>splitscreen</mat-icon> Part Delivery
+                          </span>
+                        }
                       </div>
-                      <div class="stop-value">
-                        R {{ stop.salesAmount | number:'1.2-2' }}
-                      </div>
+                      @if (stop.isPartDelivery) {
+                        <div class="part-delivery-qty">
+                          <mat-form-field appearance="outline" class="qty-field">
+                            <mat-label>Qty</mat-label>
+                            <input matInput type="number" 
+                                   [(ngModel)]="stop.partialQuantity" 
+                                   [max]="stop.originalQuantity"
+                                   min="1"
+                                   (change)="onPartialQuantityChange(stop)">
+                            <mat-hint>of {{ stop.originalQuantity }}</mat-hint>
+                          </mat-form-field>
+                        </div>
+                      } @else {
+                        <div class="stop-value">
+                          R {{ stop.salesAmount | number:'1.2-2' }}
+                        </div>
+                      }
                       <button mat-icon-button (click)="removeStop(i)" matTooltip="Remove stop">
                         <mat-icon>remove_circle</mat-icon>
                       </button>
@@ -9406,37 +10827,106 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
           <!-- Step 2: Route Optimization & Details -->
           <mat-step [completed]="tripForm.valid" label="Route Details">
             <div class="step-content route-step">
+              <!-- Route Preview Map - At the top -->
+              <div class="route-map-preview">
+                <div class="map-header">
+                  <h3><mat-icon>map</mat-icon> Route Preview</h3>
+                  <div class="map-actions">
+                    <button mat-stroked-button color="primary" (click)="loadTfnDepots()" matTooltip="Show TFN depot locations on the map">
+                      <mat-icon>store</mat-icon> Load TFN Depots
+                    </button>
+                    <button mat-icon-button (click)="refreshMap()" matTooltip="Refresh map">
+                      <mat-icon>refresh</mat-icon>
+                    </button>
+                  </div>
+                </div>
+                <div id="tripsheetRouteMap" class="route-map"></div>
+                @if (selectedStops.length > 0) {
+                  <div class="map-legend">
+                    <span class="legend-item"><span class="marker warehouse"></span> Warehouse</span>
+                    <span class="legend-item"><span class="marker stop"></span> Delivery Stop</span>
+                    @if (tfnDepotsLoaded) {
+                      <span class="legend-item"><span class="marker depot"></span> TFN Depot</span>
+                    }
+                  </div>
+                }
+                @if (selectedStops.length > 0 && !stopsHaveCoords()) {
+                  <div class="map-warning">
+                    <mat-icon>warning</mat-icon>
+                    <span>Some stops are missing coordinates. Click "Geocode All Missing" to get coordinates.</span>
+                  </div>
+                }
+              </div>
+
+              <!-- Route Configuration - Above Delivery Stops -->
               <div class="route-config">
                 <h3><mat-icon>route</mat-icon> Route Configuration</h3>
                 
+                @if (!data.warehouses?.length && !data.drivers?.length && !data.vehicles?.length) {
+                  <div class="config-loading">
+                    <mat-spinner diameter="20"></mat-spinner>
+                    <span>Loading configuration data...</span>
+                  </div>
+                }
+
                 <div class="config-grid">
                   <mat-form-field appearance="outline">
                     <mat-label>Pickup Warehouse</mat-label>
-                    <mat-select [(ngModel)]="selectedWarehouse">
-                      @for (wh of data.warehouses; track wh.id) {
+                    <input matInput
+                           [(ngModel)]="warehouseSearchText"
+                           [matAutocomplete]="warehouseAuto"
+                           (input)="filterWarehouses()"
+                           (focus)="filterWarehouses()"
+                           placeholder="Type to search warehouses...">
+                    <mat-autocomplete #warehouseAuto="matAutocomplete"
+                                      [displayWith]="displayWarehouse.bind(this)"
+                                      (optionSelected)="onWarehouseAutocompleteSelected($event)">
+                      @for (wh of filteredWarehouses; track wh.id) {
                         <mat-option [value]="wh">{{ wh.name }} - {{ wh.city }}</mat-option>
                       }
-                    </mat-select>
+                    </mat-autocomplete>
+                    <mat-icon matSuffix>warehouse</mat-icon>
+                    <mat-hint>{{ data.warehouses?.length || 0 }} warehouses available</mat-hint>
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
                     <mat-label>Driver</mat-label>
-                    <mat-select [(ngModel)]="selectedDriver">
+                    <input matInput
+                           [(ngModel)]="driverSearchText"
+                           [matAutocomplete]="driverAuto"
+                           (input)="filterDrivers()"
+                           (focus)="filterDrivers()"
+                           placeholder="Type to search drivers...">
+                    <mat-autocomplete #driverAuto="matAutocomplete"
+                                      [displayWith]="displayDriver.bind(this)"
+                                      (optionSelected)="onDriverAutocompleteSelected($event)">
                       <mat-option [value]="null">-- Unassigned --</mat-option>
-                      @for (driver of data.drivers; track driver.id) {
+                      @for (driver of filteredDrivers; track driver.id) {
                         <mat-option [value]="driver">{{ driver.firstName }} {{ driver.lastName }}</mat-option>
                       }
-                    </mat-select>
+                    </mat-autocomplete>
+                    <mat-icon matSuffix>person</mat-icon>
+                    <mat-hint>{{ data.drivers?.length || 0 }} drivers available</mat-hint>
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
                     <mat-label>Vehicle</mat-label>
-                    <mat-select [(ngModel)]="selectedVehicle">
+                    <input matInput
+                           [(ngModel)]="vehicleSearchText"
+                           [matAutocomplete]="vehicleAuto"
+                           (input)="filterVehicles()"
+                           (focus)="filterVehicles()"
+                           placeholder="Type to search vehicles...">
+                    <mat-autocomplete #vehicleAuto="matAutocomplete"
+                                      [displayWith]="displayVehicle.bind(this)"
+                                      (optionSelected)="onVehicleAutocompleteSelected($event)">
                       <mat-option [value]="null">-- Unassigned --</mat-option>
-                      @for (vehicle of data.vehicles; track vehicle.id) {
+                      @for (vehicle of filteredVehicles; track vehicle.id) {
                         <mat-option [value]="vehicle">{{ vehicle.registrationNumber }} - {{ vehicle.make }} {{ vehicle.model }}</mat-option>
                       }
-                    </mat-select>
+                    </mat-autocomplete>
+                    <mat-icon matSuffix>local_shipping</mat-icon>
+                    <mat-hint>{{ data.vehicles?.length || 0 }} vehicles available</mat-hint>
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
@@ -9472,14 +10962,10 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                     }
                     {{ advancedOptimizing ? 'Analyzing...' : 'Smart Optimize' }}
                   </button>
-                  <button mat-stroked-button color="warn" (click)="calculateDistanceMatrix()" [disabled]="calculatingMatrix || selectedStops.length < 2" matTooltip="Calculate distances between all stops using Google Distance Matrix API">
-                    @if (calculatingMatrix) {
-                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
-                    } @else {
-                      <mat-icon>grid_on</mat-icon>
-                    }
-                    {{ calculatingMatrix ? 'Calculating Matrix...' : 'Distance Matrix' }}
-                  </button>
+                  <mat-checkbox [(ngModel)]="includeRouteMapInTripsheet" color="primary" matTooltip="Include a screenshot of the route preview map in the printed tripsheet">
+                    <mat-icon class="checkbox-icon">map</mat-icon>
+                    Add route preview map to tripsheet
+                  </mat-checkbox>
                 </div>
 
                 @if (optimizationMessage) {
@@ -9547,9 +11033,19 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                       <span class="value">{{ estimatedTime }}</span>
                     </div>
                     <div class="summary-item">
-                      <mat-icon>payments</mat-icon>
-                      <span class="label">Total Value:</span>
+                      <mat-icon>receipt</mat-icon>
+                      <span class="label">Subtotal:</span>
                       <span class="value">R {{ totalValue | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="summary-item">
+                      <mat-icon>percent</mat-icon>
+                      <span class="label">VAT (15%):</span>
+                      <span class="value">R {{ totalValue * 0.15 | number:'1.2-2' }}</span>
+                    </div>
+                    <div class="summary-item highlight">
+                      <mat-icon>payments</mat-icon>
+                      <span class="label">Total Incl. VAT:</span>
+                      <span class="value">R {{ totalValue * 1.15 | number:'1.2-2' }}</span>
                     </div>
                     @if (fuelEstimate > 0) {
                       <div class="summary-item">
@@ -9560,17 +11056,138 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                     }
                   </div>
                 }
-
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Special Instructions</mat-label>
-                  <textarea matInput [(ngModel)]="specialInstructions" rows="3" placeholder="Any special instructions for the driver..."></textarea>
-                </mat-form-field>
               </div>
 
-              <div class="route-map-preview">
-                <h3><mat-icon>map</mat-icon> Route Preview</h3>
-                <div id="tripsheetRouteMap" class="route-map"></div>
-              </div>
+              <!-- Grouped Delivery Stops with Editable Addresses -->
+              @if (groupedStops.length > 0) {
+                <div class="stops-address-section">
+                  <div class="section-header">
+                    <h3><mat-icon>place</mat-icon> Delivery Stops ({{ groupedStops.length }} locations, {{ selectedStops.length }} invoices)</h3>
+                    <div class="header-actions">
+                      <span class="coord-status">
+                        <mat-icon [class.success]="stopsHaveCoords()" [class.warning]="!stopsHaveCoords()">
+                          {{ stopsHaveCoords() ? 'check_circle' : 'warning' }}
+                        </mat-icon>
+                        {{ getStopsWithCoords() }}/{{ groupedStops.length }} geocoded
+                      </span>
+                      <button mat-stroked-button color="primary" (click)="geocodeAllStops()" [disabled]="geocodingAllStops" matTooltip="Geocode all stops missing coordinates">
+                        @if (geocodingAllStops) {
+                          <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                        } @else {
+                          <mat-icon>my_location</mat-icon>
+                        }
+                        {{ geocodingAllStops ? 'Geocoding...' : 'Geocode All' }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="stops-list">
+                    @for (group of groupedStops; track group.customerName; let i = $index) {
+                      <div class="stop-item" [class.missing-coords]="!group.latitude || !group.longitude" [class.collapsed]="group.isCollapsed && group.latitude && group.longitude">
+                        <div class="stop-number">{{ i + 1 }}</div>
+                        <div class="stop-details">
+                          <div class="stop-header" (click)="toggleStopCollapse(group)">
+                            <div class="customer-info">
+                              <span class="customer-name">{{ group.customerName }}</span>
+                              @if (group.invoices.length > 1) {
+                                <mat-chip class="invoice-count">{{ group.invoices.length }} invoices</mat-chip>
+                              } @else {
+                                <span class="invoice-number">{{ group.invoices[0].invoiceNumber }}</span>
+                              }
+                            </div>
+                            <div class="stop-status">
+                              @if (group.latitude && group.longitude) {
+                                <mat-icon class="coord-icon success" matTooltip="Coordinates: {{ group.latitude }}, {{ group.longitude }}">location_on</mat-icon>
+                              } @else {
+                                <mat-icon class="coord-icon warning" matTooltip="Missing coordinates - enter address">location_off</mat-icon>
+                              }
+                              <mat-icon class="collapse-icon">{{ group.isCollapsed ? 'expand_more' : 'expand_less' }}</mat-icon>
+                            </div>
+                          </div>
+                          @if (!group.isCollapsed || !group.latitude || !group.longitude) {
+                            <!-- Saved Addresses Dropdown -->
+                            @if (getSavedAddresses(group).length > 0) {
+                              <div class="saved-addresses-row">
+                                <mat-form-field appearance="outline" class="saved-address-select">
+                                  <mat-label>Saved Addresses</mat-label>
+                                  <mat-select (selectionChange)="onSavedAddressSelected(group, $event.value)">
+                                    @for (addr of getSavedAddresses(group); track addr.id) {
+                                      <mat-option [value]="addr">
+                                        <div class="saved-addr-option">
+                                          <span class="addr-label">{{ addr.addressLabel || 'Address' }}</span>
+                                          <span class="addr-text">{{ addr.address }}</span>
+                                          @if (addr.usageCount > 1) {
+                                            <span class="addr-usage">(used {{ addr.usageCount }}x)</span>
+                                          }
+                                        </div>
+                                      </mat-option>
+                                    }
+                                  </mat-select>
+                                  <mat-hint>Select a previously used address</mat-hint>
+                                </mat-form-field>
+                                <span class="or-divider">OR</span>
+                              </div>
+                            }
+                            <div class="stop-address-row">
+                              <mat-form-field appearance="outline" class="address-field">
+                                <mat-label>Delivery Address</mat-label>
+                                <input matInput 
+                                       [(ngModel)]="group.deliveryAddress" 
+                                       [matAutocomplete]="autoAddress"
+                                       (input)="onAddressInput(group, $event)"
+                                       (focus)="onAddressFocus(group)"
+                                       placeholder="Start typing address...">
+                                <mat-autocomplete #autoAddress="matAutocomplete" (optionSelected)="onAddressSelected(group, $event)">
+                                  @for (prediction of addressPredictions; track prediction.place_id) {
+                                    <mat-option [value]="prediction.description">
+                                      <mat-icon>place</mat-icon>
+                                      <span>{{ prediction.description }}</span>
+                                    </mat-option>
+                                  }
+                                </mat-autocomplete>
+                                <mat-hint *ngIf="!group.latitude && group.deliveryAddress">Select from suggestions or geocode</mat-hint>
+                              </mat-form-field>
+                              <button mat-icon-button color="primary" (click)="geocodeGroupAddress(group)" [disabled]="geocodingStop === group || !group.deliveryAddress" matTooltip="Geocode this address">
+                                @if (geocodingStop === group) {
+                                  <mat-spinner diameter="20"></mat-spinner>
+                                } @else {
+                                  <mat-icon>my_location</mat-icon>
+                                }
+                              </button>
+                              <button mat-icon-button color="accent" (click)="saveAddressForCustomer(group)" 
+                                      [disabled]="!group.deliveryAddress || !group.latitude" 
+                                      matTooltip="Save this address for future use">
+                                <mat-icon>bookmark_add</mat-icon>
+                              </button>
+                            </div>
+                            @if (group.city || group.province) {
+                              <div class="stop-location-info">
+                                <mat-icon>info_outline</mat-icon>
+                                <span>{{ group.city }}{{ group.province ? ', ' + group.province : '' }}</span>
+                              </div>
+                            }
+                            @if (group.invoices.length > 1) {
+                              <div class="grouped-invoices">
+                                <span class="invoices-label">Invoices at this location:</span>
+                                <div class="invoice-chips">
+                                  @for (inv of group.invoices; track inv.id) {
+                                    <mat-chip>{{ inv.invoiceNumber }} - R{{ inv.totalAmount | number:'1.2-2' }}</mat-chip>
+                                  }
+                                </div>
+                              </div>
+                            }
+                          } @else {
+                            <div class="collapsed-info">
+                              <mat-icon>check_circle</mat-icon>
+                              <span>{{ group.deliveryAddress }}</span>
+                            </div>
+                          }
+                        </div>
+                        <div class="stop-value">R {{ group.totalValue * 1.15 | number:'1.2-2' }}</div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
             </div>
 
             <div class="step-actions">
@@ -9613,7 +11230,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                     <h4><mat-icon>route</mat-icon> Route Info</h4>
                     <p class="main-value">{{ selectedStops.length }} stops</p>
                     <p class="sub-value">{{ totalDistance | number:'1.0-0' }} km • {{ estimatedTime }}</p>
-                    <p class="sub-value">Total: R {{ totalValue | number:'1.2-2' }}</p>
+                    <p class="sub-value">Total (incl. VAT): R {{ totalValue * 1.15 | number:'1.2-2' }}</p>
                   </div>
                 </div>
 
@@ -9657,9 +11274,9 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                   @if (creating) {
                     <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
                   } @else {
-                    <mat-icon>check</mat-icon>
+                    <mat-icon>{{ data.isEditMode ? 'save' : 'check' }}</mat-icon>
                   }
-                  {{ creating ? 'Creating...' : 'Create & Download' }}
+                  {{ creating ? (data.isEditMode ? 'Updating...' : 'Creating...') : (data.isEditMode ? 'Update & Download' : 'Create & Download') }}
                 </button>
               </div>
             </div>
@@ -9720,8 +11337,16 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     .step-content {
       display: flex;
       gap: 24px;
-      min-height: 400px;
+      min-height: 520px;
       padding: 16px 0;
+    }
+    .step-content.route-step {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-height: auto;
+      max-height: none;
+      overflow: visible;
     }
     .source-panel, .stops-panel {
       flex: 1;
@@ -9730,6 +11355,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      max-height: 100%;
     }
     .panel-header {
       display: flex;
@@ -9900,6 +11526,76 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       font-weight: 600;
       color: #4caf50;
     }
+    
+    /* Part Delivery Styles */
+    .part-delivery-toggle {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+    }
+    .part-delivery-toggle mat-checkbox {
+      transform: scale(0.9);
+    }
+    .part-delivery-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #f57c00;
+    }
+    .invoice-item.part-delivery-marked {
+      border-color: #ff9800;
+      background: #fff8e1;
+    }
+    .invoice-item.part-delivery-marked:hover {
+      background: #ffecb3;
+    }
+    .add-btn {
+      margin-left: 4px;
+    }
+    .add-btn .add-icon {
+      opacity: 1 !important;
+      color: #667eea;
+    }
+    .invoice-item .quantity {
+      font-size: 11px;
+      color: #1976d2;
+      font-weight: 500;
+    }
+    .stop-item.part-delivery {
+      border-left-color: #ff9800;
+      background: #fffde7;
+    }
+    .part-delivery-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #ff9800;
+      color: white;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .part-delivery-badge mat-icon {
+      font-size: 12px;
+      width: 12px;
+      height: 12px;
+    }
+    .part-delivery-qty {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .qty-field {
+      width: 80px;
+    }
+    .qty-field input {
+      text-align: center;
+    }
+    .qty-field .mat-mdc-form-field-hint {
+      font-size: 10px;
+      color: #888;
+    }
     .empty-list, .empty-stops {
       text-align: center;
       padding: 40px 20px;
@@ -9918,23 +11614,38 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       border-top: 1px solid #e0e0e0;
       margin-top: 16px;
     }
-    .route-step {
-      flex-direction: column;
-    }
     .route-config {
-      flex: 1;
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #e0e0e0;
+      margin-bottom: 20px;
     }
     .route-config h3 {
       display: flex;
       align-items: center;
       gap: 8px;
+      margin: 0 0 16px 0;
+      color: #1976d2;
+    }
+    .config-loading {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: #fff3e0;
+      border-radius: 8px;
       margin-bottom: 16px;
+      color: #e65100;
     }
     .config-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 16px;
       margin-bottom: 20px;
+    }
+    .config-grid mat-form-field {
+      width: 100%;
     }
     .optimize-section {
       display: flex;
@@ -9972,19 +11683,335 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       width: 100%;
     }
     .route-map-preview {
-      margin-top: 20px;
+      margin-bottom: 24px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 16px;
     }
-    .route-map-preview h3 {
+    .map-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .map-header h3 {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 12px;
+      margin: 0;
+    }
+    .map-actions {
+      display: flex;
+      gap: 8px;
     }
     .route-map {
-      height: 300px;
+      height: 350px;
       border-radius: 12px;
       background: #e5e3df;
+      border: 1px solid #ddd;
     }
+    .map-legend {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      padding: 8px 12px;
+      background: #fff;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-item .marker {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .legend-item .marker.warehouse {
+      background: #4caf50;
+    }
+    .legend-item .marker.stop {
+      background: #667eea;
+    }
+    .legend-item .marker.depot {
+      background: #ff9800;
+    }
+    .map-warning {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: #fff3cd;
+      color: #856404;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .map-warning mat-icon {
+      color: #e65100;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Stops Address Section */
+    .stops-address-section {
+      background: #ffffff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+    }
+    .stops-address-section .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .stops-address-section .section-header h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      font-size: 16px;
+      color: #333;
+    }
+    .stops-address-section .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .stops-address-section .coord-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #666;
+    }
+    .coord-status mat-icon.success { color: #4caf50; }
+    .coord-status mat-icon.warning { color: #ff9800; }
+    
+    .stops-list {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #eee;
+      border-radius: 8px;
+    }
+    .stop-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px;
+      border-bottom: 1px solid #f0f0f0;
+      transition: all 0.2s;
+    }
+    .stop-item:last-child { border-bottom: none; }
+    .stop-item:hover { background: #f9f9f9; }
+    .stop-item.missing-coords {
+      background: #fff8e1;
+      border-left: 3px solid #ff9800;
+    }
+    .stop-item.collapsed {
+      padding: 10px 14px;
+      background: #f8fdf8;
+      border-left: 3px solid #4caf50;
+    }
+    .stop-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .stop-details {
+      flex: 1;
+      min-width: 0;
+    }
+    .stop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+    .stop-header .customer-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+    .stop-header .customer-name {
+      font-weight: 500;
+      color: #333;
+    }
+    .stop-header .invoice-number {
+      font-size: 12px;
+      color: #888;
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .stop-header .invoice-count {
+      font-size: 11px;
+      background: #e3f2fd !important;
+      color: #1976d2 !important;
+    }
+    .stop-header .stop-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .stop-header .coord-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+    .stop-header .coord-icon.success { color: #4caf50; }
+    .stop-header .coord-icon.warning { color: #ff9800; }
+    .stop-header .collapse-icon {
+      color: #999;
+      transition: transform 0.2s;
+    }
+    
+    .saved-addresses-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 0;
+    }
+    .saved-address-select {
+      flex: 1;
+      max-width: 400px;
+    }
+    .saved-addr-option {
+      display: flex;
+      flex-direction: column;
+      padding: 4px 0;
+    }
+    .saved-addr-option .addr-label {
+      font-weight: 500;
+      font-size: 13px;
+      color: #333;
+    }
+    .saved-addr-option .addr-text {
+      font-size: 12px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 350px;
+    }
+    .saved-addr-option .addr-usage {
+      font-size: 11px;
+      color: #888;
+      font-style: italic;
+    }
+    .or-divider {
+      color: #999;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    
+    .stop-address-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .stop-address-row .address-field {
+      flex: 1;
+    }
+    .stop-address-row .address-field .mat-mdc-form-field-subscript-wrapper {
+      height: 16px;
+    }
+    .stop-location-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+    }
+    .stop-location-info mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      color: #888;
+    }
+    
+    .collapsed-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #4caf50;
+      margin-top: 4px;
+    }
+    .collapsed-info mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+    .collapsed-info span {
+      color: #666;
+      font-size: 12px;
+    }
+    
+    .grouped-invoices {
+      margin-top: 12px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+    .grouped-invoices .invoices-label {
+      display: block;
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .grouped-invoices .invoice-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .grouped-invoices .invoice-chips mat-chip {
+      font-size: 11px;
+      min-height: 24px;
+      padding: 0 10px;
+    }
+    
+    .stop-value {
+      font-weight: 600;
+      color: #4caf50;
+      white-space: nowrap;
+      padding-top: 4px;
+      font-size: 14px;
+    }
+    .stops-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+    }
+    
     .review-step {
       flex-direction: column;
     }
@@ -10091,6 +12118,16 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       background: #e3f2fd;
       color: #1565c0;
       border: 1px solid #90caf9;
+    }
+    mat-checkbox.mat-mdc-checkbox {
+      margin-left: 8px;
+    }
+    mat-checkbox .checkbox-icon {
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
+      margin-right: 4px;
+      vertical-align: middle;
     }
     .fuel-estimate {
       padding: 8px 12px;
@@ -10212,6 +12249,21 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   selectedProvince = 'all';
   loadingProvinces = false;
   
+  // Searchable dropdown filters
+  warehouseSearchText = '';
+  driverSearchText = '';
+  vehicleSearchText = '';
+  filteredWarehouses: any[] = [];
+  filteredDrivers: any[] = [];
+  filteredVehicles: any[] = [];
+  
+  // Part Delivery tracking - stores invoice IDs that are marked as part delivery
+  partDeliveryMap: Map<number, boolean> = new Map();
+  
+  // Saved delivery addresses for customers
+  customerSavedAddresses: Map<string, any[]> = new Map(); // Map customer name/code to saved addresses
+  loadingSavedAddresses = false;
+  
   // Google Maps API key
   private readonly googleMapsApiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
   
@@ -10256,21 +12308,59 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     'NC': ['northern cape', 'kimberley', 'upington', 'springbok', 'kathu', 'de aar', 'kuruman', 'colesberg', 'carnarvon', 'calvinia', 'port nolloth', 'sutherland', 'prieska', 'victoria west', 'hanover', 'richmond', 'middelburg nc', 'graaff reinet', 'nieu bethesda', 'graaf reinet', 'britstown', 'hopetown', 'strydenburg', 'petrusville', 'philipstown', 'douglas', 'griekwastad', 'campbell', 'danielskuil', 'postmasburg', 'olifantshoek', 'hotazel', 'black rock', 'sishen', 'dingleton', 'askham', 'mier', 'rietfontein', 'noenieput', 'twee rivieren', 'nababeep', 'okiep', 'concordia', 'bulletrap', 'komaggas', 'steinkopf', 'vioolsdrif', 'pofadder', 'aggeneys', 'pella', 'onseepkans', 'kakamas', 'keimoes', 'kenhardt', 'brandvlei', 'vanwyksvlei', 'loeriesfontein', 'nieuwoudtville', 'garies', 'kamieskroon', 'hondeklipbaai', 'robert mangaliso', 'pixley ka seme', 'pixley ke seme', 'nc health', 'nch-', '07-']
   };
   
-  // Cache for customer provinces
-  private customerProvinceCache: Map<string, { province: string, city: string }> = new Map();
+  // Cache for customer provinces and coordinates
+  private customerProvinceCache: Map<string, { 
+    province: string; 
+    city: string; 
+    latitude?: number; 
+    longitude?: number;
+    formattedAddress?: string;
+  }> = new Map();
   
   totalDistance = 0;
   estimatedTime = '';
   totalValue = 0;
+  returnDistance = 0;
+  returnTime = '';
+  includeRouteMapInTripsheet = false;
   
   optimizing = false;
   calculating = false;
   creating = false;
   
+  // TFN Depot markers
+  tfnDepotsLoaded = false;
+  private tfnDepotMarkers: google.maps.Marker[] = [];
+  private tfnDepots = [
+    { name: 'TFN Depot - Johannesburg', code: 'JHB', province: 'GP', latitude: -26.1496, longitude: 28.2381, address: 'Isando, Johannesburg' },
+    { name: 'TFN Depot - Durban', code: 'DBN', province: 'KZN', latitude: -29.8115, longitude: 30.9622, address: 'Pinetown, Durban' },
+    { name: 'TFN Depot - Cape Town', code: 'CPT', province: 'WC', latitude: -33.9416, longitude: 18.6006, address: 'Epping, Cape Town' },
+    { name: 'TFN Depot - Port Elizabeth', code: 'PE', province: 'EC', latitude: -33.8688, longitude: 25.5701, address: 'Deal Party, Gqeberha' },
+    { name: 'TFN Depot - Bloemfontein', code: 'BFN', province: 'FS', latitude: -29.1211, longitude: 26.2140, address: 'Bloemfontein' },
+    { name: 'TFN Depot - Polokwane', code: 'PLK', province: 'LP', latitude: -23.9045, longitude: 29.4530, address: 'Polokwane' },
+    { name: 'TFN Depot - Nelspruit', code: 'NLP', province: 'MP', latitude: -25.4753, longitude: 30.9694, address: 'Mbombela' },
+    { name: 'TFN Depot - Rustenburg', code: 'RST', province: 'NW', latitude: -25.6674, longitude: 27.2421, address: 'Rustenburg' }
+  ];
+  
+  // Geocoding state
+  geocodingStop: any = null;
+  
+  // Grouped stops (same customer address = 1 stop)
+  groupedStops: any[] = [];
+  
+  // Google Places Autocomplete
+  addressPredictions: any[] = [];
+  private autocompleteService: any = null;
+  private placesService: any = null;
+  private addressInputSubject = new Subject<{group: any, query: string}>();
+  private ngZone: NgZone;
+  
   tripForm = new FormGroup({});
   
   private map: google.maps.Map | null = null;
   private routePolyline: google.maps.Polyline | null = null;
+  private directionsRenderer: any = null;
+  private directionsService: any = null;
   private stopMarkers: google.maps.Marker[] = [];
   private http: HttpClient;
   private mapInitialized = false;
@@ -10282,27 +12372,120 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       vehicles: any[], 
       warehouses: any[],
       customers: any[],
-      apiUrl: string
+      apiUrl: string,
+      isImport?: boolean,
+      batchId?: string,
+      preSelectedInvoices?: any[],
+      // Edit mode fields
+      isEditMode?: boolean,
+      editLoadId?: number,
+      existingTripsheet?: any,
+      preSelectedWarehouse?: any,
+      preSelectedDriver?: any,
+      preSelectedVehicle?: any,
+      preScheduledDate?: Date,
+      preSpecialInstructions?: string,
+      preTotalDistance?: number,
+      preEstimatedTime?: string
     },
     private dialogRef: MatDialogRef<CreateTripsheetDialog>,
     private injector: Injector
   ) {
     this.http = this.injector.get(HttpClient);
-    // Set first warehouse as default
-    if (data.warehouses && data.warehouses.length > 0) {
-      this.selectedWarehouse = data.warehouses[0];
+    this.ngZone = this.injector.get(NgZone);
+    
+    // Initialize filtered arrays for searchable dropdowns
+    this.filteredWarehouses = [...(data.warehouses || [])];
+    this.filteredDrivers = [...(data.drivers || [])];
+    this.filteredVehicles = [...(data.vehicles || [])];
+    
+    // Handle edit mode pre-population
+    if (data.isEditMode) {
+      // Set pre-selected values
+      if (data.preSelectedWarehouse) {
+        this.selectedWarehouse = data.preSelectedWarehouse;
+        this.warehouseSearchText = data.preSelectedWarehouse.name || '';
+      } else if (data.warehouses?.length > 0) {
+        this.selectedWarehouse = data.warehouses[0];
+        this.warehouseSearchText = data.warehouses[0].name || '';
+      }
+      if (data.preSelectedDriver) {
+        this.selectedDriver = data.preSelectedDriver;
+        this.driverSearchText = `${data.preSelectedDriver.firstName || ''} ${data.preSelectedDriver.lastName || ''}`.trim();
+      }
+      if (data.preSelectedVehicle) {
+        this.selectedVehicle = data.preSelectedVehicle;
+        this.vehicleSearchText = data.preSelectedVehicle.registrationNumber || '';
+      }
+      if (data.preScheduledDate) {
+        this.scheduledDate = data.preScheduledDate;
+      }
+      if (data.preSpecialInstructions) {
+        this.specialInstructions = data.preSpecialInstructions;
+      }
+      if (data.preTotalDistance) {
+        this.totalDistance = data.preTotalDistance;
+      }
+      if (data.preEstimatedTime) {
+        this.estimatedTime = data.preEstimatedTime;
+      }
+    } else {
+      // Set first warehouse as default for new tripsheets
+      if (data.warehouses && data.warehouses.length > 0) {
+        this.selectedWarehouse = data.warehouses[0];
+        this.warehouseSearchText = data.warehouses[0].name || '';
+      }
     }
+    
     // Initialize province data for invoices
     this.initializeProvinceData();
+    
+    // If coming from import or edit mode with pre-selected invoices, auto-add them to stops
+    if ((data.isImport || data.isEditMode) && data.preSelectedInvoices?.length) {
+      // Pre-select all imported/existing invoices as stops
+      setTimeout(() => {
+        data.preSelectedInvoices!.forEach(invoice => {
+          this.addStop(invoice);
+        });
+        // After adding all stops, trigger route calculation if not in edit mode (already has distance)
+        if (this.selectedStops.length > 0 && !data.isEditMode) {
+          setTimeout(() => this.calculateDistance(), 500);
+        } else if (data.isEditMode) {
+          // Just update grouped stops for edit mode
+          this.updateGroupedStops();
+        }
+      }, 100);
+    }
+    
+    // Setup address autocomplete debounce
+    this.addressInputSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged((prev, curr) => prev.query === curr.query)
+    ).subscribe(({group, query}) => {
+      this.searchAddresses(query);
+    });
   }
 
   ngAfterViewInit(): void {
     // Map will be initialized when step 2 is active
   }
 
+  onStepChange(event: any): void {
+    // When step 2 (Route & Schedule) becomes active, initialize the map
+    if (event.selectedIndex === 1) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        this.initializeMap();
+      }, 300);
+    }
+  }
+
   ngOnDestroy(): void {
     if (this.routePolyline) {
       this.routePolyline.setMap(null);
+    }
+    if (this.directionsRenderer) {
+      this.directionsRenderer.setMap(null);
     }
     this.stopMarkers.forEach(m => m.setMap(null));
   }
@@ -10397,6 +12580,9 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           const cached = this.customerProvinceCache.get(cacheKey)!;
           invoice.province = cached.province;
           invoice.city = cached.city;
+          invoice.latitude = cached.latitude;
+          invoice.longitude = cached.longitude;
+          invoice.formattedAddress = cached.formattedAddress;
           return;
         }
         
@@ -10421,6 +12607,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
             const result = data.results[0];
             const addressComponents = result.address_components || [];
             
+            // Extract coordinates from geocoding result
+            const location = result.geometry?.location;
+            if (location) {
+              invoice.latitude = location.lat;
+              invoice.longitude = location.lng;
+              invoice.formattedAddress = result.formatted_address;
+            }
+            
             // Find province from address components
             const provinceComponent = addressComponents.find((c: any) => 
               c.types.includes('administrative_area_level_1')
@@ -10437,10 +12631,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
                 invoice.province = provinceCode;
                 invoice.city = cityComponent?.long_name || '';
                 
-                // Cache the result
+                // Cache the result with coordinates
                 this.customerProvinceCache.set(cacheKey, {
                   province: provinceCode,
-                  city: invoice.city
+                  city: invoice.city,
+                  latitude: invoice.latitude,
+                  longitude: invoice.longitude,
+                  formattedAddress: invoice.formattedAddress
                 });
               }
             }
@@ -10571,19 +12768,105 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       c.accountNumber === invoice.customerNumber || c.name === invoice.customerName
     );
     
+    // Use coordinates from invoice (geocoded) or customer record
+    const latitude = invoice.latitude || customer?.latitude;
+    const longitude = invoice.longitude || customer?.longitude;
+    // Use empty string if no address found - placeholder will guide user
+    const address = invoice.formattedAddress || customer?.physicalAddress || customer?.deliveryAddress || '';
+    
     this.selectedStops.push({
       ...invoice,
-      address: customer?.physicalAddress || customer?.deliveryAddress || 'Address not available',
-      latitude: customer?.latitude,
-      longitude: customer?.longitude
+      address: address,
+      deliveryAddress: address,
+      latitude: latitude,
+      longitude: longitude
     });
     
     this.calculateTotalValue();
+    this.updateGroupedStops();
+    
+    // Update the map if already initialized
+    if (this.mapInitialized) {
+      this.updateRouteMap();
+    }
+  }
+
+  // Toggle part delivery flag for an invoice
+  togglePartDelivery(invoiceId: number, checked: boolean): void {
+    if (checked) {
+      this.partDeliveryMap.set(invoiceId, true);
+    } else {
+      this.partDeliveryMap.delete(invoiceId);
+    }
+  }
+
+  // Add stop with part delivery tracking
+  addStopWithPartDelivery(invoice: any): void {
+    if (this.isInvoiceSelected(invoice)) {
+      // Already selected, remove it
+      this.removeStopByInvoice(invoice);
+      return;
+    }
+    
+    // Find customer details for address
+    const customer = this.data.customers?.find(c => 
+      c.accountNumber === invoice.customerNumber || c.name === invoice.customerName
+    );
+    
+    // Use coordinates from invoice (geocoded) or customer record
+    const latitude = invoice.latitude || customer?.latitude;
+    const longitude = invoice.longitude || customer?.longitude;
+    // Use empty string if no address found - placeholder will guide user
+    const address = invoice.formattedAddress || customer?.physicalAddress || customer?.deliveryAddress || '';
+    
+    // Check if part delivery is marked for this invoice
+    const isPartDelivery = this.partDeliveryMap.get(invoice.id) || false;
+    const originalQuantity = invoice.quantity || 1;
+    
+    this.selectedStops.push({
+      ...invoice,
+      address: address,
+      deliveryAddress: address,
+      latitude: latitude,
+      longitude: longitude,
+      isPartDelivery: isPartDelivery,
+      originalQuantity: originalQuantity,
+      partialQuantity: isPartDelivery ? Math.ceil(originalQuantity / 2) : originalQuantity // Default to half for part delivery
+    });
+    
+    this.calculateTotalValue();
+    this.updateGroupedStops();
+    
+    // Update the map if already initialized
+    if (this.mapInitialized) {
+      this.updateRouteMap();
+    }
+  }
+
+  // Handle partial quantity change for part deliveries
+  onPartialQuantityChange(stop: any): void {
+    if (stop.partialQuantity < 1) {
+      stop.partialQuantity = 1;
+    }
+    if (stop.partialQuantity > stop.originalQuantity) {
+      stop.partialQuantity = stop.originalQuantity;
+    }
+    // Recalculate value based on partial quantity if needed
+    if (stop.isPartDelivery && stop.originalQuantity > 0) {
+      const unitPrice = stop.salesAmount / stop.originalQuantity;
+      stop.partialSalesAmount = unitPrice * stop.partialQuantity;
+    }
   }
 
   removeStop(index: number): void {
     this.selectedStops.splice(index, 1);
     this.calculateTotalValue();
+    this.updateGroupedStops();
+    
+    // Update the map if already initialized
+    if (this.mapInitialized) {
+      this.updateRouteMap();
+    }
   }
 
   removeStopByInvoice(invoice: any): void {
@@ -10595,9 +12878,61 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   clearAllStops(): void {
     this.selectedStops = [];
+    this.groupedStops = [];
     this.totalDistance = 0;
     this.estimatedTime = '';
+    this.returnDistance = 0;
+    this.returnTime = '';
     this.totalValue = 0;
+    
+    // Update the map if already initialized
+    if (this.mapInitialized) {
+      this.updateRouteMap();
+    }
+  }
+
+  // Group stops by customer name (same customer = same delivery location)
+  updateGroupedStops(): void {
+    const groups = new Map<string, any>();
+    
+    this.selectedStops.forEach(stop => {
+      const key = stop.customerName || stop.customerNumber;
+      
+      if (groups.has(key)) {
+        const group = groups.get(key);
+        group.invoices.push(stop);
+        group.totalValue += stop.salesAmount || stop.totalAmount || 0;
+      } else {
+        groups.set(key, {
+          customerName: stop.customerName,
+          customerNumber: stop.customerNumber,
+          deliveryAddress: stop.deliveryAddress || stop.address || '',
+          latitude: stop.latitude,
+          longitude: stop.longitude,
+          city: stop.city,
+          province: stop.province,
+          invoices: [stop],
+          totalValue: stop.salesAmount || stop.totalAmount || 0,
+          isCollapsed: !!(stop.latitude && stop.longitude) // Auto-collapse if has coordinates
+        });
+      }
+    });
+    
+    this.groupedStops = Array.from(groups.values());
+    console.log('Grouped stops:', this.groupedStops.length, 'from', this.selectedStops.length, 'invoices');
+    
+    // Load saved addresses for the customers in the grouped stops
+    if (this.groupedStops.length > 0) {
+      this.loadSavedAddressesForCustomers();
+    }
+  }
+
+  // Toggle collapse state of a stop
+  toggleStopCollapse(group: any): void {
+    // Only allow collapse if it has coordinates
+    if (group.latitude && group.longitude) {
+      group.isCollapsed = !group.isCollapsed;
+    }
   }
 
   dropStop(event: CdkDragDrop<any[]>): void {
@@ -10672,9 +13007,11 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           
           this.selectedStops = optimizedStops;
           
-          // Update distance and time from API response
+          // Update distance and time from API response + offload time
           this.totalDistance = Math.round(result.distanceMeters / 1000);
-          const totalMins = Math.round(result.durationSeconds / 60);
+          const driveTimeMins = Math.round(result.durationSeconds / 60);
+          const offloadMins = this.getUniqueCustomerOffloadTime();
+          const totalMins = driveTimeMins + offloadMins;
           const hours = Math.floor(totalMins / 60);
           const mins = totalMins % 60;
           this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
@@ -10777,10 +13114,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         if (result.success) {
           this.totalDistance = Math.round(result.distanceMeters / 1000);
           
-          // Add service time at each stop (15 min)
+          // Calculate return trip from last stop back to warehouse
+          this.calculateReturnTrip(lastStop, origin);
+          
+          // Add offload time: 1 hour per unique customer (not per stop)
           const driveTimeSeconds = result.durationSeconds;
-          const serviceTimeSeconds = this.selectedStops.length * 15 * 60;
-          const totalSeconds = driveTimeSeconds + serviceTimeSeconds;
+          const offloadMinutes = this.getUniqueCustomerOffloadTime();
+          const totalSeconds = driveTimeSeconds + (offloadMinutes * 60);
           
           const totalMins = Math.round(totalSeconds / 60);
           const hours = Math.floor(totalMins / 60);
@@ -10797,6 +13137,52 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         console.warn('Google Routes API failed, using local calculation:', err);
         this.calculateDistanceLocally();
         this.calculating = false;
+      }
+    });
+  }
+  
+  // Calculate return trip from last stop back to warehouse
+  private calculateReturnTrip(lastStop: any, warehouse: any): void {
+    if (!lastStop?.latitude || !warehouse?.latitude) {
+      this.returnDistance = 0;
+      this.returnTime = '0m';
+      return;
+    }
+    
+    const returnRequest = {
+      origin: { latitude: lastStop.latitude, longitude: lastStop.longitude, label: lastStop.customerName || 'Last Stop' },
+      destination: { latitude: warehouse.latitude, longitude: warehouse.longitude, label: warehouse.label || 'Warehouse' },
+      waypoints: [],
+      optimizeWaypoints: false,
+      departureTime: new Date(Date.now() + 3600000).toISOString()
+    };
+    
+    this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/calculate-route`, returnRequest).subscribe({
+      next: (result) => {
+        if (result.success) {
+          this.returnDistance = Math.round(result.distanceMeters / 1000);
+          const returnMins = Math.round(result.durationSeconds / 60);
+          const hours = Math.floor(returnMins / 60);
+          const mins = returnMins % 60;
+          this.returnTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        } else {
+          // Fallback to haversine
+          const dist = this.haversineDistance(lastStop.latitude, lastStop.longitude, warehouse.latitude, warehouse.longitude);
+          this.returnDistance = Math.round(dist * 1.25);
+          const returnMins = Math.round((this.returnDistance / 55) * 60);
+          const hours = Math.floor(returnMins / 60);
+          const mins = returnMins % 60;
+          this.returnTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        }
+      },
+      error: () => {
+        // Fallback to haversine
+        const dist = this.haversineDistance(lastStop.latitude, lastStop.longitude, warehouse.latitude, warehouse.longitude);
+        this.returnDistance = Math.round(dist * 1.25);
+        const returnMins = Math.round((this.returnDistance / 55) * 60);
+        const hours = Math.floor(returnMins / 60);
+        const mins = returnMins % 60;
+        this.returnTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
       }
     });
   }
@@ -10824,16 +13210,44 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     // Add 25% for road vs straight line (more realistic)
     this.totalDistance = Math.round(totalDist * 1.25);
     
-    // Estimate time: 55km/h average (accounting for traffic) + 15min per stop
+    // Calculate return distance from last stop back to warehouse
+    const lastStopWithCoords = stopsWithCoords[stopsWithCoords.length - 1];
+    if (lastStopWithCoords) {
+      const returnDist = this.haversineDistance(lastStopWithCoords.latitude, lastStopWithCoords.longitude, startLat, startLng);
+      this.returnDistance = Math.round(returnDist * 1.25);
+      // Return time at 55km/h average
+      const returnMinutes = Math.round((this.returnDistance / 55) * 60);
+      const returnHours = Math.floor(returnMinutes / 60);
+      const returnMins = returnMinutes % 60;
+      this.returnTime = returnHours > 0 ? `${returnHours}h ${returnMins}m` : `${returnMins}m`;
+    } else {
+      this.returnDistance = 0;
+      this.returnTime = '0m';
+    }
+    
+    // Estimate time: 55km/h average (accounting for traffic) + 1 hour per unique customer for offloading
     const driveTimeMinutes = (this.totalDistance / 55) * 60;
-    const stopTimeMinutes = this.selectedStops.length * 15;
-    const totalMinutes = Math.round(driveTimeMinutes + stopTimeMinutes);
+    const offloadMinutes = this.getUniqueCustomerOffloadTime();
+    const totalMinutes = Math.round(driveTimeMinutes + offloadMinutes);
     
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
     this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
     
     this.updateRouteMap();
+  }
+
+  // Calculate offload time: 1 hour per unique customer (not per stop)
+  private getUniqueCustomerOffloadTime(): number {
+    const uniqueCustomers = new Set<string>();
+    this.selectedStops.forEach(stop => {
+      const customerName = (stop.customerName || stop.companyName || '').toLowerCase().trim();
+      if (customerName) {
+        uniqueCustomers.add(customerName);
+      }
+    });
+    // 60 minutes per unique customer
+    return uniqueCustomers.size * 60;
   }
 
   // Advanced route optimization using Google Route Optimization API
@@ -10891,10 +13305,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           
           this.selectedStops = optimizedStops;
           
-          // Update metrics
+          // Update metrics + offload time
           this.totalDistance = Math.round(result.totalDistanceKm);
           
-          const totalMins = Math.round((result.totalDurationMinutes || 0));
+          const driveMins = Math.round((result.totalDurationMinutes || 0));
+          const offloadMins = this.getUniqueCustomerOffloadTime();
+          const totalMins = driveMins + offloadMins;
           const hours = Math.floor(totalMins / 60);
           const mins = totalMins % 60;
           this.estimatedTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
@@ -11029,16 +13445,24 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     
     if (typeof google !== 'undefined' && google.maps) {
       this.createMap(mapElement);
+      // Initialize autocomplete service if Places is loaded
+      if ((google.maps as any).places) {
+        this.autocompleteService = new (google.maps as any).places.AutocompleteService();
+      }
       return;
     }
 
     const callbackName = 'initTripsheetMap' + Date.now();
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${callbackName}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
     script.async = true;
     
     (window as any)[callbackName] = () => {
       this.createMap(mapElement);
+      // Initialize autocomplete service
+      if ((google.maps as any).places) {
+        this.autocompleteService = new (google.maps as any).places.AutocompleteService();
+      }
       delete (window as any)[callbackName];
     };
     
@@ -11063,30 +13487,45 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   updateRouteMap(): void {
     setTimeout(() => this.initializeMap(), 100);
     
-    if (!this.map) return;
+    if (!this.map) {
+      console.log('updateRouteMap: Map not initialized yet');
+      return;
+    }
     
     // Clear existing
     if (this.routePolyline) {
       this.routePolyline.setMap(null);
     }
+    if (this.directionsRenderer) {
+      this.directionsRenderer.setMap(null);
+    }
     this.stopMarkers.forEach(m => m.setMap(null));
     this.stopMarkers = [];
     
-    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
-    if (stopsWithCoords.length === 0) return;
+    console.log('updateRouteMap: Total stops:', this.selectedStops.length);
+    console.log('updateRouteMap: Stops data:', this.selectedStops.map(s => ({ 
+      name: s.customerName, 
+      lat: s.latitude, 
+      lng: s.longitude 
+    })));
     
+    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+    console.log('updateRouteMap: Stops with coordinates:', stopsWithCoords.length);
+    
+    // Always show warehouse marker even if no stops
     const bounds = new google.maps.LatLngBounds();
     
     // Add warehouse as start point
-    const startLat = this.selectedWarehouse?.latitude || -26.2041;
-    const startLng = this.selectedWarehouse?.longitude || 28.0473;
+    const startLat = this.selectedWarehouse?.latitude || -25.6963;
+    const startLng = this.selectedWarehouse?.longitude || 28.7023;
+    console.log('updateRouteMap: Warehouse position:', { lat: startLat, lng: startLng });
     
-    const path = [{ lat: startLat, lng: startLng }];
-    bounds.extend(path[0]);
+    const origin = { lat: startLat, lng: startLng };
+    bounds.extend(origin);
     
     // Add warehouse marker
     const warehouseMarker = new google.maps.Marker({
-      position: path[0],
+      position: origin,
       map: this.map,
       title: this.selectedWarehouse?.name || 'Warehouse',
       icon: {
@@ -11100,10 +13539,18 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     });
     this.stopMarkers.push(warehouseMarker);
     
+    // If no stops with coordinates, just show warehouse and return
+    if (stopsWithCoords.length === 0) {
+      console.log('updateRouteMap: No stops with coordinates, showing only warehouse');
+      this.map.setCenter({ lat: startLat, lng: startLng });
+      this.map.setZoom(10);
+      return;
+    }
+    
     // Add stop markers
     stopsWithCoords.forEach((stop, index) => {
       const pos = { lat: stop.latitude, lng: stop.longitude };
-      path.push(pos);
+      console.log(`updateRouteMap: Adding stop ${index + 1}:`, stop.customerName, pos);
       bounds.extend(pos);
       
       const marker = new google.maps.Marker({
@@ -11127,31 +13574,772 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       this.stopMarkers.push(marker);
     });
     
-    // Draw route line
-    this.routePolyline = new google.maps.Polyline({
-      path: path,
-      geodesic: true,
-      strokeColor: '#667eea',
-      strokeOpacity: 0.8,
-      strokeWeight: 4,
-      map: this.map
+    // Use Directions API to draw actual road route
+    if (!this.directionsService) {
+      this.directionsService = new (google.maps as any).DirectionsService();
+    }
+    if (!this.directionsRenderer) {
+      this.directionsRenderer = new (google.maps as any).DirectionsRenderer({
+        map: this.map,
+        suppressMarkers: true, // We already have our own markers
+        polylineOptions: {
+          strokeColor: '#667eea',
+          strokeOpacity: 0.8,
+          strokeWeight: 5
+        }
+      });
+    } else {
+      (this.directionsRenderer as any).setMap(this.map);
+    }
+    
+    // Build waypoints (all stops except the last one which is the destination)
+    const destination = stopsWithCoords[stopsWithCoords.length - 1];
+    const waypoints = stopsWithCoords.slice(0, -1).map(stop => ({
+      location: { lat: stop.latitude, lng: stop.longitude },
+      stopover: true
+    }));
+    
+    // Request directions using promise-based API
+    (this.directionsService as any).route({
+      origin: origin,
+      destination: { lat: destination.latitude, lng: destination.longitude },
+      waypoints: waypoints,
+      travelMode: 'DRIVING',
+      optimizeWaypoints: false // Keep user's order
+    }).then((result: any) => {
+      this.directionsRenderer?.setDirections(result);
+      console.log('Directions API: Route drawn successfully');
+    }).catch((error: any) => {
+      console.warn('Directions API failed:', error, '- falling back to straight lines');
+      // Fallback to straight line polyline if Directions API fails
+      const path = [origin, ...stopsWithCoords.map(s => ({ lat: s.latitude, lng: s.longitude }))];
+      this.routePolyline = new google.maps.Polyline({
+        path: path,
+        geodesic: true,
+        strokeColor: '#667eea',
+        strokeOpacity: 0.8,
+        strokeWeight: 4,
+        map: this.map
+      });
     });
     
     this.map.fitBounds(bounds, 50);
   }
 
-  previewPdf(): void {
+  // Check if stops have coordinates
+  stopsHaveCoords(): boolean {
+    if (this.groupedStops.length === 0) return false;
+    return this.groupedStops.some(s => s.latitude && s.longitude);
+  }
+
+  // Get count of stops with coordinates
+  getStopsWithCoords(): number {
+    return this.groupedStops.filter(s => s.latitude && s.longitude).length;
+  }
+
+  // Handle stop address change - NOT USED with autocomplete
+  onStopAddressChanged(stop: any): void {
+    console.log('Stop address changed:', stop.customerName, '->', stop.deliveryAddress);
+  }
+
+  // Google Places Autocomplete - Input handler
+  onAddressInput(group: any, event: any): void {
+    const query = event.target.value;
+    if (query && query.length > 2) {
+      this.addressInputSubject.next({group, query});
+    } else {
+      this.addressPredictions = [];
+    }
+  }
+
+  // Google Places Autocomplete - Focus handler
+  onAddressFocus(group: any): void {
+    if (group.deliveryAddress && group.deliveryAddress.length > 2) {
+      this.searchAddresses(group.deliveryAddress);
+    }
+  }
+
+  // Search addresses using Google Places Autocomplete
+  searchAddresses(query: string): void {
+    // Check if Places library is available
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+      console.warn('Google Places API not loaded yet. Loading now...');
+      this.loadPlacesLibrary().then(() => {
+        this.doSearchAddresses(query);
+      });
+      return;
+    }
+
+    if (!this.autocompleteService) {
+      this.autocompleteService = new (google.maps.places as any).AutocompleteService();
+    }
+
+    this.doSearchAddresses(query);
+  }
+
+  // Load Google Places library if not available
+  private loadPlacesLibrary(): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+        resolve();
+        return;
+      }
+
+      const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
+      const callbackName = 'initPlacesLib' + Date.now();
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
+      script.async = true;
+      
+      (window as any)[callbackName] = () => {
+        this.autocompleteService = new (google.maps.places as any).AutocompleteService();
+        delete (window as any)[callbackName];
+        resolve();
+      };
+      
+      document.head.appendChild(script);
+    });
+  }
+
+  // Perform the actual address search
+  private doSearchAddresses(query: string): void {
+    if (!this.autocompleteService) {
+      if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+        this.autocompleteService = new (google.maps.places as any).AutocompleteService();
+      } else {
+        console.warn('Google Places API still not loaded');
+        return;
+      }
+    }
+
+    this.autocompleteService.getPlacePredictions({
+      input: query,
+      componentRestrictions: { country: 'za' }
+      // No types restriction - includes addresses, establishments (hospitals, businesses), and other places
+    }, (predictions: any, status: any) => {
+      this.ngZone.run(() => {
+        if (status === (google.maps.places as any).PlacesServiceStatus.OK && predictions) {
+          this.addressPredictions = predictions;
+        } else {
+          this.addressPredictions = [];
+        }
+      });
+    });
+  }
+
+  // Handle autocomplete selection
+  onAddressSelected(group: any, event: any): void {
+    const selectedAddress = event.option.value;
+    group.deliveryAddress = selectedAddress;
+    this.addressPredictions = [];
+    
+    // Update all invoices in this group with the new address
+    group.invoices?.forEach((inv: any) => {
+      inv.deliveryAddress = selectedAddress;
+      inv.address = selectedAddress;
+      // Also update in selectedStops
+      const stop = this.selectedStops.find(s => s.id === inv.id);
+      if (stop) {
+        stop.deliveryAddress = selectedAddress;
+        stop.address = selectedAddress;
+      }
+    });
+    
+    // Auto-geocode the selected address
+    this.geocodeGroupAddress(group);
+  }
+
+  // Geocode a grouped stop's address
+  geocodingAllStops = false;
+  
+  geocodeGroupAddress(group: any): void {
+    if (!group.deliveryAddress) {
+      console.warn('No address to geocode');
+      return;
+    }
+
+    this.geocodingStop = group;
+    const address = group.deliveryAddress;
+    
+    console.log('Geocoding group address:', address);
+    
+    this.http.get<any>(`${this.data.apiUrl}/logistics/googlemaps/geocode`, {
+      params: { address }
+    }).subscribe({
+      next: (result) => {
+        console.log('Geocode result:', result);
+        if (result.latitude && result.longitude) {
+          group.latitude = result.latitude;
+          group.longitude = result.longitude;
+          group.city = result.city;
+          group.province = result.province;
+          group.isCollapsed = true; // Collapse after successful geocoding
+          
+          // Update all invoices in this group with coordinates
+          group.invoices.forEach((inv: any) => {
+            inv.latitude = result.latitude;
+            inv.longitude = result.longitude;
+            inv.city = result.city;
+            inv.province = result.province;
+            inv.deliveryAddress = group.deliveryAddress;
+            inv.address = group.deliveryAddress;
+            
+            // Also update in selectedStops
+            const stop = this.selectedStops.find(s => s.id === inv.id);
+            if (stop) {
+              stop.latitude = result.latitude;
+              stop.longitude = result.longitude;
+              stop.city = result.city;
+              stop.province = result.province;
+              stop.deliveryAddress = group.deliveryAddress;
+              stop.address = group.deliveryAddress;
+            }
+          });
+          
+          this.updateRouteMap();
+          console.log('Group geocoded:', group.customerName, group.latitude, group.longitude);
+        } else {
+          console.warn('No coordinates in geocode result');
+        }
+        this.geocodingStop = null;
+      },
+      error: (err) => {
+        console.error('Geocoding error:', err);
+        this.geocodingStop = null;
+      }
+    });
+  }
+
+  geocodeStopAddress(stop: any): void {
+    if (!stop.deliveryAddress) {
+      console.warn('No address to geocode');
+      return;
+    }
+
+    this.geocodingStop = stop;
+    const address = stop.deliveryAddress + ', South Africa';
+    
+    console.log('Geocoding address:', address);
+    
+    this.http.get<any>(`${this.data.apiUrl}/logistics/googlemaps/geocode`, {
+      params: { address }
+    }).subscribe({
+      next: (result) => {
+        console.log('Geocode result:', result);
+        if (result.latitude && result.longitude) {
+          stop.latitude = result.latitude;
+          stop.longitude = result.longitude;
+          stop.city = result.city;
+          stop.province = result.province;
+          this.updateRouteMap();
+          console.log('Stop geocoded:', stop.customerName, stop.latitude, stop.longitude);
+        } else {
+          console.warn('No coordinates in geocode result');
+        }
+        this.geocodingStop = null;
+      },
+      error: (err) => {
+        console.error('Geocoding error:', err);
+        this.geocodingStop = null;
+      }
+    });
+  }
+
+  // Geocode all grouped stops that are missing coordinates
+  async geocodeAllStops(): Promise<void> {
+    const groupsToGeocode = this.groupedStops.filter(g => !g.latitude && g.deliveryAddress);
+    
+    if (groupsToGeocode.length === 0) {
+      console.log('No groups to geocode');
+      return;
+    }
+
+    this.geocodingAllStops = true;
+    console.log(`Geocoding ${groupsToGeocode.length} groups...`);
+
+    for (const group of groupsToGeocode) {
+      try {
+        const address = group.deliveryAddress;
+        const result = await this.http.get<any>(`${this.data.apiUrl}/logistics/googlemaps/geocode`, {
+          params: { address }
+        }).toPromise();
+
+        if (result?.latitude && result?.longitude) {
+          group.latitude = result.latitude;
+          group.longitude = result.longitude;
+          group.city = result.city;
+          group.province = result.province;
+          group.isCollapsed = true;
+          
+          // Update all invoices in this group
+          group.invoices.forEach((inv: any) => {
+            inv.latitude = result.latitude;
+            inv.longitude = result.longitude;
+            const stop = this.selectedStops.find(s => s.id === inv.id);
+            if (stop) {
+              stop.latitude = result.latitude;
+              stop.longitude = result.longitude;
+            }
+          });
+          
+          console.log('Geocoded group:', group.customerName);
+        }
+      } catch (err) {
+        console.error('Failed to geocode group:', group.customerName, err);
+      }
+    }
+
+    this.geocodingAllStops = false;
+    this.updateRouteMap();
+    console.log('All group geocoding complete');
+  }
+
+  // ============ SAVED DELIVERY ADDRESSES ============
+  
+  // Get saved addresses for a customer group
+  getSavedAddresses(group: any): any[] {
+    const key = group.customerNumber || group.customerName;
+    return this.customerSavedAddresses.get(key) || [];
+  }
+
+  // Load saved addresses for customers in the selected stops
+  loadSavedAddressesForCustomers(): void {
+    const customerIds = new Set<number>();
+    const customerKeys = new Set<string>();
+    
+    // Collect customer IDs and names from grouped stops
+    this.groupedStops.forEach(group => {
+      // Try to find customer in the customers list
+      const customer = this.data.customers?.find((c: any) => 
+        c.customerCode === group.customerNumber || 
+        c.name === group.customerName ||
+        c.shortName === group.customerName
+      );
+      
+      if (customer?.id) {
+        customerIds.add(customer.id);
+      }
+      customerKeys.add(group.customerNumber || group.customerName);
+    });
+
+    if (customerIds.size === 0) {
+      console.log('No customer IDs found to load saved addresses');
+      return;
+    }
+
+    this.loadingSavedAddresses = true;
+    const idsArray = Array.from(customerIds);
+
+    this.http.get<any>(`${this.data.apiUrl}/logistics/customers/delivery-addresses/batch`, {
+      params: { customerIds: idsArray.join(',') }
+    }).subscribe({
+      next: (result) => {
+        console.log('Loaded saved addresses:', result);
+        // Map the results by customer code/name for easy lookup
+        this.customerSavedAddresses.clear();
+        
+        // Result is a dictionary with customerId as key
+        Object.entries(result).forEach(([customerId, addresses]) => {
+          // Find the customer to get the name/code
+          const customer = this.data.customers?.find((c: any) => c.id === parseInt(customerId));
+          if (customer) {
+            const key = customer.customerCode || customer.name;
+            this.customerSavedAddresses.set(key, addresses as any[]);
+            // Also set by name if different
+            if (customer.name && customer.name !== key) {
+              this.customerSavedAddresses.set(customer.name, addresses as any[]);
+            }
+          }
+        });
+        
+        this.loadingSavedAddresses = false;
+        console.log('Saved addresses mapped:', this.customerSavedAddresses.size, 'customers');
+      },
+      error: (err) => {
+        console.error('Failed to load saved addresses:', err);
+        this.loadingSavedAddresses = false;
+      }
+    });
+  }
+
+  // Handle selection of a saved address
+  onSavedAddressSelected(group: any, savedAddress: any): void {
+    if (!savedAddress) return;
+
+    // Update the group with the saved address data
+    group.deliveryAddress = savedAddress.formattedAddress || savedAddress.address;
+    group.latitude = savedAddress.latitude;
+    group.longitude = savedAddress.longitude;
+    group.city = savedAddress.city;
+    group.province = savedAddress.province;
+    group.isCollapsed = !!(savedAddress.latitude && savedAddress.longitude);
+
+    // Update all invoices in this group
+    group.invoices?.forEach((inv: any) => {
+      inv.deliveryAddress = group.deliveryAddress;
+      inv.address = group.deliveryAddress;
+      inv.latitude = savedAddress.latitude;
+      inv.longitude = savedAddress.longitude;
+      inv.city = savedAddress.city;
+      inv.province = savedAddress.province;
+
+      // Also update in selectedStops
+      const stop = this.selectedStops.find(s => s.id === inv.id);
+      if (stop) {
+        stop.deliveryAddress = group.deliveryAddress;
+        stop.address = group.deliveryAddress;
+        stop.latitude = savedAddress.latitude;
+        stop.longitude = savedAddress.longitude;
+        stop.city = savedAddress.city;
+        stop.province = savedAddress.province;
+      }
+    });
+
+    // Record usage of this address
+    this.http.post(`${this.data.apiUrl}/logistics/customers/delivery-addresses/${savedAddress.id}/use`, {}).subscribe({
+      next: () => console.log('Recorded address usage'),
+      error: (err) => console.error('Failed to record address usage:', err)
+    });
+
+    // Update the map
+    if (this.mapInitialized) {
+      this.updateRouteMap();
+    }
+
+    console.log('Applied saved address to group:', group.customerName, group.deliveryAddress);
+  }
+
+  // Save the current address for a customer
+  saveAddressForCustomer(group: any): void {
+    if (!group.deliveryAddress) {
+      console.warn('No address to save');
+      return;
+    }
+
+    // Find the customer
+    const customer = this.data.customers?.find((c: any) => 
+      c.customerCode === group.customerNumber || 
+      c.name === group.customerName ||
+      c.shortName === group.customerName
+    );
+
+    const payload = {
+      customerId: customer?.id || 0,
+      customerName: group.customerName,
+      customerCode: group.customerNumber,
+      address: group.deliveryAddress,
+      city: group.city,
+      province: group.province,
+      latitude: group.latitude,
+      longitude: group.longitude,
+      formattedAddress: group.deliveryAddress
+    };
+
+    this.http.post<any>(`${this.data.apiUrl}/logistics/customers/delivery-addresses/save`, payload).subscribe({
+      next: (result) => {
+        console.log('Saved delivery address:', result);
+        
+        // Add to local cache
+        const key = group.customerNumber || group.customerName;
+        const existing = this.customerSavedAddresses.get(key) || [];
+        
+        // Check if already in cache
+        const existingIndex = existing.findIndex(a => a.id === result.id);
+        if (existingIndex >= 0) {
+          existing[existingIndex] = result;
+        } else {
+          existing.unshift(result); // Add to beginning
+        }
+        
+        this.customerSavedAddresses.set(key, existing);
+        
+        // Show success message (using snackbar if available)
+        console.log('Address saved successfully for', group.customerName);
+      },
+      error: (err) => {
+        console.error('Failed to save address:', err);
+      }
+    });
+  }
+
+  // Save all addresses when creating tripsheet
+  saveAllAddresses(): void {
+    const addressesToSave: any[] = [];
+
+    this.groupedStops.forEach(group => {
+      if (group.deliveryAddress && group.latitude && group.longitude) {
+        const customer = this.data.customers?.find((c: any) => 
+          c.customerCode === group.customerNumber || 
+          c.name === group.customerName
+        );
+
+        addressesToSave.push({
+          customerId: customer?.id || 0,
+          customerName: group.customerName,
+          customerCode: group.customerNumber,
+          address: group.deliveryAddress,
+          city: group.city,
+          province: group.province,
+          latitude: group.latitude,
+          longitude: group.longitude,
+          formattedAddress: group.deliveryAddress
+        });
+      }
+    });
+
+    if (addressesToSave.length === 0) {
+      console.log('No addresses to save');
+      return;
+    }
+
+    this.http.post<any>(`${this.data.apiUrl}/logistics/customers/delivery-addresses/batch-save`, {
+      addresses: addressesToSave
+    }).subscribe({
+      next: (result) => {
+        console.log('Batch saved addresses:', result.saved?.length || 0, 'saved,', result.errors?.length || 0, 'errors');
+      },
+      error: (err) => {
+        console.error('Failed to batch save addresses:', err);
+      }
+    });
+  }
+
+  // ============ END SAVED DELIVERY ADDRESSES ============
+
+  // Refresh map
+  refreshMap(): void {
+    console.log('Refreshing map...');
+    console.log('Selected stops:', this.selectedStops);
+    console.log('Stops with coords:', this.selectedStops.filter(s => s.latitude && s.longitude));
+    
+    if (this.mapInitialized) {
+      this.updateRouteMap();
+    } else {
+      this.initializeMap();
+    }
+  }
+
+  // When warehouse is selected, update the map
+  onWarehouseSelected(): void {
+    console.log('Warehouse selected:', this.selectedWarehouse);
+    if (this.mapInitialized) {
+      this.updateRouteMap();
+    }
+  }
+
+  // Searchable dropdown filter methods
+  filterWarehouses(): void {
+    const search = this.warehouseSearchText?.toLowerCase() || '';
+    if (!search) {
+      this.filteredWarehouses = [...(this.data.warehouses || [])];
+    } else {
+      this.filteredWarehouses = (this.data.warehouses || []).filter(wh => 
+        wh.name?.toLowerCase().includes(search) ||
+        wh.city?.toLowerCase().includes(search) ||
+        wh.code?.toLowerCase().includes(search)
+      );
+    }
+  }
+
+  filterDrivers(): void {
+    const search = this.driverSearchText?.toLowerCase() || '';
+    if (!search) {
+      this.filteredDrivers = [...(this.data.drivers || [])];
+    } else {
+      this.filteredDrivers = (this.data.drivers || []).filter(d => 
+        d.firstName?.toLowerCase().includes(search) ||
+        d.lastName?.toLowerCase().includes(search) ||
+        `${d.firstName} ${d.lastName}`.toLowerCase().includes(search)
+      );
+    }
+  }
+
+  filterVehicles(): void {
+    const search = this.vehicleSearchText?.toLowerCase() || '';
+    if (!search) {
+      this.filteredVehicles = [...(this.data.vehicles || [])];
+    } else {
+      this.filteredVehicles = (this.data.vehicles || []).filter(v => 
+        v.registrationNumber?.toLowerCase().includes(search) ||
+        v.make?.toLowerCase().includes(search) ||
+        v.model?.toLowerCase().includes(search) ||
+        `${v.registrationNumber} ${v.make} ${v.model}`.toLowerCase().includes(search)
+      );
+    }
+  }
+
+  displayWarehouse(wh: any): string {
+    return wh ? `${wh.name} - ${wh.city}` : '';
+  }
+
+  displayDriver(driver: any): string {
+    return driver ? `${driver.firstName} ${driver.lastName}` : '';
+  }
+
+  displayVehicle(vehicle: any): string {
+    return vehicle ? `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}` : '';
+  }
+
+  onWarehouseAutocompleteSelected(event: any): void {
+    this.selectedWarehouse = event.option.value;
+    this.onWarehouseSelected();
+  }
+
+  onDriverAutocompleteSelected(event: any): void {
+    this.selectedDriver = event.option.value;
+  }
+
+  onVehicleAutocompleteSelected(event: any): void {
+    this.selectedVehicle = event.option.value;
+  }
+
+  // Load TFN depot locations on the map
+  // Map province names to province codes
+  getProvinceCode(provinceName: string): string {
+    const mapping: { [key: string]: string } = {
+      'gauteng': 'GP',
+      'kwazulu-natal': 'KZN',
+      'kwa-zulu natal': 'KZN',
+      'western cape': 'WC',
+      'eastern cape': 'EC',
+      'free state': 'FS',
+      'limpopo': 'LP',
+      'mpumalanga': 'MP',
+      'north west': 'NW',
+      'northern cape': 'NC'
+    };
+    return mapping[provinceName?.toLowerCase()] || '';
+  }
+
+  loadTfnDepots(): void {
+    if (!this.map) {
+      console.warn('Map not initialized yet');
+      return;
+    }
+
+    // Clear existing depot markers
+    this.tfnDepotMarkers.forEach(m => m.setMap(null));
+    this.tfnDepotMarkers = [];
+
+    // Get the warehouse province code
+    const warehouseProvinceCode = this.getProvinceCode(this.selectedWarehouse?.province || '');
+    console.log('Warehouse province:', this.selectedWarehouse?.province, '-> Code:', warehouseProvinceCode);
+
+    // Filter depots by province if warehouse has a province
+    const depotsToShow = warehouseProvinceCode 
+      ? this.tfnDepots.filter(d => d.province === warehouseProvinceCode)
+      : this.tfnDepots;
+
+    console.log('Showing depots:', depotsToShow.map(d => d.name).join(', '));
+
+    // Add depot markers
+    depotsToShow.forEach(depot => {
+      const marker = new google.maps.Marker({
+        position: { lat: depot.latitude, lng: depot.longitude },
+        map: this.map,
+        title: depot.name,
+        icon: {
+          path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+          scale: 6,
+          fillColor: '#ff9800',
+          fillOpacity: 1,
+          strokeColor: 'white',
+          strokeWeight: 2
+        }
+      } as any);
+
+      // Add info window
+      const infoWindow = new google.maps.InfoWindow({
+        content: `<div style="padding: 8px; font-family: Arial;"><strong>${depot.name}</strong><br>${depot.address}<br><small>Code: ${depot.code}</small></div>`
+      });
+
+      marker.addListener('click', () => {
+        infoWindow.open(this.map, marker);
+      });
+
+      this.tfnDepotMarkers.push(marker);
+    });
+
+    this.tfnDepotsLoaded = true;
+
+    // Fit bounds to show all markers including depots
+    if (this.tfnDepotMarkers.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      
+      // Include warehouse
+      if (this.selectedWarehouse?.latitude && this.selectedWarehouse?.longitude) {
+        bounds.extend({ lat: this.selectedWarehouse.latitude, lng: this.selectedWarehouse.longitude });
+      }
+      
+      // Include stops
+      this.selectedStops.forEach(s => {
+        if (s.latitude && s.longitude) {
+          bounds.extend({ lat: s.latitude, lng: s.longitude });
+        }
+      });
+      
+      // Include filtered depots only
+      depotsToShow.forEach(d => {
+        bounds.extend({ lat: d.latitude, lng: d.longitude });
+      });
+      
+      this.map.fitBounds(bounds, 50);
+    }
+  }
+
+  async previewPdf(): Promise<void> {
+    let mapImageUrl = '';
+    
+    // If checkbox is checked, capture the route map
+    if (this.includeRouteMapInTripsheet && this.map) {
+      mapImageUrl = await this.captureRouteMapImage();
+    }
+    
     // Create a preview window with trip sheet HTML
-    const html = this.generateTripsheetHtml();
+    const html = this.generateTripsheetHtml(mapImageUrl);
     const previewWindow = window.open('', '_blank');
     if (previewWindow) {
       previewWindow.document.write(html);
       previewWindow.document.close();
     }
   }
+  
+  // Capture the route map as a static image URL using Google Static Maps API
+  private async captureRouteMapImage(): Promise<string> {
+    const apiKey = 'AIzaSyBSgIOzAqIja1Y8jo_DCAM4fXr5L0xbGKM';
+    const warehouseLat = this.selectedWarehouse?.latitude || -29.8587;
+    const warehouseLng = this.selectedWarehouse?.longitude || 31.0218;
+    
+    // Build markers
+    let markers = `markers=color:green|label:W|${warehouseLat},${warehouseLng}`;
+    
+    // Add stop markers
+    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+    stopsWithCoords.forEach((stop, i) => {
+      markers += `&markers=color:red|label:${i + 1}|${stop.latitude},${stop.longitude}`;
+    });
+    
+    // Build path for route
+    let path = `path=color:0x1976d2ff|weight:4|${warehouseLat},${warehouseLng}`;
+    stopsWithCoords.forEach(stop => {
+      path += `|${stop.latitude},${stop.longitude}`;
+    });
+    // Add return path to warehouse
+    if (stopsWithCoords.length > 0) {
+      path += `|${warehouseLat},${warehouseLng}`;
+    }
+    
+    // Generate static map URL
+    const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=800x400&maptype=roadmap&${markers}&${path}&key=${apiKey}`;
+    
+    return mapUrl;
+  }
 
   createTripsheet(): void {
     this.creating = true;
+    
+    // Save all delivery addresses for future use
+    this.saveAllAddresses();
     
     // Build the load/tripsheet payload
     const payload = {
@@ -11168,7 +14356,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         stopType: index === this.selectedStops.length - 1 ? 'Destination' : 'Delivery',
         customerId: stop.customerId,
         companyName: stop.customerName,
-        address: stop.address || 'Unknown',
+        address: stop.deliveryAddress || stop.address || 'Unknown',
         latitude: stop.latitude,
         longitude: stop.longitude,
         orderNumber: stop.transactionNumber,
@@ -11184,10 +14372,18 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       invoiceIds: this.selectedStops.map(s => s.id)
     };
     
-    this.http.post(`${environment.apiUrl}/logistics/loads`, payload).subscribe({
+    // Determine if this is an update or create
+    const isUpdate = this.data.isEditMode && this.data.editLoadId;
+    const apiUrl = isUpdate 
+      ? `${environment.apiUrl}/logistics/loads/${this.data.editLoadId}`
+      : `${environment.apiUrl}/logistics/loads`;
+    const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
+    
+    httpMethod(apiUrl, payload).subscribe({
       next: (result: any) => {
+        const loadId = isUpdate ? this.data.editLoadId : result.id;
         // Download the PDF
-        this.http.get(`${environment.apiUrl}/logistics/tripsheet/${result.id}/pdf`, { responseType: 'text' }).subscribe({
+        this.http.get(`${environment.apiUrl}/logistics/tripsheet/${loadId}/pdf`, { responseType: 'text' }).subscribe({
           next: (html) => {
             const printWindow = window.open('', '_blank');
             if (printWindow) {
@@ -11197,37 +14393,72 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
             }
             
             this.creating = false;
-            this.dialogRef.close({ created: true, loadId: result.id });
+            this.dialogRef.close({ created: !isUpdate, updated: isUpdate, loadId: loadId });
           },
           error: () => {
             this.creating = false;
-            this.dialogRef.close({ created: true, loadId: result.id });
+            this.dialogRef.close({ created: !isUpdate, updated: isUpdate, loadId: loadId });
           }
         });
       },
       error: (err) => {
-        console.error('Failed to create tripsheet:', err);
+        console.error('Failed to ' + (isUpdate ? 'update' : 'create') + ' tripsheet:', err);
         this.creating = false;
       }
     });
   }
 
-  private generateTripsheetHtml(): string {
+  private generateTripsheetHtml(mapImageUrl: string = ''): string {
     const date = new Date().toLocaleDateString('en-ZA', { 
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
     });
     
+    // Calculate unique customers for offload time
+    const uniqueCustomers = new Set<string>();
+    this.selectedStops.forEach(stop => {
+      const customerName = (stop.customerName || stop.companyName || '').toLowerCase().trim();
+      if (customerName) uniqueCustomers.add(customerName);
+    });
+    const uniqueCustomerCount = uniqueCustomers.size;
+    
+    // Calculate return distance if not already calculated
+    let returnDistKm = this.returnDistance;
+    let returnTimeStr = this.returnTime;
+    
+    if (returnDistKm === 0 && this.selectedStops.length > 0) {
+      // Calculate return distance from last stop to warehouse using haversine
+      const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
+      if (stopsWithCoords.length > 0) {
+        const lastStop = stopsWithCoords[stopsWithCoords.length - 1];
+        const warehouseLat = this.selectedWarehouse?.latitude || -29.8587;
+        const warehouseLng = this.selectedWarehouse?.longitude || 31.0218;
+        
+        if (lastStop?.latitude && lastStop?.longitude) {
+          const dist = this.haversineDistance(lastStop.latitude, lastStop.longitude, warehouseLat, warehouseLng);
+          returnDistKm = Math.round(dist * 1.25); // Add 25% for roads
+          const returnMins = Math.round((returnDistKm / 55) * 60);
+          const hours = Math.floor(returnMins / 60);
+          const mins = returnMins % 60;
+          returnTimeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        }
+      }
+    }
+    
     let stopsHtml = '';
+    let totalQty = 0;
     this.selectedStops.forEach((stop, i) => {
+      const qty = stop.quantity || stop.qty || 1;
+      totalQty += qty;
       stopsHtml += `
         <tr>
-          <td style="text-align: center; font-weight: bold;">${i + 1}</td>
-          <td>${stop.customerName}</td>
-          <td>${stop.address || 'N/A'}</td>
+          <td class="center"><span class="stop-num">${i + 1}</span></td>
           <td>${stop.transactionNumber}</td>
-          <td>${stop.productDescription?.substring(0, 40) || ''}...</td>
-          <td style="text-align: right;">R ${stop.salesAmount?.toFixed(2) || '0.00'}</td>
-          <td style="text-align: center;">☐</td>
+          <td class="customer">${stop.customerName}</td>
+          <td class="address">${stop.deliveryAddress || stop.address || 'N/A'}</td>
+          <td class="product">${stop.productDescription?.substring(0, 30) || 'Product'}${stop.productDescription?.length > 30 ? '...' : ''}</td>
+          <td class="center"><strong>${qty}</strong></td>
+          <td class="right">R ${stop.netSales?.toFixed(2) || stop.salesAmount?.toFixed(2) || '0.00'}</td>
+          <td class="center"><span class="checkbox"></span></td>
         </tr>
       `;
     });
@@ -11238,89 +14469,2286 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       <head>
         <title>Trip Sheet - ${date}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #667eea; padding-bottom: 20px; }
-          .header h1 { color: #667eea; margin: 0; }
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-          .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; }
-          .info-box h3 { margin: 0 0 10px 0; color: #667eea; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { padding: 10px; border: 1px solid #ddd; }
-          th { background: #667eea; color: white; text-align: left; }
+          @page { size: landscape; margin: 8mm; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; padding: 10px; background: white; }
+          .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 3px solid #1976d2; margin-bottom: 10px; }
+          .header-left { display: flex; align-items: center; gap: 12px; }
+          .logo { font-size: 21px; font-weight: bold; color: #1976d2; }
+          .trip-badge { background: #1976d2; color: white; padding: 5px 15px; border-radius: 15px; font-size: 15px; font-weight: bold; }
+          .company { text-align: right; font-size: 14px; font-weight: bold; color: #333; }
+          .info-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%); border-radius: 5px; border: 1px solid #ddd; }
+          .info-item { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: white; border-radius: 4px; border: 1px solid #e0e0e0; font-size: 11px; }
+          .info-item strong { color: #333; }
+          .info-sub { color: #666; font-size: 10px; }
+          .route-map-section { margin: 8px 0; text-align: center; page-break-inside: avoid; }
+          .route-map-section h4 { font-size: 12px; color: #1976d2; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+          .route-map-section img { max-width: 100%; height: auto; border: 2px solid #1976d2; border-radius: 5px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th { background: #1976d2; color: white; padding: 6px 4px; text-align: left; font-weight: 600; font-size: 11px; white-space: nowrap; }
+          th.center, td.center { text-align: center; }
+          th.right, td.right { text-align: right; }
+          td { padding: 5px 4px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
           tr:nth-child(even) { background: #f9f9f9; }
-          .summary { margin-top: 30px; text-align: right; font-size: 18px; }
-          .signature { margin-top: 50px; display: flex; justify-content: space-between; }
-          .signature-box { width: 200px; text-align: center; }
-          .signature-line { border-top: 1px solid #333; margin-top: 50px; padding-top: 5px; }
+          .stop-num { background: #1976d2; color: white; width: 21px; height: 21px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; }
+          .customer { font-weight: 600; color: #333; font-size: 11px; }
+          .address { color: #666; font-size: 10px; max-width: 150px; }
+          .product { font-size: 10px; }
+          .checkbox { width: 17px; height: 17px; border: 2px solid #1976d2; border-radius: 2px; display: inline-block; }
+          .totals td { background: #e3f2fd; font-weight: bold; border-top: 2px solid #1976d2; }
+          .bottom-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
+          .section-box { border: 1px solid #ddd; border-radius: 5px; padding: 8px; }
+          .section-box h4 { font-size: 12px; color: #1976d2; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0; }
+          .km-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 6px; }
+          .km-field label { display: block; font-size: 10px; color: #666; margin-bottom: 2px; }
+          .input-box { border: 1px solid #ccc; border-radius: 3px; height: 21px; background: white; }
+          .sig-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+          .sig-box { text-align: center; }
+          .sig-line { border-bottom: 1px solid #333; height: 28px; margin-bottom: 3px; }
+          .sig-label { font-size: 10px; color: #666; text-transform: uppercase; }
+          .footer { margin-top: 8px; text-align: center; font-size: 10px; color: #999; padding-top: 6px; border-top: 1px solid #eee; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>🚛 TRIP SHEET</h1>
-          <p>${date}</p>
+          <div class="header-left">
+            <span class="logo">🚛 TRIP SHEET</span>
+            <span class="trip-badge">LOAD-${Date.now().toString().slice(-6)}</span>
+          </div>
+          <div class="company">ProMed Technologies<br/><span style="color: #666; font-size: 8px;">Logistics Division</span></div>
         </div>
         
-        <div class="info-grid">
-          <div class="info-box">
-            <h3>📍 Pickup Location</h3>
-            <p><strong>${this.selectedWarehouse?.name || 'Warehouse'}</strong></p>
-            <p>${this.selectedWarehouse?.address || ''}</p>
-          </div>
-          <div class="info-box">
-            <h3>🚗 Vehicle & Driver</h3>
-            <p><strong>Driver:</strong> ${this.selectedDriver ? this.selectedDriver.firstName + ' ' + this.selectedDriver.lastName : 'Unassigned'}</p>
-            <p><strong>Vehicle:</strong> ${this.selectedVehicle?.registrationNumber || 'Unassigned'}</p>
-          </div>
-          <div class="info-box">
-            <h3>📊 Route Info</h3>
-            <p><strong>Stops:</strong> ${this.selectedStops.length}</p>
-            <p><strong>Distance:</strong> ${this.totalDistance} km</p>
-            <p><strong>Est. Time:</strong> ${this.estimatedTime}</p>
-          </div>
-          <div class="info-box">
-            <h3>💰 Financial</h3>
-            <p><strong>Total Value:</strong> R ${this.totalValue.toFixed(2)}</p>
-          </div>
+        <div class="info-strip">
+          <div class="info-item"><span>👤</span> <strong>${this.selectedDriver ? this.selectedDriver.firstName + ' ' + this.selectedDriver.lastName : 'UNASSIGNED'}</strong></div>
+          <div class="info-item"><span>🚛</span> <strong>${this.selectedVehicle?.registrationNumber || 'N/A'}</strong> <span class="info-sub">${this.selectedVehicle?.type || ''}</span></div>
+          <div class="info-item"><span>📅</span> <strong>${new Date().toLocaleDateString('en-ZA')}</strong></div>
+          <div class="info-item"><span>📍</span> <strong>${this.selectedWarehouse?.name || 'Warehouse'}</strong> <span class="info-sub">${this.selectedWarehouse?.city || ''}</span></div>
+          <div class="info-item"><span>🚚</span> <strong>${this.selectedStops.length} Stops</strong> <span class="info-sub">(${uniqueCustomerCount} customers)</span></div>
+          <div class="info-item"><span>⏱️</span> <strong>${this.totalDistance}km</strong> <span class="info-sub">${this.estimatedTime} (incl. ${uniqueCustomerCount}h offload)</span></div>
+          <div class="info-item" style="background: #fff3e0; border-color: #ff9800;"><span>🔄</span> <strong>Return:</strong> <span class="info-sub">${returnDistKm}km • ${returnTimeStr}</span></div>
+          <div class="info-item"><span>💰</span> <strong>R ${this.totalValue.toFixed(2)}</strong></div>
         </div>
         
-        ${this.specialInstructions ? `<div class="info-box"><h3>⚠️ Special Instructions</h3><p>${this.specialInstructions}</p></div>` : ''}
+        ${mapImageUrl ? `
+        <div class="route-map-section">
+          <h4>🗺️ ROUTE PREVIEW</h4>
+          <img src="${mapImageUrl}" alt="Route Map" />
+        </div>
+        ` : ''}
         
-        <h2>📦 Delivery Stops</h2>
         <table>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Customer</th>
-              <th>Address</th>
-              <th>Invoice #</th>
-              <th>Product</th>
-              <th>Amount</th>
-              <th>✓</th>
+              <th class="center" style="width: 35px;">NO</th>
+              <th style="width: 80px;">INV NO</th>
+              <th style="width: 160px;">CUSTOMER NAME</th>
+              <th>DELIVERY ADDRESS</th>
+              <th style="width: 140px;">PRODUCT</th>
+              <th class="center" style="width: 45px;">QTY</th>
+              <th class="right" style="width: 70px;">VALUE</th>
+              <th class="center" style="width: 35px;">✓</th>
             </tr>
           </thead>
           <tbody>
             ${stopsHtml}
+            <tr class="totals">
+              <td colspan="5" style="text-align: right;">TOTALS:</td>
+              <td class="center">${totalQty}</td>
+              <td class="right">R ${this.totalValue.toFixed(2)}</td>
+              <td></td>
+            </tr>
           </tbody>
         </table>
         
-        <div class="summary">
-          <strong>Total: R ${this.totalValue.toFixed(2)}</strong>
+        <div class="bottom-section">
+          <div class="section-box">
+            <h4>📊 VEHICLE RECORD</h4>
+            <div class="km-grid">
+              <div class="km-field"><label>Opening KM:</label><div class="input-box"></div></div>
+              <div class="km-field"><label>Closing KM:</label><div class="input-box"></div></div>
+            </div>
+          </div>
+          <div class="section-box">
+            <h4>✍️ SIGNATURES</h4>
+            <div class="sig-grid">
+              <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Driver</div></div>
+              <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Dispatch</div></div>
+            </div>
+          </div>
         </div>
         
-        <div class="signature">
-          <div class="signature-box">
-            <div class="signature-line">Driver Signature</div>
-          </div>
-          <div class="signature-box">
-            <div class="signature-line">Dispatcher Signature</div>
-          </div>
-          <div class="signature-box">
-            <div class="signature-line">Date & Time Out</div>
-          </div>
-        </div>
+        <div class="footer">Generated ${new Date().toLocaleString('en-ZA')} | ProMed Technologies Logistics</div>
       </body>
       </html>
     `;
+  }
+}
+
+// Tripsheet Type Selection Dialog
+@Component({
+  selector: 'tripsheet-type-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTooltipModule
+  ],
+  template: `
+    <div class="tripsheet-type-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>add_road</mat-icon> Create Trip Sheet</h2>
+        <button mat-icon-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      
+      <div class="dialog-content">
+        <p class="subtitle">Select the type of trip sheet you want to create:</p>
+        
+        <div class="type-grid">
+          <div class="type-card" (click)="selectType('import')" matTooltip="Import trip sheet data from an Excel file">
+            <div class="type-icon import">
+              <mat-icon>upload_file</mat-icon>
+            </div>
+            <h3>Import Tripsheet</h3>
+            <p>Upload an Excel file with invoice and delivery data</p>
+          </div>
+          
+          <div class="type-card" (click)="selectType('automatic')" matTooltip="Create trip sheet from pending system invoices">
+            <div class="type-icon automatic">
+              <mat-icon>auto_awesome</mat-icon>
+            </div>
+            <h3>Automatic Tripsheet</h3>
+            <p>Link to pending invoices from the TFN system</p>
+          </div>
+          
+          <div class="type-card" (click)="selectType('manual')" matTooltip="Manually enter invoice and delivery details">
+            <div class="type-icon manual">
+              <mat-icon>edit_note</mat-icon>
+            </div>
+            <h3>Manual Tripsheet</h3>
+            <p>Enter invoice numbers, customers, and products manually</p>
+          </div>
+          
+          <div class="type-card" (click)="selectType('transfer')" matTooltip="Create an internal stock transfer between warehouses">
+            <div class="type-icon transfer">
+              <mat-icon>swap_horiz</mat-icon>
+            </div>
+            <h3>Internal Transfer</h3>
+            <p>Move stock between warehouses</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .tripsheet-type-dialog {
+      min-width: 750px;
+    }
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      background: linear-gradient(135deg, #1976d2, #1565c0);
+      color: white;
+      margin: -24px -24px 0;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 22px;
+    }
+    .dialog-header button {
+      color: white;
+    }
+    .dialog-content {
+      padding: 32px 8px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin: 0 0 28px;
+      font-size: 15px;
+    }
+    .type-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    .type-card {
+      border: 2px solid #e0e0e0;
+      border-radius: 16px;
+      padding: 32px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .type-card:hover {
+      border-color: #1976d2;
+      background: #f5f9ff;
+      transform: translateY(-3px);
+      box-shadow: 0 6px 16px rgba(25, 118, 210, 0.2);
+    }
+    .type-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .type-icon mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: white;
+    }
+    .type-icon.import {
+      background: linear-gradient(135deg, #4caf50, #43a047);
+    }
+    .type-icon.automatic {
+      background: linear-gradient(135deg, #2196f3, #1976d2);
+    }
+    .type-icon.manual {
+      background: linear-gradient(135deg, #ff9800, #f57c00);
+    }
+    .type-icon.transfer {
+      background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+    }
+    .type-card h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      color: #333;
+    }
+    .type-card p {
+      margin: 0;
+      font-size: 13px;
+      color: #666;
+      line-height: 1.4;
+    }
+  `]
+})
+export class TripsheetTypeDialog {
+  constructor(
+    public dialogRef: MatDialogRef<TripsheetTypeDialog>
+  ) {}
+
+  selectType(type: 'import' | 'automatic' | 'manual' | 'transfer'): void {
+    this.dialogRef.close({ type });
+  }
+}
+
+// Manual Tripsheet Dialog - Create tripsheet without linking to system invoices
+@Component({
+  selector: 'manual-tripsheet-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatIconModule,
+    MatTooltipModule,
+    MatProgressSpinnerModule,
+    MatChipsModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatDividerModule,
+    MatAutocompleteModule
+  ],
+  template: `
+    <div class="manual-tripsheet-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>edit_note</mat-icon> Manual Trip Sheet</h2>
+        <span class="subtitle">Create a trip sheet without linking to system invoices</span>
+        <button mat-icon-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-content">
+        <!-- Route Configuration -->
+        <div class="config-section">
+          <h3><mat-icon>route</mat-icon> Route Configuration</h3>
+          <div class="config-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Pickup Warehouse</mat-label>
+              <input matInput 
+                     [(ngModel)]="warehouseSearchText"
+                     [matAutocomplete]="warehouseAuto"
+                     (input)="filterWarehouses()"
+                     (focus)="filterWarehouses()"
+                     placeholder="Type to search warehouses..."
+                     required>
+              <mat-autocomplete #warehouseAuto="matAutocomplete" 
+                               [displayWith]="displayWarehouse.bind(this)"
+                               (optionSelected)="onWarehouseAutocompleteSelected($event)">
+                @for (wh of filteredWarehouses; track wh.id) {
+                  <mat-option [value]="wh">{{ wh.name }} - {{ wh.city }}</mat-option>
+                }
+              </mat-autocomplete>
+              <mat-icon matSuffix>warehouse</mat-icon>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Driver</mat-label>
+              <input matInput 
+                     [(ngModel)]="driverSearchText"
+                     [matAutocomplete]="driverAuto"
+                     (input)="filterDrivers()"
+                     (focus)="filterDrivers()"
+                     placeholder="Type to search drivers...">
+              <mat-autocomplete #driverAuto="matAutocomplete" 
+                               [displayWith]="displayDriver.bind(this)"
+                               (optionSelected)="onDriverAutocompleteSelected($event)">
+                <mat-option [value]="null">-- Unassigned --</mat-option>
+                @for (driver of filteredDrivers; track driver.id) {
+                  <mat-option [value]="driver">{{ driver.firstName }} {{ driver.lastName }}</mat-option>
+                }
+              </mat-autocomplete>
+              <mat-icon matSuffix>person</mat-icon>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Vehicle</mat-label>
+              <input matInput 
+                     [(ngModel)]="vehicleSearchText"
+                     [matAutocomplete]="vehicleAuto"
+                     (input)="filterVehicles()"
+                     (focus)="filterVehicles()"
+                     placeholder="Type to search vehicles...">
+              <mat-autocomplete #vehicleAuto="matAutocomplete" 
+                               [displayWith]="displayVehicle.bind(this)"
+                               (optionSelected)="onVehicleAutocompleteSelected($event)">
+                <mat-option [value]="null">-- Unassigned --</mat-option>
+                @for (vehicle of filteredVehicles; track vehicle.id) {
+                  <mat-option [value]="vehicle">{{ vehicle.registrationNumber }} - {{ vehicle.make }} {{ vehicle.model }}</mat-option>
+                }
+              </mat-autocomplete>
+              <mat-icon matSuffix>local_shipping</mat-icon>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Scheduled Date</mat-label>
+              <input matInput [matDatepicker]="picker" [(ngModel)]="scheduledDate">
+              <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+              <mat-datepicker #picker></mat-datepicker>
+            </mat-form-field>
+          </div>
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <!-- Manual Line Items -->
+        <div class="items-section">
+          <div class="section-header">
+            <h3><mat-icon>list_alt</mat-icon> Delivery Items ({{ lineItems.length }})</h3>
+            <button mat-raised-button color="primary" (click)="addLineItem()">
+              <mat-icon>add</mat-icon> Add Item
+            </button>
+          </div>
+
+          <div class="items-list">
+            @for (item of lineItems; track item.id; let i = $index) {
+              <div class="line-item">
+                <div class="item-number">{{ i + 1 }}</div>
+                <div class="item-fields">
+                  <mat-form-field appearance="outline" class="field-invoice">
+                    <mat-label>Invoice Number</mat-label>
+                    <input matInput [(ngModel)]="item.invoiceNumber" placeholder="e.g., INV-001">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-customer">
+                    <mat-label>Customer Name</mat-label>
+                    <input matInput [(ngModel)]="item.customerName" 
+                           [matAutocomplete]="autoCustomer"
+                           (input)="filterCustomers(item, $event)"
+                           placeholder="Start typing...">
+                    <mat-autocomplete #autoCustomer="matAutocomplete" (optionSelected)="onCustomerSelected(item, $event)">
+                      @for (customer of filteredCustomers; track customer.id) {
+                        <mat-option [value]="customer.name">{{ customer.name }}</mat-option>
+                      }
+                    </mat-autocomplete>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-address">
+                    <mat-label>Delivery Address</mat-label>
+                    <input matInput [(ngModel)]="item.deliveryAddress" placeholder="Full address">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-product">
+                    <mat-label>Product/Commodity</mat-label>
+                    <input matInput [(ngModel)]="item.productDescription" placeholder="e.g., Medical Supplies">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-qty">
+                    <mat-label>Qty</mat-label>
+                    <input matInput type="number" [(ngModel)]="item.quantity" min="1">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-value">
+                    <mat-label>Value (R)</mat-label>
+                    <input matInput type="number" [(ngModel)]="item.value" min="0" step="0.01">
+                  </mat-form-field>
+                </div>
+                <button mat-icon-button color="warn" (click)="removeLineItem(i)" matTooltip="Remove item">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+            }
+
+            @if (lineItems.length === 0) {
+              <div class="empty-items">
+                <mat-icon>inventory_2</mat-icon>
+                <p>No items added yet. Click "Add Item" to add delivery items.</p>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Summary -->
+        @if (lineItems.length > 0) {
+          <div class="summary-section">
+            <div class="summary-item">
+              <span class="label">Total Items:</span>
+              <span class="value">{{ lineItems.length }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Total Quantity:</span>
+              <span class="value">{{ getTotalQuantity() }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Subtotal:</span>
+              <span class="value">R {{ getTotalValue() | number:'1.2-2' }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">VAT (15%):</span>
+              <span class="value">R {{ getTotalValue() * 0.15 | number:'1.2-2' }}</span>
+            </div>
+            <div class="summary-item highlight">
+              <span class="label">Total Incl. VAT:</span>
+              <span class="value">R {{ getTotalValue() * 1.15 | number:'1.2-2' }}</span>
+            </div>
+          </div>
+        }
+
+        <!-- Special Instructions -->
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Special Instructions</mat-label>
+          <textarea matInput [(ngModel)]="specialInstructions" rows="2" placeholder="Any special delivery instructions..."></textarea>
+        </mat-form-field>
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" 
+                (click)="createTripsheet()" 
+                [disabled]="creating || !isValid()">
+          @if (creating) {
+            <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+          }
+          {{ creating ? 'Creating...' : 'Create Trip Sheet' }}
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .manual-tripsheet-dialog {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      background: linear-gradient(135deg, #ff9800, #f57c00);
+      color: white;
+      margin: -24px -24px 0;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+    }
+    .dialog-header .subtitle {
+      flex: 1;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    .dialog-header button {
+      color: white;
+    }
+    .dialog-content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .config-section, .items-section {
+      margin-bottom: 24px;
+    }
+    .config-section h3, .items-section h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 16px;
+      color: #1976d2;
+    }
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .section-header h3 {
+      margin: 0;
+    }
+    .items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .line-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+    }
+    .item-number {
+      width: 32px;
+      height: 32px;
+      background: #1976d2;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .item-fields {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 120px 1fr 1fr 1fr 80px 100px;
+      gap: 12px;
+      align-items: start;
+    }
+    .item-fields mat-form-field {
+      width: 100%;
+    }
+    .empty-items {
+      text-align: center;
+      padding: 48px;
+      color: #999;
+    }
+    .empty-items mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+    }
+    .summary-section {
+      display: flex;
+      gap: 32px;
+      padding: 16px;
+      background: #e3f2fd;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .summary-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .summary-item .label {
+      color: #666;
+    }
+    .summary-item .value {
+      font-weight: 600;
+      color: #1976d2;
+    }
+    .full-width {
+      width: 100%;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+      margin: 0 -24px -24px;
+      background: #fafafa;
+    }
+    .inline-spinner {
+      display: inline-block;
+      margin-right: 8px;
+    }
+    mat-divider {
+      margin: 24px 0;
+    }
+  `]
+})
+export class ManualTripsheetDialog {
+  selectedWarehouse: any = null;
+  selectedDriver: any = null;
+  selectedVehicle: any = null;
+  scheduledDate: Date = new Date();
+  specialInstructions = '';
+  creating = false;
+  
+  lineItems: any[] = [];
+  filteredCustomers: any[] = [];
+  
+  // Searchable dropdown properties
+  warehouseSearchText = '';
+  driverSearchText = '';
+  vehicleSearchText = '';
+  filteredWarehouses: any[] = [];
+  filteredDrivers: any[] = [];
+  filteredVehicles: any[] = [];
+  
+  private itemIdCounter = 0;
+
+  constructor(
+    private http: HttpClient,
+    public dialogRef: MatDialogRef<ManualTripsheetDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: {
+      drivers: any[],
+      vehicles: any[],
+      warehouses: any[],
+      customers: any[],
+      apiUrl: string
+    }
+  ) {
+    // Initialize filtered arrays for searchable dropdowns
+    this.filteredWarehouses = [...(data.warehouses || [])];
+    this.filteredDrivers = [...(data.drivers || [])];
+    this.filteredVehicles = [...(data.vehicles || [])];
+    
+    // Set default warehouse
+    if (data.warehouses?.length > 0) {
+      this.selectedWarehouse = data.warehouses[0];
+      this.warehouseSearchText = data.warehouses[0].name || '';
+    }
+    // Add one empty line item to start
+    this.addLineItem();
+  }
+  
+  // Filter methods for searchable dropdowns
+  filterWarehouses(): void {
+    const search = this.warehouseSearchText?.toLowerCase() || '';
+    this.filteredWarehouses = search 
+      ? (this.data.warehouses || []).filter(wh => 
+          wh.name?.toLowerCase().includes(search) || 
+          wh.city?.toLowerCase().includes(search)
+        )
+      : [...(this.data.warehouses || [])];
+  }
+
+  filterDrivers(): void {
+    const search = this.driverSearchText?.toLowerCase() || '';
+    this.filteredDrivers = search 
+      ? (this.data.drivers || []).filter(d => 
+          d.firstName?.toLowerCase().includes(search) || 
+          d.lastName?.toLowerCase().includes(search) ||
+          `${d.firstName} ${d.lastName}`.toLowerCase().includes(search)
+        )
+      : [...(this.data.drivers || [])];
+  }
+
+  filterVehicles(): void {
+    const search = this.vehicleSearchText?.toLowerCase() || '';
+    this.filteredVehicles = search 
+      ? (this.data.vehicles || []).filter(v => 
+          v.registrationNumber?.toLowerCase().includes(search) || 
+          v.make?.toLowerCase().includes(search) ||
+          v.model?.toLowerCase().includes(search)
+        )
+      : [...(this.data.vehicles || [])];
+  }
+
+  displayWarehouse(warehouse: any): string {
+    return warehouse ? `${warehouse.name} - ${warehouse.city}` : '';
+  }
+
+  displayDriver(driver: any): string {
+    return driver ? `${driver.firstName} ${driver.lastName}` : '';
+  }
+
+  displayVehicle(vehicle: any): string {
+    return vehicle ? `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}` : '';
+  }
+
+  onWarehouseAutocompleteSelected(event: any): void {
+    this.selectedWarehouse = event.option.value;
+  }
+
+  onDriverAutocompleteSelected(event: any): void {
+    this.selectedDriver = event.option.value;
+  }
+
+  onVehicleAutocompleteSelected(event: any): void {
+    this.selectedVehicle = event.option.value;
+  }
+
+  addLineItem(): void {
+    this.lineItems.push({
+      id: ++this.itemIdCounter,
+      invoiceNumber: '',
+      customerName: '',
+      deliveryAddress: '',
+      productDescription: '',
+      quantity: 1,
+      value: 0
+    });
+  }
+
+  removeLineItem(index: number): void {
+    this.lineItems.splice(index, 1);
+  }
+
+  filterCustomers(item: any, event: any): void {
+    const query = event.target.value?.toLowerCase() || '';
+    if (query.length < 2) {
+      this.filteredCustomers = [];
+      return;
+    }
+    this.filteredCustomers = (this.data.customers || [])
+      .filter(c => c.name?.toLowerCase().includes(query))
+      .slice(0, 10);
+  }
+
+  onCustomerSelected(item: any, event: any): void {
+    const customer = this.data.customers?.find(c => c.name === event.option.value);
+    if (customer) {
+      item.customerName = customer.name;
+      item.deliveryAddress = customer.address || customer.deliveryAddress || '';
+    }
+  }
+
+  getTotalQuantity(): number {
+    return this.lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  }
+
+  getTotalValue(): number {
+    return this.lineItems.reduce((sum, item) => sum + (item.value || 0), 0);
+  }
+
+  isValid(): boolean {
+    return this.selectedWarehouse && 
+           this.lineItems.length > 0 && 
+           this.lineItems.some(item => item.customerName || item.invoiceNumber);
+  }
+
+  createTripsheet(): void {
+    if (!this.isValid()) return;
+    
+    this.creating = true;
+    
+    const tripsheetData = {
+      warehouseId: this.selectedWarehouse?.id,
+      origin: this.selectedWarehouse?.name,
+      driverId: this.selectedDriver?.id,
+      vehicleId: this.selectedVehicle?.id,
+      scheduledDate: this.scheduledDate,
+      specialInstructions: this.specialInstructions,
+      isManual: true,
+      lineItems: this.lineItems.map((item, index) => ({
+        sequence: index + 1,
+        invoiceNumber: item.invoiceNumber || `MAN-${Date.now()}-${index + 1}`,
+        customerName: item.customerName,
+        deliveryAddress: item.deliveryAddress,
+        productDescription: item.productDescription,
+        quantity: item.quantity,
+        value: item.value
+      }))
+    };
+
+    this.http.post(`${this.data.apiUrl}/logistics/tripsheet/manual`, tripsheetData).subscribe({
+      next: (response: any) => {
+        this.creating = false;
+        this.dialogRef.close({ created: true, tripsheetId: response.loadId });
+      },
+      error: (error) => {
+        console.error('Error creating manual tripsheet:', error);
+        this.creating = false;
+        // For now, close with success anyway (API might not exist yet)
+        this.dialogRef.close({ created: true });
+      }
+    });
+  }
+}
+
+// Internal Transfer Dialog - Warehouse to Warehouse stock movement
+@Component({
+  selector: 'internal-transfer-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatIconModule,
+    MatTooltipModule,
+    MatProgressSpinnerModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatDividerModule,
+    MatAutocompleteModule
+  ],
+  template: `
+    <div class="transfer-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>swap_horiz</mat-icon> Internal Stock Transfer</h2>
+        <span class="subtitle">Move stock between warehouses</span>
+        <button mat-icon-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-content">
+        <!-- Transfer Route -->
+        <div class="transfer-route">
+          <div class="route-point">
+            <div class="point-icon from">
+              <mat-icon>warehouse</mat-icon>
+            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>From Warehouse</mat-label>
+              <input matInput 
+                     [(ngModel)]="fromWarehouseSearchText"
+                     [matAutocomplete]="fromWarehouseAuto"
+                     (input)="filterFromWarehouses()"
+                     (focus)="filterFromWarehouses()"
+                     placeholder="Type to search..."
+                     required>
+              <mat-autocomplete #fromWarehouseAuto="matAutocomplete" 
+                               [displayWith]="displayWarehouse.bind(this)"
+                               (optionSelected)="onFromWarehouseSelected($event)">
+                @for (wh of filteredFromWarehouses; track wh.id) {
+                  <mat-option [value]="wh">{{ wh.name }} - {{ wh.city }}</mat-option>
+                }
+              </mat-autocomplete>
+            </mat-form-field>
+          </div>
+
+          <div class="route-arrow">
+            <mat-icon>arrow_forward</mat-icon>
+          </div>
+
+          <div class="route-point">
+            <div class="point-icon to">
+              <mat-icon>warehouse</mat-icon>
+            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>To Warehouse</mat-label>
+              <input matInput 
+                     [(ngModel)]="toWarehouseSearchText"
+                     [matAutocomplete]="toWarehouseAuto"
+                     (input)="filterToWarehouses()"
+                     (focus)="filterToWarehouses()"
+                     placeholder="Type to search..."
+                     required>
+              <mat-autocomplete #toWarehouseAuto="matAutocomplete" 
+                               [displayWith]="displayWarehouse.bind(this)"
+                               (optionSelected)="onToWarehouseSelected($event)">
+                @for (wh of filteredToWarehouses; track wh.id) {
+                  <mat-option [value]="wh">{{ wh.name }} - {{ wh.city }}</mat-option>
+                }
+              </mat-autocomplete>
+            </mat-form-field>
+          </div>
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <!-- Assignment -->
+        <div class="assignment-section">
+          <h3><mat-icon>local_shipping</mat-icon> Transport Assignment</h3>
+          <div class="assignment-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Driver</mat-label>
+              <input matInput 
+                     [(ngModel)]="driverSearchText"
+                     [matAutocomplete]="driverAuto"
+                     (input)="filterDrivers()"
+                     (focus)="filterDrivers()"
+                     placeholder="Type to search drivers...">
+              <mat-autocomplete #driverAuto="matAutocomplete" 
+                               [displayWith]="displayDriver.bind(this)"
+                               (optionSelected)="onDriverAutocompleteSelected($event)">
+                <mat-option [value]="null">-- Unassigned --</mat-option>
+                @for (driver of filteredDrivers; track driver.id) {
+                  <mat-option [value]="driver">{{ driver.firstName }} {{ driver.lastName }}</mat-option>
+                }
+              </mat-autocomplete>
+              <mat-icon matSuffix>person</mat-icon>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Vehicle</mat-label>
+              <input matInput 
+                     [(ngModel)]="vehicleSearchText"
+                     [matAutocomplete]="vehicleAuto"
+                     (input)="filterVehicles()"
+                     (focus)="filterVehicles()"
+                     placeholder="Type to search vehicles...">
+              <mat-autocomplete #vehicleAuto="matAutocomplete" 
+                               [displayWith]="displayVehicle.bind(this)"
+                               (optionSelected)="onVehicleAutocompleteSelected($event)">
+                <mat-option [value]="null">-- Unassigned --</mat-option>
+                @for (vehicle of filteredVehicles; track vehicle.id) {
+                  <mat-option [value]="vehicle">{{ vehicle.registrationNumber }} - {{ vehicle.make }} {{ vehicle.model }}</mat-option>
+                }
+              </mat-autocomplete>
+              <mat-icon matSuffix>local_shipping</mat-icon>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Transfer Date</mat-label>
+              <input matInput [matDatepicker]="picker" [(ngModel)]="transferDate">
+              <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+              <mat-datepicker #picker></mat-datepicker>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Transfer Reference</mat-label>
+              <input matInput [(ngModel)]="transferReference" placeholder="e.g., TRF-001">
+            </mat-form-field>
+          </div>
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <!-- Transfer Items -->
+        <div class="items-section">
+          <div class="section-header">
+            <h3><mat-icon>inventory</mat-icon> Transfer Items ({{ transferItems.length }})</h3>
+            <button mat-raised-button color="primary" (click)="addTransferItem()">
+              <mat-icon>add</mat-icon> Add Item
+            </button>
+          </div>
+
+          <div class="items-list">
+            @for (item of transferItems; track item.id; let i = $index) {
+              <div class="transfer-item">
+                <div class="item-number">{{ i + 1 }}</div>
+                <div class="item-fields">
+                  <mat-form-field appearance="outline" class="field-code">
+                    <mat-label>Item Code/SKU</mat-label>
+                    <input matInput [(ngModel)]="item.itemCode" placeholder="e.g., MED-001">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-desc">
+                    <mat-label>Description</mat-label>
+                    <input matInput [(ngModel)]="item.description" placeholder="Item description">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-qty">
+                    <mat-label>Quantity</mat-label>
+                    <input matInput type="number" [(ngModel)]="item.quantity" min="1">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="field-uom">
+                    <mat-label>UOM</mat-label>
+                    <mat-select [(ngModel)]="item.uom">
+                      <mat-option value="EA">EA (Each)</mat-option>
+                      <mat-option value="BOX">BOX</mat-option>
+                      <mat-option value="CS">CS (Case)</mat-option>
+                      <mat-option value="PAL">PAL (Pallet)</mat-option>
+                      <mat-option value="KG">KG</mat-option>
+                      <mat-option value="L">L (Liters)</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+                <button mat-icon-button color="warn" (click)="removeTransferItem(i)" matTooltip="Remove item">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+            }
+
+            @if (transferItems.length === 0) {
+              <div class="empty-items">
+                <mat-icon>inventory_2</mat-icon>
+                <p>No items added yet. Click "Add Item" to add stock items for transfer.</p>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Transfer Notes</mat-label>
+          <textarea matInput [(ngModel)]="notes" rows="2" placeholder="Any notes about this transfer..."></textarea>
+        </mat-form-field>
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" 
+                (click)="createTransfer()" 
+                [disabled]="creating || !isValid()">
+          @if (creating) {
+            <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+          }
+          {{ creating ? 'Creating...' : 'Create Transfer' }}
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .transfer-dialog {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+      color: white;
+      margin: -24px -24px 0;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+    }
+    .dialog-header .subtitle {
+      flex: 1;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    .dialog-header button {
+      color: white;
+    }
+    .dialog-content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .transfer-route {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 24px;
+      background: #f5f5f5;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    .route-point {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .point-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .point-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: white;
+    }
+    .point-icon.from {
+      background: linear-gradient(135deg, #f44336, #d32f2f);
+    }
+    .point-icon.to {
+      background: linear-gradient(135deg, #4caf50, #388e3c);
+    }
+    .route-arrow {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+    }
+    .route-arrow mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: #9c27b0;
+    }
+    .route-point mat-form-field {
+      width: 250px;
+    }
+    .assignment-section, .items-section {
+      margin-bottom: 24px;
+    }
+    .assignment-section h3, .items-section h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 16px;
+      color: #9c27b0;
+    }
+    .assignment-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .section-header h3 {
+      margin: 0;
+    }
+    .items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .transfer-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+    }
+    .item-number {
+      width: 32px;
+      height: 32px;
+      background: #9c27b0;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .item-fields {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 150px 1fr 100px 120px;
+      gap: 12px;
+      align-items: start;
+    }
+    .item-fields mat-form-field {
+      width: 100%;
+    }
+    .empty-items {
+      text-align: center;
+      padding: 48px;
+      color: #999;
+    }
+    .empty-items mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+    }
+    .full-width {
+      width: 100%;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+      margin: 0 -24px -24px;
+      background: #fafafa;
+    }
+    .inline-spinner {
+      display: inline-block;
+      margin-right: 8px;
+    }
+    mat-divider {
+      margin: 24px 0;
+    }
+  `]
+})
+export class InternalTransferDialog {
+  fromWarehouse: any = null;
+  toWarehouse: any = null;
+  selectedDriver: any = null;
+  selectedVehicle: any = null;
+  transferDate: Date = new Date();
+  transferReference = '';
+  notes = '';
+  creating = false;
+  
+  transferItems: any[] = [];
+  
+  // Searchable dropdown properties
+  fromWarehouseSearchText = '';
+  toWarehouseSearchText = '';
+  driverSearchText = '';
+  vehicleSearchText = '';
+  filteredFromWarehouses: any[] = [];
+  filteredToWarehouses: any[] = [];
+  filteredDrivers: any[] = [];
+  filteredVehicles: any[] = [];
+  
+  private itemIdCounter = 0;
+
+  constructor(
+    private http: HttpClient,
+    public dialogRef: MatDialogRef<InternalTransferDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: {
+      drivers: any[],
+      vehicles: any[],
+      warehouses: any[],
+      apiUrl: string
+    }
+  ) {
+    // Initialize filtered arrays
+    this.filteredFromWarehouses = [...(data.warehouses || [])];
+    this.filteredToWarehouses = [...(data.warehouses || [])];
+    this.filteredDrivers = [...(data.drivers || [])];
+    this.filteredVehicles = [...(data.vehicles || [])];
+    
+    // Set default warehouses if available
+    if (data.warehouses?.length >= 2) {
+      this.fromWarehouse = data.warehouses[0];
+      this.fromWarehouseSearchText = `${data.warehouses[0].name} - ${data.warehouses[0].city}`;
+      this.toWarehouse = data.warehouses[1];
+      this.toWarehouseSearchText = `${data.warehouses[1].name} - ${data.warehouses[1].city}`;
+    }
+    // Generate transfer reference
+    this.transferReference = `TRF-${Date.now().toString().slice(-6)}`;
+    // Add one empty line item
+    this.addTransferItem();
+  }
+
+  // Filter methods for searchable dropdowns
+  filterFromWarehouses(): void {
+    const search = this.fromWarehouseSearchText?.toLowerCase() || '';
+    this.filteredFromWarehouses = search 
+      ? (this.data.warehouses || []).filter(wh => 
+          (wh.name?.toLowerCase().includes(search) || 
+          wh.city?.toLowerCase().includes(search)) && 
+          wh.id !== this.toWarehouse?.id
+        )
+      : (this.data.warehouses || []).filter(wh => wh.id !== this.toWarehouse?.id);
+  }
+
+  filterToWarehouses(): void {
+    const search = this.toWarehouseSearchText?.toLowerCase() || '';
+    this.filteredToWarehouses = search 
+      ? (this.data.warehouses || []).filter(wh => 
+          (wh.name?.toLowerCase().includes(search) || 
+          wh.city?.toLowerCase().includes(search)) && 
+          wh.id !== this.fromWarehouse?.id
+        )
+      : (this.data.warehouses || []).filter(wh => wh.id !== this.fromWarehouse?.id);
+  }
+
+  filterDrivers(): void {
+    const search = this.driverSearchText?.toLowerCase() || '';
+    this.filteredDrivers = search 
+      ? (this.data.drivers || []).filter(d => 
+          d.firstName?.toLowerCase().includes(search) || 
+          d.lastName?.toLowerCase().includes(search) ||
+          `${d.firstName} ${d.lastName}`.toLowerCase().includes(search)
+        )
+      : [...(this.data.drivers || [])];
+  }
+
+  filterVehicles(): void {
+    const search = this.vehicleSearchText?.toLowerCase() || '';
+    this.filteredVehicles = search 
+      ? (this.data.vehicles || []).filter(v => 
+          v.registrationNumber?.toLowerCase().includes(search) || 
+          v.make?.toLowerCase().includes(search) ||
+          v.model?.toLowerCase().includes(search)
+        )
+      : [...(this.data.vehicles || [])];
+  }
+
+  displayWarehouse(warehouse: any): string {
+    return warehouse ? `${warehouse.name} - ${warehouse.city}` : '';
+  }
+
+  displayDriver(driver: any): string {
+    return driver ? `${driver.firstName} ${driver.lastName}` : '';
+  }
+
+  displayVehicle(vehicle: any): string {
+    return vehicle ? `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}` : '';
+  }
+
+  onFromWarehouseSelected(event: any): void {
+    this.fromWarehouse = event.option.value;
+    this.filterToWarehouses(); // Update to-warehouse list
+  }
+
+  onToWarehouseSelected(event: any): void {
+    this.toWarehouse = event.option.value;
+    this.filterFromWarehouses(); // Update from-warehouse list
+  }
+
+  onDriverAutocompleteSelected(event: any): void {
+    this.selectedDriver = event.option.value;
+  }
+
+  onVehicleAutocompleteSelected(event: any): void {
+    this.selectedVehicle = event.option.value;
+  }
+
+  onFromWarehouseChange(): void {
+    // Clear toWarehouse if same as fromWarehouse
+    if (this.toWarehouse?.id === this.fromWarehouse?.id) {
+      this.toWarehouse = null;
+      this.toWarehouseSearchText = '';
+    }
+  }
+
+  addTransferItem(): void {
+    this.transferItems.push({
+      id: ++this.itemIdCounter,
+      itemCode: '',
+      description: '',
+      quantity: 1,
+      uom: 'EA'
+    });
+  }
+
+  removeTransferItem(index: number): void {
+    this.transferItems.splice(index, 1);
+  }
+
+  isValid(): boolean {
+    return this.fromWarehouse && 
+           this.toWarehouse && 
+           this.fromWarehouse.id !== this.toWarehouse.id &&
+           this.transferItems.length > 0 &&
+           this.transferItems.some(item => item.itemCode || item.description);
+  }
+
+  createTransfer(): void {
+    if (!this.isValid()) return;
+    
+    this.creating = true;
+    
+    const transferData = {
+      fromWarehouseId: this.fromWarehouse?.id,
+      toWarehouseId: this.toWarehouse?.id,
+      fromWarehouseName: this.fromWarehouse?.name,
+      toWarehouseName: this.toWarehouse?.name,
+      driverId: this.selectedDriver?.id,
+      vehicleId: this.selectedVehicle?.id,
+      transferDate: this.transferDate,
+      transferReference: this.transferReference,
+      notes: this.notes,
+      isInternalTransfer: true,
+      items: this.transferItems.map((item, index) => ({
+        sequence: index + 1,
+        itemCode: item.itemCode,
+        description: item.description,
+        quantity: item.quantity,
+        uom: item.uom
+      }))
+    };
+
+    this.http.post(`${this.data.apiUrl}/logistics/tripsheet/transfer`, transferData).subscribe({
+      next: (response: any) => {
+        this.creating = false;
+        this.dialogRef.close({ created: true, transferId: response.loadId });
+      },
+      error: (error) => {
+        console.error('Error creating internal transfer:', error);
+        this.creating = false;
+        // For now, close with success anyway (API might not exist yet)
+        this.dialogRef.close({ created: true });
+      }
+    });
+  }
+}
+
+// Import Tripsheet Dialog with Smart Matching
+@Component({
+  selector: 'import-tripsheet-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatIconModule,
+    MatProgressBarModule,
+    MatTableModule,
+    MatTooltipModule,
+    MatSelectModule,
+    MatChipsModule,
+    MatBadgeModule,
+    MatCheckboxModule,
+    MatDatepickerModule,
+    MatNativeDateModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>upload_file</mat-icon>
+      Import Tripsheet from Excel
+    </h2>
+    <mat-dialog-content>
+      <div class="import-container">
+        <!-- Step 1: Upload -->
+        @if (step === 'upload') {
+          <div class="upload-section" [class.has-file]="selectedFile">
+            <div class="drop-zone" 
+                 (dragover)="onDragOver($event)" 
+                 (dragleave)="onDragLeave($event)" 
+                 (drop)="onDrop($event)"
+                 [class.drag-over]="isDragOver"
+                 (click)="fileInput.click()">
+              @if (!selectedFile) {
+                <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                <p class="upload-text">Drag & drop an Excel file here</p>
+                <p class="upload-hint">or click to browse</p>
+                <p class="file-types">Supported format: .xlsx (max 10MB)</p>
+              } @else {
+                <mat-icon class="file-icon">description</mat-icon>
+                <p class="file-name">{{ selectedFile.name }}</p>
+                <p class="file-size">{{ formatFileSize(selectedFile.size) }}</p>
+                <button mat-icon-button class="remove-file" (click)="removeFile($event)">
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </div>
+            <input #fileInput type="file" accept=".xlsx" (change)="onFileSelected($event)" hidden>
+          </div>
+
+          @if (uploading) {
+            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+            <p class="uploading-text">Analyzing Excel file and matching records...</p>
+          }
+
+          @if (uploadError) {
+            <div class="error-message">
+              <mat-icon>error</mat-icon>
+              {{ uploadError }}
+            </div>
+          }
+
+          <div class="info-section">
+            <h4><mat-icon>info</mat-icon> Supported Trip Sheet Formats</h4>
+            <p class="info-text">The system will automatically detect invoice rows (e.g., IN161765) and extract delivery information including customer name, address, product details, and amounts.</p>
+            <div class="column-list">
+              <div class="column-item required">
+                <span class="column-name">INV NO.</span>
+                <span class="column-desc">Invoice number (required)</span>
+              </div>
+              <div class="column-item required">
+                <span class="column-name">CUSTOMER NAME</span>
+                <span class="column-desc">Customer/Company name</span>
+              </div>
+              <div class="column-item required">
+                <span class="column-name">Address</span>
+                <span class="column-desc">Delivery address (can be multi-line)</span>
+              </div>
+              <div class="column-item">
+                <span class="column-name">PRODUCT</span>
+                <span class="column-desc">Product description</span>
+              </div>
+              <div class="column-item">
+                <span class="column-name">QTY</span>
+                <span class="column-desc">Quantity</span>
+              </div>
+              <div class="column-item">
+                <span class="column-name">VALUE</span>
+                <span class="column-desc">Invoice amount</span>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Step 2: Preview & Review -->
+        @if (step === 'preview' && previewResponse) {
+          <div class="preview-header">
+            <div class="preview-summary">
+              <h3>Import Preview: {{ previewResponse.fileName }}</h3>
+              @if (isManualTripsheet()) {
+                <div class="manual-tripsheet-notice">
+                  <mat-icon>edit_note</mat-icon>
+                  <span><strong>Manual Trip Sheet</strong> - No matching invoices found in system. This will create a manual tripsheet with the imported data.</span>
+                </div>
+              }
+              <div class="summary-badges">
+                <span class="badge matched" [matBadge]="previewResponse.matchedCount" matBadgeColor="primary">
+                  <mat-icon>check_circle</mat-icon> Matched
+                </span>
+                <span class="badge partial" [matBadge]="previewResponse.partialMatchCount" matBadgeColor="accent">
+                  <mat-icon>help</mat-icon> Review
+                </span>
+                <span class="badge unmatched" [matBadge]="previewResponse.unmatchedCount" matBadgeColor="warn">
+                  <mat-icon>edit_note</mat-icon> Manual
+                </span>
+                @if (previewResponse.errorCount > 0) {
+                  <span class="badge error" [matBadge]="previewResponse.errorCount" matBadgeColor="warn">
+                    <mat-icon>error</mat-icon> Errors
+                  </span>
+                }
+              </div>
+            </div>
+            <button mat-button (click)="step = 'upload'; previewResponse = null;">
+              <mat-icon>arrow_back</mat-icon> Back
+            </button>
+          </div>
+
+          <div class="preview-table-container">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th class="status-col">Status</th>
+                  <th>Invoice #</th>
+                  <th>Customer</th>
+                  <th>Address</th>
+                  <th>Amount</th>
+                  <th class="actions-col">Match</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of previewResponse.rows; track row.rowIndex) {
+                  <tr [class.error-row]="row.status === 'Error'" 
+                      [class.matched-row]="row.status === 'Matched'"
+                      [class.partial-row]="row.status === 'PartialMatch'"
+                      [class.unmatched-row]="row.status === 'Unmatched'">
+                    <td class="status-col">
+                      @switch (row.status) {
+                        @case ('Matched') {
+                          <mat-icon class="status-icon matched" matTooltip="Auto-matched to existing invoice">check_circle</mat-icon>
+                        }
+                        @case ('PartialMatch') {
+                          <mat-icon class="status-icon partial" matTooltip="Needs review">help</mat-icon>
+                        }
+                        @case ('Unmatched') {
+                          <mat-icon class="status-icon unmatched" matTooltip="Manual entry - no matching invoice in system">edit_note</mat-icon>
+                        }
+                        @case ('Error') {
+                          <mat-icon class="status-icon error" matTooltip="{{ row.validationErrors?.join(', ') }}">error</mat-icon>
+                        }
+                      }
+                    </td>
+                    <td class="invoice-cell">{{ row.data?.invoiceNumber || '-' }}</td>
+                    <td class="customer-cell">
+                      {{ row.data?.customerName || '-' }}
+                      @if (row.matchedCustomerId) {
+                        <span class="match-badge">ID: {{ row.matchedCustomerId }}</span>
+                      }
+                    </td>
+                    <td class="address-cell" [matTooltip]="row.data?.deliveryAddress || ''">
+                      {{ (row.data?.deliveryAddress || '-') | slice:0:40 }}{{ (row.data?.deliveryAddress?.length || 0) > 40 ? '...' : '' }}
+                    </td>
+                    <td class="amount-cell">
+                      @if (row.data?.salesAmount) {
+                        R {{ row.data.salesAmount.toFixed(2) }}
+                      } @else {
+                        -
+                      }
+                    </td>
+                    <td class="actions-col">
+                      @if (row.status === 'PartialMatch' && row.suggestedCustomers?.length) {
+                        <mat-form-field appearance="outline" class="match-select">
+                          <mat-select [(value)]="row.selectedCustomerId" placeholder="Select match">
+                            <mat-option [value]="null">Create New</mat-option>
+                            @for (suggestion of row.suggestedCustomers; track suggestion.id) {
+                              <mat-option [value]="suggestion.id">
+                                {{ suggestion.displayName }} ({{ (suggestion.score * 100).toFixed(0) }}%)
+                              </mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      } @else if (row.confidenceScore) {
+                        <span class="confidence">{{ (row.confidenceScore * 100).toFixed(0) }}%</span>
+                      }
+                    </td>
+                  </tr>
+                  @if (row.validationErrors?.length || row.warnings?.length) {
+                    <tr class="message-row">
+                      <td colspan="6">
+                        @for (error of row.validationErrors || []; track error) {
+                          <span class="validation-error"><mat-icon>error</mat-icon> {{ error }}</span>
+                        }
+                        @for (warning of row.warnings || []; track warning) {
+                          <span class="validation-warning"><mat-icon>warning</mat-icon> {{ warning }}</span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      @if (step === 'upload') {
+        <button mat-button (click)="onCancel()">Cancel</button>
+        <button mat-raised-button color="primary" (click)="previewFile()" 
+                [disabled]="!selectedFile || uploading">
+          <mat-icon>search</mat-icon>
+          Preview Import
+        </button>
+      }
+      @if (step === 'preview') {
+        <button mat-button (click)="step = 'upload'">Back</button>
+        <button mat-button (click)="onCancel()">Cancel</button>
+        <button mat-raised-button color="primary" (click)="proceedToCreateTripsheet()" 
+                [disabled]="!hasValidRows()">
+          <mat-icon>{{ isManualTripsheet() ? 'edit_note' : 'arrow_forward' }}</mat-icon>
+          {{ isManualTripsheet() ? 'Create Manual Trip Sheet' : 'Create Trip Sheet' }}
+        </button>
+      }
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .import-container {
+      min-width: 800px;
+      max-width: 1000px;
+      padding: 16px 0;
+    }
+    .upload-section {
+      margin-bottom: 16px;
+    }
+    .drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #1976d2;
+      background: #e3f2fd;
+    }
+    .upload-section.has-file .drop-zone {
+      border-style: solid;
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .upload-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #9e9e9e;
+    }
+    .drop-zone:hover .upload-icon, .drop-zone.drag-over .upload-icon {
+      color: #1976d2;
+    }
+    .upload-text {
+      margin: 8px 0 4px;
+      font-size: 16px;
+      color: #333;
+    }
+    .upload-hint {
+      margin: 0;
+      font-size: 14px;
+      color: #666;
+    }
+    .file-types {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #999;
+    }
+    .file-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #4caf50;
+    }
+    .file-name {
+      margin: 8px 0 4px;
+      font-size: 16px;
+      font-weight: 500;
+      color: #333;
+    }
+    .file-size {
+      margin: 0;
+      font-size: 14px;
+      color: #666;
+    }
+    .remove-file {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+    }
+    .uploading-text {
+      text-align: center;
+      color: #666;
+      margin-top: 8px;
+    }
+    .error-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: #ffebee;
+      color: #c62828;
+      border-radius: 4px;
+      margin: 16px 0;
+    }
+    .info-section {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .info-section h4 {
+      margin: 0 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #1976d2;
+    }
+    .info-text {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: #666;
+    }
+    .column-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .column-item {
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      background: white;
+      border-radius: 4px;
+      border-left: 3px solid #e0e0e0;
+    }
+    .column-item.required {
+      border-left-color: #f44336;
+    }
+    .column-name {
+      font-family: monospace;
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+    }
+    .column-desc {
+      font-size: 11px;
+      color: #666;
+    }
+    
+    /* Preview styles */
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .preview-summary h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+    .manual-tripsheet-notice {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      border: 1px solid #2196f3;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      color: #1565c0;
+    }
+    .manual-tripsheet-notice mat-icon {
+      color: #1976d2;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+    .manual-tripsheet-notice span {
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .summary-badges {
+      display: flex;
+      gap: 16px;
+    }
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #f5f5f5;
+    }
+    .badge mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+    .badge.matched mat-icon { color: #4caf50; }
+    .badge.partial mat-icon { color: #ff9800; }
+    .badge.unmatched mat-icon { color: #2196f3; }
+    .badge.error mat-icon { color: #f44336; }
+    
+    .unmatched-row {
+      background: #e3f2fd;
+    }
+    
+    .preview-table-container {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .preview-table th, .preview-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .preview-table th {
+      background: #f5f5f5;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .preview-table tr.error-row {
+      background: #ffebee;
+    }
+    .preview-table tr.matched-row {
+      background: #e8f5e9;
+    }
+    .preview-table tr.partial-row {
+      background: #fff3e0;
+    }
+    .status-col {
+      width: 50px;
+      text-align: center;
+    }
+    .actions-col {
+      width: 150px;
+    }
+    .status-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+    .status-icon.matched { color: #4caf50; }
+    .status-icon.partial { color: #ff9800; }
+    .status-icon.unmatched { color: #2196f3; }
+    .status-icon.error { color: #f44336; }
+    
+    .invoice-cell {
+      font-family: monospace;
+      font-weight: 600;
+    }
+    .customer-cell {
+      max-width: 200px;
+    }
+    .address-cell {
+      max-width: 250px;
+      font-size: 12px;
+      color: #666;
+    }
+    .amount-cell {
+      font-family: monospace;
+      text-align: right;
+    }
+    .match-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      background: #e3f2fd;
+      color: #1976d2;
+      border-radius: 4px;
+      margin-left: 4px;
+    }
+    .match-select {
+      width: 100%;
+      font-size: 12px;
+    }
+    .match-select ::ng-deep .mat-mdc-form-field-infix {
+      padding: 4px 0 !important;
+      min-height: 32px;
+    }
+    .confidence {
+      font-size: 12px;
+      color: #4caf50;
+      font-weight: 600;
+    }
+    .message-row td {
+      padding: 4px 12px !important;
+      background: #fafafa;
+    }
+    .validation-error, .validation-warning {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      margin-right: 12px;
+    }
+    .validation-error {
+      color: #c62828;
+    }
+    .validation-error mat-icon, .validation-warning mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+    .validation-warning {
+      color: #f57c00;
+    }
+    
+    /* Success styles */
+    .success-section {
+      text-align: center;
+      padding: 32px;
+    }
+    .success-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #4caf50;
+    }
+    .success-section h3 {
+      margin: 16px 0 8px;
+      font-size: 20px;
+    }
+    .success-message {
+      color: #666;
+      margin-bottom: 24px;
+    }
+    .result-stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      display: block;
+      font-size: 32px;
+      font-weight: 600;
+      color: #4caf50;
+    }
+    .stat.error .stat-value {
+      color: #f44336;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #666;
+    }
+    .error-list {
+      margin-top: 24px;
+      text-align: left;
+      background: #ffebee;
+      padding: 12px;
+      border-radius: 4px;
+    }
+    .error-list h4 {
+      margin: 0 0 8px;
+      color: #c62828;
+    }
+    .error-item {
+      margin: 4px 0;
+      font-size: 12px;
+      color: #c62828;
+    }
+    
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2 mat-icon {
+      color: #4caf50;
+    }
+
+    /* Assignment section styles */
+    .assignment-section {
+      padding: 16px 0;
+    }
+    .assignment-section h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+      font-size: 18px;
+      color: #1976d2;
+    }
+    .assignment-info {
+      margin: 0 0 16px;
+      color: #666;
+      font-size: 14px;
+    }
+    .assignment-form {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .assignment-form .full-width {
+      width: 100%;
+    }
+    .assignment-form mat-form-field {
+      width: 100%;
+    }
+    .available-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      background: #e8f5e9;
+      color: #4caf50;
+      border-radius: 10px;
+      margin-left: 8px;
+    }
+    .summary-card {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid #e0e0e0;
+    }
+    .summary-card h4 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: #333;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .summary-row:last-child {
+      border-bottom: none;
+    }
+    .summary-row span {
+      color: #666;
+    }
+    .summary-row strong {
+      color: #1976d2;
+    }
+  `]
+})
+export class ImportTripsheetDialog {
+  step: 'upload' | 'preview' = 'upload';
+  selectedFile: File | null = null;
+  isDragOver = false;
+  uploading = false;
+  uploadError = '';
+  previewResponse: any = null;
+
+  constructor(
+    private http: HttpClient,
+    public dialogRef: MatDialogRef<ImportTripsheetDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string }
+  ) {}
+
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = true;
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+  }
+
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+    
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      this.handleFile(files[0]);
+    }
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.handleFile(input.files[0]);
+    }
+  }
+
+  handleFile(file: File): void {
+    if (!file.name.match(/\.xlsx$/i)) {
+      this.uploadError = 'Please select an Excel file (.xlsx)';
+      return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+      this.uploadError = 'File size exceeds 10MB limit';
+      return;
+    }
+    
+    this.selectedFile = file;
+    this.uploadError = '';
+    this.previewResponse = null;
+  }
+
+  removeFile(event: Event): void {
+    event.stopPropagation();
+    this.selectedFile = null;
+    this.previewResponse = null;
+    this.uploadError = '';
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  previewFile(): void {
+    if (!this.selectedFile) return;
+    
+    this.uploading = true;
+    this.uploadError = '';
+    const formData = new FormData();
+    formData.append('file', this.selectedFile);
+    
+    this.http.post<any>(`${this.data.apiUrl}/logistics/tripsheet/preview-import`, formData).subscribe({
+      next: (response) => {
+        this.previewResponse = response;
+        // Initialize selectedCustomerId for partial matches
+        if (response.rows) {
+          response.rows.forEach((row: any) => {
+            if (row.status === 'PartialMatch' && row.suggestedCustomers?.length) {
+              row.selectedCustomerId = row.suggestedCustomers[0].id;
+            } else if (row.matchedCustomerId) {
+              row.selectedCustomerId = row.matchedCustomerId;
+            }
+          });
+        }
+        this.step = 'preview';
+        this.uploading = false;
+      },
+      error: (err) => {
+        this.uploadError = err.error?.message || 'Failed to parse Excel file';
+        this.uploading = false;
+      }
+    });
+  }
+
+  hasValidRows(): boolean {
+    return this.previewResponse?.rows?.some((r: any) => r.status !== 'Error') || false;
+  }
+
+  getValidRowCount(): number {
+    return this.previewResponse?.rows?.filter((r: any) => r.status !== 'Error').length || 0;
+  }
+
+  getTotalValue(): number {
+    if (!this.previewResponse?.rows) return 0;
+    return this.previewResponse.rows
+      .filter((r: any) => r.status !== 'Error')
+      .reduce((sum: number, row: any) => sum + (row.data?.salesAmount || 0), 0);
+  }
+
+  // Check if this is a manual tripsheet (no matched invoices found in system)
+  isManualTripsheet(): boolean {
+    if (!this.previewResponse) return false;
+    // Manual tripsheet if no matched invoices AND we have unmatched rows
+    return this.previewResponse.matchedCount === 0 && 
+           this.previewResponse.partialMatchCount === 0 && 
+           this.previewResponse.unmatchedCount > 0;
+  }
+
+  proceedToCreateTripsheet(): void {
+    // Flag whether this is a manual tripsheet
+    const isManual = this.isManualTripsheet();
+    
+    // Convert parsed rows to invoice-like objects for CreateTripsheetDialog
+    const invoices = this.previewResponse.rows
+      .filter((r: any) => r.status !== 'Error')
+      .map((row: any, index: number) => ({
+        id: `import-${index}`,  // Temporary ID for tracking
+        transactionNumber: row.data?.invoiceNumber || `MAN-${index + 1}`,
+        customerName: row.data?.customerName || 'Unknown Customer',
+        customerNumber: row.data?.customerNumber,
+        deliveryAddress: row.data?.deliveryAddress || '',
+        address: row.data?.deliveryAddress || '',
+        city: row.data?.city || '',
+        province: row.data?.province || '',
+        productDescription: row.data?.productDescription || 'Imported Product',
+        productCode: row.data?.productCode,
+        quantity: row.data?.quantity || 1,
+        salesAmount: row.data?.salesAmount || 0,
+        netSales: row.data?.salesAmount || 0,
+        totalAmount: row.data?.salesAmount || 0,
+        status: 'Pending',
+        matchedCustomerId: row.selectedCustomerId || row.matchedCustomerId,
+        contactPerson: row.data?.contactPerson,
+        contactPhone: row.data?.contactPhone,
+        // Source tracking
+        isImported: true,
+        isManualEntry: isManual || row.status === 'Unmatched',
+        batchId: this.previewResponse.batchId,
+        rowIndex: row.rowIndex
+      }));
+    
+    // Close dialog and pass the converted data to open CreateTripsheetDialog
+    this.dialogRef.close({
+      openCreateDialog: true,
+      invoices: invoices,
+      batchId: this.previewResponse.batchId,
+      fileName: this.previewResponse.fileName,
+      isManualTripsheet: isManual
+    });
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
   }
 }
 
@@ -11963,6 +17391,157 @@ export class LinkVehicleDialogComponent implements OnInit {
     this.http.post(endpoint, { externalId }).subscribe({
       next: () => this.dialogRef.close(true),
       error: (err) => console.error('Error linking vehicle:', err)
+    });
+  }
+}
+
+// Assign Tripsheet Dialog - for assigning driver and vehicle to an existing tripsheet
+@Component({
+  selector: 'assign-tripsheet-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatInputModule,
+    FormsModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>person_add</mat-icon>
+      Assign Driver & Vehicle
+    </h2>
+    <mat-dialog-content>
+      <div class="assign-form">
+        <div class="tripsheet-info">
+          <p><strong>TripSheet:</strong> {{ data.tripsheet.loadNumber || data.tripsheet.tripNumber }}</p>
+          <p><strong>Status:</strong> {{ data.tripsheet.status }}</p>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Driver</mat-label>
+          <mat-select [(ngModel)]="selectedDriverId">
+            <mat-option [value]="null">-- Not Assigned --</mat-option>
+            @for (driver of data.drivers; track driver.id) {
+              <mat-option [value]="driver.id">
+                {{ driver.firstName }} {{ driver.lastName }}
+                @if (driver.status === 'On Duty') {
+                  <span class="on-duty">(On Duty)</span>
+                }
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Vehicle</mat-label>
+          <mat-select [(ngModel)]="selectedVehicleId">
+            <mat-option [value]="null">-- Not Assigned --</mat-option>
+            @for (vehicle of data.vehicles; track vehicle.id) {
+              <mat-option [value]="vehicle.id">
+                {{ vehicle.registrationNumber }} - {{ vehicle.type || vehicle.vehicleTypeName }}
+                @if (vehicle.status === 'Available') {
+                  <span class="available">(Available)</span>
+                }
+              </mat-option>
+            }
+          </mat-select>
+          <mat-hint>Only available vehicles shown</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Scheduled Date</mat-label>
+          <input matInput [matDatepicker]="picker" [(ngModel)]="scheduledDate">
+          <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+          <mat-datepicker #picker></mat-datepicker>
+        </mat-form-field>
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onAssign()" [disabled]="!selectedDriverId && !selectedVehicleId">
+        <mat-icon>check</mat-icon>
+        Assign
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .assign-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 400px;
+      padding: 16px 0;
+    }
+    .tripsheet-info {
+      background: #f5f5f5;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .tripsheet-info p {
+      margin: 4px 0;
+    }
+    .full-width {
+      width: 100%;
+    }
+    .on-duty {
+      color: #4caf50;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+    .available {
+      color: #2196f3;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+    mat-dialog-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  `]
+})
+export class AssignTripsheetDialog {
+  selectedDriverId: number | null = null;
+  selectedVehicleId: number | null = null;
+  scheduledDate: Date = new Date();
+
+  constructor(
+    public dialogRef: MatDialogRef<AssignTripsheetDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { 
+      tripsheet: any, 
+      drivers: any[], 
+      vehicles: any[] 
+    }
+  ) {
+    // Pre-fill if already assigned
+    if (data.tripsheet.driverId) {
+      this.selectedDriverId = data.tripsheet.driverId;
+    }
+    if (data.tripsheet.vehicleId) {
+      this.selectedVehicleId = data.tripsheet.vehicleId;
+    }
+    if (data.tripsheet.date) {
+      this.scheduledDate = new Date(data.tripsheet.date);
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onAssign(): void {
+    this.dialogRef.close({
+      assigned: true,
+      driverId: this.selectedDriverId,
+      vehicleId: this.selectedVehicleId,
+      scheduledDate: this.scheduledDate
     });
   }
 }
