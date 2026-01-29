@@ -24,7 +24,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
-import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of, Subject } from 'rxjs';
@@ -10417,7 +10417,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     const apiUrl = environment.apiUrl;
     
     // Fetch loads with stops that have coordinates
-    this.http.get<any[]>(`${apiUrl}/logistics/loads`).subscribe({
+    this.http.get<any[]>(`${apiUrl}/loads`).subscribe({
       next: (loads) => {
         // Filter loads that have stops with coordinates
         const routesWithCoords = loads
@@ -12389,7 +12389,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       preEstimatedTime?: string
     },
     private dialogRef: MatDialogRef<CreateTripsheetDialog>,
-    private injector: Injector
+    private injector: Injector,
+    private snackBar: MatSnackBar
   ) {
     this.http = this.injector.get(HttpClient);
     this.ngZone = this.injector.get(NgZone);
@@ -14006,6 +14007,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       this.updateRouteMap();
     }
 
+    // Show snackbar notification
+    this.snackBar.open(
+      `✓ Applied saved address for ${group.customerName}`,
+      'OK',
+      { duration: 2000, panelClass: ['info-snackbar'] }
+    );
+
     console.log('Applied saved address to group:', group.customerName, group.deliveryAddress);
   }
 
@@ -14053,11 +14061,20 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         
         this.customerSavedAddresses.set(key, existing);
         
-        // Show success message (using snackbar if available)
-        console.log('Address saved successfully for', group.customerName);
+        // Show success snackbar notification
+        this.snackBar.open(
+          `✓ Address saved for ${group.customerName}`,
+          'OK',
+          { duration: 3000, panelClass: ['success-snackbar'] }
+        );
       },
       error: (err) => {
         console.error('Failed to save address:', err);
+        this.snackBar.open(
+          `✗ Failed to save address: ${err.error?.message || 'Unknown error'}`,
+          'Dismiss',
+          { duration: 5000, panelClass: ['error-snackbar'] }
+        );
       }
     });
   }
@@ -14096,10 +14113,21 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       addresses: addressesToSave
     }).subscribe({
       next: (result) => {
-        console.log('Batch saved addresses:', result.saved?.length || 0, 'saved,', result.errors?.length || 0, 'errors');
+        const savedCount = result.saved?.length || 0;
+        const errorCount = result.errors?.length || 0;
+        console.log('Batch saved addresses:', savedCount, 'saved,', errorCount, 'errors');
+        
+        if (savedCount > 0) {
+          this.snackBar.open(
+            `✓ ${savedCount} address${savedCount > 1 ? 'es' : ''} saved for future use`,
+            'OK',
+            { duration: 4000, panelClass: ['success-snackbar'] }
+          );
+        }
       },
       error: (err) => {
         console.error('Failed to batch save addresses:', err);
+        // Don't show error for batch save - it's a background operation
       }
     });
   }
@@ -14129,7 +14157,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   // Searchable dropdown filter methods
   filterWarehouses(): void {
-    const search = this.warehouseSearchText?.toLowerCase() || '';
+    const searchValue = this.warehouseSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     if (!search) {
       this.filteredWarehouses = [...(this.data.warehouses || [])];
     } else {
@@ -14142,7 +14171,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   }
 
   filterDrivers(): void {
-    const search = this.driverSearchText?.toLowerCase() || '';
+    const searchValue = this.driverSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     if (!search) {
       this.filteredDrivers = [...(this.data.drivers || [])];
     } else {
@@ -14155,7 +14185,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   }
 
   filterVehicles(): void {
-    const search = this.vehicleSearchText?.toLowerCase() || '';
+    const searchValue = this.vehicleSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     if (!search) {
       this.filteredVehicles = [...(this.data.vehicles || [])];
     } else {
@@ -14375,8 +14406,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     // Determine if this is an update or create
     const isUpdate = this.data.isEditMode && this.data.editLoadId;
     const apiUrl = isUpdate 
-      ? `${environment.apiUrl}/logistics/loads/${this.data.editLoadId}`
-      : `${environment.apiUrl}/logistics/loads`;
+      ? `${environment.apiUrl}/loads/${this.data.editLoadId}`
+      : `${environment.apiUrl}/loads`;
     const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
     
     httpMethod(apiUrl, payload).subscribe({
@@ -15163,7 +15194,8 @@ export class ManualTripsheetDialog {
   
   // Filter methods for searchable dropdowns
   filterWarehouses(): void {
-    const search = this.warehouseSearchText?.toLowerCase() || '';
+    const searchValue = this.warehouseSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     this.filteredWarehouses = search 
       ? (this.data.warehouses || []).filter(wh => 
           wh.name?.toLowerCase().includes(search) || 
@@ -15173,7 +15205,8 @@ export class ManualTripsheetDialog {
   }
 
   filterDrivers(): void {
-    const search = this.driverSearchText?.toLowerCase() || '';
+    const searchValue = this.driverSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     this.filteredDrivers = search 
       ? (this.data.drivers || []).filter(d => 
           d.firstName?.toLowerCase().includes(search) || 
@@ -15184,7 +15217,8 @@ export class ManualTripsheetDialog {
   }
 
   filterVehicles(): void {
-    const search = this.vehicleSearchText?.toLowerCase() || '';
+    const searchValue = this.vehicleSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     this.filteredVehicles = search 
       ? (this.data.vehicles || []).filter(v => 
           v.registrationNumber?.toLowerCase().includes(search) || 
@@ -15759,7 +15793,8 @@ export class InternalTransferDialog {
 
   // Filter methods for searchable dropdowns
   filterFromWarehouses(): void {
-    const search = this.fromWarehouseSearchText?.toLowerCase() || '';
+    const searchValue = this.fromWarehouseSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     this.filteredFromWarehouses = search 
       ? (this.data.warehouses || []).filter(wh => 
           (wh.name?.toLowerCase().includes(search) || 
@@ -15770,7 +15805,8 @@ export class InternalTransferDialog {
   }
 
   filterToWarehouses(): void {
-    const search = this.toWarehouseSearchText?.toLowerCase() || '';
+    const searchValue = this.toWarehouseSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     this.filteredToWarehouses = search 
       ? (this.data.warehouses || []).filter(wh => 
           (wh.name?.toLowerCase().includes(search) || 
@@ -15781,7 +15817,8 @@ export class InternalTransferDialog {
   }
 
   filterDrivers(): void {
-    const search = this.driverSearchText?.toLowerCase() || '';
+    const searchValue = this.driverSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     this.filteredDrivers = search 
       ? (this.data.drivers || []).filter(d => 
           d.firstName?.toLowerCase().includes(search) || 
@@ -15792,7 +15829,8 @@ export class InternalTransferDialog {
   }
 
   filterVehicles(): void {
-    const search = this.vehicleSearchText?.toLowerCase() || '';
+    const searchValue = this.vehicleSearchText;
+    const search = typeof searchValue === 'string' ? searchValue.toLowerCase() : '';
     this.filteredVehicles = search 
       ? (this.data.vehicles || []).filter(v => 
           v.registrationNumber?.toLowerCase().includes(search) || 
@@ -16759,6 +16797,7 @@ export class ImportTripsheetDialog {
   imports: [
     CommonModule,
     FormsModule,
+    ReactiveFormsModule,
     MatDialogModule,
     MatButtonModule,
     MatFormFieldModule,
@@ -16766,7 +16805,8 @@ export class ImportTripsheetDialog {
     MatSelectModule,
     MatDatepickerModule,
     MatNativeDateModule,
-    MatIconModule
+    MatIconModule,
+    MatAutocompleteModule
   ],
   template: `
     <h2 mat-dialog-title>
@@ -16777,13 +16817,20 @@ export class ImportTripsheetDialog {
       <form class="maintenance-form">
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Vehicle</mat-label>
-          <mat-select [(ngModel)]="formData.vehicleId" name="vehicleId" required (selectionChange)="onVehicleChange($event)">
-            @for (vehicle of data.vehicles; track vehicle.id) {
-              <mat-option [value]="vehicle.id">
-                {{ vehicle.registrationNumber }} - {{ vehicle.type || 'Vehicle' }}
+          <input matInput 
+                 [matAutocomplete]="vehicleAuto" 
+                 [formControl]="vehicleSearchControl"
+                 placeholder="Type to search vehicle...">
+          <mat-icon matSuffix>search</mat-icon>
+          <mat-autocomplete #vehicleAuto="matAutocomplete" 
+                           [displayWith]="displayVehicle.bind(this)"
+                           (optionSelected)="onVehicleSelected($event)">
+            @for (vehicle of filteredVehicles; track vehicle.id) {
+              <mat-option [value]="vehicle">
+                {{ vehicle.registrationNumber }} - {{ vehicle.type || vehicle.make || 'Vehicle' }}
               </mat-option>
             }
-          </mat-select>
+          </mat-autocomplete>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="full-width">
@@ -16885,7 +16932,7 @@ export class ImportTripsheetDialog {
     }
   `]
 })
-export class AddMaintenanceDialog {
+export class AddMaintenanceDialog implements OnInit {
   formData: Partial<MaintenanceRecord> = {
     maintenanceType: 'scheduled',
     status: 'scheduled',
@@ -16893,12 +16940,63 @@ export class AddMaintenanceDialog {
     scheduledDate: new Date()
   };
 
+  vehicleSearchControl = new FormControl('');
+  filteredVehicles: any[] = [];
+
   constructor(
     public dialogRef: MatDialogRef<AddMaintenanceDialog>,
     @Inject(MAT_DIALOG_DATA) public data: { vehicles: any[], record?: MaintenanceRecord }
-  ) {
-    if (data.record) {
-      this.formData = { ...data.record };
+  ) {}
+
+  ngOnInit(): void {
+    // Initialize filtered vehicles first
+    this.filteredVehicles = [...(this.data.vehicles || [])];
+    
+    if (this.data.record) {
+      this.formData = { ...this.data.record };
+      // Ensure vehicleId is set from record
+      if (this.data.record.vehicleId) {
+        this.formData.vehicleId = this.data.record.vehicleId;
+      }
+      // Set the vehicle search control to display the selected vehicle
+      const selectedVehicle = (this.data.vehicles || []).find(v => v.id === this.data.record?.vehicleId);
+      if (selectedVehicle) {
+        this.vehicleSearchControl.setValue(selectedVehicle, { emitEvent: false });
+      }
+    }
+    
+    // Subscribe to search changes
+    this.vehicleSearchControl.valueChanges.subscribe(value => {
+      this.filterVehicles(value);
+    });
+  }
+
+  filterVehicles(value: any): void {
+    const vehicles = this.data.vehicles || [];
+    if (!value || typeof value === 'object') {
+      this.filteredVehicles = [...vehicles];
+      return;
+    }
+    const filterValue = value.toLowerCase();
+    this.filteredVehicles = vehicles.filter(vehicle => 
+      vehicle.registrationNumber?.toLowerCase().includes(filterValue) ||
+      vehicle.make?.toLowerCase().includes(filterValue) ||
+      vehicle.model?.toLowerCase().includes(filterValue) ||
+      vehicle.type?.toLowerCase().includes(filterValue)
+    );
+  }
+
+  displayVehicle(vehicle: any): string {
+    if (!vehicle) return '';
+    return `${vehicle.registrationNumber} - ${vehicle.type || vehicle.make || 'Vehicle'}`;
+  }
+
+  onVehicleSelected(event: any): void {
+    const vehicle = event.option.value;
+    if (vehicle) {
+      this.formData.vehicleId = vehicle.id;
+      this.formData.vehicleReg = vehicle.registrationNumber;
+      this.formData.vehicleType = vehicle.type || 'Vehicle';
     }
   }
 

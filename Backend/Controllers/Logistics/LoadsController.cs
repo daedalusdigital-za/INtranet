@@ -91,10 +91,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                 query = query.Where(l => l.CustomerId == customerId);
             }
 
-            var loads = await query
-                .Select(l => MapToLoadDto(l))
+            // First order by CreatedAt in the database, then fetch and map
+            var loadEntities = await query
                 .OrderByDescending(l => l.CreatedAt)
                 .ToListAsync();
+
+            var loads = loadEntities.Select(l => MapToLoadDto(l)).ToList();
 
             return Ok(loads);
         }
