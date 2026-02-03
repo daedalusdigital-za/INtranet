@@ -110,6 +110,12 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(500)]
         public string? DeliveryNotes { get; set; }
 
+        // Part Delivery Tracking
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? DeliveredQuantity { get; set; }
+
+        public DateTime? LastDeliveryDate { get; set; }
+
         // Import Tracking
         public DateTime ImportedAt { get; set; } = DateTime.UtcNow;
 

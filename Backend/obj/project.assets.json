@@ -184,12 +184,12 @@
           }
         }
       },
-      "itext/8.0.2": {
+      "itext/9.5.0": {
         "type": "package",
         "dependencies": {
           "Microsoft.DotNet.PlatformAbstractions": "1.1.0",
           "Microsoft.Extensions.DependencyModel": "1.1.0",
-          "itext.commons": "8.0.2"
+          "itext.commons": "9.5.0"
         },
         "compile": {
           "lib/netstandard2.0/itext.barcodes.dll": {
@@ -211,6 +211,9 @@
             "related": ".xml"
           },
           "lib/netstandard2.0/itext.pdfa.dll": {
+            "related": ".xml"
+          },
+          "lib/netstandard2.0/itext.pdfua.dll": {
             "related": ".xml"
           },
           "lib/netstandard2.0/itext.sign.dll": {
@@ -243,6 +246,9 @@
             "related": ".xml"
           },
           "lib/netstandard2.0/itext.pdfa.dll": {
+            "related": ".xml"
+          },
+          "lib/netstandard2.0/itext.pdfua.dll": {
             "related": ".xml"
           },
           "lib/netstandard2.0/itext.sign.dll": {
@@ -256,11 +262,8 @@
           }
         }
       },
-      "itext.commons/8.0.2": {
+      "itext.commons/9.5.0": {
         "type": "package",
-        "dependencies": {
-          "Newtonsoft.Json": "13.0.1"
-        },
         "compile": {
           "lib/netstandard2.0/itext.commons.dll": {
             "related": ".xml"
@@ -268,6 +271,22 @@
         },
         "runtime": {
           "lib/netstandard2.0/itext.commons.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "itext.pdfhtml/6.3.1": {
+        "type": "package",
+        "dependencies": {
+          "itext": "9.5.0"
+        },
+        "compile": {
+          "lib/netstandard2.0/itext.html2pdf.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/itext.html2pdf.dll": {
             "related": ".xml"
           }
         }
@@ -276,6 +295,12 @@
         "type": "package",
         "dependencies": {
           "itext": "8.0.2"
+        }
+      },
+      "itext7.pdfhtml/6.3.1": {
+        "type": "package",
+        "dependencies": {
+          "itext.pdfhtml": "6.3.1"
         }
       },
       "Microsoft.AspNetCore.Authentication.JwtBearer/10.0.1": {
@@ -2143,17 +2168,22 @@
         "logo.png"
       ]
     },
-    "itext/8.0.2": {
-      "sha512": "79IRTeZZirzRDEtB1PtUMSpsxaJiFz5rAXY4/VtSipsi0qlQpJ/88jxd2SsfX0IggH+wlrsiAc0Y8X2et2T+Bg==",
+    "itext/9.5.0": {
+      "sha512": "qN+CYYQCKnkEdUzmiDACNpfZGUEhsTMOUZ2YOYQ9NQL+Qi6EC+5kEF8utGKuwaMXQnvq8IeZVPczGd27k/TasQ==",
       "type": "package",
-      "path": "itext/8.0.2",
+      "path": "itext/9.5.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "ITSC-avatar.png",
         "LICENSE.md",
+        "NOTICE_barcodes.txt",
+        "NOTICE_io.txt",
+        "NOTICE_kernel.txt",
+        "NOTICE_layout.txt",
+        "NOTICE_styledxmlparser.txt",
         "gnu-agpl-v3.0.md",
-        "itext.8.0.2.nupkg.sha512",
+        "itext.9.5.0.nupkg.sha512",
         "itext.nuspec",
         "lib/net461/itext.barcodes.dll",
         "lib/net461/itext.barcodes.xml",
@@ -2169,6 +2199,8 @@
         "lib/net461/itext.layout.xml",
         "lib/net461/itext.pdfa.dll",
         "lib/net461/itext.pdfa.xml",
+        "lib/net461/itext.pdfua.dll",
+        "lib/net461/itext.pdfua.xml",
         "lib/net461/itext.sign.dll",
         "lib/net461/itext.sign.xml",
         "lib/net461/itext.styledxmlparser.dll",
@@ -2189,6 +2221,8 @@
         "lib/netstandard2.0/itext.layout.xml",
         "lib/netstandard2.0/itext.pdfa.dll",
         "lib/netstandard2.0/itext.pdfa.xml",
+        "lib/netstandard2.0/itext.pdfua.dll",
+        "lib/netstandard2.0/itext.pdfua.xml",
         "lib/netstandard2.0/itext.sign.dll",
         "lib/netstandard2.0/itext.sign.xml",
         "lib/netstandard2.0/itext.styledxmlparser.dll",
@@ -2197,20 +2231,39 @@
         "lib/netstandard2.0/itext.svg.xml"
       ]
     },
-    "itext.commons/8.0.2": {
-      "sha512": "/F7j7XERA84XgIXDb4j/so1GagAToraVKZIRAdk/ibkvYoU1uwuILU2Ly28sSFf12NN7WIBQHKSk7njJl7Nk8g==",
+    "itext.commons/9.5.0": {
+      "sha512": "3A7GknafwvGytOe4Jbba+7wYmhBaiZnaP+C8/Qw3sADzHElAjH3HZFRMF9u6Tt01LW7HdwCBTJb7V9ErFxSk8w==",
       "type": "package",
-      "path": "itext.commons/8.0.2",
+      "path": "itext.commons/9.5.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "ITSC-avatar.png",
-        "itext.commons.8.0.2.nupkg.sha512",
+        "itext.commons.9.5.0.nupkg.sha512",
         "itext.commons.nuspec",
         "lib/net461/itext.commons.dll",
         "lib/net461/itext.commons.xml",
         "lib/netstandard2.0/itext.commons.dll",
         "lib/netstandard2.0/itext.commons.xml"
+      ]
+    },
+    "itext.pdfhtml/6.3.1": {
+      "sha512": "w4lhsn68EP0JLTcrPH0HD8ynAMLykmav0ytZErXSuxGTjUSEE855s+LHC77fqdCO2nTsaAOe1jh2mvZ9njyC+w==",
+      "type": "package",
+      "path": "itext.pdfhtml/6.3.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "ITSC-avatar.png",
+        "LICENSE.md",
+        "NOTICE.txt",
+        "gnu-agpl-v3.0.md",
+        "itext.pdfhtml.6.3.1.nupkg.sha512",
+        "itext.pdfhtml.nuspec",
+        "lib/net461/itext.html2pdf.dll",
+        "lib/net461/itext.html2pdf.xml",
+        "lib/netstandard2.0/itext.html2pdf.dll",
+        "lib/netstandard2.0/itext.html2pdf.xml"
       ]
     },
     "itext7/8.0.2": {
@@ -2225,6 +2278,21 @@
         "gnu-agpl-v3.0.md",
         "itext7.8.0.2.nupkg.sha512",
         "itext7.nuspec"
+      ]
+    },
+    "itext7.pdfhtml/6.3.1": {
+      "sha512": "KYoVlrSPX0jvPzRTlOhsnCJkuU+97zWcVQOBmxUWf+t/FoqcpTgi1tWyykVPFZ928FPwm8ueKQgVZUetQimW6g==",
+      "type": "package",
+      "path": "itext7.pdfhtml/6.3.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "ITSC-avatar.png",
+        "LICENSE.md",
+        "NOTICE.txt",
+        "gnu-agpl-v3.0.md",
+        "itext7.pdfhtml.6.3.1.nupkg.sha512",
+        "itext7.pdfhtml.nuspec"
       ]
     },
     "Microsoft.AspNetCore.Authentication.JwtBearer/10.0.1": {
@@ -4771,7 +4839,8 @@
       "Microsoft.EntityFrameworkCore.Design >= 10.0.1",
       "Microsoft.EntityFrameworkCore.SqlServer >= 10.0.1",
       "Microsoft.EntityFrameworkCore.Tools >= 10.0.1",
-      "itext7 >= 8.0.2"
+      "itext7 >= 8.0.2",
+      "itext7.pdfhtml >= 6.3.1"
     ]
   },
   "packageFolders": {
@@ -4866,6 +4935,10 @@
           "itext7": {
             "target": "Package",
             "version": "[8.0.2, )"
+          },
+          "itext7.pdfhtml": {
+            "target": "Package",
+            "version": "[6.3.1, )"
           }
         },
         "imports": [

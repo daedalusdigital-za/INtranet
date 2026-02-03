@@ -4243,6 +4243,9 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<decimal?>("DeliveredQuantity")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<string>("DeliveryAddress")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -4272,6 +4275,9 @@ namespace ProjectTracker.API.Migrations
 
                     b.Property<int?>("ImportedByUserId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastDeliveryDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<int?>("LoadId")
                         .HasColumnType("int");
@@ -4750,6 +4756,60 @@ namespace ProjectTracker.API.Migrations
                     b.ToTable("LoadStops");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PartDeliveryHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DriverId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ImportedInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LoadId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("QuantityDelivered")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("RecordedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecordedByUserName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("ImportedInvoiceId");
+
+                    b.HasIndex("LoadId");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("PartDeliveryHistories");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ProofOfDelivery", b =>
                 {
                     b.Property<int>("Id")
@@ -4778,6 +4838,14 @@ namespace ProjectTracker.API.Migrations
                     b.Property<decimal?>("DeliveryLongitude")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("FileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("FilePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("LoadId")
                         .HasColumnType("int");
 
@@ -4796,6 +4864,9 @@ namespace ProjectTracker.API.Migrations
                     b.Property<string>("SignatureUrl")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UploadedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -5013,7 +5084,7 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<int>("CommodityId")
+                    b.Property<int?>("CommodityId")
                         .HasColumnType("int");
 
                     b.Property<int?>("ContractId")
@@ -5617,6 +5688,14 @@ namespace ProjectTracker.API.Migrations
 
                     b.Property<decimal?>("OdometerReading")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProofOfPaymentPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ProofOfWorkPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime>("ScheduledDate")
                         .HasColumnType("datetime2");
@@ -7231,6 +7310,35 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Warehouse");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PartDeliveryHistory", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId");
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.ImportedInvoice", "ImportedInvoice")
+                        .WithMany()
+                        .HasForeignKey("ImportedInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Load", "Load")
+                        .WithMany()
+                        .HasForeignKey("LoadId");
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId");
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("ImportedInvoice");
+
+                    b.Navigation("Load");
+
+                    b.Navigation("Vehicle");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ProofOfDelivery", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Logistics.Load", "Load")
@@ -7291,8 +7399,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasOne("ProjectTracker.API.Models.Logistics.Commodity", "Commodity")
                         .WithMany()
                         .HasForeignKey("CommodityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ProjectTracker.API.Models.Logistics.CustomerContract", "Contract")
                         .WithMany()

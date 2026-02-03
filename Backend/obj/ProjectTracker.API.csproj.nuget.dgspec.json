@@ -92,6 +92,10 @@
             "itext7": {
               "target": "Package",
               "version": "[8.0.2, )"
+            },
+            "itext7.pdfhtml": {
+              "target": "Package",
+              "version": "[6.3.1, )"
             }
           },
           "imports": [

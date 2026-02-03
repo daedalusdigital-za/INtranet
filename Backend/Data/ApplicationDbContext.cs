@@ -106,6 +106,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.ImportedInvoice> ImportedInvoices { get; set; }
         public DbSet<Models.Logistics.ImportBatch> ImportBatches { get; set; }
         public DbSet<Models.Logistics.SleepOut> SleepOuts { get; set; }
+        public DbSet<Models.Logistics.PartDeliveryHistory> PartDeliveryHistories { get; set; }
 
         // Sales Import System
         public DbSet<SalesImportBatch> SalesImportBatches { get; set; }
@@ -786,6 +787,13 @@ namespace ProjectTracker.API.Data
                 .HasOne(cc => cc.Customer)
                 .WithMany(c => c.Contracts)
                 .HasForeignKey(cc => cc.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // CustomerDeliveryAddress - explicitly configure relationship to LogisticsCustomers
+            modelBuilder.Entity<Models.Logistics.CustomerDeliveryAddress>()
+                .HasOne(cda => cda.Customer)
+                .WithMany(c => c.DeliveryAddresses)
+                .HasForeignKey(cda => cda.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }

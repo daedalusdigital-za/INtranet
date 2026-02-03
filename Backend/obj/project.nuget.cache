@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "tUY41KTJEH0=",
+  "dgSpecHash": "RuF288wuq/k=",
   "success": true,
   "projectFilePath": "C:\\Users\\Administrator\\Documents\\GitHub\\INtranet\\Backend\\ProjectTracker.API.csproj",
   "expectedPackageFiles": [
@@ -16,9 +16,11 @@
     "C:\\Users\\Administrator\\.nuget\\packages\\epplus.system.drawing\\6.1.1\\epplus.system.drawing.6.1.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\excelnumberformat\\1.1.0\\excelnumberformat.1.1.0.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\itext\\8.0.2\\itext.8.0.2.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\itext.commons\\8.0.2\\itext.commons.8.0.2.nupkg.sha512",
+    "C:\\Users\\Administrator\\.nuget\\packages\\itext\\9.5.0\\itext.9.5.0.nupkg.sha512",
+    "C:\\Users\\Administrator\\.nuget\\packages\\itext.commons\\9.5.0\\itext.commons.9.5.0.nupkg.sha512",
+    "C:\\Users\\Administrator\\.nuget\\packages\\itext.pdfhtml\\6.3.1\\itext.pdfhtml.6.3.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\itext7\\8.0.2\\itext7.8.0.2.nupkg.sha512",
+    "C:\\Users\\Administrator\\.nuget\\packages\\itext7.pdfhtml\\6.3.1\\itext7.pdfhtml.6.3.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.authentication.jwtbearer\\10.0.1\\microsoft.aspnetcore.authentication.jwtbearer.10.0.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.1\\microsoft.aspnetcore.openapi.10.0.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.signalr\\1.2.0\\microsoft.aspnetcore.signalr.1.2.0.nupkg.sha512",

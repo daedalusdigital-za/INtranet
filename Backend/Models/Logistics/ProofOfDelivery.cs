@@ -35,6 +35,15 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(1000)]
         public string? DamageNotes { get; set; }
 
+        // POD file upload
+        [MaxLength(500)]
+        public string? FilePath { get; set; } // Server file path
+
+        [MaxLength(255)]
+        public string? FileName { get; set; } // Original filename
+
+        public DateTime? UploadedAt { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation properties

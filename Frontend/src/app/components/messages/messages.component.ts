@@ -22,6 +22,7 @@ import { MessageService, Conversation, Message, User, SendMessageRequest, Messag
 import { UserSearchPopupComponent } from '../user-search-popup/user-search-popup.component';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
+import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
 @Component({
   selector: 'app-messages',
@@ -44,7 +45,8 @@ import { environment } from '../../../environments/environment';
     MatSnackBarModule,
     MatCheckboxModule,
     UserSearchPopupComponent,
-    NavbarComponent
+    NavbarComponent,
+    PickerComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -195,25 +197,23 @@ import { environment } from '../../../environments/environment';
                   <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
                     <div *ngFor="let attachment of message.attachments" class="attachment-item">
                       <!-- Image Preview -->
-                      <div *ngIf="isImageFile(attachment.fileType)" class="attachment-image">
-                        <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)">
+                      <div *ngIf="isImageFile(attachment.fileType)" class="attachment-image-container">
+                        <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)" class="attachment-image">
+                        <div class="attachment-overlay">
+                          <button mat-mini-fab color="primary" (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download">
+                            <mat-icon>download</mat-icon>
+                          </button>
+                        </div>
                       </div>
                       
                       <!-- PDF/Document Preview -->
-                      <div *ngIf="!isImageFile(attachment.fileType)" class="attachment-file">
+                      <div *ngIf="!isImageFile(attachment.fileType)" class="attachment-file" (click)="previewAttachment(attachment)">
                         <mat-icon class="file-icon">{{ getFileIcon(attachment.fileType) }}</mat-icon>
                         <div class="file-info">
                           <span class="file-name">{{ attachment.fileName }}</span>
                           <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
                         </div>
-                      </div>
-                      
-                      <!-- Attachment Actions -->
-                      <div class="attachment-actions">
-                        <button mat-icon-button (click)="previewAttachment(attachment)" matTooltip="Preview">
-                          <mat-icon>visibility</mat-icon>
-                        </button>
-                        <button mat-icon-button (click)="downloadAttachment(attachment)" matTooltip="Download">
+                        <button mat-mini-fab color="primary" (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download" class="download-btn">
                           <mat-icon>download</mat-icon>
                         </button>
                       </div>
@@ -281,15 +281,29 @@ import { environment } from '../../../environments/environment';
                    accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv">
             <button mat-icon-button (click)="fileInput.click()" matTooltip="Attach file">
               <mat-icon>attach_file</mat-icon>
+            <button mat-icon-button (click)="toggleEmojiPicker()" matTooltip="Add emoji" [class.active]="showEmojiPicker">
+              <mat-icon>sentiment_satisfied_alt</mat-icon>
             </button>
             <mat-form-field appearance="outline" class="message-input">
               <input matInput 
+                     #messageInput
                      placeholder="Type a message..." 
                      [(ngModel)]="newMessage"
                      (keyup.enter)="sendMessage()">
             </mat-form-field>
             <button mat-fab color="primary" (click)="sendMessage()" [disabled]="!newMessage.trim() && pendingAttachments.length === 0">
               <mat-icon>send</mat-icon>
+            </button>
+          </div>
+
+          <!-- Emoji Picker -->
+          <div class="emoji-picker-container" *ngIf="showEmojiPicker">
+            <emoji-mart 
+              (emojiClick)="addEmoji($event)" 
+              [darkMode]="false"
+              title="Pick your emoji"
+              emoji="point_up">
+            </emoji-martcon>send</mat-icon>
             </button>
           </div>
         </div>
@@ -804,6 +818,7 @@ import { environment } from '../../../environments/environment';
       padding: 16px 20px;
       background: white;
       border-top: 1px solid #e0e0e0;
+      position: relative;
 
       .message-input {
         flex: 1;
@@ -817,6 +832,32 @@ import { environment } from '../../../environments/environment';
         width: 48px;
         height: 48px;
       }
+
+      button.active {
+        background: #e3f2fd;
+        color: #1976d2;
+      }
+    }
+
+    /* Emoji Picker Styles */
+    .emoji-picker-container {
+      position: absolute;
+      bottom: 80px;
+      left: 20px;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border-radius: 8px;
+      overflow: hidden;
+      background: white;
+
+      ::ng-deep emoji-mart {
+        border: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      ::ng-deep .emoji-mart-search input {
+        border-radius: 4px;
+      }
     }
 
     /* Attachment Styles */
@@ -828,50 +869,79 @@ import { environment } from '../../../environments/environment';
     }
 
     .attachment-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.05);
-      border-radius: 8px;
-      max-width: 300px;
+      position: relative;
     }
 
-    .sent .attachment-item {
-      background: rgba(255, 255, 255, 0.15);
-    }
-
-    .attachment-image {
+    /* Image Attachment Styles */
+    .attachment-image-container {
+      position: relative;
       width: 100%;
       max-width: 250px;
       cursor: pointer;
+      border-radius: 8px;
+      overflow: hidden;
 
-      img {
+      .attachment-image {
         width: 100%;
-        border-radius: 8px;
+        display: block;
         max-height: 200px;
         object-fit: cover;
       }
+
+      .attachment-overlay {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        opacity: 0;
+        transition: opacity 0.2s;
+
+        button {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          width: 36px;
+          height: 36px;
+
+          mat-icon {
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+          }
+        }
+      }
+
+      &:hover .attachment-overlay {
+        opacity: 1;
+      }
     }
 
+    /* File Attachment Styles */
     .attachment-file {
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex: 1;
-      min-width: 0;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      position: relative;
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.08);
+      }
 
       .file-icon {
         font-size: 32px;
         width: 32px;
         height: 32px;
         color: #1976d2;
+        flex-shrink: 0;
       }
 
       .file-info {
         display: flex;
         flex-direction: column;
         min-width: 0;
+        flex: 1;
 
         .file-name {
           font-size: 13px;
@@ -886,29 +956,30 @@ import { environment } from '../../../environments/environment';
           color: #757575;
         }
       }
-    }
 
-    .sent .attachment-file .file-icon {
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .sent .attachment-file .file-info .file-size {
-      color: rgba(255, 255, 255, 0.7);
-    }
-
-    .attachment-actions {
-      display: flex;
-      gap: 4px;
-
-      button {
-        width: 28px;
-        height: 28px;
+      .download-btn {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+        margin-left: auto;
 
         mat-icon {
-          font-size: 16px;
-          width: 16px;
-          height: 16px;
+          font-size: 18px;
+          width: 18px;
+          height: 18px;
         }
+      }
+    }
+
+    .sent .attachment-file {
+      background: rgba(255, 255, 255, 0.15);
+
+      .file-icon {
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .file-info .file-size {
+        color: rgba(255, 255, 255, 0.7);
       }
     }
 
@@ -1076,21 +1147,23 @@ import { environment } from '../../../environments/environment';
         left: 0;
         top: 64px;
         height: calc(100vh - 64px);
-      }
+  @ViewChild('messageInput') messageInput!: ElementRef;
 
-      .chat-area {
-        width: 100%;
-      }
-
-      .message {
-        max-width: 85%;
-      }
-    }
-  `]
-})
-export class MessagesComponent implements OnInit, OnDestroy {
-  @ViewChild('messagesContainer') messagesContainer!: ElementRef;
-
+  conversations: Conversation[] = [];
+  filteredConversations: Conversation[] = [];
+  selectedConversation: Conversation | null = null;
+  messages: Message[] = [];
+  
+  currentUserId: number = 0;
+  searchQuery: string = '';
+  newMessage: string = '';
+  
+  loading: boolean = false;
+  loadingMessages: boolean = false;
+  selectMode: boolean = false;
+  selectedForDelete: { [key: number]: boolean } = {};
+  showNewConversation: boolean = false;
+  showEmojiPicker
   conversations: Conversation[] = [];
   filteredConversations: Conversation[] = [];
   selectedConversation: Conversation | null = null;
@@ -1338,6 +1411,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
         this.messages.push(message);
         this.newMessage = '';
         this.replyingTo = null;
+        this.showEmojiPicker = false; // Close emoji picker after sending
         this.scrollToBottom();
         
         // Update conversation list
@@ -1494,6 +1568,34 @@ export class MessagesComponent implements OnInit, OnDestroy {
         this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
       }
     }, 100);
+  }
+
+  // ============================================
+  // Emoji Picker Methods
+  // ============================================
+
+  toggleEmojiPicker(): void {
+    this.showEmojiPicker = !this.showEmojiPicker;
+  }
+
+  addEmoji(event: any): void {
+    const emoji = event.emoji.native;
+    const cursorPos = this.messageInput?.nativeElement?.selectionStart || this.newMessage.length;
+    
+    // Insert emoji at cursor position
+    this.newMessage = 
+      this.newMessage.slice(0, cursorPos) + 
+      emoji + 
+      this.newMessage.slice(cursorPos);
+    
+    // Focus back on input and set cursor position
+    setTimeout(() => {
+      if (this.messageInput?.nativeElement) {
+        this.messageInput.nativeElement.focus();
+        const newCursorPos = cursorPos + emoji.length;
+        this.messageInput.nativeElement.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
   }
 
   // ============================================

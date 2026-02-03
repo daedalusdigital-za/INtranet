@@ -509,8 +509,8 @@ Origin warehouse for pickups. Stored in `Backend/Models/Logistics/Warehouse.cs`.
 | Component | Line | Purpose |
 |-----------|------|---------|
 | `TripsheetTypeDialog` | ~11000 | Select creation method (Invoice/Manual/Quick) |
-| `CreateTripsheetDialog` | ~11515 | Main dialog for building trip with map |
-| `InvoiceDetailsDialog` | ~varies | View individual invoice details |
+| `CreateTripsheetDialog` | ~11515 | Main dialog for building trip with map || `ViewRouteMapDialog` | ~19933 | Interactive Google Maps route visualization |
+| `ViewLoadDetailsDialog` | ~19527 | Full load details viewer with 3 tabs || `InvoiceDetailsDialog` | ~varies | View individual invoice details |
 
 ### Key Methods
 
@@ -521,6 +521,8 @@ Origin warehouse for pickups. Stored in `Backend/Models/Logistics/Warehouse.cs`.
 | `createTripsheet()` | Saves tripsheet and generates PDF |
 | `loadTripsheets()` | Fetches all tripsheets from API |
 | `loadImportedInvoices()` | Fetches pending invoices |
+| `viewRouteOnMap()` | Opens route map dialog with geocoded stops |
+| `viewLoadDetails()` | Opens load details dialog with 3 tabs |
 
 ### CreateTripsheetDialog Flow
 
@@ -667,6 +669,77 @@ When deleting a TripSheet:
 - All `LoadStops` are removed
 - All `StopCommodities` are removed
 - Linked `ImportedInvoices` reset to `Status = "Pending"` and `LoadId = null`
+
+---
+
+## Route Map Visualization
+
+### Google Maps Integration
+
+The system includes interactive route visualization using Google Maps API.
+
+**Features:**
+- **Warehouse Origin Marker**: Green marker (40x40px) showing pickup location
+- **Stop Markers**: Blue numbered markers (32x32px) sequenced by delivery order
+- **Route Polyline**: Purple line connecting all stops in sequence
+- **Geocoding**: Automatic address-to-coordinates conversion via Google Geocoding API
+- **Route Info Panel**: Driver, vehicle, origin, and stops count
+- **Stops Legend**: List of all stops with commodity details
+
+**API Configuration:**
+- Google Maps API Key: `AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k`
+- Script Loading: Async via `index.html`
+- Package: `@angular/google-maps`
+
+### ViewRouteMapDialog Component
+
+**Location**: Lines 19933-20310 in `logistics-dashboard.component.ts`
+
+**Functionality:**
+1. Fetches load details via `GET /api/loads/{id}`
+2. Geocodes stop addresses to lat/lng coordinates
+3. Displays warehouse origin marker (green)
+4. Displays numbered stop markers (blue, sequenced)
+5. Draws route polyline (purple, 4px stroke)
+6. Shows route info and stops legend
+7. Handles geocoding errors with fallback
+
+**Usage:**
+- Available in both **Active Loads** and **Completed Loads** tabs
+- Accessed via three-dot menu → "View Route" (eye icon)
+- Opens in 95vw × 85vh modal dialog
+
+**Implementation:**
+```typescript
+viewRouteOnMap(trip: any) {
+  const loadId = trip.loadId || trip.id;
+  this.http.get(`${environment.apiUrl}/logistics/loads/${loadId}`)
+    .subscribe({
+      next: (load: any) => {
+        this.dialog.open(ViewRouteMapDialog, {
+          width: '95vw',
+          height: '85vh',
+          maxWidth: '95vw',
+          data: { load }
+        });
+      },
+      error: (err) => {
+        this.snackBar.open('Failed to load route details', 'Close', { duration: 3000 });
+      }
+    });
+}
+```
+
+### ViewLoadDetailsDialog Component
+
+**Location**: Lines 19527-19931 in `logistics-dashboard.component.ts`
+
+**Features:**
+- **Overview Tab**: Load details, driver, vehicle, warehouse, status
+- **Stops Tab**: All delivery stops with commodities
+- **Timeline Tab**: Status history and timestamps
+
+**API**: `GET /api/loads/{id}` with full entity includes
 
 ---
 

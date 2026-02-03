@@ -15,7 +15,7 @@
           "Microsoft.AspNetCore.OpenApi": "10.0.1",
           "Microsoft.EntityFrameworkCore.Design": "10.0.1",
           "Microsoft.EntityFrameworkCore.SqlServer": "10.0.1",
-          "itext7": "8.0.2"
+          "itext7.pdfhtml": "6.3.1"
         },
         "runtime": {
           "ProjectTracker.API.dll": {}
@@ -149,69 +149,81 @@
           }
         }
       },
-      "itext/8.0.2": {
+      "itext/9.5.0": {
         "dependencies": {
           "Microsoft.DotNet.PlatformAbstractions": "1.1.0",
           "Microsoft.Extensions.DependencyModel": "10.0.1",
-          "itext.commons": "8.0.2"
+          "itext.commons": "9.5.0"
         },
         "runtime": {
           "lib/netstandard2.0/itext.barcodes.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.bouncy-castle-connector.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.forms.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.io.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.kernel.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.layout.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.pdfa.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
+          },
+          "lib/netstandard2.0/itext.pdfua.dll": {
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.sign.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.styledxmlparser.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           },
           "lib/netstandard2.0/itext.svg.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           }
         }
       },
-      "itext.commons/8.0.2": {
-        "dependencies": {
-          "Newtonsoft.Json": "13.0.3"
-        },
+      "itext.commons/9.5.0": {
         "runtime": {
           "lib/netstandard2.0/itext.commons.dll": {
-            "assemblyVersion": "8.0.2.0",
-            "fileVersion": "8.0.2.0"
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
           }
         }
       },
-      "itext7/8.0.2": {
+      "itext.pdfhtml/6.3.1": {
         "dependencies": {
-          "itext": "8.0.2"
+          "itext": "9.5.0"
+        },
+        "runtime": {
+          "lib/netstandard2.0/itext.html2pdf.dll": {
+            "assemblyVersion": "6.3.1.0",
+            "fileVersion": "6.3.1.0"
+          }
+        }
+      },
+      "itext7.pdfhtml/6.3.1": {
+        "dependencies": {
+          "itext.pdfhtml": "6.3.1"
         }
       },
       "Microsoft.AspNetCore.Authentication.JwtBearer/10.0.1": {
@@ -1219,26 +1231,33 @@
       "path": "humanizer.core/2.14.1",
       "hashPath": "humanizer.core.2.14.1.nupkg.sha512"
     },
-    "itext/8.0.2": {
+    "itext/9.5.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-79IRTeZZirzRDEtB1PtUMSpsxaJiFz5rAXY4/VtSipsi0qlQpJ/88jxd2SsfX0IggH+wlrsiAc0Y8X2et2T+Bg==",
-      "path": "itext/8.0.2",
-      "hashPath": "itext.8.0.2.nupkg.sha512"
+      "sha512": "sha512-qN+CYYQCKnkEdUzmiDACNpfZGUEhsTMOUZ2YOYQ9NQL+Qi6EC+5kEF8utGKuwaMXQnvq8IeZVPczGd27k/TasQ==",
+      "path": "itext/9.5.0",
+      "hashPath": "itext.9.5.0.nupkg.sha512"
     },
-    "itext.commons/8.0.2": {
+    "itext.commons/9.5.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-/F7j7XERA84XgIXDb4j/so1GagAToraVKZIRAdk/ibkvYoU1uwuILU2Ly28sSFf12NN7WIBQHKSk7njJl7Nk8g==",
-      "path": "itext.commons/8.0.2",
-      "hashPath": "itext.commons.8.0.2.nupkg.sha512"
+      "sha512": "sha512-3A7GknafwvGytOe4Jbba+7wYmhBaiZnaP+C8/Qw3sADzHElAjH3HZFRMF9u6Tt01LW7HdwCBTJb7V9ErFxSk8w==",
+      "path": "itext.commons/9.5.0",
+      "hashPath": "itext.commons.9.5.0.nupkg.sha512"
     },
-    "itext7/8.0.2": {
+    "itext.pdfhtml/6.3.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-IuFfSlMSTLqVGCIsxpcDL9kCtEfppSBjq4V+RgfrxnqEC+iNF4tCHiIdl8quyzTDbaHF4vNufxe2NXMJMkPlSw==",
-      "path": "itext7/8.0.2",
-      "hashPath": "itext7.8.0.2.nupkg.sha512"
+      "sha512": "sha512-w4lhsn68EP0JLTcrPH0HD8ynAMLykmav0ytZErXSuxGTjUSEE855s+LHC77fqdCO2nTsaAOe1jh2mvZ9njyC+w==",
+      "path": "itext.pdfhtml/6.3.1",
+      "hashPath": "itext.pdfhtml.6.3.1.nupkg.sha512"
+    },
+    "itext7.pdfhtml/6.3.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-KYoVlrSPX0jvPzRTlOhsnCJkuU+97zWcVQOBmxUWf+t/FoqcpTgi1tWyykVPFZ928FPwm8ueKQgVZUetQimW6g==",
+      "path": "itext7.pdfhtml/6.3.1",
+      "hashPath": "itext7.pdfhtml.6.3.1.nupkg.sha512"
     },
     "Microsoft.AspNetCore.Authentication.JwtBearer/10.0.1": {
       "type": "package",

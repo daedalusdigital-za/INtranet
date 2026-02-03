@@ -331,3 +331,16 @@ C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\Excel
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\RBush.dll
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\SixLabors.Fonts.dll
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\System.IO.Packaging.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\itext.pdfua.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\itext.html2pdf.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\BuildHost-net472\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.exe.config
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\BuildHost-netcore\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll.config
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\web.config
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\appsettings.Development.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\appsettings.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\appsettings.Production.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\BuildHost-netcore\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.deps.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\BuildHost-netcore\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.runtimeconfig.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.deps.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.runtimeconfig.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.staticwebassets.endpoints.json

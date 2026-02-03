@@ -43,6 +43,10 @@ namespace ProjectTracker.API.DTOs.Logistics
         public List<LoadStopDto> Stops { get; set; } = new();
         public List<LoadItemDto> Items { get; set; } = new();
         public DateTime CreatedAt { get; set; }
+        
+        // POD Information
+        public string? PodFilePath { get; set; }
+        public bool HasPOD { get; set; }
     }
 
     public class CreateLoadDto
@@ -80,6 +84,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         
         // Legacy items (for backward compatibility)
         public List<CreateLoadItemDto> Items { get; set; } = new();
+        
+        // Invoice IDs to link to this load (for tripsheets created from imported invoices)
+        public List<int>? InvoiceIds { get; set; }
     }
 
     public class UpdateLoadDto
@@ -150,7 +157,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public int? WarehouseId { get; set; }
         public string? CompanyName { get; set; }
         public string? LocationName { get; set; }
-        public string Address { get; set; } = string.Empty;
+        public string? Address { get; set; }  // Made nullable - controller validates
         public string? City { get; set; }
         public string? Province { get; set; }
         public string? PostalCode { get; set; }
@@ -171,7 +178,7 @@ namespace ProjectTracker.API.DTOs.Logistics
     public class StopCommodityDto
     {
         public int Id { get; set; }
-        public int CommodityId { get; set; }
+        public int? CommodityId { get; set; }  // Made nullable to match model - supports imported invoices without commodity lookup
         public string CommodityName { get; set; } = string.Empty;
         public string? CommodityCode { get; set; }
         public int? ContractId { get; set; }
@@ -189,7 +196,7 @@ namespace ProjectTracker.API.DTOs.Logistics
 
     public class CreateStopCommodityDto
     {
-        public int CommodityId { get; set; }
+        public int? CommodityId { get; set; }  // Made nullable for imported invoices without commodity lookup
         public int? ContractId { get; set; }
         public decimal Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }

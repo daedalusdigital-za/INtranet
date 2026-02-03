@@ -6,6 +6,8 @@ using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Services;
 using ClosedXML.Excel;
 using System.Text;
+using iText.Html2pdf;
+using iText.Kernel.Pdf;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
@@ -17,15 +19,18 @@ namespace ProjectTracker.API.Controllers.Logistics
         private readonly ApplicationDbContext _context;
         private readonly ILogger<TripSheetController> _logger;
         private readonly TripSheetImportService _importService;
+        private readonly IEmailService _emailService;
 
         public TripSheetController(
             ApplicationDbContext context, 
             ILogger<TripSheetController> logger,
-            TripSheetImportService importService)
+            TripSheetImportService importService,
+            IEmailService emailService)
         {
             _context = context;
             _logger = logger;
             _importService = importService;
+            _emailService = emailService;
         }
 
         /// <summary>
@@ -172,6 +177,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 // Additional Header Info
                 WarehouseName = load.Warehouse?.Name,
                 WarehouseCode = load.Warehouse?.Code,
+                WarehouseEmail = load.Warehouse?.Email,
+                WarehouseManagerName = load.Warehouse?.ManagerName,
                 PickupLocation = load.PickupLocation ?? load.Warehouse?.Address,
                 PickupCity = load.Warehouse?.City,
                 PickupTime = load.ScheduledPickupTime?.ToString("HH:mm"),
@@ -584,6 +591,368 @@ namespace ProjectTracker.API.Controllers.Logistics
             // Return HTML that can be converted to PDF on client side
             // Or use a server-side PDF library
             return Content(html, "text/html");
+        }
+
+        /// <summary>
+        /// Email trip sheet PDF to warehouse manager
+        /// </summary>
+        [HttpPost("{loadId}/email")]
+        public async Task<IActionResult> EmailTripSheet(int loadId, [FromBody] EmailTripSheetDto dto)
+        {
+            try
+            {
+                _logger.LogInformation("Emailing tripsheet {LoadId} to {Email}", loadId, dto.RecipientEmail);
+
+                // Get tripsheet data
+                var tripSheetResult = await GetTripSheet(loadId);
+                if (tripSheetResult.Result is NotFoundObjectResult)
+                    return NotFound(new { error = "Load not found" });
+
+                var tripSheet = (tripSheetResult.Result as OkObjectResult)?.Value as TripSheetDto;
+                if (tripSheet == null)
+                    return BadRequest(new { error = "Failed to generate trip sheet data" });
+
+                // Generate HTML for PDF
+                var html = GenerateTripSheetHtml(tripSheet);
+
+                // Convert HTML to PDF using iText7
+                byte[] pdfBytes;
+                string attachmentFileName;
+                string attachmentContentType;
+                
+                try
+                {
+                    using var memoryStream = new MemoryStream();
+                    var writerProperties = new WriterProperties();
+                    using var pdfWriter = new PdfWriter(memoryStream, writerProperties);
+                    using var pdfDocument = new PdfDocument(pdfWriter);
+                    
+                    // Set landscape A4
+                    pdfDocument.SetDefaultPageSize(iText.Kernel.Geom.PageSize.A4.Rotate());
+                    
+                    // Convert HTML to PDF
+                    var converterProperties = new ConverterProperties();
+                    HtmlConverter.ConvertToPdf(html, pdfDocument, converterProperties);
+                    
+                    pdfBytes = memoryStream.ToArray();
+                    attachmentFileName = $"TripSheet_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.pdf";
+                    attachmentContentType = "application/pdf";
+                    
+                    _logger.LogInformation("PDF generated successfully, size: {Size} bytes", pdfBytes.Length);
+                }
+                catch (Exception pdfEx)
+                {
+                    _logger.LogWarning(pdfEx, "Failed to generate PDF, falling back to HTML attachment");
+                    // Fallback: Send HTML as attachment if PDF generation fails
+                    pdfBytes = System.Text.Encoding.UTF8.GetBytes(html);
+                    attachmentFileName = $"TripSheet_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.html";
+                    attachmentContentType = "text/html";
+                }
+
+                // Get warehouse details
+                var load = await _context.Loads
+                    .Include(l => l.Warehouse)
+                    .Include(l => l.Driver)
+                    .FirstOrDefaultAsync(l => l.Id == loadId);
+
+                var warehouseName = load?.Warehouse?.Name ?? "Warehouse";
+                var warehouseManagerName = load?.Warehouse?.ManagerName ?? "Warehouse Manager";
+                var driverName = load?.Driver != null 
+                    ? $"{load.Driver.FirstName} {load.Driver.LastName}" 
+                    : "Not assigned";
+                var scheduledDate = load?.ScheduledPickupDate?.ToString("dd MMM yyyy") ?? "Not scheduled";
+
+                // Build email body
+                var emailBody = $@"
+                <html>
+                <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                    <h2 style='color: #1976d2;'>TripSheet {tripSheet.LoadNumber}</h2>
+                    
+                    <p>Dear {warehouseManagerName},</p>
+                    
+                    <p>Please find attached the tripsheet for your review and preparation.</p>
+                    
+                    <table style='border-collapse: collapse; margin: 20px 0;'>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>TripSheet Number:</td>
+                            <td style='padding: 8px 16px;'>{tripSheet.LoadNumber}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Warehouse:</td>
+                            <td style='padding: 8px 16px;'>{warehouseName}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Driver:</td>
+                            <td style='padding: 8px 16px;'>{driverName}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Scheduled Date:</td>
+                            <td style='padding: 8px 16px;'>{scheduledDate}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Total Stops:</td>
+                            <td style='padding: 8px 16px;'>{tripSheet.LineItems.Count}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Total Value:</td>
+                            <td style='padding: 8px 16px;'>R {tripSheet.TotalWithVat:N2}</td>
+                        </tr>
+                    </table>
+                    
+                    <p>Please confirm stock availability and ensure the items are ready for dispatch.</p>
+                    
+                    <p style='margin-top: 30px;'>
+                        Best regards,<br/>
+                        <strong>ProMed Logistics Team</strong>
+                    </p>
+                    
+                    <hr style='margin-top: 30px; border: none; border-top: 1px solid #ddd;'/>
+                    <p style='font-size: 12px; color: #666;'>
+                        This is an automated message from the ProMed Logistics System.
+                    </p>
+                </body>
+                </html>";
+
+                // Create attachment
+                var attachments = new List<EmailAttachment>
+                {
+                    new EmailAttachment
+                    {
+                        FileName = attachmentFileName,
+                        Content = pdfBytes,
+                        ContentType = attachmentContentType
+                    }
+                };
+
+                // Get recipient emails
+                var recipients = new List<string>();
+                if (!string.IsNullOrWhiteSpace(dto.RecipientEmail))
+                    recipients.Add(dto.RecipientEmail);
+                
+                // Add warehouse email if available and different from primary recipient
+                if (!string.IsNullOrWhiteSpace(load?.Warehouse?.Email) && 
+                    !recipients.Contains(load.Warehouse.Email, StringComparer.OrdinalIgnoreCase))
+                {
+                    recipients.Add(load.Warehouse.Email);
+                }
+
+                if (recipients.Count == 0)
+                    return BadRequest(new { error = "No recipient email addresses provided" });
+
+                // CC list
+                var ccList = dto.CcEmails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList();
+
+                // Send email
+                var subject = $"TripSheet {tripSheet.LoadNumber} - {warehouseName} - {scheduledDate}";
+                var success = await _emailService.SendEmailAsync(
+                    recipients, 
+                    subject, 
+                    emailBody, 
+                    isHtml: true, 
+                    attachments: attachments,
+                    cc: ccList
+                );
+
+                if (success)
+                {
+                    _logger.LogInformation("Tripsheet {LoadNumber} emailed successfully to {Recipients}", 
+                        tripSheet.LoadNumber, string.Join(", ", recipients));
+                    
+                    return Ok(new { 
+                        message = "TripSheet emailed successfully", 
+                        recipients = recipients,
+                        loadNumber = tripSheet.LoadNumber
+                    });
+                }
+                else
+                {
+                    return StatusCode(500, new { error = "Failed to send email. Please check email configuration." });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error emailing tripsheet {LoadId}", loadId);
+                return StatusCode(500, new { error = $"Failed to email tripsheet: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
+        /// Email tripsheet to warehouse manager
+        /// </summary>
+        [HttpPost("{loadId}/email-warehouse-manager")]
+        public async Task<IActionResult> EmailToWarehouseManager(int loadId)
+        {
+            try
+            {
+                _logger.LogInformation("Emailing tripsheet {LoadId} to warehouse manager", loadId);
+
+                // Get load with warehouse info
+                var load = await _context.Loads
+                    .Include(l => l.Warehouse)
+                    .Include(l => l.Driver)
+                    .Include(l => l.Vehicle)
+                    .FirstOrDefaultAsync(l => l.Id == loadId);
+
+                if (load == null)
+                    return NotFound(new { error = "Load not found" });
+
+                if (load.Warehouse == null)
+                    return BadRequest(new { error = "No warehouse assigned to this load" });
+
+                if (string.IsNullOrWhiteSpace(load.Warehouse.Email))
+                    return BadRequest(new { error = $"No email configured for warehouse: {load.Warehouse.Name}" });
+
+                // Get tripsheet data
+                var tripSheetResult = await GetTripSheet(loadId);
+                if (tripSheetResult.Result is NotFoundObjectResult)
+                    return NotFound(new { error = "Load not found" });
+
+                var tripSheet = (tripSheetResult.Result as OkObjectResult)?.Value as TripSheetDto;
+                if (tripSheet == null)
+                    return BadRequest(new { error = "Failed to generate trip sheet data" });
+
+                // Generate HTML for PDF
+                var html = GenerateTripSheetHtml(tripSheet);
+
+                // Convert HTML to PDF
+                byte[] pdfBytes;
+                string attachmentFileName;
+                string attachmentContentType;
+                
+                try
+                {
+                    using var memoryStream = new MemoryStream();
+                    var writerProperties = new WriterProperties();
+                    using var pdfWriter = new PdfWriter(memoryStream, writerProperties);
+                    using var pdfDocument = new PdfDocument(pdfWriter);
+                    
+                    pdfDocument.SetDefaultPageSize(iText.Kernel.Geom.PageSize.A4.Rotate());
+                    
+                    var converterProperties = new ConverterProperties();
+                    HtmlConverter.ConvertToPdf(html, pdfDocument, converterProperties);
+                    
+                    pdfBytes = memoryStream.ToArray();
+                    attachmentFileName = $"TripSheet_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.pdf";
+                    attachmentContentType = "application/pdf";
+                }
+                catch (Exception pdfEx)
+                {
+                    _logger.LogWarning(pdfEx, "Failed to generate PDF, falling back to HTML attachment");
+                    pdfBytes = System.Text.Encoding.UTF8.GetBytes(html);
+                    attachmentFileName = $"TripSheet_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.html";
+                    attachmentContentType = "text/html";
+                }
+
+                var warehouseName = load.Warehouse.Name;
+                var warehouseManagerName = load.Warehouse.ManagerName ?? "Warehouse Manager";
+                var driverName = load.Driver != null 
+                    ? $"{load.Driver.FirstName} {load.Driver.LastName}" 
+                    : "Not assigned";
+                var vehicleReg = load.Vehicle?.RegistrationNumber ?? "Not assigned";
+                var scheduledDate = load.ScheduledPickupDate?.ToString("dd MMM yyyy HH:mm") ?? "Not scheduled";
+
+                // Build email body
+                var emailBody = $@"
+                <html>
+                <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                    <h2 style='color: #1976d2;'>TripSheet {tripSheet.LoadNumber}</h2>
+                    
+                    <p>Dear {warehouseManagerName},</p>
+                    
+                    <p>Please find attached the tripsheet for your review and preparation.</p>
+                    
+                    <table style='border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;'>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold; width: 180px;'>TripSheet Number:</td>
+                            <td style='padding: 8px 16px; border-bottom: 1px solid #e0e0e0;'>{tripSheet.LoadNumber}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Warehouse:</td>
+                            <td style='padding: 8px 16px; border-bottom: 1px solid #e0e0e0;'>{warehouseName}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Driver:</td>
+                            <td style='padding: 8px 16px; border-bottom: 1px solid #e0e0e0;'>{driverName}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Vehicle:</td>
+                            <td style='padding: 8px 16px; border-bottom: 1px solid #e0e0e0;'>{vehicleReg}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Scheduled Pickup:</td>
+                            <td style='padding: 8px 16px; border-bottom: 1px solid #e0e0e0;'>{scheduledDate}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Total Stops:</td>
+                            <td style='padding: 8px 16px; border-bottom: 1px solid #e0e0e0;'>{tripSheet.LineItems.Count}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 8px 16px; background: #f5f5f5; font-weight: bold;'>Total Value:</td>
+                            <td style='padding: 8px 16px;'><strong>R {tripSheet.TotalWithVat:N2}</strong></td>
+                        </tr>
+                    </table>
+                    
+                    <div style='background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin: 20px 0;'>
+                        <p style='margin: 0;'><strong>Action Required:</strong> Please confirm stock availability and ensure all items are ready for dispatch at the scheduled time.</p>
+                    </div>
+                    
+                    <p style='margin-top: 30px;'>
+                        Best regards,<br/>
+                        <strong>ProMed Logistics Team</strong>
+                    </p>
+                    
+                    <hr style='margin-top: 30px; border: none; border-top: 1px solid #ddd;'/>
+                    <p style='font-size: 12px; color: #666;'>
+                        This is an automated message from the ProMed Logistics System.<br/>
+                        For any queries, please contact the logistics department.
+                    </p>
+                </body>
+                </html>";
+
+                // Create attachment
+                var attachments = new List<EmailAttachment>
+                {
+                    new EmailAttachment
+                    {
+                        FileName = attachmentFileName,
+                        Content = pdfBytes,
+                        ContentType = attachmentContentType
+                    }
+                };
+
+                // Send email to warehouse manager
+                var subject = $"TripSheet {tripSheet.LoadNumber} - Stock Preparation Required - {scheduledDate}";
+                var success = await _emailService.SendEmailAsync(
+                    load.Warehouse.Email, 
+                    subject, 
+                    emailBody, 
+                    isHtml: true, 
+                    attachments: attachments
+                );
+
+                if (success)
+                {
+                    _logger.LogInformation("Tripsheet {LoadNumber} emailed to warehouse manager at {Email}", 
+                        tripSheet.LoadNumber, load.Warehouse.Email);
+                    
+                    return Ok(new { 
+                        message = "TripSheet emailed to warehouse manager successfully", 
+                        recipient = load.Warehouse.Email,
+                        warehouseName = warehouseName,
+                        managerName = warehouseManagerName,
+                        loadNumber = tripSheet.LoadNumber
+                    });
+                }
+                else
+                {
+                    return StatusCode(500, new { error = "Failed to send email. Please check email configuration." });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error emailing tripsheet {LoadId} to warehouse manager", loadId);
+                return StatusCode(500, new { error = $"Failed to email tripsheet: {ex.Message}" });
+            }
         }
 
         /// <summary>
@@ -1307,6 +1676,8 @@ namespace ProjectTracker.API.Controllers.Logistics
         // Additional Header Info
         public string? WarehouseName { get; set; }
         public string? WarehouseCode { get; set; }
+        public string? WarehouseEmail { get; set; }
+        public string? WarehouseManagerName { get; set; }
         public string? PickupLocation { get; set; }
         public string? PickupCity { get; set; }
         public string? PickupTime { get; set; }
@@ -1413,5 +1784,12 @@ namespace ProjectTracker.API.Controllers.Logistics
     public class UpdateStatusDto
     {
         public string Status { get; set; } = string.Empty;
+    }
+
+    public class EmailTripSheetDto
+    {
+        public string RecipientEmail { get; set; } = string.Empty;
+        public List<string>? CcEmails { get; set; }
+        public string? CustomMessage { get; set; }
     }
 }

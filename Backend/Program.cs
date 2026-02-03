@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ProjectTracker.API.Data;
@@ -10,7 +11,29 @@ using ProjectTracker.API.DTOs;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Customize automatic model validation response to include logging
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            
+            var errors = context.ModelState
+                .Where(x => x.Value?.Errors.Count > 0)
+                .Select(x => new { 
+                    Field = x.Key, 
+                    Errors = x.Value?.Errors.Select(e => string.IsNullOrEmpty(e.ErrorMessage) ? e.Exception?.Message : e.ErrorMessage) 
+                })
+                .ToList();
+            
+            logger.LogWarning("API Model Validation Failed for {Path}: {Errors}", 
+                context.HttpContext.Request.Path, 
+                System.Text.Json.JsonSerializer.Serialize(errors));
+            
+            return new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState));
+        };
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 // Add DbContext
@@ -115,6 +138,9 @@ builder.Services.AddScoped<StockOnHandImportService>();
 // Trip Sheet Import Service
 builder.Services.AddScoped<TripSheetImportService>();
 
+// Email Service
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 // Add comprehensive AI Context Service for database access
 builder.Services.AddScoped<IAIContextService, AIContextService>();
 
@@ -135,6 +161,12 @@ using (var scope = app.Services.CreateScope())
         var context = services.GetRequiredService<ApplicationDbContext>();
         context.Database.Migrate();
     }
+    catch (Microsoft.Data.SqlClient.SqlException sqlEx) when (sqlEx.Number == 2705)
+    {
+        // Column already exists - safe to ignore
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("Migration skipped: Column already exists in database.");
+    }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
@@ -144,6 +176,20 @@ using (var scope = app.Services.CreateScope())
 
 // Configure the HTTP request pipeline
 app.UseCors("AllowAll");
+
+// Create uploads directory if it doesn't exist
+var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+}
+
+// Serve static files for uploads
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads"
+});
 
 app.UseAuthentication();
 app.UseAuthorization();

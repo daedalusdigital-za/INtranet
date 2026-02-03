@@ -37,14 +37,21 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(1000)]
         public string? Notes { get; set; }
 
-        // Next service reminder
-        public DateTime? NextServiceDate { get; set; }
-        
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal? NextServiceOdometer { get; set; }
+    // File attachments
+    [MaxLength(500)]
+    public string? ProofOfWorkPath { get; set; }
+    
+    [MaxLength(500)]
+    public string? ProofOfPaymentPath { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime? UpdatedAt { get; set; }
+    // Next service reminder
+    public DateTime? NextServiceDate { get; set; }
+    
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? NextServiceOdometer { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
 
         // Navigation properties
         [ForeignKey("VehicleId")]

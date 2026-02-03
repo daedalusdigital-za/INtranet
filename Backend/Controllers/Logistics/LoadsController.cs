@@ -1,16 +1,18 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
     [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/logistics/loads")]
     public class LoadsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -65,6 +67,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Include(l => l.Driver)
                 .Include(l => l.Warehouse)
                 .Include(l => l.VehicleType)
+                .Include(l => l.ProofOfDelivery)
                 .Include(l => l.Stops)
                     .ThenInclude(s => s.Commodities)
                         .ThenInclude(sc => sc.Commodity)
@@ -132,8 +135,61 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         [HttpPost]
-        public async Task<ActionResult<LoadDto>> CreateLoad(CreateLoadDto dto)
+        public async Task<ActionResult<LoadDto>> CreateLoad([FromBody] CreateLoadDto dto)
         {
+            // Log ModelState errors if any (these would normally trigger automatic 400)
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState
+                    .Where(x => x.Value?.Errors.Count > 0)
+                    .Select(x => new { Field = x.Key, Errors = x.Value?.Errors.Select(e => e.ErrorMessage) })
+                    .ToList();
+                _logger.LogWarning("CreateLoad ModelState validation failed: {Errors}", JsonSerializer.Serialize(errors));
+                
+                // Log the raw errors for debugging
+                foreach (var error in errors)
+                {
+                    _logger.LogWarning("Validation error - Field: {Field}, Errors: {Errors}", 
+                        error.Field, string.Join(", ", error.Errors ?? Array.Empty<string>()));
+                }
+                
+                return ValidationProblem(ModelState);
+            }
+
+            // Log the incoming request for debugging
+            _logger.LogInformation("CreateLoad called with {StopsCount} stops", dto.Stops?.Count ?? 0);
+            
+            // Log each stop for debugging
+            if (dto.Stops != null)
+            {
+                for (int i = 0; i < dto.Stops.Count; i++)
+                {
+                    var s = dto.Stops[i];
+                    _logger.LogInformation("Stop {Index}: CompanyName={CompanyName}, Address={Address}, CommoditiesCount={CommoditiesCount}", 
+                        i, s.CompanyName ?? "null", s.Address ?? "null", s.Commodities?.Count ?? 0);
+                }
+            }
+            
+            // Validate stops have required data
+            if (dto.Stops == null || dto.Stops.Count == 0)
+            {
+                _logger.LogWarning("CreateLoad failed: No stops provided");
+                return BadRequest(new { error = "At least one stop is required" });
+            }
+
+            // Validate each stop has commodities
+            for (int i = 0; i < dto.Stops.Count; i++)
+            {
+                var stop = dto.Stops[i];
+                
+                // Validate commodities
+                if (stop.Commodities == null || stop.Commodities.Count == 0)
+                {
+                    _logger.LogWarning("CreateLoad failed: Stop {Index} has no commodities", i);
+                    return BadRequest(new { error = $"Stop {i + 1} ({stop.CompanyName ?? "Unknown"}) has no commodities" });
+                }
+            }
+
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
@@ -190,6 +246,11 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 foreach (var stopDto in dto.Stops.OrderBy(s => s.StopSequence))
                 {
+                    // Use a fallback address if none provided
+                    var address = string.IsNullOrWhiteSpace(stopDto.Address) 
+                        ? (stopDto.CompanyName ?? "Address not specified")
+                        : stopDto.Address;
+
                     var stop = new LoadStop
                     {
                         LoadId = load.Id,
@@ -199,7 +260,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         WarehouseId = stopDto.WarehouseId,
                         CompanyName = stopDto.CompanyName,
                         LocationName = stopDto.LocationName,
-                        Address = stopDto.Address,
+                        Address = address,
                         City = stopDto.City,
                         Province = stopDto.Province,
                         PostalCode = stopDto.PostalCode,
@@ -223,10 +284,19 @@ namespace ProjectTracker.API.Controllers.Logistics
                     {
                         var totalPrice = (commodityDto.UnitPrice ?? 0) * commodityDto.Quantity;
 
+                        // Use commodityName/code as comment if no explicit comment provided
+                        var comment = commodityDto.Comment;
+                        if (string.IsNullOrEmpty(comment) && !string.IsNullOrEmpty(commodityDto.CommodityName))
+                        {
+                            comment = commodityDto.CommodityCode != null 
+                                ? $"{commodityDto.CommodityCode}: {commodityDto.CommodityName}"
+                                : commodityDto.CommodityName;
+                        }
+
                         var stopCommodity = new StopCommodity
                         {
                             LoadStopId = stop.Id,
-                            CommodityId = commodityDto.CommodityId,
+                            CommodityId = commodityDto.CommodityId,  // Nullable - imported invoices don't have Commodity FK
                             ContractId = commodityDto.ContractId,
                             Quantity = commodityDto.Quantity,
                             UnitOfMeasure = commodityDto.UnitOfMeasure,
@@ -236,7 +306,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             Volume = commodityDto.Volume,
                             OrderNumber = commodityDto.OrderNumber,
                             InvoiceNumber = commodityDto.InvoiceNumber,
-                            Comment = commodityDto.Comment
+                            Comment = comment
                         };
 
                         _context.StopCommodities.Add(stopCommodity);
@@ -270,6 +340,25 @@ namespace ProjectTracker.API.Controllers.Logistics
                 load.TotalVolume = totalVolume;
 
                 await _context.SaveChangesAsync();
+                
+                // Link imported invoices to this load if invoiceIds are provided
+                if (dto.InvoiceIds != null && dto.InvoiceIds.Any())
+                {
+                    var invoicesToLink = await _context.ImportedInvoices
+                        .Where(i => dto.InvoiceIds.Contains(i.Id))
+                        .ToListAsync();
+                    
+                    foreach (var invoice in invoicesToLink)
+                    {
+                        invoice.LoadId = load.Id;
+                        invoice.Status = "Assigned";
+                        invoice.UpdatedAt = DateTime.UtcNow;
+                    }
+                    
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Linked {InvoiceCount} invoices to load {LoadNumber}", invoicesToLink.Count, loadNumber);
+                }
+                
                 await transaction.CommitAsync();
 
                 _logger.LogInformation("Created new load {LoadNumber} with {StopCount} stops", loadNumber, dto.Stops.Count);
@@ -376,7 +465,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             var commodity = new StopCommodity
                             {
                                 LoadStopId = stop.Id,
-                                CommodityId = commDto.CommodityId,
+                                CommodityId = commDto.CommodityId ?? 0,  // Default to 0 if no commodity ID provided
                                 Quantity = commDto.Quantity,
                                 UnitPrice = commDto.UnitPrice,
                                 TotalPrice = commDto.TotalPrice ?? (commDto.Quantity * (commDto.UnitPrice ?? 0)),
@@ -426,6 +515,26 @@ namespace ProjectTracker.API.Controllers.Logistics
             else if (dto.Status == "Delivered" && !load.ActualDeliveryDate.HasValue)
             {
                 load.ActualDeliveryDate = DateTime.UtcNow;
+            }
+
+            // Update all linked ImportedInvoices to Delivered status when Load is delivered
+            if (dto.Status == "Delivered")
+            {
+                var linkedInvoices = await _context.ImportedInvoices
+                    .Where(i => i.LoadId == id)
+                    .ToListAsync();
+
+                foreach (var invoice in linkedInvoices)
+                {
+                    invoice.Status = "Delivered";
+                    invoice.LastDeliveryDate = DateTime.UtcNow;
+                    
+                    // Mark as fully delivered if not already tracked
+                    if (!invoice.DeliveredQuantity.HasValue || invoice.DeliveredQuantity < invoice.Quantity)
+                    {
+                        invoice.DeliveredQuantity = invoice.Quantity;
+                    }
+                }
             }
 
             await _context.SaveChangesAsync();
@@ -509,9 +618,161 @@ namespace ProjectTracker.API.Controllers.Logistics
             load.Status = "Delivered";
             load.ActualDeliveryDate = DateTime.UtcNow;
 
+            // Update all linked ImportedInvoices to Delivered status
+            var linkedInvoices = await _context.ImportedInvoices
+                .Where(i => i.LoadId == load.Id)
+                .ToListAsync();
+
+            foreach (var invoice in linkedInvoices)
+            {
+                invoice.Status = "Delivered";
+                invoice.LastDeliveryDate = DateTime.UtcNow;
+                
+                // Mark as fully delivered if not already tracked
+                if (!invoice.DeliveredQuantity.HasValue || invoice.DeliveredQuantity < invoice.Quantity)
+                {
+                    invoice.DeliveredQuantity = invoice.Quantity;
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             return Ok(pod);
+        }
+
+        // Upload POD file
+        [HttpPost("{loadId}/pod")]
+        public async Task<IActionResult> UploadPOD(int loadId, [FromForm] IFormFile file, [FromForm] string? notes)
+        {
+            var load = await _context.Loads.FindAsync(loadId);
+            if (load == null)
+                return NotFound("Load not found");
+
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded");
+
+            // Validate file type
+            var allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".zip" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+                return BadRequest("Invalid file type. Allowed types: PDF, JPG, PNG, ZIP");
+
+            // Validate file size (10MB max)
+            if (file.Length > 10 * 1024 * 1024)
+                return BadRequest("File size exceeds 10MB limit");
+
+            try
+            {
+                // Create uploads directory if it doesn't exist
+                var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "pod");
+                Directory.CreateDirectory(uploadsPath);
+
+                // Generate unique filename
+                var fileName = $"{load.LoadNumber}_{DateTime.UtcNow:yyyyMMdd_HHmmss}{extension}";
+                var filePath = Path.Combine(uploadsPath, fileName);
+
+                // Save file
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                // Update or create POD record
+                var pod = await _context.ProofOfDeliveries.FirstOrDefaultAsync(p => p.LoadId == loadId);
+                if (pod == null)
+                {
+                    pod = new ProofOfDelivery
+                    {
+                        LoadId = loadId,
+                        DeliveredAt = DateTime.UtcNow
+                    };
+                    _context.ProofOfDeliveries.Add(pod);
+                }
+
+                pod.FilePath = filePath;
+                pod.FileName = fileName;
+                pod.Notes = notes;
+                pod.UploadedAt = DateTime.UtcNow;
+
+                // Update load status to Delivered if not already
+                if (load.Status != "Delivered")
+                {
+                    load.Status = "Delivered";
+                    load.ActualDeliveryDate = DateTime.UtcNow;
+
+                    // Update all linked ImportedInvoices to Delivered status
+                    var linkedInvoices = await _context.ImportedInvoices
+                        .Where(i => i.LoadId == loadId)
+                        .ToListAsync();
+
+                    foreach (var invoice in linkedInvoices)
+                    {
+                        invoice.Status = "Delivered";
+                        invoice.LastDeliveryDate = DateTime.UtcNow;
+                        
+                        // Mark as fully delivered if not already tracked
+                        if (!invoice.DeliveredQuantity.HasValue || invoice.DeliveredQuantity < invoice.Quantity)
+                        {
+                            invoice.DeliveredQuantity = invoice.Quantity;
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "POD uploaded successfully", fileName });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error uploading POD: {ex.Message}");
+            }
+        }
+
+        // Get POD file
+        [HttpGet("{loadId}/pod")]
+        public async Task<IActionResult> GetPOD(int loadId)
+        {
+            var pod = await _context.ProofOfDeliveries.FirstOrDefaultAsync(p => p.LoadId == loadId);
+            if (pod == null || string.IsNullOrEmpty(pod.FilePath))
+                return NotFound("POD not found");
+
+            if (!System.IO.File.Exists(pod.FilePath))
+                return NotFound("POD file not found on server");
+
+            var fileBytes = await System.IO.File.ReadAllBytesAsync(pod.FilePath);
+            var contentType = GetContentType(pod.FilePath);
+
+            return File(fileBytes, contentType);
+        }
+
+        // Download POD file
+        [HttpGet("{loadId}/pod/download")]
+        public async Task<IActionResult> DownloadPOD(int loadId)
+        {
+            var pod = await _context.ProofOfDeliveries.FirstOrDefaultAsync(p => p.LoadId == loadId);
+            if (pod == null || string.IsNullOrEmpty(pod.FilePath))
+                return NotFound("POD not found");
+
+            if (!System.IO.File.Exists(pod.FilePath))
+                return NotFound("POD file not found on server");
+
+            var fileBytes = await System.IO.File.ReadAllBytesAsync(pod.FilePath);
+            var contentType = GetContentType(pod.FilePath);
+
+            return File(fileBytes, contentType, pod.FileName ?? "POD.pdf");
+        }
+
+        private static string GetContentType(string path)
+        {
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            return extension switch
+            {
+                ".pdf" => "application/pdf",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".zip" => "application/zip",
+                _ => "application/octet-stream"
+            };
         }
 
         // Helper method to map Load to LoadDto
@@ -557,6 +818,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 SpecialInstructions = l.SpecialInstructions,
                 Notes = l.Notes,
                 CreatedAt = l.CreatedAt,
+                PodFilePath = l.ProofOfDelivery?.FilePath,
+                HasPOD = !string.IsNullOrEmpty(l.ProofOfDelivery?.FilePath),
                 Stops = l.Stops.OrderBy(s => s.StopSequence).Select(s => new LoadStopDto
                 {
                     Id = s.Id,

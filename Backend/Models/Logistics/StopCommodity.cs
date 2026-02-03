@@ -10,7 +10,7 @@ namespace ProjectTracker.API.Models.Logistics
 
         // Foreign Keys
         public int LoadStopId { get; set; }
-        public int CommodityId { get; set; }
+        public int? CommodityId { get; set; }  // Made nullable - imported invoices don't reference Commodities table
         public int? ContractId { get; set; }
 
         // Quantity and Pricing

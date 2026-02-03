@@ -67,6 +67,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public int Id { get; set; }
         public int VehicleId { get; set; }
         public string VehicleRegistration { get; set; } = string.Empty;
+        public string? VehicleType { get; set; }
         public string MaintenanceType { get; set; } = string.Empty;
         public string? Description { get; set; }
         public DateTime ScheduledDate { get; set; }
@@ -76,9 +77,15 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? ServiceProvider { get; set; }
         public string? InvoiceReference { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string? Priority { get; set; }
+        public string? AssignedTo { get; set; }
         public string? Notes { get; set; }
+        public string? ProofOfWorkPath { get; set; }
+        public string? ProofOfPaymentPath { get; set; }
         public DateTime? NextServiceDate { get; set; }
         public decimal? NextServiceOdometer { get; set; }
+        public DateTime? LicenseExpiryDate { get; set; }
+        public int? DaysUntilExpiry { get; set; }
     }
 
     public class CreateVehicleMaintenanceDto
@@ -102,6 +109,17 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal? Cost { get; set; }
         public string? InvoiceReference { get; set; }
         public string? Notes { get; set; }
+        public string? ProofOfWorkPath { get; set; }
+        public string? ProofOfPaymentPath { get; set; }
+    }
+
+    public class CompleteMaintenanceDto
+    {
+        public decimal? OdometerReading { get; set; }
+        public decimal? Cost { get; set; }
+        public string? Notes { get; set; }
+        public string? ProofOfWorkPath { get; set; }
+        public string? ProofOfPaymentPath { get; set; }
     }
 
     // Customer Contract DTOs

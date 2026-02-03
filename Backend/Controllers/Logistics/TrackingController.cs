@@ -219,13 +219,18 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Include(l => l.Customer)
                 .Include(l => l.Vehicle)
                 .Include(l => l.Driver)
+                .Include(l => l.Stops)
+                    .ThenInclude(s => s.Customer)
                 .Where(l => l.Status == "In Transit" || l.Status == "Assigned")
                 .Select(l => new LoadDto
                 {
                     Id = l.Id,
                     LoadNumber = l.LoadNumber,
                     CustomerId = l.CustomerId,
-                    CustomerName = l.Customer.Name,
+                    CustomerName = l.Customer != null ? l.Customer.Name : 
+                                   (l.Stops != null && l.Stops.Any()) ? 
+                                   l.Stops.OrderBy(s => s.StopSequence).First().CompanyName : 
+                                   "No Customer",
                     VehicleId = l.VehicleId,
                     VehicleRegistration = l.Vehicle != null ? l.Vehicle.RegistrationNumber : null,
                     DriverId = l.DriverId,
