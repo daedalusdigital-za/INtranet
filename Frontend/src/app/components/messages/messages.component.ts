@@ -281,6 +281,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
                    accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv">
             <button mat-icon-button (click)="fileInput.click()" matTooltip="Attach file">
               <mat-icon>attach_file</mat-icon>
+            </button>
             <button mat-icon-button (click)="toggleEmojiPicker()" matTooltip="Add emoji" [class.active]="showEmojiPicker">
               <mat-icon>sentiment_satisfied_alt</mat-icon>
             </button>
@@ -303,8 +304,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
               [darkMode]="false"
               title="Pick your emoji"
               emoji="point_up">
-            </emoji-martcon>send</mat-icon>
-            </button>
+            </emoji-mart>
           </div>
         </div>
       </div>
@@ -1147,6 +1147,12 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         left: 0;
         top: 64px;
         height: calc(100vh - 64px);
+      }
+    }
+  `]
+})
+export class MessagesComponent implements OnInit, OnDestroy {
+  @ViewChild('messagesContainer') messagesContainer?: ElementRef;
   @ViewChild('messageInput') messageInput!: ElementRef;
 
   conversations: Conversation[] = [];
@@ -1163,21 +1169,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
   selectMode: boolean = false;
   selectedForDelete: { [key: number]: boolean } = {};
   showNewConversation: boolean = false;
-  showEmojiPicker
-  conversations: Conversation[] = [];
-  filteredConversations: Conversation[] = [];
-  selectedConversation: Conversation | null = null;
-  messages: Message[] = [];
-  
-  currentUserId: number = 0;
-  searchQuery: string = '';
-  newMessage: string = '';
-  
-  loading: boolean = false;
-  loadingMessages: boolean = false;
-  selectMode: boolean = false;
-  selectedForDelete: { [key: number]: boolean } = {};
-  showNewConversation: boolean = false;
+  showEmojiPicker: boolean = false;
   
   replyingTo: Message | null = null;
   
@@ -1464,7 +1456,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
     if (selectedIds.length === 0) return;
 
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} conversation(s)?`)) return;
+    if (!confirm('Are you sure you want to delete ' + selectedIds.length + ' conversation(s)?')) return;
 
     // For now, just remove from local list (would need backend endpoint to truly delete)
     this.conversations = this.conversations.filter(c => !selectedIds.includes(c.conversationId));
@@ -1521,7 +1513,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     
     const otherParticipants = conversation.participants?.filter(p => p.userId !== this.currentUserId) || [];
     if (otherParticipants.length > 0) {
-      return otherParticipants.map(p => p.fullName || `${p.name} ${p.surname}`).join(', ');
+      return otherParticipants.map(p => p.fullName || (p.name + ' ' + p.surname)).join(', ');
     }
     
     return conversation.subject || 'Conversation';
@@ -1536,7 +1528,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
   getParticipantsText(conversation: Conversation): string {
     const count = conversation.participants?.length || 0;
-    return `${count} participant${count !== 1 ? 's' : ''}`;
+    return count + ' participant' + (count !== 1 ? 's' : '');
   }
 
   formatTime(date: Date | string | undefined): string {
@@ -1610,7 +1602,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       
       for (const file of files) {
         if (file.size > maxSize) {
-          this.snackBar.open(`File "${file.name}" is too large. Maximum size is 10MB.`, 'Close', { duration: 3000 });
+          this.snackBar.open('File "' + file.name + '" is too large. Maximum size is 10MB.', 'Close', { duration: 3000 });
           continue;
         }
         this.pendingAttachments.push(file);
@@ -1689,11 +1681,11 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     if (attachment.fileUrl) {
       // If it starts with /api, prepend the base URL
       if (attachment.fileUrl.startsWith('/api')) {
-        return `${environment.apiUrl.replace('/api', '')}${attachment.fileUrl}`;
+        return environment.apiUrl.replace('/api', '') + attachment.fileUrl;
       }
       return attachment.fileUrl;
     }
-    return `${environment.apiUrl}/messages/attachments/${attachment.attachmentId}`;
+    return environment.apiUrl + '/messages/attachments/' + attachment.attachmentId;
   }
 
   getSafeUrl(attachment: MessageAttachment): SafeResourceUrl {
@@ -1721,7 +1713,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     // For cross-origin requests, we need to fetch and create a blob
     fetch(url, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
       }
     })
     .then(response => response.blob())
@@ -1747,7 +1739,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     // First send the message
     const request: SendMessageRequest = {
       conversationId: this.selectedConversation.conversationId,
-      content: this.newMessage.trim() || (this.pendingAttachments.length > 0 ? `Sent ${this.pendingAttachments.length} attachment(s)` : ''),
+      content: this.newMessage.trim() || (this.pendingAttachments.length > 0 ? 'Sent ' + this.pendingAttachments.length + ' attachment(s)' : ''),
       replyToMessageId: this.replyingTo?.messageId
     };
 
@@ -1761,7 +1753,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
             await this.uploadFileAsAttachment(message.messageId, file);
           } catch (err) {
             console.error('Error uploading attachment:', err);
-            this.snackBar.open(`Failed to upload ${file.name}`, 'Close', { duration: 3000 });
+            this.snackBar.open('Failed to upload ' + file.name, 'Close', { duration: 3000 });
           }
         }
         

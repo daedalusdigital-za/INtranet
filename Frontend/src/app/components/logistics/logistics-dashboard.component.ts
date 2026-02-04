@@ -672,11 +672,11 @@ interface SleepOut {
                         <span class="stat-label">Licenses Expiring</span>
                       </div>
                     </mat-card>
-                    <mat-card class="maintenance-stat-card urgent">
-                      <mat-icon>priority_high</mat-icon>
+                    <mat-card class="maintenance-stat-card completed">
+                      <mat-icon>check_circle</mat-icon>
                       <div class="stat-info">
-                        <span class="stat-value">{{ getCompleteBeforeLicenseExpiring().length }}</span>
-                        <span class="stat-label">Complete Before License Expiring</span>
+                        <span class="stat-value">{{ getCompletedMaintenance().length }}</span>
+                        <span class="stat-label">Completed</span>
                       </div>
                     </mat-card>
                   </div>
@@ -702,39 +702,35 @@ interface SleepOut {
                     </button>
                   </div>
                 } @else {
-                  <!-- Complete Before License Expiring Section -->
-                  @if (getCompleteBeforeLicenseExpiring().length > 0) {
-                    <div class="complete-before-expiry-section">
-                      <h4><mat-icon>priority_high</mat-icon> Complete Before License Expiring</h4>
-                      <p class="section-description">Maintenance items that must be completed before vehicle licenses expire</p>
-                      <div class="maintenance-grid urgent-section">
-                        @for (record of getCompleteBeforeLicenseExpiring(); track record.id) {
-                          <mat-card class="maintenance-card urgent-card" [class.critical]="record.daysUntilExpiry! <= 7">
+                  <!-- Completed Maintenance Section -->
+                  @if (getCompletedMaintenance().length > 0) {
+                    <div class="completed-maintenance-section">
+                      <h4><mat-icon>check_circle</mat-icon> Completed Maintenance</h4>
+                      <p class="section-description">All completed maintenance records</p>
+                      <div class="maintenance-grid completed-section">
+                        @for (record of getCompletedMaintenance(); track record.id) {
+                          <mat-card class="maintenance-card completed-card">
                             <mat-card-header>
-                              <div class="maintenance-icon urgent">
-                                <mat-icon>warning</mat-icon>
+                              <div class="maintenance-icon completed">
+                                <mat-icon>check_circle</mat-icon>
                               </div>
                               <mat-card-title>{{ record.vehicleReg }}</mat-card-title>
                               <mat-card-subtitle>
-                                @if (record.daysUntilExpiry! <= 0) {
-                                  License EXPIRED - {{ record.vehicleType }}
-                                } @else {
-                                  License expires in {{ record.daysUntilExpiry }} days - {{ record.vehicleType }}
-                                }
+                                {{ record.vehicleType }} - Completed {{ record.completedDate | date:'dd MMM yyyy' }}
                               </mat-card-subtitle>
                             </mat-card-header>
                             <mat-card-content>
-                              <div class="maintenance-type-badge license-renewal">
+                              <div class="maintenance-type-badge completed">
                                 {{ record.maintenanceType | titlecase }}
                               </div>
                               <p class="maintenance-description">{{ record.description }}</p>
                               
                               <div class="maintenance-details">
-                                <div class="detail-row urgent">
-                                  <mat-icon>badge</mat-icon>
+                                <div class="detail-row completed">
+                                  <mat-icon>event_available</mat-icon>
                                   <span>
-                                    @if (record.licenseExpiryDate) {
-                                      License Expiry: {{ record.licenseExpiryDate | date:'dd MMM yyyy' }}
+                                    @if (record.completedDate) {
+                                      Completed: {{ record.completedDate | date:'dd MMM yyyy' }}
                                     }
                                   </span>
                                 </div>
@@ -748,61 +744,30 @@ interface SleepOut {
                                     <span>{{ record.assignedTo }}</span>
                                   </div>
                                 }
-                                @if (record.estimatedCost || record.cost) {
+                                @if (record.cost) {
                                   <div class="detail-row">
                                     <mat-icon>payments</mat-icon>
-                                    <span>{{ record.cost ? 'R' + (record.cost | number:'1.2-2') : 'Est: R' + (record.estimatedCost | number:'1.2-2') }}</span>
+                                    <span>R{{ record.cost | number:'1.2-2' }}</span>
                                   </div>
                                 }
                               </div>
 
                               <div class="status-section">
-                                <span class="status-badge" [class]="record.status">
-                                  @switch (record.status) {
-                                    @case ('scheduled') { <mat-icon>schedule</mat-icon> Scheduled }
-                                    @case ('in-progress') { <mat-icon>engineering</mat-icon> In Progress }
-                                    @case ('overdue') { <mat-icon>warning</mat-icon> Overdue }
-                                  }
-                                </span>
-                                <span class="priority-badge critical">
-                                  Urgent - License Expiring
+                                <span class="status-badge completed">
+                                  <mat-icon>check_circle</mat-icon> Completed
                                 </span>
                               </div>
                             </mat-card-content>
                             <mat-card-actions>
-                              @if (record.status === 'scheduled') {
-                                <button mat-raised-button color="warn" (click)="startMaintenance(record)">
-                                  <mat-icon>play_arrow</mat-icon> Start Now
-                                </button>
-                              }
-                              @if (record.status === 'in-progress') {
-                                <button mat-raised-button color="accent" (click)="completeMaintenance(record)">
-                                  <mat-icon>check</mat-icon> Complete
-                                </button>
-                              }
-                              <button mat-icon-button [matMenuTriggerFor]="urgentMenu">
+                              <button mat-icon-button [matMenuTriggerFor]="completedMenu">
                                 <mat-icon>more_vert</mat-icon>
                               </button>
-                              <mat-menu #urgentMenu="matMenu">
-                                <button mat-menu-item (click)="editMaintenance(record)">
-                                  <mat-icon>edit</mat-icon> Edit
-                                </button>
-                                <button mat-menu-item [matMenuTriggerFor]="urgentStatusMenu">
-                                  <mat-icon>update</mat-icon> Change Status
-                                </button>
+                              <mat-menu #completedMenu="matMenu">
                                 <button mat-menu-item (click)="viewMaintenanceHistory(record)">
                                   <mat-icon>history</mat-icon> View History
                                 </button>
-                              </mat-menu>
-                              <mat-menu #urgentStatusMenu="matMenu">
-                                <button mat-menu-item (click)="changeMaintenanceStatus(record, 'scheduled')">
-                                  <mat-icon>schedule</mat-icon> Scheduled
-                                </button>
-                                <button mat-menu-item (click)="changeMaintenanceStatus(record, 'in-progress')">
-                                  <mat-icon>engineering</mat-icon> In Progress
-                                </button>
-                                <button mat-menu-item (click)="changeMaintenanceStatus(record, 'completed')">
-                                  <mat-icon>check_circle</mat-icon> Completed
+                                <button mat-menu-item (click)="viewMaintenanceDetails(record)">
+                                  <mat-icon>visibility</mat-icon> View Details
                                 </button>
                               </mat-menu>
                             </mat-card-actions>
@@ -1048,16 +1013,20 @@ interface SleepOut {
                       <span class="label">Total Invoices</span>
                     </div>
                     <div class="summary-card pending">
-                      <span class="value">{{ pendingInvoiceCount() }}</span>
+                      <span class="value">{{ invoiceStatusCounts().pending || 0 }}</span>
                       <span class="label">Pending</span>
                     </div>
                     <div class="summary-card assigned">
-                      <span class="value">{{ assignedInvoiceCount() }}</span>
+                      <span class="value">{{ invoiceStatusCounts().assigned || 0 }}</span>
                       <span class="label">Assigned</span>
                     </div>
                     <div class="summary-card delivered">
-                      <span class="value">{{ deliveredInvoiceCount() }}</span>
+                      <span class="value">{{ invoiceStatusCounts().delivered || 0 }}</span>
                       <span class="label">Delivered</span>
+                    </div>
+                    <div class="summary-card partdelivered">
+                      <span class="value">{{ invoiceStatusCounts().partdelivered || 0 }}</span>
+                      <span class="label">Part Delivered</span>
                     </div>
                   </div>
 
@@ -1181,8 +1150,12 @@ interface SleepOut {
                         <mat-select [(ngModel)]="tripsheetStatusFilter">
                           <mat-option value="all">All</mat-option>
                           <mat-option value="pending">Pending</mat-option>
-                          <mat-option value="in-progress">In Progress</mat-option>
+                          <mat-option value="assigned">Assigned</mat-option>
+                          <mat-option value="scheduled">Scheduled</mat-option>
+                          <mat-option value="active">Active</mat-option>
+                          <mat-option value="in-transit">In Transit</mat-option>
                           <mat-option value="completed">Completed</mat-option>
+                          <mat-option value="cancelled">Cancelled</mat-option>
                         </mat-select>
                       </mat-form-field>
                     </div>
@@ -1318,179 +1291,6 @@ interface SleepOut {
               </div>
             </mat-tab>
 
-            <!-- Part Delivered Tab -->
-            <mat-tab>
-              <ng-template mat-tab-label>
-                <mat-icon>inventory_2</mat-icon>
-                Part Delivered
-              </ng-template>
-              <div class="tab-content">
-                <div class="part-delivered-section">
-                  <div class="part-delivered-header">
-                    <h3><mat-icon>inventory_2</mat-icon> Part Delivered Tracking</h3>
-                    <div class="header-actions">
-                      <mat-form-field appearance="outline" class="date-filter">
-                        <mat-label>Filter by Date</mat-label>
-                        <input matInput [matDatepicker]="partDatePicker" [(ngModel)]="partDeliveredDateFilter" (dateChange)="filterPartDelivered()">
-                        <mat-datepicker-toggle matSuffix [for]="partDatePicker"></mat-datepicker-toggle>
-                        <mat-datepicker #partDatePicker></mat-datepicker>
-                      </mat-form-field>
-                      <mat-form-field appearance="outline" class="search-field">
-                        <mat-label>Search</mat-label>
-                        <input matInput [(ngModel)]="partDeliveredSearch" placeholder="Invoice, customer..." (input)="filterPartDelivered()">
-                        <mat-icon matSuffix>search</mat-icon>
-                      </mat-form-field>
-                      <button mat-raised-button color="primary" (click)="openMarkPartDeliveredDialog()">
-                        <mat-icon>add_task</mat-icon>
-                        Mark Part Delivered
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Part Delivered Stats -->
-                  <div class="part-delivered-stats">
-                    <mat-card class="stat-card">
-                      <mat-card-content>
-                        <div class="stat-icon pending">
-                          <mat-icon>pending_actions</mat-icon>
-                        </div>
-                        <div class="stat-info">
-                          <span class="stat-label">Pending Completion</span>
-                          <span class="stat-value">{{ getPartDeliveredStats().pending }}</span>
-                        </div>
-                      </mat-card-content>
-                    </mat-card>
-
-                    <mat-card class="stat-card">
-                      <mat-card-content>
-                        <div class="stat-icon partial">
-                          <mat-icon>hourglass_top</mat-icon>
-                        </div>
-                        <div class="stat-info">
-                          <span class="stat-label">Part Delivered</span>
-                          <span class="stat-value">{{ getPartDeliveredStats().partial }}</span>
-                        </div>
-                      </mat-card-content>
-                    </mat-card>
-
-                    <mat-card class="stat-card">
-                      <mat-card-content>
-                        <div class="stat-icon completed">
-                          <mat-icon>check_circle</mat-icon>
-                        </div>
-                        <div class="stat-info">
-                          <span class="stat-label">Fully Delivered</span>
-                          <span class="stat-value">{{ getPartDeliveredStats().complete }}</span>
-                        </div>
-                      </mat-card-content>
-                    </mat-card>
-
-                    <mat-card class="stat-card">
-                      <mat-card-content>
-                        <div class="stat-icon value">
-                          <mat-icon>payments</mat-icon>
-                        </div>
-                        <div class="stat-info">
-                          <span class="stat-label">Outstanding Value</span>
-                          <span class="stat-value">R {{ getPartDeliveredStats().outstandingValue | number:'1.2-2' }}</span>
-                        </div>
-                      </mat-card-content>
-                    </mat-card>
-                  </div>
-
-                  <!-- Part Delivered Table -->
-                  @if (filteredPartDelivered().length > 0) {
-                    <mat-card class="part-delivered-table-card">
-                      <table mat-table [dataSource]="filteredPartDelivered()" class="part-delivered-table">
-                        <ng-container matColumnDef="invoiceNumber">
-                          <th mat-header-cell *matHeaderCellDef>Invoice #</th>
-                          <td mat-cell *matCellDef="let item">
-                            <strong>{{ item.invoiceNumber }}</strong>
-                          </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="customer">
-                          <th mat-header-cell *matHeaderCellDef>Customer</th>
-                          <td mat-cell *matCellDef="let item">{{ item.customerName }}</td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="product">
-                          <th mat-header-cell *matHeaderCellDef>Product</th>
-                          <td mat-cell *matCellDef="let item">{{ item.productDescription | slice:0:30 }}...</td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="orderedQty">
-                          <th mat-header-cell *matHeaderCellDef>Ordered</th>
-                          <td mat-cell *matCellDef="let item">{{ item.orderedQuantity }}</td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="deliveredQty">
-                          <th mat-header-cell *matHeaderCellDef>Delivered</th>
-                          <td mat-cell *matCellDef="let item">
-                            <span [class.partial]="item.deliveredQuantity < item.orderedQuantity"
-                                  [class.complete]="item.deliveredQuantity >= item.orderedQuantity">
-                              {{ item.deliveredQuantity }}
-                            </span>
-                          </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="remainingQty">
-                          <th mat-header-cell *matHeaderCellDef>Remaining</th>
-                          <td mat-cell *matCellDef="let item">
-                            <span class="remaining" [class.none]="item.remainingQuantity === 0">
-                              {{ item.remainingQuantity }}
-                            </span>
-                          </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="status">
-                          <th mat-header-cell *matHeaderCellDef>Status</th>
-                          <td mat-cell *matCellDef="let item">
-                            <mat-chip [class]="'status-' + (item.deliveryStatus || 'pending').toLowerCase().replace(' ', '-')">
-                              {{ item.deliveryStatus || 'Pending' }}
-                            </mat-chip>
-                          </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="lastDeliveryDate">
-                          <th mat-header-cell *matHeaderCellDef>Last Delivery</th>
-                          <td mat-cell *matCellDef="let item">
-                            {{ item.lastDeliveryDate | date:'dd MMM yyyy' }}
-                          </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="actions">
-                          <th mat-header-cell *matHeaderCellDef>Actions</th>
-                          <td mat-cell *matCellDef="let item">
-                            <button mat-icon-button color="primary" (click)="recordPartialDelivery(item)" matTooltip="Record Delivery">
-                              <mat-icon>add_task</mat-icon>
-                            </button>
-                            <button mat-icon-button (click)="viewDeliveryHistory(item)" matTooltip="View History">
-                              <mat-icon>history</mat-icon>
-                            </button>
-                          </td>
-                        </ng-container>
-
-                        <tr mat-header-row *matHeaderRowDef="partDeliveredColumns"></tr>
-                        <tr mat-row *matRowDef="let row; columns: partDeliveredColumns;"
-                            [class.partial-row]="row.deliveryStatus === 'Part Delivered'"
-                            [class.complete-row]="row.deliveryStatus === 'Fully Delivered'"></tr>
-                      </table>
-                    </mat-card>
-                  } @else {
-                    <div class="empty-state">
-                      <mat-icon>inventory_2</mat-icon>
-                      <h3>No Part Delivered Records</h3>
-                      <p>Track partial deliveries for invoices that couldn't be fully delivered</p>
-                      <button mat-raised-button color="primary" (click)="openMarkPartDeliveredDialog()">
-                        <mat-icon>add_task</mat-icon> Mark Part Delivered
-                      </button>
-                    </div>
-                  }
-                </div>
-              </div>
-            </mat-tab>
-
             <!-- Completed Tab -->
             <mat-tab>
               <ng-template mat-tab-label>
@@ -1571,7 +1371,7 @@ interface SleepOut {
                   @if (filteredCompletedTripsheets().length > 0) {
                     <div class="completed-cards-grid">
                       @for (trip of filteredCompletedTripsheets(); track trip.id) {
-                        <mat-card class="completed-trip-card" [class.no-pod]="!trip.hasPOD" [ngClass]="getTripsheetRowClass(trip)">
+                        <mat-card class="completed-trip-card" [class.no-pod]="!trip.hasPOD" [class.has-pod]="trip.hasPOD">
                           <mat-card-header>
                             <div class="trip-header">
                               <div class="trip-title">
@@ -1924,6 +1724,8 @@ interface SleepOut {
     .maintenance-stat-card.license mat-icon { color: #7b1fa2; }
     .maintenance-stat-card.urgent { background: linear-gradient(135deg, #ffebee, #ffcdd2); }
     .maintenance-stat-card.urgent mat-icon { color: #c62828; }
+    .maintenance-stat-card.completed { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); }
+    .maintenance-stat-card.completed mat-icon { color: #2e7d32; }
 
     .maintenance-stat-card .stat-value {
       font-size: 1.5rem;
@@ -2028,6 +1830,77 @@ interface SleepOut {
 
     .maintenance-details .detail-row.urgent mat-icon {
       color: #c62828;
+    }
+
+    /* Completed Maintenance Section Styles */
+    .completed-maintenance-section {
+      background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+      border: 2px solid #4caf50;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+    }
+
+    .completed-maintenance-section h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px 0;
+      color: #2e7d32;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .completed-maintenance-section h4 mat-icon {
+      color: #2e7d32;
+    }
+
+    .completed-maintenance-section .section-description {
+      color: #666;
+      margin: 0 0 16px 0;
+      font-size: 0.9rem;
+    }
+
+    .maintenance-grid.completed-section {
+      background: transparent;
+      padding: 0;
+    }
+
+    .maintenance-card.completed-card {
+      border: 2px solid #4caf50;
+      background: white;
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+    }
+
+    .maintenance-card.completed-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 16px rgba(76, 175, 80, 0.25);
+    }
+
+    .maintenance-icon.completed {
+      background: linear-gradient(135deg, #4caf50, #2e7d32);
+    }
+
+    .maintenance-type-badge.completed {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #4caf50;
+    }
+
+    .maintenance-details .detail-row.completed {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+
+    .maintenance-details .detail-row.completed mat-icon {
+      color: #2e7d32;
+    }
+
+    .status-badge.completed {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #4caf50;
     }
 
     .license-alerts {
@@ -2385,6 +2258,44 @@ interface SleepOut {
     .status-available { background-color: #e8f5e9 !important; color: #2e7d32 !important; }
     .status-onduty, .status-on-duty { background-color: #e3f2fd !important; color: #1565c0 !important; }
     .status-maintenance { background-color: #fff3e0 !important; color: #e65100 !important; }
+
+    /* Tripsheet Status Chips - Enhanced Styling */
+    .trip-status-pending {
+      background: linear-gradient(135deg, #fff3e0, #ffe0b2) !important;
+      color: #e65100 !important;
+      font-weight: 600 !important;
+      border: 1px solid #ffcc80 !important;
+    }
+    .trip-status-assigned {
+      background: linear-gradient(135deg, #fff9c4, #fff59d) !important;
+      color: #f57f17 !important;
+      font-weight: 600 !important;
+      border: 1px solid #ffee58 !important;
+    }
+    .trip-status-scheduled {
+      background: linear-gradient(135deg, #e1bee7, #ce93d8) !important;
+      color: #6a1b9a !important;
+      font-weight: 600 !important;
+      border: 1px solid #ba68c8 !important;
+    }
+    .trip-status-active {
+      background: linear-gradient(135deg, #bbdefb, #90caf9) !important;
+      color: #0d47a1 !important;
+      font-weight: 600 !important;
+      border: 1px solid #64b5f6 !important;
+    }
+    .trip-status-completed {
+      background: linear-gradient(135deg, #c8e6c9, #a5d6a7) !important;
+      color: #1b5e20 !important;
+      font-weight: 600 !important;
+      border: 1px solid #81c784 !important;
+    }
+    .trip-status-cancelled {
+      background: linear-gradient(135deg, #ffcdd2, #ef9a9a) !important;
+      color: #b71c1c !important;
+      font-weight: 600 !important;
+      border: 1px solid #e57373 !important;
+    }
 
     .fleet-grid {
       display: grid;
@@ -2981,6 +2892,14 @@ interface SleepOut {
       color: #388e3c;
     }
 
+    .summary-card.partdelivered {
+      background: #fff9c4;
+    }
+
+    .summary-card.partdelivered .value {
+      color: #f57f17;
+    }
+
     .table-container {
       overflow-x: auto;
     }
@@ -3046,6 +2965,40 @@ interface SleepOut {
     .status-chip.status-in-transit {
       background: #e3f2fd;
       color: #1976d2;
+    }
+
+    /* Pagination Controls */
+    .pagination-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-top: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+
+    .pagination-info {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .pagination-info.centered {
+      text-align: center;
+      padding: 16px;
+      color: #999;
+    }
+
+    .pagination-controls button {
+      min-width: 150px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pagination-controls mat-spinner {
+      display: inline-block;
+      margin-right: 8px;
     }
 
     .status-chip.status-delivered {
@@ -3209,16 +3162,31 @@ interface SleepOut {
 
     .completed-cards-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
     }
 
     .completed-trip-card {
       transition: all 0.3s ease;
       border-left: 4px solid #4caf50;
+      background-color: #e8f5e9;
+
+      &.has-pod {
+        border-left-color: #4caf50;
+        background-color: #e8f5e9;
+      }
+
+      &.has-pod:hover {
+        background-color: #c8e6c9;
+      }
 
       &.no-pod {
-        border-left-color: #ff9800;
+        border-left-color: #d32f2f;
+        background-color: #ffebee;
+      }
+
+      &.no-pod:hover {
+        background-color: #ffcdd2;
       }
 
       /* Color coding for completed trips based on date */
@@ -3288,8 +3256,8 @@ interface SleepOut {
             }
 
             &.warning {
-              background-color: #fff3e0;
-              color: #ef6c00;
+              background-color: #ffebee;
+              color: #c62828;
 
               mat-icon {
                 font-size: 16px;
@@ -3349,164 +3317,6 @@ interface SleepOut {
       }
     }
 
-    /* Part Delivered Styles */
-    .part-delivered-section {
-      padding: 0;
-    }
-
-    .part-delivered-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .part-delivered-header h3 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0;
-      font-size: 20px;
-      color: #333;
-    }
-
-    .part-delivered-header .header-actions {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .part-delivered-header .date-filter {
-      width: 180px;
-    }
-
-    .part-delivered-header .search-field {
-      width: 220px;
-    }
-
-    .part-delivered-stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .part-delivered-stats .stat-card mat-card-content {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 20px !important;
-    }
-
-    .part-delivered-stats .stat-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-    }
-
-    .part-delivered-stats .stat-icon mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-    }
-
-    .part-delivered-stats .stat-icon.pending {
-      background: linear-gradient(135deg, #ff9800, #f57c00);
-    }
-
-    .part-delivered-stats .stat-icon.partial {
-      background: linear-gradient(135deg, #2196f3, #1976d2);
-    }
-
-    .part-delivered-stats .stat-icon.completed {
-      background: linear-gradient(135deg, #4caf50, #388e3c);
-    }
-
-    .part-delivered-stats .stat-icon.value {
-      background: linear-gradient(135deg, #9c27b0, #7b1fa2);
-    }
-
-    .part-delivered-stats .stat-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .part-delivered-stats .stat-label {
-      font-size: 12px;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .part-delivered-stats .stat-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: #333;
-    }
-
-    .part-delivered-table-card {
-      overflow: hidden;
-    }
-
-    .part-delivered-table {
-      width: 100%;
-    }
-
-    .part-delivered-table th {
-      background: #f5f5f5;
-      font-weight: 600;
-      color: #333;
-    }
-
-    .part-delivered-table td .partial {
-      color: #ff9800;
-      font-weight: 600;
-    }
-
-    .part-delivered-table td .complete {
-      color: #4caf50;
-      font-weight: 600;
-    }
-
-    .part-delivered-table td .remaining {
-      color: #f44336;
-      font-weight: 600;
-    }
-
-    .part-delivered-table td .remaining.none {
-      color: #4caf50;
-    }
-
-    .part-delivered-table .partial-row {
-      background: #fff8e1;
-    }
-
-    .part-delivered-table .complete-row {
-      background: #e8f5e9;
-    }
-
-    .part-delivered-table .status-pending {
-      background: #fff3e0 !important;
-      color: #e65100 !important;
-    }
-
-    .part-delivered-table .status-part-delivered {
-      background: #e3f2fd !important;
-      color: #1565c0 !important;
-    }
-
-    .part-delivered-table .status-fully-delivered {
-      background: #e8f5e9 !important;
-      color: #2e7d32 !important;
-    }
   `]
 })
 export class LogisticsDashboardComponent implements OnInit {
@@ -3542,7 +3352,7 @@ export class LogisticsDashboardComponent implements OnInit {
   tripsheets = signal<any[]>([]);
   tripsheetSearch = '';
   tripsheetStatusFilter = 'all';
-  tripsheetColumns = ['tripNumber', 'loadNumber', 'driver', 'vehicle', 'route', 'stops', 'distance', 'estTime', 'date', 'status', 'actions'];
+  tripsheetColumns = ['loadNumber', 'driver', 'vehicle', 'route', 'stops', 'distance', 'estTime', 'date', 'status', 'actions'];
 
   // Imported Invoices
   importedInvoices = signal<ImportedInvoice[]>([]);
@@ -3555,10 +3365,7 @@ export class LogisticsDashboardComponent implements OnInit {
   loadColumns = ['loadNumber', 'customer', 'route', 'vehicle', 'driver', 'status', 'progress', 'actions'];
 
   // Part Delivered Tracking
-  partDeliveredRecords = signal<any[]>([]);
-  partDeliveredSearch = '';
-  partDeliveredDateFilter: Date | null = null;
-  partDeliveredColumns = ['invoiceNumber', 'customer', 'product', 'orderedQty', 'deliveredQty', 'remainingQty', 'status', 'lastDeliveryDate', 'actions'];
+
 
   // Completed Tripsheets
   completedTripsheets = signal<any[]>([]);
@@ -3588,7 +3395,6 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadDashboardData();
     this.loadTripsheets();
     this.loadImportedInvoices();
-    this.loadPartDeliveredRecords();
     this.loadCompletedTripsheets();
     this.loadTfnOrders();
     this.loadTfnDepots();
@@ -3753,6 +3559,17 @@ export class LogisticsDashboardComponent implements OnInit {
     return this.maintenanceRecords()
       .filter(r => r.maintenanceType === 'license' && r.daysUntilExpiry !== undefined && r.daysUntilExpiry <= 30)
       .sort((a, b) => (a.daysUntilExpiry || 0) - (b.daysUntilExpiry || 0));
+  }
+
+  getCompletedMaintenance(): MaintenanceRecord[] {
+    // Get all completed maintenance records, sorted by completion date (most recent first)
+    return this.maintenanceRecords()
+      .filter(r => r.status === 'completed')
+      .sort((a, b) => {
+        const dateA = a.completedDate ? new Date(a.completedDate).getTime() : 0;
+        const dateB = b.completedDate ? new Date(b.completedDate).getTime() : 0;
+        return dateB - dateA; // Most recent first
+      });
   }
 
   getCompleteBeforeLicenseExpiring(): MaintenanceRecord[] {
@@ -3956,6 +3773,25 @@ export class LogisticsDashboardComponent implements OnInit {
   viewMaintenanceHistory(record: MaintenanceRecord): void {
     // Could open a dialog showing maintenance history for this vehicle
     console.log('View history for vehicle:', record.vehicleReg);
+  }
+
+  viewMaintenanceDetails(record: MaintenanceRecord): void {
+    // Show details of completed maintenance
+    const details = `
+Vehicle: ${record.vehicleReg}
+Type: ${record.maintenanceType}
+Description: ${record.description}
+Scheduled Date: ${record.scheduledDate ? new Date(record.scheduledDate).toLocaleDateString() : 'N/A'}
+Completed Date: ${record.completedDate ? new Date(record.completedDate).toLocaleDateString() : 'N/A'}
+Assigned To: ${record.assignedTo || 'N/A'}
+Cost: ${record.cost ? 'R' + record.cost.toFixed(2) : 'N/A'}
+Notes: ${record.notes || 'No notes'}
+    `.trim();
+    
+    this.snackBar.open(details, 'Close', { 
+      duration: 10000,
+      panelClass: 'maintenance-details-snackbar'
+    });
   }
 
   scheduleLicenseRenewal(record: MaintenanceRecord): void {
@@ -4620,35 +4456,66 @@ export class LogisticsDashboardComponent implements OnInit {
   // Pre-computed status counts - single pass over all invoices
   invoiceStatusCounts = computed(() => {
     const invoices = this.importedInvoices();
-    let pending = 0, assigned = 0, delivered = 0;
+    let pending = 0, assigned = 0, delivered = 0, partdelivered = 0;
     
     for (const invoice of invoices) {
-      switch (invoice.status) {
-        case 'Pending': pending++; break;
-        case 'Assigned': assigned++; break;
-        case 'Delivered': delivered++; break;
+      const status = invoice.status?.toLowerCase();
+      switch (status) {
+        case 'pending': pending++; break;
+        case 'assigned': assigned++; break;
+        case 'delivered': delivered++; break;
+        case 'partdelivered': partdelivered++; break;
+        case 'part delivered': partdelivered++; break;
       }
     }
     
-    return { pending, assigned, delivered };
+    return { pending, assigned, delivered, partdelivered };
   });
 
   pendingInvoiceCount = computed(() => this.invoiceStatusCounts().pending);
   assignedInvoiceCount = computed(() => this.invoiceStatusCounts().assigned);
   deliveredInvoiceCount = computed(() => this.invoiceStatusCounts().delivered);
+  partDeliveredInvoiceCount = computed(() => this.invoiceStatusCounts().partdelivered);
 
   loadImportedInvoices(): void {
+    // Request all invoices by passing a large pageSize
     this.http.get<ImportedInvoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=10000`).subscribe({
       next: (invoices) => {
+        console.log('=== INVOICE LOADING DEBUG ===');
+        console.log('Total invoices loaded:', invoices.length);
+        
+        // Count by status (exact case)
+        const statusBreakdown = invoices.reduce((acc: any, inv) => {
+          const status = inv.status || 'Unknown';
+          acc[status] = (acc[status] || 0) + 1;
+          return acc;
+        }, {});
+        
+        console.log('Status breakdown (exact):', statusBreakdown);
+        
+        // Check for loadId to see how many are actually linked
+        const linkedCount = invoices.filter(i => i.loadId !== null && i.loadId !== undefined).length;
+        console.log('Invoices with LoadId set:', linkedCount);
+        console.log('Invoices without LoadId:', invoices.length - linkedCount);
+        
+        // Sample invoices with different statuses
+        const assigned = invoices.filter(i => i.status?.toLowerCase() === 'assigned');
+        const delivered = invoices.filter(i => i.status?.toLowerCase() === 'delivered');
+        const inProgress = invoices.filter(i => i.status?.toLowerCase() === 'inprogress' || i.status?.toLowerCase() === 'in progress');
+        
+        console.log('Assigned invoices (case-insensitive):', assigned.length);
+        console.log('Delivered invoices (case-insensitive):', delivered.length);
+        console.log('InProgress invoices (case-insensitive):', inProgress.length);
+        
+        if (assigned.length > 0) {
+          console.log('Sample assigned invoice:', assigned[0]);
+        }
+        
         this.importedInvoices.set(invoices);
-        this.stats.update(s => ({
-          ...s,
-          pendingInvoices: invoices.filter(i => i.status === 'Pending').length,
-          overdueInvoices: 0
-        }));
       },
       error: (err) => {
         console.error('Failed to load invoices:', err);
+        this.snackBar.open('Failed to load invoices', 'Close', { duration: 3000 });
       }
     });
   }
@@ -4755,10 +4622,24 @@ export class LogisticsDashboardComponent implements OnInit {
 
   getTripStatusClass(status: string): string {
     switch (status?.toLowerCase()) {
-      case 'completed': return 'status-delivered';
-      case 'in progress': return 'status-in-transit';
-      case 'pending': return 'status-pending';
-      default: return '';
+      case 'completed': 
+      case 'delivered': 
+        return 'trip-status-completed';
+      case 'in progress': 
+      case 'in transit':
+      case 'intransit':
+      case 'active':
+        return 'trip-status-active';
+      case 'pending': 
+        return 'trip-status-pending';
+      case 'assigned':
+        return 'trip-status-assigned';
+      case 'scheduled':
+        return 'trip-status-scheduled';
+      case 'cancelled':
+        return 'trip-status-cancelled';
+      default: 
+        return 'trip-status-pending';
     }
   }
 
@@ -5064,6 +4945,7 @@ export class LogisticsDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to load tripsheet for editing:', err);
+        this.snackBar.open('Failed to load tripsheet for editing: ' + (err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 5000 });
       }
     });
   }
@@ -5443,113 +5325,6 @@ export class LogisticsDashboardComponent implements OnInit {
   }
 
   // Part Delivered Tracking Methods
-  loadPartDeliveredRecords(): void {
-    this.http.get<any[]>(`${this.apiUrl}/logistics/part-delivered`).subscribe({
-      next: (records) => {
-        this.partDeliveredRecords.set(records);
-      },
-      error: (err) => {
-        console.error('Failed to load part delivered records:', err);
-        this.snackBar.open('Failed to load part delivered records', 'Close', { duration: 3000 });
-        this.partDeliveredRecords.set([]);
-      }
-    });
-  }
-
-  filterPartDelivered(): void {
-    // Trigger re-computation of filteredPartDelivered
-    this.partDeliveredRecords.set([...this.partDeliveredRecords()]);
-  }
-
-  filteredPartDelivered = computed(() => {
-    let records = this.partDeliveredRecords();
-    
-    // Apply search filter
-    if (this.partDeliveredSearch) {
-      const search = this.partDeliveredSearch.toLowerCase();
-      records = records.filter(r => 
-        r.invoiceNumber?.toLowerCase().includes(search) ||
-        r.customer?.toLowerCase().includes(search) ||
-        r.product?.toLowerCase().includes(search)
-      );
-    }
-    
-    // Apply date filter
-    if (this.partDeliveredDateFilter) {
-      const filterDate = new Date(this.partDeliveredDateFilter);
-      filterDate.setHours(0, 0, 0, 0);
-      records = records.filter(r => {
-        if (!r.lastDeliveryDate) return false;
-        const recordDate = new Date(r.lastDeliveryDate);
-        recordDate.setHours(0, 0, 0, 0);
-        return recordDate.getTime() === filterDate.getTime();
-      });
-    }
-    
-    return records;
-  });
-
-  getPartDeliveredStats(): { pending: number; partial: number; complete: number; outstandingValue: number } {
-    const records = this.partDeliveredRecords();
-    return {
-      pending: records.filter(r => r.status === 'pending').length,
-      partial: records.filter(r => r.status === 'partial').length,
-      complete: records.filter(r => r.status === 'complete').length,
-      outstandingValue: records.reduce((sum, r) => sum + (r.remainingQty * (r.unitPrice || 100)), 0)
-    };
-  }
-
-  openMarkPartDeliveredDialog(): void {
-    const dialogRef = this.dialog.open(MarkPartDeliveredDialog, {
-      width: '600px',
-      maxWidth: '95vw',
-      data: { records: this.partDeliveredRecords().filter(r => r.status !== 'complete') }
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.loadPartDeliveredRecords();
-        this.snackBar.open('Part delivery recorded successfully', 'Close', { duration: 3000 });
-      }
-    });
-  }
-
-  recordPartialDelivery(item: any): void {
-    const dialogRef = this.dialog.open(RecordDeliveryDialog, {
-      width: '500px',
-      maxWidth: '95vw',
-      data: { item }
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        // Call backend API to record the partial delivery
-        this.http.post(`${this.apiUrl}/logistics/part-delivered/${item.id}/deliver`, {
-          quantity: result.quantity,
-          notes: result.reference
-        }).subscribe({
-          next: (response: any) => {
-            // Reload all records to reflect updated data
-            this.loadPartDeliveredRecords();
-            this.snackBar.open(`Recorded delivery of ${result.quantity} units. ${response.remainingQty} remaining.`, 'Close', { duration: 4000 });
-          },
-          error: (err) => {
-            console.error('Failed to record partial delivery:', err);
-            this.snackBar.open('Failed to record delivery: ' + (err.error?.message || 'Server error'), 'Close', { duration: 5000 });
-          }
-        });
-      }
-    });
-  }
-
-  viewDeliveryHistory(item: any): void {
-    this.dialog.open(DeliveryHistoryDialog, {
-      width: '700px',
-      maxWidth: '95vw',
-      data: { item }
-    });
-  }
-
   // Completed Tripsheets Methods
   loadCompletedTripsheets(): void {
     this.http.get<any[]>(`${this.apiUrl}/logistics/loads?status=Delivered`).subscribe({
@@ -5557,9 +5332,9 @@ export class LogisticsDashboardComponent implements OnInit {
         this.completedTripsheets.set(loads.map(load => ({
           id: load.id,
           loadNumber: load.loadNumber,
-          customerName: load.customer?.name || load.stops?.[0]?.companyName || 'Unknown',
-          driverName: load.driver ? `${load.driver.firstName || ''} ${load.driver.lastName || ''}`.trim() : 'Not Assigned',
-          vehicleReg: load.vehicle?.registrationNumber || 'Not Assigned',
+          customerName: load.customerName || load.customer?.name || load.stops?.[0]?.companyName || 'Unknown',
+          driverName: load.driverName || (load.driver ? `${load.driver.firstName || ''} ${load.driver.lastName || ''}`.trim() : null) || 'Not Assigned',
+          vehicleReg: load.vehicleRegistration || load.vehicle?.registrationNumber || 'Not Assigned',
           completedDate: load.actualDeliveryDate || load.updatedAt,
           date: load.actualDeliveryDate || load.updatedAt, // For color coding
           totalStops: load.stops?.length || 0,
@@ -5599,6 +5374,17 @@ export class LogisticsDashboardComponent implements OnInit {
         return tripDate.getTime() === filterDate.getTime();
       });
     }
+    
+    // Sort: Missing POD first (red), then with POD (green)
+    trips = [...trips].sort((a, b) => {
+      // Missing POD (!hasPOD) should come first
+      if (!a.hasPOD && b.hasPOD) return -1;
+      if (a.hasPOD && !b.hasPOD) return 1;
+      // Within same POD status, sort by completed date (most recent first)
+      const dateA = a.completedDate ? new Date(a.completedDate).getTime() : 0;
+      const dateB = b.completedDate ? new Date(b.completedDate).getTime() : 0;
+      return dateB - dateA;
+    });
     
     return trips;
   });
@@ -5976,352 +5762,6 @@ export class UploadPODDialog {
         console.error('POD upload failed:', err);
       }
     });
-  }
-}
-
-// Mark Part Delivered Dialog Component
-@Component({
-  selector: 'app-mark-part-delivered-dialog',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatDialogModule,
-    MatButtonModule,
-    MatIconModule,
-    MatFormFieldModule,
-    MatSelectModule,
-    MatInputModule,
-    FormsModule
-  ],
-  template: `
-    <div class="mark-delivered-dialog">
-      <div class="dialog-header">
-        <h2><mat-icon>local_shipping</mat-icon> Mark Part Delivered</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
-      </div>
-      
-      <div class="dialog-content">
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Select Invoice</mat-label>
-          <mat-select [(ngModel)]="selectedRecord">
-            @for (record of data.records; track record.id) {
-              <mat-option [value]="record">
-                {{ record.invoiceNumber }} - {{ record.customer }} ({{ record.remainingQty }} remaining)
-              </mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-        
-        @if (selectedRecord) {
-          <div class="record-details">
-            <div class="detail-row">
-              <span class="label">Product:</span>
-              <span class="value">{{ selectedRecord.product }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Ordered:</span>
-              <span class="value">{{ selectedRecord.orderedQty }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Already Delivered:</span>
-              <span class="value">{{ selectedRecord.deliveredQty }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Remaining:</span>
-              <span class="value highlight">{{ selectedRecord.remainingQty }}</span>
-            </div>
-          </div>
-          
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Quantity to Deliver</mat-label>
-            <input matInput type="number" [(ngModel)]="deliveryQty" [max]="selectedRecord.remainingQty" min="1">
-            <mat-hint>Max: {{ selectedRecord.remainingQty }}</mat-hint>
-          </mat-form-field>
-          
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Delivery Notes (Optional)</mat-label>
-            <textarea matInput [(ngModel)]="notes" rows="2"></textarea>
-          </mat-form-field>
-        }
-      </div>
-      
-      <div class="dialog-actions">
-        <button mat-button mat-dialog-close>Cancel</button>
-        <button mat-raised-button color="primary" [disabled]="!canSubmit()" (click)="submit()">
-          <mat-icon>check</mat-icon> Record Delivery
-        </button>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .mark-delivered-dialog { padding: 0; }
-    .dialog-header {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 24px; background: linear-gradient(135deg, #1976d2, #42a5f5);
-      color: white;
-    }
-    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.25rem; }
-    .dialog-content { padding: 24px; }
-    .full-width { width: 100%; margin-bottom: 16px; }
-    .record-details {
-      background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 16px;
-    }
-    .detail-row { display: flex; justify-content: space-between; padding: 4px 0; }
-    .detail-row .label { color: #666; }
-    .detail-row .value { font-weight: 500; }
-    .detail-row .value.highlight { color: #1976d2; font-weight: 600; }
-    .dialog-actions { padding: 16px 24px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #e0e0e0; }
-  `]
-})
-export class MarkPartDeliveredDialog {
-  selectedRecord: any = null;
-  deliveryQty: number = 0;
-  notes: string = '';
-  
-  constructor(
-    @Inject(MAT_DIALOG_DATA) public data: any,
-    private dialogRef: MatDialogRef<MarkPartDeliveredDialog>,
-    private http: HttpClient,
-    private snackBar: MatSnackBar
-  ) {}
-  
-  canSubmit(): boolean {
-    return this.selectedRecord && this.deliveryQty > 0 && this.deliveryQty <= this.selectedRecord.remainingQty;
-  }
-  
-  submit(): void {
-    if (!this.canSubmit()) return;
-    
-    const payload = {
-      recordId: this.selectedRecord.id,
-      quantity: this.deliveryQty,
-      notes: this.notes
-    };
-    
-    this.http.post(`${environment.apiUrl}/logistics/part-delivered/record`, payload).subscribe({
-      next: () => {
-        this.dialogRef.close(true);
-      },
-      error: (err) => {
-        console.error('Failed to record delivery:', err);
-        // Still close with success for demo
-        this.dialogRef.close(true);
-      }
-    });
-  }
-}
-
-// Record Delivery Dialog Component
-@Component({
-  selector: 'app-record-delivery-dialog',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatDialogModule,
-    MatButtonModule,
-    MatIconModule,
-    MatFormFieldModule,
-    MatInputModule,
-    FormsModule
-  ],
-  template: `
-    <div class="record-delivery-dialog">
-      <div class="dialog-header">
-        <h2><mat-icon>add_shopping_cart</mat-icon> Record Partial Delivery</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
-      </div>
-      
-      <div class="dialog-content">
-        <div class="item-info">
-          <div class="info-row"><span class="label">Invoice:</span><span class="value">{{ data.item.invoiceNumber }}</span></div>
-          <div class="info-row"><span class="label">Customer:</span><span class="value">{{ data.item.customer }}</span></div>
-          <div class="info-row"><span class="label">Product:</span><span class="value">{{ data.item.product }}</span></div>
-          <div class="info-row"><span class="label">Remaining:</span><span class="value highlight">{{ data.item.remainingQty }} units</span></div>
-        </div>
-        
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Quantity Delivered</mat-label>
-          <input matInput type="number" [(ngModel)]="quantity" [max]="data.item.remainingQty" min="1">
-          <mat-hint>Enter quantity being delivered (max: {{ data.item.remainingQty }})</mat-hint>
-        </mat-form-field>
-        
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Driver/Reference</mat-label>
-          <input matInput [(ngModel)]="reference">
-        </mat-form-field>
-      </div>
-      
-      <div class="dialog-actions">
-        <button mat-button mat-dialog-close>Cancel</button>
-        <button mat-raised-button color="primary" [disabled]="!isValid()" (click)="submit()">
-          <mat-icon>check</mat-icon> Confirm Delivery
-        </button>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .record-delivery-dialog { padding: 0; }
-    .dialog-header {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 24px; background: linear-gradient(135deg, #43a047, #66bb6a);
-      color: white;
-    }
-    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.25rem; }
-    .dialog-content { padding: 24px; }
-    .item-info { background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
-    .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e0e0e0; }
-    .info-row:last-child { border-bottom: none; }
-    .info-row .label { color: #666; }
-    .info-row .value { font-weight: 500; }
-    .info-row .value.highlight { color: #43a047; font-weight: 600; font-size: 1.1em; }
-    .full-width { width: 100%; margin-bottom: 16px; }
-    .dialog-actions { padding: 16px 24px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #e0e0e0; }
-  `]
-})
-export class RecordDeliveryDialog {
-  quantity: number = 1;
-  reference: string = '';
-  
-  constructor(
-    @Inject(MAT_DIALOG_DATA) public data: any,
-    private dialogRef: MatDialogRef<RecordDeliveryDialog>
-  ) {}
-  
-  isValid(): boolean {
-    return this.quantity > 0 && this.quantity <= this.data.item.remainingQty;
-  }
-  
-  submit(): void {
-    if (this.isValid()) {
-      this.dialogRef.close({ quantity: this.quantity, reference: this.reference });
-    }
-  }
-}
-
-// Delivery History Dialog Component
-@Component({
-  selector: 'app-delivery-history-dialog',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatDialogModule,
-    MatButtonModule,
-    MatIconModule,
-    MatTableModule
-  ],
-  template: `
-    <div class="delivery-history-dialog">
-      <div class="dialog-header">
-        <h2><mat-icon>history</mat-icon> Delivery History</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
-      </div>
-      
-      <div class="dialog-content">
-        <div class="item-summary">
-          <div class="summary-row">
-            <span class="label">Invoice:</span>
-            <span class="value">{{ data.item.invoiceNumber }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Customer:</span>
-            <span class="value">{{ data.item.customer }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Product:</span>
-            <span class="value">{{ data.item.product }}</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" [style.width.%]="getProgressPercent()"></div>
-          </div>
-          <div class="progress-text">
-            {{ data.item.deliveredQty }} of {{ data.item.orderedQty }} delivered ({{ getProgressPercent() | number:'1.0-0' }}%)
-          </div>
-        </div>
-        
-        <h3>Delivery Records</h3>
-        <table mat-table [dataSource]="deliveryHistory" class="history-table">
-          <ng-container matColumnDef="date">
-            <th mat-header-cell *matHeaderCellDef>Date</th>
-            <td mat-cell *matCellDef="let row">{{ row.date | date:'dd/MM/yyyy HH:mm' }}</td>
-          </ng-container>
-          <ng-container matColumnDef="quantity">
-            <th mat-header-cell *matHeaderCellDef>Quantity</th>
-            <td mat-cell *matCellDef="let row">{{ row.quantity }}</td>
-          </ng-container>
-          <ng-container matColumnDef="reference">
-            <th mat-header-cell *matHeaderCellDef>Reference</th>
-            <td mat-cell *matCellDef="let row">{{ row.reference }}</td>
-          </ng-container>
-          <ng-container matColumnDef="user">
-            <th mat-header-cell *matHeaderCellDef>Recorded By</th>
-            <td mat-cell *matCellDef="let row">{{ row.user }}</td>
-          </ng-container>
-          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-        </table>
-        
-        @if (deliveryHistory.length === 0) {
-          <div class="no-history">
-            <mat-icon>inbox</mat-icon>
-            <p>No delivery records yet</p>
-          </div>
-        }
-      </div>
-      
-      <div class="dialog-actions">
-        <button mat-raised-button mat-dialog-close>Close</button>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .delivery-history-dialog { padding: 0; min-width: 500px; }
-    .dialog-header {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 24px; background: linear-gradient(135deg, #7b1fa2, #ab47bc);
-      color: white;
-    }
-    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.25rem; }
-    .dialog-content { padding: 24px; max-height: 60vh; overflow-y: auto; }
-    .item-summary { background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
-    .summary-row { display: flex; justify-content: space-between; padding: 4px 0; }
-    .summary-row .label { color: #666; }
-    .summary-row .value { font-weight: 500; }
-    .progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; margin-top: 12px; overflow: hidden; }
-    .progress-fill { height: 100%; background: linear-gradient(90deg, #43a047, #66bb6a); transition: width 0.3s; }
-    .progress-text { text-align: center; font-size: 0.85rem; color: #666; margin-top: 4px; }
-    h3 { margin: 16px 0 12px; font-size: 1rem; color: #333; }
-    .history-table { width: 100%; }
-    .no-history { text-align: center; padding: 32px; color: #999; }
-    .no-history mat-icon { font-size: 48px; width: 48px; height: 48px; }
-    .dialog-actions { padding: 16px 24px; display: flex; justify-content: flex-end; border-top: 1px solid #e0e0e0; }
-  `]
-})
-export class DeliveryHistoryDialog {
-  displayedColumns = ['date', 'quantity', 'reference', 'user'];
-  deliveryHistory: any[] = [];
-  
-  constructor(
-    @Inject(MAT_DIALOG_DATA) public data: any,
-    private http: HttpClient
-  ) {
-    this.loadHistory();
-  }
-  
-  loadHistory(): void {
-    this.http.get<any[]>(`${environment.apiUrl}/logistics/part-delivered/${this.data.item.id}/history`).subscribe({
-      next: (history) => {
-        this.deliveryHistory = history;
-      },
-      error: (err) => {
-        console.error('Failed to load delivery history:', err);
-        this.deliveryHistory = [];
-      }
-    });
-  }
-  
-  getProgressPercent(): number {
-    if (!this.data.item.orderedQty) return 0;
-    return (this.data.item.deliveredQty / this.data.item.orderedQty) * 100;
   }
 }
 
@@ -13970,19 +13410,25 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     
     // If coming from import or edit mode with pre-selected invoices, auto-add them to stops
     if ((data.isImport || data.isEditMode) && data.preSelectedInvoices?.length) {
-      // Pre-select all imported/existing invoices as stops
-      setTimeout(() => {
+      // For EDIT MODE: Add stops synchronously so stepper navigation works immediately
+      if (data.isEditMode) {
         data.preSelectedInvoices!.forEach(invoice => {
-          this.addStop(invoice);
+          this.addStopSync(invoice);
         });
-        // After adding all stops, trigger route calculation if not in edit mode (already has distance)
-        if (this.selectedStops.length > 0 && !data.isEditMode) {
-          setTimeout(() => this.calculateDistance(), 500);
-        } else if (data.isEditMode) {
-          // Just update grouped stops for edit mode
-          this.updateGroupedStops();
-        }
-      }, 100);
+        // Update grouped stops synchronously
+        this.updateGroupedStops();
+      } else {
+        // For import mode: use setTimeout to allow UI to render first
+        setTimeout(() => {
+          data.preSelectedInvoices!.forEach(invoice => {
+            this.addStop(invoice);
+          });
+          // After adding all stops, trigger route calculation
+          if (this.selectedStops.length > 0) {
+            setTimeout(() => this.calculateDistance(), 500);
+          }
+        }, 100);
+      }
     }
     
     // Setup address autocomplete debounce
@@ -14317,6 +13763,31 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     if (this.mapInitialized) {
       this.updateRouteMap();
     }
+  }
+
+  // Synchronous version of addStop for edit mode initialization (no map updates)
+  addStopSync(invoice: any): void {
+    // Find customer details for address
+    const customer = this.data.customers?.find(c => 
+      c.accountNumber === invoice.customerNumber || c.name === invoice.customerName
+    );
+    
+    // Use coordinates from invoice (geocoded) or customer record
+    const latitude = invoice.latitude || customer?.latitude;
+    const longitude = invoice.longitude || customer?.longitude;
+    // Use empty string if no address found
+    const address = invoice.formattedAddress || invoice.address || invoice.deliveryAddress || customer?.physicalAddress || customer?.deliveryAddress || '';
+    
+    this.selectedStops.push({
+      ...invoice,
+      address: address,
+      deliveryAddress: address,
+      latitude: latitude,
+      longitude: longitude
+    });
+    
+    this.calculateTotalValue();
+    // Note: No updateGroupedStops or map updates here - done after all stops added
   }
 
   // Toggle part delivery flag for an invoice
@@ -15981,6 +15452,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       },
       error: (err) => {
         console.error('Failed to ' + (isUpdate ? 'update' : 'create') + ' tripsheet:', err);
+        this.snackBar.open('Failed to ' + (isUpdate ? 'update' : 'create') + ' tripsheet: ' + (err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 5000 });
         this.creating = false;
       }
     });

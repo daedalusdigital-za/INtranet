@@ -1007,7 +1007,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     LoadId = l.Id,
                     TripNumber = $"TS-{l.LoadNumber.Replace("RF-", "")}",
                     LoadNumber = l.LoadNumber,
+                    DriverId = l.DriverId,
                     DriverName = l.Driver != null ? $"{l.Driver.FirstName} {l.Driver.LastName}" : "Unassigned",
+                    VehicleId = l.VehicleId,
                     VehicleReg = l.Vehicle != null ? l.Vehicle.RegistrationNumber : "Unassigned",
                     Origin = l.Warehouse != null ? l.Warehouse.City : l.PickupLocation,
                     Destination = l.DeliveryLocation,
@@ -1767,7 +1769,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         public int LoadId { get; set; }
         public string TripNumber { get; set; } = string.Empty;
         public string LoadNumber { get; set; } = string.Empty;
+        public int? DriverId { get; set; }           // Driver ID for assignment dialog
         public string DriverName { get; set; } = string.Empty;
+        public int? VehicleId { get; set; }          // Vehicle ID for assignment dialog
         public string VehicleReg { get; set; } = string.Empty;
         public string? Origin { get; set; }
         public string? Destination { get; set; }
