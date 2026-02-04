@@ -225,14 +225,14 @@ interface SleepOut {
             </mat-card-content>
           </mat-card>
 
-          <mat-card class="stat-card">
+          <mat-card class="stat-card clickable" (click)="openAddressIssuesDialog()">
             <mat-card-content>
-              <div class="stat-icon transit">
-                <mat-icon>local_shipping</mat-icon>
+              <div class="stat-icon postoffice">
+                <mat-icon>local_post_office</mat-icon>
               </div>
               <div class="stat-info">
-                <span class="stat-value">{{ stats().inTransit }}</span>
-                <span class="stat-label">In Transit</span>
+                <span class="stat-value">{{ addressIssuesCount() }}</span>
+                <span class="stat-label">Address Issues</span>
               </div>
             </mat-card-content>
           </mat-card>
@@ -1620,6 +1620,7 @@ interface SleepOut {
     .stat-icon.reports { background: linear-gradient(135deg, #667eea, #764ba2); }
     .stat-icon.stock { background: linear-gradient(135deg, #fa709a, #fee140); }
     .stat-icon.depots { background: linear-gradient(135deg, #11998e, #38ef7d); }
+    .stat-icon.postoffice { background: linear-gradient(135deg, #4facfe, #00f2fe); }
 
     .stat-card.clickable {
       cursor: pointer;
@@ -3385,6 +3386,9 @@ export class LogisticsDashboardComponent implements OnInit {
   sleepOuts = signal<SleepOut[]>([]);
   sleepOutsCount = signal(0);
 
+  // Address Issues (Customers without addresses)
+  addressIssuesCount = signal(0);
+
   constructor(
     private http: HttpClient,
     private dialog: MatDialog,
@@ -3403,6 +3407,7 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadMaintenanceRecords();
     this.loadWarehouses();
     this.loadSleepOuts();
+    this.loadAddressIssuesCount();
   }
 
   loadWarehouses(): void {
@@ -5242,6 +5247,36 @@ Notes: ${record.notes || 'No notes'}
     dialogRef.afterClosed().subscribe(result => {
       if (result === 'refresh') {
         this.loadSleepOuts();
+      }
+    });
+  }
+
+  // Address Issues Methods (Customers without addresses)
+  loadAddressIssuesCount(): void {
+    this.http.get<number>(`${environment.apiUrl}/logistics/customers/address-issues/count`).subscribe({
+      next: (count) => {
+        this.addressIssuesCount.set(count);
+      },
+      error: (err) => {
+        console.error('Failed to load address issues count:', err);
+        this.addressIssuesCount.set(0);
+      }
+    });
+  }
+
+  openAddressIssuesDialog(): void {
+    const dialogRef = this.dialog.open(AddressIssuesDialog, {
+      width: '95vw',
+      maxWidth: '1400px',
+      maxHeight: '90vh',
+      panelClass: 'address-issues-dialog-panel',
+      data: { apiUrl: environment.apiUrl }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === 'refresh') {
+        this.loadAddressIssuesCount();
+        this.loadCustomers();
       }
     });
   }
@@ -10659,6 +10694,618 @@ export class SleepOutsDialog {
     return this.data.sleepOuts
       .filter(s => s.status === 'Approved' || s.status === 'Requested')
       .reduce((sum, s) => sum + s.amount, 0);
+  }
+}
+
+// Address Issues Dialog Component
+interface CustomerAddressIssue {
+  id: number;
+  customerCode: string | null;
+  name: string;
+  shortName: string | null;
+  address: string | null;
+  physicalAddress: string | null;
+  deliveryAddress: string | null;
+  city: string | null;
+  deliveryCity: string | null;
+  province: string | null;
+  deliveryProvince: string | null;
+  postalCode: string | null;
+  deliveryPostalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  hasMissingAddress: boolean;
+  hasMissingCity: boolean;
+  hasMissingProvince: boolean;
+  hasMissingCoordinates: boolean;
+}
+
+@Component({
+  selector: 'app-address-issues-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatInputModule,
+    MatTooltipModule,
+    MatProgressSpinnerModule,
+    MatChipsModule,
+    MatTableModule,
+    MatTabsModule,
+    MatBadgeModule,
+    FormsModule
+  ],
+  template: `
+    <div class="address-issues-dialog">
+      <div class="dialog-header">
+        <h2>
+          <mat-icon>local_post_office</mat-icon>
+          Address Issues
+        </h2>
+        <button mat-icon-button (click)="dialogRef.close()" class="close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="toolbar">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Search customers</mat-label>
+          <input matInput [(ngModel)]="searchTerm" (ngModelChange)="loadCustomers()" placeholder="Search by name or code...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+        <div class="total-count">
+          <mat-icon>people</mat-icon>
+          {{ customers.length }} total issues
+        </div>
+      </div>
+
+      <mat-tab-group class="issue-tabs" (selectedIndexChange)="onTabChange($event)" [selectedIndex]="selectedTab">
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>home</mat-icon>
+            <span>No Address</span>
+            <span class="tab-badge address" *ngIf="getCountByType('address') > 0">{{ getCountByType('address') }}</span>
+          </ng-template>
+        </mat-tab>
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>location_city</mat-icon>
+            <span>No City</span>
+            <span class="tab-badge city" *ngIf="getCountByType('city') > 0">{{ getCountByType('city') }}</span>
+          </ng-template>
+        </mat-tab>
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>map</mat-icon>
+            <span>No Province</span>
+            <span class="tab-badge province" *ngIf="getCountByType('province') > 0">{{ getCountByType('province') }}</span>
+          </ng-template>
+        </mat-tab>
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>gps_off</mat-icon>
+            <span>No GPS</span>
+            <span class="tab-badge gps" *ngIf="getCountByType('coordinates') > 0">{{ getCountByType('coordinates') }}</span>
+          </ng-template>
+        </mat-tab>
+      </mat-tab-group>
+
+      <div class="content" *ngIf="!loading; else loadingTpl">
+        <div class="tab-info">
+          <span class="showing">Showing {{ filteredCustomers.length }} customers</span>
+        </div>
+        <div class="customers-list">
+          @for (customer of filteredCustomers; track customer.id) {
+            <div class="customer-card" [class.editing]="editingCustomerId === customer.id">
+              <div class="customer-header">
+                <div class="customer-info">
+                  <span class="customer-code">{{ customer.customerCode || 'N/A' }}</span>
+                  <span class="customer-name">{{ customer.name }}</span>
+                  @if (customer.shortName) {
+                    <span class="short-name">({{ customer.shortName }})</span>
+                  }
+                </div>
+                <div class="issue-badges">
+                  @if (customer.hasMissingAddress) {
+                    <mat-chip class="issue-chip address">No Address</mat-chip>
+                  }
+                  @if (customer.hasMissingCity) {
+                    <mat-chip class="issue-chip city">No City</mat-chip>
+                  }
+                  @if (customer.hasMissingProvince) {
+                    <mat-chip class="issue-chip province">No Province</mat-chip>
+                  }
+                  @if (customer.hasMissingCoordinates) {
+                    <mat-chip class="issue-chip gps">No GPS</mat-chip>
+                  }
+                </div>
+                <button mat-icon-button (click)="toggleEdit(customer)" [matTooltip]="editingCustomerId === customer.id ? 'Cancel' : 'Edit Address'">
+                  <mat-icon>{{ editingCustomerId === customer.id ? 'close' : 'edit' }}</mat-icon>
+                </button>
+              </div>
+
+              <div class="current-address" *ngIf="editingCustomerId !== customer.id">
+                <div class="address-line" *ngIf="customer.deliveryAddress || customer.address || customer.physicalAddress">
+                  <mat-icon>location_on</mat-icon>
+                  <span>{{ customer.deliveryAddress || customer.address || customer.physicalAddress }}</span>
+                </div>
+                <div class="address-details" *ngIf="customer.city || customer.deliveryCity || customer.province || customer.deliveryProvince">
+                  <span *ngIf="customer.city || customer.deliveryCity">{{ customer.deliveryCity || customer.city }}</span>
+                  <span *ngIf="customer.province || customer.deliveryProvince">, {{ customer.deliveryProvince || customer.province }}</span>
+                  <span *ngIf="customer.postalCode || customer.deliveryPostalCode"> {{ customer.deliveryPostalCode || customer.postalCode }}</span>
+                </div>
+                <div class="gps-coords" *ngIf="customer.latitude && customer.longitude">
+                  <mat-icon>gps_fixed</mat-icon>
+                  <span>{{ customer.latitude?.toFixed(6) }}, {{ customer.longitude?.toFixed(6) }}</span>
+                </div>
+              </div>
+
+              <!-- Edit Form -->
+              <div class="edit-form" *ngIf="editingCustomerId === customer.id">
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Delivery Address</mat-label>
+                    <input matInput [(ngModel)]="editForm.deliveryAddress" placeholder="Street address">
+                  </mat-form-field>
+                </div>
+                <div class="form-row three-col">
+                  <mat-form-field appearance="outline">
+                    <mat-label>City</mat-label>
+                    <input matInput [(ngModel)]="editForm.deliveryCity" placeholder="City">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Province</mat-label>
+                    <mat-select [(ngModel)]="editForm.deliveryProvince">
+                      <mat-option value="">Select Province</mat-option>
+                      <mat-option value="Gauteng">Gauteng</mat-option>
+                      <mat-option value="Western Cape">Western Cape</mat-option>
+                      <mat-option value="KwaZulu-Natal">KwaZulu-Natal</mat-option>
+                      <mat-option value="Eastern Cape">Eastern Cape</mat-option>
+                      <mat-option value="Free State">Free State</mat-option>
+                      <mat-option value="Limpopo">Limpopo</mat-option>
+                      <mat-option value="Mpumalanga">Mpumalanga</mat-option>
+                      <mat-option value="North West">North West</mat-option>
+                      <mat-option value="Northern Cape">Northern Cape</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Postal Code</mat-label>
+                    <input matInput [(ngModel)]="editForm.deliveryPostalCode" placeholder="Postal code">
+                  </mat-form-field>
+                </div>
+                <div class="form-row two-col">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Latitude</mat-label>
+                    <input matInput type="number" step="0.000001" [(ngModel)]="editForm.latitude" placeholder="-26.2041">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Longitude</mat-label>
+                    <input matInput type="number" step="0.000001" [(ngModel)]="editForm.longitude" placeholder="28.0473">
+                  </mat-form-field>
+                </div>
+                <div class="form-actions">
+                  <button mat-stroked-button (click)="cancelEdit()">Cancel</button>
+                  <button mat-raised-button color="primary" (click)="saveAddress(customer)" [disabled]="saving">
+                    <mat-icon>save</mat-icon>
+                    {{ saving ? 'Saving...' : 'Save Address' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          } @empty {
+            <div class="empty-state">
+              <mat-icon>check_circle</mat-icon>
+              <h3>No Issues in This Category</h3>
+              <p>All customers have this information filled in.</p>
+            </div>
+          }
+        </div>
+      </div>
+
+      <ng-template #loadingTpl>
+        <div class="loading-state">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Loading customers with address issues...</p>
+        </div>
+      </ng-template>
+
+      <mat-dialog-actions align="end">
+        <button mat-button (click)="dialogRef.close()">Close</button>
+        <button mat-raised-button color="primary" (click)="dialogRef.close('refresh')">
+          <mat-icon>refresh</mat-icon>
+          Done
+        </button>
+      </mat-dialog-actions>
+    </div>
+  `,
+  styles: [`
+    .address-issues-dialog {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-height: 85vh;
+    }
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 20px;
+    }
+    .close-btn { color: white; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 24px;
+      background: #f5f5f5;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .search-field { flex: 1; min-width: 250px; margin-bottom: -20px; }
+    .total-count {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      color: #666;
+      background: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+    .total-count mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .issue-tabs {
+      background: #fafafa;
+    }
+    ::ng-deep .issue-tabs .mat-mdc-tab-labels {
+      justify-content: center;
+    }
+    ::ng-deep .issue-tabs .mat-mdc-tab {
+      min-width: 140px;
+    }
+    ::ng-deep .issue-tabs .mat-mdc-tab .mdc-tab__content {
+      gap: 8px;
+    }
+    .tab-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+    .tab-badge.address { background: #ffebee; color: #c62828; }
+    .tab-badge.city { background: #fff3e0; color: #e65100; }
+    .tab-badge.province { background: #e3f2fd; color: #1565c0; }
+    .tab-badge.gps { background: #f3e5f5; color: #7b1fa2; }
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px;
+    }
+    .tab-info {
+      margin-bottom: 12px;
+      color: #666;
+      font-size: 13px;
+    }
+    .customers-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .customer-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
+      transition: all 0.2s;
+    }
+    .customer-card:hover {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .customer-card.editing {
+      border-color: #667eea;
+      box-shadow: 0 2px 12px rgba(102, 126, 234, 0.2);
+    }
+    .customer-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .customer-info {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .customer-code {
+      font-weight: 600;
+      color: #667eea;
+      background: #f0f2ff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .customer-name {
+      font-weight: 500;
+      font-size: 15px;
+    }
+    .short-name {
+      color: #888;
+      font-size: 13px;
+    }
+    .issue-badges {
+      display: flex;
+      gap: 6px;
+    }
+    .issue-chip {
+      font-size: 11px !important;
+      height: 22px !important;
+      padding: 0 8px !important;
+    }
+    .issue-chip.address { background: #ffebee !important; color: #c62828 !important; }
+    .issue-chip.city { background: #fff3e0 !important; color: #e65100 !important; }
+    .issue-chip.province { background: #e3f2fd !important; color: #1565c0 !important; }
+    .issue-chip.gps { background: #f3e5f5 !important; color: #7b1fa2 !important; }
+    .current-address {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed #e0e0e0;
+    }
+    .address-line {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: #333;
+    }
+    .address-line mat-icon {
+      color: #667eea;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+    .address-details {
+      margin-left: 26px;
+      color: #666;
+      font-size: 13px;
+    }
+    .gps-coords {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      color: #888;
+      font-size: 12px;
+    }
+    .gps-coords mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+    .edit-form {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .form-row {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .form-row.three-col { grid-template-columns: 1fr 1fr 1fr; }
+    .form-row.two-col { grid-template-columns: 1fr 1fr; }
+    .full-width { width: 100%; }
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .loading-state, .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px;
+      color: #666;
+    }
+    .empty-state mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #4caf50;
+      margin-bottom: 16px;
+    }
+    .empty-state h3 { margin: 0 0 8px; }
+    .empty-state p { margin: 0; color: #888; }
+    mat-dialog-actions {
+      padding: 12px 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+    @media (max-width: 768px) {
+      .form-row.three-col, .form-row.two-col { grid-template-columns: 1fr; }
+      .customer-header { flex-wrap: wrap; }
+      .issue-badges { width: 100%; margin-top: 8px; }
+      .toolbar { flex-direction: column; align-items: stretch; }
+      ::ng-deep .issue-tabs .mat-mdc-tab { min-width: 80px; }
+    }
+  `]
+})
+export class AddressIssuesDialog {
+  searchTerm = '';
+  selectedTab = 0;
+  loading = true;
+  saving = false;
+  customers: CustomerAddressIssue[] = [];
+  filteredCustomers: CustomerAddressIssue[] = [];
+  editingCustomerId: number | null = null;
+  editForm = {
+    deliveryAddress: '',
+    deliveryCity: '',
+    deliveryProvince: '',
+    deliveryPostalCode: '',
+    latitude: null as number | null,
+    longitude: null as number | null
+  };
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string },
+    public dialogRef: MatDialogRef<AddressIssuesDialog>
+  ) {
+    this.loadCustomers();
+  }
+
+  loadCustomers(): void {
+    this.loading = true;
+    const params: any = { pageSize: 500 };
+    if (this.searchTerm) {
+      params.search = this.searchTerm;
+    }
+
+    this.http.get<{ customers: CustomerAddressIssue[], totalCount: number }>(
+      `${this.data.apiUrl}/logistics/customers/address-issues`,
+      { params }
+    ).subscribe({
+      next: (response) => {
+        this.customers = response.customers;
+        this.applyFilter();
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Failed to load address issues:', err);
+        this.customers = [];
+        this.filteredCustomers = [];
+        this.loading = false;
+        this.snackBar.open('Failed to load customers with address issues', 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  onTabChange(index: number): void {
+    this.selectedTab = index;
+    this.applyFilter();
+    this.cancelEdit();
+  }
+
+  getCountByType(type: string): number {
+    switch (type) {
+      case 'address': return this.customers.filter(c => c.hasMissingAddress).length;
+      case 'city': return this.customers.filter(c => c.hasMissingCity).length;
+      case 'province': return this.customers.filter(c => c.hasMissingProvince).length;
+      case 'coordinates': return this.customers.filter(c => c.hasMissingCoordinates).length;
+      default: return 0;
+    }
+  }
+
+  applyFilter(): void {
+    switch (this.selectedTab) {
+      case 0: // No Address
+        this.filteredCustomers = this.customers.filter(c => c.hasMissingAddress);
+        break;
+      case 1: // No City
+        this.filteredCustomers = this.customers.filter(c => c.hasMissingCity);
+        break;
+      case 2: // No Province
+        this.filteredCustomers = this.customers.filter(c => c.hasMissingProvince);
+        break;
+      case 3: // No GPS
+        this.filteredCustomers = this.customers.filter(c => c.hasMissingCoordinates);
+        break;
+      default:
+        this.filteredCustomers = [...this.customers];
+    }
+  }
+
+  toggleEdit(customer: CustomerAddressIssue): void {
+    if (this.editingCustomerId === customer.id) {
+      this.cancelEdit();
+    } else {
+      this.editingCustomerId = customer.id;
+      this.editForm = {
+        deliveryAddress: customer.deliveryAddress || customer.address || customer.physicalAddress || '',
+        deliveryCity: customer.deliveryCity || customer.city || '',
+        deliveryProvince: customer.deliveryProvince || customer.province || '',
+        deliveryPostalCode: customer.deliveryPostalCode || customer.postalCode || '',
+        latitude: customer.latitude,
+        longitude: customer.longitude
+      };
+    }
+  }
+
+  cancelEdit(): void {
+    this.editingCustomerId = null;
+    this.editForm = {
+      deliveryAddress: '',
+      deliveryCity: '',
+      deliveryProvince: '',
+      deliveryPostalCode: '',
+      latitude: null,
+      longitude: null
+    };
+  }
+
+  saveAddress(customer: CustomerAddressIssue): void {
+    this.saving = true;
+
+    const payload: any = {};
+    if (this.editForm.deliveryAddress) payload.deliveryAddress = this.editForm.deliveryAddress;
+    if (this.editForm.deliveryCity) payload.deliveryCity = this.editForm.deliveryCity;
+    if (this.editForm.deliveryProvince) payload.deliveryProvince = this.editForm.deliveryProvince;
+    if (this.editForm.deliveryPostalCode) payload.deliveryPostalCode = this.editForm.deliveryPostalCode;
+    if (this.editForm.latitude !== null) payload.latitude = this.editForm.latitude;
+    if (this.editForm.longitude !== null) payload.longitude = this.editForm.longitude;
+
+    // Also set regular city/province if delivery ones are set
+    if (this.editForm.deliveryCity && !customer.city) payload.city = this.editForm.deliveryCity;
+    if (this.editForm.deliveryProvince && !customer.province) payload.province = this.editForm.deliveryProvince;
+    if (this.editForm.deliveryPostalCode && !customer.postalCode) payload.postalCode = this.editForm.deliveryPostalCode;
+
+    this.http.patch(`${this.data.apiUrl}/logistics/customers/${customer.id}/address`, payload).subscribe({
+      next: () => {
+        this.snackBar.open(`Address updated for ${customer.name}`, 'Close', { duration: 3000 });
+        // Update local data
+        Object.assign(customer, {
+          deliveryAddress: this.editForm.deliveryAddress,
+          deliveryCity: this.editForm.deliveryCity,
+          deliveryProvince: this.editForm.deliveryProvince,
+          deliveryPostalCode: this.editForm.deliveryPostalCode,
+          latitude: this.editForm.latitude,
+          longitude: this.editForm.longitude,
+          hasMissingAddress: !this.editForm.deliveryAddress,
+          hasMissingCity: !this.editForm.deliveryCity && !customer.city,
+          hasMissingProvince: !this.editForm.deliveryProvince && !customer.province,
+          hasMissingCoordinates: this.editForm.latitude === null || this.editForm.longitude === null
+        });
+        this.cancelEdit();
+        this.saving = false;
+        // Remove from current filtered list if issue is resolved
+        this.applyFilter();
+      },
+      error: (err) => {
+        this.snackBar.open('Failed to update address: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+        this.saving = false;
+      }
+    });
   }
 }
 
@@ -20437,4 +21084,654 @@ export class LogisticsReportsDialog {
     link.click();
     window.URL.revokeObjectURL(url);
   }
+}
+
+// Live Streaming Dialog Component (CarTrack Vision)
+@Component({
+  selector: 'app-livestreaming-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatSelectModule,
+    MatFormFieldModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule,
+    MatChipsModule,
+    FormsModule
+  ],
+  template: `
+    <div class="livestream-dialog">
+      <div class="dialog-header">
+        <h2>
+          <mat-icon>videocam</mat-icon>
+          Live Camera Streaming
+          <span class="live-badge">
+            <mat-icon class="live-dot">fiber_manual_record</mat-icon>
+            LIVE
+          </span>
+        </h2>
+        <button mat-icon-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-content">
+        <div class="vehicle-selector">
+          <mat-form-field appearance="outline" class="vehicle-select">
+            <mat-label>Select Vehicle</mat-label>
+            <mat-select [(ngModel)]="selectedVehicle" (selectionChange)="onVehicleSelected()">
+              @for (vehicle of vehicles; track vehicle.vehicleId) {
+                <mat-option [value]="vehicle">
+                  <mat-icon>directions_car</mat-icon>
+                  {{ vehicle.registration }} 
+                  @if (vehicle.vehicleName && vehicle.vehicleName !== vehicle.registration) {
+                    - {{ vehicle.vehicleName }}
+                  }
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          @if (selectedVehicle) {
+            <div class="camera-chips">
+              <span class="camera-label">Cameras:</span>
+              @for (cameraId of availableCameras; track cameraId) {
+                <mat-chip-option 
+                  [selected]="selectedCameras.includes(cameraId)"
+                  (click)="toggleCamera(cameraId)"
+                  [class.selected]="selectedCameras.includes(cameraId)">
+                  <mat-icon>{{ getCameraIcon(cameraId) }}</mat-icon>
+                  {{ getCameraName(cameraId) }}
+                </mat-chip-option>
+              }
+            </div>
+            
+            <button mat-raised-button color="primary" 
+                    [disabled]="selectedCameras.length === 0 || loading" 
+                    (click)="startStreaming()">
+              @if (loading) {
+                <mat-spinner diameter="20"></mat-spinner>
+              } @else {
+                <mat-icon>play_circle</mat-icon>
+              }
+              {{ streaming ? 'Refresh Streams' : 'Start Streaming' }}
+            </button>
+          }
+        </div>
+
+        @if (loading) {
+          <div class="loading-container">
+            <mat-spinner diameter="48"></mat-spinner>
+            <p>Requesting live streams...</p>
+          </div>
+        }
+
+        @if (error) {
+          <div class="error-container">
+            <mat-icon>error_outline</mat-icon>
+            <p>{{ error }}</p>
+            <button mat-raised-button color="primary" (click)="retryStreaming()">
+              <mat-icon>refresh</mat-icon> Retry
+            </button>
+          </div>
+        }
+
+        @if (streaming && streams.length > 0) {
+          <div class="streams-grid" [class.single]="streams.length === 1" [class.dual]="streams.length === 2">
+            @for (stream of streams; track stream.cameraId) {
+              <div class="stream-container">
+                <div class="stream-header">
+                  <span class="camera-name">
+                    <mat-icon>{{ getCameraIcon(stream.cameraId) }}</mat-icon>
+                    {{ stream.cameraName }}
+                  </span>
+                  <span class="live-indicator">
+                    <mat-icon>fiber_manual_record</mat-icon>
+                    LIVE
+                  </span>
+                </div>
+                <div class="video-wrapper">
+                  @if (stream.streamUrl) {
+                    <video 
+                      [src]="stream.streamUrl" 
+                      autoplay 
+                      muted 
+                      playsinline
+                      controls
+                      (error)="onVideoError(stream)"
+                      (loadeddata)="onVideoLoaded(stream)">
+                      Your browser does not support video streaming.
+                    </video>
+                  } @else {
+                    <div class="no-stream">
+                      <mat-icon>videocam_off</mat-icon>
+                      <p>Stream unavailable</p>
+                    </div>
+                  }
+                  @if (stream.loading) {
+                    <div class="video-loading">
+                      <mat-spinner diameter="32"></mat-spinner>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        @if (!streaming && !loading && !error) {
+          <div class="placeholder">
+            <mat-icon>live_tv</mat-icon>
+            <h3>CarTrack Vision Live Streaming</h3>
+            <p>Select a vehicle and cameras to start live streaming</p>
+            <div class="features">
+              <div class="feature">
+                <mat-icon>hd</mat-icon>
+                <span>HD Quality</span>
+              </div>
+              <div class="feature">
+                <mat-icon>speed</mat-icon>
+                <span>Real-time</span>
+              </div>
+              <div class="feature">
+                <mat-icon>security</mat-icon>
+                <span>Secure</span>
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (vehicles.length === 0 && !loadingVehicles) {
+          <div class="no-vehicles">
+            <mat-icon>warning</mat-icon>
+            <p>No Vision-enabled vehicles found</p>
+            <span>Contact CarTrack to enable Vision on your fleet</span>
+          </div>
+        }
+      </div>
+
+      <mat-dialog-actions align="end">
+        @if (streaming) {
+          <button mat-button color="warn" (click)="stopStreaming()">
+            <mat-icon>stop</mat-icon> Stop Streaming
+          </button>
+        }
+        <button mat-button mat-dialog-close>Close</button>
+      </mat-dialog-actions>
+    </div>
+  `,
+  styles: [`
+    :host { display: block; width: 100%; }
+    .livestream-dialog { width: 100%; overflow: hidden; }
+    
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 32px;
+      background: linear-gradient(135deg, #ff416c, #ff4b2b);
+      color: white;
+      margin: -24px -24px 0 -24px;
+    }
+    
+    .dialog-header h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 22px;
+    }
+    
+    .dialog-header button { color: white; }
+    
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255,255,255,0.2);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 12px;
+    }
+    
+    .live-dot {
+      font-size: 12px !important;
+      width: 12px !important;
+      height: 12px !important;
+      animation: pulse-live 1.5s infinite;
+    }
+    
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    
+    .dialog-content {
+      padding: 24px;
+      min-height: 400px;
+    }
+    
+    .vehicle-selector {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .vehicle-select {
+      min-width: 280px;
+    }
+    
+    .camera-chips {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+    
+    .camera-label {
+      font-weight: 500;
+      color: #666;
+      margin-right: 8px;
+    }
+    
+    mat-chip-option {
+      cursor: pointer;
+    }
+    
+    mat-chip-option.selected {
+      background: #ff416c !important;
+      color: white !important;
+    }
+    
+    mat-chip-option mat-icon {
+      font-size: 18px;
+      margin-right: 4px;
+    }
+    
+    .streams-grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .streams-grid.single {
+      grid-template-columns: 1fr;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .streams-grid.dual {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stream-container {
+      background: #1a1a1a;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    
+    .stream-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #2a2a2a;
+      color: white;
+    }
+    
+    .camera-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+    
+    .camera-name mat-icon {
+      font-size: 20px;
+    }
+    
+    .stream-header .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: #ff4444;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .stream-header .live-indicator mat-icon {
+      font-size: 10px;
+      width: 10px;
+      height: 10px;
+      animation: pulse-live 1.5s infinite;
+    }
+    
+    .video-wrapper {
+      position: relative;
+      aspect-ratio: 16/9;
+      background: #000;
+    }
+    
+    .video-wrapper video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .video-loading {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.7);
+    }
+    
+    .no-stream {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #666;
+    }
+    
+    .no-stream mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 8px;
+    }
+    
+    .loading-container,
+    .error-container,
+    .placeholder,
+    .no-vehicles {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px;
+      text-align: center;
+      color: #666;
+    }
+    
+    .loading-container mat-spinner {
+      margin-bottom: 16px;
+    }
+    
+    .error-container mat-icon {
+      font-size: 56px;
+      width: 56px;
+      height: 56px;
+      color: #f44336;
+      margin-bottom: 16px;
+    }
+    
+    .error-container button {
+      margin-top: 16px;
+    }
+    
+    .placeholder mat-icon {
+      font-size: 80px;
+      width: 80px;
+      height: 80px;
+      color: #ff416c;
+      margin-bottom: 16px;
+    }
+    
+    .placeholder h3 {
+      margin: 0 0 8px 0;
+      color: #333;
+    }
+    
+    .placeholder p {
+      margin: 0 0 24px 0;
+    }
+    
+    .features {
+      display: flex;
+      gap: 32px;
+    }
+    
+    .feature {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .feature mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: #ff416c;
+    }
+    
+    .feature span {
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .no-vehicles mat-icon {
+      font-size: 56px;
+      width: 56px;
+      height: 56px;
+      color: #ff9800;
+      margin-bottom: 16px;
+    }
+    
+    mat-dialog-actions {
+      padding: 16px 32px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    @media (max-width: 768px) {
+      .vehicle-selector {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .vehicle-select {
+        min-width: 100%;
+      }
+      .streams-grid {
+        grid-template-columns: 1fr;
+      }
+      .features {
+        flex-direction: column;
+        gap: 16px;
+      }
+    }
+  `]
+})
+export class LiveStreamingDialog implements OnInit {
+  vehicles: VisionVehicle[] = [];
+  selectedVehicle: VisionVehicle | null = null;
+  selectedCameras: number[] = [1, 2]; // Default front and rear
+  availableCameras = [1, 2, 3, 4, 5, 6, 7, 8];
+  streams: StreamInfo[] = [];
+  loading = false;
+  loadingVehicles = true;
+  streaming = false;
+  error: string | null = null;
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string },
+    public dialogRef: MatDialogRef<LiveStreamingDialog>
+  ) {}
+
+  ngOnInit(): void {
+    this.loadVehicles();
+  }
+
+  loadVehicles(): void {
+    this.loadingVehicles = true;
+    this.http.get<VisionVehicle[]>(`${this.data.apiUrl}/fleet/vision/vehicles`)
+      .subscribe({
+        next: (vehicles) => {
+          this.vehicles = vehicles;
+          this.loadingVehicles = false;
+        },
+        error: (err) => {
+          console.error('Failed to load Vision vehicles:', err);
+          this.loadingVehicles = false;
+          this.snackBar.open('Failed to load vehicles', 'Close', { duration: 3000 });
+        }
+      });
+  }
+
+  onVehicleSelected(): void {
+    this.streaming = false;
+    this.streams = [];
+    this.error = null;
+  }
+
+  toggleCamera(cameraId: number): void {
+    const index = this.selectedCameras.indexOf(cameraId);
+    if (index > -1) {
+      this.selectedCameras.splice(index, 1);
+    } else {
+      this.selectedCameras.push(cameraId);
+    }
+    this.selectedCameras.sort((a, b) => a - b);
+  }
+
+  getCameraName(cameraId: number): string {
+    const names: { [key: number]: string } = {
+      1: 'Front',
+      2: 'Rear',
+      3: 'Driver',
+      4: 'Cabin',
+      5: 'Left',
+      6: 'Right',
+      7: 'Cargo',
+      8: 'Aux'
+    };
+    return names[cameraId] || `Cam ${cameraId}`;
+  }
+
+  getCameraIcon(cameraId: number): string {
+    const icons: { [key: number]: string } = {
+      1: 'videocam',
+      2: 'flip_camera_ios',
+      3: 'person',
+      4: 'airline_seat_recline_normal',
+      5: 'chevron_left',
+      6: 'chevron_right',
+      7: 'inventory_2',
+      8: 'camera_alt'
+    };
+    return icons[cameraId] || 'videocam';
+  }
+
+  startStreaming(): void {
+    if (!this.selectedVehicle || this.selectedCameras.length === 0) return;
+
+    this.loading = true;
+    this.error = null;
+    this.streams = this.selectedCameras.map(id => ({
+      cameraId: id,
+      cameraName: this.getCameraName(id),
+      streamUrl: '',
+      loading: true
+    }));
+
+    this.http.post<LivestreamResponse>(
+      `${this.data.apiUrl}/fleet/vision/livestream/${this.selectedVehicle.registration}`,
+      { cameras: this.selectedCameras }
+    ).subscribe({
+      next: (response) => {
+        this.loading = false;
+        this.streaming = true;
+        
+        if (response.streams && response.streams.length > 0) {
+          this.streams = response.streams.map(s => ({
+            cameraId: s.cameraId,
+            cameraName: s.cameraName,
+            streamUrl: s.streamUrl,
+            thumbnailUrl: s.thumbnailUrl,
+            loading: true
+          }));
+        } else {
+          this.error = 'No streams available for this vehicle';
+          this.streaming = false;
+        }
+      },
+      error: (err) => {
+        this.loading = false;
+        this.streaming = false;
+        console.error('Failed to start streaming:', err);
+        
+        if (err.status === 403) {
+          this.error = err.error?.message || 'CarTrack Vision API is not enabled for your account. Please contact your CarTrack sales representative to enable this feature.';
+        } else if (err.status === 404) {
+          this.error = 'Vehicle not found or Vision not available for this vehicle.';
+        } else {
+          this.error = err.error?.message || 'Failed to start streaming. Please try again.';
+        }
+      }
+    });
+  }
+
+  stopStreaming(): void {
+    this.streaming = false;
+    this.streams = [];
+  }
+
+  retryStreaming(): void {
+    this.error = null;
+    this.startStreaming();
+  }
+
+  onVideoLoaded(stream: StreamInfo): void {
+    stream.loading = false;
+  }
+
+  onVideoError(stream: StreamInfo): void {
+    stream.loading = false;
+    console.error(`Video error for camera ${stream.cameraId}`);
+  }
+}
+
+interface VisionVehicle {
+  vehicleId: string;
+  registration: string;
+  vehicleName?: string;
+  hasVision: boolean;
+  availableCameras: number[];
+}
+
+interface StreamInfo {
+  cameraId: number;
+  cameraName: string;
+  streamUrl: string;
+  thumbnailUrl?: string;
+  loading?: boolean;
+}
+
+interface LivestreamResponse {
+  vehicleRegistration: string;
+  streams: {
+    cameraId: number;
+    cameraName: string;
+    streamUrl: string;
+    thumbnailUrl?: string;
+  }[];
 }

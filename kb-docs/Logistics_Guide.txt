@@ -1,0 +1,233 @@
+# ProMed Technologies - Logistics Module Knowledge Base
+
+## Overview
+The Logistics module manages all aspects of delivery operations including tripsheets, loads, drivers, vehicles, fuel management, and customer deliveries.
+
+## Dashboard Cards
+The Logistics Dashboard displays key metrics:
+- **Active Loads**: Number of loads currently being processed
+- **Address Issues**: Customers with incomplete address information (click to fix)
+- **Sleep Outs**: Driver overnight allowance requests pending approval
+- **TFN Orders**: Pending fuel orders from TFN (TransFleet Network)
+- **Available Vehicles**: Vehicles ready for assignment
+- **Available Drivers**: Drivers ready for assignment
+- **Reports**: Quick access to logistics reports
+- **TFN Depots**: Fuel depot locations map
+
+## TripSheets
+
+### What is a TripSheet?
+A TripSheet (TS-XXXXXX) is a document that groups multiple delivery invoices for a single trip. It contains:
+- Driver assignment
+- Vehicle assignment
+- Starting and ending warehouse
+- List of delivery stops (invoices)
+- KM readings (start/end)
+- Status tracking
+
+### TripSheet Statuses
+1. **Available**: Created but not yet assigned to a driver/vehicle
+2. **Active**: Currently in progress (driver is out on deliveries)
+3. **Completed**: All deliveries finished, trip is done
+4. **Cancelled**: TripSheet was cancelled
+
+### TripSheet Workflow
+1. Import invoices from ERP system
+2. Create tripsheet from pending invoices (can group by route/province)
+3. Assign driver and vehicle
+4. Print/email tripsheet to warehouse manager
+5. Driver activates tripsheet when leaving
+6. Driver completes deliveries and captures POD (Proof of Delivery)
+7. Mark tripsheet as complete when all stops delivered
+
+### POD (Proof of Delivery) Status Colors
+- **Green**: POD uploaded/captured
+- **Orange/Amber**: Partial delivery (some items not delivered)
+- **Red**: No POD captured yet
+
+## Loads
+
+### What is a Load?
+A Load (LD-XXXXXX) represents a delivery assignment with:
+- Customer information
+- Origin and destination
+- Assigned vehicle and driver
+- Scheduled delivery date
+- Delivery status
+
+### Load Statuses
+- **Pending**: Created, awaiting assignment
+- **Assigned**: Driver and vehicle assigned
+- **In Transit**: Currently being delivered
+- **Delivered**: Successfully completed
+- **Cancelled**: Load was cancelled
+
+## Invoices
+
+### Invoice Import Process
+1. Export invoices from SYSPRO ERP as JSON
+2. Import via the "Import Invoices" button
+3. Review imported invoices
+4. Create tripsheets from pending invoices
+
+### Invoice Fields
+- Transaction Number (unique identifier from ERP)
+- Customer Name and Code
+- Product Code and Description
+- Quantity and Sales Amount
+- Delivery Address (Province, City, Street)
+- Delivery Status
+
+## Drivers
+
+### Driver Management
+- Add/edit driver information
+- Track driver availability
+- View assigned trips
+- Monitor performance
+
+### Driver Information Stored
+- Employee Number
+- Full Name
+- License Number
+- Contact Details
+- Assigned Vehicle
+- Active Status
+
+## Vehicles
+
+### Vehicle Types
+- Van
+- 4 Ton Truck
+- 8 Ton Truck
+- 14 Ton Truck
+- Trailer
+
+### Vehicle Information
+- Registration Number
+- Make/Model/Year
+- Vehicle Type
+- Current Driver
+- CarTrack ID (for live tracking)
+- TFN Card Number (for fuel)
+- Maintenance Schedule
+
+### Vehicle Tracking (CarTrack Integration)
+- Real-time GPS location
+- Speed monitoring
+- Fuel level
+- Ignition status
+- Movement history
+
+## TFN (TransFleet Network) - Fuel Management
+
+### What is TFN?
+TFN is the fuel card system used for vehicle refueling. Integration allows:
+- View fuel transactions
+- Monitor fuel balances
+- Track fuel consumption
+- Find nearest fuel depots
+
+### TFN Features
+- **Fuel Orders**: Pending fuel authorization requests
+- **Fuel Depots**: Map of TFN depot locations nationwide
+- **Transaction History**: All fuel purchases by vehicle
+- **Balance Monitoring**: Current fuel card balances
+
+## Sleep Outs (Driver Overnight Allowance)
+
+### What is a Sleep Out?
+When drivers must stay overnight away from home, they receive a R250 food allowance.
+
+### Sleep Out Process
+1. Request submitted (usually by dispatcher)
+2. Manager reviews and approves/rejects
+3. Once approved, marked for payment
+4. Finance processes payment
+
+### Sleep Out Statuses
+- **Requested**: Pending approval
+- **Approved**: Approved, waiting for payment
+- **Rejected**: Request denied
+- **Paid**: Payment processed
+
+## Address Issues
+
+### What are Address Issues?
+Customers imported from ERP may have incomplete address information. This affects:
+- Route optimization
+- Delivery accuracy
+- GPS navigation
+
+### Types of Address Issues
+1. **No Address**: Missing street address
+2. **No City**: Missing city name
+3. **No Province**: Missing province
+4. **No GPS**: Missing latitude/longitude coordinates
+
+### Fixing Address Issues
+1. Click "Address Issues" card on dashboard
+2. Select issue type tab
+3. Click edit button on customer
+4. Fill in missing information
+5. Save changes
+
+## Warehouses
+
+ProMed operates from 4 warehouse locations:
+
+| Code | Location | Province | Manager |
+|------|----------|----------|---------|
+| GP | Johannesburg | Gauteng | Charles |
+| KZN | Durban | KwaZulu-Natal | Devan |
+| CPT | Cape Town | Western Cape | Tsepho |
+| PE | Gqeberha | Eastern Cape | Cheese |
+
+## Reports Available
+
+1. **Delivery Performance**: On-time delivery metrics
+2. **POD Report**: Proof of delivery status by tripsheet
+3. **Fuel Consumption**: Vehicle fuel usage analysis
+4. **Driver Performance**: Driver efficiency metrics
+5. **Route Efficiency**: Route optimization data
+
+## Vehicle Maintenance
+
+### Maintenance Types
+- Scheduled Service
+- Repairs
+- License Renewal
+- COF (Certificate of Fitness)
+- Inspections
+
+### Maintenance Statuses
+- Scheduled
+- In Progress
+- Completed
+- Overdue
+
+## Common Questions
+
+Q: How do I create a tripsheet?
+A: Go to Tripsheets tab > Click "Create Tripsheet" > Select pending invoices > Assign driver/vehicle > Save
+
+Q: How do I track a vehicle?
+A: Go to Fleet Tracking tab > Select vehicle from list > View on map
+
+Q: How do I approve a sleep out?
+A: Click Sleep Outs card > Find pending request > Click approve/reject
+
+Q: How do I fix a customer's address?
+A: Click Address Issues card > Find customer > Edit > Fill in details > Save
+
+Q: How do I see fuel consumption?
+A: Go to Reports > Fuel Consumption Report > Select date range
+
+Q: How do I import invoices?
+A: Go to Invoices tab > Click Import > Select JSON file > Review > Confirm
+
+## Keyboard Shortcuts
+- Ctrl+N: New Tripsheet
+- Ctrl+P: Print current view
+- Ctrl+F: Search/Filter
+- Escape: Close dialog

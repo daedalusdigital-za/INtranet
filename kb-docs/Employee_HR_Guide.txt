@@ -1,0 +1,151 @@
+# ProMed Technologies - Employee & HR Knowledge Base
+
+## Employee Directory
+
+### Finding Employees
+- Search by name
+- Search by department
+- Search by extension number
+- Browse by team
+
+### Employee Information Available
+- Full name
+- Job title
+- Department
+- Email address
+- Phone extension
+- Office location
+- Manager
+
+## Departments
+
+### ProMed Departments
+- Executive Management
+- Finance & Accounts
+- Human Resources
+- IT Department
+- Sales & Marketing
+- Operations
+- Logistics
+- Customer Service
+- Warehouse (GP, KZN, CPT, PE)
+
+## Phone Extensions
+
+### How to Find Extensions
+- Search employee directory
+- Ask Welly: "What's the extension for [name]?"
+- Check department contact list
+
+### Extension Format
+- Internal: 4-digit extension (e.g., 1234)
+- External: Full number + extension
+
+## Attendance
+
+### Clock In/Out
+- Employees clock in at start of day
+- Clock out at end of day
+- System tracks presence automatically
+
+### Attendance Statuses
+- **Present**: Clocked in and working
+- **Absent**: Not clocked in
+- **Late**: Clocked in after start time
+- **On Leave**: Approved leave day
+- **Half Day**: Working partial day
+
+### Viewing Attendance
+- Managers can view team attendance
+- HR can view all attendance
+- Reports available for date ranges
+
+## Leave Management
+
+### Leave Types
+- Annual Leave (21 days per year)
+- Sick Leave (with medical certificate for 2+ days)
+- Family Responsibility Leave
+- Study Leave
+- Maternity/Paternity Leave
+- Unpaid Leave
+
+### Leave Request Process
+1. Employee submits leave request
+2. Manager reviews and approves/rejects
+3. HR processes approved leave
+4. Leave balance updated
+
+### Leave Balances
+- Check remaining leave days
+- View leave history
+- Plan leave in advance
+
+## Support Tickets
+
+### Submitting Tickets
+1. Go to Support > New Ticket
+2. Select category (IT, HR, Facilities, etc.)
+3. Describe the issue
+4. Set priority
+5. Submit
+
+### Ticket Priorities
+- **Low**: Non-urgent, general requests
+- **Medium**: Important but not critical
+- **High**: Affects work, needs quick response
+- **Critical**: System down, immediate attention
+
+### Ticket Statuses
+- Open: New ticket
+- In Progress: Being worked on
+- Pending: Waiting for information
+- Resolved: Fix implemented
+- Closed: Confirmed resolved
+
+## Meetings
+
+### Scheduling Meetings
+- Use calendar to check availability
+- Book meeting rooms
+- Send invitations
+- Set agenda
+
+### Meeting Rooms
+- Board Room (20 capacity)
+- Conference Room A (10 capacity)
+- Conference Room B (8 capacity)
+- Training Room (30 capacity)
+
+## Announcements
+
+### Company Announcements
+- Posted by management/HR
+- Important updates
+- Policy changes
+- Events and news
+
+### Viewing Announcements
+- Dashboard shows recent announcements
+- Click to read full details
+- Archive of past announcements
+
+## Common Questions
+
+Q: What's John Smith's extension?
+A: Search employee directory or ask "What's the extension for John Smith?"
+
+Q: Who's on leave today?
+A: Check attendance dashboard or ask "Who's on leave today?"
+
+Q: How do I request leave?
+A: HR > Leave Management > New Request > Select dates > Submit
+
+Q: How do I submit a support ticket?
+A: Support > New Ticket > Fill details > Submit
+
+Q: Who's my manager?
+A: Check your employee profile or org chart
+
+Q: How many leave days do I have?
+A: HR > My Leave > View balance

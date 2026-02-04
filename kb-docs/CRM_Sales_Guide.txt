@@ -1,0 +1,124 @@
+# ProMed Technologies - CRM & Sales Knowledge Base
+
+## CRM Module Overview
+
+The CRM module manages customer relationships, leads, and sales activities.
+
+## Leads Management
+
+### Lead Sources
+- Website inquiries
+- Phone calls
+- Email campaigns
+- Referrals
+- Trade shows
+
+### Lead Statuses
+1. **New**: Fresh lead, not contacted
+2. **Contacted**: Initial contact made
+3. **Qualified**: Lead shows genuine interest
+4. **Proposal**: Quote/proposal sent
+5. **Negotiation**: Discussing terms
+6. **Won**: Converted to customer
+7. **Lost**: Lead did not convert
+
+### Lead Assignment
+- Leads are assigned to sales representatives
+- Can be reassigned as needed
+- Track all activities per lead
+
+## Customers
+
+### Customer Types
+- Direct customers
+- Distributors
+- Government accounts
+- Retail chains
+
+### Customer Information
+- Company name and registration
+- Contact details (phone, email, fax)
+- Physical address
+- Delivery address
+- Payment terms
+- Credit limit
+- VAT number
+
+### Customer Codes
+Customers are identified by unique codes imported from SYSPRO ERP.
+
+## Sales Activities
+
+### Activity Types
+- Phone calls
+- Emails
+- Meetings
+- Site visits
+- Follow-ups
+
+### Activity Tracking
+- Log all customer interactions
+- Set follow-up reminders
+- Track outcomes
+
+## Quotes & Proposals
+
+### Quote Process
+1. Create quote from customer inquiry
+2. Add products and pricing
+3. Apply discounts if applicable
+4. Send to customer
+5. Follow up for response
+
+### Quote Statuses
+- Draft
+- Sent
+- Accepted
+- Rejected
+- Expired
+
+## Sales Reports
+
+### Available Reports
+- Sales by customer
+- Sales by product
+- Sales by region
+- Sales by sales rep
+- Monthly sales trends
+
+## Campaigns
+
+### Campaign Types
+- Email marketing
+- Product launches
+- Promotions
+- Seasonal campaigns
+
+### Campaign Tracking
+- Track responses
+- Measure conversion rates
+- ROI analysis
+
+## Integration with Logistics
+
+### Order to Delivery Flow
+1. Sales creates customer order
+2. Order converted to invoice in SYSPRO
+3. Invoice imported to Logistics
+4. Tripsheet created for delivery
+5. Driver delivers and captures POD
+6. Delivery confirmed
+
+## Common Questions
+
+Q: How do I add a new lead?
+A: CRM > Leads > Add New Lead > Fill details > Save
+
+Q: How do I convert a lead to customer?
+A: Open lead > Click "Convert to Customer" > Confirm
+
+Q: How do I see my sales pipeline?
+A: CRM > Pipeline View > Filter by status
+
+Q: How do I track campaign performance?
+A: CRM > Campaigns > Select campaign > View metrics

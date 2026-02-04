@@ -1136,6 +1136,153 @@ namespace ProjectTracker.API.Controllers.Logistics
         #region Address Cleanup
 
         /// <summary>
+        /// Get customers with address issues (missing address, city, province, or coordinates)
+        /// </summary>
+        [HttpGet("address-issues")]
+        public async Task<ActionResult<AddressIssuesResponseDto>> GetAddressIssues(
+            [FromQuery] string? search = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50)
+        {
+            // Only find customers that TRULY have no address data at all
+            var query = _context.LogisticsCustomers
+                .Where(c => c.Status == "Active")
+                .Where(c => 
+                    // Missing ALL address fields (no address anywhere)
+                    (string.IsNullOrEmpty(c.Address) && 
+                     string.IsNullOrEmpty(c.PhysicalAddress) && 
+                     string.IsNullOrEmpty(c.DeliveryAddress) &&
+                     string.IsNullOrEmpty(c.AddressLinesJson)) ||
+                    // Missing ALL city fields
+                    (string.IsNullOrEmpty(c.City) && string.IsNullOrEmpty(c.DeliveryCity)) ||
+                    // Missing ALL province fields
+                    (string.IsNullOrEmpty(c.Province) && string.IsNullOrEmpty(c.DeliveryProvince)) ||
+                    // Missing BOTH coordinates (need both for geocoding)
+                    (c.Latitude == null && c.Longitude == null)
+                );
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                var searchLower = search.ToLower();
+                query = query.Where(c =>
+                    c.Name.ToLower().Contains(searchLower) ||
+                    (c.CustomerCode != null && c.CustomerCode.ToLower().Contains(searchLower)) ||
+                    (c.ShortName != null && c.ShortName.ToLower().Contains(searchLower)));
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var customers = await query
+                .OrderBy(c => c.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(c => new CustomerAddressIssueDto
+                {
+                    Id = c.Id,
+                    CustomerCode = c.CustomerCode,
+                    Name = c.Name,
+                    ShortName = c.ShortName,
+                    Address = c.Address,
+                    PhysicalAddress = c.PhysicalAddress,
+                    DeliveryAddress = c.DeliveryAddress,
+                    City = c.City,
+                    DeliveryCity = c.DeliveryCity,
+                    Province = c.Province,
+                    DeliveryProvince = c.DeliveryProvince,
+                    PostalCode = c.PostalCode,
+                    DeliveryPostalCode = c.DeliveryPostalCode,
+                    Latitude = c.Latitude,
+                    Longitude = c.Longitude,
+                    // Only flag as missing if ALL address fields are empty
+                    HasMissingAddress = string.IsNullOrEmpty(c.Address) && 
+                                       string.IsNullOrEmpty(c.PhysicalAddress) && 
+                                       string.IsNullOrEmpty(c.DeliveryAddress) &&
+                                       string.IsNullOrEmpty(c.AddressLinesJson),
+                    HasMissingCity = string.IsNullOrEmpty(c.City) && string.IsNullOrEmpty(c.DeliveryCity),
+                    HasMissingProvince = string.IsNullOrEmpty(c.Province) && string.IsNullOrEmpty(c.DeliveryProvince),
+                    // Only flag if BOTH coordinates are missing
+                    HasMissingCoordinates = c.Latitude == null && c.Longitude == null
+                })
+                .ToListAsync();
+
+            return Ok(new AddressIssuesResponseDto
+            {
+                Customers = customers,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            });
+        }
+
+        /// <summary>
+        /// Get count of customers with address issues
+        /// </summary>
+        [HttpGet("address-issues/count")]
+        public async Task<ActionResult<int>> GetAddressIssuesCount()
+        {
+            var count = await _context.LogisticsCustomers
+                .Where(c => c.Status == "Active")
+                .Where(c => 
+                    // Missing ALL address fields
+                    (string.IsNullOrEmpty(c.Address) && 
+                     string.IsNullOrEmpty(c.PhysicalAddress) && 
+                     string.IsNullOrEmpty(c.DeliveryAddress) &&
+                     string.IsNullOrEmpty(c.AddressLinesJson)) ||
+                    // Missing ALL city fields
+                    (string.IsNullOrEmpty(c.City) && string.IsNullOrEmpty(c.DeliveryCity)) ||
+                    // Missing ALL province fields
+                    (string.IsNullOrEmpty(c.Province) && string.IsNullOrEmpty(c.DeliveryProvince)) ||
+                    // Missing BOTH coordinates
+                    (c.Latitude == null && c.Longitude == null)
+                )
+                .CountAsync();
+
+            return Ok(count);
+        }
+
+        /// <summary>
+        /// Update customer address information
+        /// </summary>
+        [HttpPatch("{id}/address")]
+        public async Task<ActionResult<CustomerDto>> UpdateCustomerAddress(int id, [FromBody] UpdateCustomerAddressDto dto)
+        {
+            var customer = await _context.LogisticsCustomers.FindAsync(id);
+            if (customer == null)
+                return NotFound(new { error = "Customer not found" });
+
+            // Update address fields
+            if (dto.DeliveryAddress != null)
+                customer.DeliveryAddress = dto.DeliveryAddress;
+            if (dto.DeliveryCity != null)
+                customer.DeliveryCity = dto.DeliveryCity;
+            if (dto.DeliveryProvince != null)
+                customer.DeliveryProvince = dto.DeliveryProvince;
+            if (dto.DeliveryPostalCode != null)
+                customer.DeliveryPostalCode = dto.DeliveryPostalCode;
+            if (dto.City != null)
+                customer.City = dto.City;
+            if (dto.Province != null)
+                customer.Province = dto.Province;
+            if (dto.PostalCode != null)
+                customer.PostalCode = dto.PostalCode;
+            if (dto.Latitude.HasValue)
+                customer.Latitude = dto.Latitude;
+            if (dto.Longitude.HasValue)
+                customer.Longitude = dto.Longitude;
+
+            // Also update physical address if delivery address is provided
+            if (!string.IsNullOrEmpty(dto.DeliveryAddress) && string.IsNullOrEmpty(customer.PhysicalAddress))
+                customer.PhysicalAddress = dto.DeliveryAddress;
+
+            customer.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Updated address for customer {Id} - {Name}", customer.Id, customer.Name);
+
+            return Ok(await GetCustomerDtoById(id));
+        }
+
+        /// <summary>
         /// Clean up and enrich customer addresses using Google Maps Geocoding API
         /// </summary>
         /// <param name="batchSize">Number of customers to process (default: all)</param>

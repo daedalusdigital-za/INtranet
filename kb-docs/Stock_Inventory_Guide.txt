@@ -1,0 +1,93 @@
+# ProMed Technologies - Stock & Inventory Knowledge Base
+
+## Stock on Hand (SOH)
+
+### Overview
+Stock on Hand tracks inventory levels across all warehouse locations. Data is imported from SYSPRO ERP.
+
+### SOH Import Process
+1. Export SOH report from SYSPRO as CSV
+2. Go to Stock Management > Import SOH
+3. Select warehouse and upload file
+4. Review import preview
+5. Commit to save stock levels
+
+### SOH Fields
+- **Item Code**: Unique product identifier
+- **Description**: Product name/description
+- **Quantity**: Units in stock
+- **Unit of Measure**: Each, Box, Pallet, etc.
+- **Bin Location**: Physical location in warehouse
+- **Total Cost**: Value of stock
+
+## Warehouses
+
+### Warehouse Locations
+
+| Code | Name | City | Province | Manager | Contact |
+|------|------|------|----------|---------|---------|
+| GP | Gauteng Warehouse | Johannesburg | Gauteng | Charles | - |
+| KZN | KZN Warehouse | Durban | KwaZulu-Natal | Devan | - |
+| CPT | Cape Town Warehouse | Cape Town | Western Cape | Tsepho | - |
+| PE | PE Warehouse | Gqeberha | Eastern Cape | Cheese | - |
+
+### Warehouse Functions
+- Receive deliveries from suppliers
+- Pick and pack customer orders
+- Load vehicles for delivery
+- Stock counting and adjustments
+
+## Stock Queries
+
+### Checking Stock Levels
+- View stock by warehouse
+- Search by item code or description
+- Filter by category
+- Export stock reports
+
+### Stock Reports
+- Stock Valuation Report
+- Stock Movement Report
+- Low Stock Alert
+- Expiry Date Report
+
+## Stock Transfer
+
+### Transfer Process
+1. Create transfer request
+2. Select source warehouse
+3. Select destination warehouse
+4. Add items and quantities
+5. Dispatch from source
+6. Receive at destination
+
+## Stock Adjustments
+
+### When to Adjust
+- Physical count discrepancies
+- Damaged goods
+- Expired products
+- Write-offs
+
+### Adjustment Types
+- Count Adjustment
+- Damage
+- Expiry
+- Write-off
+
+## Common Questions
+
+Q: How do I check stock at a specific warehouse?
+A: Go to Stock Management > Select warehouse from dropdown > View stock list
+
+Q: Who manages the KZN warehouse?
+A: Devan manages the KZN (Durban) warehouse
+
+Q: How do I import new stock levels?
+A: Stock Management > Import SOH > Upload CSV > Review > Commit
+
+Q: How do I find a specific item?
+A: Use the search box to search by item code or description
+
+Q: How often should SOH be updated?
+A: Daily or after each major stock movement

@@ -1,0 +1,229 @@
+# ProMed Technologies - System Features & Navigation
+
+## Application Overview
+
+The ProMed Intranet is a comprehensive business management system covering:
+- Employee management and HR
+- Project tracking
+- Logistics and delivery operations
+- Stock and inventory management
+- CRM and sales
+- Support ticketing
+- Company communications
+
+## Main Navigation
+
+### Dashboard
+- Overview of key metrics
+- Quick access to common tasks
+- Recent activity feed
+- Announcements
+
+### Projects (Kanban Boards)
+- Project management with boards
+- Tasks organized in columns
+- Drag and drop cards
+- Team collaboration
+
+### Logistics
+- Tripsheets management
+- Vehicle tracking
+- Driver management
+- Delivery operations
+- Fuel management (TFN)
+
+### Stock
+- Inventory levels
+- Warehouse management
+- SOH imports
+- Stock transfers
+
+### CRM
+- Customer management
+- Lead tracking
+- Sales pipeline
+- Campaign management
+
+### HR
+- Employee directory
+- Attendance tracking
+- Leave management
+- Org chart
+
+### Support
+- Ticket submission
+- Issue tracking
+- Knowledge base
+
+### Settings
+- User preferences
+- System configuration
+- Integrations
+
+## Welly AI Assistant
+
+### What is Welly?
+Welly is the AI assistant built into the intranet. Welly can:
+- Answer questions about company data
+- Look up employee information
+- Check attendance and leave
+- Query logistics data (loads, tripsheets, drivers)
+- Find stock information
+- Search the knowledge base
+
+### How to Use Welly
+- Click the chat icon in the corner
+- Type your question
+- Welly responds with relevant information
+
+### Example Questions for Welly
+- "Who is on leave today?"
+- "What's the status of load LD-000123?"
+- "How many active tripsheets are there?"
+- "What stock do we have at KZN warehouse?"
+- "Who manages the Cape Town warehouse?"
+- "Show me today's attendance"
+- "What's John's extension number?"
+
+## User Roles
+
+### Standard User
+- View own data
+- Submit requests
+- Use basic features
+
+### Manager
+- View team data
+- Approve requests
+- Run reports
+
+### Admin
+- Full system access
+- User management
+- System configuration
+
+### Logistics User
+- Full logistics module access
+- Create tripsheets
+- Manage deliveries
+
+### HR User
+- Employee management
+- Leave approvals
+- Attendance reports
+
+## Integrations
+
+### SYSPRO ERP
+- Customer data import
+- Invoice import
+- Stock levels import
+- Product data sync
+
+### CarTrack
+- Vehicle GPS tracking
+- Real-time location
+- Speed and status
+- Trip history
+
+### TFN (TransFleet Network)
+- Fuel card management
+- Transaction history
+- Depot locations
+- Balance monitoring
+
+### Google Maps
+- Route optimization
+- Address geocoding
+- Distance calculation
+- Delivery mapping
+
+## Mobile Access
+
+The intranet is responsive and works on:
+- Desktop computers
+- Tablets
+- Mobile phones
+
+## Data Security
+
+### Authentication
+- Username and password login
+- Session timeout for security
+- Password policy enforcement
+
+### Authorization
+- Role-based access control
+- Module-level permissions
+- Data visibility rules
+
+## Common Tasks
+
+### Daily Operations
+1. Check dashboard for updates
+2. Review pending approvals
+3. Check attendance
+4. Monitor logistics status
+5. Respond to support tickets
+
+### Weekly Tasks
+1. Review reports
+2. Update project boards
+3. Check upcoming maintenance
+4. Review leave requests
+
+### Monthly Tasks
+1. Stock take and SOH import
+2. Performance reviews
+3. Report generation
+4. System maintenance
+
+## Getting Help
+
+### Self-Service
+- Search knowledge base
+- Ask Welly AI
+- Check FAQ section
+
+### Human Support
+- Submit support ticket
+- Contact IT department
+- Email helpdesk
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+K | Search |
+| Ctrl+N | New item |
+| Ctrl+P | Print |
+| Ctrl+S | Save |
+| Escape | Close dialog |
+| ? | Show help |
+
+## Browser Support
+
+Recommended browsers:
+- Google Chrome (latest)
+- Microsoft Edge (latest)
+- Mozilla Firefox (latest)
+- Safari (latest)
+
+## Troubleshooting
+
+### Page Not Loading
+1. Check internet connection
+2. Clear browser cache
+3. Try different browser
+4. Contact IT if persists
+
+### Can't Login
+1. Check caps lock
+2. Reset password
+3. Contact IT support
+
+### Data Not Showing
+1. Refresh the page
+2. Check filters
+3. Verify permissions
+4. Report to IT

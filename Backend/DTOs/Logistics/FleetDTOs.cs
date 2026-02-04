@@ -258,4 +258,61 @@ namespace ProjectTracker.API.DTOs.Logistics
         public int CustomersWithPhone { get; set; }
         public int CustomersFromERP { get; set; }
     }
+
+    // ==========================================
+    // Customer Address Issues DTOs
+    // ==========================================
+
+    /// <summary>
+    /// DTO for customers with address issues
+    /// </summary>
+    public class CustomerAddressIssueDto
+    {
+        public int Id { get; set; }
+        public string? CustomerCode { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? ShortName { get; set; }
+        public string? Address { get; set; }
+        public string? PhysicalAddress { get; set; }
+        public string? DeliveryAddress { get; set; }
+        public string? City { get; set; }
+        public string? DeliveryCity { get; set; }
+        public string? Province { get; set; }
+        public string? DeliveryProvince { get; set; }
+        public string? PostalCode { get; set; }
+        public string? DeliveryPostalCode { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public bool HasMissingAddress { get; set; }
+        public bool HasMissingCity { get; set; }
+        public bool HasMissingProvince { get; set; }
+        public bool HasMissingCoordinates { get; set; }
+    }
+
+    /// <summary>
+    /// Response for address issues query
+    /// </summary>
+    public class AddressIssuesResponseDto
+    {
+        public List<CustomerAddressIssueDto> Customers { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for updating customer address
+    /// </summary>
+    public class UpdateCustomerAddressDto
+    {
+        public string? DeliveryAddress { get; set; }
+        public string? DeliveryCity { get; set; }
+        public string? DeliveryProvince { get; set; }
+        public string? DeliveryPostalCode { get; set; }
+        public string? City { get; set; }
+        public string? Province { get; set; }
+        public string? PostalCode { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+    }
 }

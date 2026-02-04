@@ -304,6 +304,61 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // Vision API - Get livestream URLs for a vehicle
+        [HttpPost("vision/livestream/{registration}")]
+        public async Task<ActionResult<LivestreamResponseDto>> GetVehicleLivestream(string registration, [FromBody] LivestreamRequestDto request)
+        {
+            try
+            {
+                _logger.LogInformation("Requesting livestream for vehicle {Registration}", registration);
+
+                var cameras = request.Cameras ?? new int[] { 1, 2 }; // Default to front and rear cameras
+                var result = await _carTrackService.GetVehicleLivestreamAsync(registration, cameras);
+
+                if (result == null)
+                {
+                    return NotFound(new { error = "Unable to get livestream", message = "Vehicle may not have Vision enabled or service unavailable" });
+                }
+
+                // Check if there was an error from CarTrack
+                if (!string.IsNullOrEmpty(result.ErrorCode))
+                {
+                    if (result.ErrorCode == "VISION_NOT_ENABLED")
+                    {
+                        return StatusCode(403, new { 
+                            error = "Vision API not enabled", 
+                            message = result.Error ?? "Your CarTrack account does not have Vision API enabled. Please contact your CarTrack sales representative to enable this feature.",
+                            code = result.ErrorCode
+                        });
+                    }
+                    return BadRequest(new { error = result.ErrorCode, message = result.Error });
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting livestream for vehicle {Registration}", registration);
+                return StatusCode(500, new { error = "Failed to get livestream", message = ex.Message });
+            }
+        }
+
+        // Vision API - Get all Vision-enabled vehicles
+        [HttpGet("vision/vehicles")]
+        public async Task<ActionResult<List<VisionVehicleDto>>> GetVisionEnabledVehicles()
+        {
+            try
+            {
+                var vehicles = await _carTrackService.GetVisionEnabledVehiclesAsync();
+                return Ok(vehicles);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting Vision-enabled vehicles");
+                return StatusCode(500, new { error = "Failed to get Vision vehicles", message = ex.Message });
+            }
+        }
+
         [HttpGet("vehicles/{id}")]
         public async Task<ActionResult<VehicleDto>> GetVehicle(int id)
         {

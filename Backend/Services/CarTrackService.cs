@@ -12,6 +12,8 @@ namespace ProjectTracker.API.Services
         Task<FleetStatusDto> GetFleetStatusAsync();
         Task<TripTrackingDto?> TrackActiveTripAsync(int loadId);
         Task<List<CarTrackVehicleData>> GetRawVehicleDataAsync();
+        Task<LivestreamResponseDto?> GetVehicleLivestreamAsync(string registration, int[] cameras);
+        Task<List<VisionVehicleDto>> GetVisionEnabledVehiclesAsync();
     }
 
     // DTO for raw CarTrack vehicle data used in sync
@@ -248,6 +250,125 @@ namespace ProjectTracker.API.Services
             }
         }
 
+        public async Task<LivestreamResponseDto?> GetVehicleLivestreamAsync(string registration, int[] cameras)
+        {
+            try
+            {
+                _logger.LogInformation("Requesting livestream for vehicle {Registration} with cameras {Cameras}", 
+                    registration, string.Join(",", cameras));
+
+                var requestBody = new { camera = cameras };
+                var jsonContent = JsonSerializer.Serialize(requestBody);
+                var content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync($"vision/livestream/{registration}", content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("CarTrack Vision API returned {StatusCode} for {Registration}: {Error}", 
+                        response.StatusCode, registration, errorContent);
+                    
+                    if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    {
+                        _logger.LogWarning("CarTrack Vision API not enabled for this account");
+                        // Return a response with error information instead of null
+                        return new LivestreamResponseDto
+                        {
+                            VehicleRegistration = registration,
+                            Error = $"Your CarTrack account ({_username}) does not have Vision API enabled. Please contact your CarTrack sales representative to enable this feature, or update the CarTrack credentials in appsettings.json with an account that has Vision access.",
+                            ErrorCode = "VISION_NOT_ENABLED"
+                        };
+                    }
+                    
+                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    {
+                        _logger.LogWarning("CarTrack Vision API authentication failed");
+                        return new LivestreamResponseDto
+                        {
+                            VehicleRegistration = registration,
+                            Error = "CarTrack API authentication failed. Please check the username and password in appsettings.json.",
+                            ErrorCode = "AUTH_FAILED"
+                        };
+                    }
+                    return null;
+                }
+
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogDebug("CarTrack Vision API response: {Response}", responseContent);
+
+                var visionResponse = JsonSerializer.Deserialize<CarTrackVisionResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (visionResponse?.Data == null)
+                {
+                    return null;
+                }
+
+                var result = new LivestreamResponseDto
+                {
+                    VehicleRegistration = registration,
+                    Streams = visionResponse.Data.Select(stream => new LivestreamUrlDto
+                    {
+                        CameraId = stream.Camera,
+                        CameraName = GetCameraName(stream.Camera),
+                        StreamUrl = stream.StreamUrl ?? stream.Url ?? string.Empty,
+                        ThumbnailUrl = stream.ThumbnailUrl
+                    }).ToList()
+                };
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching livestream for vehicle {Registration}", registration);
+                return null;
+            }
+        }
+
+        public async Task<List<VisionVehicleDto>> GetVisionEnabledVehiclesAsync()
+        {
+            try
+            {
+                // Get all vehicles first
+                var allVehicles = await GetRawVehicleDataAsync();
+                
+                // Return all vehicles as potential Vision-enabled vehicles
+                // The actual Vision capability will be determined when trying to stream
+                return allVehicles.Select(v => new VisionVehicleDto
+                {
+                    VehicleId = v.VehicleId,
+                    Registration = v.Registration ?? string.Empty,
+                    VehicleName = v.Registration,
+                    HasVision = true, // Assume all have Vision, will fail gracefully if not
+                    AvailableCameras = new List<int> { 1, 2, 3, 4, 5, 6, 7, 8 } // Default all cameras
+                }).Where(v => !string.IsNullOrEmpty(v.Registration)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching Vision-enabled vehicles");
+                return new List<VisionVehicleDto>();
+            }
+        }
+
+        private static string GetCameraName(int cameraId)
+        {
+            return cameraId switch
+            {
+                1 => "Front Camera",
+                2 => "Rear Camera",
+                3 => "Driver Camera",
+                4 => "Cabin Camera",
+                5 => "Left Side Camera",
+                6 => "Right Side Camera",
+                7 => "Cargo Camera",
+                8 => "Auxiliary Camera",
+                _ => $"Camera {cameraId}"
+            };
+        }
+
         private string DetermineVehicleStatus(double? speed, bool? ignition, DateTime? lastUpdate)
         {
             if (lastUpdate == null || DateTime.UtcNow.Subtract(lastUpdate.Value).TotalHours > 24)
@@ -326,6 +447,28 @@ namespace ProjectTracker.API.Services
             
             [System.Text.Json.Serialization.JsonPropertyName("last_name")]
             public string? LastName { get; set; }
+        }
+
+        // Vision API response models
+        private class CarTrackVisionResponse
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("data")]
+            public List<CarTrackVisionStream>? Data { get; set; }
+        }
+
+        private class CarTrackVisionStream
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("camera")]
+            public int Camera { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("stream_url")]
+            public string? StreamUrl { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("url")]
+            public string? Url { get; set; }
+            
+            [System.Text.Json.Serialization.JsonPropertyName("thumbnail_url")]
+            public string? ThumbnailUrl { get; set; }
         }
     }
 }

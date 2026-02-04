@@ -83,4 +83,35 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal? MaxLoadVolume { get; set; }
         public string? FuelType { get; set; }
     }
+
+    // Vision API DTOs
+    public class LivestreamRequestDto
+    {
+        public int[]? Cameras { get; set; }
+    }
+
+    public class LivestreamResponseDto
+    {
+        public string VehicleRegistration { get; set; } = string.Empty;
+        public List<LivestreamUrlDto> Streams { get; set; } = new();
+        public string? Error { get; set; }
+        public string? ErrorCode { get; set; }
+    }
+
+    public class LivestreamUrlDto
+    {
+        public int CameraId { get; set; }
+        public string CameraName { get; set; } = string.Empty;
+        public string StreamUrl { get; set; } = string.Empty;
+        public string? ThumbnailUrl { get; set; }
+    }
+
+    public class VisionVehicleDto
+    {
+        public string VehicleId { get; set; } = string.Empty;
+        public string Registration { get; set; } = string.Empty;
+        public string? VehicleName { get; set; }
+        public bool HasVision { get; set; }
+        public List<int> AvailableCameras { get; set; } = new();
+    }
 }
