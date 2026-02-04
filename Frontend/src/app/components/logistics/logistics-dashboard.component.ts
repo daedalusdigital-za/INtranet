@@ -4606,6 +4606,16 @@ Notes: ${record.notes || 'No notes'}
       );
     }
     
+    // Sort: Delivered/Completed status always at the bottom
+    trips = [...trips].sort((a, b) => {
+      const aDelivered = a.status?.toLowerCase() === 'delivered' || a.status?.toLowerCase() === 'completed';
+      const bDelivered = b.status?.toLowerCase() === 'delivered' || b.status?.toLowerCase() === 'completed';
+      
+      if (aDelivered && !bDelivered) return 1;  // a goes to bottom
+      if (!aDelivered && bDelivered) return -1; // b goes to bottom
+      return 0; // keep original order within same category
+    });
+    
     return trips;
   });
 
