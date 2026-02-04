@@ -102,6 +102,27 @@ namespace ProjectTracker.API.DTOs.Logistics
         public DateTime? HireDate { get; set; }
     }
 
+    public class DriverWithStatsDto
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string FullName => $"{FirstName} {LastName}";
+        public string LicenseNumber { get; set; } = string.Empty;
+        public string LicenseType { get; set; } = string.Empty;
+        public DateTime? LicenseExpiryDate { get; set; }
+        public string? EmployeeNumber { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? Email { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTime? DateOfBirth { get; set; }
+        public DateTime? HireDate { get; set; }
+        
+        // Statistics (from delivered loads/tripsheets only)
+        public int TotalTrips { get; set; }
+        public decimal TotalKmDriven { get; set; }
+    }
+
     public class CreateDriverDto
     {
         public string FirstName { get; set; } = string.Empty;

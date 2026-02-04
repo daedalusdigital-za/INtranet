@@ -147,5 +147,64 @@ namespace ProjectTracker.API.Controllers.Logistics
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        /// <summary>
+        /// Get all drivers with their delivery statistics (total trips and KM from delivered loads)
+        /// </summary>
+        [HttpGet("with-stats")]
+        public async Task<ActionResult<IEnumerable<DriverWithStatsDto>>> GetDriversWithStats()
+        {
+            try
+            {
+                // Get all drivers
+                var drivers = await _context.Drivers.ToListAsync();
+
+                // Get statistics for all drivers from delivered loads only
+                var deliveredLoadStats = await _context.Loads
+                    .Where(l => l.DriverId != null && l.Status == "Delivered")
+                    .GroupBy(l => l.DriverId)
+                    .Select(g => new
+                    {
+                        DriverId = g.Key,
+                        TotalTrips = g.Count(),
+                        TotalKm = g.Sum(l => (l.EstimatedDistance ?? 0) + (l.ActualDistance ?? 0) > 0 
+                            ? (l.ActualDistance ?? l.EstimatedDistance ?? 0)
+                            : 0)
+                    })
+                    .ToListAsync();
+
+                // Map to DTO with stats and sort by TotalKmDriven descending (most KM first)
+                var result = drivers.Select(d =>
+                {
+                    var stats = deliveredLoadStats.FirstOrDefault(s => s.DriverId == d.Id);
+                    return new DriverWithStatsDto
+                    {
+                        Id = d.Id,
+                        FirstName = d.FirstName,
+                        LastName = d.LastName,
+                        LicenseNumber = d.LicenseNumber,
+                        LicenseType = d.LicenseType,
+                        LicenseExpiryDate = d.LicenseExpiryDate,
+                        EmployeeNumber = d.EmployeeNumber,
+                        PhoneNumber = d.PhoneNumber,
+                        Email = d.Email,
+                        Status = d.Status,
+                        DateOfBirth = d.DateOfBirth,
+                        HireDate = d.HireDate,
+                        TotalTrips = stats?.TotalTrips ?? 0,
+                        TotalKmDriven = stats?.TotalKm ?? 0
+                    };
+                })
+                .OrderByDescending(d => d.TotalKmDriven)
+                .ToList();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching drivers with stats");
+                return StatusCode(500, new { message = "Error fetching drivers with stats", error = ex.Message });
+            }
+        }
     }
 }
