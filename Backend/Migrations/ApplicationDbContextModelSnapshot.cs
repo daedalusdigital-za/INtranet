@@ -4136,6 +4136,10 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("Province")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)

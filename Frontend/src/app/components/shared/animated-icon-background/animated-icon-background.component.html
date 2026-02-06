@@ -1,0 +1,38 @@
+<!--
+  Animated Medical Icons Background
+  
+  Structure:
+  - Container div with fixed positioning covering entire viewport
+  - Multiple rows that scroll horizontally (marquee effect)
+  - Each row has duplicate icon sets for seamless looping
+  - Three parallax layers with different speeds
+  - All animations are CSS-only, no JavaScript animation loops
+-->
+
+<div 
+  class="animated-background-container"
+  [class.visible]="visible"
+  [class.hidden]="!visible"
+  [class.theme-light]="theme === 'light'"
+  [class.theme-dark]="theme === 'dark'"
+  aria-hidden="true"
+  role="presentation">
+  
+  <!-- Static rows rendered once -->
+  @for (row of iconRows; track trackByRow($index)) {
+    <div [class]="getRowClasses(row)">
+      <!-- First set of icons -->
+      <div class="icon-set">
+        @for (icon of row.icons; track trackByIcon($index, icon)) {
+          <span class="material-symbols-outlined">{{ icon }}</span>
+        }
+      </div>
+      <!-- Duplicate set for seamless loop -->
+      <div class="icon-set">
+        @for (icon of row.icons; track trackByIcon($index, icon)) {
+          <span class="material-symbols-outlined">{{ icon }}</span>
+        }
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,175 @@
+/**
+ * Animated Icon Background Styles
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Uses only 'transform: translateX()' for animations (GPU composited)
+ * - will-change hints for browser optimization
+ * - pointer-events: none to not interfere with interactions
+ * 
+ * ACCESSIBILITY:
+ * - Respects prefers-reduced-motion media query
+ * - aria-hidden and role="presentation" on container
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CONTAINER STYLES
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.animated-background-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+}
+
+.animated-background-container.hidden {
+  visibility: hidden;
+}
+
+.animated-background-container.visible {
+  visibility: visible;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ICON ROW STYLES
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.icon-row {
+  display: flex;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.icon-set {
+  display: flex;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.icon-row .material-symbols-outlined {
+  padding: 0 20px;
+  font-size: 32px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   LAYER 1 - BACK (Slowest, Largest, Most Transparent)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.layer-1 .material-symbols-outlined {
+  font-size: 48px;
+  padding: 0 30px;
+}
+
+.layer-1 .icon-set {
+  animation-duration: 120s;
+}
+
+.theme-light .layer-1 .material-symbols-outlined {
+  color: rgba(33, 150, 243, 0.25);
+}
+
+.theme-dark .layer-1 .material-symbols-outlined {
+  color: rgba(144, 202, 249, 0.35);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   LAYER 2 - MIDDLE (Medium Speed and Opacity)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.layer-2 .material-symbols-outlined {
+  font-size: 36px;
+  padding: 0 25px;
+}
+
+.layer-2 .icon-set {
+  animation-duration: 80s;
+}
+
+.theme-light .layer-2 .material-symbols-outlined {
+  color: rgba(33, 150, 243, 0.2);
+}
+
+.theme-dark .layer-2 .material-symbols-outlined {
+  color: rgba(144, 202, 249, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   LAYER 3 - FRONT (Fastest, Smallest, Most Visible)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.layer-3 .material-symbols-outlined {
+  font-size: 28px;
+  padding: 0 20px;
+}
+
+.layer-3 .icon-set {
+  animation-duration: 50s;
+}
+
+.theme-light .layer-3 .material-symbols-outlined {
+  color: rgba(33, 150, 243, 0.15);
+}
+
+.theme-dark .layer-3 .material-symbols-outlined {
+  color: rgba(144, 202, 249, 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SCROLL ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.scroll-left .icon-set {
+  animation-name: scroll-left;
+}
+
+.scroll-right .icon-set {
+  animation-name: scroll-right;
+}
+
+@keyframes scroll-left {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes scroll-right {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY - REDUCED MOTION
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-set {
+    animation: none !important;
+  }
+  
+  .material-symbols-outlined {
+    opacity: 0.3 !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PAUSE ANIMATIONS WHEN HIDDEN
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.hidden .icon-set {
+  animation-play-state: paused;
+}

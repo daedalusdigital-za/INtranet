@@ -1,2 +1,0 @@
-﻿UPDATE Users SET Permissions = '["logistics","logistics.view","logistics.manage","logistics.tripsheets","logistics.drivers","logistics.vehicles","logistics.warehouses","logistics.import","logistics.tracking","messaging","messages.send","messages.view","stock_management","support_tickets","documents"]' WHERE UserId IN (3, 15, 16, 20, 22);
-SELECT UserId, Name, Surname FROM Users WHERE UserId IN (3, 15, 16, 20, 22);
