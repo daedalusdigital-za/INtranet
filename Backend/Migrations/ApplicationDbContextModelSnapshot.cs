@@ -2884,6 +2884,50 @@ namespace ProjectTracker.API.Migrations
                     b.ToTable("CardComments");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.CollaborativeDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedById")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LastModifiedById")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("LastModifiedById");
+
+                    b.ToTable("CollaborativeDocuments");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Conversation", b =>
                 {
                     b.Property<int>("ConversationId")
@@ -3001,6 +3045,70 @@ namespace ProjectTracker.API.Migrations
                             ManagerName = "John Smith",
                             Name = "Marketing"
                         });
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.DocumentCollaborator", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("DocumentCollaborators");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.DocumentSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedById")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.Property<string>("YjsState")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("DocumentId");
+
+                    b.ToTable("DocumentSnapshots");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.EmpRegistration", b =>
@@ -4135,10 +4243,6 @@ namespace ProjectTracker.API.Migrations
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Province")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -7079,6 +7183,24 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.CollaborativeDocument", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectTracker.API.Models.User", "LastModifiedBy")
+                        .WithMany()
+                        .HasForeignKey("LastModifiedById")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("LastModifiedBy");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.ConversationParticipant", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Conversation", "Conversation")
@@ -7096,6 +7218,43 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Conversation");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.DocumentCollaborator", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.CollaborativeDocument", "Document")
+                        .WithMany("Collaborators")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectTracker.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.DocumentSnapshot", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("ProjectTracker.API.Models.CollaborativeDocument", "Document")
+                        .WithMany("Snapshots")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Document");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Extension", b =>
@@ -7812,6 +7971,13 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Attachments");
 
                     b.Navigation("Comments");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.CollaborativeDocument", b =>
+                {
+                    b.Navigation("Collaborators");
+
+                    b.Navigation("Snapshots");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Conversation", b =>

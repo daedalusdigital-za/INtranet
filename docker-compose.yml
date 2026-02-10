@@ -28,6 +28,10 @@ services:
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;
       - KnowledgeBase__DocumentsPath=/app/kb-docs
       - DocumentsPath=/app/documents
+      - NasSettings__Host=192.168.11.186
+      - NasSettings__ShareName=NewAge_Tech
+      - NasSettings__Username=Storage
+      - NasSettings__Password=AccMed@2025
       - Ollama__BaseUrl=http://host.docker.internal:11434
       - Ollama__Model=phi3:mini
       - Ollama__Enabled=true
@@ -37,7 +41,7 @@ services:
       - "0.0.0.0:5143:5143"
     volumes:
       - kb-docs:/app/kb-docs
-      - ./documents:/app/documents
+      - nas-documents:/app/documents
     depends_on:
       - database
     networks:
@@ -63,6 +67,12 @@ volumes:
     driver: local
   kb-docs:
     driver: local
+  nas-documents:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: "//192.168.11.186/WorkSpace/IntranetDocuments"
+      o: "username=Storage,password=AccMed@2025,vers=3.0,uid=1000,gid=1000"
 networks:
   projecttracker-network:
     driver: bridge

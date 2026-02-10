@@ -192,6 +192,91 @@ namespace ProjectTracker.API.Controllers
         }
 
         /// <summary>
+        /// Session-based chat with conversation memory (streaming)
+        /// Uses sessionId to maintain chat history across requests
+        /// </summary>
+        [HttpPost("chat/session")]
+        public async Task ChatWithSession([FromBody] ChatRequest request)
+        {
+            Response.ContentType = "text/event-stream";
+            Response.Headers["Cache-Control"] = "no-cache";
+            Response.Headers["Connection"] = "keep-alive";
+
+            try
+            {
+                // Generate session ID if not provided
+                var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
+                
+                // Get the user message
+                var userMessage = request.Prompt ?? request.Messages?.LastOrDefault(m => m.Role == "user")?.Content ?? "";
+                
+                if (string.IsNullOrWhiteSpace(userMessage))
+                {
+                    await WriteSSEMessage("Please provide a message.");
+                    await WriteSSEDone();
+                    return;
+                }
+
+                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
+                var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
+
+                if (useOllama)
+                {
+                    // Use session-based streaming with conversation memory
+                    await foreach (var token in _ollamaService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
+                    {
+                        await WriteSSEToken(token);
+                    }
+                    
+                    // Send session ID in final message so frontend can track it
+                    await WriteSSESessionId(sessionId);
+                }
+                else
+                {
+                    // Fallback - no session support
+                    if (!_aiService.IsModelLoaded)
+                    {
+                        await WriteSSEMessage("AI service is still loading. Please wait a moment and try again.");
+                        await WriteSSEDone();
+                        return;
+                    }
+
+                    var messages = new List<ChatMessage>
+                    {
+                        new ChatMessage { Role = "user", Content = userMessage }
+                    };
+
+                    await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                    {
+                        await WriteSSEToken(token);
+                    }
+                }
+
+                await WriteSSEDone();
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Session chat request was cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during session chat");
+                await WriteSSEMessage("An error occurred while processing your request.");
+                await WriteSSEDone();
+            }
+        }
+
+        /// <summary>
+        /// Clear a chat session's history
+        /// </summary>
+        [HttpDelete("chat/session/{sessionId}")]
+        public IActionResult ClearSession(string sessionId, [FromServices] IConversationMemoryService memoryService)
+        {
+            memoryService.ClearConversation(sessionId);
+            return Ok(new { success = true, message = "Session cleared" });
+        }
+
+        /// <summary>
         /// Upload a PDF and get AI analysis
         /// </summary>
         [HttpPost("upload-pdf")]
@@ -316,11 +401,19 @@ namespace ProjectTracker.API.Controllers
             await Response.WriteAsync("data: [DONE]\n\n");
             await Response.Body.FlushAsync();
         }
+
+        private async Task WriteSSESessionId(string sessionId)
+        {
+            var data = JsonSerializer.Serialize(new { sessionId = sessionId });
+            await Response.WriteAsync($"data: {data}\n\n");
+            await Response.Body.FlushAsync();
+        }
     }
 
     public class ChatRequest
     {
         public string? Prompt { get; set; }
+        public string? SessionId { get; set; }
         public List<ChatMessageDto>? Messages { get; set; }
         public ChatOptions? Options { get; set; }
     }

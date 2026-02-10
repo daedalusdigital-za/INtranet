@@ -259,6 +259,11 @@ import { Subscription } from 'rxjs';
           </button>
         }
         <mat-divider></mat-divider>
+        <button mat-menu-item routerLink="/docs">
+          <mat-icon>description</mat-icon>
+          <span>Docs</span>
+        </button>
+        <mat-divider></mat-divider>
         <button mat-menu-item (click)="logout()">
           <mat-icon>logout</mat-icon>
           <span>Logout</span>

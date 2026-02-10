@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import { Router, CanActivateFn, ActivatedRouteSnapshot } from '@angular/router';
-import { AuthService, ModulePermission } from '../services/auth.service';
+import { AuthService } from '../services/auth.service';
+import { ModuleKey } from '../core/modules.config';
 
 export const authGuard: CanActivateFn = (route, state) => {
   const authService = inject(AuthService);
@@ -41,7 +42,7 @@ export const moduleGuard: CanActivateFn = (route: ActivatedRouteSnapshot, state)
   }
 
   // Get the required module from route data
-  const requiredModule = route.data['module'] as ModulePermission;
+  const requiredModule = route.data['module'] as ModuleKey;
   
   if (!requiredModule) {
     // No module specified, allow access

@@ -17,12 +17,28 @@ export interface DocumentFile {
   lastModified: Date;
   fileType: string;
   icon: string;
+  selected?: boolean;
 }
 
 export interface PasswordValidationResponse {
   success: boolean;
   token?: string;
   message?: string;
+}
+
+export interface FolderInfo {
+  name: string;
+  path: string;
+  fullPath: string;
+}
+
+export interface DocumentPermissions {
+  canRead: boolean;
+  canWrite: boolean;
+  canDelete: boolean;
+  canCreateFolders: boolean;
+  canMove: boolean;
+  userRole: string;
 }
 
 @Injectable({
@@ -53,6 +69,16 @@ export class DocumentsService {
       params = params.set('subfolder', subfolder);
     }
     return this.http.get<DocumentFile[]>(`${this.apiUrl}/files/${encodeURIComponent(department)}`, { params });
+  }
+
+  // Get all folders in a department (for move dialog)
+  getFolders(department: string): Observable<FolderInfo[]> {
+    return this.http.get<FolderInfo[]>(`${this.apiUrl}/folders/${encodeURIComponent(department)}`);
+  }
+
+  // Get user permissions for a department
+  getPermissions(department: string): Observable<DocumentPermissions> {
+    return this.http.get<DocumentPermissions>(`${this.apiUrl}/permissions/${encodeURIComponent(department)}`);
   }
 
   // Upload file to a department
@@ -88,6 +114,34 @@ export class DocumentsService {
     });
   }
 
+  // Preview a file (returns blob for inline viewing)
+  previewFile(department: string, filePath: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/preview/${encodeURIComponent(department)}/${filePath}`, {
+      responseType: 'blob'
+    });
+  }
+
+  // Get preview URL for a file
+  getPreviewUrl(department: string, filePath: string): string {
+    return `${this.apiUrl}/preview/${encodeURIComponent(department)}/${filePath}`;
+  }
+
+  // Move a file or folder
+  moveFile(department: string, sourcePath: string, destinationFolder: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/move/${encodeURIComponent(department)}`, {
+      sourcePath,
+      destinationFolder
+    });
+  }
+
+  // Rename a file or folder
+  renameFile(department: string, path: string, newName: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/rename/${encodeURIComponent(department)}`, {
+      path,
+      newName
+    });
+  }
+
   // Create a new folder
   createFolder(department: string, folderName: string, parentPath?: string): Observable<DocumentFile> {
     return this.http.post<DocumentFile>(`${this.apiUrl}/create-folder/${encodeURIComponent(department)}`, {
@@ -115,5 +169,10 @@ export class DocumentsService {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // Check if file type is previewable
+  isPreviewable(fileType: string): boolean {
+    return ['pdf', 'image', 'word', 'excel', 'powerpoint', 'text', 'csv'].includes(fileType);
   }
 }

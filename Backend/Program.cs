@@ -144,6 +144,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 // Add comprehensive AI Context Service for database access
 builder.Services.AddScoped<IAIContextService, AIContextService>();
 
+// Add Conversation Memory Service for AI chat history
+builder.Services.AddSingleton<IConversationMemoryService, ConversationMemoryService>();
+
 // Add Ollama AI Service for local LLM support
 builder.Services.AddSingleton<IOllamaAIService, OllamaAIService>();
 
@@ -198,5 +201,6 @@ app.MapControllers();
 app.MapHub<BoardHub>("/hubs/board");
 app.MapHub<AttendanceHub>("/hubs/attendance");
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<CollaborativeDocsHub>("/hubs/collaborative-docs");
 
 app.Run();

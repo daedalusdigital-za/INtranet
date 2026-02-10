@@ -9,7 +9,9 @@ namespace ProjectTracker.API.Services
     public interface IOllamaAIService
     {
         Task<string> ChatAsync(List<OllamaMessage> messages, CancellationToken cancellationToken = default);
+        Task<string> ChatWithSessionAsync(string sessionId, string userMessage, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> ChatStreamingAsync(List<OllamaMessage> messages, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, CancellationToken cancellationToken = default);
         Task<bool> IsAvailableAsync();
         Task<List<string>> GetModelsAsync();
     }
@@ -28,17 +30,24 @@ namespace ProjectTracker.API.Services
         private readonly HttpClient _httpClient;
         private readonly ILogger<OllamaAIService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IConversationMemoryService _conversationMemory;
         private readonly string _baseUrl;
         private readonly string _model;
         private readonly string _systemPrompt;
+        
+        // Token limit management
+        private const int MaxContextTokens = 6000;  // Reserve tokens for response
+        private const int ApproxCharsPerToken = 4;
 
         public OllamaAIService(
             ILogger<OllamaAIService> logger, 
             IConfiguration configuration,
-            IServiceScopeFactory scopeFactory)
+            IServiceScopeFactory scopeFactory,
+            IConversationMemoryService conversationMemory)
         {
             _logger = logger;
             _scopeFactory = scopeFactory;
+            _conversationMemory = conversationMemory;
             _baseUrl = configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
             _model = configuration["Ollama:Model"] ?? "llama3.2";
             
@@ -288,6 +297,116 @@ Guidelines:
             reader?.Dispose();
             stream?.Dispose();
             response?.Dispose();
+        }
+
+        /// <summary>
+        /// Chat with session-based conversation memory (non-streaming)
+        /// </summary>
+        public async Task<string> ChatWithSessionAsync(string sessionId, string userMessage, CancellationToken cancellationToken = default)
+        {
+            // Add user message to history
+            _conversationMemory.AddMessage(sessionId, "user", userMessage);
+            
+            // Get conversation history and convert to OllamaMessages
+            var history = _conversationMemory.GetHistory(sessionId);
+            var messages = history.Select(h => new OllamaMessage 
+            { 
+                Role = h.Role, 
+                Content = h.Content 
+            }).ToList();
+            
+            // Truncate to fit within token limits
+            messages = TruncateConversation(messages);
+            
+            try
+            {
+                var response = await ChatAsync(messages, cancellationToken);
+                
+                // Add assistant response to history
+                if (!string.IsNullOrEmpty(response))
+                {
+                    _conversationMemory.AddMessage(sessionId, "assistant", response);
+                }
+                
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ChatWithSessionAsync failed for session {SessionId}", sessionId);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Chat with session-based conversation memory (streaming)
+        /// </summary>
+        public async IAsyncEnumerable<string> ChatStreamingWithSessionAsync(
+            string sessionId, 
+            string userMessage,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            // Add user message to history
+            _conversationMemory.AddMessage(sessionId, "user", userMessage);
+            
+            // Get conversation history and convert to OllamaMessages
+            var history = _conversationMemory.GetHistory(sessionId);
+            var messages = history.Select(h => new OllamaMessage 
+            { 
+                Role = h.Role, 
+                Content = h.Content 
+            }).ToList();
+            
+            // Truncate to fit within token limits
+            messages = TruncateConversation(messages);
+            
+            var fullResponse = new StringBuilder();
+            
+            await foreach (var token in ChatStreamingAsync(messages, cancellationToken))
+            {
+                fullResponse.Append(token);
+                yield return token;
+            }
+            
+            // Add complete assistant response to history
+            if (fullResponse.Length > 0)
+            {
+                _conversationMemory.AddMessage(sessionId, "assistant", fullResponse.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Truncate conversation history to fit within token limits
+        /// Keeps most recent messages, always preserving the latest user message
+        /// </summary>
+        private List<OllamaMessage> TruncateConversation(List<OllamaMessage> messages)
+        {
+            var maxChars = MaxContextTokens * ApproxCharsPerToken;
+            var totalChars = messages.Sum(m => m.Content.Length);
+            
+            if (totalChars <= maxChars)
+                return messages;
+            
+            // Always keep the last message (current user query)
+            var result = new List<OllamaMessage>();
+            var currentChars = 0;
+            
+            // Process from newest to oldest
+            for (int i = messages.Count - 1; i >= 0; i--)
+            {
+                var msg = messages[i];
+                if (currentChars + msg.Content.Length > maxChars && result.Count > 0)
+                {
+                    // Add a truncation notice if we're cutting messages
+                    _logger.LogInformation("Truncating conversation history from {Total} to {Kept} messages", 
+                        messages.Count, result.Count);
+                    break;
+                }
+                
+                result.Insert(0, msg);
+                currentChars += msg.Content.Length;
+            }
+            
+            return result;
         }
     }
 }

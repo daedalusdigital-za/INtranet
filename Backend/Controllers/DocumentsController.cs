@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -14,18 +16,35 @@ namespace ProjectTracker.API.Controllers
         // Department passwords - in production, these should be in database
         private static readonly Dictionary<string, string> DepartmentPasswords = new()
         {
-            { "IT", "it2024" },
-            { "Marketing", "marketing2024" },
-            { "Tender", "tender2024" },
-            { "Projects", "projects2024" },
-            { "Sales", "sales2024" },
-            { "Call Center", "callcenter2024" },
-            { "Production", "production2024" },
-            { "Human Resource", "hr2024" },
-            { "Stock", "stock2024" },
-            { "Logistics", "logistics2024" },
-            { "Finance", "finance2024" },
-            { "Managers", "managers2024" }
+            { "IT", "0000" },
+            { "Marketing", "0000" },
+            { "Tender", "0000" },
+            { "Projects", "0000" },
+            { "Sales", "0000" },
+            { "Call Center", "0000" },
+            { "Production", "0000" },
+            { "Human Resource", "0000" },
+            { "Stock", "0000" },
+            { "Logistics", "0000" },
+            { "Finance", "0000" },
+            { "Managers", "0000" }
+        };
+
+        // Department permissions - which roles can access which departments
+        private static readonly Dictionary<string, string[]> DepartmentPermissions = new()
+        {
+            { "IT", new[] { "Admin", "IT", "Manager" } },
+            { "Marketing", new[] { "Admin", "Marketing", "Manager" } },
+            { "Tender", new[] { "Admin", "Sales", "Manager" } },
+            { "Projects", new[] { "Admin", "Manager", "ProjectManager" } },
+            { "Sales", new[] { "Admin", "Sales", "Manager" } },
+            { "Call Center", new[] { "Admin", "CallCenter", "Manager" } },
+            { "Production", new[] { "Admin", "Production", "Manager" } },
+            { "Human Resource", new[] { "Admin", "HR", "Manager" } },
+            { "Stock", new[] { "Admin", "Stock", "Warehouse", "Manager" } },
+            { "Logistics", new[] { "Admin", "Logistics", "Driver", "Manager" } },
+            { "Finance", new[] { "Admin", "Finance", "Manager" } },
+            { "Managers", new[] { "Admin", "Manager" } }
         };
 
         public DocumentsController(ILogger<DocumentsController> logger, IConfiguration configuration)
@@ -315,6 +334,204 @@ namespace ProjectTracker.API.Controllers
             return Ok(files.Take(50)); // Limit results
         }
 
+        // POST: api/documents/move/{department}
+        [HttpPost("move/{department}")]
+        public IActionResult MoveFile(string department, [FromBody] MoveFileRequest request)
+        {
+            if (string.IsNullOrEmpty(request.SourcePath) || request.DestinationFolder == null)
+            {
+                return BadRequest(new { message = "Source path and destination folder are required" });
+            }
+
+            var sourcePath = Path.Combine(_documentsBasePath, department, request.SourcePath);
+            var destFolder = string.IsNullOrEmpty(request.DestinationFolder) 
+                ? Path.Combine(_documentsBasePath, department)
+                : Path.Combine(_documentsBasePath, department, request.DestinationFolder);
+            
+            var fileName = Path.GetFileName(sourcePath);
+            var destPath = Path.Combine(destFolder, fileName);
+
+            // Security check
+            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
+            if (!Path.GetFullPath(sourcePath).StartsWith(documentsFullPath) ||
+                !Path.GetFullPath(destPath).StartsWith(documentsFullPath))
+            {
+                return BadRequest(new { message = "Invalid file path" });
+            }
+
+            if (!System.IO.File.Exists(sourcePath) && !Directory.Exists(sourcePath))
+            {
+                return NotFound(new { message = "Source file or folder not found" });
+            }
+
+            // Ensure destination folder exists
+            Directory.CreateDirectory(destFolder);
+
+            // Handle name conflicts
+            var counter = 1;
+            var originalName = Path.GetFileNameWithoutExtension(fileName);
+            var extension = Path.GetExtension(fileName);
+            while (System.IO.File.Exists(destPath) || Directory.Exists(destPath))
+            {
+                fileName = $"{originalName} ({counter}){extension}";
+                destPath = Path.Combine(destFolder, fileName);
+                counter++;
+            }
+
+            if (Directory.Exists(sourcePath))
+            {
+                Directory.Move(sourcePath, destPath);
+            }
+            else
+            {
+                System.IO.File.Move(sourcePath, destPath);
+            }
+
+            return Ok(new { message = "File moved successfully", newPath = GetRelativePath(department, destPath) });
+        }
+
+        // POST: api/documents/rename/{department}
+        [HttpPost("rename/{department}")]
+        public IActionResult RenameFile(string department, [FromBody] RenameFileRequest request)
+        {
+            if (string.IsNullOrEmpty(request.Path) || string.IsNullOrEmpty(request.NewName))
+            {
+                return BadRequest(new { message = "Path and new name are required" });
+            }
+
+            var sourcePath = Path.Combine(_documentsBasePath, department, request.Path);
+            var parentDir = Path.GetDirectoryName(sourcePath) ?? _documentsBasePath;
+            var destPath = Path.Combine(parentDir, request.NewName);
+
+            // Security check
+            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
+            if (!Path.GetFullPath(sourcePath).StartsWith(documentsFullPath) ||
+                !Path.GetFullPath(destPath).StartsWith(documentsFullPath))
+            {
+                return BadRequest(new { message = "Invalid file path" });
+            }
+
+            if (System.IO.File.Exists(destPath) || Directory.Exists(destPath))
+            {
+                return BadRequest(new { message = "A file or folder with that name already exists" });
+            }
+
+            if (Directory.Exists(sourcePath))
+            {
+                Directory.Move(sourcePath, destPath);
+            }
+            else if (System.IO.File.Exists(sourcePath))
+            {
+                System.IO.File.Move(sourcePath, destPath);
+            }
+            else
+            {
+                return NotFound(new { message = "File or folder not found" });
+            }
+
+            return Ok(new { message = "Renamed successfully", newPath = GetRelativePath(department, destPath) });
+        }
+
+        // GET: api/documents/preview/{department}/{*filePath}
+        [HttpGet("preview/{department}/{**filePath}")]
+        public IActionResult PreviewFile(string department, string filePath)
+        {
+            var fullPath = Path.Combine(_documentsBasePath, department, filePath);
+            
+            if (!System.IO.File.Exists(fullPath))
+            {
+                return NotFound(new { message = "File not found" });
+            }
+
+            // Security check
+            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
+            var requestedFullPath = Path.GetFullPath(fullPath);
+            if (!requestedFullPath.StartsWith(documentsFullPath))
+            {
+                return BadRequest(new { message = "Invalid file path" });
+            }
+
+            var extension = Path.GetExtension(fullPath).ToLower();
+            
+            // Get content type
+            if (!_contentTypeProvider.TryGetContentType(fullPath, out var contentType))
+            {
+                contentType = "application/octet-stream";
+            }
+
+            // For Office documents, return file for client-side preview
+            // For PDF and images, return directly
+            var fileBytes = System.IO.File.ReadAllBytes(fullPath);
+            
+            // Set headers for inline display
+            Response.Headers["Content-Disposition"] = $"inline; filename=\"{Path.GetFileName(fullPath)}\"";
+            
+            return File(fileBytes, contentType);
+        }
+
+        // GET: api/documents/folders/{department}
+        [HttpGet("folders/{department}")]
+        public ActionResult<IEnumerable<FolderInfo>> GetFolders(string department)
+        {
+            var deptPath = Path.Combine(_documentsBasePath, department);
+            
+            if (!Directory.Exists(deptPath))
+            {
+                return Ok(new List<FolderInfo> { new FolderInfo { Name = "/", Path = "", FullPath = "" } });
+            }
+
+            var folders = new List<FolderInfo>
+            {
+                new FolderInfo { Name = "/ (Root)", Path = "", FullPath = "" }
+            };
+
+            GetFoldersRecursive(deptPath, department, folders, 0);
+
+            return Ok(folders);
+        }
+
+        private void GetFoldersRecursive(string path, string department, List<FolderInfo> folders, int depth)
+        {
+            if (depth > 5) return; // Limit depth
+
+            foreach (var dir in Directory.GetDirectories(path))
+            {
+                var dirInfo = new DirectoryInfo(dir);
+                var relativePath = GetRelativePath(department, dir);
+                var indent = new string(' ', (depth + 1) * 2);
+                
+                folders.Add(new FolderInfo
+                {
+                    Name = $"{indent}📁 {dirInfo.Name}",
+                    Path = relativePath,
+                    FullPath = relativePath
+                });
+
+                GetFoldersRecursive(dir, department, folders, depth + 1);
+            }
+        }
+
+        // GET: api/documents/permissions/{department}
+        [HttpGet("permissions/{department}")]
+        public ActionResult<DocumentPermissions> GetPermissions(string department)
+        {
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "User";
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            var allowedRoles = DepartmentPermissions.GetValueOrDefault(department, new[] { "Admin" });
+            var hasAccess = allowedRoles.Contains(userRole) || userRole == "Admin";
+
+            return Ok(new DocumentPermissions
+            {
+                CanRead = true, // Everyone can read after password
+                CanWrite = hasAccess,
+                CanDelete = hasAccess || userRole == "Manager",
+                CanCreateFolders = hasAccess,
+                CanMove = hasAccess,
+                UserRole = userRole
+            });
+        }
+
         private string GetRelativePath(string department, string fullPath)
         {
             var basePath = Path.Combine(_documentsBasePath, department);
@@ -404,5 +621,34 @@ namespace ProjectTracker.API.Controllers
     {
         public string FolderName { get; set; } = string.Empty;
         public string? ParentPath { get; set; }
+    }
+
+    public class MoveFileRequest
+    {
+        public string SourcePath { get; set; } = string.Empty;
+        public string DestinationFolder { get; set; } = string.Empty;
+    }
+
+    public class RenameFileRequest
+    {
+        public string Path { get; set; } = string.Empty;
+        public string NewName { get; set; } = string.Empty;
+    }
+
+    public class FolderInfo
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Path { get; set; } = string.Empty;
+        public string FullPath { get; set; } = string.Empty;
+    }
+
+    public class DocumentPermissions
+    {
+        public bool CanRead { get; set; }
+        public bool CanWrite { get; set; }
+        public bool CanDelete { get; set; }
+        public bool CanCreateFolders { get; set; }
+        public bool CanMove { get; set; }
+        public string UserRole { get; set; } = string.Empty;
     }
 }

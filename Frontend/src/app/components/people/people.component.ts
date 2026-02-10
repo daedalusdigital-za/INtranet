@@ -50,29 +50,6 @@ import { environment } from '../../../environments/environment';
 
     <div class="attendance-container">
       @if (!trainingAccess && !mainOfficeAccess && !condomFactoryAccess && !sanitaryPadsAccess && !newRoadAccess && !captownAccess && !brionkhorspruitAccess && !portElizabethAccess && !logisticsAccess) {
-        <!-- Training Section - Separated -->
-        <div class="training-section-header">
-          <h2>
-            <mat-icon>school</mat-icon>
-            Employee Training & Development
-          </h2>
-          <p>Access training materials, videos, and resources for all employees</p>
-        </div>
-
-        <div class="training-access-section">
-          <mat-card class="training-access-card">
-            <div class="training-card-content">
-              <mat-icon class="training-main-icon">school</mat-icon>
-              <h2>Training Center</h2>
-              <p>Watch training videos, download manuals, and access learning resources for sales, production, safety, and company policies</p>
-              <button mat-raised-button color="primary" (click)="openTrainingDialog()" class="training-access-btn">
-                <mat-icon>lock_open</mat-icon>
-                Access Training Center
-              </button>
-            </div>
-          </mat-card>
-        </div>
-
         <!-- Departments & Branches Section -->
         <div class="departments-section-header">
           <h2>
@@ -874,19 +851,17 @@ import { environment } from '../../../environments/environment';
     }
 
     .access-section {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 32px;
-      padding-bottom: 40px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      padding: 0 40px 40px 40px;
+      max-width: 1600px;
+      margin: 0 auto;
     }
 
     .access-card {
       text-align: center;
-      padding: 48px !important;
-      max-width: 400px;
-      min-width: 350px;
+      padding: 32px !important;
       background: rgba(255, 255, 255, 0.95) !important;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
@@ -894,31 +869,50 @@ import { environment } from '../../../environments/environment';
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
     }
 
+    @media (max-width: 1400px) {
+      .access-section {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .access-section {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .access-section {
+        grid-template-columns: 1fr;
+        padding: 0 16px 40px 16px;
+      }
+    }
+
     .access-card .folder-icon {
-      font-size: 80px;
-      width: 80px;
-      height: 80px;
+      font-size: 56px;
+      width: 56px;
+      height: 56px;
       color: #1e90ff;
-      margin: 0 auto 24px auto;
+      margin: 0 auto 16px auto;
       display: block;
     }
 
     .access-card h2 {
-      font-size: 32px;
+      font-size: 22px;
       font-weight: 600;
       color: #1e90ff;
-      margin: 0 0 16px 0;
+      margin: 0 0 12px 0;
     }
 
     .access-card p {
-      font-size: 16px;
+      font-size: 14px;
       color: #666;
-      margin: 0 0 32px 0;
+      margin: 0 0 20px 0;
     }
 
     .access-btn {
-      padding: 12px 32px !important;
-      font-size: 16px !important;
+      padding: 10px 24px !important;
+      font-size: 14px !important;
       box-shadow: 0 4px 12px rgba(0, 0, 139, 0.3) !important;
       transition: all 0.3s ease !important;
     }

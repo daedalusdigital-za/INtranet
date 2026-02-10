@@ -4,36 +4,15 @@ import { BehaviorSubject, Observable, tap, catchError, of } from 'rxjs';
 import { Router } from '@angular/router';
 import { LoginRequest, LoginResponse, User } from '../models/models';
 import { environment } from '../../environments/environment';
+import { MODULE_KEYS, ModuleKey, MODULES, getPermissionModules } from '../core/modules.config';
 
-// Module permission constants
-export const MODULE_PERMISSIONS = {
-  SALES: 'sales',
-  CRM: 'crm',
-  PROJECT_MANAGEMENT: 'project_management',
-  HUMAN_RESOURCE: 'human_resource',
-  STOCK_MANAGEMENT: 'stock_management',
-  LOGISTICS: 'logistics',
-  DOCUMENTS: 'documents',
-  SUPPORT_TICKETS: 'support_tickets',
-  MESSAGING: 'messaging',
-  AI: 'ai'
-} as const;
+// Re-export module types for backward compatibility
+export const MODULE_PERMISSIONS = MODULE_KEYS;
+export type ModulePermission = ModuleKey;
 
-export type ModulePermission = typeof MODULE_PERMISSIONS[keyof typeof MODULE_PERMISSIONS];
-
-// All modules list for admin UI
-export const ALL_MODULES: { key: ModulePermission; name: string; icon: string }[] = [
-  { key: 'sales', name: 'Sales', icon: 'point_of_sale' },
-  { key: 'crm', name: 'CRM', icon: 'people_outline' },
-  { key: 'project_management', name: 'Project Management', icon: 'business' },
-  { key: 'human_resource', name: 'Human Resource', icon: 'people' },
-  { key: 'stock_management', name: 'Stock Management', icon: 'inventory' },
-  { key: 'logistics', name: 'Logistics', icon: 'local_shipping' },
-  { key: 'documents', name: 'Documents', icon: 'folder' },
-  { key: 'support_tickets', name: 'Support Tickets', icon: 'support_agent' },
-  { key: 'messaging', name: 'Messaging', icon: 'mail' },
-  { key: 'ai', name: 'AI Assistant', icon: 'smart_toy' }
-];
+// All modules list for admin UI - derived from centralized config
+export const ALL_MODULES: { key: ModulePermission; name: string; icon: string }[] = 
+  getPermissionModules().map(m => ({ key: m.key, name: m.name, icon: m.icon }));
 
 @Injectable({
   providedIn: 'root'

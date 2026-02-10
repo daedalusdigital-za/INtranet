@@ -15,58 +15,59 @@ export class ChatService {
   // Use backend API for AI chat
   private apiUrl = `${environment.apiUrl}/aichat`;
   private conversationHistory: ChatMessage[] = [];
+  
+  // Session ID for server-side conversation memory
+  private sessionId: string | null = null;
 
-  constructor() {}
+  constructor() {
+    // Try to restore session from storage
+    this.sessionId = sessionStorage.getItem('welly_session_id');
+  }
+
+  /**
+   * Get or create a session ID
+   */
+  private getSessionId(): string {
+    if (!this.sessionId) {
+      this.sessionId = crypto.randomUUID();
+      sessionStorage.setItem('welly_session_id', this.sessionId);
+    }
+    return this.sessionId;
+  }
 
   /**
    * Send a message to AI and get a streaming response
+   * Uses server-side conversation memory for context
    */
   sendMessage(message: string): Observable<string> {
     const responseSubject = new Subject<string>();
 
-    // Add user message to history
+    // Add user message to local history for display
     this.conversationHistory.push({
       role: 'user',
       content: message,
       timestamp: new Date()
     });
 
-    // Stream the response
-    this.streamChat(message, responseSubject);
+    // Stream the response using session-based endpoint
+    this.streamChatWithSession(message, responseSubject);
 
     return responseSubject.asObservable();
   }
 
   /**
-   * Stream chat response from backend AI service
+   * Stream chat response using session-based endpoint with server-side memory
    */
-  private async streamChat(userMessage: string, subject: Subject<string>): Promise<void> {
+  private async streamChatWithSession(userMessage: string, subject: Subject<string>): Promise<void> {
     try {
-      // Build messages array with recent history
-      const messages: any[] = [];
-
-      // Include last 6 messages for context (3 exchanges)
-      const recentHistory = this.conversationHistory.slice(-7, -1);
-      for (const msg of recentHistory) {
-        messages.push({
-          role: msg.role,
-          content: msg.content
-        });
-      }
-
-      // Add current user message
-      messages.push({
-        role: 'user',
-        content: userMessage
-      });
-
-      const response = await fetch(`${this.apiUrl}/chat`, {
+      const response = await fetch(`${this.apiUrl}/chat/session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: messages
+          prompt: userMessage,
+          sessionId: this.getSessionId()
         })
       });
 
@@ -103,6 +104,11 @@ export class ChatService {
                 fullResponse += json.message;
                 subject.next(json.message);
               }
+              // Update session ID if server provides one
+              if (json.sessionId) {
+                this.sessionId = json.sessionId;
+                sessionStorage.setItem('welly_session_id', json.sessionId);
+              }
             } catch (e) {
               // Skip invalid JSON
             }
@@ -110,7 +116,7 @@ export class ChatService {
         }
       }
 
-      // Add assistant response to history
+      // Add assistant response to local history for display
       this.conversationHistory.push({
         role: 'assistant',
         content: fullResponse.trim(),
@@ -125,10 +131,20 @@ export class ChatService {
   }
 
   /**
-   * Clear conversation history
+   * Clear conversation history (both local and server-side)
    */
   clearHistory(): void {
+    // Clear server-side session
+    if (this.sessionId) {
+      fetch(`${this.apiUrl}/chat/session/${this.sessionId}`, {
+        method: 'DELETE'
+      }).catch(err => console.warn('Failed to clear server session:', err));
+    }
+    
+    // Clear local state
     this.conversationHistory = [];
+    this.sessionId = null;
+    sessionStorage.removeItem('welly_session_id');
   }
 
   /**

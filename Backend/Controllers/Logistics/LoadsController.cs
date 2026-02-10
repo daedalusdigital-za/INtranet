@@ -17,11 +17,14 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<LoadsController> _logger;
+        private readonly string _nasBasePath;
 
-        public LoadsController(ApplicationDbContext context, ILogger<LoadsController> logger)
+        public LoadsController(ApplicationDbContext context, ILogger<LoadsController> logger, IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
+            // Get NAS path from configuration, fallback to local path
+            _nasBasePath = configuration.GetValue<string>("DocumentsPath") ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
         }
 
         /// <summary>
@@ -663,11 +666,11 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             try
             {
-                // Create uploads directory if it doesn't exist
-                var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "pod");
+                // Create POD uploads directory on NAS
+                var uploadsPath = Path.Combine(_nasBasePath, "Logistics", "POD");
                 Directory.CreateDirectory(uploadsPath);
 
-                // Generate unique filename
+                // Generate unique filename with load number
                 var fileName = $"{load.LoadNumber}_{DateTime.UtcNow:yyyyMMdd_HHmmss}{extension}";
                 var filePath = Path.Combine(uploadsPath, fileName);
 

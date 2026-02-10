@@ -20,17 +20,20 @@ namespace ProjectTracker.API.Controllers.Logistics
         private readonly ILogger<TripSheetController> _logger;
         private readonly TripSheetImportService _importService;
         private readonly IEmailService _emailService;
+        private readonly string _nasBasePath;
 
         public TripSheetController(
             ApplicationDbContext context, 
             ILogger<TripSheetController> logger,
             TripSheetImportService importService,
-            IEmailService emailService)
+            IEmailService emailService,
+            IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
             _importService = importService;
             _emailService = emailService;
+            _nasBasePath = configuration.GetValue<string>("DocumentsPath") ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
         }
 
         /// <summary>
@@ -509,9 +512,48 @@ namespace ProjectTracker.API.Controllers.Logistics
             load.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            // When tripsheet is completed, save PDF to NAS
+            if (dto.Status == "Completed")
+            {
+                try
+                {
+                    await SaveCompletedTripsheetToNas(tripSheetId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to save completed tripsheet {LoadNumber} to NAS", load.LoadNumber);
+                }
+            }
+
             _logger.LogInformation("Updated TripSheet {LoadNumber} status from {OldStatus} to {NewStatus}", 
                 load.LoadNumber, oldStatus, dto.Status);
             return await GetTripSheet(tripSheetId);
+        }
+
+        /// <summary>
+        /// Save completed tripsheet PDF to NAS
+        /// </summary>
+        private async Task SaveCompletedTripsheetToNas(int tripSheetId)
+        {
+            var tripSheet = await GetTripSheet(tripSheetId);
+            if (tripSheet.Result is OkObjectResult okResult && okResult.Value is TripSheetDto ts)
+            {
+                // Create directory for completed tripsheets
+                var completedPath = Path.Combine(_nasBasePath, "Logistics", "CompletedTripsheets");
+                Directory.CreateDirectory(completedPath);
+
+                // Generate PDF filename
+                var fileName = $"{ts.LoadNumber}_{DateTime.Now:yyyyMMdd}.pdf";
+                var filePath = Path.Combine(completedPath, fileName);
+
+                // Generate PDF (simplified - use existing PDF generation)
+                var htmlContent = GenerateTripSheetHtml(ts);
+                using var pdfStream = new MemoryStream();
+                HtmlConverter.ConvertToPdf(htmlContent, pdfStream);
+                
+                await System.IO.File.WriteAllBytesAsync(filePath, pdfStream.ToArray());
+                _logger.LogInformation("Saved completed tripsheet {LoadNumber} to NAS: {FilePath}", ts.LoadNumber, filePath);
+            }
         }
 
         /// <summary>

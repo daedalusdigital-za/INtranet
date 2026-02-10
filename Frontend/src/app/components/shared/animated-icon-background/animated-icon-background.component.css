@@ -23,7 +23,7 @@
   height: 100vh;
   overflow: hidden;
   pointer-events: none;
-  z-index: -1;
+  z-index: 0;
   user-select: none;
   display: flex;
   flex-direction: column;
@@ -73,7 +73,7 @@
 }
 
 .theme-light .layer-1 .material-symbols-outlined {
-  color: rgba(33, 150, 243, 0.25);
+  color: rgba(255, 255, 255, 0.15);
 }
 
 .theme-dark .layer-1 .material-symbols-outlined {
@@ -94,7 +94,7 @@
 }
 
 .theme-light .layer-2 .material-symbols-outlined {
-  color: rgba(33, 150, 243, 0.2);
+  color: rgba(255, 255, 255, 0.12);
 }
 
 .theme-dark .layer-2 .material-symbols-outlined {
@@ -115,7 +115,7 @@
 }
 
 .theme-light .layer-3 .material-symbols-outlined {
-  color: rgba(33, 150, 243, 0.15);
+  color: rgba(255, 255, 255, 0.1);
 }
 
 .theme-dark .layer-3 .material-symbols-outlined {

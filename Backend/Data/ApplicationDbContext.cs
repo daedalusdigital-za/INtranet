@@ -125,6 +125,11 @@ namespace ProjectTracker.API.Data
         // Stock on Hand Snapshots
         public DbSet<Models.Logistics.StockOnHandSnapshot> StockOnHandSnapshots { get; set; }
 
+        // Collaborative Documents System
+        public DbSet<CollaborativeDocument> CollaborativeDocuments { get; set; }
+        public DbSet<DocumentSnapshot> DocumentSnapshots { get; set; }
+        public DbSet<DocumentCollaborator> DocumentCollaborators { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -795,6 +800,43 @@ namespace ProjectTracker.API.Data
                 .WithMany(c => c.DeliveryAddresses)
                 .HasForeignKey(cda => cda.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Collaborative Documents relationships
+            modelBuilder.Entity<CollaborativeDocument>()
+                .HasOne(d => d.CreatedBy)
+                .WithMany()
+                .HasForeignKey(d => d.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CollaborativeDocument>()
+                .HasOne(d => d.LastModifiedBy)
+                .WithMany()
+                .HasForeignKey(d => d.LastModifiedById)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<DocumentSnapshot>()
+                .HasOne(s => s.Document)
+                .WithMany(d => d.Snapshots)
+                .HasForeignKey(s => s.DocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<DocumentSnapshot>()
+                .HasOne(s => s.CreatedBy)
+                .WithMany()
+                .HasForeignKey(s => s.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<DocumentCollaborator>()
+                .HasOne(c => c.Document)
+                .WithMany(d => d.Collaborators)
+                .HasForeignKey(c => c.DocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<DocumentCollaborator>()
+                .HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.NoAction);
         }
     }
 }
