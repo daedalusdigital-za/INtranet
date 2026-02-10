@@ -32,6 +32,10 @@ namespace ProjectTracker.API.Models.Logistics
         public int VehicleTypeId { get; set; }
         public int? CurrentDriverId { get; set; }
 
+        // Province/Region assignment
+        [MaxLength(100)]
+        public string? Province { get; set; }
+
         // CarTrack Integration
         [MaxLength(100)]
         public string? CarTrackId { get; set; }

@@ -47,6 +47,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     VehicleTypeName = v.VehicleType.Name,
                     CurrentDriverId = v.CurrentDriverId,
                     CurrentDriverName = v.CurrentDriver != null ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}" : null,
+                    Province = v.Province,
                     CarTrackId = v.CarTrackId,
                     CarTrackName = v.CarTrackName,
                     // TFN Integration fields
@@ -167,6 +168,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         VehicleTypeName = v.VehicleType?.Name,
                         CurrentDriverId = v.CurrentDriverId,
                         CurrentDriverName = liveData?.CurrentDriverName ?? (v.CurrentDriver != null ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}" : null),
+                        Province = v.Province,
                         CarTrackId = v.CarTrackId,
                         CarTrackName = v.CarTrackName,
                         // TFN Integration fields
@@ -449,6 +451,20 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        [HttpPut("vehicles/{id}/province")]
+        public async Task<IActionResult> UpdateVehicleProvince(int id, [FromBody] UpdateProvinceDto dto)
+        {
+            var vehicle = await _context.Vehicles.FindAsync(id);
+            if (vehicle == null)
+                return NotFound();
+
+            vehicle.Province = dto.Province;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, province = vehicle.Province });
         }
 
         [HttpDelete("vehicles/{id}")]

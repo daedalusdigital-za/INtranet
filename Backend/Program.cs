@@ -123,6 +123,9 @@ builder.Services.AddScoped<LoadOptimizationService>();
 builder.Services.AddScoped<CustomerAddressCleanupService>();
 builder.Services.AddScoped<CustomerProvinceMapperService>();
 
+// Add Gemini AI Province Mapping Service
+builder.Services.AddScoped<GeminiProvinceService>();
+
 // Add Google Maps API Services
 builder.Services.AddScoped<ProjectTracker.API.Services.Google.GeocodingService>();
 builder.Services.AddScoped<ProjectTracker.API.Services.Google.AddressValidationService>();

@@ -71,6 +71,7 @@ interface Vehicle {
   currentDriver: string;
   currentDriverId?: number;
   currentDriverName?: string;
+  province?: string;
   lastLocation: string;
   fuelLevel: number;
   fuelCapacity?: number;
@@ -409,6 +410,10 @@ interface SleepOut {
                             <mat-icon>edit</mat-icon>
                             <span>Update Status</span>
                           </button>
+                          <button mat-menu-item (click)="reassignLoad(load)">
+                            <mat-icon>swap_horiz</mat-icon>
+                            <span>Reassign</span>
+                          </button>
                         </mat-menu>
                       </td>
                     </ng-container>
@@ -490,6 +495,11 @@ interface SleepOut {
                           </mat-card-subtitle>
                           <!-- Integration badges -->
                           <div class="integration-badges">
+                            @if (vehicle.province) {
+                              <span class="badge province-badge" [matTooltip]="'Province: ' + vehicle.province">
+                                <mat-icon>place</mat-icon> {{ getProvinceAbbreviation(vehicle.province) }}
+                              </span>
+                            }
                             @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
                               <span class="badge cartrack-badge" matTooltip="Linked to CarTrack">
                                 <mat-icon>gps_fixed</mat-icon> CT
@@ -517,6 +527,10 @@ interface SleepOut {
                             <button mat-menu-item (click)="assignDriver(vehicle)">
                               <mat-icon>person_add</mat-icon>
                               <span>Assign Driver</span>
+                            </button>
+                            <button mat-menu-item (click)="reassignProvince(vehicle)">
+                              <mat-icon>place</mat-icon>
+                              <span>Reassign Province</span>
                             </button>
                             <mat-divider></mat-divider>
                             @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
@@ -2663,6 +2677,12 @@ interface SleepOut {
       color: white;
     }
 
+    .province-badge {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      color: #fff;
+      font-weight: 700;
+    }
+
     .fleet-toolbar {
       display: flex;
       justify-content: space-between;
@@ -4546,6 +4566,44 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
+  reassignLoad(load: ActiveLoad): void {
+    const dialogRef = this.dialog.open(ReassignLoadDialog, {
+      width: '600px',
+      data: { 
+        load,
+        vehicles: this.vehicles(),
+        drivers: this.drivers()
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        const updateData: any = {};
+        if (result.vehicleId !== undefined) updateData.vehicleId = result.vehicleId;
+        if (result.driverId !== undefined) updateData.driverId = result.driverId;
+
+        this.http.put(`${this.apiUrl}/logistics/loads/${load.id}/reassign`, updateData).subscribe({
+          next: (updatedLoad: any) => {
+            // Update local state
+            this.activeLoads.update(loads => 
+              loads.map(l => l.id === load.id ? { 
+                ...l, 
+                vehicleRegistration: updatedLoad.vehicle?.registrationNumber || l.vehicleRegistration,
+                driverName: updatedLoad.driver ? `${updatedLoad.driver.firstName} ${updatedLoad.driver.lastName}` : l.driverName
+              } : l)
+            );
+            this.snackBar.open('Load reassigned successfully', 'Close', { duration: 3000 });
+            this.refreshData(); // Refresh data
+          },
+          error: (err) => {
+            console.error('Error reassigning load:', err);
+            this.snackBar.open('Failed to reassign load', 'Close', { duration: 3000 });
+          }
+        });
+      }
+    });
+  }
+
   addVehicle(): void {
     console.log('Add vehicle');
     this.openVehicleDialog();
@@ -4620,6 +4678,39 @@ Notes: ${record.notes || 'No notes'}
   assignDriver(vehicle: Vehicle): void {
     console.log('Assign driver', vehicle);
     this.openAssignDriverDialog(vehicle);
+  }
+
+  reassignProvince(vehicle: Vehicle): void {
+    const dialogRef = this.dialog.open(ReassignProvinceDialog, {
+      width: '450px',
+      data: { vehicle }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.province) {
+        this.http.put(`${this.apiUrl}/fleet/vehicles/${vehicle.id}/province`, { province: result.province })
+          .subscribe({
+            next: () => {
+              this.snackBar.open(`Province updated to ${result.province}`, 'Close', { duration: 3000 });
+              this.loadVehiclesFromDatabase();
+            },
+            error: (err) => {
+              console.error('Error updating province:', err);
+              this.snackBar.open('Failed to update province', 'Close', { duration: 3000 });
+            }
+          });
+      }
+    });
+  }
+
+  getProvinceAbbreviation(province: string): string {
+    const abbreviations: { [key: string]: string } = {
+      'Gauteng': 'GP',
+      'KwaZulu-Natal': 'KZN',
+      'Western Cape': 'CPT',
+      'Eastern Cape': 'EC'
+    };
+    return abbreviations[province] || province;
   }
 
   linkCarTrack(vehicle: Vehicle): void {
@@ -5176,9 +5267,9 @@ Notes: ${record.notes || 'No notes'}
     const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
     
     const dialogRef = this.dialog.open(CreateTripsheetDialog, {
-      width: '95vw',
-      maxWidth: '1400px',
-      height: '90vh',
+      width: '98vw',
+      maxWidth: '1800px',
+      height: '95vh',
       panelClass: 'create-tripsheet-dialog-panel',
       data: {
         invoices: this.importedInvoices(),
@@ -5228,9 +5319,9 @@ Notes: ${record.notes || 'No notes'}
     
     // Open the CreateTripsheetDialog with imported data pre-selected
     const dialogRef = this.dialog.open(CreateTripsheetDialog, {
-      width: '95vw',
-      maxWidth: '1400px',
-      height: '90vh',
+      width: '98vw',
+      maxWidth: '1800px',
+      height: '95vh',
       panelClass: 'create-tripsheet-dialog-panel',
       data: {
         invoices: allInvoices,
@@ -5308,9 +5399,9 @@ Notes: ${record.notes || 'No notes'}
 
         // Open CreateTripsheetDialog in edit mode
         const dialogRef = this.dialog.open(CreateTripsheetDialog, {
-          width: '95vw',
-          maxWidth: '1400px',
-          height: '90vh',
+          width: '98vw',
+          maxWidth: '1800px',
+          height: '95vh',
           panelClass: 'create-tripsheet-dialog-panel',
           data: {
             invoices: invoices,
@@ -12299,12 +12390,10 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   private getWarehouseIconSvg(): string {
     return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">' +
-      '<circle cx="22" cy="22" r="20" fill="url(#warehouseGrad)" stroke="white" stroke-width="2"/>' +
-      '<defs><linearGradient id="warehouseGrad" x1="0%" y1="0%" x2="100%" y2="100%">' +
-      '<stop offset="0%" style="stop-color:#1565c0"/>' +
-      '<stop offset="100%" style="stop-color:#42a5f5"/>' +
-      '</linearGradient></defs>' +
-      '<path d="M22 10L10 18v2h2v10h8v-6h4v6h8V20h2v-2L22 10zm0 2.84L30 18v10h-4v-6h-8v6h-4V18l10-5.16z" fill="white"/>' +
+      '<circle cx="22" cy="22" r="20" fill="#2196F3" stroke="white" stroke-width="2.5"/>' +
+      '<path d="M22 10L10 20v12h8v-8h8v8h8V20L22 10z" fill="white"/>' +
+      '<rect x="18" y="24" width="8" height="8" fill="#2196F3"/>' +
+      '<rect x="20" y="28" width="4" height="4" fill="white" rx="0.5"/>' +
       '</svg>'
     );
   }
@@ -13107,77 +13196,40 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
           <!-- Step 2: Route Optimization & Details -->
           <mat-step [completed]="tripForm.valid" label="Route Details">
             <div class="step-content route-step">
-              <!-- Route Preview Map - At the top -->
-              <div class="route-map-preview">
-                <div class="map-header">
-                  <h3><mat-icon>map</mat-icon> Route Preview</h3>
-                  <div class="map-actions">
-                    <button mat-stroked-button color="primary" (click)="loadTfnDepots()" matTooltip="Show TFN depot locations on the map">
-                      <mat-icon>store</mat-icon> Load TFN Depots
-                    </button>
-                    <button mat-icon-button (click)="refreshMap()" matTooltip="Refresh map">
-                      <mat-icon>refresh</mat-icon>
-                    </button>
-                  </div>
-                </div>
-                <div id="tripsheetRouteMap" class="route-map"></div>
-                @if (selectedStops.length > 0) {
-                  <div class="map-legend">
-                    <span class="legend-item"><span class="marker warehouse"></span> Warehouse</span>
-                    <span class="legend-item"><span class="marker stop"></span> Delivery Stop</span>
-                    @if (tfnDepotsLoaded) {
-                      <span class="legend-item"><span class="marker depot"></span> TFN Depot</span>
+              <!-- Side by Side Layout: Config on left, Map on right -->
+              <div class="route-layout-container">
+                <!-- Left Side: Route Configuration -->
+                <div class="route-left-panel">
+                  <div class="route-config">
+                    <h3><mat-icon>route</mat-icon> Route Configuration</h3>
+                    
+                    @if (!data.warehouses?.length && !data.drivers?.length && !data.vehicles?.length) {
+                      <div class="config-loading">
+                        <mat-spinner diameter="20"></mat-spinner>
+                        <span>Loading configuration data...</span>
+                      </div>
                     }
-                  </div>
-                }
-                @if (selectedStops.length > 0 && !stopsHaveCoords()) {
-                  <div class="map-warning">
-                    <mat-icon>warning</mat-icon>
-                    <span>Some stops are missing coordinates. Click "Geocode All Missing" to get coordinates.</span>
-                  </div>
-                }
-              </div>
 
-              <!-- Route Configuration - Above Delivery Stops -->
-              <div class="route-config">
-                <h3><mat-icon>route</mat-icon> Route Configuration</h3>
-                
-                @if (!data.warehouses?.length && !data.drivers?.length && !data.vehicles?.length) {
-                  <div class="config-loading">
-                    <mat-spinner diameter="20"></mat-spinner>
-                    <span>Loading configuration data...</span>
-                  </div>
-                }
+                    <div class="config-grid-compact">
+                      <mat-form-field appearance="outline">
+                        <mat-label>Pickup Warehouse</mat-label>
+                        <mat-select [(ngModel)]="selectedWarehouse" (selectionChange)="onWarehouseSelected()">
+                          @for (wh of data.warehouses; track wh.id) {
+                            <mat-option [value]="wh">{{ wh.name }} - {{ wh.city }}</mat-option>
+                          }
+                        </mat-select>
+                        <mat-icon matSuffix>warehouse</mat-icon>
+                      </mat-form-field>
 
-                <div class="config-grid">
-                  <mat-form-field appearance="outline">
-                    <mat-label>Pickup Warehouse</mat-label>
-                    <input matInput
-                           [(ngModel)]="warehouseSearchText"
-                           [matAutocomplete]="warehouseAuto"
-                           (input)="filterWarehouses()"
-                           (focus)="filterWarehouses()"
-                           placeholder="Type to search warehouses...">
-                    <mat-autocomplete #warehouseAuto="matAutocomplete"
-                                      [displayWith]="displayWarehouse.bind(this)"
-                                      (optionSelected)="onWarehouseAutocompleteSelected($event)">
-                      @for (wh of filteredWarehouses; track wh.id) {
-                        <mat-option [value]="wh">{{ wh.name }} - {{ wh.city }}</mat-option>
-                      }
-                    </mat-autocomplete>
-                    <mat-icon matSuffix>warehouse</mat-icon>
-                    <mat-hint>{{ data.warehouses?.length || 0 }} warehouses available</mat-hint>
-                  </mat-form-field>
-
-                  <mat-form-field appearance="outline">
-                    <mat-label>Driver</mat-label>
-                    <input matInput
-                           [(ngModel)]="driverSearchText"
-                           [matAutocomplete]="driverAuto"
-                           (input)="filterDrivers()"
-                           (focus)="filterDrivers()"
-                           placeholder="Type to search drivers...">
-                    <mat-autocomplete #driverAuto="matAutocomplete"
+                      <mat-form-field appearance="outline">
+                        <mat-label>Driver</mat-label>
+                        <input matInput
+                               [(ngModel)]="driverSearchText"
+                               [matAutocomplete]="driverAuto"
+                               (input)="filterDrivers()"
+                               (focus)="filterDrivers()"
+                               placeholder="Type to search drivers...">
+                        <mat-autocomplete #driverAuto="matAutocomplete"
                                       [displayWith]="displayDriver.bind(this)"
                                       (optionSelected)="onDriverAutocompleteSelected($event)">
                       <mat-option [value]="null">-- Unassigned --</mat-option>
@@ -13234,18 +13286,6 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                     }
                     {{ calculating ? 'Calculating...' : 'Calculate Distance' }}
                   </button>
-                  <button mat-stroked-button color="primary" (click)="advancedOptimization()" [disabled]="advancedOptimizing || selectedStops.length < 2" matTooltip="Advanced optimization considering time windows and vehicle capacity">
-                    @if (advancedOptimizing) {
-                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
-                    } @else {
-                      <mat-icon>auto_awesome</mat-icon>
-                    }
-                    {{ advancedOptimizing ? 'Analyzing...' : 'Smart Optimize' }}
-                  </button>
-                  <mat-checkbox [(ngModel)]="includeRouteMapInTripsheet" color="primary" matTooltip="Include a screenshot of the route preview map in the printed tripsheet">
-                    <mat-icon class="checkbox-icon">map</mat-icon>
-                    Add route preview map to tripsheet
-                  </mat-checkbox>
                 </div>
 
                 @if (optimizationMessage) {
@@ -13336,7 +13376,42 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                     }
                   </div>
                 }
-              </div>
+                  </div><!-- end route-config -->
+                </div><!-- end route-left-panel -->
+
+                <!-- Right Side: Route Preview Map -->
+                <div class="route-right-panel">
+                  <div class="route-map-preview">
+                    <div class="map-header">
+                      <h3><mat-icon>map</mat-icon> Route Preview</h3>
+                      <div class="map-actions">
+                        <button mat-stroked-button color="primary" (click)="loadTfnDepots()" matTooltip="Show TFN depot locations on the map">
+                          <mat-icon>store</mat-icon> TFN Depots
+                        </button>
+                        <button mat-icon-button (click)="refreshMap()" matTooltip="Refresh map">
+                          <mat-icon>refresh</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                    <div id="tripsheetRouteMap" class="route-map"></div>
+                    @if (selectedStops.length > 0) {
+                      <div class="map-legend">
+                        <span class="legend-item"><span class="marker warehouse"></span> Warehouse</span>
+                        <span class="legend-item"><span class="marker stop"></span> Delivery Stop</span>
+                        @if (tfnDepotsLoaded) {
+                          <span class="legend-item"><span class="marker depot"></span> TFN Depot</span>
+                        }
+                      </div>
+                    }
+                    @if (selectedStops.length > 0 && !stopsHaveCoords()) {
+                      <div class="map-warning">
+                        <mat-icon>warning</mat-icon>
+                        <span>Some stops are missing coordinates. Click "Geocode All"</span>
+                      </div>
+                    }
+                  </div>
+                </div><!-- end route-right-panel -->
+              </div><!-- end route-layout-container -->
 
               <!-- Grouped Delivery Stops with Editable Addresses -->
               @if (groupedStops.length > 0) {
@@ -13350,6 +13425,14 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                         </mat-icon>
                         {{ getStopsWithCoords() }}/{{ groupedStops.length }} geocoded
                       </span>
+                      <button mat-stroked-button color="accent" (click)="aiMatchAddresses()" [disabled]="matchingAddresses" matTooltip="Use AI to match customer names to delivery addresses">
+                        @if (matchingAddresses) {
+                          <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                        } @else {
+                          <mat-icon>auto_fix_high</mat-icon>
+                        }
+                        {{ matchingAddresses ? 'Matching...' : 'AI Address Match' }}
+                      </button>
                       <button mat-stroked-button color="primary" (click)="geocodeAllStops()" [disabled]="geocodingAllStops" matTooltip="Geocode all stops missing coordinates">
                         @if (geocodingAllStops) {
                           <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
@@ -13635,6 +13718,60 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       min-height: auto;
       max-height: none;
       overflow: visible;
+    }
+    /* Side-by-side layout for Route Details */
+    .route-layout-container {
+      display: flex;
+      gap: 20px;
+      min-height: 550px;
+    }
+    .route-left-panel {
+      flex: 0 0 320px;
+      min-width: 280px;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+    }
+    .route-right-panel {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .route-left-panel .route-config {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .route-left-panel .route-config h3 {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .route-right-panel .route-map-preview {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    .route-right-panel .route-map {
+      flex: 1;
+      min-height: 500px;
+    }
+    .config-grid-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .config-grid-compact mat-form-field {
+      font-size: 13px;
+    }
+    .config-grid-compact mat-form-field ::ng-deep .mat-mdc-form-field-infix {
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    .config-grid-compact mat-form-field {
+      width: 100%;
     }
     .source-panel, .stops-panel {
       flex: 1;
@@ -13937,8 +14074,12 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     }
     .optimize-section {
       display: flex;
-      gap: 16px;
-      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .optimize-section button {
+      font-size: 12px;
     }
     .inline-spinner {
       display: inline-block;
@@ -13946,11 +14087,16 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     }
     .route-summary {
       display: flex;
-      gap: 24px;
-      padding: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 12px;
       background: #e8f5e9;
       border-radius: 8px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
+    }
+    .route-summary .summary-item {
+      min-width: fit-content;
+      font-size: 13px;
     }
     .summary-item {
       display: flex;
@@ -14610,7 +14756,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   totalValue = 0;
   returnDistance = 0;
   returnTime = '';
-  includeRouteMapInTripsheet = false;
   
   optimizing = false;
   calculating = false;
@@ -16071,6 +16216,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   // Geocode a grouped stop's address
   geocodingAllStops = false;
+  matchingAddresses = false;
   
   geocodeGroupAddress(group: any): void {
     if (!group.deliveryAddress) {
@@ -16212,6 +16358,109 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     this.geocodingAllStops = false;
     this.updateRouteMap();
     console.log('All group geocoding complete');
+  }
+
+  // Use AI to match customer names to addresses
+  async aiMatchAddresses(): Promise<void> {
+    // Get stops missing coordinates or delivery address
+    const groupsToMatch = this.groupedStops.filter(g => !g.latitude || !g.deliveryAddress);
+    
+    if (groupsToMatch.length === 0) {
+      this.snackBar.open('All stops already have addresses/coordinates', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.matchingAddresses = true;
+    console.log(`AI matching ${groupsToMatch.length} customer names...`);
+
+    try {
+      // Collect customer names to match
+      const customerNames = groupsToMatch.map(g => g.customerName).filter(n => n);
+      
+      if (customerNames.length === 0) {
+        this.snackBar.open('No customer names to match', 'Close', { duration: 3000 });
+        this.matchingAddresses = false;
+        return;
+      }
+
+      // Call the backend AI match endpoint
+      const results = await this.http.post<any[]>(
+        `${this.data.apiUrl}/logistics/customers/match-addresses-ai`,
+        customerNames
+      ).toPromise();
+
+      if (!results || results.length === 0) {
+        this.snackBar.open('No matches found by AI', 'Close', { duration: 3000 });
+        this.matchingAddresses = false;
+        return;
+      }
+
+      console.log('AI match results:', results);
+
+      // Apply the matches to grouped stops
+      let matchCount = 0;
+      for (const result of results) {
+        const group = this.groupedStops.find(g => 
+          g.customerName?.toLowerCase() === result.customerName?.toLowerCase()
+        );
+
+        if (group && result.deliveryAddress) {
+          // Update the group with matched address
+          if (!group.deliveryAddress) {
+            group.deliveryAddress = result.deliveryAddress;
+          }
+          if (result.city && !group.city) {
+            group.city = result.city;
+          }
+          if (result.province && !group.province) {
+            group.province = result.province;
+          }
+          if (result.latitude && result.longitude) {
+            group.latitude = result.latitude;
+            group.longitude = result.longitude;
+            group.isCollapsed = true;
+            
+            // Update all invoices in this group
+            group.invoices.forEach((inv: any) => {
+              inv.latitude = result.latitude;
+              inv.longitude = result.longitude;
+              if (!inv.deliveryAddress) {
+                inv.deliveryAddress = result.deliveryAddress;
+              }
+              const stop = this.selectedStops.find((s: any) => s.id === inv.id);
+              if (stop) {
+                stop.latitude = result.latitude;
+                stop.longitude = result.longitude;
+                if (!stop.deliveryAddress) {
+                  stop.deliveryAddress = result.deliveryAddress;
+                }
+              }
+            });
+          }
+          
+          matchCount++;
+          console.log(`Matched: ${group.customerName} -> ${result.deliveryAddress} (${result.source})`);
+        }
+      }
+
+      // After matching, auto-geocode any stops that got addresses but no coordinates
+      const needsGeocoding = this.groupedStops.filter(g => g.deliveryAddress && !g.latitude);
+      if (needsGeocoding.length > 0) {
+        this.snackBar.open(`Matched ${matchCount} stops. Geocoding ${needsGeocoding.length} addresses...`, 'Close', { duration: 3000 });
+        await this.geocodeAllStops();
+      } else {
+        this.snackBar.open(`AI matched ${matchCount} of ${groupsToMatch.length} stops (all have coordinates)`, 'Close', { duration: 4000 });
+      }
+      
+      // Update the map with new coordinates
+      this.updateRouteMap();
+      
+    } catch (error) {
+      console.error('Error in AI address matching:', error);
+      this.snackBar.open('Failed to match addresses with AI', 'Close', { duration: 3000 });
+    }
+
+    this.matchingAddresses = false;
   }
 
   // ============ SAVED DELIVERY ADDRESSES ============
@@ -16637,52 +16886,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     }
   }
 
-  async previewPdf(): Promise<void> {
-    let mapImageUrl = '';
-    
-    // If checkbox is checked, capture the route map
-    if (this.includeRouteMapInTripsheet && this.map) {
-      mapImageUrl = await this.captureRouteMapImage();
-    }
-    
+  previewPdf(): void {
     // Create a preview window with trip sheet HTML
-    const html = this.generateTripsheetHtml(mapImageUrl);
+    const html = this.generateTripsheetHtml();
     const previewWindow = window.open('', '_blank');
     if (previewWindow) {
       previewWindow.document.write(html);
       previewWindow.document.close();
     }
-  }
-  
-  // Capture the route map as a static image URL using Google Static Maps API
-  private async captureRouteMapImage(): Promise<string> {
-    const apiKey = 'AIzaSyBSgIOzAqIja1Y8jo_DCAM4fXr5L0xbGKM';
-    const warehouseLat = this.selectedWarehouse?.latitude || -29.8587;
-    const warehouseLng = this.selectedWarehouse?.longitude || 31.0218;
-    
-    // Build markers
-    let markers = `markers=color:green|label:W|${warehouseLat},${warehouseLng}`;
-    
-    // Add stop markers
-    const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
-    stopsWithCoords.forEach((stop, i) => {
-      markers += `&markers=color:red|label:${i + 1}|${stop.latitude},${stop.longitude}`;
-    });
-    
-    // Build path for route
-    let path = `path=color:0x1976d2ff|weight:4|${warehouseLat},${warehouseLng}`;
-    stopsWithCoords.forEach(stop => {
-      path += `|${stop.latitude},${stop.longitude}`;
-    });
-    // Add return path to warehouse
-    if (stopsWithCoords.length > 0) {
-      path += `|${warehouseLat},${warehouseLng}`;
-    }
-    
-    // Generate static map URL
-    const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=800x400&maptype=roadmap&${markers}&${path}&key=${apiKey}`;
-    
-    return mapUrl;
   }
 
   createTripsheet(): void {
@@ -16867,7 +17078,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     });
   }
 
-  private generateTripsheetHtml(mapImageUrl: string = ''): string {
+  private generateTripsheetHtml(): string {
     const date = new Date().toLocaleDateString('en-ZA', { 
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
     });
@@ -16987,13 +17198,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           <div class="info-item" style="background: #fff3e0; border-color: #ff9800;"><span>🔄</span> <strong>Return:</strong> <span class="info-sub">${returnDistKm}km • ${returnTimeStr}</span></div>
           <div class="info-item"><span>💰</span> <strong>R ${this.totalValue.toFixed(2)}</strong></div>
         </div>
-        
-        ${mapImageUrl ? `
-        <div class="route-map-section">
-          <h4>🗺️ ROUTE PREVIEW</h4>
-          <img src="${mapImageUrl}" alt="Route Map" />
-        </div>
-        ` : ''}
         
         <table>
           <thead>
@@ -22384,6 +22588,109 @@ export class LiveStreamingDialog implements OnInit {
   }
 }
 
+// ===========================
+// REASSIGN LOAD DIALOG
+// ===========================
+@Component({
+  selector: 'reassign-load-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatSelectModule,
+    MatFormFieldModule,
+    MatIconModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>swap_horiz</mat-icon>
+      Reassign Load: {{ data.load.loadNumber }}
+    </h2>
+    <mat-dialog-content style="min-height: 200px; padding-top: 20px;">
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Vehicle</mat-label>
+          <mat-select [(ngModel)]="selectedVehicleId">
+            <mat-option [value]="null">Unassigned</mat-option>
+            @for (vehicle of data.vehicles; track vehicle.id) {
+              <mat-option [value]="vehicle.id">
+                {{ vehicle.registrationNumber }} - {{ vehicle.type || vehicle.vehicleTypeName }}
+                @if (vehicle.currentDriver || vehicle.currentDriverName) {
+                  <span style="color: #666; font-size: 0.85em;"> ({{ vehicle.currentDriver || vehicle.currentDriverName }})</span>
+                }
+              </mat-option>
+            }
+          </mat-select>
+          <mat-hint>Current: {{ data.load.vehicleRegistration || 'Unassigned' }}</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Driver</mat-label>
+          <mat-select [(ngModel)]="selectedDriverId">
+            <mat-option [value]="null">Unassigned</mat-option>
+            @for (driver of data.drivers; track driver.id) {
+              <mat-option [value]="driver.id">
+                {{ driver.firstName }} {{ driver.lastName }}
+                @if (driver.status) {
+                  <span [style.color]="driver.status === 'Available' ? '#4caf50' : '#ff9800'" style="font-size: 0.85em;"> ({{ driver.status }})</span>
+                }
+              </mat-option>
+            }
+          </mat-select>
+          <mat-hint>Current: {{ data.load.driverName || 'Unassigned' }}</mat-hint>
+        </mat-form-field>
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onReassign()" [disabled]="!hasChanges()">
+        <mat-icon>check</mat-icon>
+        Reassign
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    mat-dialog-content {
+      overflow-y: visible;
+    }
+    
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  `]
+})
+export class ReassignLoadDialog {
+  selectedVehicleId: number | null = null;
+  selectedDriverId: number | null = null;
+
+  constructor(
+    public dialogRef: MatDialogRef<ReassignLoadDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { load: any, vehicles: any[], drivers: any[] }
+  ) {
+    // Set initial values based on current assignments
+    // Note: We'll need to match by name since we may not have IDs in ActiveLoad
+  }
+
+  hasChanges(): boolean {
+    return this.selectedVehicleId !== null || this.selectedDriverId !== null;
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onReassign(): void {
+    this.dialogRef.close({ 
+      vehicleId: this.selectedVehicleId,
+      driverId: this.selectedDriverId
+    });
+  }
+}
+
 interface VisionVehicle {
   vehicleId: string;
   registration: string;
@@ -22409,3 +22716,73 @@ interface LivestreamResponse {
     thumbnailUrl?: string;
   }[];
 }
+
+// Reassign Province Dialog Component
+@Component({
+  selector: 'reassign-province-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatSelectModule,
+    MatFormFieldModule,
+    MatIconModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>place</mat-icon>
+      Reassign Province: {{ data.vehicle.registrationNumber }}
+    </h2>
+    <mat-dialog-content style="min-height: 150px; padding-top: 20px;">
+      <mat-form-field appearance="outline" style="width: 100%;">
+        <mat-label>Province (Warehouse Location)</mat-label>
+        <mat-select [(ngModel)]="selectedProvince">
+          <mat-option value="Gauteng">Gauteng (GP)</mat-option>
+          <mat-option value="KwaZulu-Natal">KwaZulu-Natal (KZN)</mat-option>
+          <mat-option value="Western Cape">Western Cape (CPT)</mat-option>
+          <mat-option value="Eastern Cape">Eastern Cape (EC)</mat-option>
+        </mat-select>
+        <mat-hint>Current: {{ data.vehicle.province || 'Not Set' }}</mat-hint>
+      </mat-form-field>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onAssign()" [disabled]="!selectedProvince">
+        <mat-icon>check</mat-icon>
+        Assign
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    mat-dialog-content {
+      overflow-y: visible;
+    }
+    
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  `]
+})
+export class ReassignProvinceDialog {
+  selectedProvince: string = '';
+
+  constructor(
+    public dialogRef: MatDialogRef<ReassignProvinceDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { vehicle: any }
+  ) {
+    this.selectedProvince = data.vehicle.province || '';
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onAssign(): void {
+    this.dialogRef.close({ province: this.selectedProvince });
+  }
+}
+

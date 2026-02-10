@@ -653,9 +653,11 @@ public class TripSheetImportService
             errors.Add("Customer name appears to be a label/header");
         }
 
+        // Delivery address is now a soft validation - can be fixed from customer database
         if (string.IsNullOrWhiteSpace(data.DeliveryAddress))
         {
-            errors.Add("Delivery address is required");
+            row.Warnings ??= new List<string>();
+            row.Warnings.Add("Delivery address is missing - can be matched from customer database");
         }
 
         if (string.IsNullOrWhiteSpace(data.InvoiceNumber))
@@ -703,7 +705,7 @@ public class TripSheetImportService
             {
                 row.MatchedInvoiceId = invoiceMatch.Id;
                 
-                // If invoice has customer, use that
+                // If invoice has customer, use that and apply address data
                 if (invoiceMatch.CustomerId.HasValue)
                 {
                     row.MatchedCustomerId = invoiceMatch.CustomerId;

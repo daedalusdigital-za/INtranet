@@ -14,6 +14,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? VehicleTypeName { get; set; }
         public int? CurrentDriverId { get; set; }
         public string? CurrentDriverName { get; set; }
+        public string? Province { get; set; }
         public string? CarTrackId { get; set; }
         public string? CarTrackName { get; set; }
         
@@ -82,6 +83,11 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal? CurrentOdometer { get; set; }
         public DateTime? LastServiceDate { get; set; }
         public decimal? NextServiceOdometer { get; set; }
+    }
+
+    public class UpdateProvinceDto
+    {
+        public string Province { get; set; } = string.Empty;
     }
 
     // Driver DTOs

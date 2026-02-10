@@ -4387,11 +4387,17 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime?>("LastDeliveryDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
                     b.Property<int?>("LoadId")
                         .HasColumnType("int");
 
                     b.Property<int?>("Location")
                         .HasColumnType("int");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
 
                     b.Property<decimal?>("MarginPercent")
                         .HasColumnType("decimal(18,4)");

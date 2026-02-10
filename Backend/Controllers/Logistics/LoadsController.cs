@@ -840,6 +840,65 @@ namespace ProjectTracker.API.Controllers.Logistics
             return NoContent();
         }
 
+        [HttpPut("{id}/reassign")]
+        public async Task<IActionResult> ReassignLoad(int id, [FromBody] AssignLoadDto dto)
+        {
+            var load = await _context.Loads
+                .Include(l => l.Vehicle)
+                .Include(l => l.Driver)
+                .FirstOrDefaultAsync(l => l.Id == id);
+                
+            if (load == null)
+                return NotFound();
+
+            if (dto.DriverId.HasValue)
+            {
+                var driver = await _context.Drivers.FindAsync(dto.DriverId.Value);
+                if (driver == null)
+                    return BadRequest("Driver not found");
+                load.DriverId = dto.DriverId.Value;
+            }
+            else if (dto.DriverId == null)
+            {
+                // Explicitly allow unassignment
+                load.DriverId = null;
+            }
+
+            if (dto.VehicleId.HasValue)
+            {
+                var vehicle = await _context.Vehicles.FindAsync(dto.VehicleId.Value);
+                if (vehicle == null)
+                    return BadRequest("Vehicle not found");
+                load.VehicleId = dto.VehicleId.Value;
+            }
+            else if (dto.VehicleId == null)
+            {
+                // Explicitly allow unassignment
+                load.VehicleId = null;
+            }
+
+            load.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            
+            // Reload to get fresh navigation properties
+            await _context.Entry(load).Reference(l => l.Vehicle).LoadAsync();
+            await _context.Entry(load).Reference(l => l.Driver).LoadAsync();
+            
+            _logger.LogInformation("Reassigned load {LoadNumber} to driver {DriverId} and vehicle {VehicleId}", 
+                load.LoadNumber, load.DriverId, load.VehicleId);
+
+            return Ok(new { 
+                vehicle = load.Vehicle != null ? new { 
+                    registrationNumber = load.Vehicle.RegistrationNumber 
+                } : null,
+                driver = load.Driver != null ? new { 
+                    firstName = load.Driver.FirstName, 
+                    lastName = load.Driver.LastName 
+                } : null
+            });
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteLoad(int id)
         {
@@ -1140,6 +1199,386 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }).ToList()
             };
         }
+
+        #region Stop Address Issues
+
+        /// <summary>
+        /// Get stops with missing address or coordinate data
+        /// </summary>
+        [HttpGet("stop-address-issues")]
+        public async Task<ActionResult> GetStopAddressIssues([FromQuery] int? loadId = null)
+        {
+            var query = _context.LoadStops
+                .Include(s => s.Load)
+                .Include(s => s.Customer)
+                .Where(s => 
+                    // Missing coordinates
+                    (s.Latitude == null || s.Longitude == null) ||
+                    // Missing address
+                    string.IsNullOrEmpty(s.Address) ||
+                    // Missing city
+                    string.IsNullOrEmpty(s.City) ||
+                    // Missing province  
+                    string.IsNullOrEmpty(s.Province));
+
+            if (loadId.HasValue)
+            {
+                query = query.Where(s => s.LoadId == loadId.Value);
+            }
+
+            var stops = await query
+                .OrderByDescending(s => s.CreatedAt)
+                .Take(200)
+                .Select(s => new StopAddressIssueDto
+                {
+                    Id = s.Id,
+                    LoadId = s.LoadId,
+                    LoadNumber = s.Load.LoadNumber,
+                    CustomerId = s.CustomerId,
+                    CompanyName = s.CompanyName ?? s.LocationName,
+                    Address = s.Address,
+                    City = s.City,
+                    Province = s.Province,
+                    Latitude = s.Latitude,
+                    Longitude = s.Longitude,
+                    StopSequence = s.StopSequence,
+                    StopType = s.StopType,
+                    HasMissingAddress = string.IsNullOrEmpty(s.Address),
+                    HasMissingCity = string.IsNullOrEmpty(s.City),
+                    HasMissingProvince = string.IsNullOrEmpty(s.Province),
+                    HasMissingCoordinates = s.Latitude == null || s.Longitude == null,
+                    // Include customer data if linked
+                    CustomerAddress = s.Customer != null ? (s.Customer.DeliveryAddress ?? s.Customer.Address) : null,
+                    CustomerCity = s.Customer != null ? (s.Customer.DeliveryCity ?? s.Customer.City) : null,
+                    CustomerProvince = s.Customer != null ? (s.Customer.DeliveryProvince ?? s.Customer.Province) : null,
+                    CustomerLatitude = s.Customer != null ? s.Customer.Latitude : null,
+                    CustomerLongitude = s.Customer != null ? s.Customer.Longitude : null
+                })
+                .ToListAsync();
+
+            var summary = new
+            {
+                TotalIssues = stops.Count,
+                MissingCoordinates = stops.Count(s => s.HasMissingCoordinates),
+                MissingAddress = stops.Count(s => s.HasMissingAddress),
+                MissingCity = stops.Count(s => s.HasMissingCity),
+                MissingProvince = stops.Count(s => s.HasMissingProvince),
+                WithLinkedCustomer = stops.Count(s => s.CustomerId.HasValue)
+            };
+
+            return Ok(new { summary, stops });
+        }
+
+        /// <summary>
+        /// Get AI suggestions for fixing stop address issues
+        /// </summary>
+        [HttpPost("stop-address-suggestions")]
+        public async Task<ActionResult> GetStopAddressSuggestions(
+            [FromQuery] int limit = 30,
+            [FromServices] ProjectTracker.API.Services.GeminiProvinceService geminiService = null!)
+        {
+            _logger.LogInformation("Getting AI suggestions for stop address issues. Limit: {Limit}", limit);
+
+            // First, try to match from existing customer database
+            var stopsWithIssues = await _context.LoadStops
+                .Include(s => s.Customer)
+                .Where(s => 
+                    s.Latitude == null || s.Longitude == null ||
+                    string.IsNullOrEmpty(s.Province))
+                .OrderByDescending(s => s.CreatedAt)
+                .Take(limit)
+                .ToListAsync();
+
+            var suggestions = new List<StopAddressSuggestion>();
+            var matchedFromDb = 0;
+            var needsAi = new List<LoadStop>();
+
+            foreach (var stop in stopsWithIssues)
+            {
+                // First try to match from linked customer
+                if (stop.CustomerId.HasValue && stop.Customer != null)
+                {
+                    var customer = stop.Customer;
+                    var suggestion = new StopAddressSuggestion
+                    {
+                        StopId = stop.Id,
+                        LoadNumber = "", // Will be filled
+                        CompanyName = stop.CompanyName,
+                        CurrentAddress = stop.Address,
+                        CurrentCity = stop.City,
+                        CurrentProvince = stop.Province,
+                        Source = "LinkedCustomer"
+                    };
+
+                    if ((stop.Latitude == null || stop.Longitude == null) && 
+                        customer.Latitude.HasValue && customer.Longitude.HasValue)
+                    {
+                        suggestion.SuggestedLatitude = (double)customer.Latitude.Value;
+                        suggestion.SuggestedLongitude = (double)customer.Longitude.Value;
+                    }
+                    if (string.IsNullOrEmpty(stop.Province) && 
+                        !string.IsNullOrEmpty(customer.DeliveryProvince ?? customer.Province))
+                    {
+                        suggestion.SuggestedProvince = customer.DeliveryProvince ?? customer.Province;
+                    }
+                    if (string.IsNullOrEmpty(stop.City) && 
+                        !string.IsNullOrEmpty(customer.DeliveryCity ?? customer.City))
+                    {
+                        suggestion.SuggestedCity = customer.DeliveryCity ?? customer.City;
+                    }
+                    if (string.IsNullOrEmpty(stop.Address) && 
+                        !string.IsNullOrEmpty(customer.DeliveryAddress ?? customer.Address))
+                    {
+                        suggestion.SuggestedAddress = customer.DeliveryAddress ?? customer.Address;
+                    }
+
+                    if (suggestion.HasAnySuggestion)
+                    {
+                        suggestion.Confidence = 0.95;
+                        suggestion.Reasoning = "Matched from linked customer record";
+                        suggestions.Add(suggestion);
+                        matchedFromDb++;
+                        continue;
+                    }
+                }
+
+                // Try to match by company name to existing customers
+                if (!string.IsNullOrEmpty(stop.CompanyName))
+                {
+                    var matchedCustomer = await _context.LogisticsCustomers
+                        .Where(c => c.Status == "Active")
+                        .Where(c => c.Name != null && c.Name.ToLower().Contains(stop.CompanyName.ToLower()) ||
+                                   (c.ShortName != null && c.ShortName.ToLower().Contains(stop.CompanyName.ToLower())))
+                        .FirstOrDefaultAsync();
+
+                    if (matchedCustomer != null)
+                    {
+                        var suggestion = new StopAddressSuggestion
+                        {
+                            StopId = stop.Id,
+                            LoadNumber = "",
+                            CompanyName = stop.CompanyName,
+                            CurrentAddress = stop.Address,
+                            CurrentCity = stop.City,
+                            CurrentProvince = stop.Province,
+                            Source = "CustomerNameMatch",
+                            MatchedCustomerId = matchedCustomer.Id,
+                            MatchedCustomerName = matchedCustomer.Name
+                        };
+
+                        if ((stop.Latitude == null || stop.Longitude == null) && 
+                            matchedCustomer.Latitude.HasValue && matchedCustomer.Longitude.HasValue)
+                        {
+                            suggestion.SuggestedLatitude = (double)matchedCustomer.Latitude.Value;
+                            suggestion.SuggestedLongitude = (double)matchedCustomer.Longitude.Value;
+                        }
+                        if (string.IsNullOrEmpty(stop.Province) && 
+                            !string.IsNullOrEmpty(matchedCustomer.DeliveryProvince ?? matchedCustomer.Province))
+                        {
+                            suggestion.SuggestedProvince = matchedCustomer.DeliveryProvince ?? matchedCustomer.Province;
+                        }
+                        if (string.IsNullOrEmpty(stop.City) && 
+                            !string.IsNullOrEmpty(matchedCustomer.DeliveryCity ?? matchedCustomer.City))
+                        {
+                            suggestion.SuggestedCity = matchedCustomer.DeliveryCity ?? matchedCustomer.City;
+                        }
+                        if (string.IsNullOrEmpty(stop.Address) && 
+                            !string.IsNullOrEmpty(matchedCustomer.DeliveryAddress ?? matchedCustomer.Address))
+                        {
+                            suggestion.SuggestedAddress = matchedCustomer.DeliveryAddress ?? matchedCustomer.Address;
+                        }
+
+                        if (suggestion.HasAnySuggestion)
+                        {
+                            suggestion.Confidence = 0.8;
+                            suggestion.Reasoning = $"Matched by name to customer: {matchedCustomer.Name}";
+                            suggestions.Add(suggestion);
+                            matchedFromDb++;
+                            continue;
+                        }
+                    }
+                }
+
+                // If has coordinates but missing province, queue for AI
+                if (stop.Latitude.HasValue && stop.Longitude.HasValue && string.IsNullOrEmpty(stop.Province))
+                {
+                    needsAi.Add(stop);
+                }
+            }
+
+            // Get AI suggestions for remaining stops
+            if (needsAi.Any() && geminiService != null)
+            {
+                var aiCustomers = needsAi.Select(s => new ProjectTracker.API.Services.GeminiProvinceService.CustomerAddressInfo
+                {
+                    CustomerId = s.Id, // Use stop ID
+                    CustomerName = s.CompanyName ?? s.LocationName ?? "Unknown",
+                    Address = s.Address,
+                    City = s.City,
+                    Province = s.Province,
+                    Latitude = s.Latitude.HasValue ? (double)s.Latitude.Value : null,
+                    Longitude = s.Longitude.HasValue ? (double)s.Longitude.Value : null,
+                    HasMissingProvince = string.IsNullOrEmpty(s.Province),
+                    HasMissingCity = string.IsNullOrEmpty(s.City),
+                    HasMissingCoordinates = s.Latitude == null || s.Longitude == null
+                }).ToList();
+
+                try
+                {
+                    var aiResult = await geminiService.GetAddressSuggestions(aiCustomers);
+                    foreach (var aiSuggestion in aiResult.Suggestions)
+                    {
+                        var stop = needsAi.FirstOrDefault(s => s.Id == aiSuggestion.CustomerId);
+                        if (stop != null)
+                        {
+                            suggestions.Add(new StopAddressSuggestion
+                            {
+                                StopId = stop.Id,
+                                LoadNumber = "",
+                                CompanyName = stop.CompanyName,
+                                CurrentAddress = stop.Address,
+                                CurrentCity = stop.City,
+                                CurrentProvince = stop.Province,
+                                SuggestedProvince = aiSuggestion.SuggestedProvince,
+                                SuggestedCity = aiSuggestion.SuggestedCity,
+                                SuggestedLatitude = aiSuggestion.SuggestedLatitude,
+                                SuggestedLongitude = aiSuggestion.SuggestedLongitude,
+                                Confidence = aiSuggestion.Confidence,
+                                Reasoning = aiSuggestion.Reasoning ?? "AI suggestion based on coordinates",
+                                Source = "GeminiAI"
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error getting AI suggestions for stops");
+                }
+            }
+
+            // Fill in load numbers
+            var loadIds = suggestions.Select(s => s.StopId).Distinct().ToList();
+            var loadLookup = await _context.LoadStops
+                .Where(s => loadIds.Contains(s.Id))
+                .Include(s => s.Load)
+                .ToDictionaryAsync(s => s.Id, s => s.Load.LoadNumber);
+
+            foreach (var suggestion in suggestions)
+            {
+                if (loadLookup.TryGetValue(suggestion.StopId, out var loadNumber))
+                {
+                    suggestion.LoadNumber = loadNumber;
+                }
+            }
+
+            return Ok(new
+            {
+                success = true,
+                totalProcessed = stopsWithIssues.Count,
+                matchedFromDatabase = matchedFromDb,
+                aiSuggestions = suggestions.Count - matchedFromDb,
+                suggestions
+            });
+        }
+
+        /// <summary>
+        /// Apply a suggestion to a stop
+        /// </summary>
+        [HttpPost("apply-stop-suggestion")]
+        public async Task<ActionResult> ApplyStopSuggestion([FromBody] ApplyStopSuggestionRequest request)
+        {
+            var stop = await _context.LoadStops.FindAsync(request.StopId);
+            if (stop == null)
+            {
+                return NotFound(new { error = "Stop not found" });
+            }
+
+            if (!string.IsNullOrEmpty(request.Address))
+                stop.Address = request.Address;
+            if (!string.IsNullOrEmpty(request.City))
+                stop.City = request.City;
+            if (!string.IsNullOrEmpty(request.Province))
+                stop.Province = request.Province;
+            if (request.Latitude.HasValue)
+                stop.Latitude = (decimal)request.Latitude.Value;
+            if (request.Longitude.HasValue)
+                stop.Longitude = (decimal)request.Longitude.Value;
+
+            // Also link to customer if provided
+            if (request.CustomerId.HasValue && !stop.CustomerId.HasValue)
+            {
+                stop.CustomerId = request.CustomerId;
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Applied suggestion to stop {StopId}", stop.Id);
+
+            return Ok(new { success = true, message = $"Updated stop for {stop.CompanyName}" });
+        }
+
+        /// <summary>
+        /// Bulk fix stops from linked customers
+        /// </summary>
+        [HttpPost("bulk-fix-stops-from-customers")]
+        public async Task<ActionResult> BulkFixStopsFromCustomers()
+        {
+            var stopsToFix = await _context.LoadStops
+                .Include(s => s.Customer)
+                .Where(s => s.CustomerId != null && s.Customer != null)
+                .Where(s => 
+                    (s.Latitude == null && s.Customer!.Latitude != null) ||
+                    (s.Longitude == null && s.Customer!.Longitude != null) ||
+                    (string.IsNullOrEmpty(s.Province) && !string.IsNullOrEmpty(s.Customer!.Province)) ||
+                    (string.IsNullOrEmpty(s.City) && !string.IsNullOrEmpty(s.Customer!.City)))
+                .ToListAsync();
+
+            int updated = 0;
+            foreach (var stop in stopsToFix)
+            {
+                var customer = stop.Customer!;
+                bool changed = false;
+
+                if (stop.Latitude == null && customer.Latitude.HasValue)
+                {
+                    stop.Latitude = (decimal)customer.Latitude.Value;
+                    changed = true;
+                }
+                if (stop.Longitude == null && customer.Longitude.HasValue)
+                {
+                    stop.Longitude = (decimal)customer.Longitude.Value;
+                    changed = true;
+                }
+                if (string.IsNullOrEmpty(stop.Province) && !string.IsNullOrEmpty(customer.DeliveryProvince ?? customer.Province))
+                {
+                    stop.Province = customer.DeliveryProvince ?? customer.Province;
+                    changed = true;
+                }
+                if (string.IsNullOrEmpty(stop.City) && !string.IsNullOrEmpty(customer.DeliveryCity ?? customer.City))
+                {
+                    stop.City = customer.DeliveryCity ?? customer.City;
+                    changed = true;
+                }
+                if (string.IsNullOrEmpty(stop.Address) && !string.IsNullOrEmpty(customer.DeliveryAddress ?? customer.Address))
+                {
+                    stop.Address = customer.DeliveryAddress ?? customer.Address;
+                    changed = true;
+                }
+
+                if (changed) updated++;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                totalFixed = updated,
+                message = $"Updated {updated} stops from linked customer data"
+            });
+        }
+
+        #endregion
     }
 
     // Additional DTOs for specific operations
@@ -1169,5 +1608,68 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string LoadNumber { get; set; } = string.Empty;
         public string PreviousStatus { get; set; } = string.Empty;
         public string NewStatus { get; set; } = string.Empty;
+    }
+
+    public class StopAddressIssueDto
+    {
+        public int Id { get; set; }
+        public int LoadId { get; set; }
+        public string? LoadNumber { get; set; }
+        public int? CustomerId { get; set; }
+        public string? CompanyName { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public string? Province { get; set; }
+        public decimal? Latitude { get; set; }
+        public decimal? Longitude { get; set; }
+        public int StopSequence { get; set; }
+        public string? StopType { get; set; }
+        public bool HasMissingAddress { get; set; }
+        public bool HasMissingCity { get; set; }
+        public bool HasMissingProvince { get; set; }
+        public bool HasMissingCoordinates { get; set; }
+        public string? CustomerAddress { get; set; }
+        public string? CustomerCity { get; set; }
+        public string? CustomerProvince { get; set; }
+        public double? CustomerLatitude { get; set; }
+        public double? CustomerLongitude { get; set; }
+    }
+
+    public class StopAddressSuggestion
+    {
+        public int StopId { get; set; }
+        public string? LoadNumber { get; set; }
+        public string? CompanyName { get; set; }
+        public string? CurrentAddress { get; set; }
+        public string? CurrentCity { get; set; }
+        public string? CurrentProvince { get; set; }
+        public string? SuggestedAddress { get; set; }
+        public string? SuggestedCity { get; set; }
+        public string? SuggestedProvince { get; set; }
+        public double? SuggestedLatitude { get; set; }
+        public double? SuggestedLongitude { get; set; }
+        public double Confidence { get; set; }
+        public string? Reasoning { get; set; }
+        public string Source { get; set; } = "Unknown"; // LinkedCustomer, CustomerNameMatch, GeminiAI
+        public int? MatchedCustomerId { get; set; }
+        public string? MatchedCustomerName { get; set; }
+
+        public bool HasAnySuggestion => 
+            !string.IsNullOrEmpty(SuggestedAddress) ||
+            !string.IsNullOrEmpty(SuggestedCity) ||
+            !string.IsNullOrEmpty(SuggestedProvince) ||
+            SuggestedLatitude.HasValue ||
+            SuggestedLongitude.HasValue;
+    }
+
+    public class ApplyStopSuggestionRequest
+    {
+        public int StopId { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public string? Province { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public int? CustomerId { get; set; }
     }
 }

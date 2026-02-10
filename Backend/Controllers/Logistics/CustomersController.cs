@@ -1562,6 +1562,220 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Use Gemini AI to map customer addresses to South African provinces
+        /// </summary>
+        /// <param name="batchSize">Number of customers to process (default: all with missing provinces)</param>
+        [HttpPost("map-provinces-gemini")]
+        public async Task<ActionResult<GeminiProvinceService.ProvinceMappingResult>> MapProvincesWithGemini(
+            [FromQuery] int? batchSize = null,
+            [FromServices] GeminiProvinceService geminiService = null!)
+        {
+            _logger.LogInformation($"Starting Gemini AI province mapping. BatchSize: {batchSize}");
+            
+            var result = await geminiService.MapProvincesWithGemini(batchSize);
+            
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Get AI suggestions for fixing address issues using Gemini
+        /// </summary>
+        /// <param name="limit">Maximum number of customers to analyze (default: 50)</param>
+        [HttpPost("address-suggestions")]
+        public async Task<ActionResult<GeminiProvinceService.AddressSuggestionsResult>> GetAddressSuggestions(
+            [FromQuery] int limit = 50,
+            [FromServices] GeminiProvinceService geminiService = null!)
+        {
+            _logger.LogInformation($"Getting AI address suggestions. Limit: {limit}");
+
+            // Get customers with address issues - prioritize those with coordinates but missing province
+            // (these are easy wins since we can use GPS to determine province accurately)
+            var customersWithCoords = await _context.LogisticsCustomers
+                .Where(c => c.Status == "Active")
+                .Where(c => 
+                    // Has coordinates but missing province - PRIORITY
+                    c.Latitude != null && c.Longitude != null &&
+                    string.IsNullOrEmpty(c.Province) && string.IsNullOrEmpty(c.DeliveryProvince))
+                .Take(limit)
+                .Select(c => new GeminiProvinceService.CustomerAddressInfo
+                {
+                    CustomerId = c.Id,
+                    CustomerName = c.Name,
+                    CustomerCode = c.CustomerCode,
+                    Address = c.DeliveryAddress ?? c.Address ?? c.PhysicalAddress,
+                    City = c.DeliveryCity ?? c.City,
+                    Province = c.DeliveryProvince ?? c.Province,
+                    PostalCode = c.DeliveryPostalCode ?? c.PostalCode,
+                    Latitude = c.Latitude,
+                    Longitude = c.Longitude,
+                    HasMissingAddress = string.IsNullOrEmpty(c.Address) && string.IsNullOrEmpty(c.PhysicalAddress) && 
+                                        string.IsNullOrEmpty(c.DeliveryAddress) && string.IsNullOrEmpty(c.AddressLinesJson),
+                    HasMissingCity = string.IsNullOrEmpty(c.City) && string.IsNullOrEmpty(c.DeliveryCity),
+                    HasMissingProvince = true,
+                    HasMissingCoordinates = false
+                })
+                .ToListAsync();
+
+            // If we still have room, add other customers with issues
+            var remaining = limit - customersWithCoords.Count;
+            var otherCustomers = new List<GeminiProvinceService.CustomerAddressInfo>();
+            
+            if (remaining > 0)
+            {
+                var coordsIds = customersWithCoords.Select(c => c.CustomerId).ToList();
+                otherCustomers = await _context.LogisticsCustomers
+                    .Where(c => c.Status == "Active")
+                    .Where(c => !coordsIds.Contains(c.Id))
+                    .Where(c =>
+                        // Missing address
+                        (string.IsNullOrEmpty(c.Address) && string.IsNullOrEmpty(c.PhysicalAddress) && 
+                         string.IsNullOrEmpty(c.DeliveryAddress) && string.IsNullOrEmpty(c.AddressLinesJson)) ||
+                        // Missing city
+                        (string.IsNullOrEmpty(c.City) && string.IsNullOrEmpty(c.DeliveryCity)) ||
+                        // Missing province (without coords - already got those above)
+                        (string.IsNullOrEmpty(c.Province) && string.IsNullOrEmpty(c.DeliveryProvince)) ||
+                        // Missing coordinates
+                        (c.Latitude == null || c.Longitude == null))
+                    .Take(remaining)
+                    .Select(c => new GeminiProvinceService.CustomerAddressInfo
+                    {
+                        CustomerId = c.Id,
+                        CustomerName = c.Name,
+                        CustomerCode = c.CustomerCode,
+                        Address = c.DeliveryAddress ?? c.Address ?? c.PhysicalAddress,
+                        City = c.DeliveryCity ?? c.City,
+                        Province = c.DeliveryProvince ?? c.Province,
+                        PostalCode = c.DeliveryPostalCode ?? c.PostalCode,
+                        Latitude = c.Latitude,
+                        Longitude = c.Longitude,
+                        HasMissingAddress = string.IsNullOrEmpty(c.Address) && string.IsNullOrEmpty(c.PhysicalAddress) && 
+                                            string.IsNullOrEmpty(c.DeliveryAddress) && string.IsNullOrEmpty(c.AddressLinesJson),
+                        HasMissingCity = string.IsNullOrEmpty(c.City) && string.IsNullOrEmpty(c.DeliveryCity),
+                        HasMissingProvince = string.IsNullOrEmpty(c.Province) && string.IsNullOrEmpty(c.DeliveryProvince),
+                        HasMissingCoordinates = c.Latitude == null || c.Longitude == null
+                    })
+                    .ToListAsync();
+            }
+
+            var customers = customersWithCoords.Concat(otherCustomers).ToList();
+            
+            _logger.LogInformation("Found {WithCoords} customers with coords but missing province, {Other} other issues", 
+                customersWithCoords.Count, otherCustomers.Count);
+
+            if (!customers.Any())
+            {
+                return Ok(new GeminiProvinceService.AddressSuggestionsResult
+                {
+                    Success = true,
+                    TotalProcessed = 0,
+                    Suggestions = new List<GeminiProvinceService.AddressSuggestion>()
+                });
+            }
+
+            var result = await geminiService.GetAddressSuggestions(customers);
+            
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Apply a single AI suggestion to a customer
+        /// </summary>
+        [HttpPost("apply-suggestion")]
+        public async Task<ActionResult> ApplySuggestion([FromBody] ApplySuggestionRequest request)
+        {
+            var customer = await _context.LogisticsCustomers.FindAsync(request.CustomerId);
+            if (customer == null)
+            {
+                return NotFound(new { error = "Customer not found" });
+            }
+
+            if (!string.IsNullOrEmpty(request.Province))
+            {
+                customer.Province = request.Province;
+                customer.DeliveryProvince = request.Province;
+            }
+            if (!string.IsNullOrEmpty(request.City))
+            {
+                customer.City = request.City;
+                customer.DeliveryCity = request.City;
+            }
+            if (!string.IsNullOrEmpty(request.Address))
+            {
+                customer.DeliveryAddress = request.Address;
+                if (string.IsNullOrEmpty(customer.Address))
+                    customer.Address = request.Address;
+            }
+            if (request.Latitude.HasValue)
+            {
+                customer.Latitude = request.Latitude;
+            }
+            if (request.Longitude.HasValue)
+            {
+                customer.Longitude = request.Longitude;
+            }
+
+            customer.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Applied AI suggestion to customer {Id}: {Name}", customer.Id, customer.Name);
+
+            return Ok(new { success = true, message = $"Updated {customer.Name}" });
+        }
+
+        /// <summary>
+        /// Match customers by name and return their address info
+        /// </summary>
+        [HttpPost("match-by-names")]
+        public async Task<ActionResult> MatchByNames([FromBody] List<string> customerNames)
+        {
+            if (customerNames == null || customerNames.Count == 0)
+            {
+                return BadRequest(new { error = "No customer names provided" });
+            }
+
+            _logger.LogInformation("Matching {Count} customer names", customerNames.Count);
+
+            var results = new List<object>();
+            var customers = await _context.LogisticsCustomers.ToListAsync();
+
+            foreach (var name in customerNames.Distinct())
+            {
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                var nameLower = name.Trim().ToLower();
+                
+                // Find best match by name
+                var match = customers.FirstOrDefault(c => 
+                    c.Name?.ToLower() == nameLower ||
+                    c.Name?.ToLower().Contains(nameLower) == true ||
+                    nameLower.Contains(c.Name?.ToLower() ?? ""));
+
+                if (match != null && (
+                    !string.IsNullOrEmpty(match.DeliveryAddress) ||
+                    !string.IsNullOrEmpty(match.Address) ||
+                    match.Latitude.HasValue))
+                {
+                    results.Add(new
+                    {
+                        id = match.Id,
+                        name = match.Name,
+                        deliveryAddress = match.DeliveryAddress ?? match.Address ?? match.PhysicalAddress,
+                        deliveryCity = match.DeliveryCity ?? match.City,
+                        deliveryProvince = match.DeliveryProvince ?? match.Province,
+                        province = match.Province,
+                        latitude = match.Latitude,
+                        longitude = match.Longitude
+                    });
+                    
+                    _logger.LogInformation("Matched '{Name}' to customer '{Match}'", name, match.Name);
+                }
+            }
+
+            _logger.LogInformation("Found {Count} matches", results.Count);
+            return Ok(results);
+        }
+
+        /// <summary>
         /// Get statistics about customer address data quality
         /// </summary>
         [HttpGet("address-stats")]
@@ -1593,6 +1807,120 @@ namespace ProjectTracker.API.Controllers.Logistics
             });
         }
 
+        /// <summary>
+        /// Match customer names to addresses using database first, then Gemini AI for unmatched
+        /// </summary>
+        [HttpPost("match-addresses-ai")]
+        public async Task<ActionResult> MatchAddressesWithAI(
+            [FromBody] List<string> customerNames,
+            [FromServices] GeminiProvinceService geminiService = null!)
+        {
+            if (customerNames == null || customerNames.Count == 0)
+            {
+                return BadRequest(new { error = "No customer names provided" });
+            }
+
+            _logger.LogInformation("Matching {Count} customer names with AI", customerNames.Count);
+
+            var results = new List<object>();
+            var unmatchedNames = new List<string>();
+            var customers = await _context.LogisticsCustomers.ToListAsync();
+
+            // First try database matching
+            foreach (var name in customerNames.Distinct())
+            {
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                var nameLower = name.Trim().ToLower();
+                
+                // Find best match by name
+                var match = customers.FirstOrDefault(c => 
+                    c.Name?.ToLower() == nameLower ||
+                    c.Name?.ToLower().Contains(nameLower) == true ||
+                    nameLower.Contains(c.Name?.ToLower() ?? ""));
+
+                if (match != null && (
+                    !string.IsNullOrEmpty(match.DeliveryAddress) ||
+                    !string.IsNullOrEmpty(match.Address) ||
+                    !string.IsNullOrEmpty(match.DeliveryCity) ||
+                    !string.IsNullOrEmpty(match.City) ||
+                    match.Latitude.HasValue))
+                {
+                    results.Add(new
+                    {
+                        customerName = name,
+                        id = match.Id,
+                        matchedName = match.Name,
+                        deliveryAddress = match.DeliveryAddress ?? match.Address ?? match.PhysicalAddress,
+                        city = match.DeliveryCity ?? match.City,
+                        province = match.DeliveryProvince ?? match.Province,
+                        latitude = match.Latitude,
+                        longitude = match.Longitude,
+                        confidence = 0.9,
+                        source = "Database",
+                        reasoning = $"Matched to existing customer: {match.Name}"
+                    });
+                    
+                    _logger.LogInformation("DB Matched '{Name}' to customer '{Match}'", name, match.Name);
+                }
+                else
+                {
+                    unmatchedNames.Add(name);
+                }
+            }
+
+            // Use Gemini AI for unmatched names
+            if (unmatchedNames.Count > 0 && geminiService != null)
+            {
+                _logger.LogInformation("Using Gemini AI for {Count} unmatched customer names", unmatchedNames.Count);
+
+                try
+                {
+                    var aiResults = await geminiService.LookupCustomerAddresses(unmatchedNames);
+                    
+                    foreach (var aiResult in aiResults.Where(r => r.Confidence > 0.3))
+                    {
+                        results.Add(new
+                        {
+                            customerName = aiResult.CustomerName,
+                            id = (int?)null,
+                            matchedName = (string?)null,
+                            deliveryAddress = aiResult.Address,
+                            city = aiResult.City,
+                            province = aiResult.Province,
+                            latitude = (double?)null,
+                            longitude = (double?)null,
+                            confidence = aiResult.Confidence,
+                            source = "GeminiAI",
+                            reasoning = aiResult.Reasoning
+                        });
+                        
+                        _logger.LogInformation("AI found address for '{Name}': {City}, {Province}", 
+                            aiResult.CustomerName, aiResult.City, aiResult.Province);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error calling Gemini AI for address lookup");
+                }
+            }
+
+            _logger.LogInformation("Total matches: {Count} (DB: {DB}, AI: {AI})", 
+                results.Count, 
+                results.Count(r => ((dynamic)r).source == "Database"),
+                results.Count(r => ((dynamic)r).source == "GeminiAI"));
+
+            return Ok(new
+            {
+                success = true,
+                totalRequested = customerNames.Count,
+                totalMatched = results.Count,
+                databaseMatches = results.Count(r => ((dynamic)r).source == "Database"),
+                aiMatches = results.Count(r => ((dynamic)r).source == "GeminiAI"),
+                results
+            });
+        }
+
         #endregion
     }
 
@@ -1621,5 +1949,18 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string? City { get; set; }
         public string? Province { get; set; }
         public string? FromLoadNumber { get; set; }
+    }
+
+    /// <summary>
+    /// Request to apply an AI suggestion
+    /// </summary>
+    public class ApplySuggestionRequest
+    {
+        public int CustomerId { get; set; }
+        public string? Province { get; set; }
+        public string? City { get; set; }
+        public string? Address { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 }
