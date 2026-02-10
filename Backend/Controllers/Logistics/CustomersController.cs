@@ -1283,6 +1283,250 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Sync addresses from tripsheet stops to customer delivery addresses.
+        /// Scans all load stops and saves unique addresses for customers.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("sync-addresses-from-tripsheets")]
+        public async Task<ActionResult<SyncAddressesResult>> SyncAddressesFromTripsheets()
+        {
+            var result = new SyncAddressesResult();
+
+            try
+            {
+                // Get all load stops with addresses
+                var allStops = await _context.LoadStops
+                    .Include(s => s.Load)
+                    .Where(s => !string.IsNullOrEmpty(s.Address) && s.Address.Length > 5)
+                    .ToListAsync();
+
+                _logger.LogInformation("Found {Count} stops with addresses to process", allStops.Count);
+                result.TotalStopsProcessed = allStops.Count;
+
+                // Get all customers for matching
+                var allCustomers = await _context.LogisticsCustomers.ToListAsync();
+                var customersByName = allCustomers
+                    .GroupBy(c => NormalizeCustomerName(c.Name))
+                    .ToDictionary(g => g.Key, g => g.First());
+                var customersByShortName = allCustomers
+                    .Where(c => !string.IsNullOrEmpty(c.ShortName))
+                    .GroupBy(c => NormalizeCustomerName(c.ShortName!))
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                // Get existing delivery addresses for all customers
+                var existingAddresses = await _context.CustomerDeliveryAddresses
+                    .Where(a => a.IsActive)
+                    .ToListAsync();
+                var existingAddressLookup = existingAddresses
+                    .GroupBy(a => a.CustomerId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                // Track which customers we've already added addresses to (to avoid duplicates)
+                var addedAddressesTracker = new Dictionary<int, HashSet<string>>();
+
+                foreach (var stop in allStops)
+                {
+                    // Try to find matching customer
+                    Customer? customer = null;
+
+                    // First try by CustomerId if set
+                    if (stop.CustomerId.HasValue && stop.CustomerId > 0)
+                    {
+                        customer = allCustomers.FirstOrDefault(c => c.Id == stop.CustomerId.Value);
+                    }
+
+                    // If not found, try by CompanyName
+                    if (customer == null && !string.IsNullOrEmpty(stop.CompanyName))
+                    {
+                        var normalizedCompanyName = NormalizeCustomerName(stop.CompanyName);
+                        if (customersByName.TryGetValue(normalizedCompanyName, out var matchedCustomer))
+                        {
+                            customer = matchedCustomer;
+                        }
+                        else if (customersByShortName.TryGetValue(normalizedCompanyName, out matchedCustomer))
+                        {
+                            customer = matchedCustomer;
+                        }
+                        else
+                        {
+                            // Try partial match (company name contains customer name or vice versa)
+                            customer = allCustomers.FirstOrDefault(c =>
+                                NormalizeCustomerName(c.Name).Contains(normalizedCompanyName) ||
+                                normalizedCompanyName.Contains(NormalizeCustomerName(c.Name)) ||
+                                (!string.IsNullOrEmpty(c.ShortName) && (
+                                    NormalizeCustomerName(c.ShortName).Contains(normalizedCompanyName) ||
+                                    normalizedCompanyName.Contains(NormalizeCustomerName(c.ShortName)))));
+                        }
+                    }
+
+                    // If still not found, try by LocationName
+                    if (customer == null && !string.IsNullOrEmpty(stop.LocationName))
+                    {
+                        var normalizedLocationName = NormalizeCustomerName(stop.LocationName);
+                        customer = allCustomers.FirstOrDefault(c =>
+                            NormalizeCustomerName(c.Name).Contains(normalizedLocationName) ||
+                            normalizedLocationName.Contains(NormalizeCustomerName(c.Name)));
+                    }
+
+                    if (customer == null)
+                    {
+                        // No matching customer found, skip this stop
+                        continue;
+                    }
+
+                    // Check if we already have this address for this customer
+                    var normalizedAddress = NormalizeAddress(stop.Address);
+                    
+                    if (!addedAddressesTracker.ContainsKey(customer.Id))
+                    {
+                        addedAddressesTracker[customer.Id] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    }
+
+                    if (addedAddressesTracker[customer.Id].Contains(normalizedAddress))
+                    {
+                        continue; // Already processed this address in this batch
+                    }
+
+                    // Check against existing addresses in database
+                    var customerExistingAddresses = existingAddressLookup.TryGetValue(customer.Id, out var existing)
+                        ? existing : new List<CustomerDeliveryAddress>();
+
+                    var existsInDb = customerExistingAddresses.Any(ea =>
+                        NormalizeAddress(ea.Address) == normalizedAddress ||
+                        (ea.FormattedAddress != null && NormalizeAddress(ea.FormattedAddress) == normalizedAddress));
+
+                    if (existsInDb)
+                    {
+                        result.SkippedExisting++;
+                        addedAddressesTracker[customer.Id].Add(normalizedAddress);
+                        continue;
+                    }
+
+                    // Check against customer's main addresses
+                    if (!string.IsNullOrEmpty(customer.Address) &&
+                        NormalizeAddress(customer.Address) == normalizedAddress)
+                    {
+                        result.SkippedExisting++;
+                        addedAddressesTracker[customer.Id].Add(normalizedAddress);
+                        continue;
+                    }
+                    if (!string.IsNullOrEmpty(customer.DeliveryAddress) &&
+                        NormalizeAddress(customer.DeliveryAddress) == normalizedAddress)
+                    {
+                        result.SkippedExisting++;
+                        addedAddressesTracker[customer.Id].Add(normalizedAddress);
+                        continue;
+                    }
+
+                    // Create new delivery address
+                    var isFirstAddress = customerExistingAddresses.Count == 0 &&
+                                        !result.AddedAddresses.Any(a => a.CustomerId == customer.Id);
+
+                    var newAddress = new CustomerDeliveryAddress
+                    {
+                        CustomerId = customer.Id,
+                        AddressLabel = !string.IsNullOrEmpty(stop.LocationName)
+                            ? stop.LocationName
+                            : (!string.IsNullOrEmpty(stop.City) ? $"Delivery - {stop.City}" : "Delivery Address"),
+                        Address = stop.Address,
+                        City = stop.City,
+                        Province = stop.Province,
+                        PostalCode = stop.PostalCode,
+                        Country = "South Africa",
+                        ContactPerson = stop.ContactPerson,
+                        ContactPhone = stop.ContactPhone,
+                        Latitude = stop.Latitude.HasValue ? (double)stop.Latitude.Value : null,
+                        Longitude = stop.Longitude.HasValue ? (double)stop.Longitude.Value : null,
+                        FormattedAddress = stop.Address,
+                        IsDefault = isFirstAddress,
+                        IsActive = true,
+                        UsageCount = 1,
+                        LastUsedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.CustomerDeliveryAddresses.Add(newAddress);
+                    addedAddressesTracker[customer.Id].Add(normalizedAddress);
+
+                    result.AddedAddresses.Add(new SyncedAddressInfo
+                    {
+                        CustomerId = customer.Id,
+                        CustomerName = customer.Name,
+                        Address = stop.Address,
+                        City = stop.City,
+                        Province = stop.Province,
+                        FromLoadNumber = stop.Load?.LoadNumber
+                    });
+
+                    // Also update customer's main delivery address if not set
+                    if (string.IsNullOrEmpty(customer.DeliveryAddress))
+                    {
+                        customer.DeliveryAddress = stop.Address;
+                        customer.DeliveryCity = stop.City;
+                        customer.DeliveryProvince = stop.Province;
+                        customer.DeliveryPostalCode = stop.PostalCode;
+                        customer.UpdatedAt = DateTime.UtcNow;
+                        result.CustomersUpdated++;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                result.Success = true;
+                result.TotalAddressesSaved = result.AddedAddresses.Count;
+                _logger.LogInformation("Synced {Count} addresses from tripsheets, skipped {Skipped} existing", 
+                    result.TotalAddressesSaved, result.SkippedExisting);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing addresses from tripsheets");
+                result.Success = false;
+                result.ErrorMessage = ex.Message;
+            }
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Normalize customer name for matching (lowercase, remove extra spaces, common suffixes)
+        /// </summary>
+        private static string NormalizeCustomerName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return "";
+
+            return name
+                .ToLowerInvariant()
+                .Replace("(pty) ltd", "")
+                .Replace("pty ltd", "")
+                .Replace("(pty)", "")
+                .Replace("ltd", "")
+                .Replace("cc", "")
+                .Replace(",", " ")
+                .Replace(".", " ")
+                .Replace("  ", " ")
+                .Replace("  ", " ")
+                .Trim();
+        }
+
+        /// <summary>
+        /// Normalize address for comparison (lowercase, remove extra spaces, punctuation)
+        /// </summary>
+        private static string NormalizeAddress(string? address)
+        {
+            if (string.IsNullOrWhiteSpace(address))
+                return "";
+
+            return address
+                .ToLowerInvariant()
+                .Replace(",", " ")
+                .Replace(".", " ")
+                .Replace("  ", " ")
+                .Replace("  ", " ")
+                .Trim();
+        }
+
+        /// <summary>
         /// Clean up and enrich customer addresses using Google Maps Geocoding API
         /// </summary>
         /// <param name="batchSize">Number of customers to process (default: all)</param>
@@ -1350,5 +1594,32 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// Result of syncing addresses from tripsheets
+    /// </summary>
+    public class SyncAddressesResult
+    {
+        public bool Success { get; set; }
+        public int TotalStopsProcessed { get; set; }
+        public int TotalAddressesSaved { get; set; }
+        public int SkippedExisting { get; set; }
+        public int CustomersUpdated { get; set; }
+        public string? ErrorMessage { get; set; }
+        public List<SyncedAddressInfo> AddedAddresses { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Information about a synced address
+    /// </summary>
+    public class SyncedAddressInfo
+    {
+        public int CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public string? Province { get; set; }
+        public string? FromLoadNumber { get; set; }
     }
 }
