@@ -497,7 +497,10 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPut("{id}/status")]
         public async Task<IActionResult> UpdateLoadStatus(int id, [FromBody] UpdateLoadStatusDto dto)
         {
-            var load = await _context.Loads.FindAsync(id);
+            var load = await _context.Loads
+                .Include(l => l.Stops)
+                    .ThenInclude(s => s.Commodities)
+                .FirstOrDefaultAsync(l => l.Id == id);
             if (load == null)
                 return NotFound();
 
@@ -520,11 +523,87 @@ namespace ProjectTracker.API.Controllers.Logistics
                 load.ActualDeliveryDate = DateTime.UtcNow;
             }
 
-            // Update all linked ImportedInvoices to Delivered status when Load is delivered
+            // Sync invoices from load stops when status changes
+            if (dto.Status == "Assigned" || dto.Status == "InTransit" || dto.Status == "Delivered")
+            {
+                // Collect all invoice numbers from this load
+                var invoiceNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                
+                foreach (var stop in load.Stops)
+                {
+                    // Get invoice number from stop
+                    if (!string.IsNullOrWhiteSpace(stop.InvoiceNumber))
+                    {
+                        foreach (var invNum in stop.InvoiceNumber.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            var trimmed = invNum.Trim();
+                            if (!string.IsNullOrEmpty(trimmed))
+                                invoiceNumbers.Add(NormalizeInvoiceNumber(trimmed));
+                        }
+                    }
+                    
+                    // Get invoice numbers from commodities
+                    foreach (var commodity in stop.Commodities)
+                    {
+                        if (!string.IsNullOrWhiteSpace(commodity.InvoiceNumber))
+                        {
+                            foreach (var invNum in commodity.InvoiceNumber.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                var trimmed = invNum.Trim();
+                                if (!string.IsNullOrEmpty(trimmed))
+                                    invoiceNumbers.Add(NormalizeInvoiceNumber(trimmed));
+                            }
+                        }
+                    }
+                }
+
+                // Find and update matching invoices
+                if (invoiceNumbers.Any())
+                {
+                    var allInvoices = await _context.ImportedInvoices.ToListAsync();
+                    var newStatus = dto.Status == "Delivered" ? "Delivered" 
+                                  : dto.Status == "InTransit" ? "InTransit" 
+                                  : "Assigned";
+
+                    foreach (var invoice in allInvoices)
+                    {
+                        var normalizedTransNum = NormalizeInvoiceNumber(invoice.TransactionNumber);
+                        if (invoiceNumbers.Contains(normalizedTransNum))
+                        {
+                            // Link to load if not already linked
+                            if (!invoice.LoadId.HasValue)
+                            {
+                                invoice.LoadId = id;
+                            }
+
+                            // Update status (only upgrade, never downgrade except from Pending)
+                            var shouldUpdate = invoice.Status == "Pending" 
+                                            || (invoice.Status == "Assigned" && (newStatus == "InTransit" || newStatus == "Delivered"))
+                                            || (invoice.Status == "InTransit" && newStatus == "Delivered");
+
+                            if (shouldUpdate)
+                            {
+                                invoice.Status = newStatus;
+                                
+                                if (newStatus == "Delivered")
+                                {
+                                    invoice.LastDeliveryDate = DateTime.UtcNow;
+                                    if (!invoice.DeliveredQuantity.HasValue || invoice.DeliveredQuantity < invoice.Quantity)
+                                    {
+                                        invoice.DeliveredQuantity = invoice.Quantity;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Also update any already-linked invoices (legacy behavior)
             if (dto.Status == "Delivered")
             {
                 var linkedInvoices = await _context.ImportedInvoices
-                    .Where(i => i.LoadId == id)
+                    .Where(i => i.LoadId == id && i.Status != "Delivered")
                     .ToListAsync();
 
                 foreach (var invoice in linkedInvoices)
@@ -532,7 +611,6 @@ namespace ProjectTracker.API.Controllers.Logistics
                     invoice.Status = "Delivered";
                     invoice.LastDeliveryDate = DateTime.UtcNow;
                     
-                    // Mark as fully delivered if not already tracked
                     if (!invoice.DeliveredQuantity.HasValue || invoice.DeliveredQuantity < invoice.Quantity)
                     {
                         invoice.DeliveredQuantity = invoice.Quantity;
@@ -542,6 +620,186 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        /// <summary>
+        /// Sync invoice statuses from all tripsheets/loads.
+        /// Matches invoices from load stops to ImportedInvoices and updates their status.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("sync-invoice-statuses")]
+        public async Task<IActionResult> SyncInvoiceStatuses()
+        {
+            var syncResults = new SyncInvoiceStatusesResult();
+
+            try
+            {
+                // Get all loads with their stops
+                var loads = await _context.Loads
+                    .Include(l => l.Stops)
+                        .ThenInclude(s => s.Commodities)
+                    .Where(l => l.Status != "Cancelled")
+                    .ToListAsync();
+
+                // Get all pending/unassigned invoices
+                var invoices = await _context.ImportedInvoices
+                    .Where(i => i.Status != "Cancelled")
+                    .ToListAsync();
+
+                // Build a lookup dictionary for invoices by transaction number
+                var invoiceLookup = invoices
+                    .GroupBy(i => NormalizeInvoiceNumber(i.TransactionNumber))
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                foreach (var load in loads)
+                {
+                    // Collect all invoice numbers from this load
+                    var loadInvoiceNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    // From stops
+                    foreach (var stop in load.Stops)
+                    {
+                        if (!string.IsNullOrWhiteSpace(stop.InvoiceNumber))
+                        {
+                            // Could be multiple invoices comma-separated
+                            var invoiceNos = stop.InvoiceNumber.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var inv in invoiceNos)
+                            {
+                                loadInvoiceNumbers.Add(NormalizeInvoiceNumber(inv.Trim()));
+                            }
+                        }
+
+                        // From commodities on the stop
+                        foreach (var commodity in stop.Commodities)
+                        {
+                            if (!string.IsNullOrWhiteSpace(commodity.InvoiceNumber))
+                            {
+                                var invoiceNos = commodity.InvoiceNumber.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                                foreach (var inv in invoiceNos)
+                                {
+                                    loadInvoiceNumbers.Add(NormalizeInvoiceNumber(inv.Trim()));
+                                }
+                            }
+                        }
+                    }
+
+                    // Determine the target status based on load status
+                    string targetInvoiceStatus = load.Status switch
+                    {
+                        "Delivered" => "Delivered",
+                        "InTransit" => "InTransit",
+                        "Assigned" => "Assigned",
+                        _ => "Pending"
+                    };
+
+                    // Match and update invoices
+                    foreach (var invoiceNo in loadInvoiceNumbers)
+                    {
+                        if (invoiceLookup.TryGetValue(invoiceNo, out var matchedInvoices))
+                        {
+                            foreach (var invoice in matchedInvoices)
+                            {
+                                // Only update if not already linked or status needs upgrade
+                                bool shouldUpdate = false;
+                                string previousStatus = invoice.Status;
+
+                                // Link to load if not already linked
+                                if (!invoice.LoadId.HasValue || invoice.LoadId != load.Id)
+                                {
+                                    invoice.LoadId = load.Id;
+                                    shouldUpdate = true;
+                                }
+
+                                // Update status based on priority (Delivered > InTransit > Assigned > Pending)
+                                var statusPriority = new Dictionary<string, int>
+                                {
+                                    { "Pending", 0 },
+                                    { "Assigned", 1 },
+                                    { "InTransit", 2 },
+                                    { "PartDelivered", 3 },
+                                    { "Delivered", 4 }
+                                };
+
+                                int currentPriority = statusPriority.GetValueOrDefault(invoice.Status, 0);
+                                int targetPriority = statusPriority.GetValueOrDefault(targetInvoiceStatus, 0);
+
+                                // Only upgrade status, never downgrade (unless it's pending)
+                                if (targetPriority > currentPriority || invoice.Status == "Pending")
+                                {
+                                    invoice.Status = targetInvoiceStatus;
+                                    shouldUpdate = true;
+
+                                    // Set delivery date if delivered
+                                    if (targetInvoiceStatus == "Delivered")
+                                    {
+                                        invoice.LastDeliveryDate = load.ActualDeliveryDate ?? DateTime.UtcNow;
+                                        invoice.DeliveredQuantity = invoice.Quantity;
+                                    }
+                                }
+
+                                if (shouldUpdate)
+                                {
+                                    syncResults.UpdatedInvoices.Add(new SyncedInvoice
+                                    {
+                                        InvoiceNumber = invoice.TransactionNumber,
+                                        LoadNumber = load.LoadNumber,
+                                        PreviousStatus = previousStatus,
+                                        NewStatus = invoice.Status
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                syncResults.Success = true;
+                syncResults.TotalLoadsProcessed = loads.Count;
+                syncResults.TotalInvoicesUpdated = syncResults.UpdatedInvoices.Count;
+
+                _logger.LogInformation(
+                    "Invoice status sync completed: {LoadsProcessed} loads, {InvoicesUpdated} invoices updated",
+                    syncResults.TotalLoadsProcessed, syncResults.TotalInvoicesUpdated);
+
+                return Ok(syncResults);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing invoice statuses");
+                syncResults.Success = false;
+                syncResults.ErrorMessage = ex.Message;
+                return StatusCode(500, syncResults);
+            }
+        }
+
+        /// <summary>
+        /// Normalize invoice number for matching (remove spaces, common prefixes, etc.)
+        /// </summary>
+        private static string NormalizeInvoiceNumber(string invoiceNo)
+        {
+            if (string.IsNullOrWhiteSpace(invoiceNo))
+                return string.Empty;
+
+            // Remove common prefixes and normalize
+            var normalized = invoiceNo.Trim().ToUpperInvariant();
+            
+            // Remove common prefixes for comparison
+            var prefixes = new[] { "INV", "IN", "SI", "TAX", "#", "NO.", "NO" };
+            foreach (var prefix in prefixes)
+            {
+                if (normalized.StartsWith(prefix) && normalized.Length > prefix.Length)
+                {
+                    var rest = normalized.Substring(prefix.Length).TrimStart('-', ' ', ':');
+                    if (rest.All(char.IsDigit))
+                    {
+                        normalized = rest;
+                        break;
+                    }
+                }
+            }
+
+            return normalized;
         }
 
         [HttpPut("{id}/assign")]
@@ -894,5 +1152,22 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         public int? DriverId { get; set; }
         public int? VehicleId { get; set; }
+    }
+
+    public class SyncInvoiceStatusesResult
+    {
+        public bool Success { get; set; }
+        public int TotalLoadsProcessed { get; set; }
+        public int TotalInvoicesUpdated { get; set; }
+        public string? ErrorMessage { get; set; }
+        public List<SyncedInvoice> UpdatedInvoices { get; set; } = new();
+    }
+
+    public class SyncedInvoice
+    {
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string LoadNumber { get; set; } = string.Empty;
+        public string PreviousStatus { get; set; } = string.Empty;
+        public string NewStatus { get; set; } = string.Empty;
     }
 }
