@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Caching.Memory;
 using System.Security.Claims;
+using System.Collections.Concurrent;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -12,6 +14,9 @@ namespace ProjectTracker.API.Controllers
         private readonly ILogger<DocumentsController> _logger;
         private readonly string _documentsBasePath;
         private readonly FileExtensionContentTypeProvider _contentTypeProvider;
+        private readonly IMemoryCache _cache;
+        private const string DepartmentsCacheKey = "DocumentDepartments";
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
         // Department passwords - in production, these should be in database
         private static readonly Dictionary<string, string> DepartmentPasswords = new()
@@ -47,27 +52,46 @@ namespace ProjectTracker.API.Controllers
             { "Managers", new[] { "Admin", "Manager" } }
         };
 
-        public DocumentsController(ILogger<DocumentsController> logger, IConfiguration configuration)
+        public DocumentsController(ILogger<DocumentsController> logger, IConfiguration configuration, IMemoryCache cache)
         {
             _logger = logger;
             _documentsBasePath = configuration.GetValue<string>("DocumentsPath") ?? "/app/documents";
             _contentTypeProvider = new FileExtensionContentTypeProvider();
+            _cache = cache;
         }
 
         // GET: api/documents/departments
         [HttpGet("departments")]
         public ActionResult<IEnumerable<DepartmentInfo>> GetDepartments()
         {
-            var departments = new List<DepartmentInfo>();
+            // Try to get from cache first
+            if (_cache.TryGetValue(DepartmentsCacheKey, out List<DepartmentInfo>? cachedDepartments) && cachedDepartments != null)
+            {
+                _logger.LogDebug("Returning cached department info");
+                return Ok(cachedDepartments);
+            }
+
+            var departments = new ConcurrentBag<DepartmentInfo>();
             
-            foreach (var dept in DepartmentPasswords.Keys)
+            // Process departments in parallel for faster loading
+            Parallel.ForEach(DepartmentPasswords.Keys, new ParallelOptions { MaxDegreeOfParallelism = 4 }, dept =>
             {
                 var deptPath = Path.Combine(_documentsBasePath, dept);
                 var documentCount = 0;
                 
-                if (Directory.Exists(deptPath))
+                try
                 {
-                    documentCount = Directory.GetFiles(deptPath, "*", SearchOption.AllDirectories).Length;
+                    if (Directory.Exists(deptPath))
+                    {
+                        // Use EnumerateFiles instead of GetFiles for better performance
+                        // It doesn't load all file names into memory at once
+                        documentCount = Directory.EnumerateFiles(deptPath, "*", SearchOption.AllDirectories).Count();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error counting files in department {Department}", dept);
+                    // Continue with 0 count if there's an error
                 }
 
                 departments.Add(new DepartmentInfo
@@ -76,9 +100,18 @@ namespace ProjectTracker.API.Controllers
                     DocumentCount = documentCount,
                     Icon = GetDepartmentIcon(dept)
                 });
-            }
+            });
 
-            return Ok(departments);
+            // Sort by name and convert to list for caching
+            var sortedDepartments = departments.OrderBy(d => d.Name).ToList();
+
+            // Cache the results
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(CacheDuration)
+                .SetPriority(CacheItemPriority.Normal);
+            _cache.Set(DepartmentsCacheKey, sortedDepartments, cacheOptions);
+
+            return Ok(sortedDepartments);
         }
 
         // POST: api/documents/validate-password
@@ -225,6 +258,9 @@ namespace ProjectTracker.API.Controllers
                 await file.CopyToAsync(stream);
             }
 
+            // Invalidate cache after upload
+            _cache.Remove(DepartmentsCacheKey);
+
             var fileInfo = new FileInfo(filePath);
             return Ok(new DocumentFile
             {
@@ -287,11 +323,15 @@ namespace ProjectTracker.API.Controllers
             if (Directory.Exists(fullPath))
             {
                 Directory.Delete(fullPath, true);
+                // Invalidate cache after delete
+                _cache.Remove(DepartmentsCacheKey);
                 return Ok(new { message = "Folder deleted successfully" });
             }
             else if (System.IO.File.Exists(fullPath))
             {
                 System.IO.File.Delete(fullPath);
+                // Invalidate cache after delete
+                _cache.Remove(DepartmentsCacheKey);
                 return Ok(new { message = "File deleted successfully" });
             }
 

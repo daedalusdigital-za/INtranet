@@ -1688,91 +1688,194 @@ interface SleepOut {
       margin: 0 0 24px 0;
     }
 
-    /* Maintenance Tab Styles */
+    /* Maintenance Tab Styles - Modern UI */
     .maintenance-header {
-      margin-bottom: 24px;
+      margin-bottom: 32px;
     }
 
     .maintenance-stats-row {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
     }
 
     .maintenance-stat-card {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 16px 20px;
-      min-width: 160px;
-      flex: 1;
+      gap: 16px;
+      padding: 24px;
+      border-radius: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      border: none;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .maintenance-stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%);
+      pointer-events: none;
+    }
+
+    .maintenance-stat-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
     }
 
     .maintenance-stat-card mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.5);
+      backdrop-filter: blur(10px);
     }
 
-    .maintenance-stat-card.critical { background: linear-gradient(135deg, #ffebee, #ffcdd2); }
-    .maintenance-stat-card.critical mat-icon { color: #c62828; }
-    .maintenance-stat-card.in-progress { background: linear-gradient(135deg, #fff3e0, #ffe0b2); }
-    .maintenance-stat-card.in-progress mat-icon { color: #ef6c00; }
-    .maintenance-stat-card.scheduled { background: linear-gradient(135deg, #e3f2fd, #bbdefb); }
-    .maintenance-stat-card.scheduled mat-icon { color: #1565c0; }
-    .maintenance-stat-card.license { background: linear-gradient(135deg, #f3e5f5, #e1bee7); }
-    .maintenance-stat-card.license mat-icon { color: #7b1fa2; }
-    .maintenance-stat-card.urgent { background: linear-gradient(135deg, #ffebee, #ffcdd2); }
-    .maintenance-stat-card.urgent mat-icon { color: #c62828; }
-    .maintenance-stat-card.completed { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); }
-    .maintenance-stat-card.completed mat-icon { color: #2e7d32; }
+    .maintenance-stat-card.critical { 
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); 
+    }
+    .maintenance-stat-card.critical mat-icon { 
+      color: #fff; 
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .maintenance-stat-card.critical .stat-value,
+    .maintenance-stat-card.critical .stat-label { color: #fff; }
+
+    .maintenance-stat-card.in-progress { 
+      background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); 
+    }
+    .maintenance-stat-card.in-progress mat-icon { 
+      color: #fff; 
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .maintenance-stat-card.in-progress .stat-value,
+    .maintenance-stat-card.in-progress .stat-label { color: #fff; }
+
+    .maintenance-stat-card.scheduled { 
+      background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%); 
+    }
+    .maintenance-stat-card.scheduled mat-icon { 
+      color: #fff; 
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .maintenance-stat-card.scheduled .stat-value,
+    .maintenance-stat-card.scheduled .stat-label { color: #fff; }
+
+    .maintenance-stat-card.license { 
+      background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%); 
+    }
+    .maintenance-stat-card.license mat-icon { 
+      color: #fff; 
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .maintenance-stat-card.license .stat-value,
+    .maintenance-stat-card.license .stat-label { color: #fff; }
+
+    .maintenance-stat-card.urgent { 
+      background: linear-gradient(135deg, #ff5252 0%, #d32f2f 100%); 
+    }
+    .maintenance-stat-card.urgent mat-icon { 
+      color: #fff; 
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .maintenance-stat-card.urgent .stat-value,
+    .maintenance-stat-card.urgent .stat-label { color: #fff; }
+
+    .maintenance-stat-card.completed { 
+      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%); 
+    }
+    .maintenance-stat-card.completed mat-icon { 
+      color: #fff; 
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .maintenance-stat-card.completed .stat-value,
+    .maintenance-stat-card.completed .stat-label { color: #fff; }
+
+    .maintenance-stat-card .stat-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
 
     .maintenance-stat-card .stat-value {
-      font-size: 1.5rem;
+      font-size: 2rem;
       font-weight: 700;
       display: block;
+      line-height: 1;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .maintenance-stat-card .stat-label {
-      font-size: 0.75rem;
-      color: #666;
+      font-size: 0.85rem;
+      font-weight: 500;
+      opacity: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .maintenance-actions {
       display: flex;
-      gap: 12px;
+      gap: 16px;
+      flex-wrap: wrap;
     }
 
-    .license-alerts {
-      background: #fff3e0;
-      border-left: 4px solid #ff9800;
-      padding: 16px;
-      margin-bottom: 24px;
-      border-radius: 8px;
-    }
-
-    .complete-before-expiry-section {
-      background: linear-gradient(135deg, #ffebee, #fff5f5);
-      border: 2px solid #ef5350;
+    .maintenance-actions button {
       border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
-      box-shadow: 0 4px 12px rgba(239, 83, 80, 0.15);
+      padding: 8px 24px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .maintenance-actions button:hover {
+      transform: translateY(-2px);
+    }
+
+    /* Complete Before Expiry Section - Modern UI */
+    .complete-before-expiry-section {
+      background: linear-gradient(135deg, rgba(239, 83, 80, 0.08) 0%, rgba(198, 40, 40, 0.05) 100%);
+      border: none;
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 24px rgba(239, 83, 80, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .complete-before-expiry-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #ef5350 0%, #c62828 100%);
     }
 
     .complete-before-expiry-section h4 {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
       margin: 0 0 8px 0;
       color: #c62828;
-      font-size: 1.2rem;
-      font-weight: 600;
+      font-size: 1.35rem;
+      font-weight: 700;
     }
 
     .complete-before-expiry-section h4 mat-icon {
-      color: #c62828;
+      color: #ef5350;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
       animation: pulse 2s infinite;
     }
 
@@ -1783,8 +1886,8 @@ interface SleepOut {
 
     .complete-before-expiry-section .section-description {
       color: #666;
-      margin: 0 0 16px 0;
-      font-size: 0.9rem;
+      margin: 0 0 20px 0;
+      font-size: 0.95rem;
     }
 
     .maintenance-grid.urgent-section {
@@ -1792,16 +1895,19 @@ interface SleepOut {
       padding: 0;
     }
 
+    /* Urgent Card - Modern UI */
     .maintenance-card.urgent-card {
-      border: 2px solid #ef5350;
       background: white;
-      box-shadow: 0 4px 12px rgba(239, 83, 80, 0.2);
+      border-radius: 16px;
+      border-left: 4px solid #ef5350;
+      box-shadow: 0 4px 16px rgba(239, 83, 80, 0.15);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .maintenance-card.urgent-card.critical {
-      border-color: #b71c1c;
-      box-shadow: 0 6px 16px rgba(183, 28, 28, 0.3);
-      animation: urgentBorder 1.5s infinite;
+      border-left: 4px solid #b71c1c;
+      box-shadow: 0 6px 20px rgba(183, 28, 28, 0.2);
+      background: linear-gradient(135deg, #fff 0%, rgba(198, 40, 40, 0.03) 100%);
     }
 
     @keyframes urgentBorder {
@@ -1810,18 +1916,26 @@ interface SleepOut {
     }
 
     .maintenance-card.urgent-card:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 8px 24px rgba(239, 83, 80, 0.3);
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 12px 32px rgba(239, 83, 80, 0.25);
     }
 
     .maintenance-icon.urgent {
-      background: linear-gradient(135deg, #c62828, #b71c1c);
+      background: linear-gradient(135deg, #ef5350 0%, #c62828 100%);
+      box-shadow: 0 4px 12px rgba(239, 83, 80, 0.3);
+    }
+
+    .maintenance-icon.urgent mat-icon {
+      color: white;
+      font-size: 26px;
+      width: 26px;
+      height: 26px;
     }
 
     .maintenance-type-badge.license-renewal {
-      background: #ffebee;
+      background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
       color: #c62828;
-      border: 1px solid #ef5350;
+      border: none;
     }
 
     .maintenance-details .detail-row.urgent {
@@ -1833,34 +1947,55 @@ interface SleepOut {
       color: #c62828;
     }
 
-    /* Completed Maintenance Section Styles */
+    /* Completed Maintenance Section Styles - Modern UI */
     .completed-maintenance-section {
-      background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
-      border: 2px solid #4caf50;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
-      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+      background: linear-gradient(135deg, rgba(102, 187, 106, 0.08) 0%, rgba(67, 160, 71, 0.05) 100%);
+      border: none;
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 24px rgba(76, 175, 80, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .completed-maintenance-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #66bb6a 0%, #43a047 100%);
     }
 
     .completed-maintenance-section h4 {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
       margin: 0 0 8px 0;
       color: #2e7d32;
-      font-size: 1.2rem;
-      font-weight: 600;
+      font-size: 1.35rem;
+      font-weight: 700;
     }
 
     .completed-maintenance-section h4 mat-icon {
-      color: #2e7d32;
+      color: #43a047;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
     }
 
     .completed-maintenance-section .section-description {
       color: #666;
-      margin: 0 0 16px 0;
-      font-size: 0.9rem;
+      margin: 0 0 20px 0;
+      font-size: 0.95rem;
+    }
+
+    .maintenance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
     }
 
     .maintenance-grid.completed-section {
@@ -1868,25 +2003,90 @@ interface SleepOut {
       padding: 0;
     }
 
+    .maintenance-card {
+      border-radius: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+      border: none;
+    }
+
     .maintenance-card.completed-card {
-      border: 2px solid #4caf50;
       background: white;
-      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+      box-shadow: 0 4px 16px rgba(76, 175, 80, 0.15);
+      border-left: 4px solid #43a047;
     }
 
     .maintenance-card.completed-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 6px 16px rgba(76, 175, 80, 0.25);
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 12px 32px rgba(76, 175, 80, 0.2);
+    }
+
+    .maintenance-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .maintenance-icon.completed {
-      background: linear-gradient(135deg, #4caf50, #2e7d32);
+      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+
+    .maintenance-icon.completed mat-icon {
+      color: white;
+      font-size: 26px;
+      width: 26px;
+      height: 26px;
+    }
+
+    .maintenance-type-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .maintenance-type-badge.completed {
-      background: #e8f5e9;
+      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
       color: #2e7d32;
-      border: 1px solid #4caf50;
+      border: none;
+    }
+
+    .maintenance-description {
+      color: #555;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin: 12px 0;
+    }
+
+    .maintenance-details {
+      background: rgba(0, 0, 0, 0.02);
+      border-radius: 12px;
+      padding: 14px;
+      margin: 16px 0;
+    }
+
+    .maintenance-details .detail-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    .maintenance-details .detail-row mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #888;
     }
 
     .maintenance-details .detail-row.completed {
@@ -1895,72 +2095,136 @@ interface SleepOut {
     }
 
     .maintenance-details .detail-row.completed mat-icon {
-      color: #2e7d32;
+      color: #43a047;
+    }
+
+    .status-section {
+      margin-top: 16px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
     }
 
     .status-badge.completed {
-      background: #e8f5e9;
-      color: #2e7d32;
-      border: 1px solid #4caf50;
+      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+      color: white;
+      border: none;
+      box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
     }
 
+    .status-badge.completed mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    /* License Alerts - Modern UI */
     .license-alerts {
-      background: #fff3e0;
-      border-left: 4px solid #ff9800;
-      padding: 16px;
-      margin-bottom: 24px;
-      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(255, 152, 0, 0.08) 0%, rgba(251, 140, 0, 0.05) 100%);
+      border: none;
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 24px rgba(255, 152, 0, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .license-alerts::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #ffa726 0%, #fb8c00 100%);
     }
 
     .license-alerts h4 {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin: 0 0 12px 0;
+      gap: 12px;
+      margin: 0 0 16px 0;
       color: #e65100;
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .license-alerts h4 mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      animation: pulse 2s infinite;
     }
 
     .license-cards {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
     }
 
     .license-card {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
-      min-width: 250px;
+      padding: 18px 20px;
       background: white;
+      border-radius: 14px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-left: 4px solid #ff9800;
+    }
+
+    .license-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     }
 
     .license-card.critical {
       border-left: 4px solid #c62828;
+      background: linear-gradient(135deg, #fff 0%, rgba(198, 40, 40, 0.05) 100%);
     }
 
     .license-card.warning {
       border-left: 4px solid #ff9800;
+      background: linear-gradient(135deg, #fff 0%, rgba(255, 152, 0, 0.05) 100%);
     }
 
     .license-info {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
     }
 
     .license-info mat-icon {
       color: #666;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
     }
 
     .license-info .vehicle-reg {
-      font-weight: 600;
+      font-weight: 700;
+      font-size: 1.05rem;
       display: block;
+      color: #333;
     }
 
     .license-info .expiry-text {
-      font-size: 0.8rem;
-      color: #666;
+      font-size: 0.85rem;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .license-card.critical .license-info mat-icon {
+      color: #c62828;
     }
 
     .license-card.critical .expiry-text {
@@ -1968,20 +2232,44 @@ interface SleepOut {
       font-weight: 600;
     }
 
-    .maintenance-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 24px;
-      padding: 8px;
+    /* Empty State - Modern UI */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 40px;
+      text-align: center;
+      background: linear-gradient(135deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.04) 100%);
+      border-radius: 20px;
+      margin: 20px 0;
     }
 
-    .maintenance-card {
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    .empty-state mat-icon {
+      font-size: 72px;
+      width: 72px;
+      height: 72px;
+      color: #bbb;
+      margin-bottom: 20px;
     }
 
-    .maintenance-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    .empty-state h3 {
+      color: #555;
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+    }
+
+    .empty-state p {
+      color: #888;
+      font-size: 1rem;
+      margin: 0 0 24px 0;
+    }
+
+    .empty-state button {
+      border-radius: 12px;
+      padding: 10px 28px;
+      font-weight: 500;
     }
 
     .maintenance-card.status-overdue {
@@ -3117,110 +3405,180 @@ interface SleepOut {
       margin-bottom: 8px;
     }
 
-    /* Completed Tripsheets Styles */
+    /* Completed Tripsheets Styles - Modern UI */
     .completed-section {
-      padding: 24px;
+      padding: 28px;
+      background: linear-gradient(135deg, rgba(76, 175, 80, 0.03) 0%, rgba(67, 160, 71, 0.01) 100%);
+      border-radius: 20px;
+      margin: 8px;
     }
 
     .completed-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       flex-wrap: wrap;
-      gap: 16px;
+      gap: 20px;
 
       h3 {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
         margin: 0;
-        font-size: 24px;
-        font-weight: 600;
+        font-size: 1.6rem;
+        font-weight: 700;
         color: #1a237e;
+        letter-spacing: -0.5px;
 
         mat-icon {
-          font-size: 28px;
-          width: 28px;
-          height: 28px;
-          color: #4caf50;
+          font-size: 32px;
+          width: 32px;
+          height: 32px;
+          color: #43a047;
+          background: linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(67, 160, 71, 0.1) 100%);
+          padding: 8px;
+          border-radius: 12px;
         }
       }
 
       .header-actions {
         display: flex;
-        gap: 12px;
+        gap: 16px;
         align-items: center;
+      }
+
+      .date-filter, .search-field {
+        min-width: 200px;
       }
     }
 
     .completed-stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .completed-stats .stat-card {
+      border-radius: 16px;
+      border: none;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+      background: white;
+    }
+
+    .completed-stats .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+    }
+
+    .completed-stats .stat-card mat-card-content {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 24px;
+    }
+
+    .completed-stats .stat-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .completed-stats .stat-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: white;
+    }
+
+    .completed-stats .stat-icon.completed {
+      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+      box-shadow: 0 4px 14px rgba(76, 175, 80, 0.35);
+    }
+
+    .completed-stats .stat-icon.success {
+      background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%);
+      box-shadow: 0 4px 14px rgba(33, 150, 243, 0.35);
+    }
+
+    .completed-stats .stat-icon.warning {
+      background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
+      box-shadow: 0 4px 14px rgba(255, 152, 0, 0.35);
+    }
+
+    .completed-stats .stat-icon.info {
+      background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%);
+      box-shadow: 0 4px 14px rgba(156, 39, 176, 0.35);
+    }
+
+    .completed-stats .stat-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .completed-stats .stat-label {
+      font-size: 0.85rem;
+      color: #888;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .completed-stats .stat-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #333;
+      line-height: 1;
     }
 
     .completed-cards-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
     }
 
     .completed-trip-card {
-      transition: all 0.3s ease;
-      border-left: 4px solid #4caf50;
-      background-color: #e8f5e9;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 18px;
+      border: none;
+      background: white;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+      position: relative;
 
-      &.has-pod {
-        border-left-color: #4caf50;
-        background-color: #e8f5e9;
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #66bb6a 0%, #43a047 100%);
       }
 
-      &.has-pod:hover {
-        background-color: #c8e6c9;
+      &.has-pod {
+        &::before {
+          background: linear-gradient(90deg, #66bb6a 0%, #43a047 100%);
+        }
       }
 
       &.no-pod {
-        border-left-color: #d32f2f;
-        background-color: #ffebee;
-      }
-
-      &.no-pod:hover {
-        background-color: #ffcdd2;
-      }
-
-      /* Color coding for completed trips based on date */
-      &.load-row-overdue {
-        background-color: #ffebee !important;
-        border-left-color: #d32f2f !important;
-      }
-
-      &.load-row-overdue:hover {
-        background-color: #ffcdd2 !important;
-      }
-
-      &.load-row-today {
-        background-color: #e8f5e9 !important;
-        border-left-color: #4caf50 !important;
-      }
-
-      &.load-row-today:hover {
-        background-color: #c8e6c9 !important;
-      }
-
-      &.load-row-tomorrow {
-        background-color: #e3f2fd !important;
-        border-left-color: #2196f3 !important;
-      }
-
-      &.load-row-tomorrow:hover {
-        background-color: #bbdefb !important;
+        &::before {
+          background: linear-gradient(90deg, #ffa726 0%, #fb8c00 100%);
+        }
       }
 
       &:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        transform: translateY(-6px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
       }
 
       .trip-header {
@@ -3228,26 +3586,35 @@ interface SleepOut {
         justify-content: space-between;
         align-items: flex-start;
         width: 100%;
+        padding: 20px 20px 0 20px;
 
         .trip-title {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 10px;
 
           h3 {
             margin: 0;
-            font-size: 18px;
-            font-weight: 600;
+            font-size: 1.25rem;
+            font-weight: 700;
             color: #1a237e;
+            letter-spacing: -0.3px;
           }
 
           .pod-badge {
-            height: 28px;
-            font-size: 12px;
+            height: 30px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 20px;
+            padding: 0 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
 
             &.success {
-              background-color: #e8f5e9;
+              background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
               color: #2e7d32;
+              border: none;
 
               mat-icon {
                 font-size: 16px;
@@ -3257,8 +3624,9 @@ interface SleepOut {
             }
 
             &.warning {
-              background-color: #ffebee;
-              color: #c62828;
+              background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+              color: #e65100;
+              border: none;
 
               mat-icon {
                 font-size: 16px;
@@ -3271,17 +3639,20 @@ interface SleepOut {
       }
 
       mat-card-content {
-        padding-top: 16px;
+        padding: 20px;
 
         .trip-details {
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 14px;
+          background: rgba(0, 0, 0, 0.02);
+          border-radius: 14px;
+          padding: 18px;
 
           .detail-row {
             display: grid;
-            grid-template-columns: 24px auto 1fr;
-            gap: 12px;
+            grid-template-columns: 28px auto 1fr;
+            gap: 14px;
             align-items: center;
 
             mat-icon {
@@ -3289,17 +3660,21 @@ interface SleepOut {
               font-size: 20px;
               width: 20px;
               height: 20px;
+              background: rgba(92, 107, 192, 0.1);
+              padding: 4px;
+              border-radius: 8px;
             }
 
             .label {
-              font-weight: 500;
+              font-weight: 600;
               color: #666;
-              font-size: 13px;
+              font-size: 0.85rem;
             }
 
             .value {
               color: #333;
-              font-size: 14px;
+              font-size: 0.95rem;
+              font-weight: 500;
               text-align: right;
             }
           }
@@ -3308,12 +3683,21 @@ interface SleepOut {
 
       mat-card-actions {
         display: flex;
-        gap: 8px;
-        padding: 16px;
-        border-top: 1px solid #e0e0e0;
+        gap: 12px;
+        padding: 16px 20px 20px 20px;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        background: rgba(0, 0, 0, 0.02);
 
         button {
           flex: 1;
+          border-radius: 12px;
+          font-weight: 500;
+          padding: 8px 16px;
+          transition: all 0.2s ease;
+
+          &:hover {
+            transform: translateY(-2px);
+          }
         }
       }
     }
@@ -5343,7 +5727,7 @@ Notes: ${record.notes || 'No notes'}
       maxWidth: '1600px',
       height: '90vh',
       panelClass: 'tfn-depots-map-dialog-panel',
-      data: { depots: this.tfnDepots() }
+      data: { depots: this.tfnDepots(), warehouses: this.warehouses() }
     });
   }
 
@@ -11369,13 +11753,22 @@ export class AddressIssuesDialog {
             <mat-icon matSuffix>search</mat-icon>
           </mat-form-field>
 
-          <button mat-raised-button color="accent" (click)="loadTripSheets()" [disabled]="loadingTrips">
+          <button mat-raised-button color="accent" (click)="loadTripSheets()" [disabled]="loadingTrips || loadingActiveLoads">
             @if (loadingTrips) {
               <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
             } @else {
               <mat-icon>route</mat-icon>
             }
             {{ loadingTrips ? 'Loading...' : 'Load Trip Sheets' }}
+          </button>
+
+          <button mat-raised-button class="active-loads-btn" (click)="loadActiveLoads()" [disabled]="loadingTrips || loadingActiveLoads">
+            @if (loadingActiveLoads) {
+              <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+            } @else {
+              <mat-icon>local_shipping</mat-icon>
+            }
+            {{ loadingActiveLoads ? 'Loading...' : 'Active Loads' }}
           </button>
 
           <button mat-stroked-button (click)="resetView()">
@@ -11628,6 +12021,29 @@ export class AddressIssuesDialog {
       display: inline-block;
       margin-right: 8px;
     }
+    .active-loads-btn {
+      background: linear-gradient(135deg, #11998e, #38ef7d) !important;
+      color: white !important;
+      font-weight: 500;
+    }
+    .active-loads-btn:hover:not([disabled]) {
+      background: linear-gradient(135deg, #0d7d74, #2ecc71) !important;
+      box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
+    }
+    .active-loads-btn:disabled {
+      background: #e0e0e0 !important;
+      color: #999 !important;
+    }
+    .active-routes-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
     .trip-routes-bar {
       display: flex;
       align-items: center;
@@ -11734,14 +12150,19 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   showList = true;
   mapLoading = true;
   loadingTrips = false;
+  loadingActiveLoads = false;
   tripRoutes: any[] = [];
+  activeLoadRoutes: any[] = [];
   selectedRoute: any = null;
   nearestDepots: { depot: any; distance: number }[] = [];
   private map: google.maps.Map | null = null;
   private markers: google.maps.Marker[] = [];
+  private warehouseMarkers: google.maps.Marker[] = [];
   private routePolylines: google.maps.Polyline[] = [];
+  private directionsRenderers: google.maps.DirectionsRenderer[] = [];
   private stopMarkers: google.maps.Marker[] = [];
   private infoWindow: google.maps.InfoWindow | null = null;
+  private directionsService: google.maps.DirectionsService | null = null;
   private mapInitialized = false;
   private http: HttpClient;
 
@@ -11749,6 +12170,12 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   private routeColors = [
     '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f39c12',
     '#1abc9c', '#e91e63', '#00bcd4', '#ff5722', '#795548'
+  ];
+
+  // Green-themed colors for active/assigned loads
+  private activeLoadColors = [
+    '#11998e', '#38ef7d', '#2ecc71', '#27ae60', '#1abc9c',
+    '#16a085', '#00b894', '#55efc4', '#00cec9', '#81ecec'
   ];
 
   // South African provinces with approximate bounding boxes
@@ -11765,7 +12192,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   ];
 
   constructor(
-    @Inject(MAT_DIALOG_DATA) public data: { depots: any[] },
+    @Inject(MAT_DIALOG_DATA) public data: { depots: any[], warehouses: any[] },
     private dialogRef: MatDialogRef<TfnDepotsMapDialog>,
     private injector: Injector
   ) {
@@ -11781,8 +12208,12 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.markers.forEach(m => m.setMap(null));
     this.markers = [];
+    this.warehouseMarkers.forEach(m => m.setMap(null));
+    this.warehouseMarkers = [];
     this.routePolylines.forEach(p => p.setMap(null));
     this.routePolylines = [];
+    this.directionsRenderers.forEach(r => r.setMap(null));
+    this.directionsRenderers = [];
     this.stopMarkers.forEach(m => m.setMap(null));
     this.stopMarkers = [];
     if (this.infoWindow) {
@@ -11857,10 +12288,25 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     } as any);
 
     this.infoWindow = new google.maps.InfoWindow();
+    this.directionsService = new google.maps.DirectionsService();
     this.mapInitialized = true;
     this.mapLoading = false;
     
     this.addDepotMarkers();
+    this.addWarehouseMarkers();
+  }
+
+  private getWarehouseIconSvg(): string {
+    return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">' +
+      '<circle cx="22" cy="22" r="20" fill="url(#warehouseGrad)" stroke="white" stroke-width="2"/>' +
+      '<defs><linearGradient id="warehouseGrad" x1="0%" y1="0%" x2="100%" y2="100%">' +
+      '<stop offset="0%" style="stop-color:#1565c0"/>' +
+      '<stop offset="100%" style="stop-color:#42a5f5"/>' +
+      '</linearGradient></defs>' +
+      '<path d="M22 10L10 18v2h2v10h8v-6h4v6h8V20h2v-2L22 10zm0 2.84L30 18v10h-4v-6h-8v6h-4V18l10-5.16z" fill="white"/>' +
+      '</svg>'
+    );
   }
 
   private getFuelIconSvg(): string {
@@ -11940,6 +12386,71 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       this.map.setCenter(this.markers[0].getPosition()!);
       this.map.setZoom(14);
     }
+  }
+
+  private addWarehouseMarkers(): void {
+    if (!this.map || !this.data.warehouses) return;
+
+    // Clear existing warehouse markers
+    this.warehouseMarkers.forEach(m => m.setMap(null));
+    this.warehouseMarkers = [];
+
+    const warehouseIcon = this.getWarehouseIconSvg();
+
+    this.data.warehouses.forEach(warehouse => {
+      if (warehouse.latitude && warehouse.longitude) {
+        const position = { lat: warehouse.latitude, lng: warehouse.longitude };
+
+        const marker = new google.maps.Marker({
+          position,
+          map: this.map,
+          title: warehouse.name,
+          icon: {
+            url: warehouseIcon,
+            scaledSize: new google.maps.Size(44, 44),
+            anchor: new google.maps.Point(22, 22)
+          },
+          zIndex: 1000 // Ensure warehouses appear on top
+        });
+
+        (marker as any).warehouseData = warehouse;
+
+        marker.addListener('click', () => {
+          if (this.infoWindow && this.map) {
+            this.infoWindow.setContent(this.createWarehouseInfoContent(warehouse));
+            this.infoWindow.open(this.map, marker);
+          }
+        });
+
+        this.warehouseMarkers.push(marker);
+      }
+    });
+  }
+
+  private createWarehouseInfoContent(warehouse: any): string {
+    let html = '<div style="padding: 10px; min-width: 240px;">';
+    html += '<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 3px solid #1565c0;">';
+    html += '<div style="width: 36px; height: 36px; background: linear-gradient(135deg, #1565c0, #42a5f5); border-radius: 50%; display: flex; align-items: center; justify-content: center;">';
+    html += '<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 3L2 12h3v9h6v-6h2v6h6v-9h3L12 3zm0 2.84L18 10v10h-2v-6H8v6H6V10l6-4.16z"/></svg>';
+    html += '</div>';
+    html += '<h4 style="margin: 0; color: #1565c0; font-size: 16px; font-weight: 600;">' + warehouse.name + '</h4>';
+    html += '</div>';
+    if (warehouse.code) {
+      html += '<p style="margin: 6px 0; font-size: 13px;"><strong>Code:</strong> ' + warehouse.code + '</p>';
+    }
+    if (warehouse.city) {
+      html += '<p style="margin: 6px 0; font-size: 13px;"><strong>City:</strong> ' + warehouse.city + '</p>';
+    }
+    if (warehouse.address) {
+      html += '<p style="margin: 6px 0; font-size: 13px;"><strong>Address:</strong> ' + warehouse.address + '</p>';
+    }
+    html += '<p style="margin: 6px 0; font-size: 12px; color: #666;">';
+    html += '<strong>Coordinates:</strong> ' + warehouse.latitude.toFixed(4) + ', ' + warehouse.longitude.toFixed(4);
+    html += '</p>';
+    html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee;">';
+    html += '<a href="https://www.google.com/maps/dir/?api=1&destination=' + warehouse.latitude + ',' + warehouse.longitude + '" target="_blank" style="color: #1565c0; text-decoration: none; font-size: 12px; font-weight: 500;">Get Directions →</a>';
+    html += '</div></div>';
+    return html;
   }
 
   filterByProvince(): void {
@@ -12082,43 +12593,92 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     });
   }
 
+  // Load Active/Assigned Loads - Green colored routes
+  loadActiveLoads(): void {
+    this.loadingActiveLoads = true;
+    const apiUrl = environment.apiUrl;
+    
+    // Fetch loads and filter for assigned/active status
+    this.http.get<any[]>(`${apiUrl}/logistics/loads`).subscribe({
+      next: (loads) => {
+        // Filter loads that are Assigned status and have stops with coordinates
+        const assignedLoads = loads
+          .filter(load => {
+            const status = load.status?.toLowerCase();
+            // Include loads that are assigned, in transit, or dispatched (active loads)
+            return (status === 'assigned' || status === 'in transit' || status === 'intransit' || status === 'dispatched') && 
+                   load.stops && load.stops.length > 0;
+          })
+          .map((load, index) => {
+            // Get stops that have coordinates, sorted by sequence
+            const stopsWithCoords = load.stops
+              .filter((stop: any) => stop.latitude && stop.longitude)
+              .sort((a: any, b: any) => a.stopSequence - b.stopSequence);
+            
+            return {
+              loadId: load.id,
+              loadNumber: load.loadNumber,
+              driverName: load.driverName,
+              vehicleReg: load.vehicleRegistration,
+              status: load.status,
+              totalDistance: load.estimatedDistance || 0,
+              color: this.activeLoadColors[index % this.activeLoadColors.length],
+              isActiveLoad: true,
+              stops: stopsWithCoords.map((stop: any) => ({
+                sequence: stop.stopSequence,
+                name: stop.companyName || stop.locationName || stop.customerName || 'Stop',
+                address: stop.address,
+                city: stop.city,
+                lat: stop.latitude,
+                lng: stop.longitude,
+                type: stop.stopType
+              }))
+            };
+          })
+          .filter(route => route.stops.length >= 2);
+
+        this.activeLoadRoutes = assignedLoads;
+        this.tripRoutes = assignedLoads; // Use same display mechanism
+        this.loadingActiveLoads = false;
+        
+        if (assignedLoads.length > 0) {
+          this.drawAllRoutes();
+          this.calculateNearestDepots();
+        } else {
+          console.log('No active/assigned loads with coordinates found');
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load active loads:', err);
+        this.loadingActiveLoads = false;
+      }
+    });
+  }
+
   private drawAllRoutes(): void {
     if (!this.map) return;
 
-    // Clear existing route markers and polylines
+    // Clear existing route markers, polylines, and direction renderers
     this.routePolylines.forEach(p => p.setMap(null));
     this.routePolylines = [];
+    this.directionsRenderers.forEach(r => r.setMap(null));
+    this.directionsRenderers = [];
     this.stopMarkers.forEach(m => m.setMap(null));
     this.stopMarkers = [];
 
     const bounds = new google.maps.LatLngBounds();
 
-    this.tripRoutes.forEach(route => {
+    // Process each route
+    this.tripRoutes.forEach((route, routeIndex) => {
       if (route.stops.length < 2) return;
 
-      const path = route.stops.map((stop: any) => ({
-        lat: stop.lat,
-        lng: stop.lng
-      }));
-
-      // Add all points to bounds
-      path.forEach((point: any) => bounds.extend(point));
-
-      // Draw the route line
-      const polyline = new google.maps.Polyline({
-        path: path,
-        geodesic: true,
-        strokeColor: route.color,
-        strokeOpacity: 0.8,
-        strokeWeight: 4,
-        map: this.map
+      // Add all stops to bounds
+      route.stops.forEach((stop: any) => {
+        bounds.extend({ lat: stop.lat, lng: stop.lng });
       });
 
-      polyline.addListener('click', () => {
-        this.selectedRoute = route;
-      });
-
-      this.routePolylines.push(polyline);
+      // Use Directions API for proper road routes
+      this.drawRouteWithDirections(route, routeIndex);
 
       // Add stop markers
       route.stops.forEach((stop: any, index: number) => {
@@ -12164,6 +12724,107 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     if (this.tripRoutes.length > 0) {
       this.map.fitBounds(bounds, 50);
     }
+  }
+
+  // Draw route using Google Directions API for proper road paths
+  private drawRouteWithDirections(route: any, routeIndex: number): void {
+    if (!this.map || !this.directionsService || route.stops.length < 2) return;
+
+    const stops = route.stops;
+    const origin = { lat: stops[0].lat, lng: stops[0].lng };
+    const destination = { lat: stops[stops.length - 1].lat, lng: stops[stops.length - 1].lng };
+    
+    // Build waypoints for intermediate stops (max 23 waypoints allowed by Google)
+    const waypoints: google.maps.DirectionsWaypoint[] = [];
+    if (stops.length > 2) {
+      const intermediateStops = stops.slice(1, -1).slice(0, 23); // Skip first and last, limit to 23
+      intermediateStops.forEach((stop: any) => {
+        waypoints.push({
+          location: new google.maps.LatLng(stop.lat, stop.lng),
+          stopover: true
+        });
+      });
+    }
+
+    const request: google.maps.DirectionsRequest = {
+      origin: origin,
+      destination: destination,
+      waypoints: waypoints,
+      travelMode: google.maps.TravelMode.DRIVING,
+      optimizeWaypoints: false // Keep original order
+    };
+
+    this.directionsService.route(request, (result, status) => {
+      if (status === google.maps.DirectionsStatus.OK && result) {
+        // Create a custom DirectionsRenderer with the route color
+        const renderer = new google.maps.DirectionsRenderer({
+          map: this.map,
+          directions: result,
+          suppressMarkers: true, // We add our own markers
+          polylineOptions: {
+            strokeColor: route.color,
+            strokeOpacity: 0.8,
+            strokeWeight: 5
+          }
+        });
+        
+        renderer.addListener('click', () => {
+          this.selectedRoute = route;
+        });
+
+        this.directionsRenderers.push(renderer);
+
+        // Update route with actual distance from directions
+        if (result.routes[0]?.legs) {
+          let totalDistance = 0;
+          result.routes[0].legs.forEach(leg => {
+            totalDistance += leg.distance?.value || 0;
+          });
+          route.totalDistance = Math.round(totalDistance / 1000); // Convert to km
+        }
+      } else {
+        // Fallback to straight lines if Directions API fails
+        console.warn(`Directions request failed for route ${route.loadNumber}: ${status}`);
+        this.drawFallbackPolyline(route);
+      }
+    });
+  }
+
+  // Fallback to straight lines when Directions API fails
+  private drawFallbackPolyline(route: any): void {
+    if (!this.map) return;
+
+    const path = route.stops.map((stop: any) => ({
+      lat: stop.lat,
+      lng: stop.lng
+    }));
+
+    // Create dashed line using icons
+    const lineSymbol = {
+      path: 'M 0,-1 0,1',
+      strokeOpacity: 1,
+      scale: 3
+    };
+
+    const polyline = new google.maps.Polyline({
+      path: path,
+      geodesic: true,
+      strokeColor: route.color,
+      strokeOpacity: 0,
+      strokeWeight: 3,
+      icons: [{
+        icon: lineSymbol,
+        offset: '0',
+        repeat: '15px'
+      }],
+      map: this.map
+    });
+
+    polyline.addListener('click', () => {
+      this.selectedRoute = route;
+    });
+
+    this.routePolylines.push(polyline);
   }
 
   private calculateNearestDepots(): void {
@@ -12221,9 +12882,12 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   clearTripRoutes(): void {
     this.routePolylines.forEach(p => p.setMap(null));
     this.routePolylines = [];
+    this.directionsRenderers.forEach(r => r.setMap(null));
+    this.directionsRenderers = [];
     this.stopMarkers.forEach(m => m.setMap(null));
     this.stopMarkers = [];
     this.tripRoutes = [];
+    this.activeLoadRoutes = [];
     this.selectedRoute = null;
     this.nearestDepots = [];
   }

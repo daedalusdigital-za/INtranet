@@ -66,11 +66,6 @@ import { Subscription } from 'rxjs';
           <mat-icon>local_shipping</mat-icon> Logistics
         </button>
       }
-      @if (hasPermission('project_management')) {
-        <button mat-button routerLink="/departments" routerLinkActive="active-link">
-          <mat-icon>business</mat-icon> Project Management
-        </button>
-      }
       @if (hasPermission('human_resource')) {
         <button mat-button routerLink="/people" routerLinkActive="active-link">
           <mat-icon>people</mat-icon> Human Resource
@@ -233,6 +228,12 @@ import { Subscription } from 'rxjs';
           <mat-icon>person</mat-icon>
           <span>Profile</span>
         </button>
+        @if (hasPermission('project_management')) {
+          <button mat-menu-item routerLink="/departments">
+            <mat-icon>business</mat-icon>
+            <span>Project Management</span>
+          </button>
+        }
         <button mat-menu-item (click)="openTodoDialog()">
           <mat-icon>checklist</mat-icon>
           <span>ToDo</span>
