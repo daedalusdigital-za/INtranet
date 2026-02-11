@@ -160,119 +160,168 @@ interface SalesStats {
   template: `
     <app-navbar></app-navbar>
     <div class="sales-dashboard">
-      <!-- Header -->
+      <!-- Modern Header -->
       <div class="dashboard-header">
-        <div class="header-left">
-          <h1><mat-icon>point_of_sale</mat-icon> Sales Dashboard</h1>
-          <p class="subtitle">Manage customers, invoices, and orders</p>
+        <div class="header-content-wrapper">
+          <div class="header-icon-wrapper">
+            <mat-icon>point_of_sale</mat-icon>
+          </div>
+          <div class="header-text-area">
+            <h1>Sales Dashboard</h1>
+            <p class="subtitle">Manage customers, invoices, and orders across all companies</p>
+          </div>
+        </div>
+        <div class="header-stats-row">
+          <div class="mini-stat">
+            <mat-icon>people</mat-icon>
+            <div class="mini-stat-info">
+              <span class="mini-value">{{ stats().totalCustomers }}</span>
+              <span class="mini-label">Customers</span>
+            </div>
+          </div>
+          <div class="mini-stat">
+            <mat-icon>receipt_long</mat-icon>
+            <div class="mini-stat-info">
+              <span class="mini-value">{{ stats().totalInvoices }}</span>
+              <span class="mini-label">Invoices</span>
+            </div>
+          </div>
+          <div class="mini-stat">
+            <mat-icon>shopping_cart</mat-icon>
+            <div class="mini-stat-info">
+              <span class="mini-value">{{ stats().incomingOrders }}</span>
+              <span class="mini-label">Orders</span>
+            </div>
+          </div>
         </div>
         <div class="header-actions">
-          <button mat-raised-button color="warn" (click)="openAttentionDialog()" 
+          <button class="action-btn attention" (click)="openAttentionDialog()" 
                   [matBadge]="attentionCount()" matBadgeColor="accent"
-                  [matBadgeHidden]="attentionCount() === 0" class="attention-btn">
-            <mat-icon>warning</mat-icon> Attention Required
+                  [matBadgeHidden]="attentionCount() === 0">
+            <mat-icon>warning</mat-icon>
+            <span>Attention</span>
           </button>
-          <button mat-raised-button color="primary" (click)="openCustomerDialog()">
-            <mat-icon>person_add</mat-icon> Add Customer
+          <button class="action-btn primary" (click)="openCustomerDialog()">
+            <mat-icon>person_add</mat-icon>
+            <span>Add Customer</span>
           </button>
-          <button mat-raised-button color="accent" (click)="openInvoiceDialog()">
-            <mat-icon>receipt</mat-icon> Capture Invoice
+          <button class="action-btn accent" (click)="openInvoiceDialog()">
+            <mat-icon>receipt</mat-icon>
+            <span>Capture Invoice</span>
           </button>
-          <button mat-stroked-button (click)="syncFromERP()">
-            <mat-icon>sync</mat-icon> Sync from ERP
+          <button class="action-btn outline" (click)="syncFromERP()">
+            <mat-icon>sync</mat-icon>
+            <span>Sync ERP</span>
           </button>
         </div>
       </div>
 
       <!-- Company Sales Comparison - Business Day Comparison -->
       <div class="company-sales-section">
-        <h3 class="section-title"><mat-icon>business</mat-icon> Company Sales: {{ lastBusinessDayLabel() }} vs {{ currentBusinessDayLabel() }}</h3>
+        <div class="section-header-row">
+          <div class="section-title-area">
+            <mat-icon>business</mat-icon>
+            <h3>Company Performance</h3>
+          </div>
+          <span class="comparison-label">{{ lastBusinessDayLabel() }} → {{ currentBusinessDayLabel() }}</span>
+        </div>
         <div class="company-cards-grid">
           @for (cs of companySalesData(); track cs.company.code) {
-            <mat-card class="company-card clickable" [style.border-left-color]="cs.company.color" (click)="openCompanySalesDialog(cs.company)">
-              <mat-card-content>
-                <div class="company-header">
-                  <span class="company-name" [style.color]="cs.company.color">{{ cs.company.shortName }}</span>
-                  <mat-chip [class]="cs.percentChange >= 0 ? 'up' : 'down'">
-                    <mat-icon>{{ cs.percentChange >= 0 ? 'trending_up' : 'trending_down' }}</mat-icon>
-                    {{ cs.percentChange >= 0 ? '+' : '' }}{{ cs.percentChange | number:'1.0-0' }}%
-                  </mat-chip>
+            <div class="modern-company-card" [style.--company-color]="cs.company.color" (click)="openCompanySalesDialog(cs.company)">
+              <div class="company-card-header">
+                <div class="company-badge" [style.background]="cs.company.color">
+                  {{ cs.company.shortName.charAt(0) }}
                 </div>
-                <div class="company-sales-row">
-                  <div class="sales-item yesterday">
-                    <span class="day-label">{{ lastBusinessDayLabel() }}</span>
-                    <span class="day-value">R{{ formatCurrency(cs.yesterdaySales) }}</span>
-                    <span class="day-orders">{{ cs.yesterdayOrders }} orders</span>
-                  </div>
-                  <mat-icon class="vs-icon">arrow_forward</mat-icon>
-                  <div class="sales-item today">
-                    <span class="day-label">{{ currentBusinessDayLabel() }}</span>
-                    <span class="day-value">R{{ formatCurrency(cs.todaySales) }}</span>
-                    <span class="day-orders">{{ cs.todayOrders }} orders</span>
-                  </div>
+                <div class="company-title">
+                  <span class="company-name">{{ cs.company.shortName }}</span>
+                  <span class="company-full">{{ cs.company.name }}</span>
                 </div>
-                <div class="card-hint">
-                  <mat-icon>touch_app</mat-icon> Click for details
+                <div class="trend-indicator" [class.up]="cs.percentChange >= 0" [class.down]="cs.percentChange < 0">
+                  <mat-icon>{{ cs.percentChange >= 0 ? 'trending_up' : 'trending_down' }}</mat-icon>
+                  <span>{{ cs.percentChange >= 0 ? '+' : '' }}{{ cs.percentChange | number:'1.0-0' }}%</span>
                 </div>
-              </mat-card-content>
-            </mat-card>
+              </div>
+              <div class="company-sales-comparison">
+                <div class="sales-period yesterday">
+                  <span class="period-label">{{ lastBusinessDayLabel() }}</span>
+                  <span class="period-value">R{{ formatCurrency(cs.yesterdaySales) }}</span>
+                  <span class="period-orders">{{ cs.yesterdayOrders }} orders</span>
+                </div>
+                <div class="comparison-arrow">
+                  <mat-icon>east</mat-icon>
+                </div>
+                <div class="sales-period today">
+                  <span class="period-label">{{ currentBusinessDayLabel() }}</span>
+                  <span class="period-value">R{{ formatCurrency(cs.todaySales) }}</span>
+                  <span class="period-orders">{{ cs.todayOrders }} orders</span>
+                </div>
+              </div>
+              <div class="card-footer">
+                <span class="click-hint"><mat-icon>touch_app</mat-icon> View Details</span>
+              </div>
+            </div>
           }
         </div>
       </div>
 
       <!-- Stats Grid -->
       <div class="stats-grid">
-        <mat-card class="stat-card customers">
-          <mat-card-content>
-            <div class="stat-icon">
-              <mat-icon>people</mat-icon>
+        <div class="modern-stat-card customers">
+          <div class="stat-icon-wrapper">
+            <mat-icon>people</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">{{ stats().totalCustomers }}</span>
+            <span class="stat-label">Total Customers</span>
+            <div class="stat-progress">
+              <div class="progress-bar" [style.width.%]="(stats().activeCustomers / stats().totalCustomers) * 100"></div>
             </div>
-            <div class="stat-info">
-              <span class="stat-value">{{ stats().totalCustomers }}</span>
-              <span class="stat-label">Total Customers</span>
-              <span class="stat-sub">{{ stats().activeCustomers }} active</span>
-            </div>
-          </mat-card-content>
-        </mat-card>
+            <span class="stat-sub">{{ stats().activeCustomers }} active ({{ ((stats().activeCustomers / stats().totalCustomers) * 100) | number:'1.0-0' }}%)</span>
+          </div>
+        </div>
 
-        <mat-card class="stat-card invoices">
-          <mat-card-content>
-            <div class="stat-icon">
-              <mat-icon>receipt_long</mat-icon>
+        <div class="modern-stat-card invoices">
+          <div class="stat-icon-wrapper">
+            <mat-icon>receipt_long</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">{{ stats().totalInvoices }}</span>
+            <span class="stat-label">Total Invoices</span>
+            <div class="stat-progress">
+              <div class="progress-bar pending" [style.width.%]="stats().totalInvoices > 0 ? (stats().pendingInvoices / stats().totalInvoices) * 100 : 0"></div>
             </div>
-            <div class="stat-info">
-              <span class="stat-value">{{ stats().totalInvoices }}</span>
-              <span class="stat-label">Total Invoices</span>
-              <span class="stat-sub">{{ stats().pendingInvoices }} pending</span>
-            </div>
-          </mat-card-content>
-        </mat-card>
+            <span class="stat-sub">{{ stats().pendingInvoices }} pending</span>
+          </div>
+        </div>
 
-        <mat-card class="stat-card revenue">
-          <mat-card-content>
-            <div class="stat-icon">
-              <mat-icon>trending_up</mat-icon>
+        <div class="modern-stat-card revenue">
+          <div class="stat-icon-wrapper">
+            <mat-icon>trending_up</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">R{{ formatCurrency(stats().monthlyRevenue) }}</span>
+            <span class="stat-label">Monthly Revenue</span>
+            <div class="revenue-breakdown">
+              <span class="total-label">Total: R{{ formatCurrency(stats().totalRevenue) }}</span>
             </div>
-            <div class="stat-info">
-              <span class="stat-value">R{{ formatCurrency(stats().monthlyRevenue) }}</span>
-              <span class="stat-label">Monthly Revenue</span>
-              <span class="stat-sub">Total: R{{ formatCurrency(stats().totalRevenue) }}</span>
-            </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </div>
 
-        <mat-card class="stat-card orders">
-          <mat-card-content>
-            <div class="stat-icon">
-              <mat-icon>shopping_cart</mat-icon>
+        <div class="modern-stat-card orders">
+          <div class="stat-icon-wrapper">
+            <mat-icon>shopping_cart</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">{{ stats().incomingOrders }}</span>
+            <span class="stat-label">Incoming Orders</span>
+            <div class="order-breakdown">
+              <span class="processing-badge">
+                <mat-icon>hourglass_empty</mat-icon>
+                {{ stats().processingOrders }} processing
+              </span>
             </div>
-            <div class="stat-info">
-              <span class="stat-value">{{ stats().incomingOrders }}</span>
-              <span class="stat-label">Incoming Orders</span>
-              <span class="stat-sub">{{ stats().processingOrders }} processing</span>
-            </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </div>
       </div>
 
       <!-- Main Content Tabs -->
@@ -1140,72 +1189,216 @@ interface SalesStats {
   styles: [`
     :host {
       display: block;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
       min-height: 100vh;
     }
 
     .sales-dashboard {
       padding: 24px;
       padding-top: 88px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       min-height: calc(100vh - 64px);
       max-width: 1600px;
       margin: 0 auto;
     }
 
+    /* Modern Header Styles */
     .dashboard-header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 24px;
+      align-items: center;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 20px;
     }
 
-    .header-left h1 {
-      margin: 0;
+    .header-content-wrapper {
       display: flex;
       align-items: center;
-      gap: 12px;
-      color: #ffffff;
-      font-size: 28px;
-      font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+      gap: 20px;
     }
 
-    .header-left h1 mat-icon {
+    .header-icon-wrapper {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-icon-wrapper mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: white;
+    }
+
+    .header-text-area h1 {
+      margin: 0;
+      color: white;
       font-size: 32px;
-      width: 32px;
-      height: 32px;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    .subtitle {
-      margin: 4px 0 0 44px;
+    .header-text-area .subtitle {
+      margin: 4px 0 0 0;
       color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
+      font-size: 15px;
+    }
+
+    .header-stats-row {
+      display: flex;
+      gap: 16px;
+    }
+
+    .mini-stat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .mini-stat mat-icon {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .mini-stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mini-value {
+      color: white;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .mini-label {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 11px;
+      text-transform: uppercase;
     }
 
     .header-actions {
       display: flex;
       gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .action-btn mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .action-btn.primary {
+      background: white;
+      color: #1e90ff;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .action-btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .action-btn.accent {
+      background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(196, 69, 105, 0.3);
+    }
+
+    .action-btn.accent:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(196, 69, 105, 0.4);
+    }
+
+    .action-btn.attention {
+      background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+      animation: pulse-warning 2s infinite;
+    }
+
+    .action-btn.attention:hover {
+      transform: translateY(-2px);
+    }
+
+    .action-btn.outline {
+      background: transparent;
+      color: white;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .action-btn.outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
     }
 
     /* Company Sales Section */
     .company-sales-section {
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
 
-    .company-sales-section .section-title {
+    .section-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .section-title-area {
       display: flex;
       align-items: center;
-      gap: 8px;
-      color: #ffffff;
-      font-size: 16px;
-      font-weight: 500;
-      margin-bottom: 16px;
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+      gap: 10px;
     }
 
-    .company-sales-section .section-title mat-icon {
+    .section-title-area mat-icon {
       color: rgba(255, 255, 255, 0.9);
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .section-title-area h3 {
+      margin: 0;
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .comparison-label {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 6px 14px;
+      border-radius: 20px;
     }
 
     .company-cards-grid {
@@ -1214,176 +1407,294 @@ interface SalesStats {
       gap: 16px;
     }
 
-    .company-card {
-      border-radius: 12px;
-      border-left: 4px solid #ccc;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .company-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    }
-
-    .company-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .company-name {
-      font-size: 15px;
-      font-weight: 600;
-    }
-
-    .company-header mat-chip {
-      font-size: 11px;
-      min-height: 24px;
-      padding: 0 8px;
-    }
-
-    .company-header mat-chip.up {
-      background: #e8f5e9 !important;
-      color: #2e7d32 !important;
-    }
-
-    .company-header mat-chip.down {
-      background: #ffebee !important;
-      color: #c62828 !important;
-    }
-
-    .company-header mat-chip mat-icon {
-      font-size: 14px;
-      width: 14px;
-      height: 14px;
-      margin-right: 4px;
-    }
-
-    .company-sales-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .sales-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      flex: 1;
-    }
-
-    .sales-item .day-label {
-      font-size: 11px;
-      color: #888;
-      text-transform: uppercase;
-    }
-
-    .sales-item .day-value {
-      font-size: 18px;
-      font-weight: 600;
-      color: #333;
-    }
-
-    .sales-item .day-orders {
-      font-size: 11px;
-      color: #666;
-    }
-
-    .sales-item.yesterday .day-value {
-      color: #888;
-    }
-
-    .sales-item.today .day-value {
-      color: #1a237e;
-    }
-
-    .vs-icon {
-      color: #ccc;
-      font-size: 20px;
-    }
-
-    .company-chip {
-      color: white !important;
-      font-size: 11px !important;
-      font-weight: 500 !important;
-    }
-
-    /* Stats Grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-
-    .stat-card {
+    .modern-company-card {
+      background: white;
       border-radius: 16px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      position: relative;
       overflow: hidden;
-      transition: transform 0.2s, box-shadow 0.2s;
     }
 
-    .stat-card:hover {
+    .modern-company-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--company-color);
+    }
+
+    .modern-company-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
     }
 
-    .stat-card mat-card-content {
+    .company-card-header {
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 20px;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
-    .stat-icon {
-      width: 56px;
-      height: 56px;
+    .company-badge {
+      width: 42px;
+      height: 42px;
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
+      color: white;
+      font-size: 18px;
+      font-weight: 700;
     }
 
-    .stat-icon mat-icon {
+    .company-title {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .company-title .company-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .company-title .company-full {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .trend-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .trend-indicator.up {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .trend-indicator.down {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .trend-indicator mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .company-sales-comparison {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .sales-period {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+    }
+
+    .sales-period.yesterday {
+      background: #f5f5f5;
+    }
+
+    .sales-period.today {
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    }
+
+    .period-label {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .period-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a237e;
+      margin: 4px 0;
+    }
+
+    .sales-period.yesterday .period-value {
+      color: #666;
+    }
+
+    .period-orders {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .comparison-arrow {
+      color: #ccc;
+    }
+
+    .comparison-arrow mat-icon {
+      font-size: 20px;
+    }
+
+    .card-footer {
+      text-align: center;
+      padding-top: 8px;
+      border-top: 1px solid #eee;
+    }
+
+    .click-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: #999;
+      font-size: 12px;
+    }
+
+    .click-hint mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Modern Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .modern-stat-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+    }
+
+    .modern-stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    .stat-icon-wrapper {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stat-icon-wrapper mat-icon {
       font-size: 28px;
       width: 28px;
       height: 28px;
       color: white;
     }
 
-    .stat-card.customers .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .stat-card.invoices .stat-icon { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .stat-card.revenue .stat-icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .stat-card.orders .stat-icon { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    .modern-stat-card.customers .stat-icon-wrapper { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .modern-stat-card.invoices .stat-icon-wrapper { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .modern-stat-card.revenue .stat-icon-wrapper { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .modern-stat-card.orders .stat-icon-wrapper { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
 
-    .stat-info {
+    .stat-content {
       display: flex;
       flex-direction: column;
+      flex: 1;
     }
 
     .stat-value {
       font-size: 28px;
       font-weight: 700;
       color: #1a237e;
+      line-height: 1.2;
     }
 
     .stat-label {
       font-size: 14px;
       color: #666;
-      margin-top: 2px;
+      margin-top: 4px;
+    }
+
+    .stat-progress {
+      height: 4px;
+      background: #eee;
+      border-radius: 2px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+
+    .stat-progress .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .stat-progress .progress-bar.pending {
+      background: linear-gradient(90deg, #ff9800 0%, #f57c00 100%);
     }
 
     .stat-sub {
       font-size: 12px;
-      color: #999;
-      margin-top: 4px;
+      color: #888;
+      margin-top: 6px;
     }
 
-    /* Main Content */
+    .revenue-breakdown .total-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    .order-breakdown {
+      margin-top: 8px;
+    }
+
+    .processing-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #fff3e0;
+      color: #ef6c00;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .processing-badge mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Main Content Card */
     .main-content {
-      border-radius: 16px;
+      border-radius: 20px;
       overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
     }
 
     .tab-content {
@@ -1542,13 +1853,20 @@ interface SalesStats {
     /* Tables */
     .table-container {
       overflow-x: auto;
-      border-radius: 8px;
+      border-radius: 12px;
       border: 1px solid #e0e0e0;
+      background: white;
     }
 
     .customers-table,
     .invoices-table {
       width: 100%;
+    }
+
+    .company-chip {
+      color: white !important;
+      font-size: 11px !important;
+      font-weight: 500 !important;
     }
 
     .customer-name-cell .name {
@@ -2021,16 +2339,42 @@ interface SalesStats {
       .company-cards-grid {
         grid-template-columns: repeat(2, 1fr);
       }
+      .header-stats-row {
+        display: none;
+      }
     }
 
     @media (max-width: 768px) {
       .sales-dashboard {
         padding: 16px;
+        padding-top: 80px;
       }
 
       .dashboard-header {
         flex-direction: column;
         gap: 16px;
+      }
+
+      .header-content-wrapper {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .header-text-area h1 {
+        font-size: 24px;
+      }
+
+      .header-actions {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .action-btn span {
+        display: none;
+      }
+
+      .action-btn {
+        padding: 12px;
       }
 
       .stats-grid {
