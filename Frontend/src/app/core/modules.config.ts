@@ -308,6 +308,14 @@ export function getModuleRoutes(): Routes {
       data: { module: 'stock_management' } 
     },
     
+    // Warehouse 3D View
+    { 
+      path: 'warehouse-3d', 
+      loadComponent: () => import('../components/warehouse-3d/warehouse-3d.component').then(m => m.Warehouse3DComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'stock_management' } 
+    },
+    
     // Support Tickets Module
     { 
       path: 'support-ticket', 

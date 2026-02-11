@@ -1344,6 +1344,10 @@ export class StockManagementComponent implements OnInit {
             <mat-icon>swap_horiz</mat-icon>
             Transfer @if (selection.hasValue()) { <span class="badge">{{ selection.selected.length }}</span> }
           </button>
+          <button mat-flat-button (click)="open3DPlanning()" class="planning-3d-btn">
+            <mat-icon>view_in_ar</mat-icon>
+            3D Planning
+          </button>
         </div>
         <button mat-flat-button color="primary" mat-dialog-close class="close-action-btn">
           <mat-icon>check_circle</mat-icon>
@@ -1991,6 +1995,11 @@ export class StockManagementComponent implements OnInit {
       color: white !important;
     }
 
+    .planning-3d-btn {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+      color: white !important;
+    }
+
     .transfer-btn:disabled {
       background: #ccc !important;
       color: #666 !important;
@@ -2321,6 +2330,7 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
   private searchSubject = new Subject<string>();
 
   private http = inject(HttpClient);
+  private router = inject(Router);
 
   constructor(
     public dialogRef: MatDialogRef<WarehouseDetailsDialog>,
@@ -2496,6 +2506,15 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
       this.selection.clear();
       this.closeTransferDialog();
     }
+  }
+
+  // 3D Planning
+  open3DPlanning() {
+    // Close dialog and navigate to 3D view
+    this.dialogRef.close();
+    this.router.navigate(['/warehouse-3d'], { 
+      queryParams: { warehouseId: this.data.warehouse.id } 
+    });
   }
 
   // GRV Methods

@@ -204,6 +204,20 @@ namespace ProjectTracker.API.Controllers
             conversation.LastMessageAt = message.SentAt;
             await _context.SaveChangesAsync();
 
+            // Link attachments to the message if provided
+            if (request.AttachmentIds != null && request.AttachmentIds.Count > 0)
+            {
+                var attachments = await _context.MessageAttachments
+                    .Where(a => request.AttachmentIds.Contains(a.AttachmentId))
+                    .ToListAsync();
+
+                foreach (var attachment in attachments)
+                {
+                    attachment.MessageId = message.MessageId;
+                }
+                await _context.SaveChangesAsync();
+            }
+
             // Reload with includes
             var result = await _context.Messages
                 .Include(m => m.Sender)

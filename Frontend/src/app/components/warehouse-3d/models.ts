@@ -1,0 +1,51 @@
+/**
+ * Warehouse 3D Models
+ * Data interfaces for the 3D warehouse visualization
+ */
+
+export interface WarehouseBox3D {
+  id: string;
+  label: string;
+  position: { x: number; y: number };
+  stackLevel: number; // 1, 2, or 3
+  status: 'Active' | 'LowStock' | 'Empty' | 'Blocked';
+  quantity?: number;
+  sku?: string;
+  commodityName?: string;
+  binLocation?: string;
+}
+
+export interface Warehouse3DConfig {
+  gridColumns: number;
+  gridRows: number;
+  boxWidth: number;
+  boxDepth: number;
+  boxHeight: number;
+  gridSpacing: number;
+}
+
+export interface Warehouse3DViewData {
+  warehouseId: number;
+  warehouseName: string;
+  boxes: WarehouseBox3D[];
+  config: Warehouse3DConfig;
+}
+
+export const DEFAULT_CONFIG: Warehouse3DConfig = {
+  gridColumns: 20,
+  gridRows: 10,
+  boxWidth: 1,
+  boxDepth: 1,
+  boxHeight: 1,
+  gridSpacing: 0.2
+};
+
+// Status color mapping for Three.js materials
+export const STATUS_COLORS = {
+  Active: 0x4CAF50,   // Green
+  LowStock: 0xFFC107, // Yellow
+  Empty: 0xF44336,    // Red
+  Blocked: 0x9E9E9E   // Gray
+} as const;
+
+export type BoxStatus = keyof typeof STATUS_COLORS;

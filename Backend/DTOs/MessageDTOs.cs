@@ -77,6 +77,8 @@ namespace ProjectTracker.API.DTOs
         public string MessageType { get; set; } = "text";
 
         public int? ReplyToMessageId { get; set; }
+
+        public List<int>? AttachmentIds { get; set; }
     }
 
     public class SendDirectMessageRequest
