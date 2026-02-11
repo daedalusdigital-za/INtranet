@@ -3584,12 +3584,12 @@ export class DispatchDialog implements OnInit {
   mapLoadItems(load: any): any[] {
     const items: any[] = [];
     
-    // Map items from LoadItems
-    if (load.loadItems && load.loadItems.length > 0) {
-      load.loadItems.forEach((item: any) => {
+    // Map items from LoadItems (API returns items, not loadItems)
+    if (load.items && load.items.length > 0) {
+      load.items.forEach((item: any) => {
         items.push({
           id: item.id,
-          name: item.commodity?.name || item.description || 'Unknown Item',
+          name: item.commodityName || item.description || 'Unknown Item',
           requested: item.quantity || 0,
           available: 0, // Will be populated from SOH
           toPick: item.quantity || 0,
@@ -3603,18 +3603,18 @@ export class DispatchDialog implements OnInit {
       load.stops.forEach((stop: any) => {
         if (stop.commodities && stop.commodities.length > 0) {
           stop.commodities.forEach((sc: any) => {
-            const existingItem = items.find(i => i.name === sc.commodity?.name);
+            const existingItem = items.find(i => i.name === sc.commodityName);
             if (existingItem) {
               existingItem.requested += sc.quantity || 0;
               existingItem.toPick += sc.quantity || 0;
             } else {
               items.push({
                 id: sc.id,
-                name: sc.commodity?.name || 'Unknown Item',
+                name: sc.commodityName || 'Unknown Item',
                 requested: sc.quantity || 0,
                 available: 0, // Will be populated from SOH
                 toPick: sc.quantity || 0,
-                unit: 'units'
+                unit: sc.unitOfMeasure || 'units'
               });
             }
           });
@@ -3834,7 +3834,7 @@ export class DispatchDialog implements OnInit {
       }
       
       pdf.text(`${index + 1}`, 25, yPos);
-      pdf.text(item.name || item.commodityName || 'Unknown Item', 35, yPos);
+      pdf.text(item.name || 'Unknown Item', 35, yPos);
       pdf.text(`${item.quantity || item.toPick || 0}`, 130, yPos);
       pdf.text(item.unit || 'units', 160, yPos);
       
@@ -3951,7 +3951,7 @@ export class DispatchDialog implements OnInit {
       totalQuantity += quantity;
       
       pdf.text(`${index + 1}`, 25, yPos);
-      pdf.text(item.name || item.commodityName || 'Unknown Item', 35, yPos);
+      pdf.text(item.name || 'Unknown Item', 35, yPos);
       pdf.text(`${quantity}`, 130, yPos);
       pdf.text(item.unit || 'units', 160, yPos);
       
