@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
-import { delay } from 'rxjs/operators';
-import { WarehouseBox3D, Warehouse3DViewData, DEFAULT_CONFIG, BoxStatus } from './models';
+import { map } from 'rxjs/operators';
+import { WarehouseBox3D, Warehouse3DViewData, Warehouse3DViewApiResponse, DEFAULT_CONFIG, BoxStatus } from './models';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -14,70 +14,34 @@ export class Warehouse3DService {
   constructor(private http: HttpClient) {}
 
   /**
-   * Get 3D view data for a warehouse
-   * Currently returns mock data, ready to connect to API
+   * Get 3D view data for a warehouse from API
    */
   getWarehouse3DView(warehouseId: number): Observable<Warehouse3DViewData> {
-    // TODO: Uncomment when API is ready
-    // return this.http.get<Warehouse3DViewData>(`${this.apiUrl}/warehouse/${warehouseId}/3dview`);
-    
-    // Mock data for development
-    return of(this.generateMockData(warehouseId)).pipe(delay(300));
+    return this.http.get<Warehouse3DViewApiResponse>(`${this.apiUrl}/warehouses/${warehouseId}/3dview`).pipe(
+      map(response => this.transformApiResponse(response))
+    );
   }
 
   /**
-   * Generate mock warehouse data for testing
+   * Transform API response to internal format used by Three.js component
    */
-  private generateMockData(warehouseId: number): Warehouse3DViewData {
-    const boxes: WarehouseBox3D[] = [];
-    const statuses: BoxStatus[] = ['Active', 'LowStock', 'Empty', 'Blocked'];
-    
-    let boxId = 1;
-    
-    // Generate a grid of boxes with random stacking
-    for (let row = 0; row < 10; row++) {
-      for (let col = 0; col < 20; col++) {
-        // Random chance to have boxes at this position (80% filled)
-        if (Math.random() < 0.8) {
-          // Random stack height 1-3
-          const maxStack = Math.floor(Math.random() * 3) + 1;
-          
-          for (let stack = 1; stack <= maxStack; stack++) {
-            const status = statuses[Math.floor(Math.random() * statuses.length)];
-            
-            boxes.push({
-              id: `BOX-${boxId.toString().padStart(4, '0')}`,
-              label: `Item ${boxId}`,
-              position: { x: col, y: row },
-              stackLevel: stack,
-              status: status,
-              quantity: Math.floor(Math.random() * 100) + 1,
-              sku: `SKU-${col.toString().padStart(2, '0')}${row.toString().padStart(2, '0')}${stack}`,
-              commodityName: this.getRandomCommodity(),
-              binLocation: `${String.fromCharCode(65 + row)}${col + 1}-L${stack}`
-            });
-            
-            boxId++;
-          }
-        }
-      }
-    }
-
+  private transformApiResponse(response: Warehouse3DViewApiResponse): Warehouse3DViewData {
     return {
-      warehouseId,
-      warehouseName: `Warehouse ${warehouseId}`,
-      boxes,
-      config: { ...DEFAULT_CONFIG }
+      warehouseId: response.warehouseId,
+      warehouseName: response.warehouseName,
+      boxes: response.boxes.map(box => ({
+        id: box.id,
+        label: box.label,
+        position: { x: box.positionX, y: box.positionY },
+        stackLevel: box.stackLevel,
+        status: box.status as BoxStatus,
+        quantity: box.quantity,
+        sku: box.sku,
+        commodityName: box.commodityName,
+        binLocation: box.binLocation
+      })),
+      config: response.config || { ...DEFAULT_CONFIG }
     };
-  }
-
-  private getRandomCommodity(): string {
-    const commodities = [
-      'Steel Pipes', 'Copper Wire', 'Cement Bags', 'Paint Buckets',
-      'Electrical Panels', 'PVC Fittings', 'Lumber Planks', 'Roof Tiles',
-      'Glass Sheets', 'Insulation Rolls', 'Metal Frames', 'Concrete Blocks'
-    ];
-    return commodities[Math.floor(Math.random() * commodities.length)];
   }
 
   /**

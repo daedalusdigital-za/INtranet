@@ -57,6 +57,7 @@ namespace ProjectTracker.API.Models.Logistics
         public DateTime? UpdatedAt { get; set; }
 
         // Navigation properties
+        public virtual ICollection<WarehouseBuilding> Buildings { get; set; } = new List<WarehouseBuilding>();
         public virtual ICollection<WarehouseInventory> Inventory { get; set; } = new List<WarehouseInventory>();
         public virtual ICollection<StockTransfer> TransfersFrom { get; set; } = new List<StockTransfer>();
         public virtual ICollection<StockTransfer> TransfersTo { get; set; } = new List<StockTransfer>();

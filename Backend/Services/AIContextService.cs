@@ -909,34 +909,35 @@ namespace ProjectTracker.API.Services
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
             var builder = new StringBuilder();
-            builder.AppendLine("### Stock On Hand Data\n");
+            builder.AppendLine("### Live Inventory Data\n");
 
             var lowerQuery = query.ToLower();
 
-            // Get warehouses info
-            var warehouses = await context.Warehouses.ToListAsync();
+            // Get warehouses and buildings info
+            var warehouses = await context.Warehouses
+                .Include(w => w.Buildings)
+                .ToListAsync();
 
             // Determine which warehouse to filter
-            string? locationFilter = null;
+            int? warehouseFilter = null;
             if (lowerQuery.Contains("gauteng") || lowerQuery.Contains("johannesburg") || lowerQuery.Contains("gp"))
-                locationFilter = "GP";
+                warehouseFilter = warehouses.FirstOrDefault(w => w.Code == "GP")?.Id;
             else if (lowerQuery.Contains("kzn") || lowerQuery.Contains("durban"))
-                locationFilter = "KZN";
-            else if (lowerQuery.Contains("cape town") || lowerQuery.Contains("capetown") || lowerQuery.Contains("cpt"))
-                locationFilter = "CPT";
-            else if (lowerQuery.Contains("pe") || lowerQuery.Contains("gqeberha") || lowerQuery.Contains("port elizabeth"))
-                locationFilter = "PE";
+                warehouseFilter = warehouses.FirstOrDefault(w => w.Code == "KZN")?.Id;
+            else if (lowerQuery.Contains("cape") || lowerQuery.Contains("wc"))
+                warehouseFilter = warehouses.FirstOrDefault(w => w.Code == "WC")?.Id;
+            else if (lowerQuery.Contains("eastern cape") || lowerQuery.Contains("ec"))
+                warehouseFilter = warehouses.FirstOrDefault(w => w.Code == "EC")?.Id;
 
-            // Get latest snapshot date
-            var latestDate = await context.StockOnHandSnapshots
-                .MaxAsync(s => (DateTime?)s.AsAtDate) ?? DateTime.Today;
+            // Get inventory query
+            var inventoryQuery = context.BuildingInventory
+                .Include(i => i.Building)
+                .ThenInclude(b => b.Warehouse)
+                .AsQueryable();
 
-            IQueryable<StockOnHandSnapshot> stockQuery = context.StockOnHandSnapshots
-                .Where(s => s.AsAtDate == latestDate);
-
-            if (!string.IsNullOrEmpty(locationFilter))
+            if (warehouseFilter.HasValue)
             {
-                stockQuery = stockQuery.Where(s => s.Location == locationFilter);
+                inventoryQuery = inventoryQuery.Where(i => i.Building.WarehouseId == warehouseFilter.Value);
             }
 
             // Check for specific item search
@@ -944,63 +945,70 @@ namespace ProjectTracker.API.Services
             if (itemMatch.Success)
             {
                 var searchItem = itemMatch.Groups[1].Value.Trim().ToLower();
-                stockQuery = stockQuery.Where(s => s.ItemCode.ToLower().Contains(searchItem) || 
-                                                   s.ItemDescription.ToLower().Contains(searchItem));
+                inventoryQuery = inventoryQuery.Where(i => i.ItemCode.ToLower().Contains(searchItem) || 
+                                                   i.ItemDescription.ToLower().Contains(searchItem));
             }
 
-            // Get summary by location
-            var summaryByLocation = await context.StockOnHandSnapshots
-                .Where(s => s.AsAtDate == latestDate)
-                .GroupBy(s => s.Location)
+            // Get summary by building
+            var summaryByBuilding = await context.BuildingInventory
+                .Include(i => i.Building)
+                .GroupBy(i => new { i.BuildingId, i.Building.Name, i.Building.WarehouseId })
                 .Select(g => new
                 {
-                    Location = g.Key,
+                    BuildingId = g.Key.BuildingId,
+                    BuildingName = g.Key.Name,
+                    WarehouseId = g.Key.WarehouseId,
                     ItemCount = g.Count(),
-                    TotalQty = g.Sum(s => s.QtyOnHand),
-                    TotalValue = g.Sum(s => s.TotalCostForQOH)
+                    TotalQty = g.Sum(i => i.QuantityOnHand),
+                    TotalValue = g.Sum(i => i.QuantityOnHand * i.UnitCost)
                 })
                 .ToListAsync();
 
-            builder.AppendLine($"**Stock Summary as at {latestDate:dd MMM yyyy}:**\n");
+            builder.AppendLine("**Live Inventory Summary:**\n");
 
-            // Show warehouse managers
+            // Show warehouse managers and building summaries
             builder.AppendLine("**Warehouses:**");
             foreach (var wh in warehouses)
             {
-                var summary = summaryByLocation.FirstOrDefault(s => s.Location == wh.Code);
+                var buildingSummaries = summaryByBuilding.Where(s => s.WarehouseId == wh.Id).ToList();
+                var totalItems = buildingSummaries.Sum(s => s.ItemCount);
+                var totalValue = buildingSummaries.Sum(s => s.TotalValue);
+                
                 builder.AppendLine($"- **{wh.Name}** ({wh.Code})");
                 builder.AppendLine($"  - Manager: {wh.ManagerName ?? "Not assigned"}");
-                if (summary != null)
+                builder.AppendLine($"  - Buildings: {wh.Buildings?.Count ?? 0}");
+                builder.AppendLine($"  - Total Items: {totalItems:N0}");
+                builder.AppendLine($"  - Total Value: R{totalValue:N2}");
+                
+                foreach (var bldg in buildingSummaries)
                 {
-                    builder.AppendLine($"  - Items: {summary.ItemCount:N0}");
-                    builder.AppendLine($"  - Total Qty: {summary.TotalQty:N0}");
-                    builder.AppendLine($"  - Total Value: R{summary.TotalValue:N2}");
+                    builder.AppendLine($"    - {bldg.BuildingName}: {bldg.ItemCount:N0} items, R{bldg.TotalValue:N2}");
                 }
             }
 
             // If specific location was queried, show top items
-            if (!string.IsNullOrEmpty(locationFilter) || itemMatch.Success)
+            if (warehouseFilter.HasValue || itemMatch.Success)
             {
-                var items = await stockQuery
-                    .OrderByDescending(s => s.TotalCostForQOH)
+                var items = await inventoryQuery
+                    .OrderByDescending(i => i.QuantityOnHand * i.UnitCost)
                     .Take(15)
                     .ToListAsync();
 
                 if (items.Any())
                 {
-                    builder.AppendLine($"\n**Top Items{(locationFilter != null ? $" at {locationFilter}" : "")}:**");
+                    builder.AppendLine($"\n**Top Items{(warehouseFilter.HasValue ? $" at {warehouses.FirstOrDefault(w => w.Id == warehouseFilter)?.Code}" : "")}:**");
                     foreach (var item in items)
                     {
                         builder.AppendLine($"- {item.ItemCode}: {item.ItemDescription}");
-                        builder.AppendLine($"  - Location: {item.Location} | Qty: {item.QtyOnHand:N0} {item.Uom}");
-                        builder.AppendLine($"  - Available: {item.StockAvailable:N0} | Value: R{item.TotalCostForQOH:N2}");
+                        builder.AppendLine($"  - Building: {item.Building.Name} | Qty: {item.QuantityOnHand:N0} {item.Uom}");
+                        builder.AppendLine($"  - Available: {item.QuantityAvailable:N0} | Value: R{item.QuantityOnHand * item.UnitCost:N2}");
                     }
                 }
             }
 
             // Overall totals
-            var overallTotal = summaryByLocation.Sum(s => s.TotalValue);
-            var overallQty = summaryByLocation.Sum(s => s.TotalQty);
+            var overallTotal = summaryByBuilding.Sum(s => s.TotalValue);
+            var overallQty = summaryByBuilding.Sum(s => s.TotalQty);
             builder.AppendLine($"\n**Overall Totals:**");
             builder.AppendLine($"- Total Stock Value: R{overallTotal:N2}");
             builder.AppendLine($"- Total Quantity: {overallQty:N0}");

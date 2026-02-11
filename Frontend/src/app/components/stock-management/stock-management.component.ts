@@ -2376,38 +2376,38 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
 
   loadInventory(): void {
     this.loading = true;
-    // Try to load from SOH snapshots first
-    this.http.get<any>(`${environment.apiUrl}/warehouses/${this.data.id}/soh`).subscribe({
+    // Load from live BuildingInventory
+    this.http.get<any>(`${environment.apiUrl}/warehouses/${this.data.id}/building-inventory`).subscribe({
       next: (data) => {
         if (data.items && data.items.length > 0) {
-          // Use SOH data
-          this.sohAsAtDate = data.asAtDate;
+          // Use live inventory data
+          this.sohAsAtDate = new Date().toISOString().split('T')[0]; // Live data
           this.sohTotalItems = data.totalItems;
           this.sohTotalValue = data.totalStockValue;
-          this.sohLocations = data.locations || [];
+          this.sohLocations = data.buildings?.map((b: any) => b.name) || [];
           
           this.inventoryData = data.items.map((item: any) => ({
             id: item.id,
             name: item.itemDescription || item.itemCode,
             sku: item.itemCode,
-            category: item.companyName || 'Unknown',
-            location: item.location,
+            category: item.buildingName || 'Unknown',
+            location: item.buildingName,
             quantity: item.qtyOnHand || 0,
-            reorderLevel: null,
-            binLocation: item.uom,
+            reorderLevel: item.reorderLevel,
+            binLocation: item.binLocation || item.uom,
             totalCost: item.totalCost,
             unitCost: item.unitCost,
-            qtyOnPO: item.qtyOnPO,
-            qtyOnSO: item.qtyOnSO,
-            stockAvailable: item.stockAvailable,
-            status: this.getStockStatus(item.qtyOnHand || 0, null)
+            qtyOnPO: item.qtyOnOrder,
+            qtyOnSO: item.qtyReserved,
+            stockAvailable: item.qtyAvailable,
+            status: this.getStockStatus(item.qtyOnHand || 0, item.reorderLevel)
           }));
           this.filteredInventoryData = [...this.inventoryData];
         }
         this.loading = false;
       },
       error: (error) => {
-        console.error('Error loading SOH inventory:', error);
+        console.error('Error loading building inventory:', error);
         // Fallback to legacy inventory
         this.loadLegacyInventory();
       }
@@ -2510,11 +2510,15 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
 
   // 3D Planning
   open3DPlanning() {
+    console.log('3D Planning clicked, warehouse:', this.data);
     // Close dialog and navigate to 3D view
+    const warehouseId = this.data?.id || 1;
     this.dialogRef.close();
-    this.router.navigate(['/warehouse-3d'], { 
-      queryParams: { warehouseId: this.data.warehouse.id } 
-    });
+    setTimeout(() => {
+      this.router.navigate(['/warehouse-3d'], { 
+        queryParams: { warehouseId: warehouseId } 
+      });
+    }, 100);
   }
 
   // GRV Methods

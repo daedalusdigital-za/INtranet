@@ -123,8 +123,12 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.TFN.TfnTransaction> TfnTransactions { get; set; }
         public DbSet<Models.Logistics.TFN.TfnAccountBalance> TfnAccountBalances { get; set; }
 
-        // Stock on Hand Snapshots
-        public DbSet<Models.Logistics.StockOnHandSnapshot> StockOnHandSnapshots { get; set; }
+        // Warehouse Buildings (physical buildings within each warehouse/province)
+        public DbSet<Models.Logistics.WarehouseBuilding> WarehouseBuildings { get; set; }
+
+        // Live Inventory Management
+        public DbSet<Models.Logistics.BuildingInventory> BuildingInventory { get; set; }
+        public DbSet<Models.Logistics.StockMovement> StockMovements { get; set; }
 
         // Collaborative Documents System
         public DbSet<CollaborativeDocument> CollaborativeDocuments { get; set; }

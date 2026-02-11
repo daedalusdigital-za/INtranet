@@ -593,49 +593,83 @@ public class StockOnHandImportService
 
         try
         {
-            var asAtDate = batch.AsAtDate ?? DateTime.Today;
             var locations = batch.Summary.Locations;
 
-            // Delete existing snapshots for this company, date and these locations
-            var existingSnapshots = await _context.Set<StockOnHandSnapshot>()
-                .Where(s => s.OperatingCompanyId == batch.OperatingCompanyId 
-                         && s.AsAtDate.Date == asAtDate.Date 
-                         && locations.Contains(s.Location))
-                .ToListAsync();
+            // Get building lookup - map location names to building IDs
+            var buildings = await _context.WarehouseBuildings
+                .Where(b => b.IsActive)
+                .ToDictionaryAsync(b => b.Name, b => b.Id, StringComparer.OrdinalIgnoreCase);
 
-            var deletedCount = existingSnapshots.Count;
-            if (existingSnapshots.Any())
+            // Also try to match by code
+            var buildingsByCode = await _context.WarehouseBuildings
+                .Where(b => b.IsActive)
+                .ToDictionaryAsync(b => b.Code, b => b.Id, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var kvp in buildingsByCode)
             {
-                _context.Set<StockOnHandSnapshot>().RemoveRange(existingSnapshots);
-                _logger.LogInformation(
-                    "Deleting {Count} existing snapshot records for company {CompanyId}, date {Date} and locations {Locations}",
-                    deletedCount, batch.OperatingCompanyId, asAtDate.ToString("yyyy-MM-dd"), string.Join(", ", locations));
+                if (!buildings.ContainsKey(kvp.Key))
+                    buildings[kvp.Key] = kvp.Value;
             }
 
-            // Insert new snapshot records
-            var snapshots = batch.Lines
+            // Group lines by location and get unique items
+            var linesByLocation = batch.Lines
                 .Where(l => !string.IsNullOrEmpty(l.ItemCode) && !string.IsNullOrEmpty(l.Location))
-                .Select(l => new StockOnHandSnapshot
-                {
-                    OperatingCompanyId = batch.OperatingCompanyId,
-                    AsAtDate = asAtDate,
-                    ItemCode = l.ItemCode,
-                    ItemDescription = l.ItemDescription,
-                    Location = l.Location,
-                    Uom = l.Uom,
-                    QtyOnHand = l.QtyOnHand,
-                    QtyOnPO = l.QtyOnPO,
-                    QtyOnSO = l.QtyOnSO,
-                    StockAvailable = l.StockAvailable,
-                    TotalCostForQOH = l.TotalCostForQOH,
-                    UnitCostForQOH = l.UnitCostForQOH,
-                    ImportBatchId = importId.ToString(),
-                    RowIndex = l.RowIndex,
-                    CreatedAt = DateTime.UtcNow
-                })
+                .GroupBy(l => l.Location)
                 .ToList();
 
-            await _context.Set<StockOnHandSnapshot>().AddRangeAsync(snapshots);
+            var insertedCount = 0;
+            var updatedCount = 0;
+
+            foreach (var locationGroup in linesByLocation)
+            {
+                // Try to find building by name or code
+                if (!buildings.TryGetValue(locationGroup.Key, out var buildingId))
+                {
+                    _logger.LogWarning("No building found for location '{Location}', skipping {Count} items", 
+                        locationGroup.Key, locationGroup.Count());
+                    continue;
+                }
+
+                foreach (var line in locationGroup)
+                {
+                    // Check if item already exists in this building
+                    var existing = await _context.BuildingInventory
+                        .FirstOrDefaultAsync(i => i.BuildingId == buildingId && i.ItemCode == line.ItemCode);
+
+                    if (existing != null)
+                    {
+                        // Update existing
+                        existing.ItemDescription = line.ItemDescription ?? existing.ItemDescription;
+                        existing.Uom = line.Uom ?? existing.Uom;
+                        existing.QuantityOnHand = line.QtyOnHand ?? existing.QuantityOnHand;
+                        existing.QuantityOnOrder = line.QtyOnPO ?? existing.QuantityOnOrder;
+                        existing.QuantityReserved = line.QtyOnSO ?? existing.QuantityReserved;
+                        existing.UnitCost = line.UnitCostForQOH ?? existing.UnitCost;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                        updatedCount++;
+                    }
+                    else
+                    {
+                        // Insert new
+                        var newItem = new BuildingInventory
+                        {
+                            BuildingId = buildingId,
+                            ItemCode = line.ItemCode!,
+                            ItemDescription = line.ItemDescription,
+                            Uom = line.Uom,
+                            QuantityOnHand = line.QtyOnHand ?? 0,
+                            QuantityReserved = line.QtyOnSO ?? 0,
+                            QuantityOnOrder = line.QtyOnPO ?? 0,
+                            UnitCost = line.UnitCostForQOH ?? 0,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        _context.BuildingInventory.Add(newItem);
+                        insertedCount++;
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             // Update batch status and remove from cache
@@ -643,16 +677,16 @@ public class StockOnHandImportService
             _importCache.TryRemove(importId, out _);
 
             _logger.LogInformation(
-                "SOH import {ImportId} committed: {Inserted} inserted, {Deleted} deleted by user {UserId}",
-                importId, snapshots.Count, deletedCount, userId);
+                "SOH import {ImportId} committed: {Inserted} inserted, {Updated} updated by user {UserId}",
+                importId, insertedCount, updatedCount, userId);
 
             return new SohImportCommitResponse
             {
                 ImportId = importId,
                 Success = true,
-                Message = $"Successfully committed {snapshots.Count} stock on hand records.",
-                LinesCommitted = snapshots.Count,
-                LinesDeleted = deletedCount
+                Message = $"Successfully committed {insertedCount} new items, updated {updatedCount} existing items.",
+                LinesCommitted = insertedCount + updatedCount,
+                LinesDeleted = 0
             };
         }
         catch (Exception ex)

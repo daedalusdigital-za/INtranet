@@ -54,7 +54,7 @@ namespace ProjectTracker.API.Controllers
                     "Announcements", "Messages", "Conversations", "Meetings",
                     "TodoTasks", "Attendance", "PhoneExtensions", "AuditLogs",
                     "Leads", "LeadStatuses", "Dispositions", "OperatingCompanies",
-                    "Warehouses", "Loads", "Vehicles", "Customers", "StockOnHandSnapshots"
+                    "Warehouses", "WarehouseBuildings", "BuildingInventory", "StockMovements", "Loads", "Vehicles", "Customers"
                 };
 
                 foreach (var table in tables)

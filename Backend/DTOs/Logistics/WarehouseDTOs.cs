@@ -182,4 +182,135 @@ namespace ProjectTracker.API.DTOs.Logistics
         public bool IsHazardous { get; set; }
         public string? HandlingInstructions { get; set; }
     }
+
+    // 3D Warehouse View DTOs
+    public class Warehouse3DViewDto
+    {
+        public int WarehouseId { get; set; }
+        public string WarehouseName { get; set; } = string.Empty;
+        public List<Warehouse3DBoxDto> Boxes { get; set; } = new();
+        public Warehouse3DConfigDto Config { get; set; } = new();
+    }
+
+    public class Warehouse3DBoxDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public int PositionX { get; set; }
+        public int PositionY { get; set; }
+        public int StackLevel { get; set; } = 1;
+        public string Status { get; set; } = "Active"; // Active, LowStock, Empty, Blocked
+        public int Quantity { get; set; }
+        public string? Sku { get; set; }
+        public string? CommodityName { get; set; }
+        public string? BinLocation { get; set; }
+    }
+
+    public class Warehouse3DConfigDto
+    {
+        public int GridColumns { get; set; } = 20;
+        public int GridRows { get; set; } = 10;
+        public decimal BoxWidth { get; set; } = 1;
+        public decimal BoxDepth { get; set; } = 1;
+        public decimal BoxHeight { get; set; } = 1;
+        public decimal GridSpacing { get; set; } = 0.2m;
+    }
+
+    // Warehouse Building DTOs
+    public class WarehouseBuildingDto
+    {
+        public int Id { get; set; }
+        public int WarehouseId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Address { get; set; }
+        public string? ManagerName { get; set; }
+        public string? PhoneNumber { get; set; }
+        public decimal? TotalCapacity { get; set; }
+        public decimal? AvailableCapacity { get; set; }
+        public int ItemCount { get; set; }
+    }
+
+    public class CreateWarehouseBuildingDto
+    {
+        public int WarehouseId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Address { get; set; }
+        public string? ManagerName { get; set; }
+        public string? PhoneNumber { get; set; }
+        public decimal? TotalCapacity { get; set; }
+    }
+
+    // Building Inventory DTOs
+    public class BuildingInventoryDto
+    {
+        public int Id { get; set; }
+        public int BuildingId { get; set; }
+        public string BuildingCode { get; set; } = string.Empty;
+        public string ItemCode { get; set; } = string.Empty;
+        public string? ItemDescription { get; set; }
+        public string Uom { get; set; } = "Each";
+        public decimal QuantityOnHand { get; set; }
+        public decimal QuantityReserved { get; set; }
+        public decimal QuantityOnOrder { get; set; }
+        public decimal QuantityAvailable { get; set; }
+        public decimal? ReorderLevel { get; set; }
+        public decimal? MaxLevel { get; set; }
+        public decimal? UnitCost { get; set; }
+        public string? BinLocation { get; set; }
+        public DateTime? LastMovementDate { get; set; }
+    }
+
+    public class UpdateBuildingInventoryDto
+    {
+        public decimal? QuantityOnHand { get; set; }
+        public decimal? QuantityReserved { get; set; }
+        public decimal? ReorderLevel { get; set; }
+        public decimal? MaxLevel { get; set; }
+        public decimal? UnitCost { get; set; }
+        public string? BinLocation { get; set; }
+    }
+
+    // Stock Movement DTOs
+    public class StockMovementDto
+    {
+        public int Id { get; set; }
+        public string MovementType { get; set; } = string.Empty;
+        public int? FromBuildingId { get; set; }
+        public string? FromBuildingCode { get; set; }
+        public int? ToBuildingId { get; set; }
+        public string? ToBuildingCode { get; set; }
+        public string ItemCode { get; set; } = string.Empty;
+        public string? ItemDescription { get; set; }
+        public decimal Quantity { get; set; }
+        public string Uom { get; set; } = "Each";
+        public string? Reference { get; set; }
+        public string? Notes { get; set; }
+        public string? CreatedByName { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class CreateStockMovementDto
+    {
+        public string MovementType { get; set; } = string.Empty; // Transfer, Receipt, Issue, Adjustment
+        public int? FromBuildingId { get; set; }
+        public int? ToBuildingId { get; set; }
+        public string ItemCode { get; set; } = string.Empty;
+        public string? ItemDescription { get; set; }
+        public decimal Quantity { get; set; }
+        public string Uom { get; set; } = "Each";
+        public string? Reference { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class BuildingStockTransferDto
+    {
+        public int FromBuildingId { get; set; }
+        public int ToBuildingId { get; set; }
+        public string ItemCode { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public string? Reference { get; set; }
+        public string? Notes { get; set; }
+    }
 }

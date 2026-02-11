@@ -3,6 +3,21 @@
  * Data interfaces for the 3D warehouse visualization
  */
 
+// API response format (matches backend DTO)
+export interface Warehouse3DBoxApiResponse {
+  id: string;
+  label: string;
+  positionX: number;
+  positionY: number;
+  stackLevel: number;
+  status: 'Active' | 'LowStock' | 'Empty' | 'Blocked';
+  quantity?: number;
+  sku?: string;
+  commodityName?: string;
+  binLocation?: string;
+}
+
+// Internal format used by Three.js component
 export interface WarehouseBox3D {
   id: string;
   label: string;
@@ -24,6 +39,15 @@ export interface Warehouse3DConfig {
   gridSpacing: number;
 }
 
+// API response format
+export interface Warehouse3DViewApiResponse {
+  warehouseId: number;
+  warehouseName: string;
+  boxes: Warehouse3DBoxApiResponse[];
+  config: Warehouse3DConfig;
+}
+
+// Internal format used by component
 export interface Warehouse3DViewData {
   warehouseId: number;
   warehouseName: string;

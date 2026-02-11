@@ -67,42 +67,22 @@ namespace ProjectTracker.API.Controllers.Logistics
                 })
                 .ToListAsync();
 
-            // Get the latest SOH snapshot date
-            var latestDate = await _context.StockOnHandSnapshots
-                .MaxAsync(s => (DateTime?)s.AsAtDate);
-
-            // Get all SOH data for latest date and group in memory
-            var sohLookup = new Dictionary<string, (int Count, decimal Value)>(StringComparer.OrdinalIgnoreCase);
-            
-            if (latestDate.HasValue)
-            {
-                var sohItems = await _context.StockOnHandSnapshots
-                    .Where(s => s.AsAtDate == latestDate.Value)
-                    .Select(s => new { s.Location, s.TotalCostForQOH })
-                    .ToListAsync();
-
-                // Group by location prefix (e.g., "KZN 1" -> "KZN")
-                foreach (var item in sohItems)
+            // Get live inventory from BuildingInventory grouped by warehouse
+            var inventoryByWarehouse = await _context.BuildingInventory
+                .Include(i => i.Building)
+                .GroupBy(i => i.Building.WarehouseId)
+                .Select(g => new
                 {
-                    var prefix = item.Location.Contains(' ') 
-                        ? item.Location.Substring(0, item.Location.IndexOf(' '))
-                        : item.Location;
-                    
-                    if (sohLookup.TryGetValue(prefix, out var existing))
-                    {
-                        sohLookup[prefix] = (existing.Count + 1, existing.Value + (item.TotalCostForQOH ?? 0));
-                    }
-                    else
-                    {
-                        sohLookup[prefix] = (1, item.TotalCostForQOH ?? 0);
-                    }
-                }
-            }
+                    WarehouseId = g.Key,
+                    Count = g.Count(),
+                    Value = g.Sum(i => i.QuantityOnHand * i.UnitCost) ?? 0m
+                })
+                .ToDictionaryAsync(x => x.WarehouseId, x => (x.Count, x.Value));
 
             // Build the result
             var warehouses = warehouseData.Select(w =>
             {
-                var soh = !string.IsNullOrEmpty(w.Code) && sohLookup.TryGetValue(w.Code, out var data) 
+                var inv = inventoryByWarehouse.TryGetValue(w.Id, out var data) 
                     ? data 
                     : (Count: 0, Value: 0m);
 
@@ -112,8 +92,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     Name = w.Name,
                     Location = w.Location,
                     ManagerName = w.ManagerName,
-                    TotalItems = soh.Count,
-                    TotalStockValue = soh.Value,
+                    TotalItems = inv.Count,
+                    TotalStockValue = inv.Value,
                     CapacityPercent = w.TotalCapacity.HasValue && w.TotalCapacity > 0
                         ? (int)(((w.TotalCapacity - (w.AvailableCapacity ?? 0)) / w.TotalCapacity) * 100)
                         : 0,
@@ -469,76 +449,55 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(commodity);
         }
 
-        // Stock on Hand Snapshots
+        // Building Inventory Endpoints (Live stock per building)
         /// <summary>
-        /// Get SOH snapshots for a warehouse by matching warehouse code to SOH location prefix
+        /// Get live building inventory for a warehouse (all buildings)
         /// </summary>
-        [HttpGet("{warehouseId}/soh")]
-        public async Task<ActionResult> GetWarehouseSoh(int warehouseId, [FromQuery] DateTime? asAtDate = null)
+        [HttpGet("{warehouseId}/building-inventory")]
+        public async Task<ActionResult> GetWarehouseBuildingInventory(int warehouseId)
         {
             var warehouse = await _context.Warehouses.FindAsync(warehouseId);
             if (warehouse == null)
                 return NotFound("Warehouse not found");
 
-            // Match SOH locations that start with warehouse code (e.g., KZN matches KZN 1, KZN 2)
-            var warehouseCode = warehouse.Code;
-            var targetDate = asAtDate?.Date ?? DateTime.Today;
+            var buildings = await _context.WarehouseBuildings
+                .Where(b => b.WarehouseId == warehouseId)
+                .ToListAsync();
 
-            // Get the most recent snapshot date <= targetDate for this warehouse's locations
-            var latestSnapshotDate = await _context.StockOnHandSnapshots
-                .Where(s => s.Location.StartsWith(warehouseCode) && s.AsAtDate <= targetDate)
-                .MaxAsync(s => (DateTime?)s.AsAtDate);
+            var buildingIds = buildings.Select(b => b.Id).ToList();
 
-            if (!latestSnapshotDate.HasValue)
-            {
-                return Ok(new
-                {
-                    warehouseId,
-                    warehouseName = warehouse.Name,
-                    warehouseCode,
-                    asAtDate = (DateTime?)null,
-                    totalItems = 0,
-                    totalQtyOnHand = 0m,
-                    totalStockValue = 0m,
-                    locations = new List<string>(),
-                    items = new List<object>()
-                });
-            }
-
-            // Get operating company lookup
-            var operatingCompanies = await _context.OperatingCompanies
-                .ToDictionaryAsync(c => c.OperatingCompanyId, c => c.Name);
-
-            var snapshots = await _context.StockOnHandSnapshots
-                .Where(s => s.Location.StartsWith(warehouseCode) && s.AsAtDate == latestSnapshotDate.Value)
-                .OrderBy(s => s.Location)
-                .ThenBy(s => s.ItemCode)
+            var inventory = await _context.BuildingInventory
+                .Where(i => buildingIds.Contains(i.BuildingId))
+                .Include(i => i.Building)
+                .OrderBy(i => i.Building.Name)
+                .ThenBy(i => i.ItemCode)
                 .ToListAsync();
 
             var result = new
             {
                 warehouseId,
                 warehouseName = warehouse.Name,
-                warehouseCode,
-                asAtDate = latestSnapshotDate.Value.ToString("yyyy-MM-dd"),
-                totalItems = snapshots.Count,
-                totalQtyOnHand = snapshots.Sum(s => s.QtyOnHand ?? 0),
-                totalStockValue = snapshots.Sum(s => s.TotalCostForQOH ?? 0),
-                locations = snapshots.Select(s => s.Location).Distinct().OrderBy(l => l).ToList(),
-                items = snapshots.Select(s => new
+                warehouseCode = warehouse.Code,
+                totalItems = inventory.Count,
+                totalQtyOnHand = inventory.Sum(i => i.QuantityOnHand),
+                totalStockValue = inventory.Sum(i => i.QuantityOnHand * i.UnitCost),
+                buildings = buildings.Select(b => new { b.Id, b.Code, b.Name }).ToList(),
+                items = inventory.Select(i => new
                 {
-                    id = s.StockSnapshotId,
-                    itemCode = s.ItemCode,
-                    itemDescription = s.ItemDescription,
-                    location = s.Location,
-                    companyName = operatingCompanies.GetValueOrDefault(s.OperatingCompanyId, "Unknown"),
-                    uom = s.Uom,
-                    qtyOnHand = s.QtyOnHand,
-                    qtyOnPO = s.QtyOnPO,
-                    qtyOnSO = s.QtyOnSO,
-                    stockAvailable = s.StockAvailable,
-                    totalCost = s.TotalCostForQOH,
-                    unitCost = s.UnitCostForQOH
+                    id = i.Id,
+                    itemCode = i.ItemCode,
+                    itemDescription = i.ItemDescription,
+                    buildingId = i.BuildingId,
+                    buildingName = i.Building.Name,
+                    uom = i.Uom,
+                    qtyOnHand = i.QuantityOnHand,
+                    qtyReserved = i.QuantityReserved,
+                    qtyOnOrder = i.QuantityOnOrder,
+                    qtyAvailable = i.QuantityAvailable,
+                    unitCost = i.UnitCost,
+                    totalCost = i.QuantityOnHand * i.UnitCost,
+                    binLocation = i.BinLocation,
+                    reorderLevel = i.ReorderLevel
                 }).ToList()
             };
 
@@ -546,65 +505,228 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
-        /// Get all SOH snapshots with filtering
+        /// Get all live building inventory with optional building filter
         /// </summary>
-        [HttpGet("soh")]
-        public async Task<ActionResult> GetAllSoh([FromQuery] DateTime? asAtDate = null, [FromQuery] string? location = null)
+        [HttpGet("building-inventory")]
+        public async Task<ActionResult> GetAllBuildingInventory([FromQuery] int? buildingId = null)
         {
-            var targetDate = asAtDate?.Date ?? DateTime.Today;
+            var query = _context.BuildingInventory
+                .Include(i => i.Building)
+                .ThenInclude(b => b.Warehouse)
+                .AsQueryable();
 
-            // Get the most recent snapshot date
-            var query = _context.StockOnHandSnapshots.AsQueryable();
-            
-            if (!string.IsNullOrEmpty(location))
+            if (buildingId.HasValue)
             {
-                query = query.Where(s => s.Location.StartsWith(location));
+                query = query.Where(i => i.BuildingId == buildingId.Value);
             }
 
-            var latestSnapshotDate = await query
-                .Where(s => s.AsAtDate <= targetDate)
-                .MaxAsync(s => (DateTime?)s.AsAtDate);
-
-            if (!latestSnapshotDate.HasValue)
-            {
-                return Ok(new
-                {
-                    asAtDate = (DateTime?)null,
-                    totalItems = 0,
-                    totalQtyOnHand = 0m,
-                    totalStockValue = 0m,
-                    items = new List<object>()
-                });
-            }
-
-            var snapshots = await query
-                .Where(s => s.AsAtDate == latestSnapshotDate.Value)
-                .OrderBy(s => s.Location)
-                .ThenBy(s => s.ItemCode)
+            var inventory = await query
+                .OrderBy(i => i.Building.Warehouse.Name)
+                .ThenBy(i => i.Building.Name)
+                .ThenBy(i => i.ItemCode)
                 .ToListAsync();
 
             return Ok(new
             {
-                asAtDate = latestSnapshotDate.Value.ToString("yyyy-MM-dd"),
-                totalItems = snapshots.Count,
-                totalQtyOnHand = snapshots.Sum(s => s.QtyOnHand ?? 0),
-                totalStockValue = snapshots.Sum(s => s.TotalCostForQOH ?? 0),
-                locations = snapshots.Select(s => s.Location).Distinct().OrderBy(l => l).ToList(),
-                items = snapshots.Select(s => new
+                totalItems = inventory.Count,
+                totalQtyOnHand = inventory.Sum(i => i.QuantityOnHand),
+                totalStockValue = inventory.Sum(i => i.QuantityOnHand * i.UnitCost),
+                items = inventory.Select(i => new
                 {
-                    id = s.StockSnapshotId,
-                    itemCode = s.ItemCode,
-                    itemDescription = s.ItemDescription,
-                    location = s.Location,
-                    uom = s.Uom,
-                    qtyOnHand = s.QtyOnHand,
-                    qtyOnPO = s.QtyOnPO,
-                    qtyOnSO = s.QtyOnSO,
-                    stockAvailable = s.StockAvailable,
-                    totalCost = s.TotalCostForQOH,
-                    unitCost = s.UnitCostForQOH
+                    id = i.Id,
+                    itemCode = i.ItemCode,
+                    itemDescription = i.ItemDescription,
+                    buildingId = i.BuildingId,
+                    buildingCode = i.Building.Code,
+                    buildingName = i.Building.Name,
+                    warehouseName = i.Building.Warehouse.Name,
+                    uom = i.Uom,
+                    qtyOnHand = i.QuantityOnHand,
+                    qtyReserved = i.QuantityReserved,
+                    qtyOnOrder = i.QuantityOnOrder,
+                    qtyAvailable = i.QuantityAvailable,
+                    unitCost = i.UnitCost,
+                    totalCost = i.QuantityOnHand * i.UnitCost,
+                    binLocation = i.BinLocation
                 }).ToList()
+            });
+        }
+
+        // GET: api/warehouses/{warehouseId}/3dview
+        // Returns warehouse inventory formatted for 3D visualization (all buildings combined)
+        // Uses LIVE BuildingInventory table
+        [HttpGet("{warehouseId}/3dview")]
+        public async Task<ActionResult<Warehouse3DViewDto>> GetWarehouse3DView(int warehouseId)
+        {
+            var warehouse = await _context.Warehouses.FindAsync(warehouseId);
+            if (warehouse == null)
+                return NotFound($"Warehouse with ID {warehouseId} not found");
+
+            // Get buildings for this warehouse
+            var buildingIds = await _context.WarehouseBuildings
+                .Where(b => b.WarehouseId == warehouseId)
+                .Select(b => b.Id)
+                .ToListAsync();
+
+            // Query LIVE inventory from BuildingInventory
+            var inventoryItems = await _context.BuildingInventory
+                .Include(i => i.Building)
+                .Where(i => buildingIds.Contains(i.BuildingId))
+                .OrderBy(i => i.Building!.Code)
+                .ThenBy(i => i.ItemCode)
+                .ToListAsync();
+
+            // Arrange items in a grid layout for 3D visualization
+            int gridColumns = 20;
+            int itemIndex = 0;
+
+            var boxes = inventoryItems.Select(item => {
+                int col = itemIndex % gridColumns;
+                int row = (itemIndex / gridColumns) % 15;
+                int level = (itemIndex / (gridColumns * 15)) + 1;
+                level = Math.Min(level, 3);
+                itemIndex++;
+
+                string status;
+                var qty = item.QuantityOnHand;
+                var available = item.QuantityAvailable;
+                var reorder = item.ReorderLevel ?? 10;
+                
+                if (qty <= 0) status = "Empty";
+                else if (available <= 0) status = "Blocked";
+                else if (qty <= reorder) status = "LowStock";
+                else status = "Active";
+
+                return new Warehouse3DBoxDto
+                {
+                    Id = $"INV-{item.Id:D4}",
+                    Label = item.ItemDescription ?? item.ItemCode,
+                    PositionX = col,
+                    PositionY = row,
+                    StackLevel = level,
+                    Status = status,
+                    Quantity = (int)item.QuantityOnHand,
+                    Sku = item.ItemCode,
+                    CommodityName = item.ItemDescription ?? "",
+                    BinLocation = item.Building?.Code ?? item.BinLocation ?? ""
+                };
+            }).ToList();
+
+            return Ok(new Warehouse3DViewDto
+            {
+                WarehouseId = warehouseId,
+                WarehouseName = warehouse.Name,
+                Boxes = boxes,
+                Config = new Warehouse3DConfigDto
+                {
+                    GridColumns = gridColumns,
+                    GridRows = Math.Max(10, (boxes.Count / gridColumns) + 1),
+                    BoxWidth = 1,
+                    BoxDepth = 1,
+                    BoxHeight = 1,
+                    GridSpacing = 0.2m
+                }
+            });
+        }
+
+        // GET: api/warehouses/{warehouseId}/buildings
+        // Returns all buildings for a warehouse with LIVE inventory counts
+        [HttpGet("{warehouseId}/buildings")]
+        public async Task<ActionResult<IEnumerable<WarehouseBuildingDto>>> GetWarehouseBuildings(int warehouseId)
+        {
+            var warehouse = await _context.Warehouses.FindAsync(warehouseId);
+            if (warehouse == null)
+                return NotFound($"Warehouse with ID {warehouseId} not found");
+
+            var buildings = await _context.WarehouseBuildings
+                .Where(b => b.WarehouseId == warehouseId && b.IsActive)
+                .Select(b => new WarehouseBuildingDto
+                {
+                    Id = b.Id,
+                    WarehouseId = b.WarehouseId,
+                    Code = b.Code,
+                    Name = b.Name,
+                    Address = b.Address,
+                    ManagerName = b.ManagerName,
+                    PhoneNumber = b.PhoneNumber,
+                    TotalCapacity = b.TotalCapacity,
+                    AvailableCapacity = b.AvailableCapacity,
+                    ItemCount = _context.BuildingInventory.Count(i => i.BuildingId == b.Id)
+                })
+                .ToListAsync();
+
+            return Ok(buildings);
+        }
+
+        // GET: api/warehouses/buildings/{buildingId}/3dview
+        // Returns 3D view for a specific building using LIVE inventory
+        [HttpGet("buildings/{buildingId}/3dview")]
+        public async Task<ActionResult<Warehouse3DViewDto>> GetBuilding3DView(int buildingId)
+        {
+            var building = await _context.WarehouseBuildings
+                .Include(b => b.Warehouse)
+                .FirstOrDefaultAsync(b => b.Id == buildingId);
+
+            if (building == null)
+                return NotFound($"Building with ID {buildingId} not found");
+
+            // Query LIVE inventory for this specific building
+            var inventoryItems = await _context.BuildingInventory
+                .Where(i => i.BuildingId == buildingId)
+                .OrderBy(i => i.ItemCode)
+                .ToListAsync();
+
+            int gridColumns = 20;
+            int itemIndex = 0;
+
+            var boxes = inventoryItems.Select(item => {
+                int col = itemIndex % gridColumns;
+                int row = (itemIndex / gridColumns) % 15;
+                int level = (itemIndex / (gridColumns * 15)) + 1;
+                level = Math.Min(level, 3);
+                itemIndex++;
+
+                string status;
+                var qty = item.QuantityOnHand;
+                var available = item.QuantityAvailable;
+                var reorder = item.ReorderLevel ?? 10;
+                
+                if (qty <= 0) status = "Empty";
+                else if (available <= 0) status = "Blocked";
+                else if (qty <= reorder) status = "LowStock";
+                else status = "Active";
+
+                return new Warehouse3DBoxDto
+                {
+                    Id = $"INV-{item.Id:D4}",
+                    Label = item.ItemDescription ?? item.ItemCode,
+                    PositionX = col,
+                    PositionY = row,
+                    StackLevel = level,
+                    Status = status,
+                    Quantity = (int)item.QuantityOnHand,
+                    Sku = item.ItemCode,
+                    CommodityName = item.ItemDescription ?? "",
+                    BinLocation = item.BinLocation ?? building.Code
+                };
+            }).ToList();
+
+            return Ok(new Warehouse3DViewDto
+            {
+                WarehouseId = building.WarehouseId,
+                WarehouseName = $"{building.Warehouse?.Name} - {building.Name}",
+                Boxes = boxes,
+                Config = new Warehouse3DConfigDto
+                {
+                    GridColumns = gridColumns,
+                    GridRows = Math.Max(10, (boxes.Count / gridColumns) + 1),
+                    BoxWidth = 1,
+                    BoxDepth = 1,
+                    BoxHeight = 1,
+                    GridSpacing = 0.2m
+                }
             });
         }
     }
 }
+
