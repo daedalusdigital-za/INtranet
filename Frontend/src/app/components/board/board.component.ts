@@ -1181,7 +1181,6 @@ export class BoardComponent implements OnInit, OnDestroy {
 
   addCard(listId: number): void {
     // This would open a dialog to add a new card
-    console.log('Add card to list:', listId);
   }
 
   // Board Members methods

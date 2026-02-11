@@ -188,7 +188,6 @@ export class RequestDialogComponent {
   ) {}
 
   selectCategory(category: RequestCategory): void {
-    console.log('Selected category:', category.name);
     this.dialogRef.close();
     
     switch (category.type) {

@@ -1221,7 +1221,6 @@ export class ActiveCallsComponent implements OnInit, OnDestroy {
   // Sorting
   sortData(sort: Sort): void {
     // Implement sorting logic if needed
-    console.log('Sort:', sort);
   }
 
   // Helper methods
@@ -1274,7 +1273,6 @@ export class ActiveCallsComponent implements OnInit, OnDestroy {
 
   viewDetails(record: CdrRecord): void {
     // Could open a dialog with full details
-    console.log('View details:', record);
     this.snackBar.open(`Call ID: ${record.callId}`, 'Close', { duration: 3000 });
   }
 }

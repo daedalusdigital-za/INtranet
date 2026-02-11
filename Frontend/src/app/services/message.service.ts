@@ -305,7 +305,6 @@ export class MessageService {
 
     try {
       await this.hubConnection.start();
-      console.log('SignalR Connected');
       this.isConnected = true;
       
       // Register user
@@ -322,7 +321,6 @@ export class MessageService {
 
     // Handle reconnection
     this.hubConnection.onreconnected(() => {
-      console.log('SignalR Reconnected');
       this.isConnected = true;
       if (this.currentUserId) {
         this.hubConnection?.invoke('RegisterUser', this.currentUserId);
@@ -330,12 +328,10 @@ export class MessageService {
     });
 
     this.hubConnection.onreconnecting(() => {
-      console.log('SignalR Reconnecting...');
       this.isConnected = false;
     });
 
     this.hubConnection.onclose(() => {
-      console.log('SignalR Disconnected');
       this.isConnected = false;
       // Attempt to reconnect
       setTimeout(() => {
@@ -351,7 +347,6 @@ export class MessageService {
 
     // Receive new message
     this.hubConnection.on('ReceiveMessage', (message: Message) => {
-      console.log('Received message via SignalR:', message);
       this.newMessageSubject.next(message);
       
       // Show notification if message is from someone else
@@ -366,37 +361,31 @@ export class MessageService {
 
     // ToDo notification
     this.hubConnection.on('TodoNotification', (notification: any) => {
-      console.log('Received ToDo notification via SignalR:', notification);
       this.notificationService.showTodoNotification(notification);
     });
 
     // Message edited
     this.hubConnection.on('MessageEdited', (conversationId: number, messageId: number, newContent: string) => {
-      console.log('Message edited:', conversationId, messageId);
       this.messageEditedSubject.next({ conversationId, messageId, content: newContent });
     });
 
     // Message deleted
     this.hubConnection.on('MessageDeleted', (conversationId: number, messageId: number) => {
-      console.log('Message deleted:', conversationId, messageId);
       this.messageDeletedSubject.next({ conversationId, messageId });
     });
 
     // Conversation updated
     this.hubConnection.on('ConversationUpdated', (conversation: Conversation) => {
-      console.log('Conversation updated:', conversation);
       this.conversationUpdatedSubject.next(conversation);
     });
 
     // User online status
     this.hubConnection.on('UserOnline', (status: { userId: number; isOnline: boolean }) => {
-      console.log('User online status:', status);
       this.userOnlineSubject.next(status);
     });
 
     // Typing indicator
     this.hubConnection.on('UserTyping', (data: { conversationId: number; userId: number; userName: string; isTyping: boolean }) => {
-      console.log('User typing:', data);
       // Can be used to show "User is typing..." indicator
     });
   }
@@ -407,7 +396,6 @@ export class MessageService {
         await this.hubConnection.stop();
         this.isConnected = false;
         this.currentUserId = null;
-        console.log('SignalR connection stopped');
       } catch (err) {
         console.error('Error stopping SignalR connection:', err);
       }
@@ -418,7 +406,6 @@ export class MessageService {
     if (this.hubConnection && this.isConnected) {
       try {
         await this.hubConnection.invoke('JoinConversation', conversationId);
-        console.log(`Joined conversation ${conversationId}`);
       } catch (err) {
         console.error('Error joining conversation:', err);
       }
@@ -429,7 +416,6 @@ export class MessageService {
     if (this.hubConnection && this.isConnected) {
       try {
         await this.hubConnection.invoke('LeaveConversation', conversationId);
-        console.log(`Left conversation ${conversationId}`);
       } catch (err) {
         console.error('Error leaving conversation:', err);
       }

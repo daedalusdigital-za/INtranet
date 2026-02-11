@@ -1196,7 +1196,6 @@ export class MessagesComponent implements OnInit, OnDestroy {
       
       // Start SignalR connection
       this.messageService.startConnection(this.currentUserId).then(() => {
-        console.log('Connected to messaging hub');
       }).catch(err => {
         console.error('Failed to connect to messaging hub:', err);
         this.snackBar.open('Unable to connect to real-time messaging', 'Close', { duration: 3000 });
@@ -1232,8 +1231,6 @@ export class MessagesComponent implements OnInit, OnDestroy {
     // New message received
     this.signalRSubscriptions.push(
       this.messageService.newMessage$.subscribe(message => {
-        console.log('New message received:', message);
-        
         // Add to messages if in the current conversation
         if (this.selectedConversation?.conversationId === message.conversationId) {
           // Check if message already exists (avoid duplicates)

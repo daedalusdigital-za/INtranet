@@ -2510,7 +2510,6 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
 
   // 3D Planning
   open3DPlanning() {
-    console.log('3D Planning clicked, warehouse:', this.data);
     // Close dialog and navigate to 3D view
     const warehouseId = this.data?.id || 1;
     this.dialogRef.close();

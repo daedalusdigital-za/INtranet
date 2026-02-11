@@ -4183,7 +4183,6 @@ export class LogisticsDashboardComponent implements OnInit {
     this.http.get<any[]>(`${this.apiUrl}/warehouses`).subscribe({
       next: (warehouses) => {
         this.warehouses.set(warehouses);
-        console.log('Loaded warehouses from API:', warehouses.length);
       },
       error: () => {
         // Use fallback data with all 4 warehouses
@@ -4193,7 +4192,6 @@ export class LogisticsDashboardComponent implements OnInit {
           { id: 3, name: 'Cape Town Warehouse', code: 'CPT', city: 'Cape Town', latitude: -33.9249, longitude: 18.4241, address: 'Cape Town, Western Cape' },
           { id: 4, name: 'PE Warehouse', code: 'PE', city: 'Gqeberha', latitude: -33.9608, longitude: 25.6022, address: 'Gqeberha, Eastern Cape' }
         ]);
-        console.log('Using fallback warehouses: 4');
       }
     });
   }
@@ -4546,7 +4544,6 @@ export class LogisticsDashboardComponent implements OnInit {
 
   viewMaintenanceHistory(record: MaintenanceRecord): void {
     // Could open a dialog showing maintenance history for this vehicle
-    console.log('View history for vehicle:', record.vehicleReg);
   }
 
   viewMaintenanceDetails(record: MaintenanceRecord): void {
@@ -4699,7 +4696,6 @@ Notes: ${record.notes || 'No notes'}
       next: (result) => {
         this.tfnSyncing.set(false);
         this.loadVehiclesFromDatabase();
-        console.log('TFN sync completed:', result);
       },
       error: (err) => {
         this.tfnSyncing.set(false);
@@ -4715,7 +4711,6 @@ Notes: ${record.notes || 'No notes'}
       next: (result) => {
         this.carTrackSyncing.set(false);
         this.loadVehiclesFromDatabase();
-        console.log('CarTrack sync completed:', result);
       },
       error: (err) => {
         this.carTrackSyncing.set(false);
@@ -4903,7 +4898,6 @@ Notes: ${record.notes || 'No notes'}
   }
 
   trackLoad(load: ActiveLoad): void {
-    console.log('Track load', load);
   }
 
   updateLoadStatus(load: ActiveLoad): void {
@@ -4970,7 +4964,6 @@ Notes: ${record.notes || 'No notes'}
   }
 
   addVehicle(): void {
-    console.log('Add vehicle');
     this.openVehicleDialog();
   }
 
@@ -5031,17 +5024,14 @@ Notes: ${record.notes || 'No notes'}
   }
 
   viewVehicleDetails(vehicle: Vehicle): void {
-    console.log('View vehicle details', vehicle);
     this.openVehicleDialog(vehicle, 'view');
   }
 
   editVehicle(vehicle: Vehicle): void {
-    console.log('Edit vehicle', vehicle);
     this.openVehicleDialog(vehicle, 'edit');
   }
 
   assignDriver(vehicle: Vehicle): void {
-    console.log('Assign driver', vehicle);
     this.openAssignDriverDialog(vehicle);
   }
 
@@ -5079,7 +5069,6 @@ Notes: ${record.notes || 'No notes'}
   }
 
   linkCarTrack(vehicle: Vehicle): void {
-    console.log('Link CarTrack', vehicle);
     this.openLinkDialog(vehicle, 'cartrack');
   }
 
@@ -5095,7 +5084,6 @@ Notes: ${record.notes || 'No notes'}
   }
 
   linkTfn(vehicle: Vehicle): void {
-    console.log('Link TFN', vehicle);
     this.openLinkDialog(vehicle, 'tfn');
   }
 
@@ -5111,12 +5099,10 @@ Notes: ${record.notes || 'No notes'}
   }
 
   viewFuelHistory(vehicle: Vehicle): void {
-    console.log('View fuel history', vehicle);
     // TODO: Open fuel history dialog
   }
 
   viewVehicleMaintenanceHistory(vehicle: Vehicle): void {
-    console.log('View vehicle maintenance history', vehicle);
     // TODO: Open maintenance history dialog for vehicle
   }
 
@@ -5172,7 +5158,6 @@ Notes: ${record.notes || 'No notes'}
   }
 
   trackVehicle(vehicle: Vehicle): void {
-    console.log('Track vehicle', vehicle);
     this.openSingleVehicleMap(vehicle);
   }
 
@@ -5326,9 +5311,6 @@ Notes: ${record.notes || 'No notes'}
     // Request all invoices by passing a large pageSize
     this.http.get<ImportedInvoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=10000`).subscribe({
       next: (invoices) => {
-        console.log('=== INVOICE LOADING DEBUG ===');
-        console.log('Total invoices loaded:', invoices.length);
-        
         // Count by status (exact case)
         const statusBreakdown = invoices.reduce((acc: any, inv) => {
           const status = inv.status || 'Unknown';
@@ -5336,24 +5318,14 @@ Notes: ${record.notes || 'No notes'}
           return acc;
         }, {});
         
-        console.log('Status breakdown (exact):', statusBreakdown);
-        
         // Check for loadId to see how many are actually linked
         const linkedCount = invoices.filter(i => i.loadId !== null && i.loadId !== undefined).length;
-        console.log('Invoices with LoadId set:', linkedCount);
-        console.log('Invoices without LoadId:', invoices.length - linkedCount);
-        
         // Sample invoices with different statuses
         const assigned = invoices.filter(i => i.status?.toLowerCase() === 'assigned');
         const delivered = invoices.filter(i => i.status?.toLowerCase() === 'delivered');
         const inProgress = invoices.filter(i => i.status?.toLowerCase() === 'inprogress' || i.status?.toLowerCase() === 'in progress');
         
-        console.log('Assigned invoices (case-insensitive):', assigned.length);
-        console.log('Delivered invoices (case-insensitive):', delivered.length);
-        console.log('InProgress invoices (case-insensitive):', inProgress.length);
-        
         if (assigned.length > 0) {
-          console.log('Sample assigned invoice:', assigned[0]);
         }
         
         this.importedInvoices.set(invoices);
@@ -5520,8 +5492,6 @@ Notes: ${record.notes || 'No notes'}
 
     this.http.get<any>(`${environment.apiUrl}/logistics/loads/${loadId}`).subscribe({
       next: (loadDetails) => {
-        console.log('Load details fetched:', loadDetails);
-        
         // Check if we have warehouse and stops
         if (!loadDetails.warehouse && !loadDetails.warehouseId) {
           this.snackBar.open('Load does not have warehouse information', 'Close', { duration: 3000 });
@@ -6040,7 +6010,6 @@ Notes: ${record.notes || 'No notes'}
     this.syncingFuel.set(true);
     this.http.post<any>(`${environment.apiUrl}/logistics/tfn/sync`, {}).subscribe({
       next: (result) => {
-        console.log('Fuel sync result:', result);
         this.syncingFuel.set(false);
         // Reload fuel summary after sync
         this.loadFuelSummary();
@@ -13037,7 +13006,6 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
           this.drawAllRoutes();
           this.calculateNearestDepots();
         } else {
-          console.log('No routes with coordinates found');
         }
       },
       error: (err) => {
@@ -13099,7 +13067,6 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
           this.drawAllRoutes();
           this.calculateNearestDepots();
         } else {
-          console.log('No active/assigned loads with coordinates found');
         }
       },
       error: (err) => {
@@ -15749,8 +15716,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     });
     
     this.groupedStops = Array.from(groups.values());
-    console.log('Grouped stops:', this.groupedStops.length, 'from', this.selectedStops.length, 'invoices');
-    
     // Load saved addresses for the customers in the grouped stops
     if (this.groupedStops.length > 0) {
       this.loadSavedAddressesForCustomers();
@@ -16318,7 +16283,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     setTimeout(() => this.initializeMap(), 100);
     
     if (!this.map) {
-      console.log('updateRouteMap: Map not initialized yet');
       return;
     }
     
@@ -16332,24 +16296,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     this.stopMarkers.forEach(m => m.setMap(null));
     this.stopMarkers = [];
     
-    console.log('updateRouteMap: Total stops:', this.selectedStops.length);
-    console.log('updateRouteMap: Stops data:', this.selectedStops.map(s => ({ 
-      name: s.customerName, 
-      lat: s.latitude, 
-      lng: s.longitude 
-    })));
-    
     const stopsWithCoords = this.selectedStops.filter(s => s.latitude && s.longitude);
-    console.log('updateRouteMap: Stops with coordinates:', stopsWithCoords.length);
-    
     // Always show warehouse marker even if no stops
     const bounds = new google.maps.LatLngBounds();
     
     // Add warehouse as start point
     const startLat = this.selectedWarehouse?.latitude || -25.6963;
     const startLng = this.selectedWarehouse?.longitude || 28.7023;
-    console.log('updateRouteMap: Warehouse position:', { lat: startLat, lng: startLng });
-    
     const origin = { lat: startLat, lng: startLng };
     bounds.extend(origin);
     
@@ -16371,7 +16324,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     
     // If no stops with coordinates, just show warehouse and return
     if (stopsWithCoords.length === 0) {
-      console.log('updateRouteMap: No stops with coordinates, showing only warehouse');
       this.map.setCenter({ lat: startLat, lng: startLng });
       this.map.setZoom(10);
       return;
@@ -16380,7 +16332,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     // Add stop markers
     stopsWithCoords.forEach((stop, index) => {
       const pos = { lat: stop.latitude, lng: stop.longitude };
-      console.log(`updateRouteMap: Adding stop ${index + 1}:`, stop.customerName, pos);
       bounds.extend(pos);
       
       const marker = new google.maps.Marker({
@@ -16438,7 +16389,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       optimizeWaypoints: false // Keep user's order
     }).then((result: any) => {
       this.directionsRenderer?.setDirections(result);
-      console.log('Directions API: Route drawn successfully');
     }).catch((error: any) => {
       console.warn('Directions API failed:', error, '- falling back to straight lines');
       // Fallback to straight line polyline if Directions API fails
@@ -16469,7 +16419,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   // Handle stop address change - NOT USED with autocomplete
   onStopAddressChanged(stop: any): void {
-    console.log('Stop address changed:', stop.customerName, '->', stop.deliveryAddress);
   }
 
   // Google Places Autocomplete - Input handler
@@ -16591,14 +16540,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     this.geocodingStop = group;
     const address = group.deliveryAddress;
-    
-    console.log('Geocoding group address:', address);
-    
     this.http.get<any>(`${this.data.apiUrl}/logistics/googlemaps/geocode`, {
       params: { address }
     }).subscribe({
       next: (result) => {
-        console.log('Geocode result:', result);
         if (result.latitude && result.longitude) {
           group.latitude = result.latitude;
           group.longitude = result.longitude;
@@ -16628,7 +16573,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           });
           
           this.updateRouteMap();
-          console.log('Group geocoded:', group.customerName, group.latitude, group.longitude);
         } else {
           console.warn('No coordinates in geocode result');
         }
@@ -16649,21 +16593,16 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     this.geocodingStop = stop;
     const address = stop.deliveryAddress + ', South Africa';
-    
-    console.log('Geocoding address:', address);
-    
     this.http.get<any>(`${this.data.apiUrl}/logistics/googlemaps/geocode`, {
       params: { address }
     }).subscribe({
       next: (result) => {
-        console.log('Geocode result:', result);
         if (result.latitude && result.longitude) {
           stop.latitude = result.latitude;
           stop.longitude = result.longitude;
           stop.city = result.city;
           stop.province = result.province;
           this.updateRouteMap();
-          console.log('Stop geocoded:', stop.customerName, stop.latitude, stop.longitude);
         } else {
           console.warn('No coordinates in geocode result');
         }
@@ -16681,13 +16620,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const groupsToGeocode = this.groupedStops.filter(g => !g.latitude && g.deliveryAddress);
     
     if (groupsToGeocode.length === 0) {
-      console.log('No groups to geocode');
       return;
     }
 
     this.geocodingAllStops = true;
-    console.log(`Geocoding ${groupsToGeocode.length} groups...`);
-
     for (const group of groupsToGeocode) {
       try {
         const address = group.deliveryAddress;
@@ -16712,8 +16648,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
               stop.longitude = result.longitude;
             }
           });
-          
-          console.log('Geocoded group:', group.customerName);
         }
       } catch (err) {
         console.error('Failed to geocode group:', group.customerName, err);
@@ -16722,7 +16656,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     this.geocodingAllStops = false;
     this.updateRouteMap();
-    console.log('All group geocoding complete');
   }
 
   // Use AI to match customer names to addresses
@@ -16736,8 +16669,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     }
 
     this.matchingAddresses = true;
-    console.log(`AI matching ${groupsToMatch.length} customer names...`);
-
     try {
       // Collect customer names to match
       const customerNames = groupsToMatch.map(g => g.customerName).filter(n => n);
@@ -16759,9 +16690,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         this.matchingAddresses = false;
         return;
       }
-
-      console.log('AI match results:', results);
-
       // Apply the matches to grouped stops
       let matchCount = 0;
       for (const result of results) {
@@ -16804,7 +16732,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           }
           
           matchCount++;
-          console.log(`Matched: ${group.customerName} -> ${result.deliveryAddress} (${result.source})`);
         }
       }
 
@@ -16857,7 +16784,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     });
 
     if (customerIds.size === 0) {
-      console.log('No customer IDs found to load saved addresses');
       return;
     }
 
@@ -16868,7 +16794,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       params: { customerIds: idsArray.join(',') }
     }).subscribe({
       next: (result) => {
-        console.log('Loaded saved addresses:', result);
         // Map the results by customer code/name for easy lookup
         this.customerSavedAddresses.clear();
         
@@ -16887,7 +16812,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         });
         
         this.loadingSavedAddresses = false;
-        console.log('Saved addresses mapped:', this.customerSavedAddresses.size, 'customers');
       },
       error: (err) => {
         console.error('Failed to load saved addresses:', err);
@@ -16931,7 +16855,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     // Record usage of this address
     this.http.post(`${this.data.apiUrl}/logistics/customers/delivery-addresses/${savedAddress.id}/use`, {}).subscribe({
-      next: () => console.log('Recorded address usage'),
+      next: () => {},
       error: (err) => console.error('Failed to record address usage:', err)
     });
 
@@ -16946,8 +16870,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       'OK',
       { duration: 2000, panelClass: ['info-snackbar'] }
     );
-
-    console.log('Applied saved address to group:', group.customerName, group.deliveryAddress);
   }
 
   // Save the current address for a customer
@@ -16978,8 +16900,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     this.http.post<any>(`${this.data.apiUrl}/logistics/customers/delivery-addresses/save`, payload).subscribe({
       next: (result) => {
-        console.log('Saved delivery address:', result);
-        
         // Add to local cache
         const key = group.customerNumber || group.customerName;
         const existing = this.customerSavedAddresses.get(key) || [];
@@ -17038,7 +16958,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     });
 
     if (addressesToSave.length === 0) {
-      console.log('No addresses to save');
       return;
     }
 
@@ -17048,8 +16967,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       next: (result) => {
         const savedCount = result.saved?.length || 0;
         const errorCount = result.errors?.length || 0;
-        console.log('Batch saved addresses:', savedCount, 'saved,', errorCount, 'errors');
-        
         if (savedCount > 0) {
           this.snackBar.open(
             `✓ ${savedCount} address${savedCount > 1 ? 'es' : ''} saved for future use`,
@@ -17069,10 +16986,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   // Refresh map
   refreshMap(): void {
-    console.log('Refreshing map...');
-    console.log('Selected stops:', this.selectedStops);
-    console.log('Stops with coords:', this.selectedStops.filter(s => s.latitude && s.longitude));
-    
     if (this.mapInitialized) {
       this.updateRouteMap();
     } else {
@@ -17082,7 +16995,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   // When warehouse is selected, update the map
   onWarehouseSelected(): void {
-    console.log('Warehouse selected:', this.selectedWarehouse);
     if (this.mapInitialized) {
       this.updateRouteMap();
     }
@@ -17187,14 +17099,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     // Get the warehouse province code
     const warehouseProvinceCode = this.getProvinceCode(this.selectedWarehouse?.province || '');
-    console.log('Warehouse province:', this.selectedWarehouse?.province, '-> Code:', warehouseProvinceCode);
-
     // Filter depots by province if warehouse has a province
     const depotsToShow = warehouseProvinceCode 
       ? this.tfnDepots.filter(d => d.province === warehouseProvinceCode)
       : this.tfnDepots;
-
-    console.log('Showing depots:', depotsToShow.map(d => d.name).join(', '));
 
     // Add depot markers
     depotsToShow.forEach(depot => {
@@ -17315,8 +17223,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         .filter(id => !isNaN(id))
     };
     
-    console.log('Creating tripsheet with payload:', JSON.stringify(payload, null, 2));
-    
     // Determine if this is an update or create
     const isUpdate = this.data.isEditMode && this.data.editLoadId;
     const apiUrl = isUpdate 
@@ -17327,7 +17233,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     httpMethod(apiUrl, payload).subscribe({
       next: (result: any) => {
         const loadId = isUpdate ? this.data.editLoadId : result.id;
-        console.log('Tripsheet created successfully:', result);
         // Download the PDF
         this.http.get(`${environment.apiUrl}/logistics/tripsheet/${loadId}/pdf`, { responseType: 'text' }).subscribe({
           next: (html) => {
@@ -21674,10 +21579,6 @@ export class ViewRouteMapDialog implements OnInit {
 
   async initializeMap(): Promise<void> {
     try {
-      console.log('=== Initializing Map ===');
-      console.log('Load data:', this.data.load);
-      console.log('Total stops:', this.data.load.stops?.length);
-      
       // Set warehouse position
       if (this.data.load.warehouse?.latitude && this.data.load.warehouse?.longitude) {
         this.warehousePosition = {
@@ -21685,19 +21586,15 @@ export class ViewRouteMapDialog implements OnInit {
           lng: this.data.load.warehouse.longitude,
         };
         this.mapCenter = this.warehousePosition;
-        console.log('Warehouse position set:', this.warehousePosition);
       }
 
       // Geocode stops
       if (this.data.load.stops && this.data.load.stops.length > 0) {
         const geocoder = new google.maps.Geocoder();
         const sortedStops = [...this.data.load.stops].sort((a, b) => a.stopSequence - b.stopSequence);
-        console.log('Sorted stops for geocoding:', sortedStops.length);
-
         for (const stop of sortedStops) {
           try {
             const address = `${stop.address}, ${stop.city}`;
-            console.log(`Geocoding stop ${stop.stopSequence}: ${address}`);
             const result = await this.geocodeAddress(geocoder, address);
             
             if (result) {
@@ -21707,23 +21604,19 @@ export class ViewRouteMapDialog implements OnInit {
                 label: stop.stopSequence.toString(),
                 title: `Stop ${stop.stopSequence}: ${stop.companyName}`,
               });
-              console.log(`Successfully geocoded stop ${stop.stopSequence}:`, result);
             }
           } catch (error) {
             console.warn(`Failed to geocode stop ${stop.stopSequence}:`, error);
           }
         }
-        console.log('Total geocoded stops:', this.geocodedStops.length);
       }
 
       // Get actual road route using Directions API
       if (this.warehousePosition && this.geocodedStops.length > 0) {
-        console.log('Calculating route with', this.geocodedStops.length, 'stops');
         await this.calculateRoute();
       } else if (this.warehousePosition) {
         // Only warehouse, no stops
         this.routePath.push(this.warehousePosition);
-        console.log('Only warehouse, no route calculated');
       }
 
       // Adjust map bounds to fit all markers
@@ -21738,11 +21631,9 @@ export class ViewRouteMapDialog implements OnInit {
         } else {
           this.mapZoom = 8;
         }
-        console.log('Route path points:', this.routePath.length, 'Map center:', this.mapCenter, 'Zoom:', this.mapZoom);
       }
 
       this.isLoadingMap = false;
-      console.log('=== Map Initialization Complete ===');
     } catch (error) {
       console.error('Error initializing map:', error);
       this.geocodingError = 'Failed to load map. Please try again.';
@@ -21752,14 +21643,8 @@ export class ViewRouteMapDialog implements OnInit {
 
   private async calculateRoute(): Promise<void> {
     if (!this.warehousePosition || this.geocodedStops.length === 0) {
-      console.log('Cannot calculate route: missing warehouse or stops');
       return;
     }
-
-    console.log('=== Calculating Directions Route ===');
-    console.log('Origin (warehouse):', this.warehousePosition);
-    console.log('Destination (last stop):', this.geocodedStops[this.geocodedStops.length - 1]);
-    console.log('Waypoints (intermediate stops):', this.geocodedStops.length - 1);
 
     const directionsService = new google.maps.DirectionsService();
 
@@ -21767,7 +21652,6 @@ export class ViewRouteMapDialog implements OnInit {
     const waypoints: google.maps.DirectionsWaypoint[] = this.geocodedStops
       .slice(0, -1)
       .map((stop, index) => {
-        console.log(`Waypoint ${index + 1}:`, stop.title, stop.position);
         return {
           location: stop.position,
           stopover: true
@@ -21781,17 +21665,9 @@ export class ViewRouteMapDialog implements OnInit {
       optimizeWaypoints: false, // Keep original sequence
       travelMode: google.maps.TravelMode.DRIVING,
     };
-
-    console.log('Directions request:', {
-      origin: this.warehousePosition,
-      destination: this.geocodedStops[this.geocodedStops.length - 1].position,
-      waypointCount: waypoints.length
-    });
-
     try {
       const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
         directionsService.route(request, (result, status) => {
-          console.log('Directions API response status:', status);
           if (status === 'OK' && result) {
             resolve(result);
           } else {
@@ -21803,10 +21679,7 @@ export class ViewRouteMapDialog implements OnInit {
       // Extract route path from directions result
       this.routePath = [];
       const route = result.routes[0];
-      console.log('Route legs:', route.legs.length);
-      
       route.legs.forEach((leg, legIndex) => {
-        console.log(`Leg ${legIndex}: ${leg.start_address} → ${leg.end_address}`);
         leg.steps.forEach(step => {
           const path = step.path;
           path.forEach(point => {
@@ -21814,14 +21687,10 @@ export class ViewRouteMapDialog implements OnInit {
           });
         });
       });
-
-      console.log('Total route path points:', this.routePath.length);
-
     } catch (error) {
       console.warn('Failed to get directions, falling back to straight lines:', error);
       // Fallback to straight line if directions fail
       this.routePath = [this.warehousePosition, ...this.geocodedStops.map(s => s.position)];
-      console.log('Fallback route points:', this.routePath.length);
     }
   }
 
@@ -22315,8 +22184,6 @@ export class LogisticsReportsDialog {
 
   openReport(reportType: string, data: any): void {
     // Open report data in a new dialog or window
-    console.log('Report Data:', data);
-    
     // For now, download as JSON (in production, this would be a formatted PDF/Excel)
     const dataStr = JSON.stringify(data, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });

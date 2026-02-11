@@ -155,7 +155,6 @@ export class CrmComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    console.log('CRM Component initialized');
   }
 
   logout(): void {

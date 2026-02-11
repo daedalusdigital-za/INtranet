@@ -108,7 +108,6 @@ export class CollaborativeDocsService {
     try {
       await this.hubConnection.start();
       this.connectionStateSubject.next('Connected');
-      console.log('CollaborativeDocs SignalR Connected');
     } catch (error) {
       console.error('CollaborativeDocs SignalR Connection Error:', error);
       this.connectionStateSubject.next('Disconnected');
@@ -121,17 +120,14 @@ export class CollaborativeDocsService {
 
     this.hubConnection.onreconnecting(() => {
       this.connectionStateSubject.next('Reconnecting');
-      console.log('CollaborativeDocs SignalR Reconnecting...');
     });
 
     this.hubConnection.onreconnected(() => {
       this.connectionStateSubject.next('Connected');
-      console.log('CollaborativeDocs SignalR Reconnected');
     });
 
     this.hubConnection.onclose(() => {
       this.connectionStateSubject.next('Disconnected');
-      console.log('CollaborativeDocs SignalR Disconnected');
     });
 
     // Document updates

@@ -257,7 +257,6 @@ export class NotificationService {
       this.audio.currentTime = 0;
       this.audio.volume = 0.5; // Set reasonable volume
       this.audio.play().catch(err => {
-        console.log('Could not play notification sound:', err);
       });
     }
   }

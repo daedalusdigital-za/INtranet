@@ -843,7 +843,6 @@ export class NavbarComponent implements OnInit, OnDestroy {
     }).afterClosed().subscribe(result => {
       if (result) {
         // Announcement created successfully
-        console.log('Announcement created:', result);
       }
     });
   }

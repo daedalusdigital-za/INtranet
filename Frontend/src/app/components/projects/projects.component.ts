@@ -1837,7 +1837,6 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   openConversation(conv: any): void {
     this.showMessages = false;
     // TODO: Navigate to full messages view or open chat dialog
-    console.log('Opening conversation:', conv.conversationId);
   }
 
   openNewMessageDialog(): void {

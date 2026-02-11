@@ -766,7 +766,6 @@ export class DriversDialogComponent implements OnInit {
       next: (data) => {
         this.drivers = data;
         this.isLoading = false;
-        console.log('Drivers with stats loaded:', data);
       },
       error: (error) => {
         console.error('Error loading drivers:', error);

@@ -984,8 +984,6 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
           
           // Save to backend
           this.saveBoxPosition(box, newX, newY);
-          
-          console.log(`Box ${box.id} moved from (${oldPosition.x}, ${oldPosition.y}) to (${newX}, ${newY})`);
         }
       }
       
@@ -1011,7 +1009,6 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
   private saveBoxPosition(box: WarehouseBox3D, newX: number, newY: number): void {
     this.warehouse3DService.updateBoxPosition(box.id, newX, newY).subscribe({
       next: () => {
-        console.log(`Position saved for box ${box.id}`);
       },
       error: (err) => {
         console.error('Failed to save position:', err);
@@ -1054,8 +1051,6 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private selectBox(box: WarehouseBox3D, instanceId: number): void {
     this.selectedBox.set(box);
-    console.log('Selected box:', box);
-
     // Remove previous highlight
     if (this.highlightMesh) {
       this.scene.remove(this.highlightMesh);

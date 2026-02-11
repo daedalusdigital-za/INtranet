@@ -1871,7 +1871,6 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       const result = await mammoth.convertToHtml({ arrayBuffer });
       
       if (result.messages.length > 0) {
-        console.log('Mammoth conversion messages:', result.messages);
       }
 
       // Insert the HTML content into the editor
