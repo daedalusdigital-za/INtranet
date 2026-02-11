@@ -13,6 +13,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
@@ -66,6 +67,7 @@ interface WarehouseInventory {
     MatSnackBarModule,
     MatMenuModule,
     MatTooltipModule,
+    MatProgressBarModule,
     NavbarComponent,
     MatListModule
   ],
@@ -223,9 +225,12 @@ interface WarehouseInventory {
                     <span class="capacity-title">Warehouse Capacity</span>
                     <span class="capacity-percentage">{{ warehouse.capacityPercent }}%</span>
                   </div>
-                  <div class="capacity-bar-modern">
-                    <div class="capacity-fill-modern" [style.width.%]="warehouse.capacityPercent" [class.high]="warehouse.capacityPercent > 80"></div>
-                  </div>
+                  <mat-progress-bar 
+                    mode="determinate" 
+                    [value]="warehouse.capacityPercent"
+                    [color]="warehouse.capacityPercent > 80 ? 'warn' : 'primary'"
+                    class="warehouse-progress-bar">
+                  </mat-progress-bar>
                   <div class="capacity-info">
                     <span>{{ warehouse.totalCapacity - warehouse.availableCapacity | number }} / {{ warehouse.totalCapacity | number }} m³</span>
                   </div>
@@ -524,26 +529,24 @@ interface WarehouseInventory {
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     }
 
-    .capacity-bar-modern {
+    .warehouse-progress-bar {
       height: 12px;
-      background: rgba(0, 0, 0, 0.2);
       border-radius: 6px;
-      overflow: hidden;
       margin-bottom: 10px;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.2) !important;
     }
 
-    .capacity-fill-modern {
-      height: 100%;
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 6px;
-      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    .warehouse-progress-bar ::ng-deep .mdc-linear-progress__bar-inner {
+      border-top-width: 12px;
     }
 
-    .capacity-fill-modern.high {
-      background: linear-gradient(90deg, #ffeb3b 0%, #ff9800 100%);
-      box-shadow: 0 0 12px rgba(255, 152, 0, 0.8);
+    .warehouse-progress-bar ::ng-deep .mdc-linear-progress__buffer-bar {
+      background-color: rgba(0, 0, 0, 0.2) !important;
+    }
+
+    .warehouse-progress-bar ::ng-deep .mdc-linear-progress__bar {
+      animation: none;
     }
 
     .capacity-info {
