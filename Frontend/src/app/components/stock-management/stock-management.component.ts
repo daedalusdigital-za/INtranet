@@ -19,6 +19,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
+import { MatTabsModule } from '@angular/material/tabs';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
@@ -2832,7 +2833,8 @@ export class WarehouseOperationsDialog {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatTabsModule
   ],
   template: `
     <div class="dialog-header">
@@ -2848,113 +2850,207 @@ export class WarehouseOperationsDialog {
         <span>Process tripsheets from logistics - Generate picking slips and confirm stock availability</span>
       </div>
 
-      @if (loading) {
-        <div class="loading-container">
-          <mat-spinner diameter="40"></mat-spinner>
-          <p>Loading tripsheets...</p>
-        </div>
-      } @else {
-        <div class="tripsheets-section">
-          <div class="section-header">
-            <h3>Pending Tripsheets ({{ tripsheets.length }})</h3>
-            <mat-form-field class="search-field">
-              <mat-label>Search tripsheets</mat-label>
-              <input matInput [(ngModel)]="searchQuery" (input)="filterTripsheets()" placeholder="Tripsheet number, customer...">
-              <mat-icon matSuffix>search</mat-icon>
-            </mat-form-field>
-          </div>
-
-          <div class="tripsheets-list">
-            @for (tripsheet of filteredTripsheets; track tripsheet.id) {
-              <div class="tripsheet-card" [class.expanded]="tripsheet.expanded">
-                <div class="tripsheet-header" (click)="toggleTripsheet(tripsheet)">
-                  <div class="tripsheet-info">
-                    <div class="tripsheet-number">{{ tripsheet.tripsheetNumber }}</div>
-                    <div class="tripsheet-customer">{{ tripsheet.customerName }}</div>
-                    <div class="tripsheet-items">{{ tripsheet.items.length }} items requested</div>
-                  </div>
-                  <div class="tripsheet-details">
-                    <div class="tripsheet-date">{{ tripsheet.deliveryDate }}</div>
-                    <div class="tripsheet-status" [class]="tripsheet.status.toLowerCase()">
-                      {{ tripsheet.status }}
-                    </div>
-                  </div>
-                  <mat-icon>{{ tripsheet.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+      <mat-tab-group class="tripsheet-tabs" [(selectedIndex)]="selectedTabIndex">
+        <mat-tab label="Pending Tripsheets">
+          <ng-template matTabContent>
+            @if (loading) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p>Loading tripsheets...</p>
+              </div>
+            } @else {
+              <div class="tripsheets-section">
+                <div class="section-header">
+                  <h3>Pending Tripsheets ({{ pendingTripsheets.length }})</h3>
+                  <mat-form-field class="search-field">
+                    <mat-label>Search tripsheets</mat-label>
+                    <input matInput [(ngModel)]="searchQuery" (input)="filterTripsheets()" placeholder="Tripsheet number, customer...">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
                 </div>
 
-                @if (tripsheet.expanded) {
-                  <div class="tripsheet-body">
-                    <div class="items-table">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Item</th>
-                            <th>Requested</th>
-                            <th>Available</th>
-                            <th>To Pick</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          @for (item of tripsheet.items; track item.id) {
-                            <tr [class.shortage]="item.available < item.requested">
-                              <td>{{ item.name }}</td>
-                              <td>{{ item.requested }}</td>
-                              <td>{{ item.available }}</td>
-                              <td>
-                                <input type="number" 
-                                       [(ngModel)]="item.toPick" 
-                                       [max]="item.available" 
-                                       min="0"
-                                       class="pick-input"
-                                       (change)="updatePickingStatus(tripsheet)">
-                              </td>
-                              <td>
-                                @if (item.toPick >= item.requested) {
-                                  <span class="status-badge fulfilled">✓ Fulfilled</span>
-                                } @else if (item.toPick > 0) {
-                                  <span class="status-badge partial">⚠ Partial</span>
-                                } @else {
-                                  <span class="status-badge unavailable">✗ Unavailable</span>
-                                }
-                              </td>
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
-                    </div>
+                <div class="tripsheets-list">
+                  @for (tripsheet of filteredPendingTripsheets; track tripsheet.id) {
+                    <div class="tripsheet-card" [class.expanded]="tripsheet.expanded">
+                      <div class="tripsheet-header" (click)="toggleTripsheet(tripsheet)">
+                        <div class="tripsheet-info">
+                          <div class="tripsheet-number">{{ tripsheet.tripsheetNumber }}</div>
+                          <div class="tripsheet-customer">{{ tripsheet.customerName }}</div>
+                          <div class="tripsheet-items">{{ tripsheet.items.length }} items requested</div>
+                        </div>
+                        <div class="tripsheet-details">
+                          <div class="tripsheet-date">{{ tripsheet.deliveryDate }}</div>
+                          <div class="tripsheet-status" [class]="tripsheet.status.toLowerCase()">
+                            {{ tripsheet.status }}
+                          </div>
+                        </div>
+                        <mat-icon>{{ tripsheet.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+                      </div>
 
-                    <div class="tripsheet-actions">
-                      <button mat-raised-button color="accent" (click)="generatePickingSlip(tripsheet)">
-                        <mat-icon>list_alt</mat-icon>
-                        Generate Picking Slip
-                      </button>
-                      
-                      @if (tripsheet.canFulfill) {
-                        <button mat-raised-button color="primary" (click)="generateDispatchSlip(tripsheet)">
-                          <mat-icon>local_shipping</mat-icon>
-                          Generate Dispatch Slip
-                        </button>
-                      } @else {
-                        <button mat-raised-button color="warn" (click)="markPartialFulfillment(tripsheet)">
-                          <mat-icon>report_problem</mat-icon>
-                          Mark Partial/Unfulfilled
-                        </button>
+                      @if (tripsheet.expanded) {
+                        <div class="tripsheet-body">
+                          <div class="items-table">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Item</th>
+                                  <th>Requested</th>
+                                  <th>Available</th>
+                                  <th>To Pick</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (item of tripsheet.items; track item.id) {
+                                  <tr [class.shortage]="item.available < item.requested">
+                                    <td>{{ item.name }}</td>
+                                    <td>{{ item.requested }}</td>
+                                    <td>{{ item.available }}</td>
+                                    <td>
+                                      <input type="number" 
+                                             [(ngModel)]="item.toPick" 
+                                             [max]="item.available" 
+                                             min="0"
+                                             class="pick-input"
+                                             (change)="updatePickingStatus(tripsheet)">
+                                    </td>
+                                    <td>
+                                      @if (item.toPick >= item.requested) {
+                                        <span class="status-badge fulfilled">✓ Fulfilled</span>
+                                      } @else if (item.toPick > 0) {
+                                        <span class="status-badge partial">⚠ Partial</span>
+                                      } @else {
+                                        <span class="status-badge unavailable">✗ Unavailable</span>
+                                      }
+                                    </td>
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div class="tripsheet-actions">
+                            <button mat-raised-button color="accent" (click)="generatePickingSlip(tripsheet)">
+                              <mat-icon>list_alt</mat-icon>
+                              Generate Picking Slip
+                            </button>
+                            
+                            @if (tripsheet.canFulfill) {
+                              <button mat-raised-button color="primary" (click)="generateDispatchSlip(tripsheet)">
+                                <mat-icon>local_shipping</mat-icon>
+                                Generate Dispatch Slip
+                              </button>
+                            } @else {
+                              <button mat-raised-button color="warn" (click)="markPartialFulfillment(tripsheet)">
+                                <mat-icon>report_problem</mat-icon>
+                                Mark Partial/Unfulfilled
+                              </button>
+                            }
+                          </div>
+                        </div>
                       }
+                    </div>
+                  }
+                  @if (filteredPendingTripsheets.length === 0) {
+                    <div class="empty-state">
+                      <mat-icon>inbox</mat-icon>
+                      <p>No pending tripsheets found</p>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </ng-template>
+        </mat-tab>
+
+        <mat-tab label="Picking Slips">
+          <ng-template matTabContent>
+            <div class="tripsheets-section">
+              <div class="section-header">
+                <h3>Picking Slips ({{ pickingSlips.length }})</h3>
+                <mat-form-field class="search-field">
+                  <mat-label>Search picking slips</mat-label>
+                  <input matInput [(ngModel)]="pickingSearchQuery" (input)="filterPickingSlips()" placeholder="Slip number, customer...">
+                  <mat-icon matSuffix>search</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <div class="tripsheets-list">
+                @for (slip of filteredPickingSlips; track slip.id) {
+                  <div class="tripsheet-card picking-slip-card">
+                    <div class="tripsheet-header">
+                      <div class="tripsheet-info">
+                        <div class="tripsheet-number">{{ slip.slipNumber }}</div>
+                        <div class="tripsheet-customer">{{ slip.customerName }}</div>
+                        <div class="tripsheet-items">{{ slip.items.length }} items to pick</div>
+                      </div>
+                      <div class="tripsheet-details">
+                        <div class="tripsheet-date">{{ slip.generatedDate }}</div>
+                        <div class="tripsheet-status completed">
+                          Generated
+                        </div>
+                      </div>
+                      <button mat-icon-button (click)="printPickingSlip(slip)">
+                        <mat-icon>print</mat-icon>
+                      </button>
                     </div>
                   </div>
                 }
+                @if (filteredPickingSlips.length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>list_alt</mat-icon>
+                    <p>No picking slips generated yet</p>
+                  </div>
+                }
               </div>
-            }
-            @if (filteredTripsheets.length === 0) {
-              <div class="empty-state">
-                <mat-icon>inbox</mat-icon>
-                <p>No pending tripsheets found</p>
+            </div>
+          </ng-template>
+        </mat-tab>
+
+        <mat-tab label="Dispatch Slips">
+          <ng-template matTabContent>
+            <div class="tripsheets-section">
+              <div class="section-header">
+                <h3>Dispatch Slips ({{ dispatchSlips.length }})</h3>
+                <mat-form-field class="search-field">
+                  <mat-label>Search dispatch slips</mat-label>
+                  <input matInput [(ngModel)]="dispatchSearchQuery" (input)="filterDispatchSlips()" placeholder="Slip number, customer...">
+                  <mat-icon matSuffix>search</mat-icon>
+                </mat-form-field>
               </div>
-            }
-          </div>
-        </div>
-      }
+
+              <div class="tripsheets-list">
+                @for (slip of filteredDispatchSlips; track slip.id) {
+                  <div class="tripsheet-card dispatch-slip-card">
+                    <div class="tripsheet-header">
+                      <div class="tripsheet-info">
+                        <div class="tripsheet-number">{{ slip.slipNumber }}</div>
+                        <div class="tripsheet-customer">{{ slip.customerName }}</div>
+                        <div class="tripsheet-items">{{ slip.items.length }} items dispatched</div>
+                      </div>
+                      <div class="tripsheet-details">
+                        <div class="tripsheet-date">{{ slip.dispatchedDate }}</div>
+                        <div class="tripsheet-status completed">
+                          Dispatched
+                        </div>
+                      </div>
+                      <button mat-icon-button (click)="printDispatchSlip(slip)">
+                        <mat-icon>print</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                }
+                @if (filteredDispatchSlips.length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>local_shipping</mat-icon>
+                    <p>No dispatch slips generated yet</p>
+                  </div>
+                }
+              </div>
+            </div>
+          </ng-template>
+        </mat-tab>
+      </mat-tab-group>
     </div>
 
     <div class="dialog-actions">
@@ -2986,6 +3082,34 @@ export class WarehouseOperationsDialog {
       padding: 24px;
       max-height: 75vh;
       overflow-y: auto;
+    }
+
+    .tripsheet-tabs {
+      margin-top: 20px;
+    }
+
+    .tripsheet-tabs ::ng-deep .mat-mdc-tab-labels {
+      background: #f5f5f5;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .tripsheet-tabs ::ng-deep .mat-mdc-tab-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tripsheet-tabs ::ng-deep .mat-mdc-tab-body-wrapper {
+      padding-top: 20px;
+    }
+
+    .picking-slip-card,
+    .dispatch-slip-card {
+      border-left: 4px solid #4caf50;
+    }
+
+    .dispatch-slip-card {
+      border-left-color: #2196f3;
     }
 
     .info-banner {
@@ -3220,9 +3344,24 @@ export class WarehouseOperationsDialog {
 })
 export class DispatchDialog implements OnInit {
   loading = true;
+  selectedTabIndex = 0;
+  
+  // Pending Tripsheets
   searchQuery = '';
   tripsheets: any[] = [];
   filteredTripsheets: any[] = [];
+  pendingTripsheets: any[] = [];
+  filteredPendingTripsheets: any[] = [];
+  
+  // Picking Slips
+  pickingSearchQuery = '';
+  pickingSlips: any[] = [];
+  filteredPickingSlips: any[] = [];
+  
+  // Dispatch Slips
+  dispatchSearchQuery = '';
+  dispatchSlips: any[] = [];
+  filteredDispatchSlips: any[] = [];
 
   constructor(
     public dialogRef: MatDialogRef<DispatchDialog>,
@@ -3233,6 +3372,8 @@ export class DispatchDialog implements OnInit {
 
   ngOnInit(): void {
     this.loadTripsheets();
+    this.loadPickingSlips();
+    this.loadDispatchSlips();
   }
 
   loadTripsheets(): void {
@@ -3254,7 +3395,9 @@ export class DispatchDialog implements OnInit {
             canFulfill: true,
             items: this.mapLoadItems(load)
           }));
+          this.pendingTripsheets = [...this.tripsheets];
           this.filteredTripsheets = [...this.tripsheets];
+          this.filteredPendingTripsheets = [...this.tripsheets];
           this.loading = false;
         },
         error: (error) => {
@@ -3321,10 +3464,81 @@ export class DispatchDialog implements OnInit {
 
   filterTripsheets(): void {
     const query = this.searchQuery.toLowerCase();
-    this.filteredTripsheets = this.tripsheets.filter(ts =>
+    this.filteredPendingTripsheets = this.pendingTripsheets.filter(ts =>
       ts.tripsheetNumber.toLowerCase().includes(query) ||
       ts.customerName.toLowerCase().includes(query)
     );
+  }
+
+  filterPickingSlips(): void {
+    const query = this.pickingSearchQuery.toLowerCase();
+    this.filteredPickingSlips = this.pickingSlips.filter(slip =>
+      slip.slipNumber.toLowerCase().includes(query) ||
+      slip.customerName.toLowerCase().includes(query)
+    );
+  }
+
+  filterDispatchSlips(): void {
+    const query = this.dispatchSearchQuery.toLowerCase();
+    this.filteredDispatchSlips = this.dispatchSlips.filter(slip =>
+      slip.slipNumber.toLowerCase().includes(query) ||
+      slip.customerName.toLowerCase().includes(query)
+    );
+  }
+
+  loadPickingSlips(): void {
+    // TODO: Load picking slips from backend
+    // For now, use mock data
+    this.pickingSlips = [
+      {
+        id: 1,
+        slipNumber: 'PS-2026-001',
+        customerName: 'ABC Manufacturing',
+        generatedDate: '2026-02-10',
+        items: [
+          { name: 'Widget A', quantity: 50 },
+          { name: 'Widget B', quantity: 30 }
+        ]
+      },
+      {
+        id: 2,
+        slipNumber: 'PS-2026-002',
+        customerName: 'XYZ Corp',
+        generatedDate: '2026-02-09',
+        items: [
+          { name: 'Gadget C', quantity: 100 }
+        ]
+      }
+    ];
+    this.filteredPickingSlips = [...this.pickingSlips];
+  }
+
+  loadDispatchSlips(): void {
+    // TODO: Load dispatch slips from backend
+    // For now, use mock data
+    this.dispatchSlips = [
+      {
+        id: 1,
+        slipNumber: 'DS-2026-001',
+        customerName: 'ABC Manufacturing',
+        dispatchedDate: '2026-02-10',
+        items: [
+          { name: 'Widget A', quantity: 50 },
+          { name: 'Widget B', quantity: 30 }
+        ]
+      }
+    ];
+    this.filteredDispatchSlips = [...this.dispatchSlips];
+  }
+
+  printPickingSlip(slip: any): void {
+    this.snackBar.open(`Printing picking slip ${slip.slipNumber}`, 'Close', { duration: 2000 });
+    console.log('Print picking slip:', slip);
+  }
+
+  printDispatchSlip(slip: any): void {
+    this.snackBar.open(`Printing dispatch slip ${slip.slipNumber}`, 'Close', { duration: 2000 });
+    console.log('Print dispatch slip:', slip);
   }
 
   toggleTripsheet(tripsheet: any): void {
@@ -3339,29 +3553,64 @@ export class DispatchDialog implements OnInit {
   }
 
   generatePickingSlip(tripsheet: any): void {
-    const itemsList = tripsheet.items
-      .filter((item: any) => item.toPick > 0)
-      .map((item: any) => `${item.name}: ${item.toPick} units`)
-      .join('\n');
+    const itemsToPick = tripsheet.items.filter((item: any) => item.toPick > 0);
+    
+    const newPickingSlip = {
+      id: this.pickingSlips.length + 1,
+      slipNumber: `PS-2026-${String(this.pickingSlips.length + 1).padStart(3, '0')}`,
+      customerName: tripsheet.customerName,
+      tripsheetNumber: tripsheet.tripsheetNumber,
+      generatedDate: new Date().toLocaleDateString(),
+      items: itemsToPick.map((item: any) => ({
+        name: item.name,
+        quantity: item.toPick,
+        unit: item.unit
+      }))
+    };
+    
+    this.pickingSlips.unshift(newPickingSlip);
+    this.filteredPickingSlips = [...this.pickingSlips];
     
     this.snackBar.open(
-      `Picking slip generated for ${tripsheet.tripsheetNumber}`,
-      'Close',
-      { duration: 4000 }
-    );
-    
-    console.log(`Picking Slip - ${tripsheet.tripsheetNumber}:\n${itemsList}`);
+      `Picking slip ${newPickingSlip.slipNumber} generated for ${tripsheet.tripsheetNumber}`,
+      'View',
+      { duration: 5000 }
+    ).onAction().subscribe(() => {
+      this.selectedTabIndex = 1; // Switch to Picking Slips tab
+    });
   }
 
   generateDispatchSlip(tripsheet: any): void {
-    this.snackBar.open(
-      `Dispatch slip generated for ${tripsheet.tripsheetNumber} - All items confirmed and ready for dispatch`,
-      'Close',
-      { duration: 5000 }
-    );
+    const newDispatchSlip = {
+      id: this.dispatchSlips.length + 1,
+      slipNumber: `DS-2026-${String(this.dispatchSlips.length + 1).padStart(3, '0')}`,
+      customerName: tripsheet.customerName,
+      tripsheetNumber: tripsheet.tripsheetNumber,
+      dispatchedDate: new Date().toLocaleDateString(),
+      items: tripsheet.items.map((item: any) => ({
+        name: item.name,
+        quantity: item.toPick,
+        unit: item.unit
+      }))
+    };
     
-    tripsheet.status = 'Confirmed';
-    console.log(`Dispatch slip generated for ${tripsheet.tripsheetNumber}`);
+    this.dispatchSlips.unshift(newDispatchSlip);
+    this.filteredDispatchSlips = [...this.dispatchSlips];
+    
+    // Remove from pending tripsheets
+    const index = this.pendingTripsheets.findIndex(ts => ts.id === tripsheet.id);
+    if (index > -1) {
+      this.pendingTripsheets.splice(index, 1);
+      this.filteredPendingTripsheets = [...this.pendingTripsheets];
+    }
+    
+    this.snackBar.open(
+      `Dispatch slip ${newDispatchSlip.slipNumber} generated - ${tripsheet.tripsheetNumber} ready for dispatch`,
+      'View',
+      { duration: 5000 }
+    ).onAction().subscribe(() => {
+      this.selectedTabIndex = 2; // Switch to Dispatch Slips tab
+    });
   }
 
   markPartialFulfillment(tripsheet: any): void {
