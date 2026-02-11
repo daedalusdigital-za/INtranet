@@ -3603,14 +3603,16 @@ export class DispatchDialog implements OnInit {
       load.stops.forEach((stop: any) => {
         if (stop.commodities && stop.commodities.length > 0) {
           stop.commodities.forEach((sc: any) => {
-            const existingItem = items.find(i => i.name === sc.commodityName);
+            // Use commodityName if available, otherwise use comment field, then fallback to 'Unknown Item'
+            const itemName = sc.commodityName || sc.comment || 'Unknown Item';
+            const existingItem = items.find(i => i.name === itemName);
             if (existingItem) {
               existingItem.requested += sc.quantity || 0;
               existingItem.toPick += sc.quantity || 0;
             } else {
               items.push({
                 id: sc.id,
-                name: sc.commodityName || 'Unknown Item',
+                name: itemName,
                 requested: sc.quantity || 0,
                 available: 0, // Will be populated from SOH
                 toPick: sc.quantity || 0,
