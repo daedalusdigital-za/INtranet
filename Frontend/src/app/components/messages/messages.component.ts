@@ -51,260 +51,298 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
   template: `
     <app-navbar></app-navbar>
     
-    <div class="messages-container">
-      <!-- Sidebar - Conversations List -->
-      <div class="conversations-sidebar">
-        <div class="sidebar-header">
-          <h2>Messages</h2>
-          <button mat-icon-button color="primary" (click)="showNewConversation = true" matTooltip="New Message">
-            <mat-icon>edit</mat-icon>
-          </button>
-        </div>
-        
-        <div class="search-box">
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-icon matPrefix>search</mat-icon>
-            <input matInput placeholder="Search conversations..." [(ngModel)]="searchQuery" (input)="filterConversations()">
-          </mat-form-field>
-        </div>
-
-        <div class="conversations-list" *ngIf="!loading">
-          <div 
-            *ngFor="let conv of filteredConversations" 
-            class="conversation-item"
-            [class.active]="selectedConversation?.conversationId === conv.conversationId"
-            [class.unread]="conv.unreadCount > 0"
-            (click)="selectConversation(conv)">
-            
-            <div class="avatar">
-              <img *ngIf="getConversationAvatar(conv)" [src]="getConversationAvatar(conv)" alt="Avatar">
-              <mat-icon *ngIf="!getConversationAvatar(conv)">
-                {{ conv.isGroupChat ? 'group' : 'person' }}
-              </mat-icon>
-            </div>
-            
-            <div class="conversation-info">
-              <div class="conversation-header">
-                <span class="name">{{ getConversationName(conv) }}</span>
-                <span class="time">{{ formatTime(conv.lastMessageAt || conv.createdAt) }}</span>
-              </div>
-              <div class="last-message">
-                {{ conv.lastMessage?.content || 'No messages yet' }}
-              </div>
-            </div>
-            
-            <div class="conversation-actions">
-              <span *ngIf="conv.unreadCount > 0" class="unread-badge">{{ conv.unreadCount }}</span>
-              <mat-checkbox 
-                *ngIf="selectMode"
-                [(ngModel)]="selectedForDelete[conv.conversationId]"
-                (click)="$event.stopPropagation()">
-              </mat-checkbox>
-            </div>
+    <div class="messages-page">
+      <!-- Modern Header -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="header-icon">
+            <mat-icon>forum</mat-icon>
           </div>
-
-          <div *ngIf="filteredConversations.length === 0" class="empty-state">
-            <mat-icon>chat_bubble_outline</mat-icon>
-            <p>No conversations found</p>
+          <div class="header-text">
+            <h1>Messages</h1>
+            <p>Stay connected with your team</p>
           </div>
         </div>
-
-        <div *ngIf="loading" class="loading-spinner">
-          <mat-spinner diameter="40"></mat-spinner>
-        </div>
-
-        <!-- Bulk Actions -->
-        <div class="sidebar-footer">
-          <button mat-button (click)="toggleSelectMode()">
-            <mat-icon>{{ selectMode ? 'close' : 'checklist' }}</mat-icon>
-            {{ selectMode ? 'Cancel' : 'Select' }}
-          </button>
-          <button mat-button color="warn" *ngIf="selectMode && hasSelectedConversations()" (click)="deleteSelectedConversations()">
-            <mat-icon>delete</mat-icon>
-            Delete Selected
-          </button>
+        <div class="header-stats">
+          <div class="stat-card">
+            <span class="stat-value">{{ conversations.length }}</span>
+            <span class="stat-label">Conversations</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value">{{ getTotalUnread() }}</span>
+            <span class="stat-label">Unread</span>
+          </div>
         </div>
       </div>
 
-      <!-- Main Chat Area -->
-      <div class="chat-area">
-        <div *ngIf="!selectedConversation" class="no-conversation-selected">
-          <mat-icon>forum</mat-icon>
-          <h3>Select a conversation</h3>
-          <p>Choose a conversation from the sidebar or start a new one</p>
-          <button mat-raised-button color="primary" (click)="showNewConversation = true">
-            <mat-icon>add</mat-icon>
-            Start New Conversation
-          </button>
-        </div>
+      <div class="messages-container">
+        <!-- Sidebar - Conversations List -->
+        <div class="conversations-sidebar">
+          <div class="sidebar-header">
+            <h2>Conversations</h2>
+            <button mat-mini-fab class="new-chat-btn" (click)="showNewConversation = true" matTooltip="New Message">
+              <mat-icon>edit</mat-icon>
+            </button>
+          </div>
+          
+          <div class="search-box">
+            <mat-icon class="search-icon">search</mat-icon>
+            <input type="text" placeholder="Search conversations..." [(ngModel)]="searchQuery" (input)="filterConversations()">
+          </div>
 
-        <div *ngIf="selectedConversation" class="chat-content">
-          <!-- Chat Header -->
-          <div class="chat-header">
-            <div class="chat-info">
-              <div class="avatar">
-                <img *ngIf="getConversationAvatar(selectedConversation)" [src]="getConversationAvatar(selectedConversation)" alt="Avatar">
-                <mat-icon *ngIf="!getConversationAvatar(selectedConversation)">
-                  {{ selectedConversation.isGroupChat ? 'group' : 'person' }}
+          <div class="conversations-list" *ngIf="!loading">
+            <div 
+              *ngFor="let conv of filteredConversations" 
+              class="conversation-item"
+              [class.active]="selectedConversation?.conversationId === conv.conversationId"
+              [class.unread]="conv.unreadCount > 0"
+              (click)="selectConversation(conv)">
+              
+              <div class="avatar" [class.online]="isUserOnline(conv)">
+                <img *ngIf="getConversationAvatar(conv)" [src]="getConversationAvatar(conv)" alt="Avatar">
+                <mat-icon *ngIf="!getConversationAvatar(conv)">
+                  {{ conv.isGroupChat ? 'group' : 'person' }}
                 </mat-icon>
               </div>
-              <div class="details">
-                <h3>{{ getConversationName(selectedConversation) }}</h3>
-                <span class="participants">
-                  {{ getParticipantsText(selectedConversation) }}
-                </span>
+              
+              <div class="conversation-info">
+                <div class="conversation-header">
+                  <span class="name">{{ getConversationName(conv) }}</span>
+                  <span class="time">{{ formatTime(conv.lastMessageAt || conv.createdAt) }}</span>
+                </div>
+                <div class="last-message">
+                  {{ conv.lastMessage?.content || 'No messages yet' }}
+                </div>
+              </div>
+              
+              <div class="conversation-actions">
+                <span *ngIf="conv.unreadCount > 0" class="unread-badge">{{ conv.unreadCount }}</span>
+                <mat-checkbox 
+                  *ngIf="selectMode"
+                  [(ngModel)]="selectedForDelete[conv.conversationId]"
+                  (click)="$event.stopPropagation()">
+                </mat-checkbox>
               </div>
             </div>
-            <div class="chat-actions">
-              <button mat-icon-button [matMenuTriggerFor]="chatMenu">
-                <mat-icon>more_vert</mat-icon>
+
+            <div *ngIf="filteredConversations.length === 0" class="empty-state">
+              <div class="empty-icon">
+                <mat-icon>chat_bubble_outline</mat-icon>
+              </div>
+              <p>No conversations found</p>
+              <button mat-flat-button class="start-chat-btn" (click)="showNewConversation = true">
+                <mat-icon>add</mat-icon> Start New Chat
               </button>
-              <mat-menu #chatMenu="matMenu">
-                <button mat-menu-item (click)="deleteConversation(selectedConversation)">
-                  <mat-icon color="warn">delete</mat-icon>
-                  <span>Delete Conversation</span>
-                </button>
-              </mat-menu>
             </div>
           </div>
 
-          <!-- Messages Area -->
-          <div class="messages-area" #messagesContainer>
-            <div *ngIf="loadingMessages" class="loading-messages">
-              <mat-spinner diameter="30"></mat-spinner>
-            </div>
+          <div *ngIf="loading" class="loading-spinner">
+            <mat-spinner diameter="40"></mat-spinner>
+          </div>
 
-            <div *ngFor="let message of messages" 
-                 class="message"
-                 [class.sent]="message.senderId === currentUserId"
-                 [class.received]="message.senderId !== currentUserId"
-                 [class.deleted]="message.isDeleted">
-              
-              <div class="message-avatar" *ngIf="message.senderId !== currentUserId">
-                <img *ngIf="message.senderProfilePicture" [src]="message.senderProfilePicture" alt="Avatar">
-                <mat-icon *ngIf="!message.senderProfilePicture">person</mat-icon>
+          <!-- Bulk Actions -->
+          <div class="sidebar-footer">
+            <button mat-button class="select-btn" (click)="toggleSelectMode()">
+              <mat-icon>{{ selectMode ? 'close' : 'checklist' }}</mat-icon>
+              {{ selectMode ? 'Cancel' : 'Select' }}
+            </button>
+            <button mat-button class="delete-btn" *ngIf="selectMode && hasSelectedConversations()" (click)="deleteSelectedConversations()">
+              <mat-icon>delete</mat-icon>
+              Delete
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="chat-area">
+          <div *ngIf="!selectedConversation" class="no-conversation-selected">
+            <div class="welcome-illustration">
+              <mat-icon>forum</mat-icon>
+            </div>
+            <h3>Select a conversation</h3>
+            <p>Choose a conversation from the sidebar or start a new one</p>
+            <button mat-flat-button class="primary-btn" (click)="showNewConversation = true">
+              <mat-icon>add</mat-icon>
+              Start New Conversation
+            </button>
+          </div>
+
+          <div *ngIf="selectedConversation" class="chat-content">
+            <!-- Chat Header -->
+            <div class="chat-header">
+              <div class="chat-info">
+                <div class="avatar" [class.online]="isUserOnline(selectedConversation)">
+                  <img *ngIf="getConversationAvatar(selectedConversation)" [src]="getConversationAvatar(selectedConversation)" alt="Avatar">
+                  <mat-icon *ngIf="!getConversationAvatar(selectedConversation)">
+                    {{ selectedConversation.isGroupChat ? 'group' : 'person' }}
+                  </mat-icon>
+                </div>
+                <div class="details">
+                  <h3>{{ getConversationName(selectedConversation) }}</h3>
+                  <span class="participants">
+                    {{ getParticipantsText(selectedConversation) }}
+                  </span>
+                </div>
               </div>
-              
-              <div class="message-content">
-                <div class="message-sender" *ngIf="message.senderId !== currentUserId && selectedConversation?.isGroupChat">
-                  {{ message.senderFullName || message.senderName }}
-                </div>
-                
-                <div class="message-bubble">
-                  <p *ngIf="message.content">{{ message.content }}</p>
-                  
-                  <!-- Attachments Display -->
-                  <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
-                    <div *ngFor="let attachment of message.attachments" class="attachment-item">
-                      <!-- Image Preview -->
-                      <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container">
-                        <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)" class="attachment-image">
-                        <div class="attachment-overlay">
-                          <button mat-mini-fab color="primary" (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download">
-                            <mat-icon>download</mat-icon>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <!-- PDF/Document Preview -->
-                      <div *ngIf="!isImageFile(attachment.mimeType)" class="attachment-file" (click)="previewAttachment(attachment)">
-                        <mat-icon class="file-icon">{{ getFileIcon(attachment.mimeType) }}</mat-icon>
-                        <div class="file-info">
-                          <span class="file-name">{{ attachment.fileName }}</span>
-                          <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
-                        </div>
-                        <button mat-mini-fab color="primary" (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download" class="download-btn">
-                          <mat-icon>download</mat-icon>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="message-meta">
-                    <span class="time">{{ formatMessageTime(message.sentAt) }}</span>
-                    <mat-icon *ngIf="message.isEdited" class="edited-icon" matTooltip="Edited">edit</mat-icon>
-                    <mat-icon *ngIf="message.senderId === currentUserId && message.isRead" class="read-icon">done_all</mat-icon>
-                  </div>
-                </div>
-                
-                <button mat-icon-button class="message-menu-btn" [matMenuTriggerFor]="messageMenu" *ngIf="!message.isDeleted">
-                  <mat-icon>more_horiz</mat-icon>
+              <div class="chat-actions">
+                <button mat-icon-button matTooltip="Voice Call" class="action-btn">
+                  <mat-icon>call</mat-icon>
                 </button>
-                <mat-menu #messageMenu="matMenu">
-                  <button mat-menu-item (click)="replyToMessage(message)">
-                    <mat-icon>reply</mat-icon>
-                    <span>Reply</span>
-                  </button>
-                  <button mat-menu-item (click)="deleteMessage(message)" *ngIf="message.senderId === currentUserId">
+                <button mat-icon-button matTooltip="Video Call" class="action-btn">
+                  <mat-icon>videocam</mat-icon>
+                </button>
+                <button mat-icon-button [matMenuTriggerFor]="chatMenu" class="action-btn">
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #chatMenu="matMenu">
+                  <button mat-menu-item (click)="deleteConversation(selectedConversation)">
                     <mat-icon color="warn">delete</mat-icon>
-                    <span>Delete</span>
+                    <span>Delete Conversation</span>
                   </button>
                 </mat-menu>
               </div>
             </div>
 
-            <div *ngIf="messages.length === 0 && !loadingMessages" class="no-messages">
-              <mat-icon>chat</mat-icon>
-              <p>No messages yet. Start the conversation!</p>
-            </div>
-          </div>
+            <!-- Messages Area -->
+            <div class="messages-area" #messagesContainer>
+              <div *ngIf="loadingMessages" class="loading-messages">
+                <mat-spinner diameter="30"></mat-spinner>
+              </div>
 
-          <!-- Reply Preview -->
-          <div *ngIf="replyingTo" class="reply-preview">
-            <div class="reply-content">
-              <mat-icon>reply</mat-icon>
-              <div class="reply-text">
-                <span class="reply-sender">{{ replyingTo.senderFullName || replyingTo.senderName }}</span>
-                <span class="reply-message">{{ replyingTo.content }}</span>
+              <div *ngFor="let message of messages" 
+                   class="message"
+                   [class.sent]="message.senderId === currentUserId"
+                   [class.received]="message.senderId !== currentUserId"
+                   [class.deleted]="message.isDeleted">
+                
+                <div class="message-avatar" *ngIf="message.senderId !== currentUserId">
+                  <img *ngIf="message.senderProfilePicture" [src]="message.senderProfilePicture" alt="Avatar">
+                  <mat-icon *ngIf="!message.senderProfilePicture">person</mat-icon>
+                </div>
+                
+                <div class="message-content">
+                  <div class="message-sender" *ngIf="message.senderId !== currentUserId && selectedConversation?.isGroupChat">
+                    {{ message.senderFullName || message.senderName }}
+                  </div>
+                  
+                  <div class="message-bubble">
+                    <p *ngIf="message.content">{{ message.content }}</p>
+                    
+                    <!-- Attachments Display -->
+                    <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
+                      <div *ngFor="let attachment of message.attachments" class="attachment-item">
+                        <!-- Image Preview -->
+                        <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container">
+                          <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)" class="attachment-image">
+                          <div class="attachment-overlay">
+                            <button mat-mini-fab (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download">
+                              <mat-icon>download</mat-icon>
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <!-- PDF/Document Preview -->
+                        <div *ngIf="!isImageFile(attachment.mimeType)" class="attachment-file" (click)="previewAttachment(attachment)">
+                          <mat-icon class="file-icon">{{ getFileIcon(attachment.mimeType) }}</mat-icon>
+                          <div class="file-info">
+                            <span class="file-name">{{ attachment.fileName }}</span>
+                            <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
+                          </div>
+                          <button mat-mini-fab (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download" class="download-btn">
+                            <mat-icon>download</mat-icon>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div class="message-meta">
+                      <span class="time">{{ formatMessageTime(message.sentAt) }}</span>
+                      <mat-icon *ngIf="message.isEdited" class="edited-icon" matTooltip="Edited">edit</mat-icon>
+                      <mat-icon *ngIf="message.senderId === currentUserId && message.isRead" class="read-icon">done_all</mat-icon>
+                    </div>
+                  </div>
+                  
+                  <button mat-icon-button class="message-menu-btn" [matMenuTriggerFor]="messageMenu" *ngIf="!message.isDeleted">
+                    <mat-icon>more_horiz</mat-icon>
+                  </button>
+                  <mat-menu #messageMenu="matMenu">
+                    <button mat-menu-item (click)="replyToMessage(message)">
+                      <mat-icon>reply</mat-icon>
+                      <span>Reply</span>
+                    </button>
+                    <button mat-menu-item (click)="deleteMessage(message)" *ngIf="message.senderId === currentUserId">
+                      <mat-icon color="warn">delete</mat-icon>
+                      <span>Delete</span>
+                    </button>
+                  </mat-menu>
+                </div>
+              </div>
+
+              <div *ngIf="messages.length === 0 && !loadingMessages" class="no-messages">
+                <div class="no-messages-icon">
+                  <mat-icon>chat</mat-icon>
+                </div>
+                <p>No messages yet. Start the conversation!</p>
               </div>
             </div>
-            <button mat-icon-button (click)="replyingTo = null">
-              <mat-icon>close</mat-icon>
-            </button>
-          </div>
 
-          <!-- Pending Attachments Preview -->
-          <div *ngIf="pendingAttachments.length > 0" class="pending-attachments">
-            <div *ngFor="let file of pendingAttachments; let i = index" class="pending-file">
-              <mat-icon>{{ getFileIconByName(file.name) }}</mat-icon>
-              <span class="file-name">{{ file.name }}</span>
-              <span class="file-size">{{ formatFileSize(file.size) }}</span>
-              <button mat-icon-button (click)="removePendingAttachment(i)">
+            <!-- Reply Preview -->
+            <div *ngIf="replyingTo" class="reply-preview">
+              <div class="reply-content">
+                <mat-icon>reply</mat-icon>
+                <div class="reply-text">
+                  <span class="reply-sender">{{ replyingTo.senderFullName || replyingTo.senderName }}</span>
+                  <span class="reply-message">{{ replyingTo.content }}</span>
+                </div>
+              </div>
+              <button mat-icon-button (click)="replyingTo = null">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
-          </div>
 
-          <!-- Message Input -->
-          <div class="message-input-area">
-            <input type="file" #fileInput hidden multiple (change)="onFilesSelected($event)" 
-                   accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv">
-            <button mat-icon-button (click)="fileInput.click()" matTooltip="Attach file">
-              <mat-icon>attach_file</mat-icon>
-            </button>
-            <button mat-icon-button (click)="toggleEmojiPicker()" matTooltip="Add emoji" [class.active]="showEmojiPicker">
-              <mat-icon>sentiment_satisfied_alt</mat-icon>
-            </button>
-            <mat-form-field appearance="outline" class="message-input">
-              <input matInput 
-                     #messageInput
-                     placeholder="Type a message..." 
-                     [(ngModel)]="newMessage"
-                     (keyup.enter)="sendMessage()">
-            </mat-form-field>
-            <button mat-fab color="primary" (click)="sendMessage()" [disabled]="!newMessage.trim() && pendingAttachments.length === 0">
-              <mat-icon>send</mat-icon>
-            </button>
-          </div>
+            <!-- Pending Attachments Preview -->
+            <div *ngIf="pendingAttachments.length > 0" class="pending-attachments">
+              <div *ngFor="let file of pendingAttachments; let i = index" class="pending-file">
+                <mat-icon>{{ getFileIconByName(file.name) }}</mat-icon>
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                <button mat-icon-button (click)="removePendingAttachment(i)">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+            </div>
 
-          <!-- Emoji Picker -->
-          <div class="emoji-picker-container" *ngIf="showEmojiPicker">
-            <emoji-mart 
-              (emojiClick)="addEmoji($event)" 
-              [darkMode]="false"
-              title="Pick your emoji"
-              emoji="point_up">
-            </emoji-mart>
+            <!-- Message Input -->
+            <div class="message-input-area">
+              <input type="file" #fileInput hidden multiple (change)="onFilesSelected($event)" 
+                     accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv">
+              <button mat-icon-button class="input-action" (click)="fileInput.click()" matTooltip="Attach file">
+                <mat-icon>attach_file</mat-icon>
+              </button>
+              <button mat-icon-button class="input-action" (click)="toggleEmojiPicker()" matTooltip="Add emoji" [class.active]="showEmojiPicker">
+                <mat-icon>sentiment_satisfied_alt</mat-icon>
+              </button>
+              <div class="message-input-wrapper">
+                <input type="text"
+                       #messageInput
+                       placeholder="Type a message..." 
+                       [(ngModel)]="newMessage"
+                       (keyup.enter)="sendMessage()">
+              </div>
+              <button mat-fab class="send-btn" (click)="sendMessage()" [disabled]="!newMessage.trim() && pendingAttachments.length === 0">
+                <mat-icon>send</mat-icon>
+              </button>
+            </div>
+
+            <!-- Emoji Picker -->
+            <div class="emoji-picker-container" *ngIf="showEmojiPicker">
+              <emoji-mart 
+                (emojiClick)="addEmoji($event)" 
+                [darkMode]="false"
+                title="Pick your emoji"
+                emoji="point_up">
+              </emoji-mart>
+            </div>
           </div>
         </div>
       </div>
@@ -355,47 +393,172 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     </div>
   `,
   styles: [`
-    .messages-container {
-      display: flex;
-      height: calc(100vh - 64px);
-      background: #f5f5f5;
+    /* Main Page Layout */
+    .messages-page {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 50%, #c5dff0 100%);
     }
 
+    /* Modern Gradient Header */
+    .page-header {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page-header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      opacity: 0.5;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 1;
+    }
+
+    .header-icon {
+      width: 56px;
+      height: 56px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .header-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: white;
+    }
+
+    .header-text h1 {
+      margin: 0;
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-text p {
+      margin: 4px 0 0 0;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 14px;
+    }
+
+    .header-stats {
+      display: flex;
+      gap: 16px;
+      z-index: 1;
+    }
+
+    .stat-card {
+      text-align: center;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      min-width: 100px;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .stat-label {
+      display: block;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.85);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Messages Container */
+    .messages-container {
+      display: flex;
+      height: calc(100vh - 64px - 104px);
+      margin: 20px;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(30, 144, 255, 0.15);
+    }
+
+    /* Sidebar */
     .conversations-sidebar {
-      width: 350px;
+      width: 360px;
       background: white;
-      border-right: 1px solid #e0e0e0;
       display: flex;
       flex-direction: column;
+      border-right: 1px solid #e8f4fc;
     }
 
     .sidebar-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #f8fbff 0%, #eef6fc 100%);
+      border-bottom: 1px solid #e8f4fc;
 
       h2 {
         margin: 0;
-        font-size: 20px;
-        font-weight: 500;
+        font-size: 18px;
+        font-weight: 600;
+        color: #1a5fb4;
       }
     }
 
+    .new-chat-btn {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
+    }
+
     .search-box {
-      padding: 12px 16px;
-      
-      .full-width {
-        width: 100%;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #f8fbff;
+
+      .search-icon {
+        color: #94a3b8;
       }
 
-      mat-form-field {
+      input {
+        flex: 1;
+        border: none;
+        background: white;
+        padding: 12px 16px;
+        border-radius: 12px;
         font-size: 14px;
-      }
+        border: 1px solid #e8f4fc;
+        transition: all 0.3s ease;
 
-      ::ng-deep .mat-mdc-form-field-subscript-wrapper {
-        display: none;
+        &:focus {
+          outline: none;
+          border-color: #1e90ff;
+          box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.1);
+        }
       }
     }
 
@@ -407,25 +570,26 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     .conversation-item {
       display: flex;
       align-items: center;
-      padding: 12px 16px;
+      padding: 14px 20px;
       cursor: pointer;
-      border-bottom: 1px solid #f0f0f0;
-      transition: background 0.2s;
+      border-bottom: 1px solid #f1f5f9;
+      transition: all 0.2s ease;
 
       &:hover {
-        background: #f5f5f5;
+        background: #f8fbff;
       }
 
       &.active {
-        background: #e3f2fd;
-        border-left: 3px solid #1976d2;
+        background: linear-gradient(90deg, rgba(30, 144, 255, 0.1) 0%, rgba(30, 144, 255, 0.05) 100%);
+        border-left: 4px solid #1e90ff;
       }
 
       &.unread {
-        background: #fff8e1;
+        background: rgba(30, 144, 255, 0.05);
 
         .name {
           font-weight: 600;
+          color: #1a5fb4;
         }
       }
 
@@ -433,12 +597,14 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         width: 48px;
         height: 48px;
         border-radius: 50%;
-        background: #e0e0e0;
+        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-right: 12px;
+        margin-right: 14px;
         overflow: hidden;
+        position: relative;
+        flex-shrink: 0;
 
         img {
           width: 100%;
@@ -447,7 +613,20 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         }
 
         mat-icon {
-          color: #757575;
+          color: white;
+          font-size: 22px;
+        }
+
+        &.online::after {
+          content: '';
+          position: absolute;
+          bottom: 2px;
+          right: 2px;
+          width: 12px;
+          height: 12px;
+          background: #22c55e;
+          border-radius: 50%;
+          border: 2px solid white;
         }
       }
 
@@ -463,22 +642,22 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
           .name {
             font-weight: 500;
-            color: #212121;
+            color: #1e293b;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
           }
 
           .time {
-            font-size: 12px;
-            color: #757575;
+            font-size: 11px;
+            color: #94a3b8;
             white-space: nowrap;
           }
         }
 
         .last-message {
           font-size: 13px;
-          color: #757575;
+          color: #64748b;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -491,23 +670,33 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         gap: 8px;
 
         .unread-badge {
-          background: #1976d2;
+          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
           color: white;
           font-size: 11px;
-          padding: 2px 6px;
-          border-radius: 10px;
-          min-width: 18px;
+          padding: 3px 8px;
+          border-radius: 12px;
+          min-width: 20px;
           text-align: center;
+          font-weight: 600;
         }
       }
     }
 
     .sidebar-footer {
       padding: 12px 16px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid #e8f4fc;
       display: flex;
       justify-content: space-between;
       gap: 8px;
+      background: #f8fbff;
+
+      .select-btn {
+        color: #64748b;
+      }
+
+      .delete-btn {
+        color: #ef4444;
+      }
     }
 
     .empty-state {
@@ -515,14 +704,38 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 40px 20px;
-      color: #757575;
+      padding: 60px 20px;
+      color: #64748b;
 
-      mat-icon {
-        font-size: 48px;
-        width: 48px;
-        height: 48px;
-        margin-bottom: 16px;
+      .empty-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+
+        mat-icon {
+          font-size: 36px;
+          width: 36px;
+          height: 36px;
+          color: #1e90ff;
+        }
+      }
+
+      p {
+        margin: 0 0 20px;
+        font-size: 14px;
+      }
+
+      .start-chat-btn {
+        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 0 24px;
+        height: 44px;
       }
     }
 
@@ -532,11 +745,12 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       padding: 40px;
     }
 
+    /* Chat Area */
     .chat-area {
       flex: 1;
       display: flex;
       flex-direction: column;
-      background: #fafafa;
+      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
     }
 
     .no-conversation-selected {
@@ -545,23 +759,47 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #757575;
+      color: #64748b;
+      padding: 40px;
 
-      mat-icon {
-        font-size: 72px;
-        width: 72px;
-        height: 72px;
-        margin-bottom: 16px;
-        color: #bdbdbd;
+      .welcome-illustration {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 24px;
+
+        mat-icon {
+          font-size: 56px;
+          width: 56px;
+          height: 56px;
+          color: #1e90ff;
+        }
       }
 
       h3 {
         margin: 0 0 8px;
-        font-weight: 500;
+        font-weight: 600;
+        color: #1e293b;
+        font-size: 20px;
       }
 
       p {
         margin: 0 0 24px;
+        font-size: 14px;
+      }
+
+      .primary-btn {
+        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 0 28px;
+        height: 48px;
+        font-weight: 500;
+        box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
       }
     }
 
@@ -576,29 +814,47 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 20px;
+      padding: 16px 24px;
       background: white;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid #e8f4fc;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
 
       .chat-info {
         display: flex;
         align-items: center;
 
         .avatar {
-          width: 44px;
-          height: 44px;
+          width: 48px;
+          height: 48px;
           border-radius: 50%;
-          background: #e0e0e0;
+          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-right: 12px;
+          margin-right: 14px;
           overflow: hidden;
+          position: relative;
 
           img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+          }
+
+          mat-icon {
+            color: white;
+          }
+
+          &.online::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            background: #22c55e;
+            border-radius: 50%;
+            border: 2px solid white;
           }
         }
 
@@ -606,24 +862,42 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
           h3 {
             margin: 0;
             font-size: 16px;
-            font-weight: 500;
+            font-weight: 600;
+            color: #1e293b;
           }
 
           .participants {
             font-size: 13px;
-            color: #757575;
+            color: #64748b;
+          }
+        }
+      }
+
+      .chat-actions {
+        display: flex;
+        gap: 4px;
+
+        .action-btn {
+          color: #64748b;
+          transition: all 0.2s ease;
+
+          &:hover {
+            color: #1e90ff;
+            background: rgba(30, 144, 255, 0.1);
           }
         }
       }
     }
 
+    /* Messages Area */
     .messages-area {
       flex: 1;
       overflow-y: auto;
-      padding: 20px;
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 16px;
+      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 50%, #f8fbff 100%);
     }
 
     .loading-messages {
@@ -635,7 +909,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     .message {
       display: flex;
       align-items: flex-end;
-      gap: 8px;
+      gap: 10px;
       max-width: 70%;
 
       &.sent {
@@ -643,12 +917,13 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         flex-direction: row-reverse;
 
         .message-bubble {
-          background: #1976d2;
+          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
           color: white;
-          border-radius: 18px 18px 4px 18px;
+          border-radius: 20px 20px 6px 20px;
+          box-shadow: 0 4px 15px rgba(30, 144, 255, 0.25);
 
           .message-meta {
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.75);
           }
         }
 
@@ -662,25 +937,27 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
         .message-bubble {
           background: white;
-          color: #212121;
-          border-radius: 18px 18px 18px 4px;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+          color: #1e293b;
+          border-radius: 20px 20px 20px 6px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+          border: 1px solid #e8f4fc;
         }
       }
 
       &.deleted {
         .message-bubble {
-          background: #f5f5f5 !important;
-          color: #9e9e9e !important;
+          background: #f1f5f9 !important;
+          color: #94a3b8 !important;
           font-style: italic;
+          box-shadow: none !important;
         }
       }
 
       .message-avatar {
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
         border-radius: 50%;
-        background: #e0e0e0;
+        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -697,29 +974,30 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
           font-size: 18px;
           width: 18px;
           height: 18px;
-          color: #757575;
+          color: white;
         }
       }
 
       .message-content {
         display: flex;
         align-items: flex-end;
-        gap: 4px;
+        gap: 6px;
 
         .message-sender {
           font-size: 12px;
-          font-weight: 500;
-          color: #1976d2;
+          font-weight: 600;
+          color: #1e90ff;
           margin-bottom: 4px;
         }
 
         .message-bubble {
-          padding: 10px 14px;
+          padding: 12px 16px;
           max-width: 100%;
 
           p {
             margin: 0;
             word-wrap: break-word;
+            line-height: 1.5;
           }
 
           .message-meta {
@@ -727,9 +1005,9 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
             align-items: center;
             justify-content: flex-end;
             gap: 4px;
-            margin-top: 4px;
+            margin-top: 6px;
             font-size: 11px;
-            color: #757575;
+            color: #94a3b8;
 
             .edited-icon, .read-icon {
               font-size: 14px;
@@ -738,7 +1016,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
             }
 
             .read-icon {
-              color: #4caf50;
+              color: #22c55e;
             }
           }
         }
@@ -746,6 +1024,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         .message-menu-btn {
           opacity: 0;
           transition: opacity 0.2s;
+          color: #94a3b8;
         }
       }
 
@@ -760,33 +1039,51 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       align-items: center;
       justify-content: center;
       flex: 1;
-      color: #757575;
+      color: #64748b;
+      padding: 40px;
 
-      mat-icon {
-        font-size: 48px;
-        width: 48px;
-        height: 48px;
-        margin-bottom: 12px;
-        color: #bdbdbd;
+      .no-messages-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+
+        mat-icon {
+          font-size: 36px;
+          width: 36px;
+          height: 36px;
+          color: #1e90ff;
+        }
+      }
+
+      p {
+        margin: 0;
+        font-size: 14px;
       }
     }
 
+    /* Reply Preview */
     .reply-preview {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 16px;
-      background: #e3f2fd;
-      border-left: 3px solid #1976d2;
-      margin: 0 16px;
+      padding: 12px 20px;
+      background: linear-gradient(90deg, rgba(30, 144, 255, 0.1) 0%, rgba(30, 144, 255, 0.05) 100%);
+      border-left: 4px solid #1e90ff;
+      margin: 0 20px;
+      border-radius: 0 8px 8px 0;
 
       .reply-content {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 12px;
 
         mat-icon {
-          color: #1976d2;
+          color: #1e90ff;
         }
 
         .reply-text {
@@ -795,13 +1092,13 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
           .reply-sender {
             font-size: 12px;
-            font-weight: 500;
-            color: #1976d2;
+            font-weight: 600;
+            color: #1e90ff;
           }
 
           .reply-message {
             font-size: 13px;
-            color: #616161;
+            color: #64748b;
             max-width: 300px;
             white-space: nowrap;
             overflow: hidden;
@@ -811,53 +1108,70 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       }
     }
 
+    /* Message Input */
     .message-input-area {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 16px 20px;
+      padding: 16px 24px;
       background: white;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid #e8f4fc;
       position: relative;
 
-      .message-input {
-        flex: 1;
+      .input-action {
+        color: #64748b;
+        transition: all 0.2s ease;
 
-        ::ng-deep .mat-mdc-form-field-subscript-wrapper {
-          display: none;
+        &:hover, &.active {
+          color: #1e90ff;
+          background: rgba(30, 144, 255, 0.1);
         }
       }
 
-      button[mat-fab] {
-        width: 48px;
-        height: 48px;
+      .message-input-wrapper {
+        flex: 1;
+
+        input {
+          width: 100%;
+          padding: 14px 20px;
+          border: 1px solid #e8f4fc;
+          border-radius: 24px;
+          font-size: 14px;
+          background: #f8fbff;
+          transition: all 0.3s ease;
+
+          &:focus {
+            outline: none;
+            border-color: #1e90ff;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.1);
+          }
+        }
       }
 
-      button.active {
-        background: #e3f2fd;
-        color: #1976d2;
+      .send-btn {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
+
+        &:disabled {
+          background: #e2e8f0;
+          box-shadow: none;
+        }
       }
     }
 
-    /* Emoji Picker Styles */
+    /* Emoji Picker */
     .emoji-picker-container {
       position: absolute;
       bottom: 80px;
-      left: 20px;
+      left: 24px;
       z-index: 1000;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      border-radius: 8px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+      border-radius: 12px;
       overflow: hidden;
       background: white;
-
-      ::ng-deep emoji-mart {
-        border: none;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      }
-
-      ::ng-deep .emoji-mart-search input {
-        border-radius: 4px;
-      }
     }
 
     /* Attachment Styles */
@@ -872,13 +1186,12 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       position: relative;
     }
 
-    /* Image Attachment Styles */
     .attachment-image-container {
       position: relative;
       width: 100%;
       max-width: 250px;
       cursor: pointer;
-      border-radius: 8px;
+      border-radius: 12px;
       overflow: hidden;
 
       .attachment-image {
@@ -896,15 +1209,10 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         transition: opacity 0.2s;
 
         button {
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
           width: 36px;
           height: 36px;
-
-          mat-icon {
-            font-size: 18px;
-            width: 18px;
-            height: 18px;
-          }
         }
       }
 
@@ -913,28 +1221,26 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       }
     }
 
-    /* File Attachment Styles */
     .attachment-file {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: rgba(0, 0, 0, 0.05);
-      border-radius: 8px;
+      background: rgba(30, 144, 255, 0.05);
+      border-radius: 12px;
       cursor: pointer;
       transition: background 0.2s;
-      position: relative;
+      border: 1px solid rgba(30, 144, 255, 0.1);
 
       &:hover {
-        background: rgba(0, 0, 0, 0.08);
+        background: rgba(30, 144, 255, 0.1);
       }
 
       .file-icon {
-        font-size: 32px;
-        width: 32px;
-        height: 32px;
-        color: #1976d2;
-        flex-shrink: 0;
+        font-size: 28px;
+        width: 28px;
+        height: 28px;
+        color: #1e90ff;
       }
 
       .file-info {
@@ -953,38 +1259,28 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
         .file-size {
           font-size: 11px;
-          color: #757575;
+          color: #64748b;
         }
       }
 
       .download-btn {
         width: 36px;
         height: 36px;
-        flex-shrink: 0;
-        margin-left: auto;
-
-        mat-icon {
-          font-size: 18px;
-          width: 18px;
-          height: 18px;
-        }
+        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
       }
     }
 
     .sent .attachment-file {
       background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.2);
 
       .file-icon {
         color: rgba(255, 255, 255, 0.9);
       }
 
       .file-info .file-size {
-        color: rgba(255, 255, 255, 0.7);
+        color: rgba(255, 255, 255, 0.75);
       }
-    }
-
-    .sent .attachment-actions button {
-      color: rgba(255, 255, 255, 0.9);
     }
 
     /* Pending Attachments */
@@ -992,25 +1288,25 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      padding: 8px 16px;
-      background: #f5f5f5;
-      border-top: 1px solid #e0e0e0;
+      padding: 12px 20px;
+      background: #f8fbff;
+      border-top: 1px solid #e8f4fc;
     }
 
     .pending-file {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 12px;
+      padding: 8px 12px;
       background: white;
-      border-radius: 16px;
-      border: 1px solid #e0e0e0;
+      border-radius: 20px;
+      border: 1px solid #e8f4fc;
 
       mat-icon {
         font-size: 18px;
         width: 18px;
         height: 18px;
-        color: #1976d2;
+        color: #1e90ff;
       }
 
       .file-name {
@@ -1023,19 +1319,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
       .file-size {
         font-size: 11px;
-        color: #757575;
-      }
-
-      button {
-        width: 20px;
-        height: 20px;
-        line-height: 20px;
-
-        mat-icon {
-          font-size: 14px;
-          width: 14px;
-          height: 14px;
-        }
+        color: #64748b;
       }
     }
 
@@ -1055,7 +1339,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
     .preview-container {
       background: white;
-      border-radius: 8px;
+      border-radius: 16px;
       max-width: 90vw;
       max-height: 90vh;
       display: flex;
@@ -1067,14 +1351,14 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
-      background: #f5f5f5;
-      border-bottom: 1px solid #e0e0e0;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
 
       h3 {
         margin: 0;
         font-size: 16px;
         font-weight: 500;
+        color: white;
         max-width: 400px;
         white-space: nowrap;
         overflow: hidden;
@@ -1084,6 +1368,10 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       .preview-actions {
         display: flex;
         gap: 4px;
+
+        button {
+          color: white;
+        }
       }
     }
 
@@ -1093,7 +1381,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #333;
+      background: #1e293b;
       min-width: 400px;
       min-height: 300px;
 
@@ -1119,7 +1407,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
           width: 72px;
           height: 72px;
           margin-bottom: 16px;
-          color: #bdbdbd;
+          color: #64748b;
         }
 
         h4 {
@@ -1129,7 +1417,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
         p {
           margin: 0 0 8px;
-          color: #bdbdbd;
+          color: #94a3b8;
         }
 
         .file-size {
@@ -1139,14 +1427,41 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       }
     }
 
+    /* Scrollbar */
+    .conversations-list::-webkit-scrollbar,
+    .messages-area::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .conversations-list::-webkit-scrollbar-track,
+    .messages-area::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .conversations-list::-webkit-scrollbar-thumb,
+    .messages-area::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+
+    .conversations-list::-webkit-scrollbar-thumb:hover,
+    .messages-area::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
     @media (max-width: 768px) {
       .conversations-sidebar {
         width: 100%;
         position: absolute;
         z-index: 10;
         left: 0;
-        top: 64px;
-        height: calc(100vh - 64px);
+        top: 0;
+        height: 100%;
+      }
+
+      .messages-container {
+        margin: 10px;
+        height: calc(100vh - 64px - 104px - 20px);
       }
     }
   `]
@@ -1343,6 +1658,16 @@ export class MessagesComponent implements OnInit, OnDestroy {
         return name.includes(query) || lastMessage.includes(query);
       });
     }
+  }
+
+  getTotalUnread(): number {
+    return this.conversations.reduce((total, conv) => total + (conv.unreadCount || 0), 0);
+  }
+
+  isUserOnline(conversation: Conversation | null): boolean {
+    if (!conversation || !conversation.participants) return false;
+    const otherParticipant = conversation.participants.find(p => p.userId !== this.currentUserId);
+    return otherParticipant?.isOnline ?? false;
   }
 
   selectConversation(conversation: Conversation): void {
