@@ -98,6 +98,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.StockTransfer> StockTransfers { get; set; }
         public DbSet<Models.Logistics.Backorder> Backorders { get; set; }
         public DbSet<Models.Logistics.ProofOfDelivery> ProofOfDeliveries { get; set; }
+        public DbSet<Models.Logistics.ScrapRecord> ScrapRecords { get; set; }
         public DbSet<Models.Logistics.Invoice> Invoices { get; set; }
         public DbSet<Models.Logistics.InvoiceLineItem> InvoiceLineItems { get; set; }
         public DbSet<Models.Logistics.VehicleMaintenance> VehicleMaintenance { get; set; }

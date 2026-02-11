@@ -4387,17 +4387,11 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime?>("LastDeliveryDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("float");
-
                     b.Property<int?>("LoadId")
                         .HasColumnType("int");
 
                     b.Property<int?>("Location")
                         .HasColumnType("int");
-
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("float");
 
                     b.Property<decimal?>("MarginPercent")
                         .HasColumnType("decimal(18,4)");
@@ -4988,6 +4982,52 @@ namespace ProjectTracker.API.Migrations
                         .IsUnique();
 
                     b.ToTable("ProofOfDeliveries");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ScrapRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CommodityId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("ScrapDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommodityId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.ToTable("ScrapRecords");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SleepOut", b =>
@@ -5691,6 +5731,10 @@ namespace ProjectTracker.API.Migrations
 
                     b.Property<decimal?>("NextServiceOdometer")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Province")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("RegistrationNumber")
                         .IsRequired()
@@ -7517,6 +7561,31 @@ namespace ProjectTracker.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Load");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ScrapRecord", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Commodity", "Commodity")
+                        .WithMany()
+                        .HasForeignKey("CommodityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectTracker.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Warehouse", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Commodity");
+
+                    b.Navigation("User");
+
+                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SleepOut", b =>

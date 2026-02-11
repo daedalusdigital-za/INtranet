@@ -3950,7 +3950,9 @@ export class DispatchDialog implements OnInit {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatChipsModule
+    MatChipsModule,
+    MatProgressSpinnerModule,
+    MatSnackBarModule
   ],
   template: `
     <div class="dialog-header scrap-header">
@@ -3966,23 +3968,29 @@ export class DispatchDialog implements OnInit {
         <span>Record damaged or unusable items to remove from inventory</span>
       </div>
 
-      <div class="form-section">
-        <mat-form-field class="full-width">
-          <mat-label>Search Item</mat-label>
-          <input matInput [(ngModel)]="searchQuery" (input)="filterItems()" placeholder="Item code, description...">
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
+      @if (loading) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Loading inventory...</p>
+        </div>
+      } @else {
+        <div class="form-section">
+          <mat-form-field class="full-width">
+            <mat-label>Search Item</mat-label>
+            <input matInput [(ngModel)]="searchQuery" (input)="filterItems()" placeholder="Item code, description...">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
 
-        @if (filteredItems.length > 0 && searchQuery) {
-          <div class="items-dropdown">
-            @for (item of filteredItems.slice(0, 5); track item.sku) {
-              <div class="item-option" (click)="selectItem(item)">
-                <div class="item-name">{{ item.name }}</div>
-                <div class="item-sku">{{ item.sku }}</div>
-              </div>
-            }
-          </div>
-        }
+          @if (filteredItems.length > 0 && searchQuery) {
+            <div class="items-dropdown">
+              @for (item of filteredItems.slice(0, 5); track item.sku) {
+                <div class="item-option" (click)="selectItem(item)">
+                  <div class="item-name">{{ item.name }}</div>
+                  <div class="item-sku">{{ item.sku }}</div>
+                </div>
+              }
+            </div>
+          }
 
         @if (selectedItem) {
           <div class="selected-item-card">
@@ -4033,14 +4041,19 @@ export class DispatchDialog implements OnInit {
             </div>
           </div>
         }
-      </div>
+        </div>
+      }
     </div>
 
     <div class="dialog-actions">
-      <button mat-button (click)="dialogRef.close()">Cancel</button>
-      <button mat-raised-button color="warn" [disabled]="!selectedItem || scrapQuantity <= 0 || !scrapReason" (click)="confirmScrap()">
-        <mat-icon>delete_sweep</mat-icon>
-        Record Scrap
+      <button mat-button (click)="dialogRef.close()" [disabled]="submitting">Cancel</button>
+      <button mat-raised-button color="warn" [disabled]="!selectedItem || scrapQuantity <= 0 || !scrapReason || submitting" (click)="confirmScrap()">
+        @if (submitting) {
+          <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+        } @else {
+          <mat-icon>delete_sweep</mat-icon>
+        }
+        {{ submitting ? 'Recording...' : 'Record Scrap' }}
       </button>
     </div>
   `,
@@ -4053,6 +4066,20 @@ export class DispatchDialog implements OnInit {
       background: rgba(252, 103, 103, 0.1) !important;
       border-left-color: #fc6767 !important;
       color: #ec008c !important;
+    }
+
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      gap: 16px;
+    }
+
+    .loading-container p {
+      color: #666;
+      margin: 0;
     }
 
     .dialog-header {
@@ -4189,20 +4216,44 @@ export class ScrapDialog implements OnInit {
   notes = '';
   filteredItems: any[] = [];
   allItems: any[] = [];
+  loading = false;
+  submitting = false;
 
   constructor(
     public dialogRef: MatDialogRef<ScrapDialog>,
     @Inject(MAT_DIALOG_DATA) public data: any,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
-    // Load items from warehouse
-    this.allItems = [
-      { sku: 'ITM-001', name: 'Medical Gloves Box', quantity: 150 },
-      { sku: 'ITM-002', name: 'Surgical Masks (50pk)', quantity: 200 },
-      { sku: 'ITM-003', name: 'Hand Sanitizer 500ml', quantity: 85 },
-    ];
+    this.loadWarehouseInventory();
+  }
+
+  loadWarehouseInventory(): void {
+    this.loading = true;
+    const warehouseId = this.data.id;
+    
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/warehouses/${warehouseId}/inventory`)
+      .subscribe({
+        next: (inventory) => {
+          this.allItems = inventory.map(item => ({
+            id: item.id,
+            commodityId: item.commodityId,
+            sku: item.commodityCode || `COM-${item.commodityId}`,
+            name: item.commodityName,
+            quantity: item.quantityOnHand,
+            binLocation: item.binLocation
+          }));
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error loading warehouse inventory:', error);
+          this.snackBar.open('Failed to load warehouse inventory', 'Close', { duration: 3000 });
+          this.allItems = [];
+          this.loading = false;
+        }
+      });
   }
 
   filterItems(): void {
@@ -4230,12 +4281,42 @@ export class ScrapDialog implements OnInit {
   }
 
   confirmScrap(): void {
-    this.snackBar.open(
-      `Scrapped ${this.scrapQuantity} units of ${this.selectedItem.name}. Reason: ${this.scrapReason}`,
-      'Close',
-      { duration: 5000 }
-    );
-    this.dialogRef.close({ scrapped: true });
+    if (!this.selectedItem || this.scrapQuantity <= 0 || !this.scrapReason) {
+      this.snackBar.open('Please fill in all required fields', 'Close', { duration: 3000 });
+      return;
+    }
+
+    if (this.scrapQuantity > this.selectedItem.quantity) {
+      this.snackBar.open('Scrap quantity exceeds available inventory', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.submitting = true;
+    const scrapData = {
+      warehouseId: this.data.id,
+      commodityId: this.selectedItem.commodityId,
+      quantity: this.scrapQuantity,
+      reason: this.scrapReason,
+      notes: this.notes || null
+    };
+
+    this.http.post(`${environment.apiUrl}/logistics/scrap`, scrapData)
+      .subscribe({
+        next: (response: any) => {
+          this.snackBar.open(
+            `Scrapped ${this.scrapQuantity} units of ${this.selectedItem.name}. New balance: ${response.newInventoryBalance}`,
+            'Close',
+            { duration: 5000 }
+          );
+          this.dialogRef.close({ scrapped: true, response });
+        },
+        error: (error) => {
+          console.error('Error recording scrap:', error);
+          const errorMessage = error.error?.message || 'Failed to record scrap';
+          this.snackBar.open(errorMessage, 'Close', { duration: 5000 });
+          this.submitting = false;
+        }
+      });
   }
 }
 
