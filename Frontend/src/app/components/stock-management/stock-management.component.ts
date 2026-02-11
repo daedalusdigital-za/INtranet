@@ -3096,7 +3096,8 @@ export class DispatchDialog implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<DispatchDialog>,
     @Inject(MAT_DIALOG_DATA) public data: any,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
@@ -3104,54 +3105,87 @@ export class DispatchDialog implements OnInit {
   }
 
   loadTripsheets(): void {
-    // Simulate loading tripsheets from logistics
-    setTimeout(() => {
-      this.tripsheets = [
-        {
-          id: 1,
-          tripsheetNumber: 'TS-2026-001',
-          customerName: 'Acme Corp',
-          deliveryDate: '2026-02-12',
-          status: 'Pending',
-          expanded: false,
-          canFulfill: true,
-          items: [
-            { id: 1, name: 'Medical Gloves Box', requested: 50, available: 150, toPick: 50 },
-            { id: 2, name: 'Surgical Masks (50pk)', requested: 30, available: 200, toPick: 30 },
-            { id: 3, name: 'Hand Sanitizer 500ml', requested: 20, available: 85, toPick: 20 }
-          ]
+    this.loading = true;
+    const warehouseId = this.data.id;
+    
+    // Load pending tripsheets (Available, Assigned statuses)
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/loads?warehouseId=${warehouseId}`)
+      .subscribe({
+        next: (loads) => {
+          this.tripsheets = loads.map(load => ({
+            id: load.id,
+            tripsheetNumber: load.loadNumber,
+            customerName: load.customer?.name || 'Unknown Customer',
+            deliveryDate: load.scheduledDeliveryDate ? new Date(load.scheduledDeliveryDate).toLocaleDateString() : 'Not scheduled',
+            status: load.status === 'Delivered' ? 'Completed' : (load.status === 'Assigned' || load.status === 'InTransit' ? 'Confirmed' : 'Pending'),
+            originalStatus: load.status,
+            expanded: false,
+            canFulfill: true,
+            items: this.mapLoadItems(load)
+          }));
+          this.filteredTripsheets = [...this.tripsheets];
+          this.loading = false;
         },
-        {
-          id: 2,
-          tripsheetNumber: 'TS-2026-002',
-          customerName: 'Tech Solutions Ltd',
-          deliveryDate: '2026-02-13',
-          status: 'Confirmed',
-          expanded: false,
-          canFulfill: false,
-          items: [
-            { id: 4, name: 'Disposable Gowns', requested: 100, available: 80, toPick: 80 },
-            { id: 5, name: 'Face Shields', requested: 50, available: 20, toPick: 20 },
-            { id: 6, name: 'Thermometers', requested: 25, available: 25, toPick: 25 }
-          ]
-        },
-        {
-          id: 3,
-          tripsheetNumber: 'TS-2026-003',
-          customerName: 'Medical Supplies Inc',
-          deliveryDate: '2026-02-14',
-          status: 'Pending',
-          expanded: false,
-          canFulfill: true,
-          items: [
-            { id: 7, name: 'Latex Gloves', requested: 200, available: 250, toPick: 200 },
-            { id: 8, name: 'Alcohol Wipes', requested: 100, available: 150, toPick: 100 }
-          ]
+        error: (error) => {
+          console.error('Error loading tripsheets:', error);
+          this.snackBar.open('Failed to load tripsheets', 'Close', { duration: 3000 });
+          this.tripsheets = [];
+          this.filteredTripsheets = [];
+          this.loading = false;
         }
-      ];
-      this.filteredTripsheets = [...this.tripsheets];
-      this.loading = false;
-    }, 1000);
+      });
+  }
+
+  mapLoadItems(load: any): any[] {
+    const items: any[] = [];
+    
+    // Map items from LoadItems
+    if (load.loadItems && load.loadItems.length > 0) {
+      load.loadItems.forEach((item: any) => {
+        items.push({
+          id: item.id,
+          name: item.commodity?.name || item.description || 'Unknown Item',
+          requested: item.quantity || 0,
+          available: 0, // Will be populated from SOH
+          toPick: item.quantity || 0,
+          unit: item.unitOfMeasure || 'units'
+        });
+      });
+    }
+    
+    // Map items from Stops -> Commodities
+    if (load.stops && load.stops.length > 0) {
+      load.stops.forEach((stop: any) => {
+        if (stop.commodities && stop.commodities.length > 0) {
+          stop.commodities.forEach((sc: any) => {
+            const existingItem = items.find(i => i.name === sc.commodity?.name);
+            if (existingItem) {
+              existingItem.requested += sc.quantity || 0;
+              existingItem.toPick += sc.quantity || 0;
+            } else {
+              items.push({
+                id: sc.id,
+                name: sc.commodity?.name || 'Unknown Item',
+                requested: sc.quantity || 0,
+                available: 0, // Will be populated from SOH
+                toPick: sc.quantity || 0,
+                unit: 'units'
+              });
+            }
+          });
+        }
+      });
+    }
+    
+    // Populate available stock from SOH for this warehouse
+    items.forEach(item => {
+      // TODO: Query SOH for this warehouse and item
+      // For now, simulate availability
+      item.available = Math.floor(item.requested * (0.8 + Math.random() * 0.5));
+      item.toPick = Math.min(item.toPick, item.available);
+    });
+    
+    return items;
   }
 
   filterTripsheets(): void {
