@@ -77,8 +77,13 @@
     <div class="emoji-picker-container" *ngIf="showEmojiPicker">
       <emoji-mart 
         (emojiClick)="addEmoji($event)" 
-        [perLine]="7"
-        title="Pick your emoji"
+        [perLine]="6"
+        [totalFrequentLines]="2"
+        [include]="['recent', 'people', 'nature', 'foods', 'objects']"
+        [showPreview]="false"
+        [emojiSize]="24"
+        [sheetSize]="32"
+        title="Pick emoji"
         emoji="point_up">
       </emoji-mart>
     </div>

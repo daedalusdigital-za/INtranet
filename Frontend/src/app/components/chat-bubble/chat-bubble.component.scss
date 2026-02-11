@@ -456,13 +456,29 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   border-radius: 10px;
   overflow: hidden;
+  max-height: 280px;
   
   ::ng-deep emoji-mart {
     border: none;
+    width: 260px !important;
+  }
+  
+  ::ng-deep .emoji-mart-scroll {
+    max-height: 180px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  ::ng-deep .emoji-mart-category-list {
+    contain: content;
   }
   
   ::ng-deep .emoji-mart-search input {
     border-radius: 8px;
+  }
+  
+  ::ng-deep .emoji-mart-preview {
+    display: none;
   }
 }
 
