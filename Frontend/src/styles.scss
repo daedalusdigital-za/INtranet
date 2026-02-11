@@ -196,3 +196,19 @@ mat-toolbar mat-icon {
 .warning-snackbar .mat-mdc-button {
   color: white !important;
 }
+
+/* Modern dialog styling for blue themed dialogs */
+.modern-dialog .mat-mdc-dialog-container {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 20px !important;
+  overflow: hidden;
+}
+
+.modern-dialog .mat-mdc-dialog-surface {
+  padding: 0 !important;
+  background: transparent !important;
+  border-radius: 20px !important;
+  overflow: hidden;
+}

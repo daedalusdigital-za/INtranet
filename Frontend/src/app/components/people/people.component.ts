@@ -50,95 +50,92 @@ import { environment } from '../../../environments/environment';
 
     <div class="attendance-container">
       @if (!trainingAccess && !mainOfficeAccess && !condomFactoryAccess && !sanitaryPadsAccess && !newRoadAccess && !captownAccess && !brionkhorspruitAccess && !portElizabethAccess && !logisticsAccess) {
-        <!-- Departments & Branches Section -->
-        <div class="departments-section-header">
-          <h2>
-            <mat-icon>business</mat-icon>
-            Departments & Branch Locations
-          </h2>
-          <p>Select a department or branch location to access specific operational data</p>
+        <!-- Modern Header Section -->
+        <div class="header-section-modern">
+          <div class="header-content">
+            <div class="title-area">
+              <div class="icon-wrapper">
+                <mat-icon>groups</mat-icon>
+              </div>
+              <div class="title-text">
+                <h1>Human Resources</h1>
+                <p class="subtitle">Manage departments, branches & employee data</p>
+              </div>
+            </div>
+            <div class="header-stats">
+              <div class="stat-card">
+                <mat-icon>business</mat-icon>
+                <div class="stat-info">
+                  <span class="stat-value">8</span>
+                  <span class="stat-label">Locations</span>
+                </div>
+              </div>
+              <div class="stat-card">
+                <mat-icon>badge</mat-icon>
+                <div class="stat-info">
+                  <span class="stat-value">Active</span>
+                  <span class="stat-label">Status</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Search Bar -->
+          <div class="search-section">
+            <div class="search-box">
+              <mat-icon>search</mat-icon>
+              <input type="text" 
+                     placeholder="Search departments or branches..." 
+                     [(ngModel)]="searchQuery"
+                     (input)="filterLocations()">
+              @if (searchQuery) {
+                <button mat-icon-button (click)="clearLocationSearch()" class="clear-btn">
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </div>
+          </div>
         </div>
 
-        <div class="access-section">
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">folder_special</mat-icon>
-            <h2>Main Office</h2>
-            <p>Access employee attendance records and HR data</p>
-            <button mat-raised-button color="primary" (click)="openMainOfficeDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access Main Office
-            </button>
-          </mat-card>
+        <!-- Departments Grid -->
+        <div class="departments-section">
+          <div class="departments-grid">
+            @for (location of filteredLocations; track location.name) {
+              <div class="department-card" 
+                   (click)="location.action()"
+                   [matTooltip]="'Access ' + location.name">
+                
+                <div class="card-glow"></div>
+                
+                <div class="card-content">
+                  <div class="icon-container" [attr.data-location]="location.id">
+                    <mat-icon>{{ location.icon }}</mat-icon>
+                  </div>
+                  
+                  <h3>{{ location.name }}</h3>
+                  
+                  <p class="location-description">{{ location.description }}</p>
 
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">factory</mat-icon>
-            <h2>Condom Factory</h2>
-            <p>Access factory operations and production data</p>
-            <button mat-raised-button color="primary" (click)="openCondomFactoryDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access Condom Factory
-            </button>
-          </mat-card>
+                  <div class="card-footer">
+                    <button mat-flat-button class="access-btn">
+                      <mat-icon>lock_open</mat-icon>
+                      Access
+                    </button>
+                  </div>
+                </div>
 
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">local_hospital</mat-icon>
-            <h2>Sanitary Pads</h2>
-            <p>Access sanitary pads production and inventory</p>
-            <button mat-raised-button color="primary" (click)="openSanitaryPadsDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access Sanitary Pads
-            </button>
-          </mat-card>
+                <div class="card-indicator"></div>
+              </div>
+            }
+          </div>
 
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">location_on</mat-icon>
-            <h2>New Road</h2>
-            <p>Access New Road branch operations and data</p>
-            <button mat-raised-button color="primary" (click)="openNewRoadDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access New Road
-            </button>
-          </mat-card>
-
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">location_city</mat-icon>
-            <h2>Cape Town</h2>
-            <p>Access Cape Town branch operations and data</p>
-            <button mat-raised-button color="primary" (click)="openCaptownDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access Cape Town
-            </button>
-          </mat-card>
-
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">place</mat-icon>
-            <h2>Brionkhorspruit</h2>
-            <p>Access Brionkhorspruit branch operations and data</p>
-            <button mat-raised-button color="primary" (click)="openBrionkhorspruitDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access Brionkhorspruit
-            </button>
-          </mat-card>
-
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">apartment</mat-icon>
-            <h2>Port Elizabeth</h2>
-            <p>Access Port Elizabeth branch operations and data</p>
-            <button mat-raised-button color="primary" (click)="openPortElizabethDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access Port Elizabeth
-            </button>
-          </mat-card>
-
-          <mat-card class="access-card">
-            <mat-icon class="folder-icon">local_shipping</mat-icon>
-            <h2>Logistics</h2>
-            <p>Access logistics operations and supply chain data</p>
-            <button mat-raised-button color="primary" (click)="openLogisticsDialog()" class="access-btn">
-              <mat-icon>lock_open</mat-icon>
-              Access Logistics
-            </button>
-          </mat-card>
+          @if (filteredLocations.length === 0 && searchQuery) {
+            <div class="no-results">
+              <mat-icon>search_off</mat-icon>
+              <h3>No locations found</h3>
+              <p>Try a different search term</p>
+            </div>
+          }
         </div>
       } @else if (trainingAccess) {
         <!-- Training Content -->
@@ -608,9 +605,343 @@ import { environment } from '../../../environments/environment';
   `,
   styles: [`
     .attendance-container {
-      padding: 80px;
-      min-height: calc(100vh - 64px);
+      min-height: 100vh;
+      padding: 80px 32px 48px;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
+    }
+
+    /* Modern Header Section */
+    .header-section-modern {
+      max-width: 1400px;
+      margin: 0 auto 40px;
+    }
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .title-area {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .icon-wrapper {
+      width: 72px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+
+    .icon-wrapper mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: white;
+    }
+
+    .title-text h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+      letter-spacing: -0.5px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .title-text .subtitle {
+      margin: 4px 0 0;
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .header-stats {
+      display: flex;
+      gap: 16px;
+    }
+
+    .stat-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 24px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .stat-card mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: white;
+    }
+
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Search Section */
+    .search-section {
+      display: flex;
+      justify-content: center;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 500px;
+      padding: 14px 20px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+
+    .search-box mat-icon {
+      color: #1e90ff;
+      font-size: 24px;
+    }
+
+    .search-box input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 16px;
+      background: transparent;
+      color: #333;
+    }
+
+    .search-box input::placeholder {
+      color: #999;
+    }
+
+    .clear-btn {
+      width: 32px;
+      height: 32px;
+    }
+
+    /* Departments Grid */
+    .departments-section {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .departments-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .department-card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+
+    .department-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    }
+
+    .card-glow {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 100%;
+      background: linear-gradient(135deg, rgba(30, 144, 255, 0.1) 0%, rgba(65, 105, 225, 0.05) 100%);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+
+    .department-card:hover .card-glow {
+      opacity: 1;
+    }
+
+    .card-content {
+      position: relative;
+      padding: 32px 24px;
+      text-align: center;
+      z-index: 1;
+    }
+
+    .icon-container {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 20px;
       background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      box-shadow: 0 8px 24px rgba(30, 144, 255, 0.4);
+      transition: all 0.4s;
+    }
+
+    .department-card:hover .icon-container {
+      transform: scale(1.1);
+      box-shadow: 0 12px 32px rgba(30, 144, 255, 0.5);
+    }
+
+    /* Location-specific icon colors */
+    .icon-container[data-location="main-office"] { background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%); }
+    .icon-container[data-location="condom-factory"] { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4); }
+    .icon-container[data-location="sanitary-pads"] { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); box-shadow: 0 8px 24px rgba(240, 147, 251, 0.4); }
+    .icon-container[data-location="new-road"] { background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); box-shadow: 0 8px 24px rgba(255, 167, 38, 0.4); }
+    .icon-container[data-location="cape-town"] { background: linear-gradient(135deg, #26a69a 0%, #00897b 100%); box-shadow: 0 8px 24px rgba(38, 166, 154, 0.4); }
+    .icon-container[data-location="brionkhorspruit"] { background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%); box-shadow: 0 8px 24px rgba(124, 77, 255, 0.4); }
+    .icon-container[data-location="port-elizabeth"] { background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%); box-shadow: 0 8px 24px rgba(66, 165, 245, 0.4); }
+    .icon-container[data-location="logistics"] { background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%); box-shadow: 0 8px 24px rgba(102, 187, 106, 0.4); }
+
+    .icon-container mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: white;
+    }
+
+    .department-card h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e90ff;
+    }
+
+    .location-description {
+      margin: 0 0 20px;
+      color: #666;
+      font-size: 14px;
+      min-height: 40px;
+    }
+
+    .card-footer {
+      margin-top: 8px;
+    }
+
+    .department-card .access-btn {
+      width: 100%;
+      padding: 10px 24px !important;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%) !important;
+      color: white !important;
+      font-weight: 500 !important;
+      border-radius: 12px !important;
+      transition: all 0.3s !important;
+      box-shadow: 0 4px 12px rgba(30, 144, 255, 0.3) !important;
+    }
+
+    .department-card:hover .access-btn {
+      box-shadow: 0 6px 20px rgba(30, 144, 255, 0.4) !important;
+      transform: translateY(-2px);
+    }
+
+    .department-card .access-btn mat-icon {
+      margin-right: 8px;
+    }
+
+    .card-indicator {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #1e90ff 0%, #4169e1 100%);
+      transform: scaleX(0);
+      transition: transform 0.4s;
+    }
+
+    .department-card:hover .card-indicator {
+      transform: scaleX(1);
+    }
+
+    /* No Results */
+    .no-results {
+      text-align: center;
+      padding: 60px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .no-results mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.7;
+    }
+
+    .no-results h3 {
+      margin: 0 0 8px;
+      color: white;
+    }
+
+    .no-results p {
+      margin: 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .attendance-container {
+        padding: 80px 16px 32px;
+      }
+
+      .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .title-area {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+      }
+
+      .title-text h1 {
+        font-size: 24px;
+      }
+
+      .header-stats {
+        width: 100%;
+      }
+
+      .stat-card {
+        flex: 1;
+        justify-content: center;
+      }
+
+      .departments-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .notification-dropdown {
@@ -1773,6 +2104,19 @@ export class PeopleComponent implements OnInit, OnDestroy {
   private autoRefreshSubscription?: Subscription;
   private signalRSubscription?: Subscription;
 
+  // Location cards data
+  locations = [
+    { id: 'main-office', name: 'Main Office', icon: 'folder_special', description: 'Access employee attendance records and HR data', action: () => this.openMainOfficeDialog() },
+    { id: 'condom-factory', name: 'Condom Factory', icon: 'factory', description: 'Access factory operations and production data', action: () => this.openCondomFactoryDialog() },
+    { id: 'sanitary-pads', name: 'Sanitary Pads', icon: 'local_hospital', description: 'Access sanitary pads production and inventory', action: () => this.openSanitaryPadsDialog() },
+    { id: 'new-road', name: 'New Road', icon: 'location_on', description: 'Access New Road branch operations and data', action: () => this.openNewRoadDialog() },
+    { id: 'cape-town', name: 'Cape Town', icon: 'location_city', description: 'Access Cape Town branch operations and data', action: () => this.openCaptownDialog() },
+    { id: 'brionkhorspruit', name: 'Brionkhorspruit', icon: 'place', description: 'Access Brionkhorspruit branch operations and data', action: () => this.openBrionkhorspruitDialog() },
+    { id: 'port-elizabeth', name: 'Port Elizabeth', icon: 'apartment', description: 'Access Port Elizabeth branch operations and data', action: () => this.openPortElizabethDialog() },
+    { id: 'logistics', name: 'Logistics', icon: 'local_shipping', description: 'Access logistics operations and supply chain data', action: () => this.openLogisticsDialog() }
+  ];
+  filteredLocations = [...this.locations];
+
   constructor(
     private authService: AuthService,
     private attendanceService: AttendanceService,
@@ -1938,9 +2282,27 @@ export class PeopleComponent implements OnInit, OnDestroy {
     });
   }
 
+  filterLocations(): void {
+    if (!this.searchQuery.trim()) {
+      this.filteredLocations = [...this.locations];
+    } else {
+      const query = this.searchQuery.toLowerCase();
+      this.filteredLocations = this.locations.filter(loc => 
+        loc.name.toLowerCase().includes(query) || 
+        loc.description.toLowerCase().includes(query)
+      );
+    }
+  }
+
+  clearLocationSearch(): void {
+    this.searchQuery = '';
+    this.filterLocations();
+  }
+
   openMainOfficeDialog(): void {
     const dialogRef = this.dialog.open(MainOfficePasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1953,7 +2315,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   openCondomFactoryDialog(): void {
     const dialogRef = this.dialog.open(CondomFactoryPasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1965,7 +2328,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   openSanitaryPadsDialog(): void {
     const dialogRef = this.dialog.open(SanitaryPadsPasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1977,7 +2341,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   openNewRoadDialog(): void {
     const dialogRef = this.dialog.open(NewRoadPasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1989,7 +2354,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   openCaptownDialog(): void {
     const dialogRef = this.dialog.open(CaptownPasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -2001,7 +2367,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   openBrionkhorspruitDialog(): void {
     const dialogRef = this.dialog.open(BrionkhorspruitPasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -2013,7 +2380,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   openPortElizabethDialog(): void {
     const dialogRef = this.dialog.open(PortElizabethPasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -2025,7 +2393,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   openLogisticsDialog(): void {
     const dialogRef = this.dialog.open(LogisticsPasswordDialogComponent, {
-      width: '400px'
+      width: '420px',
+      panelClass: 'modern-dialog'
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -2351,93 +2720,218 @@ export class MonthlyReportDialogComponent {
     FormsModule
   ],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>lock</mat-icon>
-      Access Main Office
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact HR management for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>folder_special</mat-icon>
+        </div>
+        <h2>Access Main Office</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput
-               type="password"
-               [(ngModel)]="password"
-               (keyup.enter)="validatePassword()"
-               placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-body">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input"
+                 [class.error]="errorMessage">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-hint">
+          <mat-icon>info_outline</mat-icon>
+          Contact HR management for access credentials
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="btn-cancel" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="btn-access" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    :host { display: block; }
+
+    .dialog-container {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      border-radius: 20px;
+      padding: 32px;
+      color: white;
+      min-width: 360px;
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .lock-icon {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: white;
+    }
+
+    .dialog-header h2 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      font-weight: 600;
+      color: white;
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      margin: 0;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.8);
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-body { margin-bottom: 24px; }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
     }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 52px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      color: white;
+      font-size: 16px;
+      transition: all 0.3s;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+    }
+
+    .password-input.error { border-color: #ff6b6b; }
+    .password-input::placeholder { color: rgba(255, 255, 255, 0.4); }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #d32f2f;
+      padding: 12px 16px;
+      background: rgba(255, 107, 107, 0.15);
+      border: 1px solid rgba(255, 107, 107, 0.3);
+      border-radius: 10px;
+      color: #ff6b6b;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.4s ease-in-out;
     }
 
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-8px); }
+      75% { transform: translateX(8px); }
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .error-message mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+    .contact-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 0;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-hint mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
     }
+
+    .btn-cancel, .btn-access {
+      flex: 1;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.3s;
+    }
+
+    .btn-cancel {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-cancel:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+    }
+
+    .btn-access {
+      background: rgba(255, 255, 255, 0.95);
+      color: #1e90ff;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-access:hover {
+      transform: translateY(-2px);
+      background: white;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .btn-access mat-icon { font-size: 20px; width: 20px; height: 20px; }
   `]
 })
 export class MainOfficePasswordDialogComponent {
@@ -2471,103 +2965,57 @@ export class MainOfficePasswordDialogComponent {
 @Component({
   selector: 'app-condom-factory-password-dialog',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatDialogModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    MatIconModule,
-    FormsModule
-  ],
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>factory</mat-icon>
-      Access Condom Factory
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact factory management for the password.</p>
-
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput
-               type="password"
-               [(ngModel)]="password"
-               (keyup.enter)="validatePassword()"
-               placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
-
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
-        </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+    <div class="dialog-container" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);">
+      <div class="dialog-header">
+        <div class="lock-icon"><mat-icon>factory</mat-icon></div>
+        <h2>Access Condom Factory</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
+      <div class="dialog-body">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password" class="password-input" [class.error]="errorMessage">
+        </div>
+        @if (errorMessage) {
+          <div class="error-message"><mat-icon>error_outline</mat-icon><span>{{ errorMessage }}</span></div>
+        }
+        <p class="contact-hint"><mat-icon>info_outline</mat-icon>Contact factory management for access</p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn-cancel" (click)="onCancel()">Cancel</button>
+        <button class="btn-access" (click)="validatePassword()"><mat-icon>lock_open</mat-icon>Access</button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
-    }
-
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-    }
-
-    .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
-    }
-
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #d32f2f;
-      font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
-    }
-
-    mat-dialog-actions button {
-      margin-left: 8px;
-    }
+    :host { display: block; }
+    .dialog-container { border-radius: 20px; padding: 32px; color: white; min-width: 360px; }
+    .dialog-header { text-align: center; margin-bottom: 28px; }
+    .lock-icon { width: 72px; height: 72px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+    .lock-icon mat-icon { font-size: 36px; width: 36px; height: 36px; color: white; }
+    .dialog-header h2 { margin: 0 0 8px; font-size: 24px; font-weight: 600; color: white; }
+    .info-text { margin: 0; font-size: 14px; color: rgba(255,255,255,0.8); }
+    .dialog-body { margin-bottom: 24px; }
+    .input-group { position: relative; margin-bottom: 16px; }
+    .input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.5); font-size: 20px; width: 20px; height: 20px; }
+    .password-input { width: 100%; padding: 16px 16px 16px 52px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; color: white; font-size: 16px; transition: all 0.3s; box-sizing: border-box; }
+    .password-input:focus { outline: none; border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); box-shadow: 0 0 0 4px rgba(255,255,255,0.1); }
+    .password-input.error { border-color: #ffcdd2; }
+    .password-input::placeholder { color: rgba(255,255,255,0.4); }
+    .error-message { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 10px; color: white; font-size: 14px; margin-bottom: 16px; animation: shake 0.4s ease-in-out; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+    .error-message mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .contact-hint { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font-size: 13px; color: rgba(255,255,255,0.6); }
+    .contact-hint mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .dialog-actions { display: flex; gap: 12px; }
+    .btn-cancel, .btn-access { flex: 1; padding: 14px 24px; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s; }
+    .btn-cancel { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.2); }
+    .btn-cancel:hover { background: rgba(255,255,255,0.15); color: white; }
+    .btn-access { background: rgba(255,255,255,0.95); color: #ee5a5a; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    .btn-access:hover { transform: translateY(-2px); background: white; box-shadow: 0 6px 24px rgba(0,0,0,0.25); }
+    .btn-access mat-icon { font-size: 20px; width: 20px; height: 20px; }
   `]
 })
 export class CondomFactoryPasswordDialogComponent {
@@ -2611,77 +3059,155 @@ export class CondomFactoryPasswordDialogComponent {
     FormsModule
   ],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>local_hospital</mat-icon>
-      Access Sanitary Pads
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact production management for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>local_hospital</mat-icon>
+        </div>
+        <h2>Access Sanitary Pads</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput
-               type="password"
-               [(ngModel)]="password"
-               (keyup.enter)="validatePassword()"
-               placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-content">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-text">
+          <mat-icon>info_outline</mat-icon>
+          Contact production management for the password
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="cancel-btn" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="access-btn" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    .dialog-container {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      border-radius: 16px;
+      padding: 32px;
+      min-width: 350px;
+      box-shadow: 0 20px 60px rgba(240, 147, 251, 0.4);
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .lock-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    h2 {
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin: 0;
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-content {
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(240, 147, 251, 0.7);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 48px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      border-color: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    }
+
+    .password-input::placeholder {
+      color: #999;
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
       color: #d32f2f;
+      padding: 12px 16px;
+      border-radius: 8px;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
     }
 
     .error-message mat-icon {
@@ -2690,13 +3216,70 @@ export class CondomFactoryPasswordDialogComponent {
       height: 18px;
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .contact-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      margin: 0;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-text mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .cancel-btn {
+      padding: 12px 24px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
+    }
+
+    .access-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      background: white;
+      color: #f5576c;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .access-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   `]
 })
@@ -2732,73 +3315,155 @@ export class SanitaryPadsPasswordDialogComponent {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>location_on</mat-icon>
-      Access New Road Branch
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact branch management for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>location_on</mat-icon>
+        </div>
+        <h2>Access New Road Branch</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-content">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-text">
+          <mat-icon>info_outline</mat-icon>
+          Contact branch management for the password
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="cancel-btn" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="access-btn" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    .dialog-container {
+      background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
+      border-radius: 16px;
+      padding: 32px;
+      min-width: 350px;
+      box-shadow: 0 20px 60px rgba(255, 167, 38, 0.4);
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .lock-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    h2 {
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin: 0;
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-content {
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(251, 140, 0, 0.7);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 48px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      border-color: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    }
+
+    .password-input::placeholder {
+      color: #999;
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
       color: #d32f2f;
+      padding: 12px 16px;
+      border-radius: 8px;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
     }
 
     .error-message mat-icon {
@@ -2807,13 +3472,70 @@ export class SanitaryPadsPasswordDialogComponent {
       height: 18px;
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .contact-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      margin: 0;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-text mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .cancel-btn {
+      padding: 12px 24px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
+    }
+
+    .access-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      background: white;
+      color: #fb8c00;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .access-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   `]
 })
@@ -2849,73 +3571,155 @@ export class NewRoadPasswordDialogComponent {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>location_city</mat-icon>
-      Access Captown Branch
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact branch management for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>location_city</mat-icon>
+        </div>
+        <h2>Access Cape Town Branch</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-content">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-text">
+          <mat-icon>info_outline</mat-icon>
+          Contact branch management for the password
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="cancel-btn" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="access-btn" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    .dialog-container {
+      background: linear-gradient(135deg, #26a69a 0%, #00897b 100%);
+      border-radius: 16px;
+      padding: 32px;
+      min-width: 350px;
+      box-shadow: 0 20px 60px rgba(38, 166, 154, 0.4);
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .lock-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    h2 {
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin: 0;
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-content {
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(0, 137, 123, 0.7);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 48px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      border-color: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    }
+
+    .password-input::placeholder {
+      color: #999;
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
       color: #d32f2f;
+      padding: 12px 16px;
+      border-radius: 8px;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
     }
 
     .error-message mat-icon {
@@ -2924,13 +3728,70 @@ export class NewRoadPasswordDialogComponent {
       height: 18px;
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .contact-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      margin: 0;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-text mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .cancel-btn {
+      padding: 12px 24px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
+    }
+
+    .access-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      background: white;
+      color: #00897b;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .access-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   `]
 })
@@ -2966,73 +3827,155 @@ export class CaptownPasswordDialogComponent {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>place</mat-icon>
-      Access Brionkhorspruit Branch
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact branch management for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>place</mat-icon>
+        </div>
+        <h2>Access Bronkhorstspruit</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-content">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-text">
+          <mat-icon>info_outline</mat-icon>
+          Contact branch management for the password
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="cancel-btn" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="access-btn" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    .dialog-container {
+      background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%);
+      border-radius: 16px;
+      padding: 32px;
+      min-width: 350px;
+      box-shadow: 0 20px 60px rgba(124, 77, 255, 0.4);
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .lock-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    h2 {
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin: 0;
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-content {
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(101, 31, 255, 0.7);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 48px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      border-color: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    }
+
+    .password-input::placeholder {
+      color: #999;
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
       color: #d32f2f;
+      padding: 12px 16px;
+      border-radius: 8px;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
     }
 
     .error-message mat-icon {
@@ -3041,13 +3984,70 @@ export class CaptownPasswordDialogComponent {
       height: 18px;
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .contact-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      margin: 0;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-text mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .cancel-btn {
+      padding: 12px 24px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
+    }
+
+    .access-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      background: white;
+      color: #651fff;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .access-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   `]
 })
@@ -3083,73 +4083,155 @@ export class BrionkhorspruitPasswordDialogComponent {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>apartment</mat-icon>
-      Access Port Elizabeth Branch
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact branch management for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>apartment</mat-icon>
+        </div>
+        <h2>Access Port Elizabeth</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-content">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-text">
+          <mat-icon>info_outline</mat-icon>
+          Contact branch management for the password
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="cancel-btn" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="access-btn" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    .dialog-container {
+      background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%);
+      border-radius: 16px;
+      padding: 32px;
+      min-width: 350px;
+      box-shadow: 0 20px 60px rgba(66, 165, 245, 0.4);
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .lock-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    h2 {
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin: 0;
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-content {
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(30, 136, 229, 0.7);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 48px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      border-color: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    }
+
+    .password-input::placeholder {
+      color: #999;
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
       color: #d32f2f;
+      padding: 12px 16px;
+      border-radius: 8px;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
     }
 
     .error-message mat-icon {
@@ -3158,13 +4240,70 @@ export class BrionkhorspruitPasswordDialogComponent {
       height: 18px;
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .contact-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      margin: 0;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-text mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .cancel-btn {
+      padding: 12px 24px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
+    }
+
+    .access-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      background: white;
+      color: #1e88e5;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .access-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   `]
 })
@@ -3200,73 +4339,155 @@ export class PortElizabethPasswordDialogComponent {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>local_shipping</mat-icon>
-      Access Logistics
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact logistics management for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>local_shipping</mat-icon>
+        </div>
+        <h2>Access Logistics</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-content">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-text">
+          <mat-icon>info_outline</mat-icon>
+          Contact logistics management for the password
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="cancel-btn" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="access-btn" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    .dialog-container {
+      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+      border-radius: 16px;
+      padding: 32px;
+      min-width: 350px;
+      box-shadow: 0 20px 60px rgba(102, 187, 106, 0.4);
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .lock-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    h2 {
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin: 0;
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-content {
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(67, 160, 71, 0.7);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 48px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      border-color: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    }
+
+    .password-input::placeholder {
+      color: #999;
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
       color: #d32f2f;
+      padding: 12px 16px;
+      border-radius: 8px;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
     }
 
     .error-message mat-icon {
@@ -3275,13 +4496,70 @@ export class PortElizabethPasswordDialogComponent {
       height: 18px;
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .contact-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      margin: 0;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-text mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .cancel-btn {
+      padding: 12px 24px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
+    }
+
+    .access-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      background: white;
+      color: #43a047;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .access-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   `]
 })
@@ -3317,73 +4595,155 @@ export class LogisticsPasswordDialogComponent {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>school</mat-icon>
-      Access Training Center
-    </h2>
-    <mat-dialog-content>
-      <p class="info-text">This section is password protected.</p>
-      <p class="contact-text">Contact HR or training coordinator for the password.</p>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <div class="lock-icon">
+          <mat-icon>school</mat-icon>
+        </div>
+        <h2>Access Training Center</h2>
+        <p class="info-text">This section is password protected</p>
+      </div>
 
-      <mat-form-field appearance="outline" style="width: 100%; margin-top: 16px;">
-        <mat-label>Password</mat-label>
-        <input matInput type="password" [(ngModel)]="password" (keyup.enter)="validatePassword()" placeholder="Enter password">
-        <mat-icon matPrefix>vpn_key</mat-icon>
-      </mat-form-field>
+      <div class="dialog-content">
+        <div class="input-group">
+          <mat-icon class="input-icon">vpn_key</mat-icon>
+          <input type="password"
+                 [(ngModel)]="password"
+                 (keyup.enter)="validatePassword()"
+                 placeholder="Enter password"
+                 class="password-input">
+        </div>
 
-      @if (errorMessage) {
-        <p class="error-message">
-          <mat-icon>error</mat-icon>
-          {{ errorMessage }}
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <p class="contact-text">
+          <mat-icon>info_outline</mat-icon>
+          Contact HR or training coordinator for the password
         </p>
-      }
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="validatePassword()">
-        <mat-icon>lock_open</mat-icon>
-        Access
-      </button>
-    </mat-dialog-actions>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="cancel-btn" (click)="onCancel()">
+          Cancel
+        </button>
+        <button class="access-btn" (click)="validatePassword()">
+          <mat-icon>lock_open</mat-icon>
+          Access
+        </button>
+      </div>
+    </div>
   `,
   styles: [`
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1e90ff;
-      margin: 0;
+    .dialog-container {
+      background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);
+      border-radius: 16px;
+      padding: 32px;
+      min-width: 350px;
+      box-shadow: 0 20px 60px rgba(92, 107, 192, 0.4);
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .lock-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .lock-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    h2 {
+      color: white;
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .info-text {
-      color: #333;
-      font-size: 15px;
-      margin: 0 0 8px 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin: 0;
     }
 
-    .contact-text {
-      color: #666;
-      font-size: 14px;
-      font-style: italic;
-      margin: 0;
+    .dialog-content {
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(57, 73, 171, 0.7);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 16px 16px 16px 48px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .password-input:focus {
+      border-color: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    }
+
+    .password-input::placeholder {
+      color: #999;
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
       color: #d32f2f;
+      padding: 12px 16px;
+      border-radius: 8px;
       font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: #ffebee;
-      border-radius: 4px;
+      margin-bottom: 16px;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
     }
 
     .error-message mat-icon {
@@ -3392,13 +4752,70 @@ export class LogisticsPasswordDialogComponent {
       height: 18px;
     }
 
-    mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+    .contact-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      margin: 0;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    .contact-text mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .cancel-btn {
+      padding: 12px 24px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: white;
+    }
+
+    .access-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      background: white;
+      color: #3949ab;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .access-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .access-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   `]
 })
