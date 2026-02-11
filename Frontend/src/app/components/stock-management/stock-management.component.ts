@@ -2713,90 +2713,121 @@ export class WarehouseOperationsDialog {
 
     <div class="dialog-content">
       <div class="info-banner">
-        <mat-icon>local_shipping</mat-icon>
-        <span>Select orders to dispatch from {{ data.name }}</span>
+        <mat-icon>description</mat-icon>
+        <span>Process tripsheets from logistics - Generate picking slips and confirm stock availability</span>
       </div>
 
       @if (loading) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
-          <p>Loading pending orders...</p>
+          <p>Loading tripsheets...</p>
         </div>
       } @else {
-        <div class="orders-section">
+        <div class="tripsheets-section">
           <div class="section-header">
-            <h3>Pending Orders ({{ pendingOrders.length }})</h3>
+            <h3>Pending Tripsheets ({{ tripsheets.length }})</h3>
             <mat-form-field class="search-field">
-              <mat-label>Search orders</mat-label>
-              <input matInput [(ngModel)]="searchQuery" (input)="filterOrders()" placeholder="Order number, customer...">
+              <mat-label>Search tripsheets</mat-label>
+              <input matInput [(ngModel)]="searchQuery" (input)="filterTripsheets()" placeholder="Tripsheet number, customer...">
               <mat-icon matSuffix>search</mat-icon>
             </mat-form-field>
           </div>
 
-          <div class="orders-list">
-            @for (order of filteredOrders; track order.id) {
-              <div class="order-card" [class.selected]="order.selected">
-                <mat-checkbox [(ngModel)]="order.selected" (change)="updateSelection()"></mat-checkbox>
-                <div class="order-info">
-                  <div class="order-number">{{ order.orderNumber }}</div>
-                  <div class="order-customer">{{ order.customerName }}</div>
-                  <div class="order-items">{{ order.itemCount }} items</div>
+          <div class="tripsheets-list">
+            @for (tripsheet of filteredTripsheets; track tripsheet.id) {
+              <div class="tripsheet-card" [class.expanded]="tripsheet.expanded">
+                <div class="tripsheet-header" (click)="toggleTripsheet(tripsheet)">
+                  <div class="tripsheet-info">
+                    <div class="tripsheet-number">{{ tripsheet.tripsheetNumber }}</div>
+                    <div class="tripsheet-customer">{{ tripsheet.customerName }}</div>
+                    <div class="tripsheet-items">{{ tripsheet.items.length }} items requested</div>
+                  </div>
+                  <div class="tripsheet-details">
+                    <div class="tripsheet-date">{{ tripsheet.deliveryDate }}</div>
+                    <div class="tripsheet-status" [class]="tripsheet.status.toLowerCase()">
+                      {{ tripsheet.status }}
+                    </div>
+                  </div>
+                  <mat-icon>{{ tripsheet.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
                 </div>
-                <div class="order-details">
-                  <div class="order-date">{{ order.orderDate }}</div>
-                  <div class="order-priority" [class.urgent]="order.priority === 'Urgent'">{{ order.priority }}</div>
-                </div>
+
+                @if (tripsheet.expanded) {
+                  <div class="tripsheet-body">
+                    <div class="items-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Item</th>
+                            <th>Requested</th>
+                            <th>Available</th>
+                            <th>To Pick</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (item of tripsheet.items; track item.id) {
+                            <tr [class.shortage]="item.available < item.requested">
+                              <td>{{ item.name }}</td>
+                              <td>{{ item.requested }}</td>
+                              <td>{{ item.available }}</td>
+                              <td>
+                                <input type="number" 
+                                       [(ngModel)]="item.toPick" 
+                                       [max]="item.available" 
+                                       min="0"
+                                       class="pick-input"
+                                       (change)="updatePickingStatus(tripsheet)">
+                              </td>
+                              <td>
+                                @if (item.toPick >= item.requested) {
+                                  <span class="status-badge fulfilled">✓ Fulfilled</span>
+                                } @else if (item.toPick > 0) {
+                                  <span class="status-badge partial">⚠ Partial</span>
+                                } @else {
+                                  <span class="status-badge unavailable">✗ Unavailable</span>
+                                }
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div class="tripsheet-actions">
+                      <button mat-raised-button color="accent" (click)="generatePickingSlip(tripsheet)">
+                        <mat-icon>list_alt</mat-icon>
+                        Generate Picking Slip
+                      </button>
+                      
+                      @if (tripsheet.canFulfill) {
+                        <button mat-raised-button color="primary" (click)="generateDispatchSlip(tripsheet)">
+                          <mat-icon>local_shipping</mat-icon>
+                          Generate Dispatch Slip
+                        </button>
+                      } @else {
+                        <button mat-raised-button color="warn" (click)="markPartialFulfillment(tripsheet)">
+                          <mat-icon>report_problem</mat-icon>
+                          Mark Partial/Unfulfilled
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
               </div>
             }
-            @if (filteredOrders.length === 0) {
+            @if (filteredTripsheets.length === 0) {
               <div class="empty-state">
                 <mat-icon>inbox</mat-icon>
-                <p>No pending orders found</p>
+                <p>No pending tripsheets found</p>
               </div>
             }
           </div>
         </div>
-
-        @if (selectedCount > 0) {
-          <div class="dispatch-section">
-            <h3>Dispatch Details</h3>
-            <div class="dispatch-form">
-              <mat-form-field class="full-width">
-                <mat-label>Assign to Vehicle</mat-label>
-                <mat-select [(ngModel)]="selectedVehicle">
-                  <mat-option value="">Select Vehicle</mat-option>
-                  <mat-option value="V001">BK31KFZN - Truck</mat-option>
-                  <mat-option value="V002">CT11SJZN - Van</mat-option>
-                  <mat-option value="V003">DJ25NRZN - Truck</mat-option>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field class="full-width">
-                <mat-label>Assign to Driver</mat-label>
-                <mat-select [(ngModel)]="selectedDriver">
-                  <mat-option value="">Select Driver</mat-option>
-                  <mat-option value="D001">John Doe</mat-option>
-                  <mat-option value="D002">Jane Smith</mat-option>
-                  <mat-option value="D003">Mike Johnson</mat-option>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field class="full-width">
-                <mat-label>Dispatch Notes</mat-label>
-                <textarea matInput [(ngModel)]="dispatchNotes" rows="3" placeholder="Enter any special instructions..."></textarea>
-              </mat-form-field>
-            </div>
-          </div>
-        }
       }
     </div>
 
     <div class="dialog-actions">
-      <button mat-button (click)="dialogRef.close()">Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="selectedCount === 0 || !selectedVehicle || !selectedDriver" (click)="confirmDispatch()">
-        <mat-icon>send</mat-icon>
-        Dispatch {{ selectedCount }} Order{{ selectedCount !== 1 ? 's' : '' }}
-      </button>
+      <button mat-button (click)="dialogRef.close()">Close</button>
     </div>
   `,
   styles: [`
@@ -2822,7 +2853,7 @@ export class WarehouseOperationsDialog {
 
     .dialog-content {
       padding: 24px;
-      max-height: 70vh;
+      max-height: 75vh;
       overflow-y: auto;
     }
 
@@ -2856,100 +2887,172 @@ export class WarehouseOperationsDialog {
       width: 300px;
     }
 
-    .orders-list {
+    .tripsheets-list {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      max-height: 400px;
-      overflow-y: auto;
+      gap: 16px;
     }
 
-    .order-card {
+    .tripsheet-card {
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      background: white;
+    }
+
+    .tripsheet-card.expanded {
+      border-color: #f093fb;
+      box-shadow: 0 4px 16px rgba(240, 147, 251, 0.2);
+    }
+
+    .tripsheet-header {
       display: flex;
       align-items: center;
       gap: 16px;
       padding: 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 12px;
-      transition: all 0.2s ease;
-      background: white;
+      cursor: pointer;
+      transition: background 0.2s ease;
     }
 
-    .order-card:hover {
-      border-color: #f093fb;
-      box-shadow: 0 2px 8px rgba(240, 147, 251, 0.2);
+    .tripsheet-header:hover {
+      background: rgba(240, 147, 251, 0.05);
     }
 
-    .order-card.selected {
-      border-color: #f5576c;
-      background: rgba(245, 87, 108, 0.05);
-    }
-
-    .order-info {
+    .tripsheet-info {
       flex: 1;
     }
 
-    .order-number {
+    .tripsheet-number {
       font-weight: 700;
       font-size: 1.1rem;
       color: #333;
     }
 
-    .order-customer {
+    .tripsheet-customer {
       color: #666;
       margin-top: 4px;
     }
 
-    .order-items {
+    .tripsheet-items {
       color: #999;
       font-size: 0.9rem;
       margin-top: 4px;
     }
 
-    .order-details {
+    .tripsheet-details {
       text-align: right;
     }
 
-    .order-date {
+    .tripsheet-date {
       color: #666;
       font-size: 0.9rem;
     }
 
-    .order-priority {
+    .tripsheet-status {
       display: inline-block;
       padding: 4px 12px;
       border-radius: 12px;
       font-size: 0.85rem;
       font-weight: 600;
       margin-top: 8px;
+    }
+
+    .tripsheet-status.pending {
+      background: #fff3e0;
+      color: #f57c00;
+    }
+
+    .tripsheet-status.confirmed {
       background: #e3f2fd;
       color: #2196f3;
     }
 
-    .order-priority.urgent {
-      background: #ffebee;
-      color: #f44336;
+    .tripsheet-body {
+      border-top: 2px solid #f0f0f0;
+      padding: 20px;
+      background: #fafafa;
     }
 
-    .dispatch-section {
-      margin-top: 24px;
-      padding-top: 24px;
-      border-top: 2px solid #e0e0e0;
+    .items-table {
+      margin-bottom: 20px;
+      overflow-x: auto;
     }
 
-    .dispatch-section h3 {
-      margin: 0 0 16px 0;
-      color: #333;
-    }
-
-    .dispatch-form {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .full-width {
+    .items-table table {
       width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .items-table th {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    .items-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .items-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .items-table tr.shortage {
+      background: rgba(255, 152, 0, 0.05);
+    }
+
+    .pick-input {
+      width: 80px;
+      padding: 6px 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: center;
+      transition: border-color 0.2s ease;
+    }
+
+    .pick-input:focus {
+      outline: none;
+      border-color: #f093fb;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status-badge.fulfilled {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-badge.partial {
+      background: #fff3e0;
+      color: #f57c00;
+    }
+
+    .status-badge.unavailable {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .tripsheet-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 2px solid #e0e0e0;
     }
 
     .dialog-actions {
@@ -2987,12 +3090,8 @@ export class WarehouseOperationsDialog {
 export class DispatchDialog implements OnInit {
   loading = true;
   searchQuery = '';
-  pendingOrders: any[] = [];
-  filteredOrders: any[] = [];
-  selectedCount = 0;
-  selectedVehicle = '';
-  selectedDriver = '';
-  dispatchNotes = '';
+  tripsheets: any[] = [];
+  filteredTripsheets: any[] = [];
 
   constructor(
     public dialogRef: MatDialogRef<DispatchDialog>,
@@ -3001,38 +3100,116 @@ export class DispatchDialog implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.loadPendingOrders();
+    this.loadTripsheets();
   }
 
-  loadPendingOrders(): void {
-    // Simulate loading pending orders
+  loadTripsheets(): void {
+    // Simulate loading tripsheets from logistics
     setTimeout(() => {
-      this.pendingOrders = [
-        { id: 1, orderNumber: 'ORD-2026-001', customerName: 'Acme Corp', itemCount: 5, orderDate: '2026-02-10', priority: 'Normal', selected: false },
-        { id: 2, orderNumber: 'ORD-2026-002', customerName: 'Tech Solutions', itemCount: 3, orderDate: '2026-02-11', priority: 'Urgent', selected: false },
-        { id: 3, orderNumber: 'ORD-2026-003', customerName: 'Medical Supplies Ltd', itemCount: 8, orderDate: '2026-02-11', priority: 'Normal', selected: false },
+      this.tripsheets = [
+        {
+          id: 1,
+          tripsheetNumber: 'TS-2026-001',
+          customerName: 'Acme Corp',
+          deliveryDate: '2026-02-12',
+          status: 'Pending',
+          expanded: false,
+          canFulfill: true,
+          items: [
+            { id: 1, name: 'Medical Gloves Box', requested: 50, available: 150, toPick: 50 },
+            { id: 2, name: 'Surgical Masks (50pk)', requested: 30, available: 200, toPick: 30 },
+            { id: 3, name: 'Hand Sanitizer 500ml', requested: 20, available: 85, toPick: 20 }
+          ]
+        },
+        {
+          id: 2,
+          tripsheetNumber: 'TS-2026-002',
+          customerName: 'Tech Solutions Ltd',
+          deliveryDate: '2026-02-13',
+          status: 'Confirmed',
+          expanded: false,
+          canFulfill: false,
+          items: [
+            { id: 4, name: 'Disposable Gowns', requested: 100, available: 80, toPick: 80 },
+            { id: 5, name: 'Face Shields', requested: 50, available: 20, toPick: 20 },
+            { id: 6, name: 'Thermometers', requested: 25, available: 25, toPick: 25 }
+          ]
+        },
+        {
+          id: 3,
+          tripsheetNumber: 'TS-2026-003',
+          customerName: 'Medical Supplies Inc',
+          deliveryDate: '2026-02-14',
+          status: 'Pending',
+          expanded: false,
+          canFulfill: true,
+          items: [
+            { id: 7, name: 'Latex Gloves', requested: 200, available: 250, toPick: 200 },
+            { id: 8, name: 'Alcohol Wipes', requested: 100, available: 150, toPick: 100 }
+          ]
+        }
       ];
-      this.filteredOrders = [...this.pendingOrders];
+      this.filteredTripsheets = [...this.tripsheets];
       this.loading = false;
     }, 1000);
   }
 
-  filterOrders(): void {
+  filterTripsheets(): void {
     const query = this.searchQuery.toLowerCase();
-    this.filteredOrders = this.pendingOrders.filter(order =>
-      order.orderNumber.toLowerCase().includes(query) ||
-      order.customerName.toLowerCase().includes(query)
+    this.filteredTripsheets = this.tripsheets.filter(ts =>
+      ts.tripsheetNumber.toLowerCase().includes(query) ||
+      ts.customerName.toLowerCase().includes(query)
     );
   }
 
-  updateSelection(): void {
-    this.selectedCount = this.pendingOrders.filter(o => o.selected).length;
+  toggleTripsheet(tripsheet: any): void {
+    tripsheet.expanded = !tripsheet.expanded;
   }
 
-  confirmDispatch(): void {
-    const selectedOrders = this.pendingOrders.filter(o => o.selected).map(o => o.orderNumber).join(', ');
-    this.snackBar.open(`Dispatched orders: ${selectedOrders} to vehicle ${this.selectedVehicle}`, 'Close', { duration: 5000 });
-    this.dialogRef.close({ dispatched: true });
+  updatePickingStatus(tripsheet: any): void {
+    // Check if all items can be fulfilled
+    tripsheet.canFulfill = tripsheet.items.every((item: any) => 
+      item.toPick >= item.requested
+    );
+  }
+
+  generatePickingSlip(tripsheet: any): void {
+    const itemsList = tripsheet.items
+      .filter((item: any) => item.toPick > 0)
+      .map((item: any) => `${item.name}: ${item.toPick} units`)
+      .join('\n');
+    
+    this.snackBar.open(
+      `Picking slip generated for ${tripsheet.tripsheetNumber}`,
+      'Close',
+      { duration: 4000 }
+    );
+    
+    console.log(`Picking Slip - ${tripsheet.tripsheetNumber}:\n${itemsList}`);
+  }
+
+  generateDispatchSlip(tripsheet: any): void {
+    this.snackBar.open(
+      `Dispatch slip generated for ${tripsheet.tripsheetNumber} - All items confirmed and ready for dispatch`,
+      'Close',
+      { duration: 5000 }
+    );
+    
+    tripsheet.status = 'Confirmed';
+    console.log(`Dispatch slip generated for ${tripsheet.tripsheetNumber}`);
+  }
+
+  markPartialFulfillment(tripsheet: any): void {
+    const unfulfilled = tripsheet.items.filter((item: any) => item.toPick < item.requested);
+    const unfulfilledList = unfulfilled.map((item: any) => 
+      `${item.name}: ${item.requested - item.toPick} short`
+    ).join(', ');
+    
+    this.snackBar.open(
+      `Partial fulfillment noted for ${tripsheet.tripsheetNumber}. Short: ${unfulfilledList}`,
+      'Close',
+      { duration: 6000 }
+    );
   }
 }
 
