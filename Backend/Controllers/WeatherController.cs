@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 
 namespace ProjectTracker.API.Controllers
@@ -10,38 +11,45 @@ namespace ProjectTracker.API.Controllers
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
         private readonly ILogger<WeatherController> _logger;
+        private readonly IMemoryCache _cache;
+        private const string WEATHER_CACHE_KEY = "weather_data";
+        private static readonly TimeSpan CACHE_DURATION = TimeSpan.FromMinutes(10);
 
-        public WeatherController(IConfiguration configuration, IHttpClientFactory httpClientFactory, ILogger<WeatherController> logger)
+        public WeatherController(IConfiguration configuration, IHttpClientFactory httpClientFactory, ILogger<WeatherController> logger, IMemoryCache cache)
         {
             _configuration = configuration;
             _httpClient = httpClientFactory.CreateClient();
             _logger = logger;
+            _cache = cache;
         }
 
         [HttpGet]
         public async Task<ActionResult<List<WeatherData>>> GetWeather()
         {
-            var apiKey = _configuration["GoogleMaps:ApiKey"];
-            
+            // Try to get cached weather data first
+            if (_cache.TryGetValue(WEATHER_CACHE_KEY, out List<WeatherData>? cachedWeather) && cachedWeather != null)
+            {
+                _logger.LogDebug("Returning cached weather data");
+                return Ok(cachedWeather);
+            }
+
             var cities = new[]
             {
-                new { Name = "Durban", Lat = -29.8587, Lng = 31.0218 },
-                new { Name = "Cape Town", Lat = -33.9249, Lng = 18.4241 },
-                new { Name = "Gqeberha", Lat = -33.9608, Lng = 25.6022 },
-                new { Name = "Johannesburg", Lat = -26.2041, Lng = 28.0473 }
+                new { Id = 1, Name = "Durban", Lat = -29.8587, Lng = 31.0218 },
+                new { Id = 2, Name = "Cape Town", Lat = -33.9249, Lng = 18.4241 },
+                new { Id = 3, Name = "Gqeberha", Lat = -33.9608, Lng = 25.6022 },
+                new { Id = 4, Name = "Johannesburg", Lat = -26.2041, Lng = 28.0473 }
             };
 
-            var weatherResults = new List<WeatherData>();
-
-            foreach (var city in cities)
+            // Fetch weather data in parallel for all cities
+            var weatherTasks = cities.Select(async city =>
             {
                 try
                 {
-                    // Use OpenWeatherMap API as Google doesn't have a direct weather API
-                    // We'll use a free weather API - Open-Meteo (no API key required)
                     var url = $"https://api.open-meteo.com/v1/forecast?latitude={city.Lat}&longitude={city.Lng}&current=temperature_2m,weather_code,wind_speed_10m&timezone=Africa/Johannesburg";
                     
-                    var response = await _httpClient.GetAsync(url);
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var response = await _httpClient.GetAsync(url, cts.Token);
                     
                     if (response.IsSuccessStatusCode)
                     {
@@ -55,31 +63,35 @@ namespace ProjectTracker.API.Controllers
                         {
                             var weatherInfo = GetWeatherInfo(data.Current.Weather_code);
                             
-                            weatherResults.Add(new WeatherData
+                            return new WeatherData
                             {
-                                Id = weatherResults.Count + 1,
+                                Id = city.Id,
                                 Name = city.Name,
                                 Temperature = (int)Math.Round(data.Current.Temperature_2m),
                                 Condition = weatherInfo.Condition,
                                 WeatherIcon = weatherInfo.Icon,
                                 WindSpeed = (int)Math.Round(data.Current.Wind_speed_10m),
                                 Time = DateTime.Now.ToString("HH:mm")
-                            });
+                            };
                         }
                     }
-                    else
-                    {
-                        _logger.LogWarning($"Failed to get weather for {city.Name}: {response.StatusCode}");
-                        // Add fallback data
-                        weatherResults.Add(GetFallbackWeather(city.Name, weatherResults.Count + 1));
-                    }
+                    
+                    _logger.LogWarning($"Failed to get weather for {city.Name}: {response.StatusCode}");
+                    return GetFallbackWeather(city.Name, city.Id);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Error fetching weather for {city.Name}");
-                    weatherResults.Add(GetFallbackWeather(city.Name, weatherResults.Count + 1));
+                    return GetFallbackWeather(city.Name, city.Id);
                 }
-            }
+            });
+
+            var weatherResults = (await Task.WhenAll(weatherTasks))
+                .OrderBy(w => w.Id)
+                .ToList();
+
+            // Cache the results
+            _cache.Set(WEATHER_CACHE_KEY, weatherResults, CACHE_DURATION);
 
             return Ok(weatherResults);
         }
