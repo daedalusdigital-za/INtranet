@@ -98,6 +98,17 @@ interface WarehouseInventory {
             </div>
             <h3>Inventory Management</h3>
             <p>View & manage stock levels</p>
+            <div class="operation-stats">
+              <div class="stat-row">
+                <span class="stat-label">Items Tracked</span>
+                <span class="stat-value">{{ selectedWarehouse.totalItems | number }}</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Stock Value</span>
+                <span class="stat-value">R{{ (selectedWarehouse.totalStockValue / 1000000) | number:'1.1-1' }}M</span>
+              </div>
+              <mat-progress-bar mode="determinate" [value]="75" color="primary" class="operation-progress"></mat-progress-bar>
+            </div>
           </div>
 
           <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')">
@@ -106,6 +117,17 @@ interface WarehouseInventory {
             </div>
             <h3>Order Accept & Dispatch</h3>
             <p>Process orders & dispatch</p>
+            <div class="operation-stats">
+              <div class="stat-row">
+                <span class="stat-label">Pending Orders</span>
+                <span class="stat-value">12</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Ready to Ship</span>
+                <span class="stat-value">8</span>
+              </div>
+              <mat-progress-bar mode="determinate" [value]="67" color="primary" class="operation-progress"></mat-progress-bar>
+            </div>
           </div>
 
           <div class="operation-block transfer-block" (click)="selectOperation('transfer')">
@@ -114,6 +136,17 @@ interface WarehouseInventory {
             </div>
             <h3>Transfer & Returns</h3>
             <p>Inter-warehouse transfers</p>
+            <div class="operation-stats">
+              <div class="stat-row">
+                <span class="stat-label">Active Transfers</span>
+                <span class="stat-value">5</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Pending Returns</span>
+                <span class="stat-value">3</span>
+              </div>
+              <mat-progress-bar mode="determinate" [value]="40" color="primary" class="operation-progress"></mat-progress-bar>
+            </div>
           </div>
 
           <div class="operation-block grv-block" (click)="selectOperation('grv')">
@@ -122,6 +155,17 @@ interface WarehouseInventory {
             </div>
             <h3>Goods Received</h3>
             <p>Record incoming deliveries</p>
+            <div class="operation-stats">
+              <div class="stat-row">
+                <span class="stat-label">Expected Deliveries</span>
+                <span class="stat-value">7</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Received Today</span>
+                <span class="stat-value">4</span>
+              </div>
+              <mat-progress-bar mode="determinate" [value]="57" color="primary" class="operation-progress"></mat-progress-bar>
+            </div>
           </div>
         </div>
       }
@@ -653,7 +697,7 @@ interface WarehouseInventory {
     .operation-block {
       position: relative;
       cursor: pointer;
-      padding: 32px 24px;
+      padding: 32px 24px 24px 24px;
       border-radius: 16px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       text-align: center;
@@ -661,10 +705,10 @@ interface WarehouseInventory {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 12px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      min-height: 180px;
+      min-height: 280px;
       background: white;
     }
 
@@ -731,6 +775,49 @@ interface WarehouseInventory {
       color: rgba(255, 255, 255, 0.95);
       font-weight: 500;
       z-index: 1;
+    }
+
+    .operation-stats {
+      width: 100%;
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      z-index: 1;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 500;
+    }
+
+    .stat-value {
+      font-size: 0.9rem;
+      color: white;
+      font-weight: 700;
+    }
+
+    .operation-progress {
+      height: 6px;
+      border-radius: 3px;
+      margin-top: 12px;
+      background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .operation-progress ::ng-deep .mdc-linear-progress__bar-inner {
+      border-top-width: 6px;
+      background-color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    .operation-progress ::ng-deep .mdc-linear-progress__buffer-bar {
+      background-color: rgba(255, 255, 255, 0.2) !important;
     }
 
     .depot-block {
