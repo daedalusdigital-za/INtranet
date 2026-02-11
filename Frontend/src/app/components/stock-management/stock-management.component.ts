@@ -1207,14 +1207,17 @@ export class StockManagementComponent implements OnInit {
         <!-- Inventory Table -->
         <div class="table-section">
           <div class="table-header">
-            <h3>
-              <mat-icon>list_alt</mat-icon>
-              Inventory Items
-            </h3>
+            <div class="header-left">
+              <h3>
+                <mat-icon>list_alt</mat-icon>
+                Inventory Items
+              </h3>
+              <span class="item-count">{{ filteredInventoryData.length }} of {{ inventoryData.length }} items</span>
+            </div>
             <div class="search-box">
               <mat-form-field appearance="outline" class="search-field">
                 <mat-label>Search inventory</mat-label>
-                <input matInput [(ngModel)]="searchQuery" (ngModelChange)="filterInventory()" placeholder="Search by name, Item Code, or company">
+                <input matInput [(ngModel)]="searchQuery" (ngModelChange)="filterInventory()" placeholder="Search by name, item code, or company">
                 <mat-icon matPrefix>search</mat-icon>
                 @if (searchQuery) {
                   <button matSuffix mat-icon-button (click)="clearSearch()">
@@ -1224,6 +1227,8 @@ export class StockManagementComponent implements OnInit {
               </mat-form-field>
             </div>
           </div>
+
+          <div class="table-container">
 
           <table mat-table [dataSource]="filteredInventoryData" class="modern-table">
             <!-- Checkbox Column -->
@@ -1308,26 +1313,37 @@ export class StockManagementComponent implements OnInit {
               </td>
             </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns" class="sticky-header"></tr>
             <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
           </table>
+          </div>
+
+          @if (filteredInventoryData.length === 0) {
+            <div class="empty-state">
+              <mat-icon>inventory_2</mat-icon>
+              <h4>No items found</h4>
+              <p>Try adjusting your search criteria</p>
+            </div>
+          }
         </div>
       </mat-dialog-content>
 
       <mat-dialog-actions>
-        <button mat-flat-button color="accent" (click)="exportToExcel()" class="export-btn">
-          <mat-icon>file_download</mat-icon>
-          Export to Excel
-        </button>
-        <button mat-flat-button (click)="openGRVDialog()" class="grv-btn">
-          <mat-icon>add_box</mat-icon>
-          GRV
-        </button>
-        <button mat-flat-button (click)="openTransferDialog()" [disabled]="!selection.hasValue()" class="transfer-btn">
-          <mat-icon>swap_horiz</mat-icon>
-          Transfer ({{ selection.selected.length }})
-        </button>
-        <button mat-flat-button color="primary" mat-dialog-close>
+        <div class="actions-left">
+          <button mat-flat-button color="accent" (click)="exportToExcel()" class="export-btn">
+            <mat-icon>file_download</mat-icon>
+            Export
+          </button>
+          <button mat-flat-button (click)="openGRVDialog()" class="grv-btn">
+            <mat-icon>add_box</mat-icon>
+            GRV
+          </button>
+          <button mat-flat-button (click)="openTransferDialog()" [disabled]="!selection.hasValue()" class="transfer-btn">
+            <mat-icon>swap_horiz</mat-icon>
+            Transfer @if (selection.hasValue()) { <span class="badge">{{ selection.selected.length }}</span> }
+          </button>
+        </div>
+        <button mat-flat-button color="primary" mat-dialog-close class="close-action-btn">
           <mat-icon>check_circle</mat-icon>
           Close
         </button>
@@ -1693,6 +1709,47 @@ export class StockManagementComponent implements OnInit {
       border-radius: 16px;
       padding: 24px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      position: relative;
+    }
+
+    .table-container {
+      max-height: 500px;
+      overflow-y: auto;
+      border-radius: 12px;
+      border: 1px solid #f0f0f0;
+      margin-top: 16px;
+    }
+
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-state mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #ddd;
+      margin-bottom: 16px;
+    }
+
+    .empty-state h4 {
+      margin: 0 0 8px 0;
+      font-size: 1.25rem;
+      color: #666;
+    }
+
+    .empty-state p {
+      margin: 0;
+      font-size: 0.875rem;
     }
 
     .table-section h3 {
@@ -1716,9 +1773,23 @@ export class StockManagementComponent implements OnInit {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
       gap: 24px;
       flex-wrap: wrap;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .item-count {
+      font-size: 0.875rem;
+      color: #666;
+      font-weight: 500;
+      background: #f5f7fa;
+      padding: 4px 12px;
+      border-radius: 12px;
     }
 
     .search-box {
@@ -1750,13 +1821,14 @@ export class StockManagementComponent implements OnInit {
     }
 
     .modern-table th {
-      background: linear-gradient(135deg, #f5f7fa 0%, #e8ebf1 100%);
-      color: #333;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
       font-weight: 700;
       font-size: 0.875rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       padding: 16px 12px;
+      border: none;
     }
 
     .modern-table td {
@@ -1764,8 +1836,14 @@ export class StockManagementComponent implements OnInit {
       border-bottom: 1px solid #f0f0f0;
     }
 
+    .table-row {
+      transition: all 0.2s ease;
+    }
+
     .table-row:hover {
-      background: #f8f9ff;
+      background: linear-gradient(90deg, #f8f9ff 0%, #fff 100%);
+      transform: scale(1.01);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
     }
 
     .item-name {
@@ -1843,26 +1921,57 @@ export class StockManagementComponent implements OnInit {
 
     mat-dialog-actions {
       padding: 24px 32px;
-      background: linear-gradient(180deg, transparent 0%, #f8f9ff 100%);
+      background: linear-gradient(180deg, rgba(248, 249, 255, 0.5) 0%, #f8f9ff 100%);
       margin: 0 -24px -24px -24px;
       display: flex;
-      justify-content: center;
+      justify-content: space-between;
+      align-items: center;
       gap: 16px;
       border-top: 1px solid #e0e0e0;
+      flex-wrap: wrap;
+      backdrop-filter: blur(10px);
+    }
+
+    .actions-left {
+      display: flex;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .actions-right {
+      display: flex;
+      gap: 12px;
     }
 
     mat-dialog-actions button {
-      min-width: 160px;
       height: 48px;
-      font-weight: 700;
-      font-size: 1rem;
+      font-weight: 600;
+      font-size: 0.95rem;
       border-radius: 12px;
       transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    mat-dialog-actions button mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
     }
 
     mat-dialog-actions button:hover {
       transform: translateY(-2px);
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .badge {
+      background: rgba(255, 255, 255, 0.3);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-left: 4px;
     }
 
     .export-btn {
