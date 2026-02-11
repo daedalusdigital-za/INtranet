@@ -43,7 +43,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
               <mat-icon class="department-icon">{{ dept.icon }}</mat-icon>
             </div>
             <h3>{{ dept.name }}</h3>
-            <p class="document-count">{{ dept.documentCount }} Documents</p>
+            <p class="document-count" [class.loading]="dept.documentCount === -1">
+              <span *ngIf="dept.documentCount === -1" class="loading-text">Loading...</span>
+              <span *ngIf="dept.documentCount !== -1">{{ dept.documentCount }} Documents</span>
+            </p>
             <button mat-raised-button color="primary" class="access-button" (click)="openPasswordDialog(dept)">
               <mat-icon>folder_open</mat-icon>
               Access Hub
@@ -140,6 +143,20 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-size: 14px;
       margin: 0 0 20px 0;
     }
+    
+    .document-count.loading .loading-text {
+      display: inline-block;
+      background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
 
     .access-button {
       width: 100%;
@@ -161,6 +178,22 @@ export class DocumentsComponent implements OnInit {
   currentUser: any;
   notificationCount = 3;
   departments: DepartmentInfo[] = [];
+  
+  // Static department list for instant display
+  private static readonly staticDepartments: DepartmentInfo[] = [
+    { name: 'IT', icon: 'computer', documentCount: -1 },
+    { name: 'Marketing', icon: 'campaign', documentCount: -1 },
+    { name: 'Tender', icon: 'gavel', documentCount: -1 },
+    { name: 'Projects', icon: 'engineering', documentCount: -1 },
+    { name: 'Sales', icon: 'point_of_sale', documentCount: -1 },
+    { name: 'Call Center', icon: 'headset_mic', documentCount: -1 },
+    { name: 'Production', icon: 'precision_manufacturing', documentCount: -1 },
+    { name: 'Human Resource', icon: 'people', documentCount: -1 },
+    { name: 'Stock', icon: 'inventory_2', documentCount: -1 },
+    { name: 'Logistics', icon: 'local_shipping', documentCount: -1 },
+    { name: 'Finance', icon: 'account_balance', documentCount: -1 },
+    { name: 'Managers', icon: 'supervisor_account', documentCount: -1 }
+  ];
 
   constructor(
     private authService: AuthService,
@@ -176,26 +209,41 @@ export class DocumentsComponent implements OnInit {
   }
 
   loadDepartments(): void {
+    // Show static departments immediately with loading state
+    this.departments = [...DocumentsComponent.staticDepartments];
+    
+    // Try to load cached counts first for instant display
+    const cachedCounts = localStorage.getItem('departmentCounts');
+    if (cachedCounts) {
+      try {
+        const counts = JSON.parse(cachedCounts);
+        this.departments = this.departments.map(dept => ({
+          ...dept,
+          documentCount: counts[dept.name] ?? -1
+        }));
+      } catch (e) {
+        // Ignore cache parse errors
+      }
+    }
+    
+    // Load fresh counts from API in background
     this.documentsService.getDepartments().subscribe({
       next: (departments) => {
-        this.departments = departments;
+        // Update counts and cache them
+        const counts: { [key: string]: number } = {};
+        departments.forEach(d => counts[d.name] = d.documentCount);
+        localStorage.setItem('departmentCounts', JSON.stringify(counts));
+        
+        // Merge API data with static departments
+        this.departments = this.departments.map(dept => {
+          const apiDept = departments.find(d => d.name === dept.name);
+          return apiDept ? { ...dept, documentCount: apiDept.documentCount } : dept;
+        });
       },
       error: (error) => {
         console.error('Error loading departments:', error);
-        // Fallback to static data if API fails
-        this.departments = [
-          { name: 'IT', icon: 'computer', documentCount: 0 },
-          { name: 'Marketing', icon: 'campaign', documentCount: 0 },
-          { name: 'Tender', icon: 'gavel', documentCount: 0 },
-          { name: 'Projects', icon: 'engineering', documentCount: 0 },
-          { name: 'Sales', icon: 'point_of_sale', documentCount: 0 },
-          { name: 'Call Center', icon: 'headset_mic', documentCount: 0 },
-          { name: 'Production', icon: 'precision_manufacturing', documentCount: 0 },
-          { name: 'Human Resource', icon: 'people', documentCount: 0 },
-          { name: 'Stock', icon: 'inventory_2', documentCount: 0 },
-          { name: 'Logistics', icon: 'local_shipping', documentCount: 0 },
-          { name: 'Finance', icon: 'account_balance', documentCount: 0 }
-        ];
+        // Set counts to 0 on error
+        this.departments = this.departments.map(d => ({ ...d, documentCount: d.documentCount === -1 ? 0 : d.documentCount }));
       }
     });
   }

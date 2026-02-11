@@ -74,7 +74,7 @@ namespace ProjectTracker.API.Controllers
             var departments = new ConcurrentBag<DepartmentInfo>();
             
             // Process departments in parallel for faster loading
-            Parallel.ForEach(DepartmentPasswords.Keys, new ParallelOptions { MaxDegreeOfParallelism = 4 }, dept =>
+            Parallel.ForEach(DepartmentPasswords.Keys, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dept =>
             {
                 var deptPath = Path.Combine(_documentsBasePath, dept);
                 var documentCount = 0;
@@ -83,9 +83,9 @@ namespace ProjectTracker.API.Controllers
                 {
                     if (Directory.Exists(deptPath))
                     {
-                        // Use EnumerateFiles instead of GetFiles for better performance
-                        // It doesn't load all file names into memory at once
-                        documentCount = Directory.EnumerateFiles(deptPath, "*", SearchOption.AllDirectories).Count();
+                        // Count files with a limit to prevent long waits
+                        // Use a fast counting method that stops after reaching a threshold
+                        documentCount = CountFilesWithLimit(deptPath, 10000);
                     }
                 }
                 catch (Exception ex)
@@ -105,13 +105,39 @@ namespace ProjectTracker.API.Controllers
             // Sort by name and convert to list for caching
             var sortedDepartments = departments.OrderBy(d => d.Name).ToList();
 
-            // Cache the results
+            // Cache the results for longer (10 minutes since counts don't change frequently)
             var cacheOptions = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(CacheDuration)
-                .SetPriority(CacheItemPriority.Normal);
+                .SetAbsoluteExpiration(TimeSpan.FromMinutes(10))
+                .SetPriority(CacheItemPriority.High);
             _cache.Set(DepartmentsCacheKey, sortedDepartments, cacheOptions);
 
             return Ok(sortedDepartments);
+        }
+        
+        // Fast file counting with limit
+        private int CountFilesWithLimit(string path, int limit)
+        {
+            int count = 0;
+            try
+            {
+                foreach (var _ in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                {
+                    count++;
+                    if (count >= limit)
+                    {
+                        return count; // Return early if we hit the limit
+                    }
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Skip directories we can't access
+            }
+            catch (PathTooLongException)
+            {
+                // Skip paths that are too long
+            }
+            return count;
         }
 
         // POST: api/documents/validate-password
