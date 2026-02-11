@@ -262,10 +262,14 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   }
 
   getAttachmentUrl(attachment: MessageAttachment): string {
-    if (attachment.fileUrl?.startsWith('http')) {
+    if (attachment.fileUrl) {
+      // If it starts with /api, prepend the base URL
+      if (attachment.fileUrl.startsWith('/api')) {
+        return environment.apiUrl.replace('/api', '') + attachment.fileUrl;
+      }
       return attachment.fileUrl;
     }
-    return `${environment.apiUrl}${attachment.fileUrl}`;
+    return `${environment.apiUrl}/messages/attachments/${attachment.attachmentId}`;
   }
 
   getFileIcon(mimeType: string): string {
@@ -280,18 +284,53 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
 
   downloadAttachment(attachment: MessageAttachment): void {
     const url = this.getAttachmentUrl(attachment);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = attachment.fileName;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    // Fetch with Authorization header for authenticated download
+    fetch(url, {
+      headers: {
+        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
+      }
+    })
+    .then(response => {
+      if (!response.ok) throw new Error('Download failed');
+      return response.blob();
+    })
+    .then(blob => {
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = attachment.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    })
+    .catch(() => {
+      // Fallback: open in new tab
+      window.open(url, '_blank');
+    });
   }
 
   previewAttachment(attachment: MessageAttachment): void {
     const url = this.getAttachmentUrl(attachment);
-    window.open(url, '_blank');
+    
+    // For images and PDFs, try to open with auth
+    fetch(url, {
+      headers: {
+        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
+      }
+    })
+    .then(response => {
+      if (!response.ok) throw new Error('Preview failed');
+      return response.blob();
+    })
+    .then(blob => {
+      const blobUrl = window.URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+    })
+    .catch(() => {
+      window.open(url, '_blank');
+    });
   }
 
   toggleEmojiPicker(): void {
