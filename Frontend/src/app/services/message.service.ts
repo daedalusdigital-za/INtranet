@@ -67,9 +67,12 @@ export interface Message {
 export interface MessageAttachment {
   attachmentId: number;
   fileName: string;
-  fileType: string;
+  mimeType: string;  // Match backend API field name
+  fileType?: string; // Alias for backwards compatibility
   fileSize: number;
   fileUrl: string;
+  thumbnailUrl?: string;
+  uploadedAt?: Date;
 }
 
 export interface ReadReceipt {

@@ -197,7 +197,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
                   <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
                     <div *ngFor="let attachment of message.attachments" class="attachment-item">
                       <!-- Image Preview -->
-                      <div *ngIf="isImageFile(attachment.fileType)" class="attachment-image-container">
+                      <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container">
                         <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)" class="attachment-image">
                         <div class="attachment-overlay">
                           <button mat-mini-fab color="primary" (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download">
@@ -207,8 +207,8 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
                       </div>
                       
                       <!-- PDF/Document Preview -->
-                      <div *ngIf="!isImageFile(attachment.fileType)" class="attachment-file" (click)="previewAttachment(attachment)">
-                        <mat-icon class="file-icon">{{ getFileIcon(attachment.fileType) }}</mat-icon>
+                      <div *ngIf="!isImageFile(attachment.mimeType)" class="attachment-file" (click)="previewAttachment(attachment)">
+                        <mat-icon class="file-icon">{{ getFileIcon(attachment.mimeType) }}</mat-icon>
                         <div class="file-info">
                           <span class="file-name">{{ attachment.fileName }}</span>
                           <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
@@ -334,14 +334,14 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         </div>
         <div class="preview-content">
           <!-- Image Preview -->
-          <img *ngIf="isImageFile(previewingAttachment.fileType)" [src]="getAttachmentUrl(previewingAttachment)" [alt]="previewingAttachment.fileName">
+          <img *ngIf="isImageFile(previewingAttachment.mimeType)" [src]="getAttachmentUrl(previewingAttachment)" [alt]="previewingAttachment.fileName">
           
           <!-- PDF Preview -->
-          <iframe *ngIf="isPdfFile(previewingAttachment.fileType)" [src]="getSafeUrl(previewingAttachment)" frameborder="0"></iframe>
+          <iframe *ngIf="isPdfFile(previewingAttachment.mimeType)" [src]="getSafeUrl(previewingAttachment)" frameborder="0"></iframe>
           
           <!-- Excel/Other Files - Show download prompt -->
-          <div *ngIf="!isImageFile(previewingAttachment.fileType) && !isPdfFile(previewingAttachment.fileType)" class="no-preview">
-            <mat-icon>{{ getFileIcon(previewingAttachment.fileType) }}</mat-icon>
+          <div *ngIf="!isImageFile(previewingAttachment.mimeType) && !isPdfFile(previewingAttachment.mimeType)" class="no-preview">
+            <mat-icon>{{ getFileIcon(previewingAttachment.mimeType) }}</mat-icon>
             <h4>{{ previewingAttachment.fileName }}</h4>
             <p>Preview not available for this file type</p>
             <p class="file-size">Size: {{ formatFileSize(previewingAttachment.fileSize) }}</p>
