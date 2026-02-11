@@ -67,6 +67,11 @@ export class NotificationService {
   private audio: HTMLAudioElement | null = null;
   private notificationPermission: NotificationPermission = 'default';
   
+  // Notification settings
+  private soundEnabled = true;
+  private popupEnabled = true;
+  private toastEnabled = true;
+  
   // Observable for unread message count (for messages specifically)
   private unreadCountSubject = new BehaviorSubject<number>(0);
   public unreadCount$ = this.unreadCountSubject.asObservable();
@@ -85,8 +90,38 @@ export class NotificationService {
     private snackBar: MatSnackBar,
     private http: HttpClient
   ) {
+    this.loadSettings();
     this.initAudio();
     this.requestNotificationPermission();
+  }
+
+  private loadSettings(): void {
+    const settings = localStorage.getItem('notificationSettings');
+    if (settings) {
+      const parsed = JSON.parse(settings);
+      this.soundEnabled = parsed.soundEnabled ?? true;
+      this.popupEnabled = parsed.popupEnabled ?? true;
+      this.toastEnabled = parsed.toastEnabled ?? true;
+    }
+  }
+
+  public saveSettings(settings: { soundEnabled?: boolean; popupEnabled?: boolean; toastEnabled?: boolean }): void {
+    if (settings.soundEnabled !== undefined) this.soundEnabled = settings.soundEnabled;
+    if (settings.popupEnabled !== undefined) this.popupEnabled = settings.popupEnabled;
+    if (settings.toastEnabled !== undefined) this.toastEnabled = settings.toastEnabled;
+    localStorage.setItem('notificationSettings', JSON.stringify({
+      soundEnabled: this.soundEnabled,
+      popupEnabled: this.popupEnabled,
+      toastEnabled: this.toastEnabled
+    }));
+  }
+
+  public getSettings(): { soundEnabled: boolean; popupEnabled: boolean; toastEnabled: boolean } {
+    return {
+      soundEnabled: this.soundEnabled,
+      popupEnabled: this.popupEnabled,
+      toastEnabled: this.toastEnabled
+    };
   }
 
   private getHeaders(): HttpHeaders {
@@ -106,34 +141,45 @@ export class NotificationService {
   }
 
   private createNotificationSound(): string {
-    // Create a simple notification beep using Web Audio API and convert to data URL
+    // Create a pleasant notification sound using Web Audio API
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const duration = 0.2;
+    const duration = 0.5;
     const sampleRate = audioContext.sampleRate;
     const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
     const channel = buffer.getChannelData(0);
     
-    // Generate a pleasant notification tone (two quick beeps)
+    // Generate a pleasant two-tone notification chime
     for (let i = 0; i < buffer.length; i++) {
       const t = i / sampleRate;
-      const freq = 800; // Hz
-      let value = Math.sin(2 * Math.PI * freq * t);
+      let value = 0;
       
-      // Envelope to avoid clicks
-      const attack = 0.01;
-      const release = 0.05;
-      let envelope = 1;
-      if (t < attack) {
-        envelope = t / attack;
-      } else if (t > duration - release) {
-        envelope = (duration - t) / release;
+      // First chime (higher pitch)
+      if (t < 0.15) {
+        const freq = 880; // A5
+        let envelope = 1;
+        if (t < 0.02) envelope = t / 0.02;
+        else if (t > 0.1) envelope = (0.15 - t) / 0.05;
+        value += Math.sin(2 * Math.PI * freq * t) * envelope * 0.4;
       }
       
-      // Two beeps pattern
-      if (t < 0.08 || (t > 0.12 && t < 0.2)) {
-        value *= envelope * 0.3;
-      } else {
-        value = 0;
+      // Second chime (even higher, delayed)
+      if (t > 0.12 && t < 0.35) {
+        const localT = t - 0.12;
+        const freq = 1046.5; // C6
+        let envelope = 1;
+        if (localT < 0.02) envelope = localT / 0.02;
+        else if (localT > 0.18) envelope = (0.23 - localT) / 0.05;
+        value += Math.sin(2 * Math.PI * freq * localT) * envelope * 0.4;
+      }
+      
+      // Third subtle chime
+      if (t > 0.25 && t < 0.5) {
+        const localT = t - 0.25;
+        const freq = 1318.5; // E6
+        let envelope = 1;
+        if (localT < 0.02) envelope = localT / 0.02;
+        else if (localT > 0.2) envelope = (0.25 - localT) / 0.05;
+        value += Math.sin(2 * Math.PI * freq * localT) * envelope * 0.3;
       }
       
       channel[i] = value;
@@ -205,8 +251,11 @@ export class NotificationService {
   }
 
   public playNotificationSound(): void {
+    if (!this.soundEnabled) return;
+    
     if (this.audio) {
       this.audio.currentTime = 0;
+      this.audio.volume = 0.5; // Set reasonable volume
       this.audio.play().catch(err => {
         console.log('Could not play notification sound:', err);
       });
@@ -224,26 +273,29 @@ export class NotificationService {
     } = config;
 
     // Play sound if enabled
-    if (playSound) {
+    if (playSound && this.soundEnabled) {
       this.playNotificationSound();
     }
 
-    // Show snackbar
-    this.snackBar.open(message, 'View', {
-      duration,
-      horizontalPosition: 'right',
-      verticalPosition: 'top',
-      panelClass: [`notification-${type}`]
-    });
+    // Show snackbar (always show for messages, respects toastEnabled)
+    if (this.toastEnabled) {
+      this.snackBar.open(`${title}: ${message}`, 'View', {
+        duration,
+        horizontalPosition: 'right',
+        verticalPosition: 'top',
+        panelClass: [`notification-${type}`, 'message-notification-snack']
+      });
+    }
 
     // Show browser notification if enabled and permission granted
-    if (showPopup && this.notificationPermission === 'granted' && document.hidden) {
+    if (showPopup && this.popupEnabled && this.notificationPermission === 'granted') {
       const notification = new Notification(title, {
         body: message,
         icon: '/favicon.ico',
         badge: '/favicon.ico',
-        tag: 'message-notification',
-        requireInteraction: false
+        tag: 'message-notification-' + Date.now(),
+        requireInteraction: false,
+        silent: true // We play our own sound
       });
 
       notification.onclick = () => {
