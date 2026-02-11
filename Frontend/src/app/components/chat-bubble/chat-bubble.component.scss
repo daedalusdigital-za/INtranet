@@ -446,3 +446,30 @@
     }
   }
 }
+
+// Emoji Picker Container
+.emoji-picker-container {
+  position: absolute;
+  bottom: 60px;
+  left: 8px;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  overflow: hidden;
+  
+  ::ng-deep emoji-mart {
+    border: none;
+  }
+  
+  ::ng-deep .emoji-mart-search input {
+    border-radius: 8px;
+  }
+}
+
+.emoji-btn {
+  &.active {
+    color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 50%;
+  }
+}

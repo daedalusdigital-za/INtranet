@@ -2,11 +2,12 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, E
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MessageService, Conversation, Message, Participant } from '../../services/message.service';
+import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
 @Component({
   selector: 'app-chat-bubble',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PickerComponent],
   templateUrl: './chat-bubble.component.html',
   styleUrls: ['./chat-bubble.component.scss']
 })
@@ -26,6 +27,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   isLoading = false;
   isSending = false;
   selectedFile: File | null = null;
+  showEmojiPicker = false;
   
   private refreshInterval: any;
 
@@ -240,5 +242,15 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
 
   triggerFileInput(): void {
     this.fileInput?.nativeElement?.click();
+  }
+
+  toggleEmojiPicker(): void {
+    this.showEmojiPicker = !this.showEmojiPicker;
+  }
+
+  addEmoji(event: any): void {
+    if (event.emoji?.native) {
+      this.newMessage += event.emoji.native;
+    }
   }
 }

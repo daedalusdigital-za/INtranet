@@ -73,8 +73,21 @@
       </button>
     </div>
 
+    <!-- Emoji Picker -->
+    <div class="emoji-picker-container" *ngIf="showEmojiPicker">
+      <emoji-mart 
+        (emojiClick)="addEmoji($event)" 
+        [perLine]="7"
+        title="Pick your emoji"
+        emoji="point_up">
+      </emoji-mart>
+    </div>
+
     <!-- Input Area -->
     <div class="input-area">
+      <button class="action-btn emoji-btn" (click)="toggleEmojiPicker()" title="Add emoji" [class.active]="showEmojiPicker">
+        <i class="bi bi-emoji-smile"></i>
+      </button>
       <button class="attach-btn" (click)="triggerFileInput()" title="Attach file">
         <i class="bi bi-paperclip"></i>
       </button>
