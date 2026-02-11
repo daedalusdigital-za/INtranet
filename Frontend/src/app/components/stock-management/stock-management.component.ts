@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -21,9 +21,11 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { SelectionModel } from '@angular/cdk/collections';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
+import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 interface WarehouseSummary {
   id: number;
@@ -1117,7 +1119,8 @@ export class StockManagementComponent implements OnInit {
     MatInputModule,
     MatCheckboxModule,
     MatSelectModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    ScrollingModule
   ],
   template: `
     <div class="modern-dialog">
@@ -1217,7 +1220,7 @@ export class StockManagementComponent implements OnInit {
             <div class="search-box">
               <mat-form-field appearance="outline" class="search-field">
                 <mat-label>Search inventory</mat-label>
-                <input matInput [(ngModel)]="searchQuery" (ngModelChange)="filterInventory()" placeholder="Search by name, item code, or company">
+                <input matInput [(ngModel)]="searchQuery" (ngModelChange)="onSearchChange($event)" placeholder="Search by name, item code, or company">
                 <mat-icon matPrefix>search</mat-icon>
                 @if (searchQuery) {
                   <button matSuffix mat-icon-button (click)="clearSearch()">
@@ -1228,8 +1231,7 @@ export class StockManagementComponent implements OnInit {
             </div>
           </div>
 
-          <div class="table-container">
-
+          <cdk-virtual-scroll-viewport itemSize="72" style="height: 500px;" class="table-container">
           <table mat-table [dataSource]="filteredInventoryData" class="modern-table">
             <!-- Checkbox Column -->
             <ng-container matColumnDef="select">
@@ -1316,7 +1318,7 @@ export class StockManagementComponent implements OnInit {
             <tr mat-header-row *matHeaderRowDef="displayedColumns" class="sticky-header"></tr>
             <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
           </table>
-          </div>
+          </cdk-virtual-scroll-viewport>
 
           @if (filteredInventoryData.length === 0) {
             <div class="empty-state">
@@ -2289,7 +2291,7 @@ export class StockManagementComponent implements OnInit {
     }
   `]
 })
-export class WarehouseDetailsDialog implements OnInit {
+export class WarehouseDetailsDialog implements OnInit, OnDestroy {
   displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'status'];
   searchQuery: string = '';
   selection = new SelectionModel<any>(true, []);
@@ -2315,6 +2317,9 @@ export class WarehouseDetailsDialog implements OnInit {
   sohTotalValue: number = 0;
   sohLocations: string[] = [];
 
+  // Performance optimization
+  private searchSubject = new Subject<string>();
+
   private http = inject(HttpClient);
 
   constructor(
@@ -2325,6 +2330,38 @@ export class WarehouseDetailsDialog implements OnInit {
   ngOnInit(): void {
     this.loadInventory();
     this.loadAllWarehouses();
+    
+    // Set up debounced search
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(query => {
+      this.performFilter(query);
+    });
+  }
+  
+  ngOnDestroy(): void {
+    // Clean up the search subject
+    this.searchSubject.complete();
+  }
+  
+  performFilter(query: string): void {
+    const searchTerm = query.toLowerCase().trim();
+
+    if (!searchTerm) {
+      this.filteredInventoryData = [...this.inventoryData];
+      return;
+    }
+
+    this.filteredInventoryData = this.inventoryData.filter(item =>
+      item.name.toLowerCase().includes(searchTerm) ||
+      item.sku.toLowerCase().includes(searchTerm) ||
+      item.category.toLowerCase().includes(searchTerm)
+    );
+  }
+  
+  onSearchChange(value: string): void {
+    this.searchSubject.next(value);
   }
 
   loadInventory(): void {
@@ -2545,23 +2582,18 @@ export class WarehouseDetailsDialog implements OnInit {
   }
 
   filterInventory(): void {
-    const query = this.searchQuery.toLowerCase().trim();
-
-    if (!query) {
-      this.filteredInventoryData = [...this.inventoryData];
-      return;
-    }
-
-    this.filteredInventoryData = this.inventoryData.filter(item =>
-      item.name.toLowerCase().includes(query) ||
-      item.sku.toLowerCase().includes(query) ||
-      item.category.toLowerCase().includes(query)
-    );
+    // Deprecated - replaced by performFilter with debouncing
+    // Kept for backwards compatibility if called elsewhere
+    this.performFilter(this.searchQuery);
   }
 
   clearSearch(): void {
     this.searchQuery = '';
-    this.filterInventory();
+    this.performFilter('');
+  }
+
+  trackByItem(index: number, item: any): any {
+    return item.id || item.sku || index;
   }
 
   getCategoryColor(category: string): string {
