@@ -2990,9 +2990,14 @@ export class WarehouseOperationsDialog {
                           Generated
                         </div>
                       </div>
-                      <button mat-icon-button (click)="printPickingSlip(slip)">
-                        <mat-icon>print</mat-icon>
-                      </button>
+                      <div class="slip-actions">
+                        <button mat-icon-button (click)="downloadPickingSlipPDF(slip)" matTooltip="Download PDF">
+                          <mat-icon>download</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="printPickingSlip(slip)" matTooltip="Print">
+                          <mat-icon>print</mat-icon>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 }
@@ -3034,9 +3039,14 @@ export class WarehouseOperationsDialog {
                           Dispatched
                         </div>
                       </div>
-                      <button mat-icon-button (click)="printDispatchSlip(slip)">
-                        <mat-icon>print</mat-icon>
-                      </button>
+                      <div class="slip-actions">
+                        <button mat-icon-button (click)="downloadDispatchSlipPDF(slip)" matTooltip="Download PDF">
+                          <mat-icon>download</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="printDispatchSlip(slip)" matTooltip="Print">
+                          <mat-icon>print</mat-icon>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 }
@@ -3172,6 +3182,21 @@ export class WarehouseOperationsDialog {
 
     .tripsheet-header:hover {
       background: rgba(240, 147, 251, 0.05);
+    }
+
+    .slip-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .slip-actions button {
+      transition: all 0.3s ease;
+    }
+
+    .slip-actions button:hover {
+      transform: scale(1.1);
+      background: rgba(103, 126, 234, 0.1);
     }
 
     .tripsheet-info {
@@ -3553,14 +3578,277 @@ export class DispatchDialog implements OnInit {
       });
   }
 
+  downloadPickingSlipPDF(slip: any): void {
+    const pdf = this.generatePickingSlipPDF(slip);
+    pdf.save(`Picking-Slip-${slip.slipNumber}.pdf`);
+    this.snackBar.open(`Picking slip ${slip.slipNumber} downloaded`, 'Close', { duration: 2000 });
+  }
+
+  downloadDispatchSlipPDF(slip: any): void {
+    const pdf = this.generateDispatchSlipPDF(slip);
+    pdf.save(`Dispatch-Slip-${slip.slipNumber}.pdf`);
+    this.snackBar.open(`Dispatch slip ${slip.slipNumber} downloaded`, 'Close', { duration: 2000 });
+  }
+
   printPickingSlip(slip: any): void {
+    const pdf = this.generatePickingSlipPDF(slip);
+    pdf.autoPrint();
+    window.open(pdf.output('bloburl'), '_blank');
     this.snackBar.open(`Printing picking slip ${slip.slipNumber}`, 'Close', { duration: 2000 });
-    console.log('Print picking slip:', slip);
   }
 
   printDispatchSlip(slip: any): void {
+    const pdf = this.generateDispatchSlipPDF(slip);
+    pdf.autoPrint();
+    window.open(pdf.output('bloburl'), '_blank');
     this.snackBar.open(`Printing dispatch slip ${slip.slipNumber}`, 'Close', { duration: 2000 });
-    console.log('Print dispatch slip:', slip);
+  }
+
+  private generatePickingSlipPDF(slip: any): any {
+    // Dynamic import to avoid bundling jsPDF if not used
+    const jsPDF = (window as any).jspdf?.jsPDF;
+    if (!jsPDF) {
+      console.error('jsPDF not loaded');
+      this.snackBar.open('PDF library not loaded. Please refresh the page.', 'Close', { duration: 3000 });
+      return null;
+    }
+
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    
+    // Header
+    pdf.setFillColor(63, 81, 181); // Material Indigo
+    pdf.rect(0, 0, pageWidth, 40, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PICKING SLIP', pageWidth / 2, 20, { align: 'center' });
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Slip #: ${slip.slipNumber}`, pageWidth / 2, 30, { align: 'center' });
+    
+    // Document Info
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(10);
+    let yPos = 50;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Customer:', 20, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(slip.customerName, 55, yPos);
+    
+    yPos += 7;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Generated Date:', 20, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(slip.generatedDate, 55, yPos);
+    
+    if (slip.tripsheetNumber) {
+      yPos += 7;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Tripsheet #:', 20, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(slip.tripsheetNumber, 55, yPos);
+    }
+    
+    yPos += 7;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Total Items:', 20, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`${slip.items.length}`, 55, yPos);
+    
+    // Items Table
+    yPos += 15;
+    const tableStartY = yPos;
+    
+    // Table Header
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(20, yPos - 5, pageWidth - 40, 10, 'F');
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.text('#', 25, yPos);
+    pdf.text('Item Name', 35, yPos);
+    pdf.text('Quantity', 130, yPos);
+    pdf.text('Unit', 160, yPos);
+    pdf.text('Picked ☐', pageWidth - 30, yPos);
+    
+    yPos += 10;
+    
+    // Table Rows
+    pdf.setFont('helvetica', 'normal');
+    slip.items.forEach((item: any, index: number) => {
+      if (yPos > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+      }
+      
+      // Alternate row background
+      if (index % 2 === 0) {
+        pdf.setFillColor(250, 250, 250);
+        pdf.rect(20, yPos - 5, pageWidth - 40, 8, 'F');
+      }
+      
+      pdf.text(`${index + 1}`, 25, yPos);
+      pdf.text(item.name || item.commodityName || 'Unknown Item', 35, yPos);
+      pdf.text(`${item.quantity || item.toPick || 0}`, 130, yPos);
+      pdf.text(item.unit || 'units', 160, yPos);
+      
+      // Checkbox
+      pdf.rect(pageWidth - 32, yPos - 4, 5, 5);
+      
+      yPos += 8;
+    });
+    
+    // Footer
+    const footerY = pageHeight - 20;
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(20, footerY - 5, pageWidth - 20, footerY - 5);
+    
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Picker Signature: _______________________`, 20, footerY);
+    pdf.text(`Date: _____________`, pageWidth - 60, footerY);
+    
+    pdf.setFontSize(7);
+    pdf.text(`Generated on ${new Date().toLocaleString()}`, pageWidth / 2, footerY + 7, { align: 'center' });
+    
+    return pdf;
+  }
+
+  private generateDispatchSlipPDF(slip: any): any {
+    const jsPDF = (window as any).jspdf?.jsPDF;
+    if (!jsPDF) {
+      console.error('jsPDF not loaded');
+      this.snackBar.open('PDF library not loaded. Please refresh the page.', 'Close', { duration: 3000 });
+      return null;
+    }
+
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    
+    // Header
+    pdf.setFillColor(76, 175, 80); // Material Green
+    pdf.rect(0, 0, pageWidth, 40, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('DISPATCH SLIP', pageWidth / 2, 20, { align: 'center' });
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Slip #: ${slip.slipNumber}`, pageWidth / 2, 30, { align: 'center' });
+    
+    // Document Info
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(10);
+    let yPos = 50;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Customer:', 20, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(slip.customerName, 55, yPos);
+    
+    yPos += 7;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Dispatch Date:', 20, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(slip.dispatchedDate, 55, yPos);
+    
+    if (slip.tripsheetNumber) {
+      yPos += 7;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Tripsheet #:', 20, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(slip.tripsheetNumber, 55, yPos);
+    }
+    
+    yPos += 7;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Total Items:', 20, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`${slip.items.length}`, 55, yPos);
+    
+    // Items Table
+    yPos += 15;
+    
+    // Table Header
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(20, yPos - 5, pageWidth - 40, 10, 'F');
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.text('#', 25, yPos);
+    pdf.text('Item Name', 35, yPos);
+    pdf.text('Quantity', 130, yPos);
+    pdf.text('Unit', 160, yPos);
+    
+    yPos += 10;
+    
+    // Table Rows
+    pdf.setFont('helvetica', 'normal');
+    let totalQuantity = 0;
+    
+    slip.items.forEach((item: any, index: number) => {
+      if (yPos > pageHeight - 40) {
+        pdf.addPage();
+        yPos = 20;
+      }
+      
+      // Alternate row background
+      if (index % 2 === 0) {
+        pdf.setFillColor(250, 250, 250);
+        pdf.rect(20, yPos - 5, pageWidth - 40, 8, 'F');
+      }
+      
+      const quantity = item.quantity || item.toPick || 0;
+      totalQuantity += quantity;
+      
+      pdf.text(`${index + 1}`, 25, yPos);
+      pdf.text(item.name || item.commodityName || 'Unknown Item', 35, yPos);
+      pdf.text(`${quantity}`, 130, yPos);
+      pdf.text(item.unit || 'units', 160, yPos);
+      
+      yPos += 8;
+    });
+    
+    // Total
+    yPos += 5;
+    pdf.setDrawColor(0, 0, 0);
+    pdf.line(120, yPos - 3, pageWidth - 20, yPos - 3);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Total:', 100, yPos);
+    pdf.text(`${totalQuantity}`, 130, yPos);
+    
+    // Footer with signatures
+    const footerY = pageHeight - 35;
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(20, footerY - 5, pageWidth - 20, footerY - 5);
+    
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Dispatcher Signature: _______________________', 20, footerY);
+    pdf.text('Date: _____________', 20, footerY + 7);
+    
+    pdf.text('Driver Signature: _______________________', pageWidth - 90, footerY);
+    pdf.text('Date: _____________', pageWidth - 90, footerY + 7);
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Customer Acknowledgement:', 20, footerY + 17);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.text('Received By: _______________________ Signature: _______________________ Date: _____________', 20, footerY + 23);
+    
+    pdf.setFontSize(7);
+    pdf.text(`Generated on ${new Date().toLocaleString()}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    
+    return pdf;
   }
 
   toggleTripsheet(tripsheet: any): void {
