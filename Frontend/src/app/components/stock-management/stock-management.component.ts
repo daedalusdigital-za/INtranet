@@ -3380,11 +3380,16 @@ export class DispatchDialog implements OnInit {
     this.loading = true;
     const warehouseId = this.data.id;
     
-    // Load pending tripsheets (Available, Assigned statuses)
+    // Load pending tripsheets (only Available, Assigned, InTransit statuses - not Delivered/Completed)
     this.http.get<any[]>(`${environment.apiUrl}/logistics/loads?warehouseId=${warehouseId}`)
       .subscribe({
         next: (loads) => {
-          this.tripsheets = loads.map(load => ({
+          // Filter to only show non-delivered loads in pending tab
+          const pendingLoads = loads.filter(load => 
+            load.status !== 'Delivered' && load.status !== 'Completed'
+          );
+          
+          this.tripsheets = pendingLoads.map(load => ({
             id: load.id,
             tripsheetNumber: load.loadNumber,
             customerName: load.customer?.name || 'Unknown Customer',
@@ -3487,48 +3492,65 @@ export class DispatchDialog implements OnInit {
   }
 
   loadPickingSlips(): void {
-    // TODO: Load picking slips from backend
-    // For now, use mock data
-    this.pickingSlips = [
-      {
-        id: 1,
-        slipNumber: 'PS-2026-001',
-        customerName: 'ABC Manufacturing',
-        generatedDate: '2026-02-10',
-        items: [
-          { name: 'Widget A', quantity: 50 },
-          { name: 'Widget B', quantity: 30 }
-        ]
-      },
-      {
-        id: 2,
-        slipNumber: 'PS-2026-002',
-        customerName: 'XYZ Corp',
-        generatedDate: '2026-02-09',
-        items: [
-          { name: 'Gadget C', quantity: 100 }
-        ]
-      }
-    ];
-    this.filteredPickingSlips = [...this.pickingSlips];
+    const warehouseId = this.data.id;
+    
+    // Load delivered/completed loads and convert to picking slips
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/loads?warehouseId=${warehouseId}`)
+      .subscribe({
+        next: (loads) => {
+          // Filter to delivered or completed loads
+          const deliveredLoads = loads.filter(load => 
+            load.status === 'Delivered' || load.status === 'Completed'
+          );
+          
+          this.pickingSlips = deliveredLoads.map(load => ({
+            id: load.id,
+            slipNumber: load.loadNumber,
+            tripsheetNumber: load.loadNumber,
+            customerName: load.customer?.name || 'Unknown Customer',
+            generatedDate: load.scheduledDeliveryDate ? new Date(load.scheduledDeliveryDate).toLocaleDateString() : new Date().toLocaleDateString(),
+            items: this.mapLoadItems(load)
+          }));
+          
+          this.filteredPickingSlips = [...this.pickingSlips];
+        },
+        error: (error) => {
+          console.error('Error loading picking slips:', error);
+          this.pickingSlips = [];
+          this.filteredPickingSlips = [];
+        }
+      });
   }
 
   loadDispatchSlips(): void {
-    // TODO: Load dispatch slips from backend
-    // For now, use mock data
-    this.dispatchSlips = [
-      {
-        id: 1,
-        slipNumber: 'DS-2026-001',
-        customerName: 'ABC Manufacturing',
-        dispatchedDate: '2026-02-10',
-        items: [
-          { name: 'Widget A', quantity: 50 },
-          { name: 'Widget B', quantity: 30 }
-        ]
-      }
-    ];
-    this.filteredDispatchSlips = [...this.dispatchSlips];
+    const warehouseId = this.data.id;
+    
+    // Load delivered/completed loads and convert to dispatch slips
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/loads?warehouseId=${warehouseId}`)
+      .subscribe({
+        next: (loads) => {
+          // Filter to delivered or completed loads
+          const deliveredLoads = loads.filter(load => 
+            load.status === 'Delivered' || load.status === 'Completed'
+          );
+          
+          this.dispatchSlips = deliveredLoads.map(load => ({
+            id: load.id,
+            slipNumber: load.loadNumber,
+            tripsheetNumber: load.loadNumber,
+            customerName: load.customer?.name || 'Unknown Customer',
+            dispatchedDate: load.scheduledDeliveryDate ? new Date(load.scheduledDeliveryDate).toLocaleDateString() : new Date().toLocaleDateString(),
+            items: this.mapLoadItems(load)
+          }));
+          
+          this.filteredDispatchSlips = [...this.dispatchSlips];
+        },
+        error: (error) => {
+          console.error('Error loading dispatch slips:', error);
+          this.dispatchSlips = [];
+          this.filteredDispatchSlips = [];
+        }
+      });
   }
 
   printPickingSlip(slip: any): void {
