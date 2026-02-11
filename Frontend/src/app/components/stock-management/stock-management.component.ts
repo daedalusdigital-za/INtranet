@@ -108,6 +108,10 @@ interface WarehouseInventory {
                 <span class="stat-value">R{{ (selectedWarehouse.totalStockValue / 1000000) | number:'1.1-1' }}M</span>
               </div>
               <mat-progress-bar mode="determinate" [value]="75" color="primary" class="operation-progress"></mat-progress-bar>
+              <button mat-raised-button class="operation-btn">
+                <mat-icon>arrow_forward</mat-icon>
+                View Operations
+              </button>
             </div>
           </div>
 
@@ -127,6 +131,10 @@ interface WarehouseInventory {
                 <span class="stat-value">8</span>
               </div>
               <mat-progress-bar mode="determinate" [value]="67" color="primary" class="operation-progress"></mat-progress-bar>
+              <button mat-raised-button class="operation-btn">
+                <mat-icon>arrow_forward</mat-icon>
+                View Operations
+              </button>
             </div>
           </div>
 
@@ -146,6 +154,10 @@ interface WarehouseInventory {
                 <span class="stat-value">3</span>
               </div>
               <mat-progress-bar mode="determinate" [value]="40" color="primary" class="operation-progress"></mat-progress-bar>
+              <button mat-raised-button class="operation-btn">
+                <mat-icon>arrow_forward</mat-icon>
+                View Operations
+              </button>
             </div>
           </div>
 
@@ -165,6 +177,10 @@ interface WarehouseInventory {
                 <span class="stat-value">4</span>
               </div>
               <mat-progress-bar mode="determinate" [value]="57" color="primary" class="operation-progress"></mat-progress-bar>
+              <button mat-raised-button class="operation-btn">
+                <mat-icon>arrow_forward</mat-icon>
+                View Operations
+              </button>
             </div>
           </div>
         </div>
@@ -818,6 +834,31 @@ interface WarehouseInventory {
 
     .operation-progress ::ng-deep .mdc-linear-progress__buffer-bar {
       background-color: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .operation-btn {
+      width: 100%;
+      margin-top: 12px;
+      background: rgba(255, 255, 255, 0.25) !important;
+      backdrop-filter: blur(10px);
+      color: white !important;
+      font-weight: 600 !important;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      transition: all 0.3s ease;
+      padding: 10px 16px !important;
+    }
+
+    .operation-btn:hover {
+      background: rgba(255, 255, 255, 0.35) !important;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .operation-btn mat-icon {
+      margin-right: 8px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
     }
 
     .depot-block {
