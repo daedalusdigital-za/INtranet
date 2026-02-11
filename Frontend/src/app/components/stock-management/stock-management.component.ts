@@ -685,7 +685,7 @@ export class StockManagementComponent implements OnInit {
     if (operation === 'inventory') {
       this.showInventorySubmenu = true;
     } else if (operation === 'dispatch') {
-      this.snackBar.open('Order Accept & Dispatch - Coming Soon!', 'Close', { duration: 3000 });
+      this.openDispatchDialog();
     } else if (operation === 'transfer') {
       this.openTransferDialog();
     } else if (operation === 'grv') {
@@ -706,15 +706,35 @@ export class StockManagementComponent implements OnInit {
   }
 
   openScrap(): void {
-    this.snackBar.open('Scrap Management - Coming Soon!', 'Close', { duration: 3000 });
+    this.dialog.open(ScrapDialog, {
+      width: '800px',
+      maxWidth: '90vw',
+      data: this.selectedWarehouse
+    });
   }
 
   openStockTake(): void {
-    this.snackBar.open('Stock Take - Coming Soon!', 'Close', { duration: 3000 });
+    this.dialog.open(StockTakeDialog, {
+      width: '900px',
+      maxWidth: '90vw',
+      data: this.selectedWarehouse
+    });
   }
 
   openRepackaging(): void {
-    this.snackBar.open('Repackaging - Coming Soon!', 'Close', { duration: 3000 });
+    this.dialog.open(RepackagingDialog, {
+      width: '700px',
+      maxWidth: '90vw',
+      data: this.selectedWarehouse
+    });
+  }
+
+  openDispatchDialog(): void {
+    this.dialog.open(DispatchDialog, {
+      width: '1000px',
+      maxWidth: '90vw',
+      data: this.selectedWarehouse
+    });
   }
 
   openTransferDialog(): void {
@@ -2504,6 +2524,1228 @@ export class WarehouseOperationsDialog {
         }, 500);
         break;
     }
+  }
+}
+
+// Dispatch Dialog Component
+@Component({
+  selector: 'dispatch-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatCheckboxModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatProgressSpinnerModule
+  ],
+  template: `
+    <div class="dialog-header">
+      <h2>Order Accept & Dispatch - {{ data.name }}</h2>
+      <button mat-icon-button (click)="dialogRef.close()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <div class="dialog-content">
+      <div class="info-banner">
+        <mat-icon>local_shipping</mat-icon>
+        <span>Select orders to dispatch from {{ data.name }}</span>
+      </div>
+
+      @if (loading) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Loading pending orders...</p>
+        </div>
+      } @else {
+        <div class="orders-section">
+          <div class="section-header">
+            <h3>Pending Orders ({{ pendingOrders.length }})</h3>
+            <mat-form-field class="search-field">
+              <mat-label>Search orders</mat-label>
+              <input matInput [(ngModel)]="searchQuery" (input)="filterOrders()" placeholder="Order number, customer...">
+              <mat-icon matSuffix>search</mat-icon>
+            </mat-form-field>
+          </div>
+
+          <div class="orders-list">
+            @for (order of filteredOrders; track order.id) {
+              <div class="order-card" [class.selected]="order.selected">
+                <mat-checkbox [(ngModel)]="order.selected" (change)="updateSelection()"></mat-checkbox>
+                <div class="order-info">
+                  <div class="order-number">{{ order.orderNumber }}</div>
+                  <div class="order-customer">{{ order.customerName }}</div>
+                  <div class="order-items">{{ order.itemCount }} items</div>
+                </div>
+                <div class="order-details">
+                  <div class="order-date">{{ order.orderDate }}</div>
+                  <div class="order-priority" [class.urgent]="order.priority === 'Urgent'">{{ order.priority }}</div>
+                </div>
+              </div>
+            }
+            @if (filteredOrders.length === 0) {
+              <div class="empty-state">
+                <mat-icon>inbox</mat-icon>
+                <p>No pending orders found</p>
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (selectedCount > 0) {
+          <div class="dispatch-section">
+            <h3>Dispatch Details</h3>
+            <div class="dispatch-form">
+              <mat-form-field class="full-width">
+                <mat-label>Assign to Vehicle</mat-label>
+                <mat-select [(ngModel)]="selectedVehicle">
+                  <mat-option value="">Select Vehicle</mat-option>
+                  <mat-option value="V001">BK31KFZN - Truck</mat-option>
+                  <mat-option value="V002">CT11SJZN - Van</mat-option>
+                  <mat-option value="V003">DJ25NRZN - Truck</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field class="full-width">
+                <mat-label>Assign to Driver</mat-label>
+                <mat-select [(ngModel)]="selectedDriver">
+                  <mat-option value="">Select Driver</mat-option>
+                  <mat-option value="D001">John Doe</mat-option>
+                  <mat-option value="D002">Jane Smith</mat-option>
+                  <mat-option value="D003">Mike Johnson</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field class="full-width">
+                <mat-label>Dispatch Notes</mat-label>
+                <textarea matInput [(ngModel)]="dispatchNotes" rows="3" placeholder="Enter any special instructions..."></textarea>
+              </mat-form-field>
+            </div>
+          </div>
+        }
+      }
+    </div>
+
+    <div class="dialog-actions">
+      <button mat-button (click)="dialogRef.close()">Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="selectedCount === 0 || !selectedVehicle || !selectedDriver" (click)="confirmDispatch()">
+        <mat-icon>send</mat-icon>
+        Dispatch {{ selectedCount }} Order{{ selectedCount !== 1 ? 's' : '' }}
+      </button>
+    </div>
+  `,
+  styles: [`
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      margin: -24px -24px 0 -24px;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+
+    .dialog-header button {
+      color: white;
+    }
+
+    .dialog-content {
+      padding: 24px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .info-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: rgba(240, 147, 251, 0.1);
+      border-left: 4px solid #f093fb;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      color: #f5576c;
+      font-weight: 500;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .section-header h3 {
+      margin: 0;
+      color: #333;
+      font-size: 1.1rem;
+    }
+
+    .search-field {
+      width: 300px;
+    }
+
+    .orders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .order-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+      background: white;
+    }
+
+    .order-card:hover {
+      border-color: #f093fb;
+      box-shadow: 0 2px 8px rgba(240, 147, 251, 0.2);
+    }
+
+    .order-card.selected {
+      border-color: #f5576c;
+      background: rgba(245, 87, 108, 0.05);
+    }
+
+    .order-info {
+      flex: 1;
+    }
+
+    .order-number {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #333;
+    }
+
+    .order-customer {
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .order-items {
+      color: #999;
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    .order-details {
+      text-align: right;
+    }
+
+    .order-date {
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .order-priority {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-top: 8px;
+      background: #e3f2fd;
+      color: #2196f3;
+    }
+
+    .order-priority.urgent {
+      background: #ffebee;
+      color: #f44336;
+    }
+
+    .dispatch-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 2px solid #e0e0e0;
+    }
+
+    .dispatch-section h3 {
+      margin: 0 0 16px 0;
+      color: #333;
+    }
+
+    .dispatch-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .full-width {
+      width: 100%;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px;
+      gap: 16px;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .empty-state mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+    }
+  `]
+})
+export class DispatchDialog implements OnInit {
+  loading = true;
+  searchQuery = '';
+  pendingOrders: any[] = [];
+  filteredOrders: any[] = [];
+  selectedCount = 0;
+  selectedVehicle = '';
+  selectedDriver = '';
+  dispatchNotes = '';
+
+  constructor(
+    public dialogRef: MatDialogRef<DispatchDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private snackBar: MatSnackBar
+  ) {}
+
+  ngOnInit(): void {
+    this.loadPendingOrders();
+  }
+
+  loadPendingOrders(): void {
+    // Simulate loading pending orders
+    setTimeout(() => {
+      this.pendingOrders = [
+        { id: 1, orderNumber: 'ORD-2026-001', customerName: 'Acme Corp', itemCount: 5, orderDate: '2026-02-10', priority: 'Normal', selected: false },
+        { id: 2, orderNumber: 'ORD-2026-002', customerName: 'Tech Solutions', itemCount: 3, orderDate: '2026-02-11', priority: 'Urgent', selected: false },
+        { id: 3, orderNumber: 'ORD-2026-003', customerName: 'Medical Supplies Ltd', itemCount: 8, orderDate: '2026-02-11', priority: 'Normal', selected: false },
+      ];
+      this.filteredOrders = [...this.pendingOrders];
+      this.loading = false;
+    }, 1000);
+  }
+
+  filterOrders(): void {
+    const query = this.searchQuery.toLowerCase();
+    this.filteredOrders = this.pendingOrders.filter(order =>
+      order.orderNumber.toLowerCase().includes(query) ||
+      order.customerName.toLowerCase().includes(query)
+    );
+  }
+
+  updateSelection(): void {
+    this.selectedCount = this.pendingOrders.filter(o => o.selected).length;
+  }
+
+  confirmDispatch(): void {
+    const selectedOrders = this.pendingOrders.filter(o => o.selected).map(o => o.orderNumber).join(', ');
+    this.snackBar.open(`Dispatched orders: ${selectedOrders} to vehicle ${this.selectedVehicle}`, 'Close', { duration: 5000 });
+    this.dialogRef.close({ dispatched: true });
+  }
+}
+
+// Scrap Dialog Component
+@Component({
+  selector: 'scrap-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatChipsModule
+  ],
+  template: `
+    <div class="dialog-header scrap-header">
+      <h2>Scrap Items - {{ data.name }}</h2>
+      <button mat-icon-button (click)="dialogRef.close()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <div class="dialog-content">
+      <div class="info-banner scrap-banner">
+        <mat-icon>warning</mat-icon>
+        <span>Record damaged or unusable items to remove from inventory</span>
+      </div>
+
+      <div class="form-section">
+        <mat-form-field class="full-width">
+          <mat-label>Search Item</mat-label>
+          <input matInput [(ngModel)]="searchQuery" (input)="filterItems()" placeholder="Item code, description...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        @if (filteredItems.length > 0 && searchQuery) {
+          <div class="items-dropdown">
+            @for (item of filteredItems.slice(0, 5); track item.sku) {
+              <div class="item-option" (click)="selectItem(item)">
+                <div class="item-name">{{ item.name }}</div>
+                <div class="item-sku">{{ item.sku }}</div>
+              </div>
+            }
+          </div>
+        }
+
+        @if (selectedItem) {
+          <div class="selected-item-card">
+            <div class="item-details">
+              <h3>{{ selectedItem.name }}</h3>
+              <p>SKU: {{ selectedItem.sku }} | Available: {{ selectedItem.quantity }} units</p>
+            </div>
+            <button mat-icon-button (click)="clearItem()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
+          <mat-form-field class="full-width">
+            <mat-label>Quantity to Scrap</mat-label>
+            <input matInput type="number" [(ngModel)]="scrapQuantity" min="1" [max]="selectedItem.quantity">
+          </mat-form-field>
+
+          <mat-form-field class="full-width">
+            <mat-label>Reason for Scrapping</mat-label>
+            <mat-select [(ngModel)]="scrapReason">
+              <mat-option value="damaged">Damaged in Transit</mat-option>
+              <mat-option value="expired">Expired</mat-option>
+              <mat-option value="defective">Manufacturing Defect</mat-option>
+              <mat-option value="contaminated">Contaminated</mat-option>
+              <mat-option value="obsolete">Obsolete</mat-option>
+              <mat-option value="other">Other</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field class="full-width">
+            <mat-label>Additional Notes</mat-label>
+            <textarea matInput [(ngModel)]="notes" rows="3" placeholder="Enter any additional details..."></textarea>
+          </mat-form-field>
+
+          <div class="summary-box">
+            <h4>Scrap Summary</h4>
+            <div class="summary-row">
+              <span>Item:</span>
+              <strong>{{ selectedItem.name }}</strong>
+            </div>
+            <div class="summary-row">
+              <span>Quantity:</span>
+              <strong>{{ scrapQuantity }} units</strong>
+            </div>
+            <div class="summary-row">
+              <span>New Balance:</span>
+              <strong>{{ selectedItem.quantity - scrapQuantity }} units</strong>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="dialog-actions">
+      <button mat-button (click)="dialogRef.close()">Cancel</button>
+      <button mat-raised-button color="warn" [disabled]="!selectedItem || scrapQuantity <= 0 || !scrapReason" (click)="confirmScrap()">
+        <mat-icon>delete_sweep</mat-icon>
+        Record Scrap
+      </button>
+    </div>
+  `,
+  styles: [`
+    .scrap-header {
+      background: linear-gradient(135deg, #fc6767 0%, #ec008c 100%) !important;
+    }
+
+    .scrap-banner {
+      background: rgba(252, 103, 103, 0.1) !important;
+      border-left-color: #fc6767 !important;
+      color: #ec008c !important;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      color: white;
+      margin: -24px -24px 0 -24px;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+
+    .dialog-header button {
+      color: white;
+    }
+
+    .dialog-content {
+      padding: 24px;
+    }
+
+    .info-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-weight: 500;
+    }
+
+    .form-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .full-width {
+      width: 100%;
+    }
+
+    .items-dropdown {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .item-option {
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .item-option:hover {
+      background: #f5f5f5;
+    }
+
+    .item-name {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .item-sku {
+      font-size: 0.9rem;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .selected-item-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      border: 2px solid #fc6767;
+    }
+
+    .item-details h3 {
+      margin: 0 0 8px 0;
+      color: #333;
+    }
+
+    .item-details p {
+      margin: 0;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .summary-box {
+      padding: 16px;
+      background: #fff3e0;
+      border-radius: 8px;
+      border-left: 4px solid #ff9800;
+    }
+
+    .summary-box h4 {
+      margin: 0 0 12px 0;
+      color: #f57c00;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #ffe0b2;
+    }
+
+    .summary-row:last-child {
+      border-bottom: none;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+  `]
+})
+export class ScrapDialog implements OnInit {
+  searchQuery = '';
+  selectedItem: any = null;
+  scrapQuantity = 1;
+  scrapReason = '';
+  notes = '';
+  filteredItems: any[] = [];
+  allItems: any[] = [];
+
+  constructor(
+    public dialogRef: MatDialogRef<ScrapDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private snackBar: MatSnackBar
+  ) {}
+
+  ngOnInit(): void {
+    // Load items from warehouse
+    this.allItems = [
+      { sku: 'ITM-001', name: 'Medical Gloves Box', quantity: 150 },
+      { sku: 'ITM-002', name: 'Surgical Masks (50pk)', quantity: 200 },
+      { sku: 'ITM-003', name: 'Hand Sanitizer 500ml', quantity: 85 },
+    ];
+  }
+
+  filterItems(): void {
+    const query = this.searchQuery.toLowerCase();
+    if (!query) {
+      this.filteredItems = [];
+      return;
+    }
+    this.filteredItems = this.allItems.filter(item =>
+      item.name.toLowerCase().includes(query) || item.sku.toLowerCase().includes(query)
+    );
+  }
+
+  selectItem(item: any): void {
+    this.selectedItem = item;
+    this.searchQuery = item.name;
+    this.filteredItems = [];
+    this.scrapQuantity = 1;
+  }
+
+  clearItem(): void {
+    this.selectedItem = null;
+    this.searchQuery = '';
+    this.scrapQuantity = 1;
+  }
+
+  confirmScrap(): void {
+    this.snackBar.open(
+      `Scrapped ${this.scrapQuantity} units of ${this.selectedItem.name}. Reason: ${this.scrapReason}`,
+      'Close',
+      { duration: 5000 }
+    );
+    this.dialogRef.close({ scrapped: true });
+  }
+}
+
+// Stock Take Dialog Component
+@Component({
+  selector: 'stock-take-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatChipsModule
+  ],
+  template: `
+    <div class="dialog-header stocktake-header">
+      <h2>Stock Take - {{ data.name }}</h2>
+      <button mat-icon-button (click)="dialogRef.close()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <div class="dialog-content">
+      <div class="info-banner stocktake-banner">
+        <mat-icon>fact_check</mat-icon>
+        <span>Perform physical count and compare with system inventory</span>
+      </div>
+
+      <div class="stocktake-table">
+        <table mat-table [dataSource]="items" class="full-width-table">
+          <ng-container matColumnDef="sku">
+            <th mat-header-cell *matHeaderCellDef>SKU</th>
+            <td mat-cell *matCellDef="let item">{{ item.sku }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Item Name</th>
+            <td mat-cell *matCellDef="let item">{{ item.name }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="systemQty">
+            <th mat-header-cell *matHeaderCellDef>System Qty</th>
+            <td mat-cell *matCellDef="let item">{{ item.systemQty }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="countedQty">
+            <th mat-header-cell *matHeaderCellDef>Counted Qty</th>
+            <td mat-cell *matCellDef="let item">
+              <mat-form-field class="qty-field">
+                <input matInput type="number" [(ngModel)]="item.countedQty" (input)="calculateVariance(item)" min="0">
+              </mat-form-field>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="variance">
+            <th mat-header-cell *matHeaderCellDef>Variance</th>
+            <td mat-cell *matCellDef="let item">
+              <span [class]="getVarianceClass(item.variance)">
+                {{ item.variance > 0 ? '+' : '' }}{{ item.variance }}
+              </span>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      </div>
+
+      @if (hasVariances()) {
+        <div class="summary-section">
+          <h3>Stock Take Summary</h3>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value">{{ getTotalItems() }}</div>
+              <div class="stat-label">Items Counted</div>
+            </div>
+            <div class="stat-card positive">
+              <div class="stat-value">{{ getPositiveVariances() }}</div>
+              <div class="stat-label">Overages</div>
+            </div>
+            <div class="stat-card negative">
+              <div class="stat-value">{{ getNegativeVariances() }}</div>
+              <div class="stat-label">Shortages</div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="dialog-actions">
+      <button mat-button (click)="dialogRef.close()">Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!hasVariances()" (click)="submitStockTake()">
+        <mat-icon>save</mat-icon>
+        Submit Stock Take
+      </button>
+    </div>
+  `,
+  styles: [`
+    .stocktake-header {
+      background: linear-gradient(135deg, #f77062 0%, #fe5196 100%) !important;
+    }
+
+    .stocktake-banner {
+      background: rgba(247, 112, 98, 0.1) !important;
+      border-left-color: #f77062 !important;
+      color: #fe5196 !important;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      color: white;
+      margin: -24px -24px 0 -24px;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+
+    .dialog-header button {
+      color: white;
+    }
+
+    .dialog-content {
+      padding: 24px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .info-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-weight: 500;
+    }
+
+    .stocktake-table {
+      margin-bottom: 24px;
+    }
+
+    .full-width-table {
+      width: 100%;
+    }
+
+    .qty-field {
+      width: 100px;
+      margin-bottom: -1.25em;
+    }
+
+    .qty-field input {
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .variance-positive {
+      color: #4caf50;
+      font-weight: 700;
+    }
+
+    .variance-negative {
+      color: #f44336;
+      font-weight: 700;
+    }
+
+    .variance-zero {
+      color: #999;
+    }
+
+    .summary-section {
+      padding: 20px;
+      background: #f5f5f5;
+      border-radius: 12px;
+    }
+
+    .summary-section h3 {
+      margin: 0 0 16px 0;
+      color: #333;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .stat-card {
+      padding: 16px;
+      background: white;
+      border-radius: 8px;
+      text-align: center;
+      border: 2px solid #e0e0e0;
+    }
+
+    .stat-card.positive {
+      border-color: #4caf50;
+      background: #f1f8f4;
+    }
+
+    .stat-card.negative {
+      border-color: #f44336;
+      background: #fef1f1;
+    }
+
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+  `]
+})
+export class StockTakeDialog implements OnInit {
+  displayedColumns = ['sku', 'name', 'systemQty', 'countedQty', 'variance'];
+  items: any[] = [];
+
+  constructor(
+    public dialogRef: MatDialogRef<StockTakeDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private snackBar: MatSnackBar
+  ) {}
+
+  ngOnInit(): void {
+    this.items = [
+      { sku: 'ITM-001', name: 'Medical Gloves Box', systemQty: 150, countedQty: 150, variance: 0 },
+      { sku: 'ITM-002', name: 'Surgical Masks (50pk)', systemQty: 200, countedQty: 200, variance: 0 },
+      { sku: 'ITM-003', name: 'Hand Sanitizer 500ml', systemQty: 85, countedQty: 85, variance: 0 },
+      { sku: 'ITM-004', name: 'Disposable Gowns', systemQty: 120, countedQty: 120, variance: 0 },
+    ];
+  }
+
+  calculateVariance(item: any): void {
+    item.variance = (item.countedQty || 0) - item.systemQty;
+  }
+
+  getVarianceClass(variance: number): string {
+    if (variance > 0) return 'variance-positive';
+    if (variance < 0) return 'variance-negative';
+    return 'variance-zero';
+  }
+
+  hasVariances(): boolean {
+    return this.items.some(item => item.variance !== 0);
+  }
+
+  getTotalItems(): number {
+    return this.items.filter(item => item.countedQty !== null && item.countedQty !== item.systemQty).length;
+  }
+
+  getPositiveVariances(): number {
+    return this.items.filter(item => item.variance > 0).length;
+  }
+
+  getNegativeVariances(): number {
+    return this.items.filter(item => item.variance < 0).length;
+  }
+
+  submitStockTake(): void {
+    this.snackBar.open(`Stock take completed. ${this.getTotalItems()} items adjusted.`, 'Close', { duration: 5000 });
+    this.dialogRef.close({ submitted: true });
+  }
+}
+
+// Repackaging Dialog Component
+@Component({
+  selector: 'repackaging-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule
+  ],
+  template: `
+    <div class="dialog-header repack-header">
+      <h2>Repackaging - {{ data.name }}</h2>
+      <button mat-icon-button (click)="dialogRef.close()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <div class="dialog-content">
+      <div class="info-banner repack-banner">
+        <mat-icon>inventory</mat-icon>
+        <span>Change item packaging or split bulk items into smaller units</span>
+      </div>
+
+      <div class="form-section">
+        <mat-form-field class="full-width">
+          <mat-label>Select Item to Repackage</mat-label>
+          <mat-select [(ngModel)]="selectedItem" (selectionChange)="onItemSelect()">
+            <mat-option [value]="null">-- Select Item --</mat-option>
+            @for (item of items; track item.sku) {
+              <mat-option [value]="item">{{ item.name }} ({{ item.sku }})</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        @if (selectedItem) {
+          <div class="current-package-card">
+            <h3>Current Package</h3>
+            <div class="package-details">
+              <div class="detail-row">
+                <span>Item:</span>
+                <strong>{{ selectedItem.name }}</strong>
+              </div>
+              <div class="detail-row">
+                <span>Current Qty:</span>
+                <strong>{{ selectedItem.quantity }} {{ selectedItem.unit }}</strong>
+              </div>
+              <div class="detail-row">
+                <span>Package Size:</span>
+                <strong>{{ selectedItem.packageSize }} {{ selectedItem.unit }}/package</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="repackage-section">
+            <h3>New Packaging</h3>
+            
+            <mat-form-field class="full-width">
+              <mat-label>Repackage Type</mat-label>
+              <mat-select [(ngModel)]="repackType">
+                <mat-option value="split">Split into Smaller Units</mat-option>
+                <mat-option value="combine">Combine into Larger Units</mat-option>
+                <mat-option value="repack">Change Package Size</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field class="full-width">
+              <mat-label>New Package Size</mat-label>
+              <input matInput type="number" [(ngModel)]="newPackageSize" min="1">
+              <span matSuffix>{{ selectedItem.unit }}/package</span>
+            </mat-form-field>
+
+            <mat-form-field class="full-width">
+              <mat-label>Number of Units to Repackage</mat-label>
+              <input matInput type="number" [(ngModel)]="unitsToRepack" min="1" [max]="selectedItem.quantity">
+              <span matSuffix>{{ selectedItem.unit }}</span>
+            </mat-form-field>
+
+            <div class="calculation-card">
+              <h4>Repackaging Result</h4>
+              <div class="calc-row">
+                <span>Original Packages:</span>
+                <strong>{{ getOriginalPackages() }}</strong>
+              </div>
+              <div class="calc-row">
+                <span>New Packages:</span>
+                <strong class="highlight">{{ getNewPackages() }}</strong>
+              </div>
+              <div class="calc-row">
+                <span>Remaining Units:</span>
+                <strong>{{ getRemainingUnits() }} {{ selectedItem.unit }}</strong>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="dialog-actions">
+      <button mat-button (click)="dialogRef.close()">Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!selectedItem || !newPackageSize || !unitsToRepack" (click)="confirmRepackage()">
+        <mat-icon>published_with_changes</mat-icon>
+        Confirm Repackaging
+      </button>
+    </div>
+  `,
+  styles: [`
+    .repack-header {
+      background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%) !important;
+    }
+
+    .repack-banner {
+      background: rgba(252, 203, 144, 0.1) !important;
+      border-left-color: #fccb90 !important;
+      color: #d57eeb !important;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      color: white;
+      margin: -24px -24px 0 -24px;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+
+    .dialog-header button {
+      color: white;
+    }
+
+    .dialog-content {
+      padding: 24px;
+    }
+
+    .info-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-weight: 500;
+    }
+
+    .form-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .full-width {
+      width: 100%;
+    }
+
+    .current-package-card {
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      border-left: 4px solid #fccb90;
+    }
+
+    .current-package-card h3 {
+      margin: 0 0 12px 0;
+      color: #333;
+      font-size: 1rem;
+    }
+
+    .package-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    .detail-row span {
+      color: #666;
+    }
+
+    .repackage-section h3 {
+      margin: 16px 0 12px 0;
+      color: #333;
+      font-size: 1rem;
+    }
+
+    .calculation-card {
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(252, 203, 144, 0.1) 0%, rgba(213, 126, 235, 0.1) 100%);
+      border-radius: 8px;
+      border: 2px solid #d57eeb;
+    }
+
+    .calculation-card h4 {
+      margin: 0 0 12px 0;
+      color: #d57eeb;
+    }
+
+    .calc-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(213, 126, 235, 0.2);
+    }
+
+    .calc-row:last-child {
+      border-bottom: none;
+    }
+
+    .calc-row .highlight {
+      color: #d57eeb;
+      font-size: 1.2rem;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+  `]
+})
+export class RepackagingDialog implements OnInit {
+  items: any[] = [];
+  selectedItem: any = null;
+  repackType = '';
+  newPackageSize = 0;
+  unitsToRepack = 0;
+
+  constructor(
+    public dialogRef: MatDialogRef<RepackagingDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private snackBar: MatSnackBar
+  ) {}
+
+  ngOnInit(): void {
+    this.items = [
+      { sku: 'ITM-001', name: 'Medical Gloves', quantity: 1000, unit: 'pairs', packageSize: 100 },
+      { sku: 'ITM-002', name: 'Surgical Masks', quantity: 5000, unit: 'units', packageSize: 50 },
+      { sku: 'ITM-003', name: 'Hand Sanitizer', quantity: 500, unit: 'ml', packageSize: 500 },
+    ];
+  }
+
+  onItemSelect(): void {
+    this.newPackageSize = this.selectedItem?.packageSize || 0;
+    this.unitsToRepack = 0;
+  }
+
+  getOriginalPackages(): number {
+    if (!this.selectedItem || !this.unitsToRepack) return 0;
+    return Math.floor(this.unitsToRepack / this.selectedItem.packageSize);
+  }
+
+  getNewPackages(): number {
+    if (!this.selectedItem || !this.unitsToRepack || !this.newPackageSize) return 0;
+    return Math.floor(this.unitsToRepack / this.newPackageSize);
+  }
+
+  getRemainingUnits(): number {
+    if (!this.selectedItem || !this.unitsToRepack || !this.newPackageSize) return 0;
+    return this.unitsToRepack % this.newPackageSize;
+  }
+
+  confirmRepackage(): void {
+    this.snackBar.open(
+      `Repackaged ${this.unitsToRepack} ${this.selectedItem.unit} of ${this.selectedItem.name} into ${this.getNewPackages()} packages`,
+      'Close',
+      { duration: 5000 }
+    );
+    this.dialogRef.close({ repackaged: true });
   }
 }
 
