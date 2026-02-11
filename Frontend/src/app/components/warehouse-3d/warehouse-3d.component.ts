@@ -18,6 +18,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -25,6 +26,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
 
 import { Warehouse3DService } from './warehouse-3d.service';
 import { 
@@ -32,7 +34,8 @@ import {
   Warehouse3DViewData, 
   STATUS_COLORS, 
   BoxStatus,
-  Warehouse3DConfig 
+  Warehouse3DConfig,
+  WarehouseBuilding
 } from './models';
 
 // Cardboard box colors
@@ -51,6 +54,7 @@ const CARDBOARD_LIGHT = 0xA67B1A;
     MatIconModule,
     MatSelectModule,
     MatFormFieldModule,
+    MatInputModule,
     MatProgressSpinnerModule,
     MatCardModule,
     MatTooltipModule,
@@ -74,6 +78,20 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
   dragModeEnabled = signal(false);
   isDragging = signal(false);
   
+  // Building selection state
+  buildings = signal<WarehouseBuilding[]>([]);
+  selectedBuildingId = signal<number | null>(null);
+  warehouseId = signal<number>(1);
+  
+  // Inventory search state
+  searchQuery = signal('');
+  searchResults = signal<WarehouseBox3D[]>([]);
+  showSearchResults = signal(false);
+  
+  // Transfer dialog state
+  showTransferDialog = signal(false);
+  transferTargetBuilding = signal<WarehouseBuilding | null>(null);
+  
   // Data
   private warehouseData: Warehouse3DViewData | null = null;
   private boxes: WarehouseBox3D[] = [];
@@ -95,6 +113,12 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
   // Highlighted box
   private highlightMesh: THREE.Mesh | null = null;
   
+  // Drag controls for moving boxes
+  private dragControls: DragControls | null = null;
+  private draggableBoxes: THREE.Mesh[] = [];
+  private boxToDataMap: Map<THREE.Mesh, WarehouseBox3D> = new Map();
+  private dragStartPosition: THREE.Vector3 | null = null;
+  
   // Animation
   private animationId: number = 0;
   
@@ -108,9 +132,20 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Get warehouse ID from route params if available
-    const warehouseId = this.route.snapshot.queryParams['warehouseId'] || 1;
-    this.loadWarehouseData(warehouseId);
+    // Get warehouse ID or building ID from route params
+    const warehouseIdParam = this.route.snapshot.queryParams['warehouseId'];
+    const buildingIdParam = this.route.snapshot.queryParams['buildingId'];
+    
+    if (buildingIdParam) {
+      // Direct building view - load that specific building
+      this.selectedBuildingId.set(Number(buildingIdParam));
+      this.loadBuildingData(Number(buildingIdParam));
+    } else {
+      // Warehouse view - load buildings list first
+      const whId = warehouseIdParam ? Number(warehouseIdParam) : 1;
+      this.warehouseId.set(whId);
+      this.loadWarehouseBuildings(whId);
+    }
   }
 
   ngAfterViewInit(): void {
@@ -238,18 +273,20 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
       metalness: 0.05
     });
 
-    // Vertical aisles every 8 columns
-    const aislePositions = [8, 16, 24];
-    aislePositions.forEach(x => {
+    // Vertical aisles at columns 8 and 16 (matching backend aisle columns)
+    const aisleColumns = this.warehouseData?.config?.aisleColumns || [8, 16];
+    const spacing = (this.warehouseData?.config?.boxWidth || 1) + (this.warehouseData?.config?.gridSpacing || 0.2);
+    
+    aisleColumns.forEach(col => {
       const aisle = new THREE.Mesh(aisleGeometry, aisleMaterial);
       aisle.rotation.x = -Math.PI / 2;
-      aisle.position.set(x * 1.2, 0.02, 6);
+      aisle.position.set(col * spacing, 0.02, 6);
       aisle.receiveShadow = true;
       this.scene.add(aisle);
 
       // Yellow safety lines
-      this.createSafetyLine(x * 1.2 - 0.9, 6, 35, false);
-      this.createSafetyLine(x * 1.2 + 0.9, 6, 35, false);
+      this.createSafetyLine(col * spacing - 0.9, 6, 35, false);
+      this.createSafetyLine(col * spacing + 0.9, 6, 35, false);
     });
 
     // Horizontal aisle at the front
@@ -430,13 +467,246 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  /**
+   * Load buildings for a warehouse and auto-select first building
+   */
+  private loadWarehouseBuildings(warehouseId: number): void {
+    this.isLoading.set(true);
+    
+    this.warehouse3DService.getWarehouseBuildings(warehouseId).subscribe({
+      next: (buildings) => {
+        this.buildings.set(buildings);
+        
+        if (buildings.length > 0) {
+          // Auto-select first building with items, or first building
+          const buildingWithItems = buildings.find(b => b.itemCount > 0) || buildings[0];
+          this.selectedBuildingId.set(buildingWithItems.id);
+          this.loadBuildingData(buildingWithItems.id);
+        } else {
+          // No buildings - load warehouse view (all combined)
+          this.loadWarehouseData(warehouseId);
+        }
+      },
+      error: (err) => {
+        console.error('Error loading buildings:', err);
+        // Fallback to warehouse view
+        this.loadWarehouseData(warehouseId);
+      }
+    });
+  }
+
+  /**
+   * Load 3D data for a specific building
+   */
+  private loadBuildingData(buildingId: number): void {
+    this.isLoading.set(true);
+    
+    this.warehouse3DService.getBuilding3DView(buildingId).subscribe({
+      next: (data) => {
+        this.warehouseData = data;
+        // Find building name for display
+        const building = this.buildings().find(b => b.id === buildingId);
+        if (building) {
+          this.warehouseName.set(`${data.warehouseName} → ${building.name}`);
+        } else {
+          this.warehouseName.set(data.warehouseName);
+        }
+        this.boxes = data.boxes;
+        this.renderBoxes();
+        this.isLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Error loading building data:', err);
+        this.isLoading.set(false);
+      }
+    });
+  }
+
+  /**
+   * Handle building selection change
+   */
+  onBuildingChange(buildingId: number | null): void {
+    this.selectedBuildingId.set(buildingId);
+    this.clearSelection();
+    this.searchQuery.set('');
+    this.searchResults.set([]);
+    
+    if (buildingId === null) {
+      // "All Buildings" selected
+      this.loadWarehouseData(this.warehouseId());
+    } else {
+      this.loadBuildingData(buildingId);
+    }
+  }
+
+  /**
+   * Search inventory items
+   */
+  onSearchInput(query: string): void {
+    this.searchQuery.set(query);
+    
+    if (query.length < 2) {
+      this.searchResults.set([]);
+      this.showSearchResults.set(false);
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const results = this.boxes.filter(box => 
+      box.label.toLowerCase().includes(lowerQuery) ||
+      box.sku?.toLowerCase().includes(lowerQuery) ||
+      box.commodityName?.toLowerCase().includes(lowerQuery) ||
+      box.id.toLowerCase().includes(lowerQuery)
+    ).slice(0, 10); // Limit to 10 results
+
+    this.searchResults.set(results);
+    this.showSearchResults.set(results.length > 0);
+  }
+
+  /**
+   * Select a search result and fly camera to it
+   */
+  selectSearchResult(box: WarehouseBox3D): void {
+    this.selectedBox.set(box);
+    this.showSearchResults.set(false);
+    this.searchQuery.set(box.label);
+    this.flyToBox(box);
+    this.highlightBox(box);
+  }
+
+  /**
+   * Animate camera to focus on a specific box
+   */
+  private flyToBox(box: WarehouseBox3D): void {
+    const config = this.warehouseData?.config || { boxWidth: 1, boxDepth: 1, boxHeight: 1, gridSpacing: 0.2 };
+    const spacing = config.boxWidth + config.gridSpacing;
+    
+    const targetX = box.position.x * spacing;
+    const targetZ = box.position.y * spacing;
+    const targetY = (box.stackLevel - 1) * config.boxHeight;
+
+    // Animate camera position
+    const startPos = this.camera.position.clone();
+    const endPos = new THREE.Vector3(targetX + 5, targetY + 8, targetZ + 5);
+    
+    const startTarget = this.controls.target.clone();
+    const endTarget = new THREE.Vector3(targetX, targetY, targetZ);
+
+    const duration = 1000; // 1 second
+    const startTime = performance.now();
+
+    const animateCamera = () => {
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      this.camera.position.lerpVectors(startPos, endPos, eased);
+      this.controls.target.lerpVectors(startTarget, endTarget, eased);
+      this.controls.update();
+
+      if (progress < 1) {
+        requestAnimationFrame(animateCamera);
+      }
+    };
+
+    requestAnimationFrame(animateCamera);
+  }
+
+  /**
+   * Highlight a specific box in the scene
+   */
+  private highlightBox(box: WarehouseBox3D): void {
+    // Remove existing highlight
+    if (this.highlightMesh) {
+      this.scene.remove(this.highlightMesh);
+      this.highlightMesh = null;
+    }
+
+    const config = this.warehouseData?.config || { boxWidth: 1, boxDepth: 1, boxHeight: 1, gridSpacing: 0.2 };
+    const spacing = config.boxWidth + config.gridSpacing;
+
+    // Create highlight ring around the box
+    const geometry = new THREE.RingGeometry(0.8, 1.0, 32);
+    const material = new THREE.MeshBasicMaterial({ 
+      color: 0x00BFFF, 
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8
+    });
+    this.highlightMesh = new THREE.Mesh(geometry, material);
+    this.highlightMesh.rotation.x = -Math.PI / 2;
+    this.highlightMesh.position.set(
+      box.position.x * spacing,
+      0.01,
+      box.position.y * spacing
+    );
+    this.scene.add(this.highlightMesh);
+  }
+
+  /**
+   * Open transfer dialog for selected box
+   */
+  openTransferDialog(): void {
+    if (!this.selectedBox()) return;
+    this.showTransferDialog.set(true);
+  }
+
+  /**
+   * Close transfer dialog
+   */
+  closeTransferDialog(): void {
+    this.showTransferDialog.set(false);
+    this.transferTargetBuilding.set(null);
+  }
+
+  /**
+   * Execute transfer to another building
+   */
+  confirmTransfer(): void {
+    const box = this.selectedBox();
+    const targetBuilding = this.transferTargetBuilding();
+    const currentBuildingId = this.selectedBuildingId();
+
+    if (!box || !targetBuilding || !currentBuildingId) return;
+
+    // Extract inventory ID from box ID
+    const inventoryId = parseInt(box.id.replace('INV-', ''), 10);
+
+    this.warehouse3DService.transferBetweenBuildings({
+      fromBuildingId: currentBuildingId,
+      toBuildingId: targetBuilding.id,
+      inventoryItemId: inventoryId,
+      quantity: box.quantity || 1
+    }).subscribe({
+      next: () => {
+        this.closeTransferDialog();
+        this.clearSelection();
+        // Reload building data to reflect transfer
+        this.loadBuildingData(currentBuildingId);
+      },
+      error: (err) => {
+        console.error('Transfer failed:', err);
+        alert('Transfer failed. Please try again.');
+      }
+    });
+  }
+
+  /**
+   * Get other buildings (excluding currently selected) for transfer
+   */
+  getOtherBuildings(): WarehouseBuilding[] {
+    return this.buildings().filter(b => b.id !== this.selectedBuildingId());
+  }
+
   private loadWarehouseData(warehouseId: number): void {
     this.isLoading.set(true);
     
     this.warehouse3DService.getWarehouse3DView(warehouseId).subscribe({
       next: (data) => {
         this.warehouseData = data;
-        this.warehouseName.set(data.warehouseName);
+        this.warehouseName.set(data.warehouseName + ' (All Buildings)');
         this.boxes = data.boxes;
         this.renderBoxes();
         this.isLoading.set(false);
@@ -460,6 +730,20 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
       .filter(child => child.userData['isTape'])
       .forEach(child => this.scene.remove(child));
 
+    // Remove existing draggable boxes
+    this.draggableBoxes.forEach(box => {
+      this.scene.remove(box);
+      box.geometry.dispose();
+    });
+    this.draggableBoxes = [];
+    this.boxToDataMap.clear();
+
+    // Dispose old drag controls
+    if (this.dragControls) {
+      this.dragControls.dispose();
+      this.dragControls = null;
+    }
+
     // Filter boxes based on status
     const filteredBoxes = this.statusFilter() === 'All' 
       ? this.boxes 
@@ -481,6 +765,68 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
       config.boxDepth * 0.9
     );
 
+    const cellSize = config.boxWidth + config.gridSpacing;
+
+    if (this.dragModeEnabled()) {
+      // Create individual meshes for drag mode
+      this.renderDraggableBoxes(filteredBoxes, config, cellSize);
+    } else {
+      // Use instanced mesh for performance (view mode)
+      this.renderInstancedBoxes(filteredBoxes, config, cellSize);
+    }
+  }
+
+  private renderDraggableBoxes(boxes: WarehouseBox3D[], config: any, cellSize: number): void {
+    const tapeGeometry = new THREE.PlaneGeometry(config.boxWidth * 0.8, 0.1);
+
+    boxes.forEach((box) => {
+      const x = box.position.x * cellSize;
+      const y = (box.stackLevel - 1) * config.boxHeight + config.boxHeight / 2;
+      const z = box.position.y * cellSize;
+
+      // Create box mesh
+      const boxMaterial = new THREE.MeshStandardMaterial({ 
+        color: CARDBOARD_BASE,
+        roughness: 0.8,
+        metalness: 0.0
+      });
+      const boxMesh = new THREE.Mesh(this.boxGeometry, boxMaterial);
+      boxMesh.position.set(x, y, z);
+      boxMesh.castShadow = true;
+      boxMesh.receiveShadow = true;
+      boxMesh.userData['boxData'] = box;
+      boxMesh.userData['originalPosition'] = new THREE.Vector3(x, y, z);
+      
+      this.scene.add(boxMesh);
+      this.draggableBoxes.push(boxMesh);
+      this.boxToDataMap.set(boxMesh, box);
+
+      // Add colored tape on top
+      const tapeMaterial = new THREE.MeshStandardMaterial({
+        color: STATUS_COLORS[box.status],
+        roughness: 0.3,
+        metalness: 0.1
+      });
+
+      const topTape = new THREE.Mesh(tapeGeometry, tapeMaterial);
+      topTape.rotation.x = -Math.PI / 2;
+      topTape.position.set(0, config.boxHeight * 0.45 + 0.01, 0);
+      topTape.userData['isTape'] = true;
+      boxMesh.add(topTape); // Add as child so it moves with the box
+
+      // Front tape
+      const frontTapeGeom = new THREE.PlaneGeometry(0.1, config.boxHeight * 0.8);
+      const frontTape = new THREE.Mesh(frontTapeGeom, tapeMaterial);
+      frontTape.position.set(0, 0, -config.boxDepth * 0.45 - 0.01);
+      frontTape.userData['isTape'] = true;
+      boxMesh.add(frontTape);
+    });
+
+    // Setup drag controls
+    this.setupDragControls();
+  }
+
+  private renderInstancedBoxes(boxes: WarehouseBox3D[], config: any, cellSize: number): void {
     // Cardboard brown material
     const cardboardMaterial = new THREE.MeshStandardMaterial({ 
       color: CARDBOARD_BASE,
@@ -491,7 +837,7 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
     this.boxMesh = new THREE.InstancedMesh(
       this.boxGeometry,
       cardboardMaterial,
-      filteredBoxes.length
+      boxes.length
     );
     this.boxMesh.castShadow = true;
     this.boxMesh.receiveShadow = true;
@@ -503,8 +849,7 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
     // Tape geometry for status indication
     const tapeGeometry = new THREE.PlaneGeometry(config.boxWidth * 0.8, 0.1);
 
-    filteredBoxes.forEach((box, index) => {
-      const cellSize = config.boxWidth + config.gridSpacing;
+    boxes.forEach((box, index) => {
       const x = box.position.x * cellSize;
       const y = (box.stackLevel - 1) * config.boxHeight + config.boxHeight / 2;
       const z = box.position.y * cellSize;
@@ -539,6 +884,146 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.boxMesh.instanceMatrix.needsUpdate = true;
     this.scene.add(this.boxMesh);
+  }
+
+  private setupDragControls(): void {
+    if (this.draggableBoxes.length === 0) return;
+
+    this.dragControls = new DragControls(
+      this.draggableBoxes,
+      this.camera,
+      this.renderer.domElement
+    );
+
+    // Constrain movement to XZ plane (floor)
+    this.dragControls.addEventListener('dragstart', (event: any) => {
+      this.controls.enabled = false; // Disable orbit controls while dragging
+      this.isDragging.set(true);
+      this.dragStartPosition = event.object.position.clone();
+      
+      const box = this.boxToDataMap.get(event.object);
+      if (box) {
+        this.selectBox(box, 0);
+      }
+    });
+
+    this.dragControls.addEventListener('drag', (event: any) => {
+      // Constrain to XZ plane and snap to grid
+      const config = this.warehouseData?.config || { boxWidth: 1, boxHeight: 1, gridSpacing: 0.2, aisleColumns: [8, 16] };
+      const cellSize = config.boxWidth + config.gridSpacing;
+      const aisleColumns = config.aisleColumns || [8, 16];
+      
+      // Keep Y position fixed (maintain stack level)
+      const boxData = this.boxToDataMap.get(event.object);
+      if (boxData) {
+        const fixedY = (boxData.stackLevel - 1) * config.boxHeight + config.boxHeight / 2;
+        event.object.position.y = fixedY;
+      }
+      
+      // Snap to grid
+      let snappedX = Math.round(event.object.position.x / cellSize) * cellSize;
+      const snappedZ = Math.round(event.object.position.z / cellSize) * cellSize;
+      
+      // Calculate grid column
+      let gridCol = Math.round(event.object.position.x / cellSize);
+      
+      // If on an aisle column, push to nearest non-aisle column
+      if (aisleColumns.includes(gridCol)) {
+        // Find nearest non-aisle column
+        const leftCol = gridCol - 1;
+        const rightCol = gridCol + 1;
+        if (!aisleColumns.includes(leftCol) && leftCol >= 0) {
+          gridCol = leftCol;
+        } else if (!aisleColumns.includes(rightCol)) {
+          gridCol = rightCol;
+        }
+        snappedX = gridCol * cellSize;
+      }
+      
+      // Constrain to valid area
+      event.object.position.x = Math.max(0, Math.min(snappedX, 25 * cellSize));
+      event.object.position.z = Math.max(0, Math.min(snappedZ, 15 * cellSize));
+    });
+
+    this.dragControls.addEventListener('dragend', (event: any) => {
+      this.controls.enabled = true;
+      this.isDragging.set(false);
+      
+      const box = this.boxToDataMap.get(event.object);
+      if (box && this.dragStartPosition) {
+        const config = this.warehouseData?.config || { boxWidth: 1, gridSpacing: 0.2, aisleColumns: [8, 16] };
+        const cellSize = config.boxWidth + config.gridSpacing;
+        const aisleColumns = config.aisleColumns || [8, 16];
+        
+        // Calculate new grid position
+        let newX = Math.round(event.object.position.x / cellSize);
+        const newY = Math.round(event.object.position.z / cellSize);
+        
+        // Ensure not on aisle - push to nearest valid column
+        if (aisleColumns.includes(newX)) {
+          const leftCol = newX - 1;
+          const rightCol = newX + 1;
+          if (!aisleColumns.includes(leftCol) && leftCol >= 0) {
+            newX = leftCol;
+          } else if (!aisleColumns.includes(rightCol)) {
+            newX = rightCol;
+          }
+          // Update visual position
+          event.object.position.x = newX * cellSize;
+        }
+        
+        // Check if position actually changed
+        if (newX !== box.position.x || newY !== box.position.y) {
+          // Update local box data
+          const oldPosition = { x: box.position.x, y: box.position.y };
+          box.position.x = newX;
+          box.position.y = newY;
+          
+          // Emit event for parent component
+          this.boxMoved.emit({ box, newPosition: { x: newX, y: newY } });
+          
+          // Save to backend
+          this.saveBoxPosition(box, newX, newY);
+          
+          console.log(`Box ${box.id} moved from (${oldPosition.x}, ${oldPosition.y}) to (${newX}, ${newY})`);
+        }
+      }
+      
+      this.dragStartPosition = null;
+    });
+
+    // Hover effect
+    this.dragControls.addEventListener('hoveron', (event: any) => {
+      if (event.object.material) {
+        event.object.material.emissive?.setHex(0x222222);
+      }
+      document.body.style.cursor = 'grab';
+    });
+
+    this.dragControls.addEventListener('hoveroff', (event: any) => {
+      if (event.object.material) {
+        event.object.material.emissive?.setHex(0x000000);
+      }
+      document.body.style.cursor = 'default';
+    });
+  }
+
+  private saveBoxPosition(box: WarehouseBox3D, newX: number, newY: number): void {
+    this.warehouse3DService.updateBoxPosition(box.id, newX, newY).subscribe({
+      next: () => {
+        console.log(`Position saved for box ${box.id}`);
+      },
+      error: (err) => {
+        console.error('Failed to save position:', err);
+        // Could revert position here if needed
+      }
+    });
+  }
+
+  toggleDragMode(): void {
+    this.dragModeEnabled.set(!this.dragModeEnabled());
+    this.clearSelection();
+    this.renderBoxes();
   }
 
   private onCanvasClick(event: MouseEvent): void {
@@ -665,6 +1150,19 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
     }
+
+    // Dispose drag controls
+    if (this.dragControls) {
+      this.dragControls.dispose();
+    }
+
+    // Dispose draggable boxes
+    this.draggableBoxes.forEach(box => {
+      box.geometry.dispose();
+      (box.material as THREE.Material).dispose();
+    });
+    this.draggableBoxes = [];
+    this.boxToDataMap.clear();
 
     // Dispose Three.js resources
     if (this.boxMesh) {

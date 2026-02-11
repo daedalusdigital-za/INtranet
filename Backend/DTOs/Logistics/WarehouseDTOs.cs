@@ -214,6 +214,10 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal BoxDepth { get; set; } = 1;
         public decimal BoxHeight { get; set; } = 1;
         public decimal GridSpacing { get; set; } = 0.2m;
+        /// <summary>
+        /// Columns reserved for forklift aisles - boxes should not be placed here
+        /// </summary>
+        public int[] AisleColumns { get; set; } = Array.Empty<int>();
     }
 
     // Warehouse Building DTOs
@@ -272,6 +276,13 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? BinLocation { get; set; }
     }
 
+    // 3D Position Update DTO
+    public class UpdatePositionDto
+    {
+        public int PositionX { get; set; }
+        public int PositionY { get; set; }
+    }
+
     // Stock Movement DTOs
     public class StockMovementDto
     {
@@ -312,5 +323,16 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal Quantity { get; set; }
         public string? Reference { get; set; }
         public string? Notes { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for transferring inventory by ID (used by 3D view)
+    /// </summary>
+    public class TransferByIdDto
+    {
+        public int FromBuildingId { get; set; }
+        public int ToBuildingId { get; set; }
+        public int InventoryItemId { get; set; }
+        public decimal Quantity { get; set; }
     }
 }

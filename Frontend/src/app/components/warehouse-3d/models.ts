@@ -37,6 +37,7 @@ export interface Warehouse3DConfig {
   boxDepth: number;
   boxHeight: number;
   gridSpacing: number;
+  aisleColumns?: number[]; // Columns reserved for forklift aisles
 }
 
 // API response format
@@ -61,7 +62,8 @@ export const DEFAULT_CONFIG: Warehouse3DConfig = {
   boxWidth: 1,
   boxDepth: 1,
   boxHeight: 1,
-  gridSpacing: 0.2
+  gridSpacing: 0.2,
+  aisleColumns: [8, 16] // Default aisle columns
 };
 
 // Status color mapping for Three.js materials
@@ -73,3 +75,25 @@ export const STATUS_COLORS = {
 } as const;
 
 export type BoxStatus = keyof typeof STATUS_COLORS;
+
+// Building interface for building selector
+export interface WarehouseBuilding {
+  id: number;
+  warehouseId: number;
+  code: string;
+  name: string;
+  address?: string;
+  managerName?: string;
+  phoneNumber?: string;
+  totalCapacity?: number;
+  availableCapacity?: number;
+  itemCount: number;
+}
+
+// Transfer DTO for inter-building transfers
+export interface BuildingTransferDto {
+  fromBuildingId: number;
+  toBuildingId: number;
+  inventoryItemId: number;
+  quantity: number;
+}

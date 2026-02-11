@@ -577,14 +577,26 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .ToListAsync();
 
             // Arrange items in a grid layout for 3D visualization
+            // Skip aisle columns (8, 16, 24) where forklifts travel
             int gridColumns = 20;
+            int[] aisleColumns = { 8, 16 }; // Columns reserved for forklift aisles
             int itemIndex = 0;
+            int gridPosition = 0; // Actual grid position (including skipped aisles)
 
             var boxes = inventoryItems.Select(item => {
-                int col = itemIndex % gridColumns;
-                int row = (itemIndex / gridColumns) % 15;
-                int level = (itemIndex / (gridColumns * 15)) + 1;
+                // Calculate column, skipping aisle positions
+                int col;
+                do {
+                    col = gridPosition % gridColumns;
+                    if (aisleColumns.Contains(col)) {
+                        gridPosition++; // Skip aisle column
+                    }
+                } while (aisleColumns.Contains(col));
+                
+                int row = (gridPosition / gridColumns) % 15;
+                int level = (gridPosition / (gridColumns * 15)) + 1;
                 level = Math.Min(level, 3);
+                gridPosition++;
                 itemIndex++;
 
                 string status;
@@ -624,7 +636,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     BoxWidth = 1,
                     BoxDepth = 1,
                     BoxHeight = 1,
-                    GridSpacing = 0.2m
+                    GridSpacing = 0.2m,
+                    AisleColumns = aisleColumns // Tell frontend which columns are aisles
                 }
             });
         }
@@ -676,14 +689,26 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .OrderBy(i => i.ItemCode)
                 .ToListAsync();
 
+            // Skip aisle columns (8, 16) where forklifts travel
             int gridColumns = 20;
+            int[] aisleColumns = { 8, 16 };
             int itemIndex = 0;
+            int gridPosition = 0;
 
             var boxes = inventoryItems.Select(item => {
-                int col = itemIndex % gridColumns;
-                int row = (itemIndex / gridColumns) % 15;
-                int level = (itemIndex / (gridColumns * 15)) + 1;
+                // Calculate column, skipping aisle positions
+                int col;
+                do {
+                    col = gridPosition % gridColumns;
+                    if (aisleColumns.Contains(col)) {
+                        gridPosition++;
+                    }
+                } while (aisleColumns.Contains(col));
+                
+                int row = (gridPosition / gridColumns) % 15;
+                int level = (gridPosition / (gridColumns * 15)) + 1;
                 level = Math.Min(level, 3);
+                gridPosition++;
                 itemIndex++;
 
                 string status;
@@ -723,7 +748,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     BoxWidth = 1,
                     BoxDepth = 1,
                     BoxHeight = 1,
-                    GridSpacing = 0.2m
+                    GridSpacing = 0.2m,
+                    AisleColumns = aisleColumns
                 }
             });
         }

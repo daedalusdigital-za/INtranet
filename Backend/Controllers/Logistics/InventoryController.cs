@@ -113,6 +113,102 @@ public class InventoryController : ControllerBase
         return NoContent();
     }
 
+    // PUT: api/inventory/{id}/position - Update 3D position
+    [HttpPut("{id}/position")]
+    public async Task<IActionResult> UpdateInventoryPosition(int id, [FromBody] UpdatePositionDto dto)
+    {
+        var item = await _context.BuildingInventory.FindAsync(id);
+        if (item == null)
+            return NotFound();
+
+        // Store position as bin location in format "X,Y" for 3D view
+        item.BinLocation = $"{dto.PositionX},{dto.PositionY}";
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        
+        _logger.LogInformation("Inventory item {Id} position updated to ({X}, {Y})", id, dto.PositionX, dto.PositionY);
+        
+        return NoContent();
+    }
+
+    // POST: api/inventory/transfer-building - Transfer by inventory ID (for 3D view)
+    [HttpPost("transfer-building")]
+    public async Task<ActionResult> TransferByInventoryId([FromBody] TransferByIdDto dto)
+    {
+        if (dto.FromBuildingId == dto.ToBuildingId)
+            return BadRequest("Cannot transfer to same building");
+
+        // Get source inventory item by ID
+        var sourceItem = await _context.BuildingInventory.FindAsync(dto.InventoryItemId);
+        if (sourceItem == null)
+            return NotFound($"Inventory item {dto.InventoryItemId} not found");
+
+        if (sourceItem.BuildingId != dto.FromBuildingId)
+            return BadRequest("Item is not in the source building");
+
+        var transferQty = dto.Quantity > 0 ? dto.Quantity : sourceItem.QuantityOnHand;
+        if (sourceItem.QuantityAvailable < transferQty)
+            return BadRequest($"Insufficient available stock. Available: {sourceItem.QuantityAvailable}");
+
+        // Get or create destination inventory
+        var destItem = await _context.BuildingInventory
+            .FirstOrDefaultAsync(i => i.BuildingId == dto.ToBuildingId && i.ItemCode == sourceItem.ItemCode);
+
+        if (destItem == null)
+        {
+            destItem = new BuildingInventory
+            {
+                BuildingId = dto.ToBuildingId,
+                ItemCode = sourceItem.ItemCode,
+                ItemDescription = sourceItem.ItemDescription,
+                Uom = sourceItem.Uom,
+                QuantityOnHand = 0,
+                UnitCost = sourceItem.UnitCost
+            };
+            _context.BuildingInventory.Add(destItem);
+        }
+
+        // Get user info
+        var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? 
+                       User.FindFirst("name")?.Value ?? 
+                       "System";
+        var userId = int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : (int?)null;
+
+        // Update quantities
+        sourceItem.QuantityOnHand -= transferQty;
+        sourceItem.LastMovementDate = DateTime.UtcNow;
+        sourceItem.UpdatedAt = DateTime.UtcNow;
+
+        destItem.QuantityOnHand += transferQty;
+        destItem.LastMovementDate = DateTime.UtcNow;
+        destItem.UpdatedAt = DateTime.UtcNow;
+
+        // Create movement record
+        var movement = new StockMovement
+        {
+            MovementType = MovementTypes.Transfer,
+            FromBuildingId = dto.FromBuildingId,
+            ToBuildingId = dto.ToBuildingId,
+            ItemCode = sourceItem.ItemCode,
+            ItemDescription = sourceItem.ItemDescription,
+            Quantity = transferQty,
+            Uom = sourceItem.Uom,
+            Reference = $"3D-TRANSFER-{DateTime.UtcNow:yyyyMMddHHmmss}",
+            Notes = "Transfer initiated from 3D warehouse view",
+            CreatedById = userId,
+            CreatedByName = userName
+        };
+
+        _context.StockMovements.Add(movement);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("3D View transfer: {Qty} x {Item} from Building {From} to {To} by {User}",
+            transferQty, sourceItem.ItemCode, dto.FromBuildingId, dto.ToBuildingId, userName);
+
+        return Ok(new { message = $"Transferred {transferQty} units to destination building" });
+    }
+
     #endregion
 
     #region Stock Movement Endpoints

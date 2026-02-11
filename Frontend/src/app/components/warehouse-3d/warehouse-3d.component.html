@@ -17,6 +17,58 @@
       <span class="view-badge">3D View</span>
     </div>
     
+    <div class="header-center">
+      <!-- Building Selector -->
+      @if (buildings().length > 1) {
+        <mat-form-field appearance="outline" class="building-selector">
+          <mat-label>Building</mat-label>
+          <mat-select [value]="selectedBuildingId()" (selectionChange)="onBuildingChange($event.value)">
+            <mat-option [value]="null">All Buildings</mat-option>
+            @for (building of buildings(); track building.id) {
+              <mat-option [value]="building.id">
+                {{ building.name }} ({{ building.itemCount }} items)
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+
+      <!-- Inventory Search -->
+      <div class="search-container">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Search Inventory</mat-label>
+          <mat-icon matPrefix>search</mat-icon>
+          <input 
+            matInput 
+            [value]="searchQuery()"
+            (input)="onSearchInput($any($event.target).value)"
+            (focus)="showSearchResults.set(searchResults().length > 0)"
+            placeholder="Search by name, SKU, or ID..."
+            autocomplete="off">
+          @if (searchQuery()) {
+            <button matSuffix mat-icon-button (click)="searchQuery.set(''); searchResults.set([]); showSearchResults.set(false)">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </mat-form-field>
+        
+        <!-- Search Results Dropdown -->
+        @if (showSearchResults()) {
+          <div class="search-results">
+            @for (box of searchResults(); track box.id) {
+              <div class="search-result-item" (click)="selectSearchResult(box)">
+                <mat-icon [style.color]="getStatusColor(box.status)">inventory_2</mat-icon>
+                <div class="result-info">
+                  <span class="result-name">{{ box.label }}</span>
+                  <span class="result-details">{{ box.sku }} • Qty: {{ box.quantity }}</span>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+    
     <div class="header-right">
       <mat-form-field appearance="outline" class="status-filter">
         <mat-label>Filter by Status</mat-label>
@@ -26,6 +78,15 @@
           }
         </mat-select>
       </mat-form-field>
+      
+      <button 
+        mat-flat-button 
+        [color]="dragModeEnabled() ? 'accent' : 'primary'"
+        (click)="toggleDragMode()" 
+        [matTooltip]="dragModeEnabled() ? 'Exit Move Mode' : 'Enter Move Mode'">
+        <mat-icon>{{ dragModeEnabled() ? 'lock' : 'open_with' }}</mat-icon>
+        {{ dragModeEnabled() ? 'Lock' : 'Move' }}
+      </button>
       
       <button mat-icon-button (click)="resetCamera()" matTooltip="Reset Camera">
         <mat-icon>center_focus_strong</mat-icon>
@@ -96,6 +157,14 @@
           <span class="value">{{ selectedBox()!.stackLevel }} of 3</span>
         </div>
       </mat-card-content>
+      <mat-card-actions>
+        @if (buildings().length > 1 && selectedBuildingId()) {
+          <button mat-flat-button color="accent" (click)="openTransferDialog()">
+            <mat-icon>swap_horiz</mat-icon>
+            Transfer to Building
+          </button>
+        }
+      </mat-card-actions>
     </mat-card>
   }
 
@@ -120,8 +189,59 @@
   </div>
 
   <!-- Controls Hint -->
-  <div class="controls-hint">
-    <mat-icon>mouse</mat-icon>
-    <span>Left-click: Select | Drag: Rotate | Scroll: Zoom | Right-drag: Pan</span>
+  <div class="controls-hint" [class.move-mode]="dragModeEnabled()">
+    <mat-icon>{{ dragModeEnabled() ? 'open_with' : 'mouse' }}</mat-icon>
+    @if (dragModeEnabled()) {
+      <span>MOVE MODE: Drag boxes to reposition | Click Lock to exit</span>
+    } @else {
+      <span>Left-click: Select | Drag: Rotate | Scroll: Zoom | Right-drag: Pan</span>
+    }
   </div>
+
+  <!-- Transfer Dialog -->
+  @if (showTransferDialog()) {
+    <div class="transfer-overlay" (click)="closeTransferDialog()">
+      <div class="transfer-dialog" (click)="$event.stopPropagation()">
+        <div class="transfer-header">
+          <h3>Transfer to Building</h3>
+          <button mat-icon-button (click)="closeTransferDialog()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        
+        <div class="transfer-content">
+          <div class="transfer-item-info">
+            <mat-icon [style.color]="getStatusColor(selectedBox()!.status)">inventory_2</mat-icon>
+            <div class="transfer-item-details">
+              <span class="item-name">{{ selectedBox()!.label }}</span>
+              <span class="item-qty">Quantity: {{ selectedBox()!.quantity }}</span>
+            </div>
+          </div>
+
+          <mat-form-field appearance="outline" class="target-building-select">
+            <mat-label>Transfer To</mat-label>
+            <mat-select [(value)]="transferTargetBuilding">
+              @for (building of getOtherBuildings(); track building.id) {
+                <mat-option [value]="building">
+                  {{ building.name }} ({{ building.itemCount }} items)
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="transfer-actions">
+          <button mat-button (click)="closeTransferDialog()">Cancel</button>
+          <button 
+            mat-flat-button 
+            color="primary" 
+            [disabled]="!transferTargetBuilding()"
+            (click)="confirmTransfer()">
+            <mat-icon>swap_horiz</mat-icon>
+            Confirm Transfer
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 </div>
