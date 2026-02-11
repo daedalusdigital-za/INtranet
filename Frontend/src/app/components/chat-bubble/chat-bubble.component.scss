@@ -505,3 +505,155 @@
     border-radius: 50%;
   }
 }
+
+// Attachment Styles
+.message-attachments {
+  margin-top: 8px;
+}
+
+.attachment-item {
+  margin-bottom: 6px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.attachment-image-container {
+  position: relative;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 200px;
+  
+  .attachment-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 8px;
+  }
+  
+  .attachment-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    
+    .overlay-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: white;
+      color: #333;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      
+      i {
+        font-size: 16px;
+      }
+      
+      &:hover {
+        background: #f0f0f0;
+      }
+    }
+  }
+  
+  &:hover .attachment-overlay {
+    opacity: 1;
+  }
+}
+
+.attachment-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  
+  &:hover {
+    background: rgba(0, 0, 0, 0.1);
+  }
+  
+  .file-icon {
+    font-size: 24px;
+    color: #667eea;
+  }
+  
+  .file-details {
+    flex: 1;
+    min-width: 0;
+    
+    .file-name {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .file-size {
+      display: block;
+      font-size: 10px;
+      opacity: 0.7;
+    }
+  }
+  
+  .download-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: #667eea;
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    
+    i {
+      font-size: 14px;
+    }
+    
+    &:hover {
+      background: #5a6fd6;
+    }
+  }
+}
+
+// Adjust file colors for own messages
+.message.own {
+  .attachment-file {
+    background: rgba(255, 255, 255, 0.15);
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+    
+    .file-icon {
+      color: white;
+    }
+    
+    .download-btn {
+      background: rgba(255, 255, 255, 0.2);
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
+}

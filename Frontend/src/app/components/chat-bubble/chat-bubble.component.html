@@ -48,7 +48,35 @@
           <!-- Message bubble -->
           <div class="message" [class.own]="isOwnMessage(message)" [class.other]="!isOwnMessage(message)">
             <div class="message-bubble">
-              <p class="message-content">{{ message.content }}</p>
+              <p class="message-content" *ngIf="message.content">{{ message.content }}</p>
+              
+              <!-- Attachments Display -->
+              <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
+                <div *ngFor="let attachment of message.attachments" class="attachment-item">
+                  <!-- Image Preview -->
+                  <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container" (click)="previewAttachment(attachment)">
+                    <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" class="attachment-image">
+                    <div class="attachment-overlay">
+                      <button class="overlay-btn" (click)="downloadAttachment(attachment); $event.stopPropagation()" title="Download">
+                        <i class="bi bi-download"></i>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- File Preview (non-image) -->
+                  <div *ngIf="!isImageFile(attachment.mimeType)" class="attachment-file" (click)="previewAttachment(attachment)">
+                    <i [class]="getFileIcon(attachment.mimeType)" class="file-icon"></i>
+                    <div class="file-details">
+                      <span class="file-name">{{ attachment.fileName }}</span>
+                      <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
+                    </div>
+                    <button class="download-btn" (click)="downloadAttachment(attachment); $event.stopPropagation()" title="Download">
+                      <i class="bi bi-download"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
               <span class="message-time">{{ formatTime(message.sentAt) }}</span>
             </div>
           </div>

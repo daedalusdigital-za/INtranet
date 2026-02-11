@@ -94,6 +94,7 @@ export interface SendMessageRequest {
   content: string;
   messageType?: string;
   replyToMessageId?: number;
+  attachmentIds?: number[];
 }
 
 export interface SendDirectMessageRequest {

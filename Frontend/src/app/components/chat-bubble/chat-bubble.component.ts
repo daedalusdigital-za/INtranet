@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MessageService, Conversation, Message, Participant } from '../../services/message.service';
+import { MessageService, Conversation, Message, Participant, MessageAttachment } from '../../services/message.service';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-chat-bubble',
@@ -148,24 +149,35 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   uploadAndSend(): void {
     if (!this.selectedFile) return;
     
-    // For now, send a message about the file (full attachment support can be added later)
-    const fileName = this.selectedFile.name;
-    const fileSize = this.formatFileSize(this.selectedFile.size);
-    
-    this.messageService.sendMessage({
-      conversationId: this.conversation.conversationId,
-      content: `📎 Shared file: ${fileName} (${fileSize})`,
-      messageType: 'file'
-    }, this.currentUserId).subscribe({
-      next: (message: Message) => {
-        this.messages.push(message);
-        this.newMessage = '';
-        this.selectedFile = null;
-        this.isSending = false;
-        setTimeout(() => this.scrollToBottom(), 100);
+    // Upload the file first
+    this.messageService.uploadAttachment(
+      this.conversation.conversationId,
+      this.selectedFile,
+      this.currentUserId
+    ).subscribe({
+      next: (attachment: MessageAttachment) => {
+        // Send a message with the attachment reference
+        this.messageService.sendMessage({
+          conversationId: this.conversation.conversationId,
+          content: this.newMessage.trim() || '',
+          messageType: 'file',
+          attachmentIds: [attachment.attachmentId]
+        }, this.currentUserId).subscribe({
+          next: (message: Message) => {
+            this.messages.push(message);
+            this.newMessage = '';
+            this.selectedFile = null;
+            this.isSending = false;
+            setTimeout(() => this.scrollToBottom(), 100);
+          },
+          error: (err: any) => {
+            console.error('Error sending file message:', err);
+            this.isSending = false;
+          }
+        });
       },
       error: (err: any) => {
-        console.error('Error sending file message:', err);
+        console.error('Error uploading file:', err);
         this.isSending = false;
       }
     });
@@ -242,6 +254,44 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
 
   triggerFileInput(): void {
     this.fileInput?.nativeElement?.click();
+  }
+
+  // Attachment helper methods
+  isImageFile(mimeType: string): boolean {
+    return mimeType?.startsWith('image/');
+  }
+
+  getAttachmentUrl(attachment: MessageAttachment): string {
+    if (attachment.fileUrl?.startsWith('http')) {
+      return attachment.fileUrl;
+    }
+    return `${environment.apiUrl}${attachment.fileUrl}`;
+  }
+
+  getFileIcon(mimeType: string): string {
+    if (mimeType?.includes('pdf')) return 'bi-file-earmark-pdf';
+    if (mimeType?.includes('word') || mimeType?.includes('document')) return 'bi-file-earmark-word';
+    if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet')) return 'bi-file-earmark-excel';
+    if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation')) return 'bi-file-earmark-ppt';
+    if (mimeType?.includes('zip') || mimeType?.includes('rar') || mimeType?.includes('archive')) return 'bi-file-earmark-zip';
+    if (mimeType?.includes('text')) return 'bi-file-earmark-text';
+    return 'bi-file-earmark';
+  }
+
+  downloadAttachment(attachment: MessageAttachment): void {
+    const url = this.getAttachmentUrl(attachment);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.fileName;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  previewAttachment(attachment: MessageAttachment): void {
+    const url = this.getAttachmentUrl(attachment);
+    window.open(url, '_blank');
   }
 
   toggleEmojiPicker(): void {
