@@ -3558,7 +3558,7 @@ export class DispatchDialog implements OnInit {
           this.tripsheets = pendingLoads.map(load => ({
             id: load.id,
             tripsheetNumber: load.loadNumber,
-            customerName: load.customer?.name || 'Unknown Customer',
+            customerName: this.getCustomerName(load),
             deliveryDate: load.scheduledDeliveryDate ? new Date(load.scheduledDeliveryDate).toLocaleDateString() : 'Not scheduled',
             status: load.status === 'Delivered' ? 'Completed' : (load.status === 'Assigned' || load.status === 'InTransit' ? 'Confirmed' : 'Pending'),
             originalStatus: load.status,
@@ -3579,6 +3579,19 @@ export class DispatchDialog implements OnInit {
           this.loading = false;
         }
       });
+  }
+
+  getCustomerName(load: any): string {
+    // Try customerName field from API first
+    if (load.customerName) {
+      return load.customerName;
+    }
+    // Fall back to first stop's company name
+    if (load.stops && load.stops.length > 0 && load.stops[0].companyName) {
+      return load.stops[0].companyName;
+    }
+    // Last resort
+    return 'Unknown Customer';
   }
 
   mapLoadItems(load: any): any[] {
@@ -3675,7 +3688,7 @@ export class DispatchDialog implements OnInit {
             id: load.id,
             slipNumber: load.loadNumber,
             tripsheetNumber: load.loadNumber,
-            customerName: load.customer?.name || 'Unknown Customer',
+            customerName: this.getCustomerName(load),
             generatedDate: load.scheduledDeliveryDate ? new Date(load.scheduledDeliveryDate).toLocaleDateString() : new Date().toLocaleDateString(),
             items: this.mapLoadItems(load)
           }));
@@ -3706,7 +3719,7 @@ export class DispatchDialog implements OnInit {
             id: load.id,
             slipNumber: load.loadNumber,
             tripsheetNumber: load.loadNumber,
-            customerName: load.customer?.name || 'Unknown Customer',
+            customerName: this.getCustomerName(load),
             dispatchedDate: load.scheduledDeliveryDate ? new Date(load.scheduledDeliveryDate).toLocaleDateString() : new Date().toLocaleDateString(),
             items: this.mapLoadItems(load)
           }));
