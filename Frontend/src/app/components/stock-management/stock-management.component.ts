@@ -630,8 +630,8 @@ interface WarehouseInventory {
 
     .operations-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 24px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
       margin-bottom: 32px;
       animation: slideUp 0.4s ease-out;
     }
