@@ -196,13 +196,33 @@ interface SleepOut {
   template: `
     <app-navbar></app-navbar>
     <div class="logistics-dashboard">
-      <div class="dashboard-header">
-        <div class="header-left">
-          <h1>
+      <!-- Modern Header Section -->
+      <div class="modern-header">
+        <div class="header-main">
+          <div class="header-icon-wrapper">
             <mat-icon>local_shipping</mat-icon>
-            Logistics Management
-          </h1>
-          <p class="subtitle">Fleet, Loads, Maintenance & Tracking</p>
+          </div>
+          <div class="header-text-area">
+            <h1>Logistics Management</h1>
+            <p class="header-subtitle">Fleet, Loads, Maintenance & Tracking</p>
+          </div>
+        </div>
+        <div class="header-stats-row">
+          <div class="mini-stat">
+            <mat-icon>local_shipping</mat-icon>
+            <span class="mini-value">{{ stats().totalVehicles }}</span>
+            <span class="mini-label">Total Fleet</span>
+          </div>
+          <div class="mini-stat">
+            <mat-icon>people</mat-icon>
+            <span class="mini-value">{{ stats().totalDrivers }}</span>
+            <span class="mini-label">Drivers</span>
+          </div>
+          <div class="mini-stat">
+            <mat-icon>route</mat-icon>
+            <span class="mini-value">{{ stats().activeLoads }}</span>
+            <span class="mini-label">Active Routes</span>
+          </div>
         </div>
       </div>
 
@@ -212,111 +232,107 @@ interface SleepOut {
           <p>Loading logistics data...</p>
         </div>
       } @else {
-        <!-- Stats Cards -->
-        <div class="stats-grid">
-          <mat-card class="stat-card">
-            <mat-card-content>
-              <div class="stat-icon loads">
-                <mat-icon>assignment</mat-icon>
+        <!-- Modern Stats Cards -->
+        <div class="modern-stats-grid">
+          <div class="modern-stat-card">
+            <div class="stat-icon-wrapper loads">
+              <mat-icon>assignment</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ stats().activeLoads }}</span>
+              <span class="stat-label">Active Loads</span>
+              <div class="stat-progress">
+                <div class="progress-bar" [style.width.%]="stats().activeLoads > 0 ? 100 : 0"></div>
               </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ stats().activeLoads }}</span>
-                <span class="stat-label">Active Loads</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+            </div>
+          </div>
 
-          <mat-card class="stat-card clickable" (click)="openAddressIssuesDialog()">
-            <mat-card-content>
-              <div class="stat-icon postoffice">
-                <mat-icon>local_post_office</mat-icon>
+          <div class="modern-stat-card clickable" (click)="openAddressIssuesDialog()">
+            <div class="stat-icon-wrapper address">
+              <mat-icon>local_post_office</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ addressIssuesCount() }}</span>
+              <span class="stat-label">Address Issues</span>
+              <div class="stat-progress warning">
+                <div class="progress-bar" [style.width.%]="addressIssuesCount() > 0 ? Math.min(addressIssuesCount() * 10, 100) : 0"></div>
               </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ addressIssuesCount() }}</span>
-                <span class="stat-label">Address Issues</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+            </div>
+          </div>
 
-          <mat-card class="stat-card clickable" (click)="openSleepOutsDialog()">
-            <mat-card-content>
-              <div class="stat-icon sleepouts">
-                <mat-icon>hotel</mat-icon>
+          <div class="modern-stat-card clickable" (click)="openSleepOutsDialog()">
+            <div class="stat-icon-wrapper sleepouts">
+              <mat-icon>hotel</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ sleepOutsCount() }}</span>
+              <span class="stat-label">Sleep Outs</span>
+              <div class="stat-progress">
+                <div class="progress-bar" [style.width.%]="sleepOutsCount() > 0 ? Math.min(sleepOutsCount() * 20, 100) : 0"></div>
               </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ sleepOutsCount() }}</span>
-                <span class="stat-label">Sleep Outs</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+            </div>
+          </div>
 
-          <mat-card class="stat-card warning clickable" [class.warning]="tfnOrdersCount() > 5" (click)="openTfnOrdersDialog()">
-            <mat-card-content>
-              <div class="stat-icon tfn-orders">
-                <mat-icon>local_gas_station</mat-icon>
+          <div class="modern-stat-card clickable" [class.warning]="tfnOrdersCount() > 5" (click)="openTfnOrdersDialog()">
+            <div class="stat-icon-wrapper tfn">
+              <mat-icon>local_gas_station</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value" [class.warning-text]="tfnOrdersCount() > 5">{{ tfnOrdersCount() }}</span>
+              <span class="stat-label">TFN Orders</span>
+              <div class="stat-progress" [class.danger]="tfnOrdersCount() > 5">
+                <div class="progress-bar" [style.width.%]="tfnOrdersCount() > 0 ? Math.min(tfnOrdersCount() * 10, 100) : 0"></div>
               </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ tfnOrdersCount() }}</span>
-                <span class="stat-label">TFN Orders</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+            </div>
+          </div>
         </div>
 
-        <!-- Second Row Stats -->
-        <div class="stats-grid secondary">
-          <mat-card class="stat-card small">
-            <mat-card-content>
-              <div class="stat-icon vehicles">
-                <mat-icon>directions_car</mat-icon>
-              </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ stats().availableVehicles }}/{{ stats().totalVehicles }}</span>
-                <span class="stat-label">Available Vehicles</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+        <!-- Secondary Stats Row -->
+        <div class="secondary-stats-grid">
+          <div class="secondary-stat-card">
+            <div class="stat-icon-mini vehicles">
+              <mat-icon>directions_car</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ stats().availableVehicles }}/{{ stats().totalVehicles }}</span>
+              <span class="stat-label">Available Vehicles</span>
+            </div>
+          </div>
 
-          <mat-card class="stat-card small clickable" (click)="openDriversDialog()">
-            <mat-card-content>
-              <div class="stat-icon drivers">
-                <mat-icon>person</mat-icon>
-              </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ stats().availableDrivers }}/{{ stats().totalDrivers }}</span>
-                <span class="stat-label">Available Drivers</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+          <div class="secondary-stat-card clickable" (click)="openDriversDialog()">
+            <div class="stat-icon-mini drivers">
+              <mat-icon>person</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ stats().availableDrivers }}/{{ stats().totalDrivers }}</span>
+              <span class="stat-label">Available Drivers</span>
+            </div>
+          </div>
 
-          <mat-card class="stat-card small clickable" (click)="openReportsDialog()">
-            <mat-card-content>
-              <div class="stat-icon reports">
-                <mat-icon>assessment</mat-icon>
-              </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ availableReportsCount() }}</span>
-                <span class="stat-label">Reports</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+          <div class="secondary-stat-card clickable" (click)="openReportsDialog()">
+            <div class="stat-icon-mini reports">
+              <mat-icon>assessment</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ availableReportsCount() }}</span>
+              <span class="stat-label">Reports</span>
+            </div>
+          </div>
 
-          <mat-card class="stat-card small clickable" (click)="openDepotsMapDialog()">
-            <mat-card-content>
-              <div class="stat-icon depots">
-                <mat-icon>local_gas_station</mat-icon>
-              </div>
-              <div class="stat-info">
-                <span class="stat-value">{{ tfnDepotsCount() }}</span>
-                <span class="stat-label">TFN Depots</span>
-              </div>
-            </mat-card-content>
-          </mat-card>
+          <div class="secondary-stat-card clickable" (click)="openDepotsMapDialog()">
+            <div class="stat-icon-mini depots">
+              <mat-icon>local_gas_station</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ tfnDepotsCount() }}</span>
+              <span class="stat-label">TFN Depots</span>
+            </div>
+          </div>
         </div>
 
         <!-- Main Content Tabs -->
-        <mat-card class="main-content">
-          <mat-tab-group>
+        <mat-card class="main-content modern-tabs-card">
+          <mat-tab-group animationDuration="200ms">
             <!-- Active Loads Tab -->
             <mat-tab>
               <ng-template mat-tab-label>
@@ -329,12 +345,12 @@ interface SleepOut {
                     <mat-icon>local_shipping</mat-icon>
                     <h3>No Active Loads</h3>
                     <p>Create a new load to get started</p>
-                    <button mat-raised-button color="primary" (click)="createNewLoad()">
+                    <button mat-raised-button color="primary" class="modern-action-btn" (click)="createNewLoad()">
                       <mat-icon>add</mat-icon> Create Load
                     </button>
                   </div>
                 } @else {
-                  <table mat-table [dataSource]="activeLoads()" class="loads-table">
+                  <table mat-table [dataSource]="activeLoads()" class="loads-table modern-table">
                     <ng-container matColumnDef="loadNumber">
                       <th mat-header-cell *matHeaderCellDef>Load #</th>
                       <td mat-cell *matCellDef="let load">
@@ -1508,7 +1524,7 @@ interface SleepOut {
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
     }
 
     .logistics-dashboard {
@@ -1518,6 +1534,297 @@ interface SleepOut {
       margin: 0 auto;
     }
 
+    /* Modern Header Styles */
+    .modern-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+
+    .header-main {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .header-icon-wrapper {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .header-icon-wrapper mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: white;
+    }
+
+    .header-text-area h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-subtitle {
+      margin: 4px 0 0 0;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 15px;
+      font-weight: 400;
+    }
+
+    .header-stats-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .mini-stat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      padding: 12px 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .mini-stat mat-icon {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .mini-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .mini-label {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* Modern Stats Grid */
+    .modern-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .modern-stat-card {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .modern-stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #1e90ff, #4169e1);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .modern-stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    .modern-stat-card:hover::before {
+      opacity: 1;
+    }
+
+    .modern-stat-card.clickable {
+      cursor: pointer;
+    }
+
+    .modern-stat-card.warning::before {
+      background: linear-gradient(90deg, #f44336, #ff5722);
+      opacity: 1;
+    }
+
+    .stat-icon-wrapper {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stat-icon-wrapper mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: white;
+    }
+
+    .stat-icon-wrapper.loads { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stat-icon-wrapper.address { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stat-icon-wrapper.sleepouts { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stat-icon-wrapper.tfn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+
+    .stat-content {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .stat-content .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1a1a2e;
+      line-height: 1.1;
+    }
+
+    .stat-content .stat-value.warning-text {
+      color: #f44336;
+    }
+
+    .stat-content .stat-label {
+      font-size: 14px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .stat-progress {
+      height: 4px;
+      background: #e0e0e0;
+      border-radius: 2px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+
+    .stat-progress .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #1e90ff, #4169e1);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .stat-progress.warning .progress-bar {
+      background: linear-gradient(90deg, #ff9800, #ff5722);
+    }
+
+    .stat-progress.danger .progress-bar {
+      background: linear-gradient(90deg, #f44336, #d32f2f);
+    }
+
+    /* Secondary Stats Grid */
+    .secondary-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .secondary-stat-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .secondary-stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.1);
+    }
+
+    .secondary-stat-card.clickable {
+      cursor: pointer;
+    }
+
+    .stat-icon-mini {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stat-icon-mini mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: white;
+    }
+
+    .stat-icon-mini.vehicles { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stat-icon-mini.drivers { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stat-icon-mini.reports { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stat-icon-mini.depots { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+
+    .secondary-stat-card .stat-content .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .secondary-stat-card .stat-content .stat-label {
+      font-size: 13px;
+      color: #666;
+    }
+
+    /* Responsive adjustments for stats grids */
+    @media (max-width: 1200px) {
+      .modern-stats-grid, .secondary-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .modern-stats-grid, .secondary-stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .modern-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .header-stats-row {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+
+    /* Legacy Styles - keeping for compatibility */
     .dashboard-header {
       display: flex;
       justify-content: space-between;
@@ -1668,6 +1975,63 @@ interface SleepOut {
     .main-content {
       background: rgba(255, 255, 255, 0.95);
       border-radius: 16px;
+    }
+
+    /* Modern Tabs Card Styles */
+    .modern-tabs-card {
+      background: white;
+      border-radius: 24px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .modern-tabs-card ::ng-deep .mat-mdc-tab-header {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .modern-tabs-card ::ng-deep .mat-mdc-tab {
+      min-width: 140px;
+      padding: 0 24px;
+    }
+
+    .modern-tabs-card ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .modern-tabs-card ::ng-deep .mat-mdc-tab-body-wrapper {
+      background: white;
+    }
+
+    .modern-action-btn {
+      border-radius: 12px !important;
+      padding: 8px 24px !important;
+      font-weight: 500 !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .modern-action-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(30, 144, 255, 0.3);
+    }
+
+    .modern-table {
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .modern-table ::ng-deep th.mat-mdc-header-cell {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .modern-table ::ng-deep tr.mat-mdc-row:hover {
+      background: rgba(30, 144, 255, 0.04);
     }
 
     .tab-content {
@@ -3726,6 +4090,7 @@ interface SleepOut {
 })
 export class LogisticsDashboardComponent implements OnInit {
   apiUrl = environment.apiUrl;
+  Math = Math; // Expose Math for template
 
   loading = signal(true);
   stats = signal<DashboardStats>({
