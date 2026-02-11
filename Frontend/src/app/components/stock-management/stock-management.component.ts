@@ -186,48 +186,64 @@ interface WarehouseInventory {
       } @else if (!selectedWarehouse) {
         <div class="warehouses-grid">
           @for (warehouse of warehouses; track warehouse.id) {
-            <mat-card class="warehouse-card" (click)="selectWarehouse(warehouse)">
-              <mat-card-header>
-                <div class="warehouse-icon">
-                  <mat-icon>warehouse</mat-icon>
+            <div class="warehouse-card-modern warehouse-{{ warehouse.id }}" (click)="selectWarehouse(warehouse)">
+              <div class="warehouse-gradient-bg"></div>
+              <div class="warehouse-content">
+                <div class="warehouse-header">
+                  <div class="warehouse-icon-modern">
+                    <mat-icon>warehouse</mat-icon>
+                  </div>
+                  <div class="warehouse-title-section">
+                    <h2>{{ warehouse.name }}</h2>
+                    <p class="warehouse-location">
+                      <mat-icon>location_on</mat-icon>
+                      {{ warehouse.location }}
+                    </p>
+                  </div>
                 </div>
-                <mat-card-title>{{ warehouse.name }}</mat-card-title>
-                <mat-card-subtitle>{{ warehouse.location }}</mat-card-subtitle>
-              </mat-card-header>
-              <mat-card-content>
-                <div class="warehouse-stats">
-                  <div class="stat">
-                    <mat-icon>inventory_2</mat-icon>
-                    <div>
+
+                <div class="warehouse-stats-modern">
+                  <div class="stat-modern">
+                    <div class="stat-icon-wrapper">
+                      <mat-icon>inventory_2</mat-icon>
+                    </div>
+                    <div class="stat-details">
                       <div class="stat-value">{{ warehouse.totalItems | number }}</div>
                       <div class="stat-label">Total Items</div>
                     </div>
                   </div>
-                  <div class="stat">
-                    <mat-icon>category</mat-icon>
-                    <div>
-                      <div class="stat-value">R{{ warehouse.totalStockValue | number:'1.0-0' }}</div>
-                      <div class="stat-label">Value</div>
+                  <div class="stat-modern">
+                    <div class="stat-icon-wrapper">
+                      <mat-icon>attach_money</mat-icon>
+                    </div>
+                    <div class="stat-details">
+                      <div class="stat-value">R{{ (warehouse.totalStockValue / 1000000) | number:'1.1-1' }}M</div>
+                      <div class="stat-label">Stock Value</div>
                     </div>
                   </div>
                 </div>
-                <div class="warehouse-capacity">
-                  <div class="capacity-label">
-                    <span>Capacity</span>
-                    <span>{{ warehouse.capacityPercent }}%</span>
+
+                <div class="warehouse-capacity-modern">
+                  <div class="capacity-header">
+                    <span class="capacity-title">Warehouse Capacity</span>
+                    <span class="capacity-percentage">{{ warehouse.capacityPercent }}%</span>
                   </div>
-                  <div class="capacity-bar">
-                    <div class="capacity-fill" [style.width.%]="warehouse.capacityPercent" [class.high]="warehouse.capacityPercent > 80"></div>
+                  <div class="capacity-bar-modern">
+                    <div class="capacity-fill-modern" [style.width.%]="warehouse.capacityPercent" [class.high]="warehouse.capacityPercent > 80"></div>
+                  </div>
+                  <div class="capacity-info">
+                    <span>{{ warehouse.totalCapacity - warehouse.availableCapacity | number }} / {{ warehouse.totalCapacity | number }} m³</span>
                   </div>
                 </div>
-              </mat-card-content>
-              <mat-card-actions>
-                <button mat-button color="primary" (click)="selectWarehouse(warehouse); $event.stopPropagation()">
-                  <mat-icon>visibility</mat-icon>
-                  View Operations
-                </button>
-              </mat-card-actions>
-            </mat-card>
+
+                <div class="warehouse-footer">
+                  <button mat-raised-button class="view-operations-btn">
+                    <mat-icon>arrow_forward</mat-icon>
+                    View Operations
+                  </button>
+                </div>
+              </div>
+            </div>
           }
         </div>
       }
@@ -289,121 +305,289 @@ interface WarehouseInventory {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 32px;
+      margin-bottom: 32px;
     }
 
-    .warehouse-card {
+    .warehouse-card-modern {
+      position: relative;
+      border-radius: 20px;
+      padding: 32px;
       cursor: pointer;
-      transition: all 0.3s ease;
-      padding: 24px;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+      min-height: 380px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
     }
 
-    .warehouse-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    .warehouse-gradient-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      opacity: 1;
+      transition: opacity 0.4s ease;
+      z-index: 0;
     }
 
-    .warehouse-icon {
+    .warehouse-card-modern.warehouse-1 .warehouse-gradient-bg {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 50%;
+    }
+
+    .warehouse-card-modern.warehouse-2 .warehouse-gradient-bg {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .warehouse-card-modern.warehouse-3 .warehouse-gradient-bg {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .warehouse-card-modern.warehouse-4 .warehouse-gradient-bg {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .warehouse-card-modern::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.05);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      z-index: 1;
+    }
+
+    .warehouse-card-modern:hover {
+      transform: translateY(-12px) scale(1.02);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.3);
+    }
+
+    .warehouse-card-modern:hover::before {
+      opacity: 1;
+    }
+
+    .warehouse-card-modern:hover .warehouse-icon-modern {
+      transform: scale(1.1) rotate(5deg);
+    }
+
+    .warehouse-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      color: white;
+    }
+
+    .warehouse-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .warehouse-icon-modern {
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      width: 70px;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .warehouse-icon-modern mat-icon {
+      color: white;
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+    }
+
+    .warehouse-title-section {
+      flex: 1;
+    }
+
+    .warehouse-title-section h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .warehouse-location {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .warehouse-location mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .warehouse-stats-modern {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-modern {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      transition: all 0.3s ease;
+    }
+
+    .stat-modern:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .stat-icon-wrapper {
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
       width: 48px;
       height: 48px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-right: 16px;
+      flex-shrink: 0;
     }
 
-    .warehouse-icon mat-icon {
+    .stat-icon-wrapper mat-icon {
       color: white;
       font-size: 28px;
       width: 28px;
       height: 28px;
     }
 
-    mat-card-header {
-      margin-bottom: 16px;
+    .stat-details {
+      flex: 1;
     }
 
-    mat-card-title {
+    .stat-modern .stat-value {
       font-size: 1.5rem;
-      font-weight: 600;
+      font-weight: 800;
+      color: white;
+      line-height: 1.2;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     }
 
-    mat-card-subtitle {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-top: 4px;
+    .stat-modern .stat-label {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.9);
+      margin-top: 2px;
+      font-weight: 500;
     }
 
-    .warehouse-stats {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-bottom: 20px;
+    .warehouse-capacity-modern {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      margin-bottom: auto;
     }
 
-    .stat {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
-      background: #f5f5f5;
-      border-radius: 8px;
-    }
-
-    .stat mat-icon {
-      color: #667eea;
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-    }
-
-    .stat-value {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #333;
-      white-space: nowrap;
-    }
-
-    .stat-label {
-      font-size: 0.875rem;
-      color: #666;
-    }
-
-    .warehouse-capacity {
-      margin-top: 16px;
-    }
-
-    .capacity-label {
+    .capacity-header {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 8px;
-      font-size: 0.875rem;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .capacity-title {
+      font-size: 0.95rem;
       font-weight: 600;
-      color: #666;
+      color: white;
     }
 
-    .capacity-bar {
-      height: 8px;
-      background: #e0e0e0;
-      border-radius: 4px;
+    .capacity-percentage {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .capacity-bar-modern {
+      height: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
       overflow: hidden;
+      margin-bottom: 10px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
-    .capacity-fill {
+    .capacity-fill-modern {
       height: 100%;
-      background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
-      transition: width 0.3s ease;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 6px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
     }
 
-    .capacity-fill.high {
-      background: linear-gradient(90deg, #f44336 0%, #ff9800 100%);
+    .capacity-fill-modern.high {
+      background: linear-gradient(90deg, #ffeb3b 0%, #ff9800 100%);
+      box-shadow: 0 0 12px rgba(255, 152, 0, 0.8);
     }
 
-    mat-card-actions {
-      padding: 16px;
-      border-top: 1px solid #e0e0e0;
+    .capacity-info {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.9);
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .warehouse-footer {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .view-operations-btn {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.25) !important;
+      backdrop-filter: blur(10px);
+      color: white !important;
+      font-weight: 600 !important;
+      font-size: 1rem !important;
+      padding: 14px 24px !important;
+      border-radius: 12px !important;
+      border: 2px solid rgba(255, 255, 255, 0.4) !important;
+      transition: all 0.3s ease !important;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .view-operations-btn:hover {
+      background: rgba(255, 255, 255, 0.4) !important;
+      border-color: rgba(255, 255, 255, 0.6) !important;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    .view-operations-btn mat-icon {
+      margin-left: 8px;
     }
 
     .loading-container {
