@@ -17,6 +17,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatListModule } from '@angular/material/list';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
@@ -66,7 +67,8 @@ interface WarehouseInventory {
     MatSnackBarModule,
     MatMenuModule,
     MatTooltipModule,
-    NavbarComponent
+    NavbarComponent,
+    MatListModule
   ],
   template: `
     <app-navbar></app-navbar>
@@ -75,15 +77,100 @@ interface WarehouseInventory {
       <div class="page-header">
         <div class="header-text">
           <h1>Stock Management</h1>
-          <p class="subtitle">Manage your warehouses and inventory</p>
+          <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name : 'Select a warehouse to begin' }}</p>
         </div>
         <div class="header-actions">
+          @if (selectedWarehouse) {
+            <button mat-raised-button (click)="clearSelection()">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Warehouses
+            </button>
+          }
           <button mat-raised-button color="accent" (click)="openSohImportDialog()" matTooltip="Import Stock on Hand from Excel">
             <mat-icon>upload_file</mat-icon>
             Import SOH
           </button>
         </div>
       </div>
+
+      @if (selectedWarehouse && !showInventorySubmenu) {
+        <div class="operations-grid">
+          <div class="operation-block depot-block" (click)="selectOperation('inventory')">
+            <div class="block-icon">
+              <mat-icon>inventory_2</mat-icon>
+            </div>
+            <h3>Inventory Management</h3>
+            <p>View & manage stock levels</p>
+          </div>
+
+          <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')">
+            <div class="block-icon">
+              <mat-icon>local_shipping</mat-icon>
+            </div>
+            <h3>Order Accept & Dispatch</h3>
+            <p>Process orders & dispatch</p>
+          </div>
+
+          <div class="operation-block transfer-block" (click)="selectOperation('transfer')">
+            <div class="block-icon">
+              <mat-icon>swap_horiz</mat-icon>
+            </div>
+            <h3>Transfer & Returns</h3>
+            <p>Inter-warehouse transfers</p>
+          </div>
+
+          <div class="operation-block grv-block" (click)="selectOperation('grv')">
+            <div class="block-icon">
+              <mat-icon>receipt_long</mat-icon>
+            </div>
+            <h3>Goods Received</h3>
+            <p>Record incoming deliveries</p>
+          </div>
+        </div>
+      }
+
+      @if (showInventorySubmenu) {
+        <div class="submenu-header">
+          <button mat-icon-button (click)="backToOperations()">
+            <mat-icon>arrow_back</mat-icon>
+          </button>
+          <h2>Inventory Management</h2>
+        </div>
+
+        <div class="operations-grid">
+          <div class="operation-block inventory-block" (click)="openInventoryView()">
+            <div class="block-icon">
+              <mat-icon>view_list</mat-icon>
+            </div>
+            <h3>Inventory Management</h3>
+            <p>View all stock items</p>
+          </div>
+
+          <div class="operation-block scrap-block" (click)="openScrap()">
+            <div class="block-icon">
+              <mat-icon>delete_sweep</mat-icon>
+            </div>
+            <h3>Scrap</h3>
+            <p>Record damaged items</p>
+          </div>
+
+          <div class="operation-block stocktake-block" (click)="openStockTake()">
+            <div class="block-icon">
+              <mat-icon>fact_check</mat-icon>
+            </div>
+            <h3>Stock Take</h3>
+            <p>Physical count verification</p>
+          </div>
+
+          <div class="operation-block repack-block" (click)="openRepackaging()">
+            <div class="block-icon">
+              <mat-icon>inventory</mat-icon>
+            </div>
+            <h3>Repackaging</h3>
+            <p>Change item packaging</p>
+          </div>
+        </div>
+      }
 
       @if (loading) {
         <div class="loading-container">
@@ -96,10 +183,10 @@ interface WarehouseInventory {
           <h3>No Warehouses Found</h3>
           <p>No warehouses have been configured yet.</p>
         </div>
-      } @else {
+      } @else if (!selectedWarehouse) {
         <div class="warehouses-grid">
           @for (warehouse of warehouses; track warehouse.id) {
-            <mat-card class="warehouse-card" (click)="viewWarehouseDetails(warehouse)">
+            <mat-card class="warehouse-card" (click)="selectWarehouse(warehouse)">
               <mat-card-header>
                 <div class="warehouse-icon">
                   <mat-icon>warehouse</mat-icon>
@@ -135,9 +222,9 @@ interface WarehouseInventory {
                 </div>
               </mat-card-content>
               <mat-card-actions>
-                <button mat-button color="primary" (click)="viewWarehouseDetails(warehouse); $event.stopPropagation()">
+                <button mat-button color="primary" (click)="selectWarehouse(warehouse); $event.stopPropagation()">
                   <mat-icon>visibility</mat-icon>
-                  View Details
+                  View Operations
                 </button>
               </mat-card-actions>
             </mat-card>
@@ -361,12 +448,202 @@ interface WarehouseInventory {
       opacity: 0.8;
       margin: 0;
     }
+
+    .operations-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-bottom: 32px;
+      animation: slideUp 0.4s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .operation-block {
+      position: relative;
+      cursor: pointer;
+      padding: 32px 24px;
+      border-radius: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-align: center;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      min-height: 180px;
+      background: white;
+    }
+
+    .operation-block::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .operation-block:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+    }
+
+    .operation-block:hover::before {
+      opacity: 1;
+    }
+
+    .operation-block:active {
+      transform: translateY(-4px) scale(0.98);
+    }
+
+    .block-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.9);
+      margin-bottom: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .operation-block:hover .block-icon {
+      transform: scale(1.1) rotate(5deg);
+      background: white;
+    }
+
+    .block-icon mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+    }
+
+    .operation-block h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      z-index: 1;
+    }
+
+    .operation-block p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.95);
+      font-weight: 500;
+      z-index: 1;
+    }
+
+    .depot-block {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .depot-block .block-icon mat-icon {
+      color: #667eea;
+    }
+
+    .dispatch-block {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .dispatch-block .block-icon mat-icon {
+      color: #f5576c;
+    }
+
+    .transfer-block {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .transfer-block .block-icon mat-icon {
+      color: #4facfe;
+    }
+
+    .grv-block {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .grv-block .block-icon mat-icon {
+      color: #43e97b;
+    }
+
+    .inventory-block {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .inventory-block .block-icon mat-icon {
+      color: #667eea;
+    }
+
+    .scrap-block {
+      background: linear-gradient(135deg, #fc6767 0%, #ec008c 100%);
+    }
+
+    .scrap-block .block-icon mat-icon {
+      color: #fc6767;
+    }
+
+    .stocktake-block {
+      background: linear-gradient(135deg, #f77062 0%, #fe5196 100%);
+    }
+
+    .stocktake-block .block-icon mat-icon {
+      color: #f77062;
+    }
+
+    .repack-block {
+      background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%);
+    }
+
+    .repack-block .block-icon mat-icon {
+      color: #d57eeb;
+    }
+
+    .submenu-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      animation: slideUp 0.3s ease-out;
+    }
+
+    .submenu-header button {
+      color: white;
+    }
+
+    .submenu-header h2 {
+      margin: 0;
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
   `]
 })
 export class StockManagementComponent implements OnInit {
   warehouses: WarehouseSummary[] = [];
   loading = true;
   notificationCount = 3;
+  selectedWarehouse: any = null;
+  showInventorySubmenu = false;
 
   constructor(
     private router: Router,
@@ -394,7 +671,87 @@ export class StockManagementComponent implements OnInit {
     });
   }
 
+  selectWarehouse(warehouse: any): void {
+    this.selectedWarehouse = warehouse;
+    this.showInventorySubmenu = false;
+  }
+
+  clearSelection(): void {
+    this.selectedWarehouse = null;
+    this.showInventorySubmenu = false;
+  }
+
+  selectOperation(operation: string): void {
+    if (operation === 'inventory') {
+      this.showInventorySubmenu = true;
+    } else if (operation === 'dispatch') {
+      this.snackBar.open('Order Accept & Dispatch - Coming Soon!', 'Close', { duration: 3000 });
+    } else if (operation === 'transfer') {
+      this.openTransferDialog();
+    } else if (operation === 'grv') {
+      this.openGRVDialog();
+    }
+  }
+
+  backToOperations(): void {
+    this.showInventorySubmenu = false;
+  }
+
+  openInventoryView(): void {
+    this.dialog.open(WarehouseDetailsDialog, {
+      width: '90%',
+      maxWidth: '1200px',
+      data: this.selectedWarehouse
+    });
+  }
+
+  openScrap(): void {
+    this.snackBar.open('Scrap Management - Coming Soon!', 'Close', { duration: 3000 });
+  }
+
+  openStockTake(): void {
+    this.snackBar.open('Stock Take - Coming Soon!', 'Close', { duration: 3000 });
+  }
+
+  openRepackaging(): void {
+    this.snackBar.open('Repackaging - Coming Soon!', 'Close', { duration: 3000 });
+  }
+
+  openTransferDialog(): void {
+    const detailsDialog = this.dialog.open(WarehouseDetailsDialog, {
+      width: '90%',
+      maxWidth: '1200px',
+      data: this.selectedWarehouse
+    });
+    setTimeout(() => {
+      if (detailsDialog.componentInstance) {
+        detailsDialog.componentInstance.openTransferDialog();
+      }
+    }, 500);
+  }
+
+  openGRVDialog(): void {
+    const grvDialog = this.dialog.open(WarehouseDetailsDialog, {
+      width: '90%',
+      maxWidth: '1200px',
+      data: this.selectedWarehouse
+    });
+    setTimeout(() => {
+      if (grvDialog.componentInstance) {
+        grvDialog.componentInstance.openGRVDialog();
+      }
+    }, 500);
+  }
+
   viewWarehouseDetails(warehouse: any): void {
+    this.dialog.open(WarehouseOperationsDialog, {
+      width: '700px',
+      maxWidth: '90vw',
+      data: warehouse
+    });
+  }
+
+  openWarehouseInventory(warehouse: any): void {
     this.dialog.open(WarehouseDetailsDialog, {
       width: '90%',
       maxWidth: '1200px',
@@ -1855,6 +2212,298 @@ export class WarehouseDetailsDialog implements OnInit {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+}
+
+// Warehouse Operations Menu Dialog
+@Component({
+  selector: 'warehouse-operations-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule
+  ],
+  template: `
+    <div class="operations-dialog">
+      <div class="dialog-header">
+        <h2>{{ data.name }}</h2>
+        <button mat-icon-button (click)="dialogRef.close()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-content">
+        <p class="warehouse-info">
+          <mat-icon>location_on</mat-icon>
+          {{ data.location }}
+        </p>
+
+        <div class="operations-grid">
+          <div class="operation-block depot-block" (click)="selectOperation('depot')">
+            <div class="block-icon">
+              <mat-icon>warehouse</mat-icon>
+            </div>
+            <h3>Depot Management</h3>
+            <p>View inventory & stock levels</p>
+          </div>
+
+          <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')">
+            <div class="block-icon">
+              <mat-icon>local_shipping</mat-icon>
+            </div>
+            <h3>Order Accept & Dispatch</h3>
+            <p>Process orders & dispatch</p>
+          </div>
+
+          <div class="operation-block transfer-block" (click)="selectOperation('transfer')">
+            <div class="block-icon">
+              <mat-icon>swap_horiz</mat-icon>
+            </div>
+            <h3>Transfer & Returns</h3>
+            <p>Inter-warehouse transfers</p>
+          </div>
+
+          <div class="operation-block grv-block" (click)="selectOperation('grv')">
+            <div class="block-icon">
+              <mat-icon>receipt_long</mat-icon>
+            </div>
+            <h3>Goods Received</h3>
+            <p>Record incoming deliveries</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .operations-dialog {
+      font-family: 'Roboto', sans-serif;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin: -24px -24px 0 -24px;
+      border-radius: 4px 4px 0 0;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .dialog-header button {
+      color: white;
+    }
+
+    .dialog-content {
+      padding: 24px;
+    }
+
+    .warehouse-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 24px 0;
+      padding: 12px 16px;
+      background: rgba(102, 126, 234, 0.08);
+      border-radius: 12px;
+      color: #667eea;
+      font-size: 0.95rem;
+      font-weight: 500;
+      border: 1px solid rgba(102, 126, 234, 0.2);
+    }
+
+    .warehouse-info mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #667eea;
+    }
+
+    .operations-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      padding: 8px 0;
+    }
+
+    .operation-block {
+      position: relative;
+      cursor: pointer;
+      padding: 32px 24px;
+      border-radius: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-align: center;
+      overflow: hidden;
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .operation-block::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .operation-block:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+    }
+
+    .operation-block:hover::before {
+      opacity: 1;
+    }
+
+    .operation-block:active {
+      transform: translateY(-4px) scale(0.98);
+    }
+
+    .block-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.9);
+      margin-bottom: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .operation-block:hover .block-icon {
+      transform: scale(1.1) rotate(5deg);
+      background: white;
+    }
+
+    .block-icon mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+    }
+
+    .operation-block h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      z-index: 1;
+    }
+
+    .operation-block p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.95);
+      font-weight: 500;
+      z-index: 1;
+    }
+
+    .depot-block {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .depot-block .block-icon mat-icon {
+      color: #667eea;
+    }
+
+    .dispatch-block {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .dispatch-block .block-icon mat-icon {
+      color: #f5576c;
+    }
+
+    .transfer-block {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .transfer-block .block-icon mat-icon {
+      color: #4facfe;
+    }
+
+    .grv-block {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .grv-block .block-icon mat-icon {
+      color: #43e97b;
+    }
+  `]
+})
+export class WarehouseOperationsDialog {
+  constructor(
+    public dialogRef: MatDialogRef<WarehouseOperationsDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private dialog: MatDialog
+  ) {}
+
+  selectOperation(operation: string): void {
+    this.dialogRef.close();
+    
+    switch (operation) {
+      case 'depot':
+        // Open depot management (inventory view)
+        this.dialog.open(WarehouseDetailsDialog, {
+          width: '90%',
+          maxWidth: '1200px',
+          data: this.data
+        });
+        break;
+      
+      case 'dispatch':
+        // TODO: Open dispatch dialog
+        alert(`Order Accept & Dispatch for ${this.data.name}\nComing soon!`);
+        break;
+      
+      case 'transfer':
+        // Open transfer dialog (will open with transfer mode)
+        const detailsDialog = this.dialog.open(WarehouseDetailsDialog, {
+          width: '90%',
+          maxWidth: '1200px',
+          data: this.data
+        });
+        // Auto-open transfer after dialog loads
+        setTimeout(() => {
+          if (detailsDialog.componentInstance) {
+            detailsDialog.componentInstance.openTransferDialog();
+          }
+        }, 500);
+        break;
+      
+      case 'grv':
+        // Open GRV dialog (goods received)
+        const grvDialog = this.dialog.open(WarehouseDetailsDialog, {
+          width: '90%',
+          maxWidth: '1200px',
+          data: this.data
+        });
+        // Auto-open GRV after dialog loads
+        setTimeout(() => {
+          if (grvDialog.componentInstance) {
+            grvDialog.componentInstance.openGRVDialog();
+          }
+        }, 500);
+        break;
+    }
   }
 }
 
