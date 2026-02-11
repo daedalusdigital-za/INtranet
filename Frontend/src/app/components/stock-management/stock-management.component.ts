@@ -21,7 +21,6 @@ import { MatListModule } from '@angular/material/list';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
-import { SohImportDialogComponent, SohImportDialogData, SohImportDialogResult } from '../shared/soh-import-dialog/soh-import-dialog.component';
 import { environment } from '../../../environments/environment';
 
 interface WarehouseSummary {
@@ -86,10 +85,6 @@ interface WarehouseInventory {
               Back to Warehouses
             </button>
           }
-          <button mat-raised-button color="accent" (click)="openSohImportDialog()" matTooltip="Import Stock on Hand from Excel">
-            <mat-icon>upload_file</mat-icon>
-            Import SOH
-          </button>
         </div>
       </div>
 
@@ -966,26 +961,6 @@ export class StockManagementComponent implements OnInit {
   openWarehouse(warehouse: any): void {
     // Navigate to warehouse detail page (to be created)
     this.router.navigate(['/stock-management/warehouse', warehouse.id]);
-  }
-
-  openSohImportDialog(): void {
-    const dialogRef = this.dialog.open(SohImportDialogComponent, {
-      width: '95vw',
-      maxWidth: '1200px',
-      maxHeight: '90vh',
-      disableClose: true,
-      data: {
-        apiUrl: environment.apiUrl
-      } as SohImportDialogData
-    });
-
-    dialogRef.afterClosed().subscribe((result: SohImportDialogResult) => {
-      if (result?.success && result?.committed) {
-        this.snackBar.open(result.message || 'Stock on Hand data imported successfully!', 'Close', { duration: 5000 });
-        // Optionally refresh warehouse data
-        this.loadWarehouses();
-      }
-    });
   }
 
   logout(): void {
