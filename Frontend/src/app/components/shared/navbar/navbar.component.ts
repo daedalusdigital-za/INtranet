@@ -66,6 +66,11 @@ import { Subscription } from 'rxjs';
           <mat-icon>local_shipping</mat-icon> Logistics
         </button>
       }
+      @if (hasPermission('tenders')) {
+        <button mat-button routerLink="/tenders" routerLinkActive="active-link">
+          <mat-icon>gavel</mat-icon> Tenders
+        </button>
+      }
       @if (hasPermission('human_resource')) {
         <button mat-button routerLink="/people" routerLinkActive="active-link">
           <mat-icon>people</mat-icon> Human Resource

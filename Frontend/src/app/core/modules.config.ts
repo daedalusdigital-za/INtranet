@@ -21,6 +21,7 @@ export const MODULE_KEYS = {
   CRM: 'crm',
   SALES: 'sales',
   LOGISTICS: 'logistics',
+  TENDERS: 'tenders',
   PROJECT_MANAGEMENT: 'project_management',
   HUMAN_RESOURCE: 'human_resource',
   STOCK_MANAGEMENT: 'stock_management',
@@ -90,6 +91,23 @@ export const MODULES: ModuleConfig[] = [
     requiresPermission: true,
     showInNavbar: true,
     showInDashboard: true
+  },
+  {
+    key: 'tenders',
+    name: 'Tenders',
+    description: 'Tender management, compliance vault, BOQ builder, and analytics',
+    icon: 'gavel',
+    route: '/tenders',
+    color: '#8E24AA',
+    requiresPermission: true,
+    showInNavbar: true,
+    showInDashboard: true,
+    subRoutes: [
+      { path: '/tenders', name: 'Dashboard', icon: 'dashboard' },
+      { path: '/tenders/compliance', name: 'Compliance Vault', icon: 'verified_user' },
+      { path: '/tenders/calendar', name: 'Calendar', icon: 'calendar_month' },
+      { path: '/tenders/analytics', name: 'Analytics', icon: 'analytics' }
+    ]
   },
   {
     key: 'project_management',
@@ -344,6 +362,14 @@ export function getModuleRoutes(): Routes {
       loadComponent: () => import('../components/logistics/logistics-dashboard.component').then(m => m.LogisticsDashboardComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'logistics' } 
+    },
+    
+    // Tenders Module
+    { 
+      path: 'tenders', 
+      loadComponent: () => import('../components/tenders/tenders.component').then(m => m.TendersComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'tenders' } 
     },
     
     // User Profile & Settings (available to all)

@@ -136,6 +136,16 @@ namespace ProjectTracker.API.Data
         public DbSet<DocumentSnapshot> DocumentSnapshots { get; set; }
         public DbSet<DocumentCollaborator> DocumentCollaborators { get; set; }
 
+        // Tenders Management System
+        public DbSet<Models.Tenders.Tender> Tenders { get; set; }
+        public DbSet<Models.Tenders.TenderDocument> TenderDocuments { get; set; }
+        public DbSet<Models.Tenders.TenderTeamMember> TenderTeamMembers { get; set; }
+        public DbSet<Models.Tenders.TenderActivity> TenderActivities { get; set; }
+        public DbSet<Models.Tenders.TenderBOQItem> TenderBOQItems { get; set; }
+        public DbSet<Models.Tenders.ComplianceDocument> ComplianceDocuments { get; set; }
+        public DbSet<Models.Tenders.ComplianceAlert> ComplianceAlerts { get; set; }
+        public DbSet<Models.Tenders.TenderKnowledgeBase> TenderKnowledgeBase { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
