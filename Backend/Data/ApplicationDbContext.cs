@@ -108,6 +108,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.ImportBatch> ImportBatches { get; set; }
         public DbSet<Models.Logistics.SleepOut> SleepOuts { get; set; }
         public DbSet<Models.Logistics.PartDeliveryHistory> PartDeliveryHistories { get; set; }
+        public DbSet<Models.Logistics.OrderCancellation> OrderCancellations { get; set; }
 
         // Sales Import System
         public DbSet<SalesImportBatch> SalesImportBatches { get; set; }

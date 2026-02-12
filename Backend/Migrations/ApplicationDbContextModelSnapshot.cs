@@ -3807,6 +3807,77 @@ namespace ProjectTracker.API.Migrations
                     b.ToTable("Backorders");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.BuildingInventory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BinLocation")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ItemCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ItemDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("LastCountDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastMovementDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("MaxLevel")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("QuantityOnHand")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("QuantityOnOrder")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("QuantityReserved")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ReorderLevel")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("Uom")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "BuildingId" }, "IX_BuildingInventory_BuildingId");
+
+                    b.HasIndex(new[] { "ItemCode" }, "IX_BuildingInventory_ItemCode");
+
+                    b.HasIndex(new[] { "BuildingId", "ItemCode" }, "UQ_BuildingInventory_Building_Item")
+                        .IsUnique();
+
+                    b.ToTable("BuildingInventory");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Commodity", b =>
                 {
                     b.Property<int>("Id")
@@ -4864,6 +4935,114 @@ namespace ProjectTracker.API.Migrations
                     b.ToTable("LoadStops");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.OrderCancellation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApprovalNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ApprovedByUserName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CancellationNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("CancellationReason")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CancelledByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CancelledByUserName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CompanyCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CustomerNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("ImportedInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("OrderAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("OriginalOrderDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("RefundAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("RefundProcessed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("RefundProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("CancelledByUserId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("ImportedInvoiceId");
+
+                    b.ToTable("OrderCancellations");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PartDeliveryHistory", b =>
                 {
                     b.Property<int>("Id")
@@ -5087,23 +5266,26 @@ namespace ProjectTracker.API.Migrations
                     b.ToTable("SleepOuts");
                 });
 
-            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockOnHandSnapshot", b =>
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockMovement", b =>
                 {
-                    b.Property<int>("StockSnapshotId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("StockSnapshotId"));
-
-                    b.Property<DateTime>("AsAtDate")
-                        .HasColumnType("datetime2");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("ImportBatchId")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<int?>("CreatedById")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("FromBuildingId")
+                        .HasColumnType("int");
 
                     b.Property<string>("ItemCode")
                         .IsRequired()
@@ -5114,48 +5296,41 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Location")
+                    b.Property<string>("MovementType")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
-                    b.Property<int>("OperatingCompanyId")
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ToBuildingId")
                         .HasColumnType("int");
-
-                    b.Property<decimal?>("QtyOnHand")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("QtyOnPO")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("QtyOnSO")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("RowIndex")
-                        .HasColumnType("int");
-
-                    b.Property<decimal?>("StockAvailable")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("TotalCostForQOH")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("UnitCostForQOH")
-                        .HasColumnType("decimal(18,6)");
 
                     b.Property<string>("Uom")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.HasKey("StockSnapshotId");
+                    b.HasKey("Id");
 
-                    b.HasIndex(new[] { "OperatingCompanyId", "AsAtDate", "Location", "ItemCode" }, "IX_StockOnHandSnapshot_AsAtDate_Location_ItemCode");
+                    b.HasIndex(new[] { "CreatedAt" }, "IX_StockMovements_CreatedAt");
 
-                    b.HasIndex(new[] { "OperatingCompanyId", "AsAtDate", "Location", "ItemCode", "Uom" }, "IX_StockOnHandSnapshot_Unique")
-                        .IsUnique();
+                    b.HasIndex(new[] { "FromBuildingId" }, "IX_StockMovements_FromBuildingId");
 
-                    b.ToTable("StockOnHandSnapshots");
+                    b.HasIndex(new[] { "ItemCode" }, "IX_StockMovements_ItemCode");
+
+                    b.HasIndex(new[] { "ToBuildingId" }, "IX_StockMovements_ToBuildingId");
+
+                    b.ToTable("StockMovements");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockTransfer", b =>
@@ -5989,6 +6164,61 @@ namespace ProjectTracker.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Warehouses");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseBuilding", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("AvailableCapacity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ManagerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("TotalCapacity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.ToTable("WarehouseBuildings");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseInventory", b =>
@@ -7363,6 +7593,17 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Inventory");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.BuildingInventory", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.WarehouseBuilding", "Building")
+                        .WithMany("Inventory")
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Building");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.CustomerContract", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Logistics.Customer", "Customer")
@@ -7523,6 +7764,35 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Warehouse");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.OrderCancellation", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId");
+
+                    b.HasOne("ProjectTracker.API.Models.User", "CancelledByUser")
+                        .WithMany()
+                        .HasForeignKey("CancelledByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId");
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.ImportedInvoice", "ImportedInvoice")
+                        .WithMany()
+                        .HasForeignKey("ImportedInvoiceId");
+
+                    b.Navigation("ApprovedByUser");
+
+                    b.Navigation("CancelledByUser");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("ImportedInvoice");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PartDeliveryHistory", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Logistics.Driver", "Driver")
@@ -7603,6 +7873,21 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Driver");
 
                     b.Navigation("Load");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockMovement", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.WarehouseBuilding", "FromBuilding")
+                        .WithMany()
+                        .HasForeignKey("FromBuildingId");
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.WarehouseBuilding", "ToBuilding")
+                        .WithMany()
+                        .HasForeignKey("ToBuildingId");
+
+                    b.Navigation("FromBuilding");
+
+                    b.Navigation("ToBuilding");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockTransfer", b =>
@@ -7753,6 +8038,17 @@ namespace ProjectTracker.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseBuilding", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Warehouse", "Warehouse")
+                        .WithMany("Buildings")
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseInventory", b =>
@@ -8161,11 +8457,18 @@ namespace ProjectTracker.API.Migrations
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Warehouse", b =>
                 {
+                    b.Navigation("Buildings");
+
                     b.Navigation("Inventory");
 
                     b.Navigation("TransfersFrom");
 
                     b.Navigation("TransfersTo");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseBuilding", b =>
+                {
+                    b.Navigation("Inventory");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseInventory", b =>

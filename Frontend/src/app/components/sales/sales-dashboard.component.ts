@@ -123,6 +123,43 @@ interface SalesStats {
   processingOrders: number;
 }
 
+interface OrderCancellation {
+  id: number;
+  orderNumber: string;
+  importedInvoiceId?: number;
+  customerNumber: string;
+  customerName: string;
+  customerId?: number;
+  orderAmount: number;
+  itemCount: number;
+  originalOrderDate: Date;
+  cancellationReason: string;
+  cancellationNotes?: string;
+  cancelledAt: Date;
+  cancelledByUserId: number;
+  cancelledByUserName?: string;
+  approvalStatus: string;
+  approvedByUserId?: number;
+  approvedByUserName?: string;
+  approvedAt?: Date;
+  approvalNotes?: string;
+  refundAmount?: number;
+  refundProcessed: boolean;
+  refundProcessedAt?: Date;
+  companyCode?: string;
+}
+
+interface CancellationStats {
+  totalCancellations: number;
+  pendingApproval: number;
+  approvedToday: number;
+  rejectedToday: number;
+  totalRefundAmount: number;
+  pendingRefundAmount: number;
+  byReason: { [key: string]: number };
+  byCompany: { [key: string]: number };
+}
+
 @Component({
   selector: 'app-sales-dashboard',
   standalone: true,
@@ -743,6 +780,168 @@ interface SalesStats {
                                [pageSizeOptions]="[10, 15, 25, 50]"
                                showFirstLastButtons>
                 </mat-paginator>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Order Cancellations Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>cancel</mat-icon>
+              <span>Cancellations</span>
+              @if (pendingCancellations().length > 0) {
+                <span class="tab-badge warning">{{ pendingCancellations().length }}</span>
+              }
+            </ng-template>
+            <div class="tab-content">
+              <div class="section-header">
+                <h3>Order Cancellations</h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="search-field">
+                    <mat-label>Search cancellations</mat-label>
+                    <input matInput [value]="cancellationSearch()" (input)="cancellationSearch.set($any($event.target).value)">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Status</mat-label>
+                    <mat-select [value]="cancellationStatusFilter()" (selectionChange)="cancellationStatusFilter.set($event.value)">
+                      <mat-option value="all">All Status</mat-option>
+                      <mat-option value="Pending">Pending Approval</mat-option>
+                      <mat-option value="Approved">Approved</mat-option>
+                      <mat-option value="Rejected">Rejected</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <button mat-icon-button (click)="loadCancellations()" matTooltip="Refresh">
+                    <mat-icon>refresh</mat-icon>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Cancellation Stats -->
+              <div class="cancellation-stats">
+                <div class="cancel-stat pending">
+                  <mat-icon>hourglass_empty</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">{{ cancellationStats().pendingApproval }}</span>
+                    <span class="label">Pending</span>
+                  </div>
+                </div>
+                <div class="cancel-stat approved">
+                  <mat-icon>check_circle</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">{{ cancellationStats().approvedToday }}</span>
+                    <span class="label">Approved Today</span>
+                  </div>
+                </div>
+                <div class="cancel-stat rejected">
+                  <mat-icon>cancel</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">{{ cancellationStats().rejectedToday }}</span>
+                    <span class="label">Rejected Today</span>
+                  </div>
+                </div>
+                <div class="cancel-stat refund">
+                  <mat-icon>payments</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">R{{ formatCurrency(cancellationStats().pendingRefundAmount) }}</span>
+                    <span class="label">Pending Refunds</span>
+                  </div>
+                </div>
+              </div>
+
+              @if (loadingCancellations()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="40"></mat-spinner>
+                </div>
+              } @else if (filteredCancellations().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>task_alt</mat-icon>
+                  <h3>No Cancellations Found</h3>
+                  <p>No order cancellations match your criteria</p>
+                </div>
+              } @else {
+                <div class="cancellations-grid">
+                  @for (cancel of filteredCancellations(); track cancel.id) {
+                    <mat-card class="cancellation-card" [class]="'status-' + cancel.approvalStatus.toLowerCase()">
+                      <mat-card-header>
+                        <div class="cancel-header">
+                          <div class="order-info">
+                            <strong>{{ cancel.orderNumber }}</strong>
+                            <span class="cancel-date">Cancelled {{ cancel.cancelledAt | date:'dd MMM yyyy HH:mm' }}</span>
+                          </div>
+                          <mat-chip [class]="'approval-' + cancel.approvalStatus.toLowerCase()">
+                            {{ cancel.approvalStatus }}
+                          </mat-chip>
+                        </div>
+                      </mat-card-header>
+                      <mat-card-content>
+                        <div class="cancel-customer">
+                          <mat-icon>person</mat-icon>
+                          <span>{{ cancel.customerName }}</span>
+                          <span class="customer-code">({{ cancel.customerNumber }})</span>
+                        </div>
+                        <div class="cancel-details">
+                          <div class="detail-row">
+                            <span class="label">Original Amount</span>
+                            <span class="value">R{{ cancel.orderAmount * 1.15 | number:'1.2-2' }}</span>
+                          </div>
+                          <div class="detail-row">
+                            <span class="label">Refund Amount</span>
+                            <span class="value refund">R{{ (cancel.refundAmount || cancel.orderAmount) * 1.15 | number:'1.2-2' }}</span>
+                          </div>
+                          <div class="detail-row">
+                            <span class="label">Reason</span>
+                            <mat-chip class="reason-chip" size="small">{{ cancel.cancellationReason | titlecase }}</mat-chip>
+                          </div>
+                          @if (cancel.cancellationNotes) {
+                            <div class="detail-row notes">
+                              <mat-icon>notes</mat-icon>
+                              <span>{{ cancel.cancellationNotes }}</span>
+                            </div>
+                          }
+                        </div>
+                        <div class="cancel-meta">
+                          <span class="cancelled-by">
+                            <mat-icon>person</mat-icon>
+                            {{ cancel.cancelledByUserName || 'Unknown' }}
+                          </span>
+                          @if (cancel.companyCode) {
+                            <mat-chip class="company-chip" [style.background-color]="getCompanyColor(cancel.companyCode)">
+                              {{ getCompanyShortName(cancel.companyCode) }}
+                            </mat-chip>
+                          }
+                        </div>
+                      </mat-card-content>
+                      <mat-card-actions>
+                        @if (cancel.approvalStatus === 'Pending') {
+                          <button mat-button color="primary" (click)="approveCancellation(cancel)">
+                            <mat-icon>check</mat-icon> Approve
+                          </button>
+                          <button mat-button color="warn" (click)="rejectCancellation(cancel)">
+                            <mat-icon>close</mat-icon> Reject
+                          </button>
+                        } @else if (cancel.approvalStatus === 'Approved' && !cancel.refundProcessed) {
+                          <button mat-button color="accent" (click)="processRefund(cancel)">
+                            <mat-icon>payments</mat-icon> Process Refund
+                          </button>
+                        }
+                        <button mat-icon-button [matMenuTriggerFor]="cancelMenu">
+                          <mat-icon>more_vert</mat-icon>
+                        </button>
+                        <mat-menu #cancelMenu="matMenu">
+                          <button mat-menu-item (click)="viewCancellationDetails(cancel)">
+                            <mat-icon>visibility</mat-icon> View Details
+                          </button>
+                          @if (cancel.approvalStatus === 'Pending') {
+                            <button mat-menu-item class="delete-btn" (click)="deleteCancellation(cancel)">
+                              <mat-icon>delete</mat-icon> Delete
+                            </button>
+                          }
+                        </mat-menu>
+                      </mat-card-actions>
+                    </mat-card>
+                  }
+                </div>
               }
             </div>
           </mat-tab>
@@ -1850,6 +2049,216 @@ interface SalesStats {
       height: 16px;
     }
 
+    /* Cancellation Stats */
+    .cancellation-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .cancel-stat {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 12px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      transition: transform 0.2s;
+    }
+
+    .cancel-stat:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .cancel-stat mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .cancel-stat.pending mat-icon { color: #ff9800; }
+    .cancel-stat.approved mat-icon { color: #4caf50; }
+    .cancel-stat.rejected mat-icon { color: #f44336; }
+    .cancel-stat.refund mat-icon { color: #2196f3; }
+
+    .cancel-stat .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cancel-stat .value {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a237e;
+    }
+
+    .cancel-stat .label {
+      font-size: 12px;
+      color: #666;
+    }
+
+    /* Cancellations Grid */
+    .cancellations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 16px;
+    }
+
+    .cancellation-card {
+      border-radius: 12px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      border-left: 4px solid #ccc;
+    }
+
+    .cancellation-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .cancellation-card.status-pending { border-left-color: #ff9800; }
+    .cancellation-card.status-approved { border-left-color: #4caf50; }
+    .cancellation-card.status-rejected { border-left-color: #f44336; }
+
+    .cancel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+    }
+
+    .cancel-header .order-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cancel-header .order-info strong {
+      font-size: 16px;
+      color: #1a237e;
+    }
+
+    .cancel-header .cancel-date {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .approval-pending {
+      background: #fff3e0 !important;
+      color: #e65100 !important;
+    }
+
+    .approval-approved {
+      background: #e8f5e9 !important;
+      color: #2e7d32 !important;
+    }
+
+    .approval-rejected {
+      background: #ffebee !important;
+      color: #c62828 !important;
+    }
+
+    .cancel-customer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    .cancel-customer mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #666;
+    }
+
+    .cancel-customer .customer-code {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .cancel-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .cancel-details .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .cancel-details .label {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .cancel-details .value {
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .cancel-details .value.refund {
+      color: #f44336;
+      font-weight: 600;
+    }
+
+    .cancel-details .notes {
+      background: #f5f5f5;
+      padding: 8px;
+      border-radius: 8px;
+      gap: 6px;
+    }
+
+    .cancel-details .notes mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #999;
+    }
+
+    .cancel-details .notes span {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .reason-chip {
+      background: #e8eaf6 !important;
+      color: #3f51b5 !important;
+      font-size: 11px !important;
+    }
+
+    .cancel-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 8px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .cancelled-by {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .cancelled-by mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .tab-badge.warning {
+      background: #ff9800;
+    }
+
     /* Tables */
     .table-container {
       overflow-x: auto;
@@ -2720,6 +3129,17 @@ export class SalesDashboardComponent implements OnInit {
   customers = signal<Customer[]>([]);
   invoices = signal<Invoice[]>([]);
   orders = signal<Order[]>([]);
+  cancellations = signal<OrderCancellation[]>([]);
+  cancellationStats = signal<CancellationStats>({
+    totalCancellations: 0,
+    pendingApproval: 0,
+    approvedToday: 0,
+    rejectedToday: 0,
+    totalRefundAmount: 0,
+    pendingRefundAmount: 0,
+    byReason: {},
+    byCompany: {}
+  });
   stats = signal<SalesStats>({
     totalCustomers: 0,
     activeCustomers: 0,
@@ -2746,6 +3166,11 @@ export class SalesDashboardComponent implements OnInit {
   invoiceStatusFilter = signal('all');
   orderSearch = signal('');
   orderStatusFilter = signal('all');
+  cancellationSearch = signal('');
+  cancellationStatusFilter = signal('all');
+
+  // Loading states for cancellations
+  loadingCancellations = signal(false);
 
   // Selected items
   selectedCustomer = signal<Customer | null>(null);
@@ -2856,6 +3281,30 @@ export class SalesDashboardComponent implements OnInit {
     }
 
     return list;
+  });
+
+  filteredCancellations = computed(() => {
+    let list = this.cancellations();
+    const search = this.cancellationSearch().toLowerCase();
+    const status = this.cancellationStatusFilter();
+
+    if (search) {
+      list = list.filter(c =>
+        c.orderNumber?.toLowerCase().includes(search) ||
+        c.customerName?.toLowerCase().includes(search) ||
+        c.customerNumber?.toLowerCase().includes(search)
+      );
+    }
+
+    if (status !== 'all') {
+      list = list.filter(c => c.approvalStatus === status);
+    }
+
+    return list;
+  });
+
+  pendingCancellations = computed(() => {
+    return this.cancellations().filter(c => c.approvalStatus === 'Pending');
   });
 
   // Attention computed values
@@ -2997,6 +3446,7 @@ export class SalesDashboardComponent implements OnInit {
     this.loadCustomers();
     this.loadInvoices();
     this.loadOrders();
+    this.loadCancellations();
     // Stats are now calculated reactively when data loads
   }
 
@@ -3050,6 +3500,32 @@ export class SalesDashboardComponent implements OnInit {
       this.loadingOrders.set(false);
       this.updateStats();
     }, 500);
+  }
+
+  loadCancellations(): void {
+    this.loadingCancellations.set(true);
+    this.http.get<OrderCancellation[]>(`${this.apiUrl}/ordercancellations`).subscribe({
+      next: (cancellations) => {
+        this.cancellations.set(cancellations);
+        this.loadingCancellations.set(false);
+        this.loadCancellationStats();
+      },
+      error: (err) => {
+        console.error('Failed to load cancellations:', err);
+        this.loadingCancellations.set(false);
+      }
+    });
+  }
+
+  loadCancellationStats(): void {
+    this.http.get<CancellationStats>(`${this.apiUrl}/ordercancellations/stats`).subscribe({
+      next: (stats) => {
+        this.cancellationStats.set(stats);
+      },
+      error: (err) => {
+        console.error('Failed to load cancellation stats:', err);
+      }
+    });
   }
 
   updateStats(): void {
@@ -3210,9 +3686,110 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   cancelOrder(order: Order): void {
-    if (confirm(`Are you sure you want to cancel order ${order.orderNumber}?`)) {
-      this.snackBar.open('Order cancelled', 'Close', { duration: 3000 });
-    }
+    const reason = prompt('Please enter cancellation reason:', 'CustomerRequest');
+    if (!reason) return;
+
+    const notes = prompt('Additional notes (optional):');
+
+    this.http.post<OrderCancellation>(`${this.apiUrl}/ordercancellations`, {
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      customerId: order.customerId,
+      orderAmount: order.totalAmount,
+      itemCount: order.items,
+      originalOrderDate: order.orderDate,
+      cancellationReason: reason,
+      cancellationNotes: notes,
+      cancelledByUserId: 1, // TODO: Get from auth service
+      cancelledByUserName: 'Admin',
+      companyCode: order.companyCode
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Order cancellation submitted for approval', 'Close', { duration: 3000 });
+        this.loadOrders();
+        this.loadCancellations();
+      },
+      error: (err) => {
+        console.error('Failed to cancel order:', err);
+        this.snackBar.open('Failed to cancel order', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  // Cancellation methods
+  approveCancellation(cancel: OrderCancellation): void {
+    if (!confirm(`Approve cancellation for order ${cancel.orderNumber}?`)) return;
+
+    this.http.put(`${this.apiUrl}/ordercancellations/${cancel.id}/approve`, {
+      userId: 1, // TODO: Get from auth service
+      userName: 'Admin',
+      notes: ''
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Cancellation approved', 'Close', { duration: 3000 });
+        this.loadCancellations();
+      },
+      error: () => {
+        this.snackBar.open('Failed to approve cancellation', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  rejectCancellation(cancel: OrderCancellation): void {
+    const reason = prompt('Please enter rejection reason:');
+    if (!reason) return;
+
+    this.http.put(`${this.apiUrl}/ordercancellations/${cancel.id}/reject`, {
+      userId: 1, // TODO: Get from auth service
+      userName: 'Admin',
+      notes: reason
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Cancellation rejected', 'Close', { duration: 3000 });
+        this.loadCancellations();
+        this.loadOrders();
+      },
+      error: () => {
+        this.snackBar.open('Failed to reject cancellation', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  processRefund(cancel: OrderCancellation): void {
+    const amount = prompt('Enter refund amount:', ((cancel.refundAmount || cancel.orderAmount) * 1.15).toFixed(2));
+    if (!amount) return;
+
+    this.http.put(`${this.apiUrl}/ordercancellations/${cancel.id}/process-refund`, {
+      amount: parseFloat(amount)
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Refund processed', 'Close', { duration: 3000 });
+        this.loadCancellations();
+      },
+      error: () => {
+        this.snackBar.open('Failed to process refund', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  viewCancellationDetails(cancel: OrderCancellation): void {
+    // For now, show in a snackbar. Could open a dialog with full details
+    this.snackBar.open(`Order: ${cancel.orderNumber} - ${cancel.cancellationReason}`, 'Close', { duration: 5000 });
+  }
+
+  deleteCancellation(cancel: OrderCancellation): void {
+    if (!confirm(`Delete cancellation for order ${cancel.orderNumber}? This will restore the order.`)) return;
+
+    this.http.delete(`${this.apiUrl}/ordercancellations/${cancel.id}`).subscribe({
+      next: () => {
+        this.snackBar.open('Cancellation deleted', 'Close', { duration: 3000 });
+        this.loadCancellations();
+        this.loadOrders();
+      },
+      error: () => {
+        this.snackBar.open('Failed to delete cancellation', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   // Report methods
