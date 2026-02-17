@@ -18,6 +18,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatCardModule } from '@angular/material/card';
 import { TenderService, Tender, TenderDocument, TenderTeamMember, TenderBOQItem, TenderActivity } from '../../services/tender.service';
 import { AuthService } from '../../services/auth.service';
 
@@ -53,6 +54,7 @@ interface DialogData {
     MatSnackBarModule,
     MatMenuModule,
     MatExpansionModule,
+    MatCardModule,
     CurrencyPipe,
     DatePipe,
     DecimalPipe
@@ -549,157 +551,216 @@ interface DialogData {
     </div>
   `,
   styles: [`
-    .dialog-container { min-width: 800px; }
+    :host {
+      display: block;
+      width: 100%;
+    }
+
+    .dialog-container {
+      width: 100%;
+      min-width: 1200px;
+    }
 
     .dialog-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 24px;
-      border-bottom: 1px solid #E0E0E0;
+      padding: 20px 32px;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      color: white;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    .dialog-header button {
+      color: white;
     }
 
     .tender-header {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
     }
 
     .company-badge {
-      padding: 4px 12px;
-      border-radius: 4px;
+      padding: 6px 16px;
+      border-radius: 6px;
       color: white;
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 14px;
     }
 
     .status-badge {
-      padding: 4px 12px;
-      border-radius: 16px;
+      padding: 6px 16px;
+      border-radius: 20px;
       color: white;
-      font-size: 12px;
+      font-size: 13px;
+      font-weight: 500;
     }
 
     mat-dialog-content {
-      max-height: 70vh;
+      max-height: 75vh;
       padding: 0 !important;
+      overflow-y: auto;
     }
 
-    .tab-content { padding: 24px; }
+    .tab-content {
+      padding: 32px;
+      min-height: 400px;
+    }
 
     /* Overview Grid */
     .overview-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 24px;
+      gap: 32px;
     }
 
     .info-section h3 {
-      margin: 0 0 8px 0;
-      font-size: 18px;
+      margin: 0 0 12px 0;
+      font-size: 20px;
+      color: #1a5fb4;
     }
 
     .description {
       color: #666;
-      margin-bottom: 16px;
+      margin-bottom: 24px;
+      line-height: 1.6;
     }
 
     .info-row {
       display: flex;
       align-items: flex-start;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
     }
     .info-row mat-icon {
-      margin-right: 12px;
-      color: #666;
+      margin-right: 16px;
+      color: #1e90ff;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
     }
     .info-row .label {
       display: block;
       font-size: 12px;
       color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
     }
     .info-row .value {
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 15px;
+      color: #333;
     }
 
     /* Dates Section */
     .dates-section h4, .workflow-section h4 {
-      margin: 0 0 16px 0;
-      color: #333;
+      margin: 0 0 20px 0;
+      color: #1a5fb4;
+      font-size: 18px;
     }
 
     .date-timeline {
-      border-left: 2px solid #E0E0E0;
-      padding-left: 20px;
+      border-left: 3px solid #1e90ff;
+      padding-left: 24px;
+      margin-left: 8px;
     }
 
     .timeline-item {
       display: flex;
       align-items: flex-start;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       position: relative;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
     }
     .timeline-item::before {
       content: '';
       position: absolute;
-      left: -26px;
-      top: 4px;
-      width: 12px;
-      height: 12px;
+      left: -33px;
+      top: 16px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       background: #E0E0E0;
+      border: 3px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .timeline-item.past::before { background: #4CAF50; }
     .timeline-item.closing::before { background: #F44336; }
 
     .timeline-item mat-icon {
-      margin-right: 12px;
-      color: #666;
+      margin-right: 16px;
+      color: #1e90ff;
     }
     .timeline-item .label {
       display: block;
       font-size: 12px;
       color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     .timeline-item .date {
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 15px;
+      color: #333;
     }
     .timeline-item .venue {
       display: block;
-      font-size: 12px;
+      font-size: 13px;
       color: #1976D2;
+      margin-top: 4px;
     }
-    .timeline-item.urgent .date { color: #F44336; font-weight: 600; }
+    .timeline-item.urgent .date { color: #F44336; font-weight: 700; }
 
     .days-badge {
       display: inline-block;
-      padding: 2px 8px;
+      padding: 4px 12px;
       background: #FFEBEE;
       color: #C62828;
-      border-radius: 10px;
-      font-size: 11px;
-      margin-left: 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 12px;
     }
 
     /* Workflow */
-    .workflow-section { grid-column: 1 / -1; }
+    .workflow-section {
+      grid-column: 1 / -1;
+      margin-top: 16px;
+      padding-top: 24px;
+      border-top: 1px solid #e0e0e0;
+    }
 
     .workflow-steps {
       display: flex;
-      gap: 8px;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .step {
       display: flex;
       align-items: center;
-      padding: 8px 16px;
+      padding: 12px 20px;
       background: #F5F5F5;
-      border-radius: 20px;
-      font-size: 13px;
+      border-radius: 24px;
+      font-size: 14px;
+      transition: all 0.2s;
     }
     .step.active {
-      background: #E3F2FD;
-      color: #1976D2;
-      font-weight: 500;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(30, 144, 255, 0.3);
     }
     .step.completed {
       background: #E8F5E9;
@@ -707,33 +768,39 @@ interface DialogData {
     }
 
     .step-indicator {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: #CCC;
-      margin-right: 8px;
+      margin-right: 10px;
     }
-    .step.active .step-indicator { background: #1976D2; }
+    .step.active .step-indicator { background: white; }
     .step.completed .step-indicator { background: #4CAF50; }
 
     /* Activity */
-    .activity-list { max-height: 200px; overflow-y: auto; }
+    .activity-list {
+      max-height: 250px;
+      overflow-y: auto;
+    }
 
     .activity-item {
       display: flex;
-      padding: 12px 0;
+      padding: 16px;
       border-bottom: 1px solid #EEE;
     }
     .activity-item mat-icon {
-      margin-right: 12px;
-      color: #666;
+      margin-right: 16px;
+      color: #1e90ff;
     }
-    .activity-desc { display: block; }
+    .activity-desc {
+      display: block;
+      font-size: 14px;
+    }
     .activity-meta {
       display: block;
       font-size: 12px;
       color: #999;
-      margin-top: 4px;
+      margin-top: 6px;
     }
 
     /* Documents */
@@ -741,26 +808,39 @@ interface DialogData {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 24px;
     }
 
-    .documents-table, .boq-table { width: 100%; }
+    .documents-table, .boq-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
 
     .empty-state {
       text-align: center;
-      padding: 48px;
+      padding: 64px;
       color: #999;
     }
     .empty-state mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #ccc;
+    }
+    .empty-state p {
+      font-size: 16px;
+      margin-top: 16px;
     }
 
     /* BOQ */
     .boq-summary {
       display: flex;
-      gap: 24px;
+      gap: 32px;
+      font-size: 15px;
+    }
+    .boq-summary strong {
+      color: #1a5fb4;
     }
 
     .below-cost { color: #F44336 !important; }
@@ -769,22 +849,29 @@ interface DialogData {
     .team-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
+      gap: 20px;
+    }
+
+    .team-role-card {
+      border-radius: 12px;
+      overflow: hidden;
     }
 
     .team-role-card mat-card-header mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: #1e90ff;
     }
 
-    .member-info { text-align: center; }
-    .member-name { display: block; font-weight: 500; margin-bottom: 8px; }
+    .member-info { text-align: center; padding: 16px 0; }
+    .member-name { display: block; font-weight: 600; font-size: 15px; margin-bottom: 12px; }
     .member-status {
       display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 12px;
+      padding: 6px 16px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
     }
     .member-status.status-pending { background: #FFF3E0; color: #E65100; }
     .member-status.status-inprogress { background: #E3F2FD; color: #1565C0; }
@@ -793,22 +880,71 @@ interface DialogData {
     .no-member {
       text-align: center;
       color: #999;
+      padding: 16px 0;
     }
 
-    /* Form */
-    .tender-form { padding: 24px; }
+    /* Form - Create/Edit Mode */
+    .tender-form {
+      padding: 32px;
+    }
 
     .form-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      align-items: start;
     }
 
-    .full-width { grid-column: 1 / -1; }
+    .form-grid mat-form-field {
+      width: 100%;
+    }
+
+    .form-grid h4 {
+      margin: 16px 0 8px 0;
+      color: #1a5fb4;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .form-grid mat-divider {
+      margin: 8px 0;
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .two-cols {
+      grid-column: span 2;
+    }
 
     mat-dialog-actions {
-      padding: 16px 24px;
+      padding: 20px 32px;
       border-top: 1px solid #E0E0E0;
+      background: #fafafa;
+    }
+
+    mat-dialog-actions button {
+      min-width: 120px;
+      padding: 8px 24px;
+    }
+
+    /* Material overrides */
+    ::ng-deep .mat-mdc-tab-labels {
+      background: #f5f5f5;
+    }
+
+    ::ng-deep .mat-mdc-tab.mdc-tab--active .mdc-tab__text-label {
+      color: #1e90ff;
+    }
+
+    ::ng-deep .mat-mdc-tab-body-wrapper {
+      flex: 1;
+    }
+
+    ::ng-deep .mdc-text-field--outlined {
+      --mdc-outlined-text-field-outline-color: #ccc;
+      --mdc-outlined-text-field-focus-outline-color: #1e90ff;
     }
   `]
 })
@@ -939,13 +1075,13 @@ export class TenderDetailDialogComponent {
 
     this.saving = true;
     const formValue = this.tenderForm.value;
-    const currentUser = this.authService.getCurrentUser();
+    const currentUser = this.authService.currentUserValue;
 
     if (this.data.mode === 'create') {
       this.tenderService.createTender({
         ...formValue,
-        createdByUserId: currentUser?.id,
-        createdByUserName: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined
+        createdByUserId: currentUser?.userId,
+        createdByUserName: currentUser ? `${currentUser.name} ${currentUser.surname}` : undefined
       }).subscribe({
         next: () => {
           this.snackBar.open('Tender created successfully', 'Close', { duration: 2000 });
@@ -959,8 +1095,8 @@ export class TenderDetailDialogComponent {
     } else {
       this.tenderService.updateTender(this.data.tender!.id, {
         ...formValue,
-        updatedByUserId: currentUser?.id,
-        updatedByUserName: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined
+        updatedByUserId: currentUser?.userId,
+        updatedByUserName: currentUser ? `${currentUser.name} ${currentUser.surname}` : undefined
       }).subscribe({
         next: () => {
           this.snackBar.open('Tender updated successfully', 'Close', { duration: 2000 });
@@ -981,14 +1117,14 @@ export class TenderDetailDialogComponent {
 
     const file = input.files[0];
     const type = prompt('Document type:', 'Submission') || 'Other';
-    const currentUser = this.authService.getCurrentUser();
+    const currentUser = this.authService.currentUserValue;
 
     this.tenderService.uploadDocument(
       this.data.tender.id,
       file,
       type,
-      currentUser?.id || 0,
-      currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined
+      currentUser?.userId || 0,
+      currentUser ? `${currentUser.name} ${currentUser.surname}` : undefined
     ).subscribe({
       next: (doc) => {
         this.data.tender!.documents = [...(this.data.tender!.documents || []), doc];
@@ -1076,13 +1212,13 @@ export class TenderDetailDialogComponent {
     if (!memberName) return;
 
     const memberRole = role || prompt('Role:', 'Technical') || 'Technical';
-    const currentUser = this.authService.getCurrentUser();
+    const currentUser = this.authService.currentUserValue;
 
     this.tenderService.addTeamMember(this.data.tender.id, {
       userName: memberName,
       role: memberRole,
-      assignedByUserId: currentUser?.id,
-      assignedByUserName: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined
+      assignedByUserId: currentUser?.userId,
+      assignedByUserName: currentUser ? `${currentUser.name} ${currentUser.surname}` : undefined
     }).subscribe({
       next: (member) => {
         this.data.tender!.teamMembers = [...(this.data.tender!.teamMembers || []), member];
@@ -1093,11 +1229,11 @@ export class TenderDetailDialogComponent {
   }
 
   updateMemberStatus(member: TenderTeamMember, status: string): void {
-    const currentUser = this.authService.getCurrentUser();
+    const currentUser = this.authService.currentUserValue;
     this.tenderService.updateTeamMember(member.id, {
       status,
-      updatedByUserId: currentUser?.id,
-      updatedByUserName: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined
+      updatedByUserId: currentUser?.userId,
+      updatedByUserName: currentUser ? `${currentUser.name} ${currentUser.surname}` : undefined
     }).subscribe({
       next: () => {
         member.status = status;

@@ -547,7 +547,7 @@ export class ComplianceDialogComponent {
 
     this.saving = true;
     const formValue = this.complianceForm.value;
-    const currentUser = this.authService.getCurrentUser();
+    const currentUser = this.authService.currentUserValue;
 
     if (this.data.mode === 'create') {
       const formData = new FormData();
@@ -558,8 +558,8 @@ export class ComplianceDialogComponent {
       formData.append('issueDate', formValue.issueDate.toISOString());
       formData.append('expiryDate', formValue.expiryDate.toISOString());
       if (formValue.notes) formData.append('notes', formValue.notes);
-      if (currentUser?.id) formData.append('uploadedByUserId', currentUser.id.toString());
-      if (currentUser) formData.append('uploadedByUserName', `${currentUser.firstName} ${currentUser.lastName}`);
+      if (currentUser?.userId) formData.append('uploadedByUserId', currentUser.userId.toString());
+      if (currentUser) formData.append('uploadedByUserName', `${currentUser.name} ${currentUser.surname}`);
       if (this.selectedFile) formData.append('file', this.selectedFile);
 
       this.tenderService.createComplianceDocument(formData).subscribe({

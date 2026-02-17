@@ -277,6 +277,115 @@ namespace ProjectTracker.API.Controllers
         }
 
         /// <summary>
+        /// Analyze a tender document with AI
+        /// </summary>
+        [HttpPost("analyze-document")]
+        public async Task<IActionResult> AnalyzeDocument([FromForm] IFormFile file, [FromForm] string prompt, [FromForm] string? context)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new { error = "No file uploaded" });
+                }
+
+                if (file.ContentType != "application/pdf")
+                {
+                    return BadRequest(new { error = "Only PDF files are supported" });
+                }
+
+                // Max file size: 50MB for tender documents
+                if (file.Length > 50 * 1024 * 1024)
+                {
+                    return BadRequest(new { error = "File size must be less than 50MB" });
+                }
+
+                // Extract text from PDF
+                var pdfText = await ExtractTextFromPdf(file);
+
+                if (string.IsNullOrWhiteSpace(pdfText))
+                {
+                    return BadRequest(new { error = "No text could be extracted from the PDF" });
+                }
+
+                // Allow more text for tender analysis (up to 8000 chars)
+                if (pdfText.Length > 8000)
+                {
+                    pdfText = pdfText.Substring(0, 8000) + "\n\n[Document truncated for analysis...]";
+                }
+
+                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
+                var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
+
+                // Build the analysis prompt
+                var systemPrompt = @"You are an expert tender document analyzer specializing in South African government procurement. 
+When analyzing tender documents, focus on:
+- Tender reference numbers and titles
+- Issuing organization/department
+- Key dates (closing date, briefing sessions, validity periods)
+- Required compliance documents (CSD, Tax Clearance, B-BBEE, CIDB, COIDA, etc.)
+- Mandatory requirements and specifications
+- Evaluation criteria and weightings
+- Budget/estimated values
+- Special conditions or requirements
+
+Format your responses clearly with sections and bullet points where appropriate.
+Be specific and extract actual values from the document when available.";
+
+                var userPrompt = $@"Document: {file.FileName}
+
+{prompt}
+
+--- TENDER DOCUMENT CONTENT ---
+{pdfText}";
+
+                string aiResponse;
+
+                if (useOllama)
+                {
+                    var messages = new List<OllamaMessage>
+                    {
+                        new OllamaMessage { Role = "system", Content = systemPrompt },
+                        new OllamaMessage { Role = "user", Content = userPrompt }
+                    };
+
+                    aiResponse = await _ollamaService.ChatAsync(messages);
+                }
+                else
+                {
+                    if (!_aiService.IsModelLoaded)
+                    {
+                        return Ok(new 
+                        { 
+                            response = "AI service is still loading. Please try again in a moment.",
+                            provider = "none"
+                        });
+                    }
+
+                    var messages = new List<ChatMessage>
+                    {
+                        new ChatMessage { Role = "user", Content = systemPrompt + "\n\n" + userPrompt }
+                    };
+
+                    aiResponse = await _aiService.ChatAsync(messages);
+                }
+
+                return Ok(new 
+                { 
+                    response = aiResponse,
+                    fileName = file.FileName,
+                    fileSize = file.Length,
+                    provider = useOllama ? "ollama" : "fallback"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error analyzing tender document");
+                return StatusCode(500, new { error = "Failed to analyze document", details = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Upload a PDF and get AI analysis
         /// </summary>
         [HttpPost("upload-pdf")]

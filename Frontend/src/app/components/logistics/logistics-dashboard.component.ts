@@ -1286,6 +1286,12 @@ interface SleepOut {
                                 <span>Assign Driver/Vehicle</span>
                               </button>
                             }
+                            @if (trip.driverName || trip.vehicleReg) {
+                              <button mat-menu-item (click)="reassignTripsheet(trip)">
+                                <mat-icon>swap_horiz</mat-icon>
+                                <span>Reassign Driver/Vehicle</span>
+                              </button>
+                            }
                             <button mat-menu-item (click)="printTripsheet(trip)">
                               <mat-icon>print</mat-icon>
                               <span>Print</span>
@@ -5853,6 +5859,51 @@ Notes: ${record.notes || 'No notes'}
           error: (err) => {
             console.error('Failed to assign tripsheet:', err);
             this.snackBar.open('Failed to assign driver/vehicle', 'Close', { duration: 3000 });
+          }
+        });
+      }
+    });
+  }
+
+  reassignTripsheet(trip: any): void {
+    // Filter out unavailable vehicles
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+    
+    // Use the ReassignLoadDialog for tripsheets too
+    const dialogRef = this.dialog.open(ReassignLoadDialog, {
+      width: '500px',
+      data: {
+        load: {
+          loadNumber: trip.tripNumber || trip.loadNumber || `TS-${trip.loadId || trip.id}`,
+          vehicleRegistration: trip.vehicleReg,
+          driverName: trip.driverName
+        },
+        vehicles: availableVehicles,
+        drivers: this.drivers()
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        const loadId = trip.loadId || trip.id;
+        const updateData: any = {};
+        
+        if (result.vehicleId !== null) {
+          updateData.vehicleId = result.vehicleId;
+        }
+        if (result.driverId !== null) {
+          updateData.driverId = result.driverId;
+        }
+
+        this.http.put(`${this.apiUrl}/logistics/tripsheet/${loadId}/assign`, updateData).subscribe({
+          next: () => {
+            this.loadTripsheets();
+            this.snackBar.open('Tripsheet reassigned successfully!', 'Close', { duration: 3000 });
+          },
+          error: (err) => {
+            console.error('Error reassigning tripsheet:', err);
+            this.snackBar.open('Failed to reassign tripsheet', 'Close', { duration: 3000 });
           }
         });
       }

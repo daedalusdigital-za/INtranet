@@ -178,7 +178,7 @@ export interface ComplianceSummary {
   providedIn: 'root'
 })
 export class TenderService {
-  private apiUrl = `${environment.apiUrl}/api`;
+  private apiUrl = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 

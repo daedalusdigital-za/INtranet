@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatTabsModule, MatTabGroup } from '@angular/material/tabs';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -29,6 +30,7 @@ import { TenderService, Tender, TenderStats, ComplianceDocument, ComplianceSumma
 import { AuthService } from '../../services/auth.service';
 import { TenderDetailDialogComponent } from './tender-detail-dialog.component';
 import { ComplianceDialogComponent } from './compliance-dialog.component';
+import { NavbarComponent } from '../shared/navbar/navbar.component';
 
 interface Company {
   code: string;
@@ -67,10 +69,41 @@ interface Company {
     MatDividerModule,
     CurrencyPipe,
     DatePipe,
-    DecimalPipe
+    DecimalPipe,
+    NavbarComponent
   ],
   template: `
+    <app-navbar></app-navbar>
     <div class="tenders-container">
+      <!-- Modern Header -->
+      <div class="modern-header">
+        <div class="header-main">
+          <div class="header-icon-wrapper">
+            <mat-icon>gavel</mat-icon>
+          </div>
+          <div class="header-text-area">
+            <h1>Tenders Management</h1>
+            <p class="header-subtitle">Track tenders, manage compliance, and monitor your bidding performance</p>
+          </div>
+        </div>
+        <div class="header-stats-row">
+          <div class="mini-stat">
+            <mat-icon>trending_up</mat-icon>
+            <div class="mini-stat-content">
+              <span class="mini-value">{{ stats?.winRate || 0 }}%</span>
+              <span class="mini-label">Win Rate</span>
+            </div>
+          </div>
+          <div class="mini-stat">
+            <mat-icon>attach_money</mat-icon>
+            <div class="mini-stat-content">
+              <span class="mini-value">{{ stats?.totalValueAwarded | currency:'ZAR':'symbol':'1.0-0' }}</span>
+              <span class="mini-label">Total Awarded</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Top Stats Widgets -->
       <div class="stats-row">
         <mat-card class="stat-card active" (click)="filterByStatus(null)">
@@ -349,7 +382,7 @@ interface Company {
           <ng-template mat-tab-label>
             <mat-icon class="tab-icon">verified_user</mat-icon>
             Compliance Vault
-            @if (stats?.complianceExpiring) {
+            @if (stats && stats.complianceExpiring) {
               <span class="badge warn">{{ stats.complianceExpiring }}</span>
             }
           </ng-template>
@@ -415,8 +448,11 @@ interface Company {
                               <mat-icon>more_vert</mat-icon>
                             </button>
                             <mat-menu #docMenu="matMenu">
+                              <button mat-menu-item (click)="previewComplianceDoc(doc)" [disabled]="!isPdfFile(doc)">
+                                <mat-icon>picture_as_pdf</mat-icon> Preview PDF
+                              </button>
                               <button mat-menu-item (click)="viewComplianceDoc(doc)">
-                                <mat-icon>visibility</mat-icon> View
+                                <mat-icon>visibility</mat-icon> View Details
                               </button>
                               <button mat-menu-item (click)="downloadComplianceDoc(doc)">
                                 <mat-icon>download</mat-icon> Download
@@ -498,125 +534,126 @@ interface Company {
           </div>
         </mat-tab>
 
-        <!-- Analytics Tab -->
+        <!-- AI Document Analyzer Tab -->
         <mat-tab>
           <ng-template mat-tab-label>
-            <mat-icon class="tab-icon">analytics</mat-icon>
-            Analytics
+            <mat-icon class="tab-icon">smart_toy</mat-icon>
+            AI Analyzer
           </ng-template>
           
           <div class="tab-content">
-            <div class="analytics-grid">
-              <!-- Win Rate Card -->
-              <mat-card class="analytics-card win-rate">
-                <mat-card-header>
-                  <mat-card-title>Win Rate YTD</mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                  <div class="big-stat">
-                    <span class="value">{{ stats?.winRate | number:'1.1-1' }}%</span>
-                    <mat-progress-bar mode="determinate" [value]="stats?.winRate || 0"></mat-progress-bar>
-                  </div>
-                  <div class="stat-breakdown">
-                    <div class="breakdown-item won">
-                      <span class="label">Won</span>
-                      <span class="value">{{ stats?.awardedYTD || 0 }}</span>
+            <div class="ai-analyzer-container">
+              <!-- Document Upload Section -->
+              <div class="upload-section">
+                <div class="upload-header">
+                  <mat-icon>description</mat-icon>
+                  <h3>Tender Document Analyzer</h3>
+                  <p>Upload a tender document (PDF) and ask AI questions about requirements, deadlines, and more</p>
+                </div>
+                
+                <div class="drop-zone" 
+                     [class.dragover]="isDragOver"
+                     [class.has-file]="analyzerDocument"
+                     (dragover)="onDragOver($event)"
+                     (dragleave)="onDragLeave($event)"
+                     (drop)="onFileDrop($event)"
+                     (click)="analyzerFileInput.click()">
+                  @if (!analyzerDocument) {
+                    <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                    <p class="drop-text">Drag & drop a PDF here or click to browse</p>
+                    <p class="drop-hint">Supports PDF files up to 50MB</p>
+                  } @else {
+                    <div class="file-info">
+                      <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
+                      <div class="file-details">
+                        <span class="file-name">{{ analyzerDocument.name }}</span>
+                        <span class="file-size">{{ formatFileSize(analyzerDocument.size) }}</span>
+                      </div>
+                      <button mat-icon-button (click)="removeAnalyzerDocument($event)" matTooltip="Remove file">
+                        <mat-icon>close</mat-icon>
+                      </button>
                     </div>
-                    <div class="breakdown-item lost">
-                      <span class="label">Lost</span>
-                      <span class="value">{{ stats?.lostYTD || 0 }}</span>
-                    </div>
-                  </div>
-                </mat-card-content>
-              </mat-card>
+                  }
+                </div>
+                <input #analyzerFileInput type="file" hidden accept=".pdf" (change)="onFileSelected($event)">
 
-              <!-- Value Summary -->
-              <mat-card class="analytics-card value-summary">
-                <mat-card-header>
-                  <mat-card-title>Value Summary</mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                  <div class="value-row">
-                    <span class="label">Total Submitted</span>
-                    <span class="value">{{ stats?.totalValueSubmitted | currency:'ZAR':'symbol':'1.0-0' }}</span>
-                  </div>
-                  <div class="value-row">
-                    <span class="label">Total Awarded</span>
-                    <span class="value highlight">{{ stats?.totalValueAwarded | currency:'ZAR':'symbol':'1.0-0' }}</span>
-                  </div>
-                </mat-card-content>
-              </mat-card>
+                @if (analyzerDocument && !documentAnalyzed) {
+                  <button mat-raised-button color="primary" class="analyze-btn" (click)="analyzeDocument()" [disabled]="analyzingDocument">
+                    @if (analyzingDocument) {
+                      <mat-spinner diameter="20"></mat-spinner>
+                      <span>Analyzing...</span>
+                    } @else {
+                      <mat-icon>psychology</mat-icon>
+                      <span>Analyze Document</span>
+                    }
+                  </button>
+                }
+              </div>
 
-              <!-- By Province -->
-              <mat-card class="analytics-card by-province">
-                <mat-card-header>
-                  <mat-card-title>By Province</mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                  @if (stats?.byProvince) {
-                    @for (item of getObjectEntries(stats.byProvince); track item[0]) {
-                      <div class="bar-row">
-                        <span class="label">{{ item[0] }}</span>
-                        <div class="bar-container">
-                          <div class="bar" [style.width.%]="getBarWidth(item[1], stats.byProvince)"></div>
+              <!-- Chat Section -->
+              @if (documentAnalyzed) {
+                <div class="chat-section">
+                  <div class="chat-header">
+                    <mat-icon>chat</mat-icon>
+                    <h4>Ask About This Document</h4>
+                  </div>
+                  
+                  <div class="chat-messages" #chatContainer>
+                    @for (message of analyzerMessages; track message.id) {
+                      <div class="message" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
+                        <div class="message-avatar">
+                          <mat-icon>{{ message.role === 'user' ? 'person' : 'smart_toy' }}</mat-icon>
                         </div>
-                        <span class="value">{{ item[1] }}</span>
+                        <div class="message-content">
+                          <div class="message-text" [innerHTML]="formatMessage(message.content)"></div>
+                          <span class="message-time">{{ message.timestamp | date:'HH:mm' }}</span>
+                        </div>
                       </div>
                     }
-                  }
-                </mat-card-content>
-              </mat-card>
+                    @if (aiThinking) {
+                      <div class="message assistant">
+                        <div class="message-avatar">
+                          <mat-icon>smart_toy</mat-icon>
+                        </div>
+                        <div class="message-content">
+                          <div class="typing-indicator">
+                            <span></span><span></span><span></span>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  </div>
 
-              <!-- By Status -->
-              <mat-card class="analytics-card by-status">
-                <mat-card-header>
-                  <mat-card-title>By Status</mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                  @if (stats?.byStatus) {
-                    @for (item of getObjectEntries(stats.byStatus); track item[0]) {
-                      <div class="status-row">
-                        <span class="status-chip" [style.background-color]="getStatusColor(item[0])">{{ item[0] }}</span>
-                        <span class="value">{{ item[1] }}</span>
-                      </div>
-                    }
-                  }
-                </mat-card-content>
-              </mat-card>
+                  <div class="quick-questions">
+                    <span class="quick-label">Quick questions:</span>
+                    <button mat-stroked-button (click)="askQuickQuestion('What documents are required for this tender?')">
+                      Required Documents
+                    </button>
+                    <button mat-stroked-button (click)="askQuickQuestion('What is the closing date and time?')">
+                      Closing Date
+                    </button>
+                    <button mat-stroked-button (click)="askQuickQuestion('What are the mandatory requirements?')">
+                      Mandatory Requirements
+                    </button>
+                    <button mat-stroked-button (click)="askQuickQuestion('Summarize the key evaluation criteria')">
+                      Evaluation Criteria
+                    </button>
+                  </div>
 
-              <!-- By Company -->
-              <mat-card class="analytics-card by-company">
-                <mat-card-header>
-                  <mat-card-title>By Company</mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                  @if (stats?.byCompany) {
-                    @for (item of getObjectEntries(stats.byCompany); track item[0]) {
-                      <div class="company-row">
-                        <span class="company-chip" [style.background-color]="getCompanyColor(item[0])">{{ item[0] }}</span>
-                        <span class="value">{{ item[1] }} tenders</span>
-                      </div>
-                    }
-                  }
-                </mat-card-content>
-              </mat-card>
-
-              <!-- By Department -->
-              <mat-card class="analytics-card by-department">
-                <mat-card-header>
-                  <mat-card-title>Top Departments</mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                  @if (stats?.byDepartment) {
-                    @for (item of getTopEntries(stats.byDepartment, 5); track item[0]) {
-                      <div class="dept-row">
-                        <span class="label">{{ item[0] }}</span>
-                        <span class="value">{{ item[1] }}</span>
-                      </div>
-                    }
-                  }
-                </mat-card-content>
-              </mat-card>
+                  <div class="chat-input">
+                    <mat-form-field appearance="outline" class="message-input">
+                      <mat-label>Ask a question about the tender...</mat-label>
+                      <input matInput [(ngModel)]="analyzerQuestion" 
+                             (keyup.enter)="sendAnalyzerQuestion()"
+                             [disabled]="aiThinking"
+                             placeholder="e.g., What BBBEE level is required?">
+                    </mat-form-field>
+                    <button mat-fab color="primary" (click)="sendAnalyzerQuestion()" [disabled]="!analyzerQuestion || aiThinking">
+                      <mat-icon>send</mat-icon>
+                    </button>
+                  </div>
+                </div>
+              }
             </div>
           </div>
         </mat-tab>
@@ -624,12 +661,112 @@ interface Company {
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
+      position: relative;
+      z-index: 1;
+    }
+
     .tenders-container {
       padding: 24px;
+      padding-top: 88px;
       max-width: 1600px;
       margin: 0 auto;
-      background: #f5f5f5;
       min-height: calc(100vh - 64px);
+      position: relative;
+    }
+
+    /* Modern Header Styles */
+    .modern-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+
+    .header-main {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .header-icon-wrapper {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .header-icon-wrapper mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: white;
+    }
+
+    .header-text-area h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-subtitle {
+      margin: 4px 0 0 0;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 15px;
+      font-weight: 400;
+    }
+
+    .header-stats-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .mini-stat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      padding: 12px 20px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .mini-stat mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: white;
+    }
+
+    .mini-stat-content {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mini-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .mini-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
     }
 
     /* Stats Row */
@@ -647,15 +784,19 @@ interface Company {
       cursor: pointer;
       transition: all 0.3s ease;
       border-left: 4px solid transparent;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     }
 
     .stat-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
     }
 
-    .stat-card.active { border-left-color: #2196F3; }
-    .stat-card.active .stat-icon { color: #2196F3; }
+    .stat-card.active { border-left-color: #1e90ff; }
+    .stat-card.active .stat-icon { color: #1e90ff; }
     .stat-card.closing { border-left-color: #FF9800; }
     .stat-card.closing .stat-icon { color: #FF9800; }
     .stat-card.compliance { border-left-color: #F44336; }
@@ -675,6 +816,7 @@ interface Company {
       font-size: 32px;
       font-weight: 700;
       line-height: 1;
+      color: #1a1a2e;
     }
 
     .stat-label {
@@ -690,7 +832,67 @@ interface Company {
       margin-bottom: 24px;
     }
 
+    .quick-actions button {
+      background: rgba(255, 255, 255, 0.2) !important;
+      backdrop-filter: blur(10px);
+      color: white !important;
+      border: 1px solid rgba(255, 255, 255, 0.3) !important;
+      border-radius: 12px !important;
+      padding: 8px 20px !important;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .quick-actions button:hover {
+      background: rgba(255, 255, 255, 0.3) !important;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .quick-actions button[color="primary"] {
+      background: white !important;
+      color: #1e90ff !important;
+    }
+
+    .quick-actions button[color="primary"]:hover {
+      background: #f0f8ff !important;
+    }
+
     /* Tabs */
+    ::ng-deep .mat-mdc-tab-group {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    ::ng-deep .mat-mdc-tab-header {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      border-radius: 20px 20px 0 0;
+    }
+
+    ::ng-deep .mat-mdc-tab-labels {
+      background: transparent;
+    }
+
+    ::ng-deep .mat-mdc-tab {
+      color: rgba(255, 255, 255, 0.8) !important;
+      font-weight: 500;
+    }
+
+    ::ng-deep .mat-mdc-tab.mdc-tab--active {
+      color: white !important;
+    }
+
+    ::ng-deep .mat-mdc-tab-body-wrapper {
+      padding: 24px;
+    }
+
+    ::ng-deep .mdc-tab-indicator__content--underline {
+      border-color: white !important;
+    }
+
     .tab-icon { margin-right: 8px; }
     .badge {
       margin-left: 8px;
@@ -700,12 +902,16 @@ interface Company {
     }
     .badge.warn { background: #F44336; color: white; }
 
-    .tab-content { padding: 24px 0; }
+    .tab-content { padding: 0; }
 
     /* Filter Card */
     .filter-card {
       margin-bottom: 16px;
-      padding: 16px;
+      padding: 20px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: none;
     }
 
     .filter-row {
@@ -716,6 +922,10 @@ interface Company {
     }
 
     .filter-row mat-form-field { flex: 1; min-width: 150px; }
+
+    ::ng-deep .filter-card .mat-mdc-form-field-subscript-wrapper {
+      display: none;
+    }
 
     .company-badge {
       display: inline-block;
@@ -734,25 +944,39 @@ interface Company {
     }
 
     /* Table */
-    .table-card { overflow: hidden; }
+    .table-card { 
+      overflow: hidden;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: none;
+    }
 
     .tenders-table {
       width: 100%;
     }
 
     .tenders-table tr { cursor: pointer; }
-    .tenders-table tr:hover { background: #f5f5f5; }
+    .tenders-table tr:hover { background: #f0f8ff; }
+
+    ::ng-deep .tenders-table .mat-mdc-header-row {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
+    ::ng-deep .tenders-table .mat-mdc-header-cell {
+      color: white !important;
+      font-weight: 600;
+    }
 
     .company-chip {
       padding: 4px 10px;
-      border-radius: 4px;
+      border-radius: 8px;
       color: white;
       font-weight: 500;
       font-size: 12px;
     }
 
     .tender-link {
-      color: #1976D2;
+      color: #1e90ff;
       cursor: pointer;
       font-weight: 500;
     }
@@ -782,17 +1006,18 @@ interface Company {
     .days-left { font-size: 12px; color: #666; }
 
     .status-chip {
-      padding: 4px 12px;
-      border-radius: 16px;
+      padding: 6px 14px;
+      border-radius: 20px;
       color: white;
       font-size: 12px;
       font-weight: 500;
     }
 
     .workflow-badge {
-      padding: 4px 8px;
-      border-radius: 4px;
+      padding: 4px 10px;
+      border-radius: 8px;
       font-size: 11px;
+      font-weight: 500;
       background: #E0E0E0;
     }
     .workflow-draft { background: #E3F2FD; color: #1565C0; }
@@ -827,9 +1052,19 @@ interface Company {
       align-items: center;
       padding: 24px;
       text-align: center;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      transition: all 0.3s ease;
     }
+
+    .compliance-stat:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+    }
+
     .compliance-stat mat-icon { font-size: 40px; width: 40px; height: 40px; }
-    .compliance-stat .value { font-size: 36px; font-weight: 700; margin: 8px 0; }
+    .compliance-stat .value { font-size: 36px; font-weight: 700; margin: 8px 0; color: #1a1a2e; }
     .compliance-stat .label { color: #666; }
 
     .compliance-stat.valid mat-icon { color: #4CAF50; }
@@ -845,12 +1080,14 @@ interface Company {
 
     .compliance-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 16px;
     }
 
     .company-compliance-card {
       border-top: 4px solid #E0E0E0;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
     }
 
     .company-indicator {
@@ -916,6 +1153,8 @@ interface Company {
     /* Calendar Tab */
     .calendar-card {
       overflow: hidden;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
     }
 
     .calendar-card mat-card-header {
@@ -924,6 +1163,13 @@ interface Company {
       align-items: center;
       flex-wrap: wrap;
       gap: 16px;
+      padding: 20px;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      color: white;
+    }
+
+    .calendar-card mat-card-header mat-card-title {
+      color: white;
     }
 
     .calendar-legend {
@@ -936,6 +1182,7 @@ interface Company {
       display: flex;
       align-items: center;
       gap: 4px;
+      color: rgba(255, 255, 255, 0.9);
     }
     .legend-item .dot {
       width: 10px;
@@ -943,7 +1190,7 @@ interface Company {
       border-radius: 50%;
     }
     .legend-item.closing .dot { background: #F44336; }
-    .legend-item.briefing .dot { background: #2196F3; }
+    .legend-item.briefing .dot { background: #64B5F6; }
     .legend-item.site-visit .dot { background: #4CAF50; }
     .legend-item.clarification .dot { background: #FF9800; }
     .legend-item.evaluation .dot { background: #9C27B0; }
@@ -954,14 +1201,16 @@ interface Company {
       gap: 1px;
       background: #E0E0E0;
       border: 1px solid #E0E0E0;
+      border-radius: 0 0 16px 16px;
+      overflow: hidden;
     }
 
     .day-header {
-      background: #F5F5F5;
+      background: #F8F9FA;
       padding: 12px;
       text-align: center;
-      font-weight: 500;
-      color: #666;
+      font-weight: 600;
+      color: #1e90ff;
     }
 
     .calendar-day {
@@ -969,11 +1218,13 @@ interface Company {
       min-height: 100px;
       padding: 8px;
       position: relative;
+      transition: all 0.2s ease;
     }
+    .calendar-day:hover { background: #f0f8ff; }
     .calendar-day.other-month { background: #FAFAFA; }
     .calendar-day.other-month .day-number { color: #CCC; }
     .calendar-day.today { background: #E3F2FD; }
-    .calendar-day.today .day-number { color: #1976D2; font-weight: 700; }
+    .calendar-day.today .day-number { color: #1e90ff; font-weight: 700; }
 
     .day-number {
       font-size: 14px;
@@ -1016,18 +1267,47 @@ interface Company {
       gap: 16px;
     }
 
-    .analytics-card { padding: 16px; }
+    .analytics-card { 
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      background: white;
+    }
+
+    ::ng-deep .analytics-card mat-card-header {
+      border-bottom: 1px solid #eee;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+
+    ::ng-deep .analytics-card mat-card-title {
+      color: #1a1a2e;
+      font-size: 16px;
+      font-weight: 600;
+    }
 
     .big-stat {
       text-align: center;
       margin: 24px 0;
     }
     .big-stat .value {
-      font-size: 48px;
+      font-size: 56px;
       font-weight: 700;
-      color: #1976D2;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    .big-stat mat-progress-bar { margin-top: 16px; }
+    .big-stat mat-progress-bar { margin-top: 16px; border-radius: 8px; }
+
+    ::ng-deep .big-stat .mat-mdc-progress-bar {
+      height: 8px;
+      border-radius: 8px;
+    }
+
+    ::ng-deep .big-stat .mdc-linear-progress__bar-inner {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
 
     .stat-breakdown {
       display: flex;
@@ -1057,17 +1337,17 @@ interface Company {
     .bar-row .label { width: 60px; font-size: 12px; }
     .bar-container {
       flex: 1;
-      height: 20px;
+      height: 24px;
       background: #EEE;
-      border-radius: 10px;
+      border-radius: 12px;
       margin: 0 8px;
       overflow: hidden;
     }
     .bar {
       height: 100%;
-      background: linear-gradient(90deg, #2196F3, #1976D2);
-      border-radius: 10px;
-      transition: width 0.3s ease;
+      background: linear-gradient(90deg, #1e90ff, #4169e1);
+      border-radius: 12px;
+      transition: width 0.5s ease;
     }
     .bar-row .value { width: 30px; text-align: right; font-weight: 600; }
 
@@ -1075,15 +1355,314 @@ interface Company {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 0;
+      padding: 10px 0;
       border-bottom: 1px solid #EEE;
     }
     .status-row .value, .company-row .value, .dept-row .value { font-weight: 600; }
 
+    /* AI Document Analyzer Styles */
+    .ai-analyzer-container {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .upload-section {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+
+    .upload-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .upload-header mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #1e90ff;
+    }
+
+    .upload-header h3 {
+      margin: 12px 0 8px 0;
+      font-size: 24px;
+      color: #1a1a2e;
+    }
+
+    .upload-header p {
+      color: #666;
+      margin: 0;
+    }
+
+    .drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 16px;
+      padding: 48px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: #fafafa;
+    }
+
+    .drop-zone:hover {
+      border-color: #1e90ff;
+      background: #f0f7ff;
+    }
+
+    .drop-zone.dragover {
+      border-color: #1e90ff;
+      background: #e3f2fd;
+      transform: scale(1.02);
+    }
+
+    .drop-zone.has-file {
+      border-style: solid;
+      border-color: #4CAF50;
+      background: #E8F5E9;
+      padding: 24px;
+    }
+
+    .upload-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #ccc;
+    }
+
+    .drop-zone:hover .upload-icon {
+      color: #1e90ff;
+    }
+
+    .drop-text {
+      font-size: 18px;
+      color: #666;
+      margin: 16px 0 8px 0;
+    }
+
+    .drop-hint {
+      font-size: 13px;
+      color: #999;
+      margin: 0;
+    }
+
+    .file-info {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .pdf-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #F44336;
+    }
+
+    .file-details {
+      text-align: left;
+    }
+
+    .file-name {
+      display: block;
+      font-weight: 600;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .file-size {
+      display: block;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .analyze-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 24px auto 0;
+      padding: 12px 32px;
+      font-size: 16px;
+    }
+
+    .analyze-btn mat-spinner {
+      margin-right: 8px;
+    }
+
+    /* Chat Section */
+    .chat-section {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 600px;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      color: white;
+    }
+
+    .chat-header h4 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: #f8f9fa;
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 80%;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .message.assistant .message-avatar {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      color: white;
+    }
+
+    .message.user .message-avatar {
+      background: #E0E0E0;
+      color: #666;
+    }
+
+    .message-content {
+      background: white;
+      padding: 12px 16px;
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .message.user .message-content {
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      color: white;
+    }
+
+    .message-text {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .message-text ul, .message-text ol {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .message-text li {
+      margin: 4px 0;
+    }
+
+    .message-time {
+      display: block;
+      font-size: 11px;
+      color: #999;
+      margin-top: 6px;
+    }
+
+    .message.user .message-time {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 8px 0;
+    }
+
+    .typing-indicator span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #1e90ff;
+      animation: typing 1.4s infinite ease-in-out;
+    }
+
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-8px); opacity: 1; }
+    }
+
+    .quick-questions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 24px;
+      background: #f0f0f0;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .quick-label {
+      font-size: 12px;
+      color: #666;
+      align-self: center;
+      margin-right: 8px;
+    }
+
+    .quick-questions button {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 16px;
+    }
+
+    .chat-input {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 24px;
+      background: white;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .message-input {
+      flex: 1;
+    }
+
+    ::ng-deep .message-input .mat-mdc-form-field-subscript-wrapper {
+      display: none;
+    }
+
     @media (max-width: 1200px) {
       .stats-row { grid-template-columns: repeat(3, 1fr); }
       .compliance-grid { grid-template-columns: repeat(2, 1fr); }
-      .analytics-grid { grid-template-columns: repeat(2, 1fr); }
+      .modern-header { flex-direction: column; align-items: flex-start; }
     }
 
     @media (max-width: 768px) {
@@ -1092,6 +1671,18 @@ interface Company {
       .compliance-summary { grid-template-columns: repeat(2, 1fr); }
       .compliance-grid { grid-template-columns: 1fr; }
       .analytics-grid { grid-template-columns: 1fr; }
+      .header-text-area h1 { font-size: 24px; }
+      .header-icon-wrapper { width: 56px; height: 56px; }
+      .header-icon-wrapper mat-icon { font-size: 32px; width: 32px; height: 32px; }
+      .header-stats-row { width: 100%; }
+      .mini-stat { flex: 1; justify-content: center; }
+    }
+
+    @media (max-width: 480px) {
+      .stats-row { grid-template-columns: 1fr; }
+      .compliance-summary { grid-template-columns: 1fr; }
+      .quick-actions { flex-wrap: wrap; }
+      .quick-actions button { flex: 1; min-width: 120px; }
     }
   `]
 })
@@ -1127,7 +1718,8 @@ export class TendersComponent implements OnInit, OnDestroy {
   companies: Company[] = [
     { code: 'PMT', name: 'Promed Tech', color: '#1976D2' },
     { code: 'SBT', name: 'Sebenzani', color: '#4CAF50' },
-    { code: 'ACM', name: 'Access Medical', color: '#9C27B0' }
+    { code: 'ACM', name: 'Access Medical', color: '#9C27B0' },
+    { code: 'PHT', name: 'Pharatech', color: '#FF5722' }
   ];
 
   provinces = ['KZN', 'WC', 'EC', 'GP', 'FS', 'NC', 'NW', 'LP', 'MP'];
@@ -1157,11 +1749,21 @@ export class TendersComponent implements OnInit, OnDestroy {
     { value: 'ISO', label: 'ISO Certification', icon: 'stars' }
   ];
 
+  // AI Document Analyzer
+  analyzerDocument: File | null = null;
+  analyzerMessages: { id: number; role: 'user' | 'assistant'; content: string; timestamp: Date }[] = [];
+  isDragOver = false;
+  documentAnalyzed = false;
+  analyzingDocument = false;
+  aiThinking = false;
+  analyzerQuestion = '';
+
   constructor(
     private tenderService: TenderService,
     private authService: AuthService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
@@ -1346,8 +1948,10 @@ export class TendersComponent implements OnInit, OnDestroy {
   // Dialog methods
   openCreateTender(): void {
     const dialogRef = this.dialog.open(TenderDetailDialogComponent, {
-      width: '900px',
-      maxHeight: '90vh',
+      width: '95vw',
+      maxWidth: '1600px',
+      maxHeight: '95vh',
+      panelClass: 'tender-dialog-panel',
       data: { mode: 'create', companies: this.companies, provinces: this.provinces, departments: this.departments }
     });
 
@@ -1358,8 +1962,10 @@ export class TendersComponent implements OnInit, OnDestroy {
 
   openTenderDetail(tender: Tender): void {
     const dialogRef = this.dialog.open(TenderDetailDialogComponent, {
-      width: '1000px',
-      maxHeight: '90vh',
+      width: '95vw',
+      maxWidth: '1600px',
+      maxHeight: '95vh',
+      panelClass: 'tender-dialog-panel',
       data: { mode: 'view', tender, companies: this.companies, provinces: this.provinces, departments: this.departments }
     });
 
@@ -1370,8 +1976,10 @@ export class TendersComponent implements OnInit, OnDestroy {
 
   editTender(tender: Tender): void {
     const dialogRef = this.dialog.open(TenderDetailDialogComponent, {
-      width: '900px',
-      maxHeight: '90vh',
+      width: '95vw',
+      maxWidth: '1600px',
+      maxHeight: '95vh',
+      panelClass: 'tender-dialog-panel',
       data: { mode: 'edit', tender, companies: this.companies, provinces: this.provinces, departments: this.departments }
     });
 
@@ -1435,6 +2043,28 @@ export class TendersComponent implements OnInit, OnDestroy {
     });
   }
 
+  previewComplianceDoc(doc: ComplianceDocument): void {
+    if (!doc.fileName) {
+      this.snackBar.open('No file uploaded for this document', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.tenderService.downloadComplianceDocument(doc.id).subscribe({
+      next: (blob) => {
+        // Create a blob URL and open in new tab
+        const fileURL = window.URL.createObjectURL(blob);
+        window.open(fileURL, '_blank');
+      },
+      error: () => this.snackBar.open('Error loading document preview', 'Close', { duration: 3000 })
+    });
+  }
+
+  isPdfFile(doc: ComplianceDocument): boolean {
+    if (!doc.fileName) return false;
+    const ext = doc.fileName.toLowerCase();
+    return ext.endsWith('.pdf') || doc.mimeType === 'application/pdf';
+  }
+
   editComplianceDoc(doc: ComplianceDocument): void {
     const dialogRef = this.dialog.open(ComplianceDialogComponent, {
       width: '600px',
@@ -1468,5 +2098,152 @@ export class TendersComponent implements OnInit, OnDestroy {
       },
       error: () => this.snackBar.open('Error checking alerts', 'Close', { duration: 3000 })
     });
+  }
+
+  // AI Document Analyzer Methods
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = true;
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+  }
+
+  onFileDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type === 'application/pdf') {
+        this.analyzerDocument = file;
+        this.documentAnalyzed = false;
+        this.analyzerMessages = [];
+      } else {
+        this.snackBar.open('Please upload a PDF file', 'Close', { duration: 3000 });
+      }
+    }
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      if (file.type === 'application/pdf') {
+        this.analyzerDocument = file;
+        this.documentAnalyzed = false;
+        this.analyzerMessages = [];
+      } else {
+        this.snackBar.open('Please upload a PDF file', 'Close', { duration: 3000 });
+      }
+    }
+  }
+
+  removeAnalyzerDocument(event: Event): void {
+    event.stopPropagation();
+    this.analyzerDocument = null;
+    this.documentAnalyzed = false;
+    this.analyzerMessages = [];
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  analyzeDocument(): void {
+    if (!this.analyzerDocument) return;
+
+    this.analyzingDocument = true;
+    console.log('Starting document analysis...', this.analyzerDocument.name, this.analyzerDocument.size);
+    
+    // Create FormData and send to AI service
+    const formData = new FormData();
+    formData.append('file', this.analyzerDocument);
+    formData.append('prompt', 'Analyze this tender document and provide a summary including: 1) The tender title and reference number, 2) The issuing entity, 3) Key dates (closing date, validity period, briefing sessions), 4) Required documents and compliance requirements, 5) Estimated value or budget, 6) Key evaluation criteria. Format your response clearly with sections.');
+
+    console.log('Sending request to /api/aichat/analyze-document');
+    this.http.post<{ response: string }>('/api/aichat/analyze-document', formData).subscribe({
+      next: (result) => {
+        console.log('Analysis complete:', result);
+        this.analyzingDocument = false;
+        this.documentAnalyzed = true;
+        this.analyzerMessages = [{
+          id: 1,
+          role: 'assistant',
+          content: result.response,
+          timestamp: new Date()
+        }];
+      },
+      error: (err) => {
+        console.error('Analysis error:', err);
+        this.analyzingDocument = false;
+        this.snackBar.open('Error analyzing document: ' + (err.error?.error || err.message || 'Unknown error'), 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  sendAnalyzerQuestion(): void {
+    if (!this.analyzerQuestion.trim() || !this.documentAnalyzed) return;
+
+    const question = this.analyzerQuestion.trim();
+    this.analyzerQuestion = '';
+
+    // Add user message
+    this.analyzerMessages.push({
+      id: this.analyzerMessages.length + 1,
+      role: 'user',
+      content: question,
+      timestamp: new Date()
+    });
+
+    this.aiThinking = true;
+
+    // Send question to AI with document context
+    const formData = new FormData();
+    if (this.analyzerDocument) {
+      formData.append('file', this.analyzerDocument);
+    }
+    formData.append('prompt', question);
+    formData.append('context', JSON.stringify(this.analyzerMessages.slice(0, -1)));
+
+    this.http.post<{ response: string }>('/api/aichat/analyze-document', formData).subscribe({
+      next: (result) => {
+        this.aiThinking = false;
+        this.analyzerMessages.push({
+          id: this.analyzerMessages.length + 1,
+          role: 'assistant',
+          content: result.response,
+          timestamp: new Date()
+        });
+      },
+      error: () => {
+        this.aiThinking = false;
+        this.snackBar.open('Error getting response. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  askQuickQuestion(question: string): void {
+    this.analyzerQuestion = question;
+    this.sendAnalyzerQuestion();
+  }
+
+  formatMessage(content: string): string {
+    // Convert markdown-like formatting to HTML
+    return content
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n- /g, '<br>• ')
+      .replace(/\n\d+\. /g, (match) => '<br>' + match.trim() + ' ')
+      .replace(/\n/g, '<br>');
   }
 }
