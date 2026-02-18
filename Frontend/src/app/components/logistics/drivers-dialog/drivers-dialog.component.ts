@@ -107,7 +107,7 @@ interface Driver {
               </div>
               <div class="detail-item">
                 <span class="detail-label">Status</span>
-                <span class="status-badge" [class]="viewingDriver.status?.toLowerCase()">{{ viewingDriver.status || 'Active' }}</span>
+                <span class="status-badge" [class]="(viewingDriver.status || 'active').toLowerCase()">{{ viewingDriver.status || 'Active' }}</span>
               </div>
             </div>
             <div class="detail-row">

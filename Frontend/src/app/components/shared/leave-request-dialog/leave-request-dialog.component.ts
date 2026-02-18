@@ -104,8 +104,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
             @if (isSubmitting) {
               <mat-spinner diameter="20"></mat-spinner>
             } @else {
-              <mat-icon>send</mat-icon>
-              Submit Request
+              <ng-container><mat-icon>send</mat-icon> Submit Request</ng-container>
             }
           </button>
         </div>

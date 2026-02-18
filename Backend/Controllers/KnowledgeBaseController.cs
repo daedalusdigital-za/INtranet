@@ -7,6 +7,7 @@ namespace ProjectTracker.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class KnowledgeBaseController : ControllerBase
     {
         private readonly IKnowledgeBaseService _kbService;

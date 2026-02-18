@@ -28,6 +28,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { environment } from '../../../environments/environment';
 
 // Company definitions
@@ -238,20 +239,127 @@ interface CancellationStats {
             <mat-icon>warning</mat-icon>
             <span>Attention</span>
           </button>
-          <button class="action-btn primary" (click)="openCustomerDialog()">
-            <mat-icon>person_add</mat-icon>
-            <span>Add Customer</span>
+          <button class="action-btn primary" (click)="promptImportPassword('customers')">
+            <mat-icon>group_add</mat-icon>
+            <span>Import Customers</span>
           </button>
           <button class="action-btn accent" (click)="openInvoiceDialog()">
             <mat-icon>receipt</mat-icon>
             <span>Capture Invoice</span>
           </button>
-          <button class="action-btn outline" (click)="syncFromERP()">
-            <mat-icon>sync</mat-icon>
-            <span>Sync ERP</span>
+          <button class="action-btn import" (click)="promptImportPassword('sales')">
+            <mat-icon>upload_file</mat-icon>
+            <span>Import Sales</span>
           </button>
         </div>
       </div>
+
+      <!-- Password Protection Dialog -->
+      @if (showImportPasswordDialog) {
+        <div class="dialog-overlay" (click)="closeImportPasswordDialog()">
+          <div class="import-password-dialog" (click)="$event.stopPropagation()">
+            <div class="password-dialog-header">
+              <div class="password-icon-circle" [style.background]="pendingImportType === 'customers' ? 'linear-gradient(135deg, #1e88e5 0%, #1565c0 100%)' : 'linear-gradient(135deg, #43a047 0%, #2e7d32 100%)'">
+                <mat-icon>{{ pendingImportType === 'customers' ? 'group_add' : 'lock' }}</mat-icon>
+              </div>
+              <h2>Import Authentication</h2>
+              <p>Enter the access code to import {{ pendingImportType === 'customers' ? 'customers' : 'sales transactions' }}</p>
+            </div>
+            <div class="password-dialog-body">
+              <div class="pin-input-group">
+                @for (i of [0, 1, 2, 3]; track i) {
+                  <input
+                    type="password"
+                    maxlength="1"
+                    class="pin-digit"
+                    [class.filled]="importPasswordDigits()[i]"
+                    [class.error]="importPasswordError()"
+                    [value]="importPasswordDigits()[i] || ''"
+                    (input)="onPinInput($event, i)"
+                    (keydown)="onPinKeydown($event, i)"
+                    (paste)="onPinPaste($event)"
+                    [attr.data-pin-index]="i"
+                  />
+                }
+              </div>
+              @if (importPasswordError()) {
+                <div class="password-error">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>Incorrect access code. Please try again.</span>
+                </div>
+              }
+            </div>
+            <div class="password-dialog-actions">
+              <button class="dialog-btn cancel" (click)="closeImportPasswordDialog()">Cancel</button>
+              <button class="dialog-btn submit" (click)="verifyImportPassword()" [disabled]="importPasswordDigits().join('').length < 4">Verify</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Hidden file inputs for import -->
+      <input
+        type="file"
+        id="salesFileInput"
+        style="display: none"
+        accept=".xlsx,.xls"
+        (change)="onImportFileSelected($event)"
+      />
+      <input
+        type="file"
+        id="customerFileInput"
+        style="display: none"
+        accept=".xlsx,.xls"
+        (change)="onCustomerFileSelected($event)"
+      />
+
+      <!-- Customer Import Result Dialog -->
+      @if (showCustomerImportResult && customerImportResult) {
+        <div class="import-result-overlay" (click)="closeCustomerImportResult()">
+          <div class="import-result-dialog" (click)="$event.stopPropagation()">
+            <div class="import-result-header" [class.success]="customerImportResult.success" [class.error]="!customerImportResult.success">
+              <mat-icon>{{ customerImportResult.success ? 'check_circle' : 'error' }}</mat-icon>
+              <h3>Customer Import {{ customerImportResult.success ? 'Complete' : 'Failed' }}</h3>
+              <button mat-icon-button (click)="closeCustomerImportResult()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="import-result-body">
+              <div class="import-stats-grid">
+                <div class="import-stat">
+                  <span class="stat-number">{{ customerImportResult.totalRecords }}</span>
+                  <span class="stat-label">Total Records</span>
+                </div>
+                <div class="import-stat created">
+                  <span class="stat-number">{{ customerImportResult.created }}</span>
+                  <span class="stat-label">Created</span>
+                </div>
+                <div class="import-stat updated">
+                  <span class="stat-number">{{ customerImportResult.updated }}</span>
+                  <span class="stat-label">Updated</span>
+                </div>
+                <div class="import-stat failed">
+                  <span class="stat-number">{{ customerImportResult.failed }}</span>
+                  <span class="stat-label">Failed</span>
+                </div>
+              </div>
+              @if (customerImportResult.errors && customerImportResult.errors.length > 0) {
+                <div class="import-errors-section">
+                  <h4><mat-icon>warning</mat-icon> Errors</h4>
+                  <div class="import-errors-list">
+                    @for (error of customerImportResult.errors; track error) {
+                      <div class="import-error-item">{{ error }}</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+            <div class="import-result-footer">
+              <button mat-raised-button color="primary" (click)="closeCustomerImportResult()">Close</button>
+            </div>
+          </div>
+        </div>
+      }
 
       <!-- Company Sales Comparison - Business Day Comparison -->
       <div class="company-sales-section">
@@ -505,8 +613,8 @@ interface CancellationStats {
                       }
                     </mat-select>
                   </mat-form-field>
-                  <button mat-raised-button color="primary" (click)="openCustomerDialog()">
-                    <mat-icon>add</mat-icon> Add Customer
+                  <button mat-raised-button color="primary" (click)="promptImportPassword('customers')">
+                    <mat-icon>group_add</mat-icon> Import Customers
                   </button>
                 </div>
               </div>
@@ -1120,7 +1228,7 @@ interface CancellationStats {
                           <mat-spinner diameter="18"></mat-spinner>
                           Geocoding {{ geocodeProgress }}...
                         } @else {
-                          <mat-icon>my_location</mat-icon> Geocode All ({{ customersWithoutLocation().length }})
+                          <ng-container><mat-icon>my_location</mat-icon> Geocode All ({{ customersWithoutLocation().length }})</ng-container>
                         }
                       </button>
                     </div>
@@ -1548,6 +1656,17 @@ interface CancellationStats {
       transform: translateY(-2px);
     }
 
+    .action-btn.import {
+      background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(46, 125, 50, 0.3);
+    }
+
+    .action-btn.import:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(46, 125, 50, 0.4);
+    }
+
     .action-btn.outline {
       background: transparent;
       color: white;
@@ -1557,6 +1676,348 @@ interface CancellationStats {
     .action-btn.outline:hover {
       background: rgba(255, 255, 255, 0.1);
       border-color: white;
+    }
+
+    /* Import Password Dialog */
+    .dialog-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1100;
+    }
+
+    .import-password-dialog {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      width: 400px;
+      max-width: 90vw;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+      animation: dialogSlideIn 0.3s ease;
+    }
+
+    @keyframes dialogSlideIn {
+      from { transform: scale(0.9) translateY(20px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    .password-dialog-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .password-icon-circle {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      box-shadow: 0 8px 24px rgba(46, 125, 50, 0.3);
+    }
+
+    .password-icon-circle mat-icon {
+      color: white;
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .password-dialog-header h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .password-dialog-header p {
+      margin: 8px 0 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .password-dialog-body {
+      margin-bottom: 32px;
+    }
+
+    .pin-input-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .pin-digit {
+      width: 56px;
+      height: 64px;
+      border: 2px solid #e0e0e0;
+      border-radius: 14px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a2e;
+      background: #fafafa;
+      outline: none;
+      transition: all 0.2s ease;
+      -webkit-text-security: disc;
+    }
+
+    .pin-digit:focus {
+      border-color: #43a047;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(67, 160, 71, 0.15);
+    }
+
+    .pin-digit.filled {
+      border-color: #43a047;
+      background: #f1f8e9;
+    }
+
+    .pin-digit.error {
+      border-color: #e53935;
+      background: #ffebee;
+      animation: shake 0.4s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      50% { transform: translateX(6px); }
+      75% { transform: translateX(-6px); }
+    }
+
+    .password-error {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+      color: #e53935;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .password-error mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .password-dialog-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .dialog-btn {
+      padding: 12px 32px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .dialog-btn.cancel {
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .dialog-btn.cancel:hover {
+      background: #e0e0e0;
+    }
+
+    .dialog-btn.submit {
+      background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
+    }
+
+    .dialog-btn.submit:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(46, 125, 50, 0.4);
+    }
+
+    .dialog-btn.submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Customer Import Result Dialog */
+    .import-result-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+    }
+
+    .import-result-dialog {
+      background: white;
+      border-radius: 20px;
+      width: 480px;
+      max-width: 90vw;
+      max-height: 80vh;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+      animation: dialogSlideIn 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .import-result-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 24px;
+      color: white;
+    }
+
+    .import-result-header.success {
+      background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+    }
+
+    .import-result-header.error {
+      background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
+    }
+
+    .import-result-header mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .import-result-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .import-result-header button {
+      color: white;
+    }
+
+    .import-result-body {
+      padding: 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .import-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .import-stat {
+      text-align: center;
+      padding: 16px 8px;
+      border-radius: 12px;
+      background: #f5f5f5;
+    }
+
+    .import-stat .stat-number {
+      display: block;
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a2e;
+      line-height: 1.2;
+    }
+
+    .import-stat .stat-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    .import-stat.created {
+      background: #e8f5e9;
+    }
+
+    .import-stat.created .stat-number {
+      color: #2e7d32;
+    }
+
+    .import-stat.updated {
+      background: #e3f2fd;
+    }
+
+    .import-stat.updated .stat-number {
+      color: #1565c0;
+    }
+
+    .import-stat.failed {
+      background: #ffebee;
+    }
+
+    .import-stat.failed .stat-number {
+      color: #c62828;
+    }
+
+    .import-errors-section {
+      border-top: 1px solid #eee;
+      padding-top: 16px;
+    }
+
+    .import-errors-section h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #e53935;
+    }
+
+    .import-errors-section h4 mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .import-errors-list {
+      max-height: 160px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .import-error-item {
+      padding: 8px 12px;
+      background: #fff3f3;
+      border-left: 3px solid #e53935;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .import-result-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: flex-end;
     }
 
     /* Company Sales Section */
@@ -3801,19 +4262,186 @@ export class SalesDashboardComponent implements OnInit {
     this.snackBar.open('Running ' + reportType + ' report...', 'Close', { duration: 2000 });
   }
 
-  // Sync methods
-  syncFromERP(): void {
-    this.snackBar.open('Syncing from ERP...', 'Close', { duration: 2000 });
-    // This would trigger an ERP sync
-    this.http.post(`${this.apiUrl}/logistics/importedinvoices/sync`, {}).subscribe({
-      next: () => {
-        this.snackBar.open('Sync completed', 'Close', { duration: 3000 });
+  // ============= Import Methods (Sales & Customers) =============
+  showImportPasswordDialog = false;
+  importPasswordDigits = signal<string[]>(['', '', '', '']);
+  importPasswordError = signal(false);
+  pendingImportType: 'sales' | 'customers' = 'sales';
+  showCustomerImportResult = false;
+  customerImportResult: any = null;
+  customerImportLoading = signal(false);
+  private importPasswordValue = '';
+  private readonly IMPORT_ACCESS_CODE = '0000';
+
+  promptImportPassword(type: 'sales' | 'customers'): void {
+    this.pendingImportType = type;
+    this.showImportPasswordDialog = true;
+    this.importPasswordDigits.set(['', '', '', '']);
+    this.importPasswordError.set(false);
+    this.importPasswordValue = '';
+    setTimeout(() => {
+      const firstInput = document.querySelector('.pin-digit') as HTMLInputElement;
+      firstInput?.focus();
+    }, 100);
+  }
+
+  closeImportPasswordDialog(): void {
+    this.showImportPasswordDialog = false;
+    this.importPasswordDigits.set(['', '', '', '']);
+    this.importPasswordError.set(false);
+    this.importPasswordValue = '';
+  }
+
+  onPinInput(event: Event, index: number): void {
+    const input = event.target as HTMLInputElement;
+    const value = input.value;
+    
+    if (value && !/^\d$/.test(value)) {
+      input.value = '';
+      return;
+    }
+
+    const digits = [...this.importPasswordDigits()];
+    digits[index] = value;
+    this.importPasswordDigits.set(digits);
+    this.importPasswordError.set(false);
+
+    if (value && index < 3) {
+      const nextInput = document.querySelector(`[data-pin-index="${index + 1}"]`) as HTMLInputElement;
+      nextInput?.focus();
+    }
+
+    if (digits.every(d => d !== '')) {
+      setTimeout(() => this.verifyImportPassword(), 150);
+    }
+  }
+
+  onPinKeydown(event: KeyboardEvent, index: number): void {
+    if (event.key === 'Backspace') {
+      const digits = [...this.importPasswordDigits()];
+      if (!digits[index] && index > 0) {
+        const prevInput = document.querySelector(`[data-pin-index="${index - 1}"]`) as HTMLInputElement;
+        prevInput?.focus();
+        digits[index - 1] = '';
+        this.importPasswordDigits.set(digits);
+      } else {
+        digits[index] = '';
+        this.importPasswordDigits.set(digits);
+      }
+      this.importPasswordError.set(false);
+    } else if (event.key === 'Enter') {
+      this.verifyImportPassword();
+    }
+  }
+
+  onPinPaste(event: ClipboardEvent): void {
+    event.preventDefault();
+    const pastedData = event.clipboardData?.getData('text') || '';
+    const digits = pastedData.replace(/\D/g, '').split('').slice(0, 4);
+    while (digits.length < 4) digits.push('');
+    this.importPasswordDigits.set(digits);
+    
+    if (digits.every(d => d !== '')) {
+      setTimeout(() => this.verifyImportPassword(), 150);
+    }
+  }
+
+  verifyImportPassword(): void {
+    const entered = this.importPasswordDigits().join('');
+    if (entered.length < 4) return;
+
+    if (entered === this.IMPORT_ACCESS_CODE) {
+      const type = this.pendingImportType;
+      this.closeImportPasswordDialog();
+      this.snackBar.open(`Access granted - select your Excel file`, 'Close', { duration: 2000 });
+      setTimeout(() => {
+        const inputId = type === 'customers' ? '#customerFileInput' : '#salesFileInput';
+        const fileInput = document.querySelector(inputId) as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = '';
+          fileInput.click();
+        }
+      }, 300);
+    } else {
+      this.importPasswordError.set(true);
+      setTimeout(() => {
+        this.importPasswordDigits.set(['', '', '', '']);
+        const firstInput = document.querySelector('.pin-digit') as HTMLInputElement;
+        firstInput?.focus();
+      }, 600);
+    }
+  }
+
+  // Sales file import
+  onImportFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.toLowerCase();
+    if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
+      this.snackBar.open('Please select an Excel file (.xlsx or .xls)', 'Close', { duration: 3000 });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(SalesImportDialogComponent, {
+      width: '95vw',
+      maxWidth: '1200px',
+      maxHeight: '90vh',
+      disableClose: true,
+      data: {
+        apiUrl: this.apiUrl,
+        file: file
+      } as SalesImportDialogData
+    });
+
+    dialogRef.afterClosed().subscribe((result: SalesImportDialogResult) => {
+      if (result?.success && result?.committed) {
+        this.snackBar.open(result.message || 'Sales transactions imported successfully!', 'Close', { duration: 5000 });
         this.loadDashboardData();
-      },
-      error: () => {
-        this.snackBar.open('Sync failed', 'Close', { duration: 3000 });
       }
     });
+  }
+
+  // Customer file import
+  onCustomerFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.toLowerCase();
+    if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
+      this.snackBar.open('Please select an Excel file (.xlsx or .xls)', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.customerImportLoading.set(true);
+    this.showCustomerImportResult = true;
+    this.customerImportResult = null;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    this.http.post(`${this.apiUrl}/logistics/customers/import/excel`, formData).subscribe({
+      next: (result: any) => {
+        this.customerImportLoading.set(false);
+        this.customerImportResult = result;
+        this.loadDashboardData();
+      },
+      error: (err) => {
+        this.customerImportLoading.set(false);
+        this.customerImportResult = {
+          success: false,
+          error: err.error?.error || err.error?.details || 'Import failed',
+          details: err.error?.details
+        };
+      }
+    });
+  }
+
+  closeCustomerImportResult(): void {
+    this.showCustomerImportResult = false;
+    this.customerImportResult = null;
   }
 
   // Attention dialog methods

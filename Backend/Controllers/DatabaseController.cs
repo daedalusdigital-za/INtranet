@@ -61,9 +61,13 @@ namespace ProjectTracker.API.Controllers
                 {
                     try
                     {
+                        // Using SqlQueryRaw with validated table names from hardcoded whitelist
+                        // Table name cannot be parameterized in SQL, but source is safe (hardcoded array above)
+                        #pragma warning disable EF1002 // Table names from hardcoded whitelist, not user input
                         var count = await _context.Database
                             .SqlQueryRaw<int>($"SELECT COUNT(*) AS Value FROM [{table}]")
                             .FirstOrDefaultAsync();
+                        #pragma warning restore EF1002
                         
                         info.TableStats.Add(new TableStatDto { TableName = table, RowCount = count });
                     }
@@ -110,7 +114,7 @@ namespace ProjectTracker.API.Controllers
                 _logger.LogInformation("Starting database export for tables: {Tables}", 
                     string.Join(", ", request.Tables ?? new List<string>()));
 
-                var exportData = new Dictionary<string, List<Dictionary<string, object>>>();
+                var exportData = new Dictionary<string, List<Dictionary<string, object?>>>();
                 var tablesToExport = request.Tables ?? new List<string>();
 
                 // If no specific tables, export all main tables
@@ -129,7 +133,7 @@ namespace ProjectTracker.API.Controllers
                 {
                     try
                     {
-                        var data = new List<Dictionary<string, object>>();
+                        var data = new List<Dictionary<string, object?>>();
                         
                         using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
                         await connection.OpenAsync();
@@ -139,7 +143,7 @@ namespace ProjectTracker.API.Controllers
                         
                         while (await reader.ReadAsync())
                         {
-                            var row = new Dictionary<string, object>();
+                            var row = new Dictionary<string, object?>();
                             for (int i = 0; i < reader.FieldCount; i++)
                             {
                                 var value = reader.GetValue(i);
@@ -464,7 +468,7 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
-                var data = new List<Dictionary<string, object>>();
+                var data = new List<Dictionary<string, object?>>();
                 
                 using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
                 await connection.OpenAsync();
@@ -474,7 +478,7 @@ namespace ProjectTracker.API.Controllers
                 
                 while (await reader.ReadAsync())
                 {
-                    var row = new Dictionary<string, object>();
+                    var row = new Dictionary<string, object?>();
                     for (int i = 0; i < reader.FieldCount; i++)
                     {
                         var value = reader.GetValue(i);

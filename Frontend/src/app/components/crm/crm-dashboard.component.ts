@@ -277,13 +277,8 @@ import { CrmService, OperatingCompany, CrmDashboard, PipelineStage, AgentPerform
                 @if ((dashboard()?.agentPerformance?.length || 0) > 5) {
                   <div class="expand-section">
                     <button mat-button color="primary" (click)="toggleExpandAgents()">
-                      @if (showAllAgents()) {
-                        <mat-icon>expand_less</mat-icon>
-                        Show Less
-                      } @else {
-                        <mat-icon>expand_more</mat-icon>
-                        Show All ({{ dashboard()?.agentPerformance?.length }})
-                      }
+                      <mat-icon>{{ showAllAgents() ? 'expand_less' : 'expand_more' }}</mat-icon>
+                      {{ showAllAgents() ? 'Show Less' : 'Show All (' + (dashboard()?.agentPerformance?.length || 0) + ')' }}
                     </button>
                   </div>
                 }

@@ -9,6 +9,7 @@ namespace ProjectTracker.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class DocumentsController : ControllerBase
     {
         private readonly ILogger<DocumentsController> _logger;

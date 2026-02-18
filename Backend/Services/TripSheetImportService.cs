@@ -226,8 +226,8 @@ public class TripSheetImportService
                         StopSequence = stopSequence++,
                         StopType = "Delivery",
                         CompanyName = firstItem.CustomerName ?? "Unknown Customer",
-                        CustomerId = firstItem.ConfirmedCustomerId,
-                        Address = firstItem.DeliveryAddress,
+                        CustomerId = firstItem.ConfirmedCustomerId!,
+                        Address = firstItem.DeliveryAddress ?? "",
                         City = firstItem.City,
                         Province = firstItem.Province,
                         ContactPerson = firstItem.ContactPerson,
@@ -386,7 +386,6 @@ public class TripSheetImportService
         _logger.LogInformation("Found header at row {Row} with {ColCount} mapped columns", headerRowIndex, columnMap.Count);
 
         // Step 2: Extract data rows
-        string? pendingAddress = null;
         TripSheetImportRowDto? lastRow2 = null;
         
         for (int rowIndex = headerRowIndex + 1; rowIndex <= lastRow; rowIndex++)

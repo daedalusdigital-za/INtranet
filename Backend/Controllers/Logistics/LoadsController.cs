@@ -1556,12 +1556,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
                 if (string.IsNullOrEmpty(stop.City) && !string.IsNullOrEmpty(customer.DeliveryCity ?? customer.City))
                 {
-                    stop.City = customer.DeliveryCity ?? customer.City;
+                    stop.City = (customer.DeliveryCity ?? customer.City)!;
                     changed = true;
                 }
                 if (string.IsNullOrEmpty(stop.Address) && !string.IsNullOrEmpty(customer.DeliveryAddress ?? customer.Address))
                 {
-                    stop.Address = customer.DeliveryAddress ?? customer.Address;
+                    stop.Address = (customer.DeliveryAddress ?? customer.Address)!;
                     changed = true;
                 }
 

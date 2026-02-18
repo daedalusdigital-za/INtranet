@@ -9,6 +9,7 @@ namespace ProjectTracker.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class SupportTicketsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "RuF288wuq/k=",
+  "dgSpecHash": "SkZ33QwBUK8=",
   "success": true,
   "projectFilePath": "C:\\Users\\Administrator\\Documents\\GitHub\\INtranet\\Backend\\ProjectTracker.API.csproj",
   "expectedPackageFiles": [
@@ -23,7 +23,6 @@
     "C:\\Users\\Administrator\\.nuget\\packages\\itext7.pdfhtml\\6.3.1\\itext7.pdfhtml.6.3.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.authentication.jwtbearer\\10.0.1\\microsoft.aspnetcore.authentication.jwtbearer.10.0.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.1\\microsoft.aspnetcore.openapi.10.0.1.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.signalr\\1.2.0\\microsoft.aspnetcore.signalr.1.2.0.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\8.0.0\\microsoft.bcl.asyncinterfaces.8.0.0.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.bcl.cryptography\\9.0.4\\microsoft.bcl.cryptography.9.0.4.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.build\\17.7.2\\microsoft.build.17.7.2.nupkg.sha512",
@@ -86,18 +85,5 @@
     "C:\\Users\\Administrator\\.nuget\\packages\\system.security.permissions\\9.0.0\\system.security.permissions.9.0.0.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\system.windows.extensions\\9.0.0\\system.windows.extensions.9.0.0.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1510",
-      "level": "Warning",
-      "message": "PackageReference Microsoft.AspNetCore.SignalR will not be pruned. Consider removing this package from your dependencies, as it is likely unnecessary.",
-      "projectPath": "C:\\Users\\Administrator\\Documents\\GitHub\\INtranet\\Backend\\ProjectTracker.API.csproj",
-      "warningLevel": 1,
-      "filePath": "C:\\Users\\Administrator\\Documents\\GitHub\\INtranet\\Backend\\ProjectTracker.API.csproj",
-      "libraryId": "Microsoft.AspNetCore.SignalR",
-      "targetGraphs": [
-        "net10.0"
-      ]
-    }
-  ]
+  "logs": []
 }

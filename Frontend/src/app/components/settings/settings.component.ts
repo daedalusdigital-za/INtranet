@@ -541,8 +541,7 @@ import * as XLSX from 'xlsx';
                         <mat-spinner diameter="20"></mat-spinner>
                         Creating Backup...
                       } @else {
-                        <mat-icon>backup</mat-icon>
-                        Create Backup
+                        <ng-container><mat-icon>backup</mat-icon> Create Backup</ng-container>
                       }
                     </button>
                   </div>
@@ -599,8 +598,7 @@ import * as XLSX from 'xlsx';
                         <mat-spinner diameter="20"></mat-spinner>
                         Exporting...
                       } @else {
-                        <mat-icon>download</mat-icon>
-                        Export All
+                        <ng-container><mat-icon>download</mat-icon> Export All</ng-container>
                       }
                     </button>
                   </div>
@@ -673,8 +671,7 @@ import * as XLSX from 'xlsx';
                       <mat-spinner diameter="20"></mat-spinner>
                       Importing...
                     } @else {
-                      <mat-icon>upload</mat-icon>
-                      Import Data
+                      <ng-container><mat-icon>upload</mat-icon> Import Data</ng-container>
                     }
                   </button>
                 }
@@ -901,7 +898,7 @@ import * as XLSX from 'xlsx';
                         <mat-spinner diameter="20"></mat-spinner>
                         Importing...
                       } @else {
-                        <mat-icon>upload</mat-icon> Import Data
+                        <ng-container><mat-icon>upload</mat-icon> Import Data</ng-container>
                       }
                     </button>
                   </div>

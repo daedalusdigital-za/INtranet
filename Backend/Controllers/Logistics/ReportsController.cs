@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
+using ClosedXML.Excel;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
@@ -81,11 +82,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                     LoadNumber = l.LoadNumber,
                     CustomerName = l.Customer?.Name ?? "Unknown",
                     DriverName = l.Driver != null ? $"{l.Driver.FirstName} {l.Driver.LastName}" : "Unknown",
-                    DeliveredAt = l.ProofOfDelivery.DeliveredAt,
-                    ReceiverName = l.ProofOfDelivery.RecipientName,
-                    HasSignature = !string.IsNullOrEmpty(l.ProofOfDelivery.SignatureUrl),
-                    HasPhoto = !string.IsNullOrEmpty(l.ProofOfDelivery.PhotoUrls),
-                    Notes = l.ProofOfDelivery.Notes
+                    DeliveredAt = l.ProofOfDelivery!.DeliveredAt,
+                    ReceiverName = l.ProofOfDelivery!.RecipientName,
+                    HasSignature = !string.IsNullOrEmpty(l.ProofOfDelivery!.SignatureUrl),
+                    HasPhoto = !string.IsNullOrEmpty(l.ProofOfDelivery!.PhotoUrls),
+                    Notes = l.ProofOfDelivery!.Notes
                 })
                 .ToList();
 
@@ -268,6 +269,328 @@ namespace ProjectTracker.API.Controllers.Logistics
                 AverageStopsPerRoute = loads.Count > 0 ? Math.Round((double)totalStops / loads.Count, 2) : 0,
                 Routes = routeStats
             });
+        }
+
+        // GET: api/logistics/reports/daily-dispatch  
+        [AllowAnonymous]
+        [HttpGet("daily-dispatch")]
+        public async Task<IActionResult> GetDailyDispatchReport([FromQuery] DateTime? reportDate)
+        {
+            try
+            {
+                var date = reportDate ?? DateTime.Now.Date;
+                var monthStart = new DateTime(date.Year, date.Month, 1);
+
+                var vehicles = await _context.Vehicles
+                    .Include(v => v.VehicleType)
+                    .Include(v => v.CurrentDriver)
+                    .Where(v => !string.IsNullOrEmpty(v.Province))
+                    .OrderBy(v => v.Province)
+                    .ThenBy(v => v.RegistrationNumber)
+                    .ToListAsync();
+
+                // Look for loads by ScheduledPickupDate, ScheduledDeliveryDate, ActualDeliveryDate, or ActualPickupDate
+                var todayLoads = await _context.Loads
+                    .Include(l => l.Stops)
+                    .Include(l => l.Customer)
+                    .Include(l => l.Vehicle)
+                    .Where(l => 
+                        (l.ScheduledPickupDate.HasValue && l.ScheduledPickupDate.Value.Date == date.Date) ||
+                        (l.ScheduledDeliveryDate.HasValue && l.ScheduledDeliveryDate.Value.Date == date.Date) ||
+                        (l.ActualDeliveryDate.HasValue && l.ActualDeliveryDate.Value.Date == date.Date) ||
+                        (l.ActualPickupDate.HasValue && l.ActualPickupDate.Value.Date == date.Date))
+                    .ToListAsync();
+
+                // Get today's load IDs for invoice lookup
+                var todayLoadIds = todayLoads.Select(l => l.Id).ToList();
+
+                // Get invoice values for today's loads from ImportedInvoices
+                var todayInvoiceValues = await _context.ImportedInvoices
+                    .Where(i => i.LoadId.HasValue && todayLoadIds.Contains(i.LoadId.Value))
+                    .GroupBy(i => i.LoadId)
+                    .Select(g => new { LoadId = g.Key, TotalValue = g.Sum(i => i.SalesAmount) })
+                    .ToListAsync();
+
+                // Get month-to-date loads with their vehicle IDs
+                var monthLoadIds = await _context.Loads
+                    .Where(l => l.Status == "Delivered" && 
+                        ((l.ActualDeliveryDate.HasValue && 
+                          l.ActualDeliveryDate.Value >= monthStart &&
+                          l.ActualDeliveryDate.Value <= date) ||
+                         (l.ScheduledDeliveryDate.HasValue && 
+                          l.ScheduledDeliveryDate.Value >= monthStart &&
+                          l.ScheduledDeliveryDate.Value <= date)))
+                    .Select(l => new { l.Id, l.VehicleId })
+                    .ToListAsync();
+
+                var monthLoadIdList = monthLoadIds.Select(l => l.Id).ToList();
+
+                // Get invoice values for month loads
+                var monthInvoiceValues = await _context.ImportedInvoices
+                    .Where(i => i.LoadId.HasValue && monthLoadIdList.Contains(i.LoadId.Value))
+                    .GroupBy(i => i.LoadId)
+                    .Select(g => new { LoadId = g.Key, TotalValue = g.Sum(i => i.SalesAmount) })
+                    .ToListAsync();
+
+                // Calculate monthly totals per vehicle
+                var monthlyTotalsByVehicle = monthLoadIds
+                    .GroupBy(l => l.VehicleId)
+                    .ToDictionary(
+                        g => g.Key ?? 0,
+                        g => g.Sum(l => monthInvoiceValues.FirstOrDefault(m => m.LoadId == l.Id)?.TotalValue ?? 0)
+                    );
+
+                var maintenance = await _context.VehicleMaintenance
+                    .Where(m => m.Status == "In Progress" || m.Status == "Pending")
+                    .ToListAsync();
+
+                var report = new List<DailyDispatchVehicleRow>();
+                int rowNum = 1;
+
+                foreach (var vehicle in vehicles)
+                {
+                    var load = todayLoads.FirstOrDefault(l => l.VehicleId == vehicle.Id);
+                    var monthValue = monthlyTotalsByVehicle.GetValueOrDefault(vehicle.Id, 0);
+                    var repair = maintenance.FirstOrDefault(m => m.VehicleId == vehicle.Id);
+
+                    string comment = "";
+                    decimal value = 0;
+                    string route = "";
+                    int stops = 0;
+
+                    if (repair != null)
+                    {
+                        comment = repair.Description ?? "REPAIRS";
+                    }
+                    else if (load != null)
+                    {
+                        // Get value from ImportedInvoices instead of ChargeAmount
+                        value = todayInvoiceValues.FirstOrDefault(v => v.LoadId == load.Id)?.TotalValue ?? 0;
+                        stops = load.Stops.Count;
+                        
+                        var customerName = load.Customer?.Name ?? load.DeliveryLocation ?? "";
+                        route = customerName;
+                    }
+                    else
+                    {
+                        comment = "NO LOAD";
+                    }
+
+                    report.Add(new DailyDispatchVehicleRow
+                    {
+                        Province = vehicle.Province ?? "",
+                        No = rowNum++,
+                        VehicleType = vehicle.VehicleType?.Name ?? "",
+                        Registration = vehicle.RegistrationNumber ?? "",
+                        Driver = vehicle.CurrentDriver?.FirstName ?? "",
+                        DispatchDate = date.ToString("dd.MM.yyyy"),
+                        Value = value,
+                        Route = route,
+                        Stops = stops,
+                        Comment = comment,
+                        MonthlyValue = monthValue,
+                        HasLoad = load != null
+                    });
+                }
+
+                var provinceDaily = report.GroupBy(r => r.Province)
+                    .Select(g => new
+                    {
+                        Province = g.Key,
+                        DailyTotal = g.Sum(r => r.Value)
+                    })
+                    .ToList();
+
+                // Count only vehicles that actually have loads
+                var dispatchedCount = report.Count(r => r.HasLoad);
+
+                return Ok(new
+                {
+                    ReportDate = date,
+                    MonthStart = monthStart,
+                    Vehicles = report,
+                    DailySummary = provinceDaily,
+                    GrandTotal = report.Sum(r => r.Value),
+                    MonthlyTotal = monthlyTotalsByVehicle.Values.Sum(),
+                    DispatchedCount = dispatchedCount,
+                    TotalVehicles = report.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR in GetDailyDispatchReport: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                return StatusCode(500, new { error = ex.Message, stackTrace = ex.StackTrace });
+            }
+        }
+
+        // Helper class for Daily Dispatch Report
+        private class DailyDispatchVehicleRow
+        {
+            public string Province { get; set; } = "";
+            public int No { get; set; }
+            public string VehicleType { get; set; } = "";
+            public string Registration { get; set; } = "";
+            public string Driver { get; set; } = "";
+            public string DispatchDate { get; set; } = "";
+            public decimal Value { get; set; }
+            public string Route { get; set; } = "";
+            public int Stops { get; set; }
+            public string Comment { get; set; } = "";
+            public decimal MonthlyValue { get; set; }
+            public bool HasLoad { get; set; }
+        }
+
+        // GET: api/logistics/reports/daily-dispatch/export
+        [HttpGet("daily-dispatch/export")]
+        public async Task<IActionResult> ExportDailyDispatchReport([FromQuery] DateTime? reportDate)
+        {
+            var date = reportDate ?? DateTime.Now.Date;
+            var monthStart = new DateTime(date.Year, date.Month, 1);
+
+            var vehicles = await _context.Vehicles
+                .Include(v => v.VehicleType)
+                .Include(v => v.CurrentDriver)
+                .Where(v => !string.IsNullOrEmpty(v.Province))
+                .OrderBy(v => v.Province)
+                .ThenBy(v => v.RegistrationNumber)
+                .ToListAsync();
+
+            var todayLoads = await _context.Loads
+                .Include(l => l.Stops)
+                .Include(l => l.Customer)
+                .Include(l => l.Vehicle)
+                .Where(l => l.ScheduledPickupDate.HasValue && 
+                           l.ScheduledPickupDate.Value.Date == date.Date)
+                .ToListAsync();
+
+            var monthLoads = await _context.Loads
+                .Where(l => l.ScheduledPickupDate.HasValue && 
+                           l.ScheduledPickupDate.Value >= monthStart &&
+                           l.ScheduledPickupDate.Value <= date &&
+                           l.Status == "Delivered")
+                .GroupBy(l => l.VehicleId)
+                .Select(g => new { VehicleId = g.Key, MonthlyValue = g.Sum(l => l.ChargeAmount ?? 0) })
+                .ToListAsync();
+
+            var maintenance = await _context.VehicleMaintenance
+                .Where(m => m.Status == "In Progress" || m.Status == "Pending")
+                .ToListAsync();
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Daily Dispatch");
+
+            // Headers
+            var headers = new[]
+            {
+                "PROVINCE", "NO", "VEHICLE", "REGISTRATION", "DRIVER", "DISPATCH DATE",
+                "VALUE", "ROUTE/COMMENT", "STOPS", "COMMENT", "DELIVERED", "OVERALL RETURNED",
+                "RETURNED AMOUNT", "MONTHLY VALUE"
+            };
+
+            for (int i = 0; i < headers.Length; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.LightGray;
+            }
+
+            int row = 2;
+            int rowNum = 1;
+            decimal dailyTotal = 0;
+
+            foreach (var vehicle in vehicles)
+            {
+                var load = todayLoads.FirstOrDefault(l => l.VehicleId == vehicle.Id);
+                var monthValue = monthLoads.FirstOrDefault(m => m.VehicleId == vehicle.Id)?.MonthlyValue ?? 0;
+                var repair = maintenance.FirstOrDefault(m => m.VehicleId == vehicle.Id);
+
+                string comment = "";
+                decimal value = 0;
+                string route = "";
+                int stops = 0;
+
+                if (repair != null)
+                {
+                    comment = repair.Description ?? "REPAIRS";
+                }
+                else if (load != null)
+                {
+                    value = load.ChargeAmount ?? 0;
+                    stops = load.Stops.Count;
+                    dailyTotal += value;
+                    
+                    var customerName = load.Customer?.Name ?? load.DeliveryLocation ?? "";
+                    route = customerName;
+                }
+                else
+                {
+                    comment = "NO LOAD";
+                }
+
+                worksheet.Cell(row, 1).Value = vehicle.Province;
+                worksheet.Cell(row, 2).Value = rowNum++;
+                worksheet.Cell(row, 3).Value = vehicle.VehicleType?.Name ?? "";
+                worksheet.Cell(row, 4).Value = vehicle.RegistrationNumber;
+                worksheet.Cell(row, 5).Value = vehicle.CurrentDriver?.FirstName ?? "";
+                worksheet.Cell(row, 6).Value = date.ToString("dd.MM.yyyy");
+                worksheet.Cell(row, 7).Value = value;
+                worksheet.Cell(row, 7).Style.NumberFormat.Format = "R #,##0.00";
+                worksheet.Cell(row, 8).Value = route;
+                worksheet.Cell(row, 9).Value = stops;
+                worksheet.Cell(row, 10).Value = comment;
+                worksheet.Cell(row, 14).Value = monthValue;
+                worksheet.Cell(row, 14).Style.NumberFormat.Format = "R #,##0.00";
+
+                row++;
+            }
+
+            // Add summary section
+            row += 2;
+            worksheet.Cell(row, 1).Value = "MONTHLY VALUE";
+            worksheet.Cell(row, 1).Style.Font.Bold = true;
+            row++;
+            worksheet.Cell(row, 1).Value = $"{monthStart:dd-MM} - {date:dd-MM} {date:MMM}";
+            worksheet.Cell(row, 2).Value = monthLoads.Sum(m => m.MonthlyValue);
+            worksheet.Cell(row, 2).Style.NumberFormat.Format = "R #,##0.00";
+            worksheet.Cell(row, 2).Style.Font.Bold = true;
+
+            row += 2;
+            worksheet.Cell(row, 1).Value = $"DAILY {date:dd.MM.yyyy}";
+            worksheet.Cell(row, 1).Style.Font.Bold = true;
+            row++;
+
+            var provinceTotals = vehicles.GroupBy(v => v.Province).Select(g => new
+            {
+                Province = g.Key,
+                Total = todayLoads.Where(l => g.Any(v => v.Id == l.VehicleId))
+                    .Sum(l => l.ChargeAmount ?? 0)
+            }).ToList();
+
+            foreach (var pt in provinceTotals)
+            {
+                worksheet.Cell(row, 1).Value = pt.Province;
+                worksheet.Cell(row, 2).Value = pt.Total;
+                worksheet.Cell(row, 2).Style.NumberFormat.Format = "R #,##0.00";
+                row++;
+            }
+
+            worksheet.Cell(row, 1).Value = "TOTAL";
+            worksheet.Cell(row, 1).Style.Font.Bold = true;
+            worksheet.Cell(row, 2).Value = dailyTotal;
+            worksheet.Cell(row, 2).Style.NumberFormat.Format = "R #,##0.00";
+            worksheet.Cell(row, 2).Style.Font.Bold = true;
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            stream.Position = 0;
+
+            return File(stream.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"DailyDispatch_{date:yyyyMMdd}.xlsx");
         }
     }
 }

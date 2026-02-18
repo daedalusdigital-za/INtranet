@@ -70,7 +70,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             // Get live inventory from BuildingInventory grouped by warehouse
             var inventoryByWarehouse = await _context.BuildingInventory
                 .Include(i => i.Building)
-                .GroupBy(i => i.Building.WarehouseId)
+                .GroupBy(i => i.Building!.WarehouseId)
                 .Select(g => new
                 {
                     WarehouseId = g.Key,
@@ -469,7 +469,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             var inventory = await _context.BuildingInventory
                 .Where(i => buildingIds.Contains(i.BuildingId))
                 .Include(i => i.Building)
-                .OrderBy(i => i.Building.Name)
+                .OrderBy(i => i.Building!.Name)
                 .ThenBy(i => i.ItemCode)
                 .ToListAsync();
 
@@ -488,7 +488,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     itemCode = i.ItemCode,
                     itemDescription = i.ItemDescription,
                     buildingId = i.BuildingId,
-                    buildingName = i.Building.Name,
+                    buildingName = i.Building!.Name,
                     uom = i.Uom,
                     qtyOnHand = i.QuantityOnHand,
                     qtyReserved = i.QuantityReserved,
@@ -512,7 +512,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         {
             var query = _context.BuildingInventory
                 .Include(i => i.Building)
-                .ThenInclude(b => b.Warehouse)
+                .ThenInclude(b => b!.Warehouse)
                 .AsQueryable();
 
             if (buildingId.HasValue)
@@ -521,8 +521,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             var inventory = await query
-                .OrderBy(i => i.Building.Warehouse.Name)
-                .ThenBy(i => i.Building.Name)
+                .OrderBy(i => i.Building!.Warehouse!.Name)
+                .ThenBy(i => i.Building!.Name)
                 .ThenBy(i => i.ItemCode)
                 .ToListAsync();
 
@@ -537,9 +537,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     itemCode = i.ItemCode,
                     itemDescription = i.ItemDescription,
                     buildingId = i.BuildingId,
-                    buildingCode = i.Building.Code,
-                    buildingName = i.Building.Name,
-                    warehouseName = i.Building.Warehouse.Name,
+                    buildingCode = i.Building!.Code,
+                    buildingName = i.Building!.Name,
+                    warehouseName = i.Building!.Warehouse!.Name,
                     uom = i.Uom,
                     qtyOnHand = i.QuantityOnHand,
                     qtyReserved = i.QuantityReserved,

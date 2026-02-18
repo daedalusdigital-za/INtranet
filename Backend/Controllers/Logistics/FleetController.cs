@@ -158,14 +158,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                     return new VehicleDto
                     {
                         Id = v.Id,
-                        RegistrationNumber = v.RegistrationNumber,
+                        RegistrationNumber = v.RegistrationNumber!,
                         VinNumber = v.VinNumber,
-                        Make = v.Make,
-                        Model = v.Model,
+                        Make = v.Make!,
+                        Model = v.Model!,
                         Year = v.Year,
                         Color = v.Color,
                         VehicleTypeId = v.VehicleTypeId,
-                        VehicleTypeName = v.VehicleType?.Name,
+                        VehicleTypeName = v.VehicleType?.Name ?? "Unknown",
                         CurrentDriverId = v.CurrentDriverId,
                         CurrentDriverName = liveData?.CurrentDriverName ?? (v.CurrentDriver != null ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}" : null),
                         Province = v.Province,

@@ -786,7 +786,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (!string.IsNullOrEmpty(province))
             {
                 query = query.Where(i => 
-                    (i.DeliveryProvince ?? i.Customer.Province ?? "").Contains(province));
+                    (i.DeliveryProvince ?? i.Customer!.Province ?? "").Contains(province));
             }
 
             var invoices = await query.ToListAsync();

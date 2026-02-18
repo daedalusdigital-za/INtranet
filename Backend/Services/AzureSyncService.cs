@@ -185,12 +185,20 @@ namespace ProjectTracker.API.Services
                     if (existing == null)
                     {
                         // Insert with identity insert on
+                        object?[] sqlParams = new object?[] { 
+                            id, 
+                            empId ?? "", 
+                            date, 
+                            (object?)timeIn ?? DBNull.Value, 
+                            (object?)timeOut ?? DBNull.Value, 
+                            status ?? "" 
+                        };
                         await localContext.Database.ExecuteSqlRawAsync(@"
                             SET IDENTITY_INSERT attendance ON;
                             INSERT INTO attendance (Id, empID, Date, TimeIn, TimeOut, Status) 
                             VALUES ({0}, {1}, {2}, {3}, {4}, {5});
                             SET IDENTITY_INSERT attendance OFF;",
-                            id, empId, date, timeIn, timeOut, status);
+                            sqlParams!);
                         insertCount++;
                     }
                     else

@@ -178,7 +178,7 @@ namespace ProjectTracker.API.Services.TFN
                         {
                             FirstName = nameParts[0],
                             LastName = nameParts.Length > 1 ? nameParts[1] : "",
-                            LicenseNumber = tfnDriver.LicenseNumber,
+                            LicenseNumber = tfnDriver.LicenseNumber ?? "",
                             PhoneNumber = tfnDriver.CellNumber,
                             Email = tfnDriver.Email,
                             Status = tfnDriver.IsActive ? "Active" : "Inactive"

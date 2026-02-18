@@ -11,6 +11,7 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ILogger<PrintController> _logger;
         private readonly IWebHostEnvironment _environment;
+        private readonly IHttpClientFactory _httpClientFactory;
 
         // Printer configurations
         private static readonly Dictionary<string, PrinterInfo> Printers = new()
@@ -26,10 +27,11 @@ namespace ProjectTracker.API.Controllers
             { "tender", new PrinterInfo("Tender Printer", "192.168.10.128", 9100) }
         };
 
-        public PrintController(ILogger<PrintController> logger, IWebHostEnvironment environment)
+        public PrintController(ILogger<PrintController> logger, IWebHostEnvironment environment, IHttpClientFactory httpClientFactory)
         {
             _logger = logger;
             _environment = environment;
+            _httpClientFactory = httpClientFactory;
         }
 
         /// <summary>
@@ -225,7 +227,7 @@ namespace ProjectTracker.API.Controllers
                 {
                     try
                     {
-                        using var client = new HttpClient();
+                        using var client = _httpClientFactory.CreateClient();
                         client.Timeout = TimeSpan.FromSeconds(30);
                         
                         var ippUrl = $"http://{printer.IpAddress}:{port}/ipp/print";
@@ -361,29 +363,29 @@ namespace ProjectTracker.API.Controllers
                 
                 // Wait for acknowledgment
                 var ack = new byte[1];
-                await stream.ReadAsync(ack);
+                await stream.ReadExactlyAsync(ack, 0, 1);
                 if (ack[0] != 0) return false;
                 
                 // Send control file
                 var ctrlCmd = $"\x02{controlFile.Length} cfA001{Environment.MachineName}\n";
                 await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(ctrlCmd));
-                await stream.ReadAsync(ack);
+                await stream.ReadExactlyAsync(ack, 0, 1);
                 if (ack[0] != 0) return false;
                 
                 await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(controlFile));
                 await stream.WriteAsync(new byte[] { 0 });
-                await stream.ReadAsync(ack);
+                await stream.ReadExactlyAsync(ack, 0, 1);
                 if (ack[0] != 0) return false;
                 
                 // Send data file
                 var dataCmd = $"\x03{dataFileSize} dfA001{Environment.MachineName}\n";
                 await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(dataCmd));
-                await stream.ReadAsync(ack);
+                await stream.ReadExactlyAsync(ack, 0, 1);
                 if (ack[0] != 0) return false;
                 
                 await stream.WriteAsync(data);
                 await stream.WriteAsync(new byte[] { 0 });
-                await stream.ReadAsync(ack);
+                await stream.ReadExactlyAsync(ack, 0, 1);
                 
                 _logger.LogInformation("Successfully sent via LPD");
                 return ack[0] == 0;

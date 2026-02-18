@@ -110,9 +110,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     {
                         t.TfnTransactionId,
                         t.TransactionDate,
-                        Vehicle = new { VehicleId = t.Vehicle.Id, t.Vehicle.RegistrationNumber },
-                        Driver = new { t.Driver.Id, DriverName = t.Driver.FirstName + " " + t.Driver.LastName },
-                        Depot = new { t.Depot.TfnDepotId, t.Depot.Name },
+                        Vehicle = new { VehicleId = t.Vehicle!.Id, t.Vehicle.RegistrationNumber },
+                        Driver = new { t.Driver!.Id, DriverName = t.Driver.FirstName + " " + t.Driver.LastName },
+                        Depot = new { t.Depot!.TfnDepotId, t.Depot.Name },
                         t.FuelType,
                         t.Litres,
                         t.PricePerLitre,
@@ -148,7 +148,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     query = query.Where(t => t.VehicleId == vehicleId.Value);
 
                 var efficiencyData = await query
-                    .GroupBy(t => new { t.VehicleId, t.Vehicle.RegistrationNumber })
+                    .GroupBy(t => new { t.VehicleId, t.Vehicle!.RegistrationNumber })
                     .Select(g => new
                     {
                         VehicleId = g.Key.VehicleId,
@@ -440,8 +440,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     .Select(t => new
                     {
                         t.TransactionDate,
-                        Vehicle = t.Vehicle.RegistrationNumber,
-                        Driver = t.Driver.FirstName + " " + t.Driver.LastName,
+                        Vehicle = t.Vehicle!.RegistrationNumber,
+                        Driver = t.Driver!.FirstName + " " + t.Driver.LastName,
                         t.AnomalyReason,
                         t.Litres,
                         t.TotalAmount

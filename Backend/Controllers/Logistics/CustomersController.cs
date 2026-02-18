@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -269,6 +270,215 @@ namespace ProjectTracker.API.Controllers.Logistics
                 batchId, result.CreatedRecords, result.UpdatedRecords, result.FailedRecords);
 
             return Ok(result);
+        }
+
+        /// <summary>
+        /// Import customers from an Excel file (.xlsx)
+        /// </summary>
+        [HttpPost("import/excel")]
+        [RequestSizeLimit(50_000_000)]
+        public async Task<ActionResult> ImportCustomersFromExcel(IFormFile file, [FromQuery] string? sourceSystem = null)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No file provided" });
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (ext != ".xlsx" && ext != ".xls")
+                return BadRequest(new { error = "Only .xlsx and .xls files are supported" });
+
+            try
+            {
+                using var stream = new MemoryStream();
+                await file.CopyToAsync(stream);
+                stream.Position = 0;
+
+                using var workbook = new XLWorkbook(stream);
+                var worksheet = workbook.Worksheets.First();
+
+                // Find header row - look for common customer column names
+                var headerRow = 1;
+                var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+                var lastCol = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+
+                if (lastRow < 2 || lastCol < 1)
+                    return BadRequest(new { error = "Excel file appears to be empty" });
+
+                // Build column mapping from header row
+                var columnMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (int col = 1; col <= lastCol; col++)
+                {
+                    var header = worksheet.Cell(headerRow, col).GetString().Trim();
+                    if (!string.IsNullOrEmpty(header))
+                        columnMap[header] = col;
+                }
+
+                // Define flexible column aliases
+                var aliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CustomerNumber"] = new[] { "CustomerNumber", "Customer Number", "Customer Code", "CustomerCode", "Code", "Account", "Account Number", "AccNo", "Cust No", "CustNo" },
+                    ["Name"] = new[] { "Name", "Customer Name", "CustomerName", "Description", "Company", "Company Name", "CompanyName", "Business Name" },
+                    ["ShortName"] = new[] { "ShortName", "Short Name", "Abbrev", "Abbreviation", "Trading As" },
+                    ["Email"] = new[] { "Email", "E-mail", "EmailAddress", "Email Address" },
+                    ["ContactEmail"] = new[] { "ContactEmail", "Contact Email", "Contact E-mail" },
+                    ["Phone"] = new[] { "Phone", "Telephone", "Tel", "Phone Number", "PhoneNumber", "Contact Number" },
+                    ["Fax"] = new[] { "Fax", "Fax Number", "FaxNumber" },
+                    ["Contact"] = new[] { "Contact", "Contact Person", "ContactPerson", "Contact Name" },
+                    ["ContactPhone"] = new[] { "ContactPhone", "Contact Phone", "Contact Tel" },
+                    ["VatNo"] = new[] { "VatNo", "VAT", "VAT Number", "VAT No", "VatNumber", "Tax Number" },
+                    ["Address"] = new[] { "Address", "Street Address", "Address1", "Address Line 1", "Physical Address" },
+                    ["Address2"] = new[] { "Address2", "Address Line 2", "Suburb" },
+                    ["City"] = new[] { "City", "Town" },
+                    ["Province"] = new[] { "Province", "State", "Region" },
+                    ["PostalCode"] = new[] { "PostalCode", "Postal Code", "Zip", "Zip Code", "ZipCode" },
+                };
+
+                // Resolve actual column indices
+                int? ResolveCol(string key)
+                {
+                    if (!aliases.ContainsKey(key)) return null;
+                    foreach (var alias in aliases[key])
+                    {
+                        if (columnMap.TryGetValue(alias, out var col)) return col;
+                    }
+                    return null;
+                }
+
+                var customerNumberCol = ResolveCol("CustomerNumber");
+                var nameCol = ResolveCol("Name");
+
+                if (customerNumberCol == null && nameCol == null)
+                {
+                    return BadRequest(new
+                    {
+                        error = "Could not find required columns. Need at least 'Customer Number' or 'Name'.",
+                        foundColumns = columnMap.Keys.ToList()
+                    });
+                }
+
+                // Parse rows
+                var batchId = Guid.NewGuid().ToString("N")[..12].ToUpper();
+                var customers = new List<ImportCustomerDto>();
+                var previewRows = new List<object>();
+
+                for (int row = headerRow + 1; row <= lastRow; row++)
+                {
+                    string GetVal(string key) => ResolveCol(key) is int c ? worksheet.Cell(row, c).GetString().Trim() : "";
+
+                    var custNumber = GetVal("CustomerNumber");
+                    var name = GetVal("Name");
+
+                    // Skip empty rows
+                    if (string.IsNullOrWhiteSpace(custNumber) && string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    // Auto-generate customer code if missing
+                    if (string.IsNullOrWhiteSpace(custNumber))
+                        custNumber = $"IMP-{batchId}-{row}";
+
+                    var addressLines = new List<string>();
+                    var addr = GetVal("Address");
+                    var addr2 = GetVal("Address2");
+                    var city = GetVal("City");
+                    var province = GetVal("Province");
+                    var postalCode = GetVal("PostalCode");
+
+                    if (!string.IsNullOrWhiteSpace(addr)) addressLines.Add(addr);
+                    if (!string.IsNullOrWhiteSpace(addr2)) addressLines.Add(addr2);
+                    if (!string.IsNullOrWhiteSpace(city)) addressLines.Add(city);
+                    if (!string.IsNullOrWhiteSpace(province)) addressLines.Add(province);
+                    if (!string.IsNullOrWhiteSpace(postalCode)) addressLines.Add(postalCode);
+
+                    var dto = new ImportCustomerDto
+                    {
+                        CustomerNumber = custNumber,
+                        Description = string.IsNullOrWhiteSpace(name) ? custNumber : name,
+                        ShortName = GetVal("ShortName"),
+                        Email = GetVal("Email"),
+                        ContactEmail = GetVal("ContactEmail"),
+                        Phone = GetVal("Phone"),
+                        Fax = GetVal("Fax"),
+                        Contact = GetVal("Contact"),
+                        ContactPhone = GetVal("ContactPhone"),
+                        VatNo = GetVal("VatNo"),
+                        AddressLines = addressLines.Any() ? addressLines : null
+                    };
+
+                    customers.Add(dto);
+                    previewRows.Add(new
+                    {
+                        row,
+                        customerNumber = dto.CustomerNumber,
+                        name = dto.Description,
+                        email = dto.Email,
+                        phone = dto.Phone,
+                        contact = dto.Contact,
+                        address = addressLines.Any() ? string.Join(", ", addressLines) : "",
+                        city,
+                        province
+                    });
+                }
+
+                if (!customers.Any())
+                    return BadRequest(new { error = "No valid customer rows found in the file" });
+
+                // Check for existing customers (duplicates)
+                var customerCodes = customers.Select(c => c.CustomerNumber).ToList();
+                var existingCodes = await _context.LogisticsCustomers
+                    .Where(c => customerCodes.Contains(c.CustomerCode!))
+                    .Select(c => c.CustomerCode)
+                    .ToListAsync();
+
+                // Perform the import
+                var result = new CustomerImportResultDto
+                {
+                    BatchId = batchId,
+                    TotalRecords = customers.Count
+                };
+
+                foreach (var customerDto in customers)
+                {
+                    try
+                    {
+                        var (customer, isNew) = await ImportOrUpdateCustomer(customerDto, batchId, sourceSystem ?? "Excel Import");
+                        if (isNew)
+                            result.CreatedRecords++;
+                        else
+                            result.UpdatedRecords++;
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"Row {customerDto.CustomerNumber}: {ex.Message}");
+                        result.FailedRecords++;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                result.Success = result.FailedRecords == 0 || (result.CreatedRecords + result.UpdatedRecords) > 0;
+
+                _logger.LogInformation(
+                    "Excel customer import completed. File: {FileName}, Batch: {BatchId}, Created: {Created}, Updated: {Updated}, Failed: {Failed}",
+                    file.FileName, batchId, result.CreatedRecords, result.UpdatedRecords, result.FailedRecords);
+
+                return Ok(new
+                {
+                    result.Success,
+                    result.BatchId,
+                    result.TotalRecords,
+                    result.CreatedRecords,
+                    result.UpdatedRecords,
+                    result.FailedRecords,
+                    result.Errors,
+                    existingCount = existingCodes.Count,
+                    fileName = file.FileName,
+                    columnsFound = columnMap.Keys.ToList(),
+                    preview = previewRows.Take(10)
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error importing customers from Excel file {FileName}", file.FileName);
+                return BadRequest(new { error = "Failed to parse Excel file", details = ex.Message });
+            }
         }
 
         /// <summary>

@@ -17,16 +17,18 @@ namespace ProjectTracker.API.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly ITokenService _tokenService;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(ApplicationDbContext context, ITokenService tokenService)
+        public AuthService(ApplicationDbContext context, ITokenService tokenService, ILogger<AuthService> logger)
         {
             _context = context;
             _tokenService = tokenService;
+            _logger = logger;
         }
 
         public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto)
         {
-            Console.WriteLine($"[AUTH] Login attempt for email: '{loginDto.Email}'");
+            _logger.LogDebug("Login attempt for email: {Email}", loginDto.Email);
             
             var user = await _context.Users
                 .Include(u => u.Department)
@@ -34,11 +36,11 @@ namespace ProjectTracker.API.Services
 
             if (user == null)
             {
-                Console.WriteLine($"[AUTH] User not found or inactive for email: '{loginDto.Email}'");
+                _logger.LogWarning("User not found or inactive for email: {Email}", loginDto.Email);
                 return null;
             }
 
-            Console.WriteLine($"[AUTH] User found: {user.Email}, PasswordHash starts with: '{user.PasswordHash.Substring(0, Math.Min(10, user.PasswordHash.Length))}'");
+            _logger.LogDebug("User found: {Email}", user.Email);
 
             // Verify password - support both plain text (for dev) and BCrypt hashed
             bool passwordValid = false;
@@ -46,17 +48,17 @@ namespace ProjectTracker.API.Services
             // Check if password is BCrypt hashed (starts with $2)
             if (user.PasswordHash.StartsWith("$2"))
             {
-                Console.WriteLine("[AUTH] Using BCrypt verification");
+                _logger.LogDebug("Using BCrypt verification");
                 passwordValid = BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash);
             }
             else
             {
-                Console.WriteLine($"[AUTH] Using plain text comparison: '{user.PasswordHash}' == '{loginDto.Password}'");
+                _logger.LogDebug("Using plain text comparison");
                 // Plain text comparison (for development/testing)
                 passwordValid = user.PasswordHash == loginDto.Password;
             }
 
-            Console.WriteLine($"[AUTH] Password valid: {passwordValid}");
+            _logger.LogDebug("Password valid: {IsValid}", passwordValid);
 
             if (!passwordValid)
             {

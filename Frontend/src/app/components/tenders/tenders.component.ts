@@ -583,8 +583,7 @@ interface Company {
                       <mat-spinner diameter="20"></mat-spinner>
                       <span>Analyzing...</span>
                     } @else {
-                      <mat-icon>psychology</mat-icon>
-                      <span>Analyze Document</span>
+                      <ng-container><mat-icon>psychology</mat-icon> <span>Analyze Document</span></ng-container>
                     }
                   </button>
                 }

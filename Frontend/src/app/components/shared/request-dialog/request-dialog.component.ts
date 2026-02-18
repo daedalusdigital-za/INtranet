@@ -521,7 +521,7 @@ interface UserOption {
                 @for (user of filteredUsers | async; track user.id) {
                   <mat-option [value]="user">
                     <div class="user-option">
-                      <div class="user-avatar-small">{{ user.name?.charAt(0) || '?' }}</div>
+                      <div class="user-avatar-small">{{ (user.name || '?').charAt(0) }}</div>
                       <div class="user-info">
                         <span class="user-name">{{ user.name || 'Unknown' }}</span>
                         <span class="user-dept">{{ user.department || user.email }}</span>
@@ -537,7 +537,7 @@ interface UserOption {
                 @for (attendee of selectedAttendees; track attendee.id) {
                   <mat-chip-row (removed)="removeAttendee(attendee)">
                     <div class="chip-content">
-                      <div class="chip-avatar">{{ attendee.name?.charAt(0) || '?' }}</div>
+                      <div class="chip-avatar">{{ (attendee.name || '?').charAt(0) }}</div>
                       {{ attendee.name || 'Unknown' }}
                     </div>
                     <button matChipRemove>
@@ -563,8 +563,7 @@ interface UserOption {
             @if (isSubmitting) {
               <mat-spinner diameter="20"></mat-spinner>
             } @else {
-              <mat-icon>send</mat-icon>
-              Send Meeting Invites
+              <ng-container><mat-icon>send</mat-icon> Send Meeting Invites</ng-container>
             }
           </button>
         </div>

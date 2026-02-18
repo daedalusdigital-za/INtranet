@@ -11710,7 +11710,7 @@ interface CustomerAddressIssue {
                 </div>
                 <div class="gps-coords" *ngIf="customer.latitude && customer.longitude">
                   <mat-icon>gps_fixed</mat-icon>
-                  <span>{{ customer.latitude?.toFixed(6) }}, {{ customer.longitude?.toFixed(6) }}</span>
+                  <span>{{ customer.latitude.toFixed(6) }}, {{ customer.longitude.toFixed(6) }}</span>
                 </div>
               </div>
 
@@ -13586,7 +13586,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                   <div class="route-config">
                     <h3><mat-icon>route</mat-icon> Route Configuration</h3>
                     
-                    @if (!data.warehouses?.length && !data.drivers?.length && !data.vehicles?.length) {
+                    @if (!data.warehouses.length && !data.drivers.length && !data.vehicles.length) {
                       <div class="config-loading">
                         <mat-spinner diameter="20"></mat-spinner>
                         <span>Loading configuration data...</span>
@@ -13621,7 +13621,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                       }
                     </mat-autocomplete>
                     <mat-icon matSuffix>person</mat-icon>
-                    <mat-hint>{{ data.drivers?.length || 0 }} drivers available</mat-hint>
+                    <mat-hint>{{ data.drivers.length || 0 }} drivers available</mat-hint>
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
@@ -13641,7 +13641,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                       }
                     </mat-autocomplete>
                     <mat-icon matSuffix>local_shipping</mat-icon>
-                    <mat-hint>{{ data.vehicles?.length || 0 }} vehicles available</mat-hint>
+                    <mat-hint>{{ data.vehicles.length || 0 }} vehicles available</mat-hint>
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
@@ -21791,227 +21791,159 @@ export class ViewRouteMapDialog implements OnInit {
   template: `
     <div class="reports-dialog">
       <div class="dialog-header">
-        <h2 mat-dialog-title>
-          <mat-icon>assessment</mat-icon>
-          Logistics Reports
-        </h2>
-        <button mat-icon-button mat-dialog-close>
+        <div class="header-content">
+          <div class="header-icon">
+            <mat-icon>local_shipping</mat-icon>
+          </div>
+          <div class="header-text">
+            <h2>Daily Dispatch Report</h2>
+            <span class="header-subtitle">Fleet dispatch overview and analytics</span>
+          </div>
+        </div>
+        <button mat-icon-button mat-dialog-close class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </div>
 
       <mat-dialog-content>
-        <mat-tab-group>
-          <!-- Delivery Reports Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>local_shipping</mat-icon>
-              Delivery Reports
-            </ng-template>
-            <div class="reports-grid">
-              <mat-card class="report-card" (click)="generateReport('loads-summary')">
-                <mat-card-content>
-                  <div class="report-icon loads">
-                    <mat-icon>assignment</mat-icon>
-                  </div>
-                  <h3>Loads Summary</h3>
-                  <p>Overview of all loads by status, date range, and customer</p>
-                  <mat-chip-set>
-                    <mat-chip>Active: {{ stats.activeLoads }}</mat-chip>
-                    <mat-chip>In Transit: {{ stats.inTransit }}</mat-chip>
-                    <mat-chip>Delivered: {{ stats.delivered }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
+        <div class="report-controls">
+          <div class="date-picker-wrapper">
+            <mat-icon class="control-icon">calendar_today</mat-icon>
+            <mat-form-field appearance="outline">
+              <mat-label>Select Date</mat-label>
+              <input matInput [matDatepicker]="picker" [(ngModel)]="selectedDate" (dateChange)="loadReport()">
+              <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+              <mat-datepicker #picker></mat-datepicker>
+            </mat-form-field>
+          </div>
+          <div class="control-spacer"></div>
+          <button mat-flat-button class="export-btn" (click)="exportToExcel()" [disabled]="loading">
+            <mat-icon>file_download</mat-icon>
+            <span>Export Excel</span>
+          </button>
+          <button mat-flat-button class="refresh-btn" (click)="loadReport()" [disabled]="loading">
+            <mat-icon>refresh</mat-icon>
+          </button>
+        </div>
 
-              <mat-card class="report-card" (click)="generateReport('delivery-performance')">
-                <mat-card-content>
-                  <div class="report-icon performance">
-                    <mat-icon>speed</mat-icon>
-                  </div>
-                  <h3>Delivery Performance</h3>
-                  <p>On-time delivery rate, average delivery time, and delays analysis</p>
-                  <mat-chip-set>
-                    <mat-chip>On-Time: 87%</mat-chip>
-                    <mat-chip>Delayed: 13%</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
-
-              <mat-card class="report-card" (click)="generateReport('pod-report')">
-                <mat-card-content>
-                  <div class="report-icon pod">
-                    <mat-icon>fact_check</mat-icon>
-                  </div>
-                  <h3>Proof of Delivery</h3>
-                  <p>POD capture rates, missing PODs, and signature compliance</p>
-                  <mat-chip-set>
-                    <mat-chip>Captured: {{ stats.delivered }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
-
-              <mat-card class="report-card" (click)="generateReport('route-efficiency')">
-                <mat-card-content>
-                  <div class="report-icon routes">
-                    <mat-icon>route</mat-icon>
-                  </div>
-                  <h3>Route Efficiency</h3>
-                  <p>Actual vs. planned distance, stops per route, optimization opportunities</p>
-                  <mat-chip-set>
-                    <mat-chip>Avg Distance: 245 km</mat-chip>
-                    <mat-chip>Avg Stops: 12</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
+        @if (loading) {
+          <div class="loading-state">
+            <div class="loading-spinner">
+              <mat-spinner diameter="48"></mat-spinner>
             </div>
-          </mat-tab>
+            <p>Fetching dispatch data...</p>
+          </div>
+        }
 
-          <!-- Fleet Reports Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>directions_car</mat-icon>
-              Fleet Reports
-            </ng-template>
-            <div class="reports-grid">
-              <mat-card class="report-card" (click)="generateReport('vehicle-utilization')">
-                <mat-card-content>
-                  <div class="report-icon vehicles">
-                    <mat-icon>directions_car</mat-icon>
-                  </div>
-                  <h3>Vehicle Utilization</h3>
-                  <p>Fleet usage rates, idle time, and capacity optimization</p>
-                  <mat-chip-set>
-                    <mat-chip>Total: {{ stats.totalVehicles }}</mat-chip>
-                    <mat-chip>Available: {{ stats.availableVehicles }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
-
-              <mat-card class="report-card" (click)="generateReport('fuel-consumption')">
-                <mat-card-content>
-                  <div class="report-icon fuel">
-                    <mat-icon>local_gas_station</mat-icon>
-                  </div>
-                  <h3>Fuel Consumption</h3>
-                  <p>Fuel usage by vehicle, cost analysis, and TFN transaction summary</p>
-                  <mat-chip-set>
-                    <mat-chip>TFN Orders: {{ tfnOrdersCount }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
-
-              <mat-card class="report-card" (click)="generateReport('maintenance-schedule')">
-                <mat-card-content>
-                  <div class="report-icon maintenance">
-                    <mat-icon>build</mat-icon>
-                  </div>
-                  <h3>Maintenance Schedule</h3>
-                  <p>Upcoming maintenance, overdue services, and maintenance costs</p>
-                  <mat-chip-set>
-                    <mat-chip>Upcoming: {{ stats.upcomingMaintenance }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
-
-              <mat-card class="report-card" (click)="generateReport('sleep-outs')">
-                <mat-card-content>
-                  <div class="report-icon sleepouts">
-                    <mat-icon>hotel</mat-icon>
-                  </div>
-                  <h3>Sleep Outs Report</h3>
-                  <p>Drivers sleeping away from base, frequency, and cost analysis</p>
-                  <mat-chip-set>
-                    <mat-chip>Active: {{ sleepOutsCount }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
+        @if (!loading && reportData) {
+          <div class="report-summary">
+            <div class="summary-card daily">
+              <div class="card-icon">
+                <mat-icon>today</mat-icon>
+              </div>
+              <div class="card-content">
+                <span class="card-label">Daily Revenue</span>
+                <span class="card-value">{{ reportData.grandTotal | currency: 'R ' }}</span>
+                <span class="card-date">{{ reportData.reportDate | date: 'EEEE, dd MMM yyyy' }}</span>
+              </div>
             </div>
-          </mat-tab>
-
-          <!-- Driver Reports Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>person</mat-icon>
-              Driver Reports
-            </ng-template>
-            <div class="reports-grid">
-              <mat-card class="report-card" (click)="generateReport('driver-performance')">
-                <mat-card-content>
-                  <div class="report-icon drivers">
-                    <mat-icon>person</mat-icon>
-                  </div>
-                  <h3>Driver Performance</h3>
-                  <p>Deliveries completed, on-time rate, customer feedback scores</p>
-                  <mat-chip-set>
-                    <mat-chip>Total: {{ stats.totalDrivers }}</mat-chip>
-                    <mat-chip>Available: {{ stats.availableDrivers }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
-
-              <mat-card class="report-card" (click)="generateReport('license-compliance')">
-                <mat-card-content>
-                  <div class="report-icon compliance">
-                    <mat-icon>verified_user</mat-icon>
-                  </div>
-                  <h3>License Compliance</h3>
-                  <p>Valid licenses, expiring licenses, and renewal tracking</p>
-                  <mat-chip-set>
-                    <mat-chip class="warning">Expiring Soon: 3</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
+            <div class="summary-card monthly">
+              <div class="card-icon">
+                <mat-icon>date_range</mat-icon>
+              </div>
+              <div class="card-content">
+                <span class="card-label">Monthly Revenue</span>
+                <span class="card-value">{{ reportData.monthlyTotal | currency: 'R ' }}</span>
+                <span class="card-date">{{ reportData.monthStart | date: 'MMMM yyyy' }}</span>
+              </div>
             </div>
-          </mat-tab>
-
-          <!-- Financial Reports Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>payments</mat-icon>
-              Financial Reports
-            </ng-template>
-            <div class="reports-grid">
-              <mat-card class="report-card" (click)="generateReport('invoice-summary')">
-                <mat-card-content>
-                  <div class="report-icon invoices">
-                    <mat-icon>receipt</mat-icon>
-                  </div>
-                  <h3>Invoice Summary</h3>
-                  <p>Total invoices, pending invoices, delivered invoices by period</p>
-                  <mat-chip-set>
-                    <mat-chip>Pending: {{ stats.pendingInvoices }}</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
-
-              <mat-card class="report-card" (click)="generateReport('delivery-costs')">
-                <mat-card-content>
-                  <div class="report-icon costs">
-                    <mat-icon>attach_money</mat-icon>
-                  </div>
-                  <h3>Delivery Costs</h3>
-                  <p>Cost per delivery, fuel costs, maintenance costs breakdown</p>
-                  <mat-chip-set>
-                    <mat-chip>Avg Cost: R 2,450</mat-chip>
-                  </mat-chip-set>
-                </mat-card-content>
-              </mat-card>
+            <div class="summary-card vehicles">
+              <div class="card-icon">
+                <mat-icon>local_shipping</mat-icon>
+              </div>
+              <div class="card-content">
+                <span class="card-label">Fleet Dispatched</span>
+                <span class="card-value">{{ reportData.dispatchedCount || 0 }}</span>
+                <span class="card-date">of {{ reportData.totalVehicles }} vehicles</span>
+              </div>
             </div>
-          </mat-tab>
-        </mat-tab-group>
+          </div>
 
-        <!-- Report Generation Section -->
-        @if (generatingReport) {
-          <div class="report-generation">
-            <mat-spinner diameter="40"></mat-spinner>
-            <p>Generating {{ currentReportName }}...</p>
+          <div class="provinces-section">
+            <div class="section-header">
+              <mat-icon>map</mat-icon>
+              <h3>Provincial Breakdown</h3>
+            </div>
+            <div class="province-grid">
+              @for (province of reportData.dailySummary; track province.province) {
+                <div class="province-card">
+                  <div class="province-icon">
+                    <mat-icon>location_on</mat-icon>
+                  </div>
+                  <div class="province-info">
+                    <span class="province-name">{{ province.province }}</span>
+                    <span class="province-value">{{ province.dailyTotal | currency: 'R ' }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="table-section">
+            <div class="section-header">
+              <mat-icon>table_chart</mat-icon>
+              <h3>Vehicle Dispatch Details</h3>
+              <span class="record-count">{{ reportData.dispatchedCount || 0 }} dispatched / {{ reportData.totalVehicles }} total</span>
+            </div>
+            <div class="vehicles-table-container">
+              <table class="vehicles-table">
+                <thead>
+                  <tr>
+                    <th>Province</th>
+                    <th>#</th>
+                    <th>Type</th>
+                    <th>Registration</th>
+                    <th>Driver</th>
+                    <th>Date</th>
+                    <th>Value</th>
+                    <th>Route</th>
+                    <th>Stops</th>
+                    <th>Notes</th>
+                    <th>MTD Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (vehicle of reportData.vehicles; track vehicle.no) {
+                    <tr>
+                      <td><span class="province-badge">{{ vehicle.province }}</span></td>
+                      <td class="center">{{ vehicle.no }}</td>
+                      <td><span class="vehicle-type">{{ vehicle.vehicleType }}</span></td>
+                      <td class="mono">{{ vehicle.registration }}</td>
+                      <td>{{ vehicle.driver || '—' }}</td>
+                      <td class="date-cell">{{ vehicle.dispatchDate }}</td>
+                      <td class="currency">{{ vehicle.value | currency: 'R ' }}</td>
+                      <td class="route-cell" [title]="vehicle.route || ''">{{ vehicle.route || '—' }}</td>
+                      <td class="center">{{ vehicle.stops || '—' }}</td>
+                      <td class="notes-cell">{{ vehicle.comment || '—' }}</td>
+                      <td class="currency mtd">{{ vehicle.monthlyValue | currency: 'R ' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           </div>
         }
       </mat-dialog-content>
 
       <mat-dialog-actions>
-        <button mat-button mat-dialog-close>Close</button>
+        <span class="footer-info">
+          <mat-icon>info_outline</mat-icon>
+          Data refreshed at {{ currentTime }}
+        </span>
+        <button mat-stroked-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+          Close
+        </button>
       </mat-dialog-actions>
     </div>
   `,
@@ -22020,230 +21952,544 @@ export class ViewRouteMapDialog implements OnInit {
       display: flex;
       flex-direction: column;
       height: 100%;
+      min-width: 1200px;
+      background: #f8fafc;
     }
 
+    /* Header Styles */
     .dialog-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 24px 0;
-      border-bottom: 1px solid #e0e0e0;
+      padding: 20px 28px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+      color: white;
+      position: relative;
+      overflow: hidden;
     }
 
-    .dialog-header h2 {
+    .dialog-header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .header-content {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin: 0 0 16px 0;
-      font-size: 24px;
+      gap: 16px;
+      z-index: 1;
     }
 
-    mat-dialog-content {
-      flex: 1;
-      padding: 24px;
-      overflow-y: auto;
-    }
-
-    .reports-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
-      padding: 20px 0;
-    }
-
-    .report-card {
-      cursor: pointer;
-      transition: all 0.3s ease;
-      border: 2px solid transparent;
-    }
-
-    .report-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-      border-color: #1976d2;
-    }
-
-    .report-card mat-card-content {
-      padding: 20px;
-    }
-
-    .report-icon {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
+    .header-icon {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
 
-    .report-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
+    .header-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
     }
 
-    .report-icon.loads { background: linear-gradient(135deg, #e3f2fd, #bbdefb); }
-    .report-icon.loads mat-icon { color: #1976d2; }
-    
-    .report-icon.performance { background: linear-gradient(135deg, #f3e5f5, #e1bee7); }
-    .report-icon.performance mat-icon { color: #7b1fa2; }
-    
-    .report-icon.pod { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); }
-    .report-icon.pod mat-icon { color: #388e3c; }
-    
-    .report-icon.routes { background: linear-gradient(135deg, #fff3e0, #ffe0b2); }
-    .report-icon.routes mat-icon { color: #f57c00; }
-    
-    .report-icon.vehicles { background: linear-gradient(135deg, #e0f2f1, #b2dfdb); }
-    .report-icon.vehicles mat-icon { color: #00796b; }
-    
-    .report-icon.fuel { background: linear-gradient(135deg, #fce4ec, #f8bbd0); }
-    .report-icon.fuel mat-icon { color: #c2185b; }
-    
-    .report-icon.maintenance { background: linear-gradient(135deg, #fff8e1, #ffecb3); }
-    .report-icon.maintenance mat-icon { color: #f57f17; }
-    
-    .report-icon.sleepouts { background: linear-gradient(135deg, #e8eaf6, #c5cae9); }
-    .report-icon.sleepouts mat-icon { color: #3f51b5; }
-    
-    .report-icon.drivers { background: linear-gradient(135deg, #e1f5fe, #b3e5fc); }
-    .report-icon.drivers mat-icon { color: #0288d1; }
-    
-    .report-icon.compliance { background: linear-gradient(135deg, #f1f8e9, #dcedc8); }
-    .report-icon.compliance mat-icon { color: #689f38; }
-    
-    .report-icon.invoices { background: linear-gradient(135deg, #fce4ec, #f8bbd0); }
-    .report-icon.invoices mat-icon { color: #c2185b; }
-    
-    .report-icon.costs { background: linear-gradient(135deg, #fffde7, #fff9c4); }
-    .report-icon.costs mat-icon { color: #f9a825; }
-
-    .report-card h3 {
-      margin: 0 0 8px 0;
-      font-size: 18px;
+    .header-text h2 {
+      margin: 0;
+      font-size: 24px;
       font-weight: 600;
+      letter-spacing: -0.5px;
     }
 
-    .report-card p {
-      margin: 0 0 16px 0;
-      color: #666;
-      font-size: 14px;
-      line-height: 1.5;
+    .header-subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 2px;
+      display: block;
     }
 
-    mat-chip {
-      font-size: 12px;
+    .close-btn {
+      color: rgba(255,255,255,0.8);
+      transition: all 0.2s;
+      z-index: 1;
     }
 
-    mat-chip.warning {
-      background: #fff3e0;
-      color: #e65100;
+    .close-btn:hover {
+      color: white;
+      background: rgba(255,255,255,0.1);
     }
 
-    .report-generation {
+    /* Content Area */
+    mat-dialog-content {
+      flex: 1;
+      padding: 28px;
+      overflow-y: auto;
+      background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+    }
+
+    /* Controls Bar */
+    .report-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      padding: 16px 20px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+    }
+
+    .date-picker-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-icon {
+      color: #64748b;
+      font-size: 22px;
+    }
+
+    .report-controls mat-form-field {
+      width: 200px;
+    }
+
+    .control-spacer {
+      flex: 1;
+    }
+
+    .export-btn {
+      background: linear-gradient(135deg, #10b981, #059669) !important;
+      color: white !important;
+      padding: 0 20px;
+      height: 42px;
+      border-radius: 10px !important;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .export-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    }
+
+    .refresh-btn {
+      background: #f1f5f9 !important;
+      color: #475569 !important;
+      min-width: 42px !important;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px !important;
+      padding: 0 !important;
+    }
+
+    .refresh-btn:hover {
+      background: #e2e8f0 !important;
+    }
+
+    /* Loading State */
+    .loading-state {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 40px;
-      background: #f5f5f5;
-      border-radius: 8px;
+      padding: 80px;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .loading-spinner {
+      position: relative;
+    }
+
+    .loading-state p {
       margin-top: 20px;
+      color: #64748b;
+      font-size: 15px;
+      font-weight: 500;
     }
 
-    .report-generation p {
-      margin-top: 16px;
-      font-size: 16px;
-      color: #666;
+    /* Summary Cards */
+    .report-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 28px;
     }
 
+    .summary-card {
+      background: white;
+      padding: 24px;
+      border-radius: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+
+    .summary-card .card-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .summary-card .card-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .summary-card.daily .card-icon {
+      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+      color: #2563eb;
+    }
+
+    .summary-card.monthly .card-icon {
+      background: linear-gradient(135deg, #fae8ff, #f5d0fe);
+      color: #a855f7;
+    }
+
+    .summary-card.vehicles .card-icon {
+      background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+      color: #059669;
+    }
+
+    .card-content {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .card-label {
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.2;
+      margin: 6px 0;
+    }
+
+    .card-date {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    /* Provinces Section */
+    .provinces-section {
+      background: white;
+      padding: 24px;
+      border-radius: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+      margin-bottom: 28px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .section-header mat-icon {
+      color: #3b82f6;
+      font-size: 24px;
+    }
+
+    .section-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .record-count {
+      margin-left: auto;
+      font-size: 13px;
+      color: #64748b;
+      background: #f1f5f9;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+
+    .province-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .province-card {
+      background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+      padding: 18px 20px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s;
+    }
+
+    .province-card:hover {
+      border-color: #3b82f6;
+      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    }
+
+    .province-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .province-icon mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .province-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .province-name {
+      font-weight: 600;
+      color: #334155;
+      font-size: 14px;
+    }
+
+    .province-value {
+      font-weight: 700;
+      color: #0f172a;
+      font-size: 18px;
+    }
+
+    /* Table Section */
+    .table-section {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+
+    .table-section .section-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      margin-bottom: 0;
+    }
+
+    .vehicles-table-container {
+      overflow-x: auto;
+    }
+
+    .vehicles-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .vehicles-table thead {
+      background: #f8fafc;
+    }
+
+    .vehicles-table th {
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      border-bottom: 2px solid #e2e8f0;
+      white-space: nowrap;
+    }
+
+    .vehicles-table tbody tr {
+      border-bottom: 1px solid #f1f5f9;
+      transition: background 0.15s;
+    }
+
+    .vehicles-table tbody tr:hover {
+      background: #f8fafc;
+    }
+
+    .vehicles-table td {
+      padding: 14px 16px;
+      vertical-align: middle;
+      color: #334155;
+    }
+
+    .province-badge {
+      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+      color: #1d4ed8;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .vehicle-type {
+      background: #f1f5f9;
+      color: #475569;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .mono {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 12px;
+      color: #0f172a;
+      font-weight: 500;
+    }
+
+    .date-cell {
+      color: #64748b;
+      white-space: nowrap;
+    }
+
+    .vehicles-table td.currency {
+      font-weight: 600;
+      color: #059669;
+      text-align: right;
+      white-space: nowrap;
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+
+    .vehicles-table td.currency.mtd {
+      color: #7c3aed;
+    }
+
+    .vehicles-table td.center {
+      text-align: center;
+    }
+
+    .route-cell {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #64748b;
+    }
+
+    .notes-cell {
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #94a3b8;
+      font-style: italic;
+    }
+
+    /* Dialog Actions */
     mat-dialog-actions {
-      padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      padding: 16px 28px;
+      background: white;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .footer-info mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    mat-dialog-actions button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
   `]
 })
-export class LogisticsReportsDialog {
-  generatingReport = false;
-  currentReportName = '';
-  
-  stats = {
-    activeLoads: 15,
-    inTransit: 8,
-    delivered: 142,
-    totalVehicles: 45,
-    availableVehicles: 32,
-    totalDrivers: 38,
-    availableDrivers: 25,
-    upcomingMaintenance: 7,
-    pendingInvoices: 23
-  };
+export class LogisticsReportsDialog implements OnInit {
+  selectedDate = new Date();
+  loading = true;
+  reportData: any = null;
+  currentTime = new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
 
-  sleepOutsCount = 5;
-  tfnOrdersCount = 12;
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
 
   constructor(
-    public dialogRef: MatDialogRef<LogisticsReportsDialog>,
-    private http: HttpClient,
-    private snackBar: MatSnackBar
+    public dialogRef: MatDialogRef<LogisticsReportsDialog>
   ) {}
 
-  generateReport(reportType: string): void {
-    const reportNames: { [key: string]: string } = {
-      'loads-summary': 'Loads Summary Report',
-      'delivery-performance': 'Delivery Performance Report',
-      'pod-report': 'Proof of Delivery Report',
-      'route-efficiency': 'Route Efficiency Report',
-      'vehicle-utilization': 'Vehicle Utilization Report',
-      'fuel-consumption': 'Fuel Consumption Report',
-      'maintenance-schedule': 'Maintenance Schedule Report',
-      'sleep-outs': 'Sleep Outs Report',
-      'driver-performance': 'Driver Performance Report',
-      'license-compliance': 'License Compliance Report',
-      'invoice-summary': 'Invoice Summary Report',
-      'delivery-costs': 'Delivery Costs Report'
-    };
+  ngOnInit(): void {
+    this.loadReport();
+  }
 
-    this.currentReportName = reportNames[reportType] || 'Report';
-    this.generatingReport = true;
-
-    // Fetch real report data from backend
+  loadReport(): void {
+    this.loading = true;
     const apiUrl = environment.apiUrl;
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 1);
+    const dateStr = this.selectedDate.toISOString().split('T')[0];
 
-    this.http.get(`${apiUrl}/logistics/reports/${reportType}?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
+    this.http.get(`${apiUrl}/logistics/reports/daily-dispatch?reportDate=${dateStr}`)
       .subscribe({
         next: (data: any) => {
-          this.generatingReport = false;
-          this.snackBar.open(`${this.currentReportName} generated successfully!`, 'View', {
-            duration: 5000
-          }).onAction().subscribe(() => {
-            this.openReport(reportType, data);
-          });
+          this.reportData = data;
+          this.loading = false;
+          this.currentTime = new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
         },
         error: (err) => {
-          this.generatingReport = false;
-          this.snackBar.open(`Failed to generate ${this.currentReportName}`, 'Close', {
-            duration: 3000
-          });
+          this.loading = false;
+          this.snackBar.open('Failed to load report', 'Close', { duration: 3000 });
         }
       });
   }
 
-  openReport(reportType: string, data: any): void {
-    // Open report data in a new dialog or window
-    // For now, download as JSON (in production, this would be a formatted PDF/Excel)
-    const dataStr = JSON.stringify(data, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = window.URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${reportType}-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+  exportToExcel(): void {
+    const apiUrl = environment.apiUrl;
+    const dateStr = this.selectedDate.toISOString().split('T')[0];
+    const url = `${apiUrl}/logistics/reports/daily-dispatch/export?reportDate=${dateStr}`;
+    window.open(url, '_blank');
   }
 }
 

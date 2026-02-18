@@ -655,8 +655,8 @@ public class StockOnHandImportService
                         {
                             BuildingId = buildingId,
                             ItemCode = line.ItemCode!,
-                            ItemDescription = line.ItemDescription,
-                            Uom = line.Uom,
+                            ItemDescription = line.ItemDescription ?? "",
+                            Uom = line.Uom ?? "",
                             QuantityOnHand = line.QtyOnHand ?? 0,
                             QuantityReserved = line.QtyOnSO ?? 0,
                             QuantityOnOrder = line.QtyOnPO ?? 0,

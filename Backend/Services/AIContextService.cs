@@ -932,12 +932,12 @@ namespace ProjectTracker.API.Services
             // Get inventory query
             var inventoryQuery = context.BuildingInventory
                 .Include(i => i.Building)
-                .ThenInclude(b => b.Warehouse)
+                .ThenInclude(b => b!.Warehouse)
                 .AsQueryable();
 
             if (warehouseFilter.HasValue)
             {
-                inventoryQuery = inventoryQuery.Where(i => i.Building.WarehouseId == warehouseFilter.Value);
+                inventoryQuery = inventoryQuery.Where(i => i.Building!.WarehouseId == warehouseFilter.Value);
             }
 
             // Check for specific item search
@@ -945,18 +945,18 @@ namespace ProjectTracker.API.Services
             if (itemMatch.Success)
             {
                 var searchItem = itemMatch.Groups[1].Value.Trim().ToLower();
-                inventoryQuery = inventoryQuery.Where(i => i.ItemCode.ToLower().Contains(searchItem) || 
-                                                   i.ItemDescription.ToLower().Contains(searchItem));
+                inventoryQuery = inventoryQuery.Where(i => i.ItemCode!.ToLower().Contains(searchItem) || 
+                                                   i.ItemDescription!.ToLower().Contains(searchItem));
             }
 
             // Get summary by building
             var summaryByBuilding = await context.BuildingInventory
                 .Include(i => i.Building)
-                .GroupBy(i => new { i.BuildingId, i.Building.Name, i.Building.WarehouseId })
+                .GroupBy(i => new { i.BuildingId, BuildingName = i.Building!.Name, i.Building!.WarehouseId })
                 .Select(g => new
                 {
                     BuildingId = g.Key.BuildingId,
-                    BuildingName = g.Key.Name,
+                    BuildingName = g.Key.BuildingName,
                     WarehouseId = g.Key.WarehouseId,
                     ItemCount = g.Count(),
                     TotalQty = g.Sum(i => i.QuantityOnHand),
@@ -1000,7 +1000,7 @@ namespace ProjectTracker.API.Services
                     foreach (var item in items)
                     {
                         builder.AppendLine($"- {item.ItemCode}: {item.ItemDescription}");
-                        builder.AppendLine($"  - Building: {item.Building.Name} | Qty: {item.QuantityOnHand:N0} {item.Uom}");
+                        builder.AppendLine($"  - Building: {item.Building?.Name ?? "Unknown"} | Qty: {item.QuantityOnHand:N0} {item.Uom}");
                         builder.AppendLine($"  - Available: {item.QuantityAvailable:N0} | Value: R{item.QuantityOnHand * item.UnitCost:N2}");
                     }
                 }

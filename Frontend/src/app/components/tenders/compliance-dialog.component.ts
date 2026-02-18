@@ -296,7 +296,7 @@ interface DialogData {
             @if (saving) {
               <mat-spinner diameter="20"></mat-spinner>
             } @else {
-              <mat-icon>save</mat-icon> {{ data.mode === 'create' ? 'Add Document' : 'Save Changes' }}
+              <ng-container><mat-icon>save</mat-icon> {{ data.mode === 'create' ? 'Add Document' : 'Save Changes' }}</ng-container>
             }
           </button>
         }

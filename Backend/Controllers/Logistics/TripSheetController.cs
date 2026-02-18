@@ -1141,6 +1141,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             align-items: center;
             gap: 15px;
         }
+        .header-logo {
+            height: 50px;
+            width: auto;
+        }
         .logo-text {
             font-size: 27px;
             font-weight: bold;
@@ -1159,11 +1163,6 @@ namespace ProjectTracker.API.Controllers.Logistics
             display: flex;
             flex-direction: column;
             align-items: flex-end;
-        }
-        .header-logo {
-            height: 50px;
-            width: auto;
-            margin-bottom: 5px;
         }
         .company-name {
             font-size: 17px;
@@ -1397,11 +1396,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             sb.AppendLine($@"
     <div class='header'>
         <div class='header-left'>
+            <img src='data:image/png;base64,{COMPANY_LOGO_BASE64}' class='header-logo' alt='Company Logo' />
             <span class='logo-text'>🚛 TRIP SHEET</span>
             <span class='trip-badge'>{tripSheet.LoadNumber}</span>
         </div>
         <div class='header-right'>
-            <img src='data:image/png;base64,{COMPANY_LOGO_BASE64}' class='header-logo' alt='Company Logo' />
             <div class='company-name'>ProMed Technologies</div>
             <div style='color: #666; font-size: 9px;'>Logistics Division</div>
         </div>
