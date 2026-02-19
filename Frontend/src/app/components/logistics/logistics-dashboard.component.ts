@@ -1310,6 +1310,10 @@ interface SleepOut {
                                 <span>Reassign Driver/Vehicle</span>
                               </button>
                             }
+                            <button mat-menu-item class="modern-menu-item" (click)="rescheduleTripsheet(trip)">
+                              <mat-icon class="menu-icon-purple">schedule</mat-icon>
+                              <span>Reschedule</span>
+                            </button>
                             <div class="menu-divider"></div>
                             <div class="menu-section-header">Export</div>
                             <button mat-menu-item class="modern-menu-item" (click)="printTripsheet(trip)">
@@ -6034,6 +6038,43 @@ Notes: ${record.notes || 'No notes'}
           error: (err) => {
             console.error('Error reassigning tripsheet:', err);
             this.snackBar.open('Failed to reassign tripsheet', 'Close', { duration: 3000 });
+          }
+        });
+      }
+    });
+  }
+
+  rescheduleTripsheet(trip: any): void {
+    const dialogRef = this.dialog.open(RescheduleTripsheetDialog, {
+      width: '520px',
+      data: {
+        tripNumber: trip.tripsheetNo || trip.tripNumber || trip.loadNumber || `TS-${trip.loadId || trip.id}`,
+        currentPickupDate: trip.scheduledPickupDate || trip.scheduledDate || trip.date,
+        currentPickupTime: trip.scheduledPickupTime,
+        currentDeliveryDate: trip.scheduledDeliveryDate || trip.expectedDelivery,
+        currentDeliveryTime: trip.scheduledDeliveryTime || trip.expectedDeliveryTime
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        const loadId = trip.loadId || trip.id;
+        const updateData: any = {};
+        
+        if (result.scheduledPickupDate) updateData.scheduledPickupDate = result.scheduledPickupDate;
+        if (result.scheduledPickupTime) updateData.scheduledPickupTime = result.scheduledPickupTime;
+        if (result.scheduledDeliveryDate) updateData.scheduledDeliveryDate = result.scheduledDeliveryDate;
+        if (result.scheduledDeliveryTime) updateData.scheduledDeliveryTime = result.scheduledDeliveryTime;
+        if (result.reason) updateData.notes = result.reason;
+
+        this.http.put(`${this.apiUrl}/logistics/tripsheet/${loadId}/assign`, updateData).subscribe({
+          next: () => {
+            this.loadTripsheets();
+            this.snackBar.open('Tripsheet rescheduled successfully!', 'Close', { duration: 3000 });
+          },
+          error: (err) => {
+            console.error('Error rescheduling tripsheet:', err);
+            this.snackBar.open('Failed to reschedule tripsheet', 'Close', { duration: 3000 });
           }
         });
       }
@@ -23515,6 +23556,178 @@ export class ReassignLoadDialog {
       vehicleId: this.selectedVehicleId,
       driverId: this.selectedDriverId
     });
+  }
+}
+
+// ===========================
+// RESCHEDULE TRIPSHEET DIALOG
+// ===========================
+@Component({
+  selector: 'reschedule-tripsheet-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatDatepickerModule,
+    MatInputModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon style="color: #7b1fa2;">schedule</mat-icon>
+      Reschedule: {{ data.tripNumber }}
+    </h2>
+    <mat-dialog-content style="min-height: 220px; padding-top: 16px;">
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <!-- Current schedule info -->
+        <div style="background: #f5f5f5; border-radius: 8px; padding: 12px; margin-bottom: 4px;">
+          <div style="font-size: 12px; color: #666; font-weight: 500; margin-bottom: 6px;">CURRENT SCHEDULE</div>
+          <div style="display: flex; gap: 20px; font-size: 13px;">
+            <div><strong>Pickup:</strong> {{ data.currentPickupDate ? (data.currentPickupDate | date:'dd MMM yyyy') : 'Not set' }}
+              {{ data.currentPickupTime ? formatTime(data.currentPickupTime) : '' }}</div>
+            <div><strong>Delivery:</strong> {{ data.currentDeliveryDate ? (data.currentDeliveryDate | date:'dd MMM yyyy') : 'Not set' }}
+              {{ data.currentDeliveryTime ? formatTime(data.currentDeliveryTime) : '' }}</div>
+          </div>
+        </div>
+
+        <!-- New Pickup Date & Time -->
+        <div style="display: flex; gap: 12px;">
+          <mat-form-field appearance="outline" style="flex: 1;">
+            <mat-label>New Pickup Date</mat-label>
+            <input matInput [matDatepicker]="pickupPicker" [(ngModel)]="newPickupDate">
+            <mat-datepicker-toggle matSuffix [for]="pickupPicker"></mat-datepicker-toggle>
+            <mat-datepicker #pickupPicker></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" style="flex: 0.7;">
+            <mat-label>Time</mat-label>
+            <input matInput type="time" [(ngModel)]="newPickupTime">
+          </mat-form-field>
+        </div>
+
+        <!-- New Delivery Date & Time -->
+        <div style="display: flex; gap: 12px;">
+          <mat-form-field appearance="outline" style="flex: 1;">
+            <mat-label>New Delivery Date</mat-label>
+            <input matInput [matDatepicker]="deliveryPicker" [(ngModel)]="newDeliveryDate">
+            <mat-datepicker-toggle matSuffix [for]="deliveryPicker"></mat-datepicker-toggle>
+            <mat-datepicker #deliveryPicker></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" style="flex: 0.7;">
+            <mat-label>Time</mat-label>
+            <input matInput type="time" [(ngModel)]="newDeliveryTime">
+          </mat-form-field>
+        </div>
+
+        <!-- Reason -->
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Reason for Reschedule</mat-label>
+          <input matInput [(ngModel)]="reason" placeholder="e.g. Driver unavailable, vehicle in maintenance...">
+        </mat-form-field>
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="onCancel()">Cancel</button>
+      <button mat-raised-button color="primary" (click)="onReschedule()" [disabled]="!hasChanges()">
+        <mat-icon>schedule</mat-icon>
+        Reschedule
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    mat-dialog-content { overflow-y: visible; }
+    h2 { display: flex; align-items: center; gap: 8px; }
+    h2 mat-icon { font-size: 28px; width: 28px; height: 28px; }
+  `]
+})
+export class RescheduleTripsheetDialog {
+  newPickupDate: Date | null = null;
+  newDeliveryDate: Date | null = null;
+  newPickupTime: string = '';
+  newDeliveryTime: string = '';
+  reason: string = '';
+
+  constructor(
+    public dialogRef: MatDialogRef<RescheduleTripsheetDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: {
+      tripNumber: string;
+      currentPickupDate: string | null;
+      currentPickupTime: string | null;
+      currentDeliveryDate: string | null;
+      currentDeliveryTime: string | null;
+    }
+  ) {
+    // Pre-populate with current values
+    if (data.currentPickupDate) this.newPickupDate = new Date(data.currentPickupDate);
+    if (data.currentDeliveryDate) this.newDeliveryDate = new Date(data.currentDeliveryDate);
+    if (data.currentPickupTime) this.newPickupTime = this.extractTime(data.currentPickupTime);
+    if (data.currentDeliveryTime) this.newDeliveryTime = this.extractTime(data.currentDeliveryTime);
+  }
+
+  extractTime(dateStr: string): string {
+    try {
+      const d = new Date(dateStr);
+      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+    } catch {
+      return '';
+    }
+  }
+
+  formatTime(dateStr: string): string {
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }
+
+  hasChanges(): boolean {
+    return this.newPickupDate !== null || this.newDeliveryDate !== null ||
+           this.newPickupTime !== '' || this.newDeliveryTime !== '';
+  }
+
+  onCancel(): void {
+    this.dialogRef.close();
+  }
+
+  onReschedule(): void {
+    const result: any = { reason: this.reason };
+    
+    if (this.newPickupDate) {
+      const d = new Date(this.newPickupDate);
+      if (this.newPickupTime) {
+        const [h, m] = this.newPickupTime.split(':');
+        d.setHours(parseInt(h), parseInt(m), 0, 0);
+      }
+      result.scheduledPickupDate = d.toISOString();
+    }
+    if (this.newPickupTime) {
+      const d = this.newPickupDate ? new Date(this.newPickupDate) : new Date();
+      const [h, m] = this.newPickupTime.split(':');
+      d.setHours(parseInt(h), parseInt(m), 0, 0);
+      result.scheduledPickupTime = d.toISOString();
+    }
+    if (this.newDeliveryDate) {
+      const d = new Date(this.newDeliveryDate);
+      if (this.newDeliveryTime) {
+        const [h, m] = this.newDeliveryTime.split(':');
+        d.setHours(parseInt(h), parseInt(m), 0, 0);
+      }
+      result.scheduledDeliveryDate = d.toISOString();
+    }
+    if (this.newDeliveryTime) {
+      const d = this.newDeliveryDate ? new Date(this.newDeliveryDate) : new Date();
+      const [h, m] = this.newDeliveryTime.split(':');
+      d.setHours(parseInt(h), parseInt(m), 0, 0);
+      result.scheduledDeliveryTime = d.toISOString();
+    }
+    
+    this.dialogRef.close(result);
   }
 }
 

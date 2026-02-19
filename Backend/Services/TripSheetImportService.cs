@@ -299,7 +299,43 @@ public class TripSheetImportService
                             }
                             else
                             {
-                                _context.ImportedInvoices.Add(invoice);
+                                // Try to find existing invoice by TransactionNumber before creating a duplicate
+                                ImportedInvoice? existingByTxn = null;
+                                if (!string.IsNullOrEmpty(confirmation.InvoiceNumber))
+                                {
+                                    var normalizedInvoiceNo = NormalizeInvoiceNumber(confirmation.InvoiceNumber);
+                                    existingByTxn = await _context.ImportedInvoices
+                                        .FirstOrDefaultAsync(i => i.LoadId == null && 
+                                            i.TransactionNumber == confirmation.InvoiceNumber);
+                                    
+                                    // If exact match not found, try normalized match
+                                    if (existingByTxn == null)
+                                    {
+                                        var candidates = await _context.ImportedInvoices
+                                            .Where(i => i.LoadId == null)
+                                            .ToListAsync();
+                                        existingByTxn = candidates
+                                            .FirstOrDefault(i => NormalizeInvoiceNumber(i.TransactionNumber) == normalizedInvoiceNo);
+                                    }
+                                }
+
+                                if (existingByTxn != null)
+                                {
+                                    // Update existing invoice instead of creating duplicate
+                                    existingByTxn.LoadId = load.Id;
+                                    existingByTxn.Status = "Assigned";
+                                    existingByTxn.UpdatedAt = DateTime.UtcNow;
+                                    if (confirmation.ConfirmedCustomerId.HasValue)
+                                    {
+                                        existingByTxn.CustomerId = confirmation.ConfirmedCustomerId;
+                                    }
+                                    _logger.LogInformation("Linked existing invoice {TransactionNumber} to load {LoadId} by TransactionNumber match",
+                                        existingByTxn.TransactionNumber, load.Id);
+                                }
+                                else
+                                {
+                                    _context.ImportedInvoices.Add(invoice);
+                                }
                             }
 
                             // Update stop with invoice number if we have one
@@ -329,17 +365,26 @@ public class TripSheetImportService
 
             await _context.SaveChangesAsync();
 
+            // Post-commit sync: link any remaining unlinked ImportedInvoices by matching
+            // LoadStop invoice numbers to ImportedInvoices.TransactionNumber
+            var syncedCount = await SyncInvoiceStatusesForLoad(load);
+            if (syncedCount > 0)
+            {
+                _logger.LogInformation("Post-commit sync: linked {Count} additional invoices to load {LoadNumber}",
+                    syncedCount, tripSheetNumber);
+            }
+
             response.TripSheetNumber = tripSheetNumber;
             response.LoadId = load.Id;
-            response.ImportedCount = successCount;
+            response.ImportedCount = successCount + syncedCount;
             response.ErrorCount = errorCount;
             response.Errors = errors;
             response.TotalStops = stopSequence - 1;
             response.TotalValue = totalValue;
 
             _logger.LogInformation(
-                "Committed import batch {BatchId} as {TripSheetNumber}: {Success} success, {Errors} errors, {Stops} stops",
-                request.BatchId, tripSheetNumber, successCount, errorCount, stopSequence - 1);
+                "Committed import batch {BatchId} as {TripSheetNumber}: {Success} success, {Errors} errors, {Stops} stops, {Synced} synced",
+                request.BatchId, tripSheetNumber, successCount, errorCount, stopSequence - 1, syncedCount);
         }
         catch (Exception ex)
         {
@@ -349,6 +394,82 @@ public class TripSheetImportService
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// After creating a load, sync any remaining unlinked ImportedInvoices by matching
+    /// LoadStop invoice numbers to ImportedInvoices.TransactionNumber.
+    /// Returns the number of invoices synced.
+    /// </summary>
+    private async Task<int> SyncInvoiceStatusesForLoad(Load load)
+    {
+        try
+        {
+            // Reload load with stops
+            var loadWithStops = await _context.Loads
+                .Include(l => l.Stops)
+                .FirstOrDefaultAsync(l => l.Id == load.Id);
+            
+            if (loadWithStops == null) return 0;
+
+            // Collect all invoice numbers from this load's stops
+            var loadInvoiceNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var stop in loadWithStops.Stops)
+            {
+                if (!string.IsNullOrWhiteSpace(stop.InvoiceNumber))
+                {
+                    var invoiceNos = stop.InvoiceNumber.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var inv in invoiceNos)
+                    {
+                        loadInvoiceNumbers.Add(inv.Trim());
+                    }
+                }
+            }
+
+            if (!loadInvoiceNumbers.Any()) return 0;
+
+            // Get all unlinked invoices
+            var unlinkedInvoices = await _context.ImportedInvoices
+                .Where(i => i.LoadId == null && (i.Status == "Pending" || i.Status == null))
+                .ToListAsync();
+
+            int syncedCount = 0;
+            var targetStatus = loadWithStops.Status switch
+            {
+                "Delivered" => "Delivered",
+                "InTransit" => "InTransit",
+                "Assigned" => "Assigned",
+                _ => "Assigned"
+            };
+
+            foreach (var invoiceNo in loadInvoiceNumbers)
+            {
+                var normalizedNo = NormalizeInvoiceNumber(invoiceNo);
+                var matched = unlinkedInvoices
+                    .Where(i => NormalizeInvoiceNumber(i.TransactionNumber) == normalizedNo && i.LoadId == null)
+                    .ToList();
+
+                foreach (var invoice in matched)
+                {
+                    invoice.LoadId = load.Id;
+                    invoice.Status = targetStatus;
+                    invoice.UpdatedAt = DateTime.UtcNow;
+                    syncedCount++;
+                }
+            }
+
+            if (syncedCount > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return syncedCount;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Post-commit invoice sync failed for load {LoadId}, non-critical", load.Id);
+            return 0;
+        }
     }
 
     #region Private Methods - Extraction

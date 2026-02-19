@@ -269,5 +269,10 @@ namespace ProjectTracker.API.DTOs.Logistics
         public int? VehicleId { get; set; }
         public DateTime? ScheduledDate { get; set; }
         public DateTime? ScheduledTime { get; set; }
+        public DateTime? ScheduledPickupDate { get; set; }
+        public DateTime? ScheduledPickupTime { get; set; }
+        public DateTime? ScheduledDeliveryDate { get; set; }
+        public DateTime? ScheduledDeliveryTime { get; set; }
+        public string? Notes { get; set; }
     }
 }

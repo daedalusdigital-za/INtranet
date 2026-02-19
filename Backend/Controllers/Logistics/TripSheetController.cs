@@ -410,6 +410,27 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.ScheduledTime.HasValue)
                 load.ScheduledPickupTime = dto.ScheduledTime;
 
+            // Reschedule support: pickup date/time
+            if (dto.ScheduledPickupDate.HasValue)
+                load.ScheduledPickupDate = dto.ScheduledPickupDate;
+            if (dto.ScheduledPickupTime.HasValue)
+                load.ScheduledPickupTime = dto.ScheduledPickupTime;
+
+            // Reschedule support: delivery date/time
+            if (dto.ScheduledDeliveryDate.HasValue)
+                load.ScheduledDeliveryDate = dto.ScheduledDeliveryDate;
+            if (dto.ScheduledDeliveryTime.HasValue)
+                load.ScheduledDeliveryTime = dto.ScheduledDeliveryTime;
+
+            // Reschedule reason in notes
+            if (!string.IsNullOrEmpty(dto.Notes))
+            {
+                var rescheduleNote = $"[Rescheduled {DateTime.Now:dd MMM yyyy HH:mm}] {dto.Notes}";
+                load.Notes = string.IsNullOrEmpty(load.Notes) 
+                    ? rescheduleNote 
+                    : $"{load.Notes}\n{rescheduleNote}";
+            }
+
             // If driver and vehicle are assigned, update status
             if (load.DriverId.HasValue && load.VehicleId.HasValue && load.Status == "Pending")
             {
@@ -419,7 +440,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             load.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Assigned driver {DriverId} and vehicle {VehicleId} to TripSheet {LoadNumber}", 
+            _logger.LogInformation("Assigned/Rescheduled driver {DriverId} and vehicle {VehicleId} to TripSheet {LoadNumber}", 
                 dto.DriverId, dto.VehicleId, load.LoadNumber);
 
             return await GetTripSheet(tripSheetId);
@@ -1067,7 +1088,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     VatAmount = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0) * TripSheetDto.VatRate,
                     TotalWithVat = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0) * (1 + TripSheetDto.VatRate)
                 })
-                .Take(100)
+                .Take(10000)
                 .ToListAsync();
 
             return Ok(tripSheets);

@@ -476,6 +476,45 @@ namespace ProjectTracker.API.Controllers.Logistics
                     _context.LoadStops.Add(stop);
                     await _context.SaveChangesAsync(); // Save to get the stop ID
                     
+                    // Write back address fixes to the linked LogisticsCustomer
+                    if (stopDto.CustomerId.HasValue && stopDto.CustomerId.Value > 0)
+                    {
+                        var customer = await _context.LogisticsCustomers.FindAsync(stopDto.CustomerId.Value);
+                        if (customer != null)
+                        {
+                            bool customerChanged = false;
+                            if (!string.IsNullOrEmpty(stopDto.City) && (string.IsNullOrEmpty(customer.City) || customer.City != stopDto.City))
+                            {
+                                customer.City = stopDto.City;
+                                customer.DeliveryCity = stopDto.City;
+                                customerChanged = true;
+                            }
+                            if (!string.IsNullOrEmpty(stopDto.Province) && (string.IsNullOrEmpty(customer.Province) || customer.Province != stopDto.Province))
+                            {
+                                customer.Province = stopDto.Province;
+                                customer.DeliveryProvince = stopDto.Province;
+                                customerChanged = true;
+                            }
+                            if (stopDto.Latitude.HasValue && stopDto.Latitude != 0 && customer.Latitude == null)
+                            {
+                                customer.Latitude = (double)stopDto.Latitude.Value;
+                                customer.Longitude = stopDto.Longitude.HasValue ? (double)stopDto.Longitude.Value : null;
+                                customerChanged = true;
+                            }
+                            if (!string.IsNullOrEmpty(stopDto.Address) && stopDto.Address != "Unknown" && 
+                                (string.IsNullOrEmpty(customer.DeliveryAddress) || customer.DeliveryAddress == "Unknown"))
+                            {
+                                customer.DeliveryAddress = stopDto.Address;
+                                customerChanged = true;
+                            }
+                            if (customerChanged)
+                            {
+                                customer.UpdatedAt = DateTime.UtcNow;
+                                _logger.LogInformation("Updated LogisticsCustomer {Id} ({Name}) with address fixes from load edit", customer.Id, customer.Name);
+                            }
+                        }
+                    }
+
                     // Add commodities for this stop
                     if (stopDto.Commodities != null)
                     {
@@ -1526,6 +1565,46 @@ namespace ProjectTracker.API.Controllers.Logistics
                 stop.CustomerId = request.CustomerId;
             }
 
+            // Write back address fixes to linked LogisticsCustomer so they persist
+            var customerId = stop.CustomerId ?? request.CustomerId;
+            if (customerId.HasValue)
+            {
+                var customer = await _context.LogisticsCustomers.FindAsync(customerId.Value);
+                if (customer != null)
+                {
+                    bool customerChanged = false;
+                    if (!string.IsNullOrEmpty(request.City) && (string.IsNullOrEmpty(customer.City) || string.IsNullOrEmpty(customer.DeliveryCity)))
+                    {
+                        if (string.IsNullOrEmpty(customer.City)) customer.City = request.City;
+                        if (string.IsNullOrEmpty(customer.DeliveryCity)) customer.DeliveryCity = request.City;
+                        customerChanged = true;
+                    }
+                    if (!string.IsNullOrEmpty(request.Province) && (string.IsNullOrEmpty(customer.Province) || string.IsNullOrEmpty(customer.DeliveryProvince)))
+                    {
+                        if (string.IsNullOrEmpty(customer.Province)) customer.Province = request.Province;
+                        if (string.IsNullOrEmpty(customer.DeliveryProvince)) customer.DeliveryProvince = request.Province;
+                        customerChanged = true;
+                    }
+                    if (request.Latitude.HasValue && customer.Latitude == null)
+                    {
+                        customer.Latitude = request.Latitude.Value;
+                        customer.Longitude = request.Longitude;
+                        customerChanged = true;
+                    }
+                    if (!string.IsNullOrEmpty(request.Address) && 
+                        (string.IsNullOrEmpty(customer.DeliveryAddress) || customer.DeliveryAddress == "Unknown"))
+                    {
+                        customer.DeliveryAddress = request.Address;
+                        customerChanged = true;
+                    }
+                    if (customerChanged)
+                    {
+                        customer.UpdatedAt = DateTime.UtcNow;
+                        _logger.LogInformation("Updated LogisticsCustomer {Id} ({Name}) from stop suggestion", customer.Id, customer.Name);
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Applied suggestion to stop {StopId}", stop.Id);
@@ -1592,6 +1671,20 @@ namespace ProjectTracker.API.Controllers.Logistics
                 totalFixed = updated,
                 message = $"Updated {updated} stops from linked customer data"
             });
+        }
+
+        /// <summary>
+        /// Bulk fix missing provinces on LogisticsCustomers by mapping city names to provinces.
+        /// Uses a hard-coded dictionary first, then Gemini AI for unknown cities.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("bulk-fix-provinces")]
+        public async Task<ActionResult> BulkFixProvinces(
+            [FromServices] ProjectTracker.API.Services.GeminiProvinceService geminiService)
+        {
+            _logger.LogInformation("Starting bulk province fix...");
+            var result = await geminiService.BulkFixMissingProvinces();
+            return Ok(result);
         }
 
         #endregion

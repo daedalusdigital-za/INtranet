@@ -1153,6 +1153,46 @@ namespace ProjectTracker.API.Controllers.Logistics
                             a.Address.ToLower() == addressDto.Address.ToLower() &&
                             a.IsActive);
 
+                    // Also update the main LogisticsCustomer record with address data if missing
+                    bool custUpdated = false;
+                    if (!string.IsNullOrEmpty(addressDto.City) && string.IsNullOrEmpty(customer.City))
+                    {
+                        customer.City = addressDto.City;
+                        custUpdated = true;
+                    }
+                    if (!string.IsNullOrEmpty(addressDto.City) && string.IsNullOrEmpty(customer.DeliveryCity))
+                    {
+                        customer.DeliveryCity = addressDto.City;
+                        custUpdated = true;
+                    }
+                    if (!string.IsNullOrEmpty(addressDto.Province) && string.IsNullOrEmpty(customer.Province))
+                    {
+                        customer.Province = addressDto.Province;
+                        custUpdated = true;
+                    }
+                    if (!string.IsNullOrEmpty(addressDto.Province) && string.IsNullOrEmpty(customer.DeliveryProvince))
+                    {
+                        customer.DeliveryProvince = addressDto.Province;
+                        custUpdated = true;
+                    }
+                    if (addressDto.Latitude.HasValue && customer.Latitude == null)
+                    {
+                        customer.Latitude = (double)addressDto.Latitude.Value;
+                        customer.Longitude = addressDto.Longitude.HasValue ? (double)addressDto.Longitude.Value : null;
+                        custUpdated = true;
+                    }
+                    if (!string.IsNullOrEmpty(addressDto.Address) && 
+                        (string.IsNullOrEmpty(customer.DeliveryAddress) || customer.DeliveryAddress == "Unknown"))
+                    {
+                        customer.DeliveryAddress = addressDto.Address;
+                        custUpdated = true;
+                    }
+                    if (custUpdated)
+                    {
+                        customer.UpdatedAt = DateTime.UtcNow;
+                        _logger.LogInformation("Updated LogisticsCustomer {Id} ({Name}) with address data from batch-save", customer.Id, customer.Name);
+                    }
+
                     if (existingAddress != null)
                     {
                         // Update existing
