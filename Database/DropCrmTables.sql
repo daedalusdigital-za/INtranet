@@ -1,0 +1,10 @@
+IF OBJECT_ID('LeadInterests', 'U') IS NOT NULL DROP TABLE LeadInterests;
+IF OBJECT_ID('LeadAssignmentHistories', 'U') IS NOT NULL DROP TABLE LeadAssignmentHistories;
+IF OBJECT_ID('LeadLogs', 'U') IS NOT NULL DROP TABLE LeadLogs;
+IF OBJECT_ID('CampaignAgents', 'U') IS NOT NULL DROP TABLE CampaignAgents;
+IF OBJECT_ID('Promotions', 'U') IS NOT NULL DROP TABLE Promotions;
+IF OBJECT_ID('Leads', 'U') IS NOT NULL DROP TABLE Leads;
+IF OBJECT_ID('Dispositions', 'U') IS NOT NULL DROP TABLE Dispositions;
+IF OBJECT_ID('LeadStatuses', 'U') IS NOT NULL DROP TABLE LeadStatuses;
+IF OBJECT_ID('Campaigns', 'U') IS NOT NULL DROP TABLE Campaigns;
+SELECT 'CRM tables dropped successfully' AS Result;

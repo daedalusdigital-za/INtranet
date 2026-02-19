@@ -34,6 +34,7 @@ namespace ProjectTracker.API.Controllers
         /// <summary>
         /// Check if AI service is available
         /// </summary>
+        [AllowAnonymous]
         [HttpGet("health")]
         public async Task<IActionResult> Health()
         {

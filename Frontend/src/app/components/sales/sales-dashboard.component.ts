@@ -3932,9 +3932,9 @@ export class SalesDashboardComponent implements OnInit {
 
   loadInvoices(): void {
     this.loadingInvoices.set(true);
-    this.http.get<Invoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=1000`).subscribe({
-      next: (invoices) => {
-        this.invoices.set(invoices);
+    this.http.get<Invoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=10000`, { observe: 'response' }).subscribe({
+      next: (response) => {
+        this.invoices.set(response.body || []);
         this.loadingInvoices.set(false);
         this.updateStats();
       },
@@ -4633,44 +4633,33 @@ export class SalesDashboardComponent implements OnInit {
       inv.sourceCompany === this.selectedCompanyForDialog!.code
     );
     
-    // Number of business days to show based on selection
-    const businessDays = this.companySalesDateRange === 'week' ? 5 : 
-                         this.companySalesDateRange === 'month' ? 22 : 66;
+    // Actual calendar days to show based on selection
+    const calendarDays = this.companySalesDateRange === 'week' ? 7 : 
+                         this.companySalesDateRange === 'month' ? 30 : 90;
     
     const historyData: { date: string; label: string; total: number; count: number }[] = [];
     const today = new Date();
-    let daysCollected = 0;
-    let daysBack = 0;
     
-    // Go back until we have enough business days (Mon-Fri only)
-    while (daysCollected < businessDays && daysBack < 120) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - daysBack);
-      const dayOfWeek = date.getDay();
+    for (let daysBack = calendarDays - 1; daysBack >= 0; daysBack--) {
+      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysBack);
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       
-      // Skip weekends (0 = Sunday, 6 = Saturday)
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        const dateStr = date.toISOString().split('T')[0];
-        
-        const dayInvoices = invoices.filter(inv => {
-          const invDate = new Date(inv.transactionDate).toISOString().split('T')[0];
-          return invDate === dateStr;
-        });
-        
-        const label = businessDays <= 5 ? 
-          date.toLocaleDateString('en-ZA', { weekday: 'short' }) :
-          date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
-        
-        historyData.unshift({
-          date: date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }),
-          label: label,
-          total: dayInvoices.reduce((sum, inv) => sum + (inv.salesAmount || 0), 0),
-          count: dayInvoices.length
-        });
-        
-        daysCollected++;
-      }
-      daysBack++;
+      const dayInvoices = invoices.filter(inv => {
+        const d = new Date(inv.transactionDate);
+        const invDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return invDateStr === dateStr;
+      });
+      
+      const label = calendarDays <= 7 ? 
+        date.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric' }) :
+        date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+      
+      historyData.push({
+        date: date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }),
+        label: label,
+        total: dayInvoices.reduce((sum, inv) => sum + (inv.salesAmount || 0), 0),
+        count: dayInvoices.length
+      });
     }
     
     this.companySalesHistoryData = historyData;

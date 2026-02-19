@@ -402,11 +402,19 @@ namespace ProjectTracker.API.Services.TFN
             try
             {
                 fromDate ??= DateTime.UtcNow.AddDays(-7);
+                
+                // Try with utilized orders first, fall back to basic transactions
                 var tfnTransactions = await _transactionsClient.GetTransactionsWithOrdersAsync(fromDate);
                 
                 if (tfnTransactions == null)
                 {
-                    result.ErrorMessage = "Failed to retrieve transactions from TFN";
+                    _logger.LogWarning("TransactionsWithUtilisedOrders failed, falling back to basic Transactions endpoint");
+                    tfnTransactions = await _transactionsClient.GetTransactionsAsync(fromDate);
+                }
+                
+                if (tfnTransactions == null)
+                {
+                    result.ErrorMessage = "Failed to retrieve transactions from TFN (both endpoints failed)";
                     return result;
                 }
 

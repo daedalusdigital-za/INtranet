@@ -1790,8 +1790,14 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   }
 
   loadRecentConversations(): void {
-    fetch(`${environment.apiUrl}/messages/conversations?userId=${this.currentUserId}`)
-      .then(response => response.json())
+    const token = localStorage.getItem('token');
+    fetch(`${environment.apiUrl}/messages/conversations?userId=${this.currentUserId}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
       .then(data => {
         this.recentConversations = data.slice(0, 5); // Show only 5 most recent
       })
@@ -1802,8 +1808,14 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   }
 
   loadUnreadCount(): void {
-    fetch(`${environment.apiUrl}/messages/unread-count?userId=${this.currentUserId}`)
-      .then(response => response.json())
+    const token = localStorage.getItem('token');
+    fetch(`${environment.apiUrl}/messages/unread-count?userId=${this.currentUserId}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
       .then(count => {
         this.unreadMessagesCount = count;
       })
@@ -1862,8 +1874,9 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   // Open All Announcements Dialog
   openAllAnnouncementsDialog(): void {
     this.dialog.open(AllAnnouncementsDialogComponent, {
-      width: '800px',
-      maxHeight: '80vh',
+      width: '1100px',
+      maxWidth: '95vw',
+      maxHeight: '90vh',
       data: { 
         announcements: this.announcements,
         formatDate: this.formatAnnouncementDate.bind(this)
@@ -2026,7 +2039,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     .dialog-content {
       padding: 24px;
       overflow-y: auto;
-      max-height: calc(80vh - 100px);
+      max-height: calc(90vh - 100px);
     }
 
     .announcements-list {

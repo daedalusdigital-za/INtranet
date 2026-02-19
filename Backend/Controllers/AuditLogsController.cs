@@ -110,8 +110,8 @@ namespace ProjectTracker.API.Controllers
                 "announcement",
                 "settings",
                 "system",
+                "backup",
                 "document",
-                "crm",
                 "attendance",
                 "meeting"
             };

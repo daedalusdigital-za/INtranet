@@ -62,6 +62,7 @@ namespace ProjectTracker.API.Controllers
                         CreatedAt = a.CreatedAt,
                         Priority = a.Priority,
                         Category = a.Category,
+                        IsActive = a.IsActive,
                         IsRead = a.ReadByUsers.Any(r => r.UserId == currentUserId)
                     })
                     .ToListAsync();
@@ -122,7 +123,7 @@ namespace ProjectTracker.API.Controllers
 
         // POST: api/announcements
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<ActionResult<AnnouncementDto>> CreateAnnouncement(CreateAnnouncementDto dto)
         {
             try
@@ -184,7 +185,7 @@ namespace ProjectTracker.API.Controllers
 
         // PUT: api/announcements/{id}
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<IActionResult> UpdateAnnouncement(int id, UpdateAnnouncementDto dto)
         {
             try
@@ -196,9 +197,9 @@ namespace ProjectTracker.API.Controllers
                 }
 
                 var currentUserId = GetCurrentUserId();
-                // Only creator or admin can update
+                // Only creator or admin/super admin can update
                 if (announcement.CreatedByUserId != currentUserId && 
-                    !User.IsInRole("Admin"))
+                    !User.IsInRole("Admin") && !User.IsInRole("Super Admin"))
                 {
                     return Forbid();
                 }
@@ -234,7 +235,7 @@ namespace ProjectTracker.API.Controllers
 
         // DELETE: api/announcements/{id}
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<IActionResult> DeleteAnnouncement(int id)
         {
             try
@@ -246,9 +247,9 @@ namespace ProjectTracker.API.Controllers
                 }
 
                 var currentUserId = GetCurrentUserId();
-                // Only creator or admin can delete
+                // Only creator or admin/super admin can delete
                 if (announcement.CreatedByUserId != currentUserId && 
-                    !User.IsInRole("Admin"))
+                    !User.IsInRole("Admin") && !User.IsInRole("Super Admin"))
                 {
                     return Forbid();
                 }

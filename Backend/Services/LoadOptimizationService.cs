@@ -79,7 +79,10 @@ namespace ProjectTracker.API.Services
                             ProductDescription = i.ProductDescription,
                             Quantity = i.Quantity,
                             Amount = i.SalesAmount - i.SalesReturns,
-                            TransactionDate = i.TransactionDate
+                            TransactionDate = i.TransactionDate,
+                            DaysInSystem = (int)(DateTime.UtcNow - i.ImportedAt).TotalDays,
+                            DeliveryPriority = i.DeliveryPriority,
+                            DeliveryDeadline = i.DeliveryDeadline
                         }).ToList(),
                         Customers = customerGroups.Select(cg => new SuggestedLoadCustomerDto
                         {
@@ -106,7 +109,11 @@ namespace ProjectTracker.API.Services
                     break;
             }
 
-            return suggestedLoads.OrderByDescending(l => l.OptimizationScore).ToList();
+            return suggestedLoads
+                .OrderByDescending(l => InvoiceDeliveryPriorityService.GetPriorityWeight(
+                    InvoiceDeliveryPriorityService.MapToLoadPriority(l.Priority)))
+                .ThenByDescending(l => l.OptimizationScore)
+                .ToList();
         }
 
         private decimal CalculateOptimizationScore(int customerCount, decimal totalValue, int totalItems)
@@ -153,15 +160,33 @@ namespace ProjectTracker.API.Services
         private string DeterminePriority(List<ImportedInvoice> invoices)
         {
             var totalValue = invoices.Sum(i => i.SalesAmount - i.SalesReturns);
-            var oldestInvoice = invoices.Min(i => i.TransactionDate);
-            var daysOld = (DateTime.UtcNow - oldestInvoice).Days;
-
-            if (totalValue > 1000000m || daysOld > 7)
-                return "Urgent";
-            else if (totalValue > 500000m || daysOld > 5)
-                return "High";
+            
+            // Use the new delivery priority escalation system
+            // Get the highest delivery priority from linked invoices
+            var invoicePriorities = invoices
+                .Select(i => InvoiceDeliveryPriorityService.CalculatePriority(i.ImportedAt, i.Status))
+                .ToList();
+            var highestInvoicePriority = InvoiceDeliveryPriorityService.GetHighestPriority(invoicePriorities);
+            
+            // Map invoice priority to load priority, also factor in total value
+            var agePriority = InvoiceDeliveryPriorityService.MapToLoadPriority(highestInvoicePriority);
+            
+            // Value-based boost: high-value loads get bumped up
+            string valuePriority;
+            if (totalValue > 1000000m)
+                valuePriority = "Urgent";
+            else if (totalValue > 500000m)
+                valuePriority = "High";
+            else if (totalValue > 200000m)
+                valuePriority = "Normal";
             else
-                return "Normal";
+                valuePriority = "Low";
+            
+            // Return the higher of age-based or value-based priority
+            var ageWeight = InvoiceDeliveryPriorityService.GetPriorityWeight(agePriority);
+            var valueWeight = InvoiceDeliveryPriorityService.GetPriorityWeight(valuePriority);
+            
+            return ageWeight >= valueWeight ? agePriority : valuePriority;
         }
 
         private string GenerateLoadNotes(string province, string city, int customers, int items)
@@ -204,6 +229,9 @@ namespace ProjectTracker.API.Services
         public decimal Quantity { get; set; }
         public decimal Amount { get; set; }
         public DateTime TransactionDate { get; set; }
+        public int DaysInSystem { get; set; }
+        public string DeliveryPriority { get; set; } = string.Empty;
+        public DateTime? DeliveryDeadline { get; set; }
     }
 
     public class SuggestedLoadCustomerDto

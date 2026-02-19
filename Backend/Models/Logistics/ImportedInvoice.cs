@@ -110,6 +110,25 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(500)]
         public string? DeliveryNotes { get; set; }
 
+        // Delivery Priority Escalation
+        // Priority auto-escalates based on days since import:
+        // 0-3 days = Low, 4-6 = Normal, 7-10 = High, 11-13 = Urgent, 14+ = Critical
+        [MaxLength(20)]
+        public string DeliveryPriority { get; set; } = "Low";
+
+        public DateTime? DeliveryDeadline { get; set; } // 14 days from ImportedAt
+
+        [NotMapped]
+        public int DaysInSystem => (int)(DateTime.UtcNow - ImportedAt).TotalDays;
+
+        [NotMapped]
+        public bool IsOverdue => DaysInSystem > 14;
+
+        [NotMapped]
+        public int DaysUntilDeadline => DeliveryDeadline.HasValue 
+            ? (int)(DeliveryDeadline.Value - DateTime.UtcNow).TotalDays 
+            : 14 - DaysInSystem;
+
         // Part Delivery Tracking
         [Column(TypeName = "decimal(18,4)")]
         public decimal? DeliveredQuantity { get; set; }

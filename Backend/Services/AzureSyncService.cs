@@ -184,21 +184,19 @@ namespace ProjectTracker.API.Services
                     var existing = await localContext.AttendanceRecords.FindAsync(id);
                     if (existing == null)
                     {
-                        // Insert with identity insert on
-                        object?[] sqlParams = new object?[] { 
-                            id, 
-                            empId ?? "", 
-                            date, 
-                            (object?)timeIn ?? DBNull.Value, 
-                            (object?)timeOut ?? DBNull.Value, 
-                            status ?? "" 
-                        };
+                        // Insert with identity insert on - use SqlParameter for proper null handling
+                        var p0 = new Microsoft.Data.SqlClient.SqlParameter("@p0", id);
+                        var p1 = new Microsoft.Data.SqlClient.SqlParameter("@p1", (object)(empId ?? "") );
+                        var p2 = new Microsoft.Data.SqlClient.SqlParameter("@p2", System.Data.SqlDbType.DateTime2) { Value = (object?)date ?? DBNull.Value };
+                        var p3 = new Microsoft.Data.SqlClient.SqlParameter("@p3", System.Data.SqlDbType.Time) { Value = timeIn.HasValue ? (object)timeIn.Value.ToTimeSpan() : DBNull.Value };
+                        var p4 = new Microsoft.Data.SqlClient.SqlParameter("@p4", System.Data.SqlDbType.Time) { Value = timeOut.HasValue ? (object)timeOut.Value.ToTimeSpan() : DBNull.Value };
+                        var p5 = new Microsoft.Data.SqlClient.SqlParameter("@p5", (object)(status ?? ""));
                         await localContext.Database.ExecuteSqlRawAsync(@"
                             SET IDENTITY_INSERT attendance ON;
-                            INSERT INTO attendance (Id, empID, Date, TimeIn, TimeOut, Status) 
-                            VALUES ({0}, {1}, {2}, {3}, {4}, {5});
+                            INSERT INTO attendance (Id, empID, Date, timein, timeout, Status) 
+                            VALUES (@p0, @p1, @p2, @p3, @p4, @p5);
                             SET IDENTITY_INSERT attendance OFF;",
-                            sqlParams!);
+                            p0, p1, p2, p3, p4, p5);
                         insertCount++;
                     }
                     else

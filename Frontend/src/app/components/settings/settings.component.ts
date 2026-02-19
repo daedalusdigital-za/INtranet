@@ -358,8 +358,8 @@ import * as XLSX from 'xlsx';
                     <mat-option value="announcement">Announcement</mat-option>
                     <mat-option value="settings">Settings</mat-option>
                     <mat-option value="system">System</mat-option>
+                    <mat-option value="backup">Backup</mat-option>
                     <mat-option value="document">Document</mat-option>
-                    <mat-option value="crm">CRM</mat-option>
                     <mat-option value="attendance">Attendance</mat-option>
                     <mat-option value="meeting">Meeting</mat-option>
                   </mat-select>

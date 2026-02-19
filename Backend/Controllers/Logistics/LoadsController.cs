@@ -358,6 +358,22 @@ namespace ProjectTracker.API.Controllers.Logistics
                         invoice.UpdatedAt = DateTime.UtcNow;
                     }
                     
+                    // Auto-escalate load priority based on highest-priority linked invoice
+                    // The longer an invoice has been in the system, the higher the load priority
+                    var invoicePriorities = invoicesToLink.Select(i => i.DeliveryPriority).ToList();
+                    var highestInvoicePriority = Services.InvoiceDeliveryPriorityService.GetHighestPriority(invoicePriorities);
+                    var mappedLoadPriority = Services.InvoiceDeliveryPriorityService.MapToLoadPriority(highestInvoicePriority);
+                    
+                    // Only escalate, never downgrade the load priority
+                    var currentWeight = Services.InvoiceDeliveryPriorityService.GetPriorityWeight(load.Priority ?? "Normal");
+                    var invoiceWeight = Services.InvoiceDeliveryPriorityService.GetPriorityWeight(mappedLoadPriority);
+                    if (invoiceWeight > currentWeight)
+                    {
+                        load.Priority = mappedLoadPriority;
+                        _logger.LogInformation("Load {LoadNumber} priority auto-escalated to {Priority} based on invoice aging",
+                            loadNumber, mappedLoadPriority);
+                    }
+                    
                     await _context.SaveChangesAsync();
                     _logger.LogInformation("Linked {InvoiceCount} invoices to load {LoadNumber}", invoicesToLink.Count, loadNumber);
                 }

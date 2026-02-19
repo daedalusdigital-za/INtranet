@@ -19,7 +19,7 @@ namespace ProjectTracker.API.Models
 
         [Required]
         [MaxLength(50)]
-        public string Category { get; set; } = string.Empty; // security, user, announcement, settings, system, document, crm
+        public string Category { get; set; } = string.Empty; // security, user, announcement, settings, system, document
 
         [Required]
         [MaxLength(50)]

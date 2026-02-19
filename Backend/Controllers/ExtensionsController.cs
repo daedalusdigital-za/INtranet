@@ -184,7 +184,7 @@ namespace ProjectTracker.API.Controllers
 
         // POST: api/extensions
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<ActionResult<ExtensionDto>> CreateExtension(CreateExtensionDto dto)
         {
             // Check if extension number already exists
@@ -276,7 +276,7 @@ namespace ProjectTracker.API.Controllers
 
         // PUT: api/extensions/5
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<IActionResult> UpdateExtension(int id, UpdateExtensionDto dto)
         {
             var extension = await _context.Extensions.FindAsync(id);
@@ -364,7 +364,7 @@ namespace ProjectTracker.API.Controllers
 
         // POST: api/extensions/5/assign
         [HttpPost("{id}/assign")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<IActionResult> AssignExtension(int id, AssignExtensionDto dto)
         {
             var extension = await _context.Extensions.FindAsync(id);
@@ -411,7 +411,7 @@ namespace ProjectTracker.API.Controllers
 
         // DELETE: api/extensions/5
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Super Admin,Admin")]
         public async Task<IActionResult> DeleteExtension(int id)
         {
             var extension = await _context.Extensions.FindAsync(id);

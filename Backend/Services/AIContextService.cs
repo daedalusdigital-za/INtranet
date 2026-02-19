@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
-using ProjectTracker.API.Models.CRM;
 using ProjectTracker.API.Models.Logistics;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -31,7 +30,6 @@ namespace ProjectTracker.API.Services
             ["meetings"] = new[] { "meeting", "meetings", "appointment", "appointments", "schedule", "scheduled", "calendar", "boardroom", "call", "conference" },
             ["announcements"] = new[] { "announcement", "announcements", "news", "notice", "notices", "update", "updates", "bulletin", "memo" },
             ["departments"] = new[] { "department", "departments", "team", "teams", "division", "unit", "group" },
-            ["crm"] = new[] { "lead", "leads", "customer", "customers", "client", "clients", "prospect", "prospects", "campaign", "sales", "crm", "contact", "contacts" },
             ["logistics"] = new[] { "load", "loads", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "rf-", "ld-", "in transit", "delivered" },
             ["tripsheets"] = new[] { "tripsheet", "tripsheets", "trip sheet", "trip sheets", "ts-", "trip", "trips", "generate load", "available tripsheet", "active tripsheet" },
             ["invoices"] = new[] { "invoice", "invoices", "tfn", "transaction", "transactions", "sales amount", "cost of sales", "billing", "billed", "revenue", "imported invoice", "product sold", "quantity sold" },
@@ -93,7 +91,6 @@ namespace ProjectTracker.API.Services
                         "meetings" => await GetMeetingsContextAsync(query),
                         "announcements" => await GetAnnouncementsContextAsync(query),
                         "departments" => await GetDepartmentsContextAsync(query),
-                        "crm" => await GetCRMContextAsync(query),
                         "logistics" => await _logisticsService.GetLoadsContextAsync(query),
                         "tripsheets" => await GetTripSheetsContextAsync(query),
                         "invoices" => await GetInvoicesContextAsync(query),
@@ -589,77 +586,6 @@ namespace ProjectTracker.API.Services
                     builder.AppendLine($"- Manager: {dept.ManagerName}");
                 builder.AppendLine($"- Employees: {dept.Users.Count}");
                 builder.AppendLine($"- Active Projects: {dept.Boards.Count(b => b.Status == "InProgress")}");
-            }
-
-            return builder.ToString();
-        }
-
-        private async Task<string?> GetCRMContextAsync(string query)
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            var lowerQuery = query.ToLower();
-
-            var builder = new StringBuilder();
-            builder.AppendLine("### CRM Data");
-
-            // Lead summary
-            var totalLeads = await context.Leads.CountAsync();
-            var newLeadsToday = await context.Leads.CountAsync(l => l.CreatedAt.Date == DateTime.Today);
-            var hotLeads = await context.Leads
-                .Include(l => l.LeadStatus)
-                .Where(l => l.LeadStatus != null && l.LeadStatus.Name.ToLower().Contains("hot"))
-                .CountAsync();
-
-            builder.AppendLine($"**Lead Summary:**");
-            builder.AppendLine($"- Total Leads: {totalLeads}");
-            builder.AppendLine($"- New Today: {newLeadsToday}");
-            builder.AppendLine($"- Hot Leads: {hotLeads}");
-
-            // If asking about specific lead or customer
-            var nameMatch = Regex.Match(query, @"(?:lead|customer|client|contact)\s+[""']?([^""']+)[""']?", RegexOptions.IgnoreCase);
-            if (nameMatch.Success)
-            {
-                var searchName = nameMatch.Groups[1].Value.Trim().ToLower();
-                var matchingLeads = await context.Leads
-                    .Include(l => l.LeadStatus)
-                    .Include(l => l.AssignedAgent)
-                    .Where(l => l.FirstName.ToLower().Contains(searchName) || 
-                               (l.LastName != null && l.LastName.ToLower().Contains(searchName)) ||
-                               (l.CompanyName != null && l.CompanyName.ToLower().Contains(searchName)))
-                    .Take(5)
-                    .ToListAsync();
-
-                if (matchingLeads.Any())
-                {
-                    builder.AppendLine($"\n**Matching Leads:**");
-                    foreach (var lead in matchingLeads)
-                    {
-                        builder.AppendLine($"- **{lead.FirstName} {lead.LastName}** ({lead.CompanyName ?? "Individual"})");
-                        builder.AppendLine($"  - Status: {lead.LeadStatus?.Name ?? "N/A"}");
-                        builder.AppendLine($"  - Phone: {lead.Phone ?? lead.MobilePhone ?? "N/A"}");
-                        builder.AppendLine($"  - Email: {lead.Email ?? "N/A"}");
-                        if (lead.AssignedAgent != null)
-                            builder.AppendLine($"  - Assigned to: {lead.AssignedAgent.Name}");
-                    }
-                }
-            }
-
-            // Campaign summary
-            var activeCampaigns = await context.Campaigns
-                .Where(c => c.Status == "Active")
-                .Select(c => new { c.Name, c.StartDate, c.EndDate })
-                .Take(5)
-                .ToListAsync();
-
-            if (activeCampaigns.Any())
-            {
-                builder.AppendLine($"\n**Active Campaigns:**");
-                foreach (var campaign in activeCampaigns)
-                {
-                    builder.AppendLine($"- {campaign.Name} ({campaign.StartDate:dd MMM} - {campaign.EndDate?.ToString("dd MMM") ?? "Ongoing"})");
-                }
             }
 
             return builder.ToString();

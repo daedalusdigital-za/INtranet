@@ -209,7 +209,7 @@ export class UserManagementService {
 
   // Get operating companies
   getCompanies(): Observable<OperatingCompany[]> {
-    return this.http.get<OperatingCompany[]>(`${environment.apiUrl}/crm/all-companies`, { headers: this.getHeaders() }).pipe(
+    return this.http.get<OperatingCompany[]>(`${environment.apiUrl}/companies/all`, { headers: this.getHeaders() }).pipe(
       catchError(error => {
         console.error('Error fetching companies:', error);
         return of([]);

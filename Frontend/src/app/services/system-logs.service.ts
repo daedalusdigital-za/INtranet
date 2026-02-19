@@ -7,7 +7,7 @@ import { environment } from '../../environments/environment';
 export interface SystemLog {
   id: number;
   action: string;
-  category: 'user' | 'announcement' | 'settings' | 'security' | 'system' | 'document' | 'crm' | 'attendance' | 'meeting';
+  category: 'user' | 'announcement' | 'settings' | 'security' | 'system' | 'document' | 'attendance' | 'meeting';
   description: string;
   userId?: number;
   userName?: string;
@@ -209,7 +209,7 @@ export class SystemLogsService {
     return this.http.get<string[]>(`${this.apiUrl}/categories`, { 
       headers: this.getHeaders() 
     }).pipe(
-      catchError(() => of(['security', 'user', 'announcement', 'settings', 'system', 'document', 'crm', 'attendance', 'meeting']))
+      catchError(() => of(['security', 'user', 'announcement', 'settings', 'system', 'document', 'attendance', 'meeting']))
     );
   }
 
@@ -244,8 +244,8 @@ export class SystemLogsService {
       'announcement': 'campaign',
       'settings': 'settings',
       'system': 'computer',
+      'backup': 'backup',
       'document': 'description',
-      'crm': 'business',
       'attendance': 'access_time',
       'meeting': 'event'
     };
@@ -272,7 +272,6 @@ export class SystemLogsService {
       'settings': '#9e9e9e',
       'system': '#607d8b',
       'document': '#4caf50',
-      'crm': '#9c27b0',
       'attendance': '#00bcd4',
       'meeting': '#e91e63'
     };

@@ -240,6 +240,47 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
         }
       </div>
 
+      <!-- Announcements Section -->
+      @if (announcements.length > 0) {
+        <div class="announcements-section">
+          <div class="section-header">
+            <h2><mat-icon>campaign</mat-icon> Announcements</h2>
+          </div>
+          <div class="announcements-grid">
+            @for (announcement of announcements; track announcement.announcementId) {
+              <div class="announcement-card" 
+                   [class.unread]="!announcement.isRead"
+                   [class.priority-urgent]="announcement.priority === 'Urgent' || announcement.priority === 'urgent'"
+                   [class.priority-high]="announcement.priority === 'High' || announcement.priority === 'high'"
+                   (click)="markAnnouncementAsRead(announcement)">
+                <div class="announcement-header">
+                  <div class="announcement-title-row">
+                    <mat-icon class="announcement-type-icon">
+                      {{ announcement.priority === 'Urgent' || announcement.priority === 'urgent' ? 'error' : 
+                         announcement.priority === 'High' || announcement.priority === 'high' ? 'warning' : 'info' }}
+                    </mat-icon>
+                    <h3>{{ announcement.title }}</h3>
+                    @if (!announcement.isRead) {
+                      <span class="unread-badge">NEW</span>
+                    }
+                  </div>
+                </div>
+                <div class="announcement-content">
+                  <p>{{ announcement.content }}</p>
+                </div>
+                <div class="announcement-meta">
+                  <span><mat-icon>person</mat-icon> {{ announcement.createdByName }}</span>
+                  <span><mat-icon>schedule</mat-icon> {{ formatDate(announcement.createdAt) }}</span>
+                  @if (announcement.category) {
+                    <span><mat-icon>label</mat-icon> {{ announcement.category }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
     </div>
   `,
   styles: [`
@@ -351,6 +392,29 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-size: 16px;
       font-weight: 600;
       color: #333;
+    }
+
+    .announcement-type-icon {
+      color: #1976d2;
+    }
+
+    .announcement-card.priority-urgent .announcement-type-icon {
+      color: #f44336;
+    }
+
+    .announcement-card.priority-high .announcement-type-icon {
+      color: #ff9800;
+    }
+
+    .unread-badge {
+      background: linear-gradient(135deg, #4caf50, #66bb6a);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
     }
 
     .priority-chip {

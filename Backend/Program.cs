@@ -147,6 +147,7 @@ builder.Services.AddSingleton<ILlamaAIService, LlamaAIService>();
 // Add Logistics AI Service for load/tripsheet querying
 builder.Services.AddScoped<ILogisticsAIService, LogisticsAIService>();
 builder.Services.AddScoped<LoadOptimizationService>();
+builder.Services.AddScoped<InvoiceDeliveryPriorityService>();
 
 // Add Customer Address Cleanup Service
 builder.Services.AddScoped<CustomerAddressCleanupService>();

@@ -253,6 +253,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                 int linked = 0;
                 int updated = 0;
                 
+                // Build lookup of unlinked local vehicles for suffix matching
+                var unlinkedLocals = localVehicles
+                    .Where(v => string.IsNullOrEmpty(v.CarTrackId) && !string.IsNullOrEmpty(v.RegistrationNumber))
+                    .ToList();
+                
+                // Known CarTrack device suffixes (LV=Livestream, FMP=FMPro tracker, BU=Backup, SC=SecondCam, MV=MultiView, TAG=Tag)
+                var deviceSuffixes = new[] { "LV", "FMP", "BU", "SC", "MV", "TAG", "LVHA4", "NEW" };
+                
                 foreach (var ctVehicle in carTrackVehicles)
                 {
                     if (string.IsNullOrEmpty(ctVehicle.Registration))
@@ -261,9 +269,38 @@ namespace ProjectTracker.API.Controllers.Logistics
                     // Normalize registration for matching
                     var regNormalized = ctVehicle.Registration.ToUpperInvariant().Replace(" ", "").Replace("-", "");
                     
-                    // Find matching local vehicle by registration
+                    // Skip entries with device suffixes - prefer the base registration entry
+                    bool hasSuffix = deviceSuffixes.Any(s => regNormalized.EndsWith(s, StringComparison.OrdinalIgnoreCase));
+                    
+                    // Find matching local vehicle by exact registration first
                     var localVehicle = localVehicles.FirstOrDefault(v => 
                         v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") == regNormalized);
+                    
+                    // If no exact match and this entry has a suffix, try matching the base registration
+                    if (localVehicle == null && hasSuffix)
+                    {
+                        // Strip known suffixes to get base registration
+                        var baseReg = regNormalized;
+                        foreach (var suffix in deviceSuffixes.OrderByDescending(s => s.Length))
+                        {
+                            if (baseReg.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                            {
+                                baseReg = baseReg[..^suffix.Length];
+                                break;
+                            }
+                        }
+                        localVehicle = unlinkedLocals.FirstOrDefault(v => 
+                            v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") == baseReg);
+                    }
+                    
+                    // If still no match, check if CarTrack reg starts with any unlinked local reg (catches unknown suffixes)
+                    if (localVehicle == null && !hasSuffix)
+                    {
+                        localVehicle = unlinkedLocals.FirstOrDefault(v => {
+                            var localReg = v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") ?? "";
+                            return localReg.Length >= 6 && regNormalized.StartsWith(localReg) && regNormalized.Length > localReg.Length;
+                        });
+                    }
                     
                     if (localVehicle != null)
                     {
@@ -272,11 +309,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                             localVehicle.CarTrackId = ctVehicle.VehicleId;
                             localVehicle.CarTrackName = ctVehicle.Registration;
                             linked++;
-                            _logger.LogInformation($"Linked vehicle {localVehicle.RegistrationNumber} to CarTrack ID {ctVehicle.VehicleId}");
+                            unlinkedLocals.Remove(localVehicle); // Remove from unlinked pool
+                            _logger.LogInformation($"Linked vehicle {localVehicle.RegistrationNumber} to CarTrack ID {ctVehicle.VehicleId} (CarTrack reg: {ctVehicle.Registration})");
                         }
-                        else if (localVehicle.CarTrackId != ctVehicle.VehicleId)
+                        else if (localVehicle.CarTrackId != ctVehicle.VehicleId && !hasSuffix)
                         {
-                            // Update if different
+                            // Only update with base registration entries (not suffix duplicates)
                             localVehicle.CarTrackId = ctVehicle.VehicleId;
                             localVehicle.CarTrackName = ctVehicle.Registration;
                             updated++;

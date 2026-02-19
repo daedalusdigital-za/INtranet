@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
-using ProjectTracker.API.Models.CRM;
 using ProjectTracker.API.DTOs.Users;
 using ProjectTracker.API.Services;
 
@@ -190,7 +189,6 @@ namespace ProjectTracker.API.Controllers
             var permissions = new List<ModulePermissionDto>
             {
                 new ModulePermissionDto { Key = "sales", Name = "Sales", Icon = "point_of_sale", Description = "Access to Sales dashboard and invoice management" },
-                new ModulePermissionDto { Key = "crm", Name = "CRM", Icon = "people_outline", Description = "Access to Customer Relationship Management" },
                 new ModulePermissionDto { Key = "project_management", Name = "Project Management", Icon = "business", Description = "Access to project boards, tasks, and team management" },
                 new ModulePermissionDto { Key = "human_resource", Name = "Human Resource", Icon = "people", Description = "Access to employee management, attendance, and HR functions" },
                 new ModulePermissionDto { Key = "stock_management", Name = "Stock Management", Icon = "inventory", Description = "Access to inventory, stock levels, and warehouse management" },

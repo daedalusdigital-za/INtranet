@@ -314,7 +314,6 @@ interface SleepOut {
               <mat-icon>assessment</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ availableReportsCount() }}</span>
               <span class="stat-label">Reports</span>
             </div>
           </div>
@@ -409,25 +408,28 @@ interface SleepOut {
                         <button mat-icon-button [matMenuTriggerFor]="loadMenu" matTooltip="Actions">
                           <mat-icon>more_vert</mat-icon>
                         </button>
-                        <mat-menu #loadMenu="matMenu">
-                          <button mat-menu-item (click)="viewLoadDetails(load)">
-                            <mat-icon>visibility</mat-icon>
+                        <mat-menu #loadMenu="matMenu" class="modern-menu">
+                          <div class="menu-section-header">View</div>
+                          <button mat-menu-item class="modern-menu-item" (click)="viewLoadDetails(load)">
+                            <mat-icon class="menu-icon-blue">visibility</mat-icon>
                             <span>View Details</span>
                           </button>
-                          <button mat-menu-item (click)="viewRouteOnMap(load)">
-                            <mat-icon>remove_red_eye</mat-icon>
+                          <button mat-menu-item class="modern-menu-item" (click)="viewRouteOnMap(load)">
+                            <mat-icon class="menu-icon-teal">map</mat-icon>
                             <span>View Route</span>
                           </button>
-                          <button mat-menu-item (click)="trackLoad(load)">
-                            <mat-icon>gps_fixed</mat-icon>
+                          <button mat-menu-item class="modern-menu-item" (click)="trackLoad(load)">
+                            <mat-icon class="menu-icon-green">gps_fixed</mat-icon>
                             <span>Track</span>
                           </button>
-                          <button mat-menu-item (click)="updateLoadStatus(load)">
-                            <mat-icon>edit</mat-icon>
+                          <div class="menu-divider"></div>
+                          <div class="menu-section-header">Manage</div>
+                          <button mat-menu-item class="modern-menu-item" (click)="updateLoadStatus(load)">
+                            <mat-icon class="menu-icon-purple">edit</mat-icon>
                             <span>Update Status</span>
                           </button>
-                          <button mat-menu-item (click)="reassignLoad(load)">
-                            <mat-icon>swap_horiz</mat-icon>
+                          <button mat-menu-item class="modern-menu-item" (click)="reassignLoad(load)">
+                            <mat-icon class="menu-icon-orange">swap_horiz</mat-icon>
                             <span>Reassign</span>
                           </button>
                         </mat-menu>
@@ -531,62 +533,65 @@ interface SleepOut {
                           <button mat-icon-button [matMenuTriggerFor]="vehicleMenu" class="vehicle-menu-btn" (click)="$event.stopPropagation()">
                             <mat-icon>more_vert</mat-icon>
                           </button>
-                          <mat-menu #vehicleMenu="matMenu">
-                            <button mat-menu-item (click)="viewVehicleDetails(vehicle)">
-                              <mat-icon>visibility</mat-icon>
+                          <mat-menu #vehicleMenu="matMenu" class="modern-menu">
+                            <div class="menu-section-header">General</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewVehicleDetails(vehicle)">
+                              <mat-icon class="menu-icon-blue">visibility</mat-icon>
                               <span>View Details</span>
                             </button>
-                            <button mat-menu-item (click)="editVehicle(vehicle)">
-                              <mat-icon>edit</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="editVehicle(vehicle)">
+                              <mat-icon class="menu-icon-blue">edit</mat-icon>
                               <span>Edit Vehicle</span>
                             </button>
-                            <button mat-menu-item (click)="assignDriver(vehicle)">
-                              <mat-icon>person_add</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="assignDriver(vehicle)">
+                              <mat-icon class="menu-icon-purple">person_add</mat-icon>
                               <span>Assign Driver</span>
                             </button>
-                            <button mat-menu-item (click)="reassignProvince(vehicle)">
-                              <mat-icon>place</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="reassignProvince(vehicle)">
+                              <mat-icon class="menu-icon-purple">place</mat-icon>
                               <span>Reassign Province</span>
                             </button>
-                            <mat-divider></mat-divider>
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Integrations</div>
                             @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
-                              <button mat-menu-item (click)="unlinkCarTrack(vehicle)">
-                                <mat-icon>link_off</mat-icon>
+                              <button mat-menu-item class="modern-menu-item" (click)="unlinkCarTrack(vehicle)">
+                                <mat-icon class="menu-icon-orange">link_off</mat-icon>
                                 <span>Unlink CarTrack</span>
                               </button>
                             } @else {
-                              <button mat-menu-item (click)="linkCarTrack(vehicle)">
-                                <mat-icon>link</mat-icon>
+                              <button mat-menu-item class="modern-menu-item" (click)="linkCarTrack(vehicle)">
+                                <mat-icon class="menu-icon-green">link</mat-icon>
                                 <span>Link to CarTrack</span>
                               </button>
                             }
                             @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn) {
-                              <button mat-menu-item (click)="unlinkTfn(vehicle)">
-                                <mat-icon>link_off</mat-icon>
+                              <button mat-menu-item class="modern-menu-item" (click)="unlinkTfn(vehicle)">
+                                <mat-icon class="menu-icon-orange">link_off</mat-icon>
                                 <span>Unlink TFN</span>
                               </button>
                             } @else {
-                              <button mat-menu-item (click)="linkTfn(vehicle)">
-                                <mat-icon>link</mat-icon>
+                              <button mat-menu-item class="modern-menu-item" (click)="linkTfn(vehicle)">
+                                <mat-icon class="menu-icon-green">link</mat-icon>
                                 <span>Link to TFN</span>
                               </button>
                             }
-                            <mat-divider></mat-divider>
-                            <button mat-menu-item (click)="trackVehicle(vehicle)">
-                              <mat-icon>gps_fixed</mat-icon>
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Tracking & History</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="trackVehicle(vehicle)">
+                              <mat-icon class="menu-icon-teal">gps_fixed</mat-icon>
                               <span>Track Location</span>
                             </button>
-                            <button mat-menu-item (click)="viewFuelHistory(vehicle)">
-                              <mat-icon>local_gas_station</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewFuelHistory(vehicle)">
+                              <mat-icon class="menu-icon-amber">local_gas_station</mat-icon>
                               <span>Fuel History</span>
                             </button>
-                            <button mat-menu-item (click)="viewVehicleMaintenanceHistory(vehicle)">
-                              <mat-icon>build</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewVehicleMaintenanceHistory(vehicle)">
+                              <mat-icon class="menu-icon-orange">build</mat-icon>
                               <span>Maintenance History</span>
                             </button>
-                            <mat-divider></mat-divider>
-                            <button mat-menu-item class="delete-action" (click)="deleteVehicle(vehicle)">
-                              <mat-icon color="warn">delete</mat-icon>
+                            <div class="menu-divider"></div>
+                            <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteVehicle(vehicle)">
+                              <mat-icon class="menu-icon-red">delete</mat-icon>
                               <span>Delete Vehicle</span>
                             </button>
                           </mat-menu>
@@ -792,12 +797,14 @@ interface SleepOut {
                               <button mat-icon-button [matMenuTriggerFor]="completedMenu">
                                 <mat-icon>more_vert</mat-icon>
                               </button>
-                              <mat-menu #completedMenu="matMenu">
-                                <button mat-menu-item (click)="viewMaintenanceHistory(record)">
-                                  <mat-icon>history</mat-icon> View History
+                              <mat-menu #completedMenu="matMenu" class="modern-menu">
+                                <button mat-menu-item class="modern-menu-item" (click)="viewMaintenanceHistory(record)">
+                                  <mat-icon class="menu-icon-teal">history</mat-icon>
+                                  <span>View History</span>
                                 </button>
-                                <button mat-menu-item (click)="viewMaintenanceDetails(record)">
-                                  <mat-icon>visibility</mat-icon> View Details
+                                <button mat-menu-item class="modern-menu-item" (click)="viewMaintenanceDetails(record)">
+                                  <mat-icon class="menu-icon-blue">visibility</mat-icon>
+                                  <span>View Details</span>
                                 </button>
                               </mat-menu>
                             </mat-card-actions>
@@ -943,33 +950,41 @@ interface SleepOut {
                           <button mat-icon-button [matMenuTriggerFor]="maintenanceMenu">
                             <mat-icon>more_vert</mat-icon>
                           </button>
-                          <mat-menu #maintenanceMenu="matMenu">
-                            <button mat-menu-item (click)="editMaintenance(record)">
-                              <mat-icon>edit</mat-icon> Edit
+                          <mat-menu #maintenanceMenu="matMenu" class="modern-menu">
+                            <button mat-menu-item class="modern-menu-item" (click)="editMaintenance(record)">
+                              <mat-icon class="menu-icon-blue">edit</mat-icon>
+                              <span>Edit</span>
                             </button>
-                            <button mat-menu-item [matMenuTriggerFor]="statusMenu">
-                              <mat-icon>update</mat-icon> Change Status
+                            <button mat-menu-item class="modern-menu-item" [matMenuTriggerFor]="statusMenu">
+                              <mat-icon class="menu-icon-purple">update</mat-icon>
+                              <span>Change Status</span>
                             </button>
-                            <button mat-menu-item (click)="viewMaintenanceHistory(record)">
-                              <mat-icon>history</mat-icon> View History
+                            <button mat-menu-item class="modern-menu-item" (click)="viewMaintenanceHistory(record)">
+                              <mat-icon class="menu-icon-teal">history</mat-icon>
+                              <span>View History</span>
                             </button>
-                            <mat-divider></mat-divider>
-                            <button mat-menu-item class="delete-action" (click)="deleteMaintenance(record)">
-                              <mat-icon>delete</mat-icon> Delete
+                            <div class="menu-divider"></div>
+                            <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteMaintenance(record)">
+                              <mat-icon class="menu-icon-red">delete</mat-icon>
+                              <span>Delete</span>
                             </button>
                           </mat-menu>
-                          <mat-menu #statusMenu="matMenu">
-                            <button mat-menu-item (click)="changeMaintenanceStatus(record, 'scheduled')">
-                              <mat-icon>schedule</mat-icon> Scheduled
+                          <mat-menu #statusMenu="matMenu" class="modern-menu">
+                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'scheduled')">
+                              <mat-icon class="menu-icon-blue">schedule</mat-icon>
+                              <span>Scheduled</span>
                             </button>
-                            <button mat-menu-item (click)="changeMaintenanceStatus(record, 'in-progress')">
-                              <mat-icon>engineering</mat-icon> In Progress
+                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'in-progress')">
+                              <mat-icon class="menu-icon-amber">engineering</mat-icon>
+                              <span>In Progress</span>
                             </button>
-                            <button mat-menu-item (click)="changeMaintenanceStatus(record, 'overdue')">
-                              <mat-icon>warning</mat-icon> Overdue
+                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'overdue')">
+                              <mat-icon class="menu-icon-red">warning</mat-icon>
+                              <span>Overdue</span>
                             </button>
-                            <button mat-menu-item (click)="changeMaintenanceStatus(record, 'completed')">
-                              <mat-icon>check_circle</mat-icon> Completed
+                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'completed')">
+                              <mat-icon class="menu-icon-green">check_circle</mat-icon>
+                              <span>Completed</span>
                             </button>
                           </mat-menu>
                         </mat-card-actions>
@@ -1131,14 +1146,14 @@ interface SleepOut {
                             <button mat-icon-button [matMenuTriggerFor]="invoiceMenu" matTooltip="Actions">
                               <mat-icon>more_vert</mat-icon>
                             </button>
-                            <mat-menu #invoiceMenu="matMenu">
-                              <button mat-menu-item (click)="viewInvoiceDetails(inv)">
-                                <mat-icon>visibility</mat-icon>
+                            <mat-menu #invoiceMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item class="modern-menu-item" (click)="viewInvoiceDetails(inv)">
+                                <mat-icon class="menu-icon-blue">visibility</mat-icon>
                                 <span>View Details</span>
                               </button>
                               @if (inv.status === 'Pending') {
-                                <button mat-menu-item>
-                                  <mat-icon>local_shipping</mat-icon>
+                                <button mat-menu-item class="modern-menu-item">
+                                  <mat-icon class="menu-icon-green">local_shipping</mat-icon>
                                   <span>Add to Load</span>
                                 </button>
                               }
@@ -1267,52 +1282,57 @@ interface SleepOut {
                           <button mat-icon-button [matMenuTriggerFor]="tripMenu" matTooltip="Actions">
                             <mat-icon>more_vert</mat-icon>
                           </button>
-                          <mat-menu #tripMenu="matMenu">
-                            <button mat-menu-item (click)="viewTripsheet(trip)">
-                              <mat-icon>visibility</mat-icon>
+                          <mat-menu #tripMenu="matMenu" class="modern-menu">
+                            <div class="menu-section-header">View</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewTripsheet(trip)">
+                              <mat-icon class="menu-icon-blue">visibility</mat-icon>
                               <span>View Details</span>
                             </button>
-                            <button mat-menu-item (click)="viewRouteOnMap(trip)">
-                              <mat-icon>remove_red_eye</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewRouteOnMap(trip)">
+                              <mat-icon class="menu-icon-teal">map</mat-icon>
                               <span>View Route</span>
                             </button>
-                            <button mat-menu-item (click)="editTripsheet(trip)">
-                              <mat-icon>edit</mat-icon>
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Manage</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="editTripsheet(trip)">
+                              <mat-icon class="menu-icon-blue">edit</mat-icon>
                               <span>Edit</span>
                             </button>
                             @if (!trip.driverName || !trip.vehicleReg) {
-                              <button mat-menu-item (click)="assignTripsheet(trip)">
-                                <mat-icon>person_add</mat-icon>
+                              <button mat-menu-item class="modern-menu-item" (click)="assignTripsheet(trip)">
+                                <mat-icon class="menu-icon-purple">person_add</mat-icon>
                                 <span>Assign Driver/Vehicle</span>
                               </button>
                             }
                             @if (trip.driverName || trip.vehicleReg) {
-                              <button mat-menu-item (click)="reassignTripsheet(trip)">
-                                <mat-icon>swap_horiz</mat-icon>
+                              <button mat-menu-item class="modern-menu-item" (click)="reassignTripsheet(trip)">
+                                <mat-icon class="menu-icon-orange">swap_horiz</mat-icon>
                                 <span>Reassign Driver/Vehicle</span>
                               </button>
                             }
-                            <button mat-menu-item (click)="printTripsheet(trip)">
-                              <mat-icon>print</mat-icon>
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Export</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="printTripsheet(trip)">
+                              <mat-icon class="menu-icon-teal">print</mat-icon>
                               <span>Print</span>
                             </button>
-                            <button mat-menu-item (click)="downloadTripsheet(trip)">
-                              <mat-icon>download</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="downloadTripsheet(trip)">
+                              <mat-icon class="menu-icon-green">download</mat-icon>
                               <span>Download PDF</span>
                             </button>
-                            <button mat-menu-item (click)="emailToWarehouseManager(trip)">
-                              <mat-icon>email</mat-icon>
+                            <button mat-menu-item class="modern-menu-item" (click)="emailToWarehouseManager(trip)">
+                              <mat-icon class="menu-icon-blue">email</mat-icon>
                               <span>Email to Warehouse Manager</span>
                             </button>
-                            <mat-divider></mat-divider>
+                            <div class="menu-divider"></div>
                             @if (trip.status !== 'Active' && trip.status !== 'Completed') {
-                              <button mat-menu-item (click)="activateTripsheet(trip)">
-                                <mat-icon color="primary">play_arrow</mat-icon>
+                              <button mat-menu-item class="modern-menu-item" (click)="activateTripsheet(trip)">
+                                <mat-icon class="menu-icon-green">play_arrow</mat-icon>
                                 <span>Generate Load</span>
                               </button>
                             }
-                            <button mat-menu-item (click)="deleteTripsheet(trip)" class="delete-action">
-                              <mat-icon color="warn">delete</mat-icon>
+                            <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteTripsheet(trip)">
+                              <mat-icon class="menu-icon-red">delete</mat-icon>
                               <span>Delete</span>
                             </button>
                           </mat-menu>
@@ -1427,30 +1447,35 @@ interface SleepOut {
                               <button mat-icon-button [matMenuTriggerFor]="completedMenu">
                                 <mat-icon>more_vert</mat-icon>
                               </button>
-                              <mat-menu #completedMenu="matMenu">
-                                <button mat-menu-item (click)="viewRouteOnMap(trip)">
-                                  <mat-icon>remove_red_eye</mat-icon>
+                              <mat-menu #completedMenu="matMenu" class="modern-menu">
+                                <div class="menu-section-header">View</div>
+                                <button mat-menu-item class="modern-menu-item" (click)="viewRouteOnMap(trip)">
+                                  <mat-icon class="menu-icon-teal">map</mat-icon>
                                   <span>View Route</span>
                                 </button>
-                                <button mat-menu-item (click)="viewTripsheet(trip)">
-                                  <mat-icon>visibility</mat-icon>
+                                <button mat-menu-item class="modern-menu-item" (click)="viewTripsheet(trip)">
+                                  <mat-icon class="menu-icon-blue">visibility</mat-icon>
                                   <span>View Details</span>
                                 </button>
-                                <button mat-menu-item (click)="printTripsheet(trip)">
-                                  <mat-icon>print</mat-icon>
+                                <div class="menu-divider"></div>
+                                <div class="menu-section-header">Export</div>
+                                <button mat-menu-item class="modern-menu-item" (click)="printTripsheet(trip)">
+                                  <mat-icon class="menu-icon-teal">print</mat-icon>
                                   <span>Print Tripsheet</span>
                                 </button>
-                                <button mat-menu-item (click)="downloadTripsheet(trip)">
-                                  <mat-icon>download</mat-icon>
+                                <button mat-menu-item class="modern-menu-item" (click)="downloadTripsheet(trip)">
+                                  <mat-icon class="menu-icon-green">download</mat-icon>
                                   <span>Download PDF</span>
                                 </button>
                                 @if (trip.hasPOD) {
-                                  <button mat-menu-item (click)="viewPOD(trip)">
-                                    <mat-icon>description</mat-icon>
+                                  <div class="menu-divider"></div>
+                                  <div class="menu-section-header">POD</div>
+                                  <button mat-menu-item class="modern-menu-item" (click)="viewPOD(trip)">
+                                    <mat-icon class="menu-icon-purple">description</mat-icon>
                                     <span>View POD</span>
                                   </button>
-                                  <button mat-menu-item (click)="downloadPOD(trip)">
-                                    <mat-icon>download</mat-icon>
+                                  <button mat-menu-item class="modern-menu-item" (click)="downloadPOD(trip)">
+                                    <mat-icon class="menu-icon-green">download</mat-icon>
                                     <span>Download POD</span>
                                   </button>
                                 }
@@ -3018,6 +3043,111 @@ interface SleepOut {
 
     .delete-action mat-icon {
       color: #f44336 !important;
+    }
+
+    /* ============ Modern Menu Styles ============ */
+    ::ng-deep .modern-menu.mat-mdc-menu-panel {
+      background: linear-gradient(180deg, #1a1f2e 0%, #151922 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px !important;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(30, 144, 255, 0.08) !important;
+      padding: 6px 0 !important;
+      min-width: 220px !important;
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+
+    ::ng-deep .modern-menu .mat-mdc-menu-content {
+      padding: 4px 0 !important;
+    }
+
+    ::ng-deep .modern-menu .menu-section-header {
+      padding: 8px 16px 4px 16px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: rgba(255, 255, 255, 0.35);
+      user-select: none;
+    }
+
+    ::ng-deep .modern-menu .menu-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+      margin: 6px 12px;
+    }
+
+    ::ng-deep .modern-menu .modern-menu-item.mat-mdc-menu-item {
+      color: rgba(255, 255, 255, 0.85) !important;
+      border-radius: 8px;
+      margin: 2px 6px;
+      padding: 0 12px;
+      height: 40px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    ::ng-deep .modern-menu .modern-menu-item.mat-mdc-menu-item:hover {
+      background: rgba(255, 255, 255, 0.08) !important;
+      transform: translateX(2px);
+    }
+
+    ::ng-deep .modern-menu .modern-menu-item .mat-icon {
+      margin-right: 12px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+    }
+
+    ::ng-deep .modern-menu .modern-menu-item span {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+    }
+
+    ::ng-deep .modern-menu .modern-menu-item .mdc-list-item__primary-text {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    /* Icon color classes */
+    ::ng-deep .modern-menu .menu-icon-blue {
+      color: #42a5f5 !important;
+    }
+    ::ng-deep .modern-menu .menu-icon-purple {
+      color: #ab47bc !important;
+    }
+    ::ng-deep .modern-menu .menu-icon-green {
+      color: #66bb6a !important;
+    }
+    ::ng-deep .modern-menu .menu-icon-teal {
+      color: #26a69a !important;
+    }
+    ::ng-deep .modern-menu .menu-icon-orange {
+      color: #ff7043 !important;
+    }
+    ::ng-deep .modern-menu .menu-icon-amber {
+      color: #ffa726 !important;
+    }
+    ::ng-deep .modern-menu .menu-icon-red {
+      color: #ef5350 !important;
+    }
+
+    ::ng-deep .modern-menu .delete-action.mat-mdc-menu-item {
+      color: rgba(239, 83, 80, 0.9) !important;
+    }
+    ::ng-deep .modern-menu .delete-action.mat-mdc-menu-item:hover {
+      background: rgba(239, 83, 80, 0.12) !important;
+    }
+    ::ng-deep .modern-menu .delete-action .mdc-list-item__primary-text {
+      color: rgba(239, 83, 80, 0.9) !important;
+    }
+
+    ::ng-deep .modern-menu .mat-mdc-menu-submenu-icon {
+      color: rgba(255, 255, 255, 0.4) !important;
+    }
+
+    ::ng-deep .modern-menu .mat-divider {
+      border-top-color: rgba(255, 255, 255, 0.06) !important;
     }
 
     .badge {
@@ -10098,267 +10228,384 @@ export class SuggestedTripsDialog implements OnInit {
   ],
   template: `
     <div class="tfn-orders-dialog">
+      <!-- Header -->
       <div class="dialog-header">
-        <h2>
-          <mat-icon>local_gas_station</mat-icon>
-          TFN Fuel Orders
-        </h2>
-        <button mat-icon-button mat-dialog-close>
+        <div class="header-left">
+          <div class="header-icon-wrap">
+            <mat-icon>local_gas_station</mat-icon>
+          </div>
+          <div class="header-text">
+            <h2>TFN Fuel Orders</h2>
+            <span class="header-sub">{{ data.orders.length }} total orders · Last synced just now</span>
+          </div>
+        </div>
+        <button mat-icon-button mat-dialog-close class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </div>
 
+      <!-- Summary Stats -->
+      <div class="summary-strip">
+        <div class="summary-stat">
+          <div class="summary-icon total"><mat-icon>receipt_long</mat-icon></div>
+          <div class="summary-info">
+            <span class="summary-value">{{ data.orders.length }}</span>
+            <span class="summary-label">Total</span>
+          </div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-icon complete"><mat-icon>check_circle</mat-icon></div>
+          <div class="summary-info">
+            <span class="summary-value">{{ getStatusCount('complete') }}</span>
+            <span class="summary-label">Complete</span>
+          </div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-icon active"><mat-icon>play_circle</mat-icon></div>
+          <div class="summary-info">
+            <span class="summary-value">{{ getStatusCount('active') }}</span>
+            <span class="summary-label">Active</span>
+          </div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-icon pending"><mat-icon>pending</mat-icon></div>
+          <div class="summary-info">
+            <span class="summary-value">{{ getStatusCount('pending') }}</span>
+            <span class="summary-label">Pending</span>
+          </div>
+        </div>
+        <div class="summary-stat fuel">
+          <div class="summary-icon fuel-icon"><mat-icon>opacity</mat-icon></div>
+          <div class="summary-info">
+            <span class="summary-value">{{ getTotalLitres() | number:'1.0-0' }}L</span>
+            <span class="summary-label">Total Allocated</span>
+          </div>
+        </div>
+      </div>
+
       <div class="dialog-content">
-        <div class="search-bar">
-          <mat-form-field appearance="outline" class="search-field">
-            <mat-label>Search orders...</mat-label>
-            <input matInput [(ngModel)]="searchTerm" (input)="filterOrders()" placeholder="Search by order number, vehicle, or status">
-            <mat-icon matSuffix>search</mat-icon>
-          </mat-form-field>
-          <div class="order-count">
-            <span class="count">{{ filteredOrders.length }}</span> orders
+        <!-- Search & Filters -->
+        <div class="toolbar">
+          <div class="search-wrap">
+            <mat-icon class="search-icon">search</mat-icon>
+            <input class="search-input" [(ngModel)]="searchTerm" (input)="filterOrders()" placeholder="Search orders, vehicles, cards...">
+            @if (searchTerm) {
+              <button class="clear-btn" (click)="searchTerm = ''; filterOrders()">
+                <mat-icon>close</mat-icon>
+              </button>
+            }
+          </div>
+          <div class="filter-chips">
+            <button class="chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">
+              All <span class="chip-count">{{ data.orders.length }}</span>
+            </button>
+            <button class="chip" [class.active]="activeFilter === 'complete'" (click)="setFilter('complete')">
+              Complete <span class="chip-count">{{ getStatusCount('complete') }}</span>
+            </button>
+            <button class="chip" [class.active]="activeFilter === 'active'" (click)="setFilter('active')">
+              Active <span class="chip-count">{{ getStatusCount('active') }}</span>
+            </button>
+            <button class="chip" [class.active]="activeFilter === 'pending'" (click)="setFilter('pending')">
+              Pending <span class="chip-count">{{ getStatusCount('pending') }}</span>
+            </button>
+          </div>
+          <div class="results-badge">
+            <mat-icon>filter_list</mat-icon>
+            {{ filteredOrders.length }} result{{ filteredOrders.length !== 1 ? 's' : '' }}
           </div>
         </div>
 
-        <div class="orders-list">
+        <!-- Orders Grid -->
+        <div class="orders-grid">
           @for (order of filteredOrders; track $index) {
-            <div class="order-item" (click)="viewOrderDetails(order)">
-              <div class="order-main">
-                <div class="order-number">
+            <div class="order-card" (click)="viewOrderDetails(order)" [class]="'card-' + getStatusKey(order.status)">
+              <!-- Card Header -->
+              <div class="card-header">
+                <div class="card-order-id">
                   <mat-icon>receipt</mat-icon>
-                  {{ order.orderNumber }}
+                  <span>{{ getShortOrderNumber(order.orderNumber) }}</span>
                 </div>
-                <div class="order-vehicle">
-                  <mat-icon>directions_car</mat-icon>
-                  {{ order.vehicleRegistration || order.vehicle?.registrationNumber || 'No Vehicle' }}
-                </div>
-              </div>
-              <div class="order-details">
-                <div class="detail">
-                  <span class="label">Fuel Type:</span>
-                  <span class="value">{{ getProductName(order.productCode) }}</span>
-                </div>
-                <div class="detail">
-                  <span class="label">Allocated:</span>
-                  <span class="value">{{ order.allocatedLitres | number:'1.0-0' }} L</span>
-                </div>
-                <div class="detail">
-                  <span class="label">Virtual Card:</span>
-                  <span class="value">{{ order.virtualCardNumber || 'N/A' }}</span>
-                </div>
-                <div class="detail">
-                  <span class="label">Valid Until:</span>
-                  <span class="value">{{ formatDate(order.expiryDate) || 'N/A' }}</span>
-                </div>
-              </div>
-              <div class="order-meta">
-                <span class="status" [class]="getStatusClass(order.status)">
-                  {{ order.status || 'Pending' }}
+                <span class="status-badge" [class]="getStatusClass(order.status)">
+                  <span class="status-dot"></span>
+                  {{ getShortStatus(order.status) }}
                 </span>
-                <span class="date">{{ formatDate(order.orderDate) }}</span>
               </div>
-              <mat-icon class="chevron">chevron_right</mat-icon>
+
+              <!-- Vehicle Row -->
+              <div class="card-vehicle">
+                <div class="vehicle-plate">
+                  <mat-icon>directions_car</mat-icon>
+                  <span class="plate-text">{{ order.vehicleRegistration || order.vehicle?.registrationNumber || '—' }}</span>
+                </div>
+                @if (order.virtualCardNumber) {
+                  <span class="virtual-card">
+                    <mat-icon>credit_card</mat-icon>
+                    {{ order.virtualCardNumber | slice:0:12 }}{{ order.virtualCardNumber?.length > 12 ? '...' : '' }}
+                  </span>
+                }
+              </div>
+
+              <!-- Fuel Gauge -->
+              <div class="fuel-gauge-section">
+                <div class="gauge-header">
+                  <span class="fuel-type-badge">{{ getProductName(order.productCode) }}</span>
+                  <span class="fuel-amount">{{ order.allocatedLitres | number:'1.0-0' }}L allocated</span>
+                </div>
+                <div class="fuel-gauge-bar">
+                  <div class="gauge-fill" [style.width.%]="getUsagePercent(order)"
+                       [class.low]="getUsagePercent(order) < 30"
+                       [class.mid]="getUsagePercent(order) >= 30 && getUsagePercent(order) < 70"
+                       [class.high]="getUsagePercent(order) >= 70">
+                  </div>
+                </div>
+                <div class="gauge-labels">
+                  <span class="used-label">{{ order.usedLitres | number:'1.0-0' }}L used</span>
+                  <span class="remaining-label">{{ order.remainingLitres | number:'1.0-0' }}L left</span>
+                </div>
+              </div>
+
+              <!-- Card Footer -->
+              <div class="card-footer">
+                <div class="date-info">
+                  <mat-icon>calendar_today</mat-icon>
+                  <span>{{ formatDate(order.orderDate) }}</span>
+                </div>
+                <mat-icon class="card-arrow">arrow_forward</mat-icon>
+              </div>
             </div>
           } @empty {
             <div class="no-orders">
-              <mat-icon>inbox</mat-icon>
-              <p>No orders found</p>
+              <div class="empty-illustration">
+                <mat-icon>local_gas_station</mat-icon>
+              </div>
+              <h3>No orders found</h3>
+              <p>Try adjusting your search or filter criteria</p>
             </div>
           }
         </div>
       </div>
 
       <mat-dialog-actions align="end">
+        <span class="dialog-footer-info">Data from TFN · {{ data.orders.length }} orders loaded</span>
         <button mat-button mat-dialog-close>Close</button>
       </mat-dialog-actions>
     </div>
   `,
   styles: [`
-    :host {
-      display: block;
-      width: 100%;
-    }
-    .tfn-orders-dialog {
-      width: 100%;
-      overflow: hidden;
-    }
+    :host { display: block; width: 100%; }
+
+    .tfn-orders-dialog { width: 100%; overflow: hidden; }
+
+    /* ── Header ─────────────────────────────────────────────── */
     .dialog-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px 32px;
-      background: linear-gradient(135deg, #f093fb, #f5576c);
-      color: white;
-      margin: -24px -24px 0 -24px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 24px 32px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: white; margin: -24px -24px 0 -24px; position: relative; overflow: hidden;
     }
-    .dialog-header h2 {
-      margin: 0;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 22px;
-      font-weight: 500;
+    .dialog-header::before {
+      content: ''; position: absolute; top: -50%; right: -10%; width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(245,87,108,0.15) 0%, transparent 70%);
+      border-radius: 50%;
     }
-    .dialog-header button {
-      color: white;
+    .dialog-header::after {
+      content: ''; position: absolute; bottom: -60%; left: 20%; width: 200px; height: 200px;
+      background: radial-gradient(circle, rgba(240,147,251,0.1) 0%, transparent 70%);
+      border-radius: 50%;
     }
-    .dialog-content {
-      padding: 24px 8px;
-      max-height: 65vh;
-      overflow-y: auto;
-      overflow-x: hidden;
+    .header-left { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
+    .header-icon-wrap {
+      width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #f5576c, #f093fb); box-shadow: 0 4px 15px rgba(245,87,108,0.4);
     }
-    .search-bar {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      padding: 0 0 20px 0;
+    .header-icon-wrap mat-icon { font-size: 26px; width: 26px; height: 26px; }
+    .header-text h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+    .header-sub { font-size: 13px; opacity: 0.7; }
+    .close-btn { color: rgba(255,255,255,0.7); position: relative; z-index: 1; }
+    .close-btn:hover { color: white; }
+
+    /* ── Summary Strip ──────────────────────────────────────── */
+    .summary-strip {
+      display: flex; gap: 0; padding: 0; margin: 0 -24px;
+      background: #f8f9fc; border-bottom: 1px solid #eef0f5;
     }
-    .search-field {
-      flex: 1;
-      max-width: 400px;
+    .summary-stat {
+      flex: 1; display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+      border-right: 1px solid #eef0f5; transition: background 0.2s;
     }
-    .order-count {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 20px;
-      background: #f5f5f5;
-      border-radius: 20px;
-      font-size: 14px;
-      white-space: nowrap;
+    .summary-stat:last-child { border-right: none; }
+    .summary-stat:hover { background: #f0f2f8; }
+    .summary-icon {
+      width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
     }
-    .order-count .count {
-      font-weight: 600;
-      color: #f5576c;
+    .summary-icon mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .summary-icon.total { background: #e8eaf6; color: #3f51b5; }
+    .summary-icon.complete { background: #e8f5e9; color: #2e7d32; }
+    .summary-icon.active { background: #e3f2fd; color: #1565c0; }
+    .summary-icon.pending { background: #fff3e0; color: #e65100; }
+    .summary-icon.fuel-icon { background: linear-gradient(135deg, #e0f7fa, #b2ebf2); color: #00838f; }
+    .summary-info { display: flex; flex-direction: column; }
+    .summary-value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+    .summary-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Content ────────────────────────────────────────────── */
+    .dialog-content { padding: 20px 8px; max-height: 60vh; overflow-y: auto; overflow-x: hidden; }
+
+    /* ── Toolbar ────────────────────────────────────────────── */
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 20px; }
+    .search-wrap {
+      display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px; max-width: 360px;
+      background: #f5f6fa; border: 2px solid transparent; border-radius: 12px;
+      padding: 0 14px; height: 44px; transition: all 0.2s;
     }
-    .orders-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .search-wrap:focus-within { border-color: #f5576c; background: white; box-shadow: 0 0 0 4px rgba(245,87,108,0.1); }
+    .search-icon { color: #aaa; font-size: 20px; width: 20px; height: 20px; }
+    .search-input {
+      flex: 1; border: none; outline: none; background: transparent; font-size: 14px; color: #333;
     }
-    .order-item {
-      display: grid;
-      grid-template-columns: 200px 1fr 140px 40px;
-      gap: 24px;
-      align-items: center;
-      padding: 20px 24px;
-      background: #fafafa;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-      border-left: 4px solid #f5576c;
+    .search-input::placeholder { color: #bbb; }
+    .clear-btn {
+      background: none; border: none; cursor: pointer; padding: 2px; display: flex; color: #999;
     }
-    .order-item:hover {
-      background: #f0f0f0;
-      transform: translateX(4px);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    .clear-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+    .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px;
+      border: 1.5px solid #e0e0e0; background: white; cursor: pointer; font-size: 13px;
+      color: #666; transition: all 0.2s; font-weight: 500;
     }
-    .order-main {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      min-width: 0;
+    .chip:hover { border-color: #f5576c; color: #f5576c; }
+    .chip.active { background: linear-gradient(135deg, #f5576c, #f093fb); color: white; border-color: transparent; box-shadow: 0 2px 8px rgba(245,87,108,0.3); }
+    .chip.active .chip-count { background: rgba(255,255,255,0.25); color: white; }
+    .chip-count {
+      font-size: 11px; background: #f0f0f0; padding: 1px 7px; border-radius: 10px;
+      font-weight: 600; color: #999;
     }
-    .order-number {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 600;
-      font-size: 15px;
-      color: #333;
+    .results-badge {
+      display: flex; align-items: center; gap: 4px; font-size: 13px; color: #999;
+      margin-left: auto; white-space: nowrap;
     }
-    .order-number mat-icon {
-      color: #f5576c;
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      flex-shrink: 0;
+    .results-badge mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+    /* ── Orders Grid ────────────────────────────────────────── */
+    .orders-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px;
     }
-    .order-vehicle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #666;
-      font-size: 13px;
+
+    /* ── Order Card ─────────────────────────────────────────── */
+    .order-card {
+      background: white; border-radius: 16px; padding: 20px; cursor: pointer;
+      border: 1px solid #eef0f5; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative; overflow: hidden;
     }
-    .order-vehicle mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-      flex-shrink: 0;
+    .order-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, #f5576c, #f093fb); opacity: 0; transition: opacity 0.25s;
     }
-    .order-details {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(100px, 1fr));
-      gap: 20px;
+    .order-card:hover {
+      transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+      border-color: rgba(245,87,108,0.2);
     }
-    .detail {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    .order-card:hover::before { opacity: 1; }
+    .card-complete::before { background: linear-gradient(90deg, #2e7d32, #66bb6a); }
+    .card-active::before { background: linear-gradient(90deg, #1565c0, #42a5f5); }
+
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .card-order-id { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; color: #1a1a2e; }
+    .card-order-id mat-icon { font-size: 18px; width: 18px; height: 18px; color: #f5576c; }
+    .status-badge {
+      display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
     }
-    .detail .label {
-      font-size: 11px;
-      color: #999;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .detail .value {
-      font-size: 15px;
-      color: #333;
-      font-weight: 500;
-    }
-    .detail .value.highlight {
-      color: #4caf50;
-      font-weight: 600;
-    }
-    .order-meta {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 8px;
-      min-width: 120px;
-    }
-    .status {
-      padding: 6px 14px;
-      border-radius: 14px;
-      font-size: 12px;
-      font-weight: 500;
-      white-space: nowrap;
-    }
-    .status-active, .status-complete { background: #e8f5e9; color: #2e7d32; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .status-active { background: #e3f2fd; color: #1565c0; }
+    .status-active .status-dot { background: #1565c0; }
+    .status-complete { background: #e8f5e9; color: #2e7d32; }
+    .status-complete .status-dot { background: #2e7d32; }
     .status-pending, .status-not-started { background: #fff3e0; color: #e65100; }
+    .status-pending .status-dot, .status-not-started .status-dot { background: #e65100; }
     .status-expired { background: #ffebee; color: #c62828; }
+    .status-expired .status-dot { background: #c62828; }
     .status-cancelled { background: #f5f5f5; color: #757575; }
-    .date {
-      font-size: 12px;
-      color: #999;
-      white-space: nowrap;
+    .status-cancelled .status-dot { background: #757575; }
+    .status-planned { background: #ede7f6; color: #5e35b1; }
+    .status-planned .status-dot { background: #5e35b1; }
+
+    /* Vehicle Row */
+    .card-vehicle { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 8px; }
+    .vehicle-plate {
+      display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+      background: #f5f6fa; border-radius: 8px; font-weight: 600; color: #333; font-size: 14px;
     }
-    .chevron {
-      color: #ccc;
-      flex-shrink: 0;
+    .vehicle-plate mat-icon { font-size: 16px; width: 16px; height: 16px; color: #666; }
+    .virtual-card {
+      display: flex; align-items: center; gap: 4px; font-size: 12px; color: #999;
     }
-    .no-orders {
-      text-align: center;
-      padding: 60px;
-      color: #999;
+    .virtual-card mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
+    /* Fuel Gauge */
+    .fuel-gauge-section { margin-bottom: 14px; }
+    .gauge-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .fuel-type-badge {
+      padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: linear-gradient(135deg, #fff8e1, #ffecb3); color: #f57f17; letter-spacing: 0.3px;
     }
-    .no-orders mat-icon {
-      font-size: 56px;
-      width: 56px;
-      height: 56px;
-      margin-bottom: 16px;
+    .fuel-amount { font-size: 12px; color: #999; font-weight: 500; }
+    .fuel-gauge-bar {
+      width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden;
     }
-    mat-dialog-actions {
-      padding: 16px 32px;
-      border-top: 1px solid #e0e0e0;
+    .gauge-fill {
+      height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 2px;
+    }
+    .gauge-fill.low { background: linear-gradient(90deg, #e8f5e9, #66bb6a); }
+    .gauge-fill.mid { background: linear-gradient(90deg, #fff3e0, #ffa726); }
+    .gauge-fill.high { background: linear-gradient(90deg, #ffebee, #ef5350); }
+    .gauge-labels { display: flex; justify-content: space-between; margin-top: 4px; }
+    .used-label, .remaining-label { font-size: 11px; color: #aaa; font-weight: 500; }
+    .remaining-label { color: #66bb6a; }
+
+    /* Card Footer */
+    .card-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 12px; border-top: 1px solid #f5f5f5;
+    }
+    .date-info { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999; }
+    .date-info mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .card-arrow { color: #ddd; font-size: 18px; width: 18px; height: 18px; transition: all 0.2s; }
+    .order-card:hover .card-arrow { color: #f5576c; transform: translateX(3px); }
+
+    /* ── Empty State ────────────────────────────────────────── */
+    .no-orders { grid-column: 1 / -1; text-align: center; padding: 60px 20px; }
+    .empty-illustration {
+      width: 80px; height: 80px; margin: 0 auto 16px; border-radius: 50%;
+      background: linear-gradient(135deg, #f5f6fa, #eef0f5); display: flex;
+      align-items: center; justify-content: center;
+    }
+    .empty-illustration mat-icon { font-size: 36px; width: 36px; height: 36px; color: #ccc; }
+    .no-orders h3 { margin: 0 0 8px; color: #333; font-size: 18px; }
+    .no-orders p { margin: 0; color: #999; font-size: 14px; }
+
+    /* ── Dialog Footer ──────────────────────────────────────── */
+    mat-dialog-actions { padding: 14px 28px; border-top: 1px solid #eef0f5; }
+    .dialog-footer-info { font-size: 12px; color: #bbb; margin-right: auto; }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .summary-strip { flex-wrap: wrap; }
+      .summary-stat { min-width: calc(50% - 1px); }
+      .orders-grid { grid-template-columns: 1fr; }
+      .toolbar { flex-direction: column; align-items: stretch; }
+      .search-wrap { max-width: none; }
+      .filter-chips { overflow-x: auto; flex-wrap: nowrap; }
+      .results-badge { margin-left: 0; }
     }
   `]
 })
 export class TfnOrdersListDialog {
   searchTerm = '';
+  activeFilter = 'all';
   filteredOrders: any[] = [];
 
   constructor(
@@ -10370,18 +10617,68 @@ export class TfnOrdersListDialog {
   }
 
   filterOrders(): void {
-    const term = this.searchTerm.toLowerCase();
-    if (!term) {
-      this.filteredOrders = [...this.data.orders];
-      return;
+    let orders = [...this.data.orders];
+
+    // Apply status filter
+    if (this.activeFilter !== 'all') {
+      orders = orders.filter(o => this.getStatusKey(o.status) === this.activeFilter);
     }
-    this.filteredOrders = this.data.orders.filter(order =>
-      order.orderNumber?.toLowerCase().includes(term) ||
-      order.vehicleRegistration?.toLowerCase().includes(term) ||
-      order.vehicle?.registrationNumber?.toLowerCase().includes(term) ||
-      order.status?.toLowerCase().includes(term) ||
-      order.virtualCardNumber?.toLowerCase().includes(term)
-    );
+
+    // Apply search
+    const term = this.searchTerm.toLowerCase();
+    if (term) {
+      orders = orders.filter(order =>
+        order.orderNumber?.toLowerCase().includes(term) ||
+        order.vehicleRegistration?.toLowerCase().includes(term) ||
+        order.vehicle?.registrationNumber?.toLowerCase().includes(term) ||
+        order.status?.toLowerCase().includes(term) ||
+        order.virtualCardNumber?.toLowerCase().includes(term)
+      );
+    }
+    this.filteredOrders = orders;
+  }
+
+  setFilter(filter: string): void {
+    this.activeFilter = filter;
+    this.filterOrders();
+  }
+
+  getStatusCount(key: string): number {
+    return this.data.orders.filter(o => this.getStatusKey(o.status) === key).length;
+  }
+
+  getTotalLitres(): number {
+    return this.data.orders.reduce((sum: number, o: any) => sum + (o.allocatedLitres || 0), 0);
+  }
+
+  getUsagePercent(order: any): number {
+    if (!order.allocatedLitres || order.allocatedLitres === 0) return 0;
+    return Math.min(100, ((order.usedLitres || 0) / order.allocatedLitres) * 100);
+  }
+
+  getShortOrderNumber(orderNumber: string): string {
+    if (!orderNumber) return 'N/A';
+    // Show just the last part: ORD/01/5373/03879 → 03879
+    const parts = orderNumber.split('/');
+    return parts.length > 1 ? parts[parts.length - 1] : orderNumber;
+  }
+
+  getShortStatus(status: string): string {
+    if (!status) return 'Pending';
+    if (status.length > 20) return status.substring(0, 18) + '…';
+    return status;
+  }
+
+  getStatusKey(status: string): string {
+    if (!status) return 'pending';
+    const s = status.toLowerCase();
+    if (s.includes('complete')) return 'complete';
+    if (s.includes('active')) return 'active';
+    if (s.includes('planned')) return 'pending';
+    if (s.includes('not started')) return 'pending';
+    if (s.includes('expired')) return 'expired';
+    if (s.includes('cancel') || s.includes('delete')) return 'cancelled';
+    return 'pending';
   }
 
   viewOrderDetails(order: any): void {
@@ -10419,6 +10716,7 @@ export class TfnOrdersListDialog {
     const s = status.toLowerCase();
     if (s.includes('complete')) return 'status-complete';
     if (s.includes('active')) return 'status-active';
+    if (s.includes('planned')) return 'status-planned';
     if (s.includes('not started')) return 'status-not-started';
     if (s.includes('expired')) return 'status-expired';
     if (s.includes('cancel') || s.includes('delete')) return 'status-cancelled';

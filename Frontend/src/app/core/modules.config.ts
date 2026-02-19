@@ -18,7 +18,6 @@ import { authGuard, moduleGuard } from '../guards/auth.guard';
 // MODULE KEYS - All available module permission keys
 // ============================================================================
 export const MODULE_KEYS = {
-  CRM: 'crm',
   SALES: 'sales',
   LOGISTICS: 'logistics',
   TENDERS: 'tenders',
@@ -53,23 +52,6 @@ export interface ModuleConfig {
 }
 
 export const MODULES: ModuleConfig[] = [
-  {
-    key: 'crm',
-    name: 'CRM',
-    description: 'Customer Relationship Management - Leads, Contacts, Campaigns',
-    icon: 'people_outline',
-    route: '/crm',
-    color: '#4CAF50',
-    requiresPermission: true,
-    showInNavbar: true,
-    showInDashboard: true,
-    subRoutes: [
-      { path: '/crm', name: 'Dashboard', icon: 'dashboard' },
-      { path: '/crm/leads', name: 'Leads', icon: 'person_add' },
-      { path: '/crm/campaigns', name: 'Campaigns', icon: 'campaign' },
-      { path: '/crm/manager', name: 'Manager Console', icon: 'admin_panel_settings' }
-    ]
-  },
   {
     key: 'sales',
     name: 'Sales',
@@ -277,9 +259,6 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard] 
     },
     
-    // CRM Module
-    ...getCrmRoutes(),
-    
     // Sales Module
     { 
       path: 'sales', 
@@ -441,46 +420,4 @@ export function getModuleRoutes(): Routes {
   ];
 }
 
-/**
- * CRM Module Routes
- */
-function getCrmRoutes(): Routes {
-  return [
-    { 
-      path: 'crm', 
-      loadComponent: () => import('../components/crm/crm-dashboard.component').then(m => m.CrmDashboardComponent),
-      canActivate: [authGuard, moduleGuard], 
-      data: { module: 'crm' } 
-    },
-    { 
-      path: 'crm/leads', 
-      loadComponent: () => import('../components/crm/crm-leads.component').then(m => m.CrmLeadsComponent),
-      canActivate: [authGuard, moduleGuard], 
-      data: { module: 'crm' } 
-    },
-    { 
-      path: 'crm/leads/new', 
-      loadComponent: () => import('../components/crm/crm-lead-create.component').then(m => m.CrmLeadCreateComponent),
-      canActivate: [authGuard, moduleGuard], 
-      data: { module: 'crm' } 
-    },
-    { 
-      path: 'crm/leads/:id', 
-      loadComponent: () => import('../components/crm/crm-lead-detail.component').then(m => m.CrmLeadDetailComponent),
-      canActivate: [authGuard, moduleGuard], 
-      data: { module: 'crm' } 
-    },
-    { 
-      path: 'crm/campaigns', 
-      loadComponent: () => import('../components/crm/crm-campaigns.component').then(m => m.CrmCampaignsComponent),
-      canActivate: [authGuard, moduleGuard], 
-      data: { module: 'crm' } 
-    },
-    { 
-      path: 'crm/manager', 
-      loadComponent: () => import('../components/crm/crm-manager-console.component').then(m => m.CrmManagerConsoleComponent),
-      canActivate: [authGuard, moduleGuard], 
-      data: { module: 'crm' } 
-    }
-  ];
-}
+

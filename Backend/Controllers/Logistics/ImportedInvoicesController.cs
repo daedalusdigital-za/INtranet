@@ -18,15 +18,18 @@ namespace ProjectTracker.API.Controllers.Logistics
         private readonly ApplicationDbContext _context;
         private readonly ILogger<ImportedInvoicesController> _logger;
         private readonly LoadOptimizationService _optimizationService;
+        private readonly InvoiceDeliveryPriorityService _priorityService;
 
         public ImportedInvoicesController(
             ApplicationDbContext context, 
             ILogger<ImportedInvoicesController> logger,
-            LoadOptimizationService optimizationService)
+            LoadOptimizationService optimizationService,
+            InvoiceDeliveryPriorityService priorityService)
         {
             _context = context;
             _logger = logger;
             _optimizationService = optimizationService;
+            _priorityService = priorityService;
         }
 
         /// <summary>
@@ -40,6 +43,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] DateTime? fromDate,
             [FromQuery] DateTime? toDate,
             [FromQuery] bool? unassigned,
+            [FromQuery] string? priority,
+            [FromQuery] string? sortBy,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50)
         {
@@ -74,11 +79,33 @@ namespace ProjectTracker.API.Controllers.Logistics
                     i.ProductDescription.ToLower().Contains(searchLower));
             }
 
+            // Filter by delivery priority
+            if (!string.IsNullOrEmpty(priority))
+                query = query.Where(i => i.DeliveryPriority == priority);
+
             var totalCount = await query.CountAsync();
 
-            var invoices = await query
-                .OrderByDescending(i => i.TransactionDate)
-                .ThenByDescending(i => i.ImportedAt)
+            // Sort by priority (highest first) when requested, otherwise default sort
+            IOrderedQueryable<ImportedInvoice> orderedQuery;
+            if (sortBy?.ToLower() == "priority")
+            {
+                // Sort by priority weight descending (Critical first), then by oldest first
+                orderedQuery = query
+                    .OrderByDescending(i => 
+                        i.DeliveryPriority == "Critical" ? 5 :
+                        i.DeliveryPriority == "Urgent" ? 4 :
+                        i.DeliveryPriority == "High" ? 3 :
+                        i.DeliveryPriority == "Normal" ? 2 : 1)
+                    .ThenBy(i => i.ImportedAt);
+            }
+            else
+            {
+                orderedQuery = query
+                    .OrderByDescending(i => i.TransactionDate)
+                    .ThenByDescending(i => i.ImportedAt);
+            }
+
+            var invoices = await orderedQuery
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(i => new ImportedInvoiceDto
@@ -118,7 +145,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ImportedAt = i.ImportedAt,
                     ImportBatchId = i.ImportBatchId,
                     SourceSystem = i.SourceSystem,
-                    SourceCompany = i.SourceCompany
+                    SourceCompany = i.SourceCompany,
+                    DeliveryPriority = i.DeliveryPriority,
+                    DeliveryDeadline = i.DeliveryDeadline,
+                    DaysInSystem = (int)Math.Floor((DateTime.UtcNow - i.ImportedAt).TotalDays),
+                    DaysUntilDeadline = i.DeliveryDeadline.HasValue ? (int)Math.Floor((i.DeliveryDeadline.Value - DateTime.UtcNow).TotalDays) : 14 - (int)Math.Floor((DateTime.UtcNow - i.ImportedAt).TotalDays),
+                    IsOverdue = (DateTime.UtcNow - i.ImportedAt).TotalDays > 14
                 })
                 .ToListAsync();
 
@@ -176,7 +208,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ImportedAt = i.ImportedAt,
                     ImportBatchId = i.ImportBatchId,
                     SourceSystem = i.SourceSystem,
-                    SourceCompany = i.SourceCompany
+                    SourceCompany = i.SourceCompany,
+                    DeliveryPriority = i.DeliveryPriority,
+                    DeliveryDeadline = i.DeliveryDeadline,
+                    DaysInSystem = (int)Math.Floor((DateTime.UtcNow - i.ImportedAt).TotalDays),
+                    DaysUntilDeadline = i.DeliveryDeadline.HasValue ? (int)Math.Floor((i.DeliveryDeadline.Value - DateTime.UtcNow).TotalDays) : 14 - (int)Math.Floor((DateTime.UtcNow - i.ImportedAt).TotalDays),
+                    IsOverdue = (DateTime.UtcNow - i.ImportedAt).TotalDays > 14
                 })
                 .FirstOrDefaultAsync();
 
@@ -431,10 +468,15 @@ namespace ProjectTracker.API.Controllers.Logistics
             // Calculate totals
             load.ChargeAmount = invoices.Sum(i => i.SalesAmount - i.SalesReturns);
 
+            // Auto-escalate load priority based on highest-priority linked invoice
+            var invoicePriorities = invoices.Select(i => i.DeliveryPriority).ToList();
+            var highestPriority = InvoiceDeliveryPriorityService.GetHighestPriority(invoicePriorities);
+            load.Priority = InvoiceDeliveryPriorityService.MapToLoadPriority(highestPriority);
+
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Created trip sheet {LoadNumber} from {Count} invoices",
-                loadNumber, invoices.Count);
+            _logger.LogInformation("Created trip sheet {LoadNumber} from {Count} invoices (Priority: {Priority})",
+                loadNumber, invoices.Count, load.Priority);
 
             return Ok(new
             {
@@ -593,6 +635,45 @@ namespace ProjectTracker.API.Controllers.Logistics
             });
         }
 
+        /// <summary>
+        /// Get delivery priority dashboard - overview of all invoice priorities and aging
+        /// </summary>
+        [HttpGet("priority-dashboard")]
+        public async Task<ActionResult<PriorityDashboardDto>> GetPriorityDashboard()
+        {
+            try
+            {
+                var dashboard = await _priorityService.GetPriorityDashboard();
+                return Ok(dashboard);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting priority dashboard");
+                return BadRequest(new { error = "Failed to get priority dashboard", details = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Recalculate delivery priorities for all active invoices based on current age.
+        /// Call this periodically (e.g., daily) or on-demand to escalate priorities.
+        /// </summary>
+        [HttpPost("recalculate-priorities")]
+        public async Task<ActionResult<PriorityRecalculationResult>> RecalculatePriorities()
+        {
+            try
+            {
+                var result = await _priorityService.RecalculateAllPriorities();
+                _logger.LogInformation("Priority recalculation triggered. Processed: {Total}, Escalated: {Escalated}",
+                    result.TotalProcessed, result.Escalated);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error recalculating priorities");
+                return BadRequest(new { error = "Failed to recalculate priorities", details = ex.Message });
+            }
+        }
+
         #region Helper Methods
 
         private ImportedInvoice MapToImportedInvoice(ImportInvoiceDto dto, string batchId, int? userId, string? sourceSystem = null)
@@ -630,7 +711,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 ImportedAt = DateTime.UtcNow,
                 ImportedByUserId = userId,
                 ImportBatchId = batchId,
-                SourceSystem = sourceSystem
+                SourceSystem = sourceSystem,
+                DeliveryPriority = "Low",
+                DeliveryDeadline = DateTime.UtcNow.AddDays(14)
             };
         }
 
@@ -697,7 +780,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ImportedAt = i.ImportedAt,
                     ImportBatchId = i.ImportBatchId,
                     SourceSystem = i.SourceSystem,
-                    SourceCompany = i.SourceCompany
+                    SourceCompany = i.SourceCompany,
+                    DeliveryPriority = i.DeliveryPriority,
+                    DeliveryDeadline = i.DeliveryDeadline,
+                    DaysInSystem = (int)Math.Floor((DateTime.UtcNow - i.ImportedAt).TotalDays),
+                    DaysUntilDeadline = i.DeliveryDeadline.HasValue ? (int)Math.Floor((i.DeliveryDeadline.Value - DateTime.UtcNow).TotalDays) : 14 - (int)Math.Floor((DateTime.UtcNow - i.ImportedAt).TotalDays),
+                    IsOverdue = (DateTime.UtcNow - i.ImportedAt).TotalDays > 14
                 })
                 .FirstOrDefaultAsync();
         }

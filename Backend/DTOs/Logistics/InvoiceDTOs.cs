@@ -217,6 +217,13 @@ namespace ProjectTracker.API.DTOs.Logistics
         public DateTime? ScheduledDeliveryDate { get; set; }
         public string? DeliveryNotes { get; set; }
         
+        // Delivery Priority
+        public string DeliveryPriority { get; set; } = string.Empty;
+        public DateTime? DeliveryDeadline { get; set; }
+        public int DaysInSystem { get; set; }
+        public int DaysUntilDeadline { get; set; }
+        public bool IsOverdue { get; set; }
+        
         // Import Info
         public DateTime ImportedAt { get; set; }
         public string? ImportBatchId { get; set; }

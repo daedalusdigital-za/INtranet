@@ -21,7 +21,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<ActionResult<ListDto>> CreateList([FromBody] CreateListDto createListDto)
         {
             var list = new List
@@ -86,7 +86,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<IActionResult> UpdateList(int id, [FromBody] CreateListDto updateListDto)
         {
             var list = await _context.Lists.FindAsync(id);
@@ -105,7 +105,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<IActionResult> DeleteList(int id)
         {
             var list = await _context.Lists.FindAsync(id);

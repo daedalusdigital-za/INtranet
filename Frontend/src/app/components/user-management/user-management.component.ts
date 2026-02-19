@@ -655,7 +655,7 @@ export class UserManagementComponent implements OnInit {
   }
 
   loadCompanies(): void {
-    this.http.get<OperatingCompany[]>(`${environment.apiUrl}/crm/all-companies`, { headers: this.getHeaders() })
+    this.http.get<OperatingCompany[]>(`${environment.apiUrl}/companies/all`, { headers: this.getHeaders() })
       .subscribe({
         next: (companies) => this.companies = companies,
         error: (err) => console.error('Error loading companies:', err)

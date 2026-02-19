@@ -855,7 +855,7 @@ export class SohImportDialogComponent implements OnInit {
 
   loadCompanies(): void {
     this.loadingCompanies.set(true);
-    this.http.get<OperatingCompany[]>(`${this.data.apiUrl}/crm/all-companies`).subscribe({
+    this.http.get<OperatingCompany[]>(`${this.data.apiUrl}/companies/all`).subscribe({
       next: (companies) => {
         this.companies.set(companies);
         this.loadingCompanies.set(false);

@@ -14,8 +14,8 @@ public class TripSheetImportService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<TripSheetImportService> _logger;
 
-    // Invoice number patterns (e.g., IN161765, INV12345, etc.)
-    private static readonly Regex InvoicePattern = new(@"^(IN|INV|SI|TAX)\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Invoice number patterns (e.g., IN161765, INV12345, CN010662, etc.)
+    private static readonly Regex InvoicePattern = new(@"^(IN|INV|SI|TAX|CN|CR|DN|IMP)[\-\s]?\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     
     // Footer/summary markers that signal end of data
     private static readonly string[] FooterMarkers = new[]
@@ -697,21 +697,40 @@ public class TripSheetImportService
         // Step 1: Try invoice matching first (highest priority)
         if (!string.IsNullOrEmpty(data.InvoiceNumber))
         {
+            var trimmedInvoiceNo = data.InvoiceNumber.Trim();
+            var normalizedImportInvoice = NormalizeInvoiceNumber(trimmedInvoiceNo);
+
+            // Try exact match first, then normalized match
             var invoiceMatch = invoices.FirstOrDefault(i => 
-                i.TransactionNumber.Equals(data.InvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase));
+                i.TransactionNumber.Equals(trimmedInvoiceNo, StringComparison.OrdinalIgnoreCase));
+
+            // If no exact match, try normalized comparison (strips prefixes, spaces, hyphens)
+            if (invoiceMatch == null && !string.IsNullOrEmpty(normalizedImportInvoice))
+            {
+                invoiceMatch = invoices.FirstOrDefault(i => 
+                    NormalizeInvoiceNumber(i.TransactionNumber).Equals(normalizedImportInvoice, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Also try contains match for partial invoice numbers
+            if (invoiceMatch == null)
+            {
+                invoiceMatch = invoices.FirstOrDefault(i => 
+                    i.TransactionNumber.Contains(trimmedInvoiceNo, StringComparison.OrdinalIgnoreCase) ||
+                    trimmedInvoiceNo.Contains(i.TransactionNumber, StringComparison.OrdinalIgnoreCase));
+            }
 
             if (invoiceMatch != null)
             {
                 row.MatchedInvoiceId = invoiceMatch.Id;
+                row.Status = ImportRowStatus.Matched;
+                row.ConfidenceScore = 1.0;
                 
-                // If invoice has customer, use that and apply address data
+                // If invoice has customer, use that too
                 if (invoiceMatch.CustomerId.HasValue)
                 {
                     row.MatchedCustomerId = invoiceMatch.CustomerId;
-                    row.Status = ImportRowStatus.Matched;
-                    row.ConfidenceScore = 1.0;
-                    return;
                 }
+                return;
             }
 
             // Fuzzy invoice matching
@@ -854,6 +873,36 @@ public class TripSheetImportService
             .Replace("DRIVE", "DR")
             .Replace("  ", " ")
             .Trim();
+    }
+
+    /// <summary>
+    /// Normalize invoice number for flexible matching - strips prefixes, spaces, hyphens
+    /// </summary>
+    private static string NormalizeInvoiceNumber(string invoiceNo)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNo))
+            return string.Empty;
+
+        // Remove spaces, hyphens, and normalize to uppercase
+        var normalized = invoiceNo.Trim().ToUpperInvariant()
+            .Replace(" ", "")
+            .Replace("-", "");
+
+        // Extract the numeric portion by stripping common prefixes
+        var prefixes = new[] { "INV", "IN", "SI", "TAX", "CN", "CR", "DN", "IMP" };
+        foreach (var prefix in prefixes)
+        {
+            if (normalized.StartsWith(prefix) && normalized.Length > prefix.Length)
+            {
+                var rest = normalized.Substring(prefix.Length);
+                if (rest.All(char.IsDigit))
+                {
+                    return normalized; // Return full normalized form (prefix + digits)
+                }
+            }
+        }
+
+        return normalized;
     }
 
     /// <summary>

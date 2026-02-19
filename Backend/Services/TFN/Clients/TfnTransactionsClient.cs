@@ -47,13 +47,33 @@ namespace ProjectTracker.API.Services.TFN.Clients
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
                 var dateParam = fromDate.Value.ToString("yyyy-MM-dd");
-                var response = await _httpClient.GetAsync($"/api/Transactions?customerNumber={customerNumber}&transactionDate={dateParam}&api-version={apiVersion}");
                 
-                if (!response.IsSuccessStatusCode)
+                // Try different parameter patterns the TFN API might accept
+                var urls = new[]
                 {
-                    var error = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Failed to get transactions from TFN: {StatusCode} - {Error}", 
-                        response.StatusCode, error);
+                    $"/api/Transactions?customerNumber={customerNumber}&transactionDate={dateParam}&api-version={apiVersion}",
+                    $"/api/Transactions?customerNumber={customerNumber}&fromDate={dateParam}&api-version={apiVersion}",
+                    $"/api/Transactions?customerNumber={customerNumber}&startDate={dateParam}&api-version={apiVersion}"
+                };
+
+                HttpResponseMessage? response = null;
+                string? lastError = null;
+                
+                foreach (var url in urls)
+                {
+                    _logger.LogInformation("Trying TFN transactions URL: {Url}", url);
+                    response = await _httpClient.GetAsync(url);
+                    
+                    if (response.IsSuccessStatusCode)
+                        break;
+                    
+                    lastError = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("TFN transactions URL failed: {StatusCode} - {Error}", response.StatusCode, lastError);
+                }
+                
+                if (response == null || !response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Failed to get transactions from TFN after trying all URL patterns. Last error: {Error}", lastError);
                     return null;
                 }
 

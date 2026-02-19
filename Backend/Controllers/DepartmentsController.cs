@@ -63,7 +63,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Super Admin,Admin")]
         public async Task<ActionResult<DepartmentDto>> CreateDepartment([FromBody] Department department)
         {
             department.CreatedAt = DateTime.UtcNow;
@@ -83,7 +83,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Super Admin,Admin,Manager")]
         public async Task<IActionResult> UpdateDepartment(int id, [FromBody] Department department)
         {
             if (id != department.DepartmentId)
@@ -107,7 +107,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Super Admin,Admin")]
         public async Task<IActionResult> DeleteDepartment(int id)
         {
             var department = await _context.Departments.FindAsync(id);

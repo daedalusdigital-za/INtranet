@@ -64,6 +64,7 @@ namespace ProjectTracker.API.DTOs
         public DateTime CreatedAt { get; set; }
         public string Priority { get; set; } = "Normal";
         public string? Category { get; set; }
+        public bool IsActive { get; set; }
         public bool IsRead { get; set; }
     }
 }

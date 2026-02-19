@@ -138,9 +138,49 @@ namespace ProjectTracker.API.Services.TFN.Clients
                     return null;
                 }
 
-                var limits = await response.Content.ReadFromJsonAsync<List<TfnCreditLimitDto>>();
-                _logger.LogInformation("Retrieved {Count} credit limits from TFN", limits?.Count ?? 0);
+                var jsonContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("Credit limits response received, length={Length}, preview={Preview}", 
+                    jsonContent.Length, jsonContent.Length > 200 ? jsonContent[..200] : jsonContent);
                 
+                List<TfnCreditLimitDto>? limits = null;
+                try
+                {
+                    limits = System.Text.Json.JsonSerializer.Deserialize<List<TfnCreditLimitDto>>(jsonContent);
+                }
+                catch
+                {
+                    // TFN API may return a single object or a wrapper object instead of an array
+                    try
+                    {
+                        var single = System.Text.Json.JsonSerializer.Deserialize<TfnCreditLimitDto>(jsonContent);
+                        if (single != null)
+                            limits = new List<TfnCreditLimitDto> { single };
+                    }
+                    catch
+                    {
+                        // Try as a wrapper with a data/results property
+                        try
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
+                            var root = doc.RootElement;
+                            // Look for an array property in the object
+                            foreach (var prop in root.EnumerateObject())
+                            {
+                                if (prop.Value.ValueKind == System.Text.Json.JsonValueKind.Array)
+                                {
+                                    limits = System.Text.Json.JsonSerializer.Deserialize<List<TfnCreditLimitDto>>(prop.Value.GetRawText());
+                                    break;
+                                }
+                            }
+                        }
+                        catch (Exception innerEx)
+                        {
+                            _logger.LogError(innerEx, "Could not parse TFN credit limits response");
+                        }
+                    }
+                }
+                
+                _logger.LogInformation("Retrieved {Count} credit limits from TFN", limits?.Count ?? 0);
                 return limits;
             }
             catch (Exception ex)

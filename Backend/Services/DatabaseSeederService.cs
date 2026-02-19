@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
-using ProjectTracker.API.Models.CRM;
 
 namespace ProjectTracker.API.Services
 {
