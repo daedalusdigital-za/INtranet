@@ -201,7 +201,15 @@ Be concise, professional, and friendly. Use the provided database context when a
             var json = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
+            _logger.LogDebug("LocalLLM ChatAsync request body: {Json}", json);
+
             var response = await _httpClient.PostAsync("/v1/chat/completions", content, cancellationToken);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("LocalLLM ChatAsync failed with {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
+            }
             response.EnsureSuccessStatusCode();
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);

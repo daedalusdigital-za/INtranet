@@ -8,7 +8,7 @@ $ModelPath = "C:\Models\Qwen2.5-14B-Instruct-Q4_K_M.gguf"
 $Port = 8090
 $Threads = 24          # Pin to 1 NUMA node (24 threads) — avoids slow cross-socket memory access
 $ThreadsBatch = 36     # Use more threads for prompt processing (batch is less NUMA-sensitive)
-$ContextSize = 8192    # Context window (2048 per slot x 4 slots — plenty for chat)
+$ContextSize = 32768   # Context window (8192 per slot x 4 slots — fits large system prompt + KB + conversation)
 $BatchSize = 2048      # Larger batch for faster prompt ingestion
 $ParallelSlots = 4     # Number of concurrent users
 
@@ -55,6 +55,7 @@ Write-Host ""
     --parallel $ParallelSlots `
     --cont-batching `
     --flash-attn auto `
+    --reasoning-format none `
     --mlock `
     --no-mmap `
     --prio 2 `
