@@ -203,6 +203,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
                       action.type === 'EDIT_EMPLOYEE' ? 'Employee Updated' :
                       action.type === 'RESET_PASSWORD' ? 'Password Reset' :
                       action.type === 'SYSTEM_OVERVIEW' ? 'System Overview' :
+                      action.type === 'CREATE_ANNOUNCEMENT' ? 'Announcement' :
                       action.type === 'TRIPSHEET_CREATE' ? 'TripSheet Created' :
                       action.type === 'TRIPSHEET_GET_WAREHOUSES' ? 'Warehouses' :
                       action.type === 'TRIPSHEET_GET_INVOICES' ? 'Pending Invoices' :
@@ -274,9 +275,19 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     if (input.files && input.files.length > 0) {
       const file = input.files[0];
       
-      // Validate file type (PDF only)
-      if (file.type !== 'application/pdf') {
-        this.fileInputError = 'Only PDF files are supported';
+      // Validate file type (PDF, Excel, CSV)
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+        'application/vnd.ms-excel', // .xls
+        'text/csv',
+        'application/csv'
+      ];
+      const allowedExtensions = ['.pdf', '.xlsx', '.xls', '.csv'];
+      const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      
+      if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExt)) {
+        this.fileInputError = 'Only PDF, Excel (.xlsx/.xls), and CSV files are supported';
         this.selectedFile = null;
         return;
       }

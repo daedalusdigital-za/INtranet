@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ClosedXML.Excel;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
@@ -449,9 +450,20 @@ namespace ProjectTracker.API.Controllers
                     return BadRequest(new { error = "No file uploaded" });
                 }
 
-                if (file.ContentType != "application/pdf")
+                var allowedTypes = new[]
                 {
-                    return BadRequest(new { error = "Only PDF files are supported" });
+                    "application/pdf",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+                    "application/vnd.ms-excel", // .xls
+                    "text/csv",
+                    "application/csv"
+                };
+                var allowedExtensions = new[] { ".pdf", ".xlsx", ".xls", ".csv" };
+                var fileExt = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+                if (!allowedTypes.Contains(file.ContentType) && !allowedExtensions.Contains(fileExt))
+                {
+                    return BadRequest(new { error = "Only PDF, Excel (.xlsx/.xls), and CSV files are supported" });
                 }
 
                 // Max file size: 50MB for tender documents
@@ -460,23 +472,39 @@ namespace ProjectTracker.API.Controllers
                     return BadRequest(new { error = "File size must be less than 50MB" });
                 }
 
-                // Extract text from PDF
-                var pdfText = await ExtractTextFromPdf(file);
-
-                if (string.IsNullOrWhiteSpace(pdfText))
+                // Extract text based on file type
+                string documentText;
+                if (fileExt == ".csv" || file.ContentType == "text/csv" || file.ContentType == "application/csv")
                 {
-                    return BadRequest(new { error = "No text could be extracted from the PDF" });
+                    documentText = await ExtractTextFromCsv(file);
+                }
+                else if (fileExt == ".xlsx" || fileExt == ".xls" || file.ContentType.Contains("spreadsheet") || file.ContentType.Contains("excel"))
+                {
+                    documentText = await ExtractTextFromExcel(file);
+                }
+                else
+                {
+                    documentText = await ExtractTextFromPdf(file);
+                }
+
+                if (string.IsNullOrWhiteSpace(documentText))
+                {
+                    return BadRequest(new { error = "No text could be extracted from the document" });
                 }
 
                 // Allow more text for tender analysis (up to 8000 chars)
-                if (pdfText.Length > 8000)
+                if (documentText.Length > 8000)
                 {
-                    pdfText = pdfText.Substring(0, 8000) + "\n\n[Document truncated for analysis...]";
+                    documentText = documentText.Substring(0, 8000) + "\n\n[Document truncated for analysis...]";
                 }
 
                 // Build the analysis prompt
-                var systemPrompt = @"You are an expert tender document analyzer specializing in South African government procurement. 
-When analyzing tender documents, focus on:
+                var systemPrompt = @"You are an expert document analyzer. When analyzing documents, you can handle: 
+- PDF documents (tenders, contracts, reports)
+- Excel spreadsheets (data tables, financial reports, inventory lists)
+- CSV files (data exports, lists, records)
+
+For tender/procurement documents, focus on:
 - Tender reference numbers and titles
 - Issuing organization/department
 - Key dates (closing date, briefing sessions, validity periods)
@@ -486,6 +514,12 @@ When analyzing tender documents, focus on:
 - Budget/estimated values
 - Special conditions or requirements
 
+For Excel/CSV data, focus on:
+- Summarizing the data structure (columns, row count)
+- Key statistics (totals, averages, min/max)
+- Identifying patterns or notable entries
+- Answering the user's specific questions about the data
+
 Format your responses clearly with sections and bullet points where appropriate.
 Be specific and extract actual values from the document when available.";
 
@@ -493,8 +527,8 @@ Be specific and extract actual values from the document when available.";
 
 {prompt}
 
---- TENDER DOCUMENT CONTENT ---
-{pdfText}";
+--- DOCUMENT CONTENT ---
+{documentText}";
 
                 string aiResponse;
                 string usedProvider;
@@ -572,7 +606,7 @@ Be specific and extract actual values from the document when available.";
         }
 
         /// <summary>
-        /// Upload a PDF and get AI analysis
+        /// Upload a PDF, Excel, or CSV file and get AI analysis
         /// </summary>
         [HttpPost("upload-pdf")]
         public async Task<IActionResult> UploadPdf([FromForm] IFormFile file, [FromForm] string message)
@@ -584,9 +618,12 @@ Be specific and extract actual values from the document when available.";
                     return BadRequest(new { error = "No file uploaded" });
                 }
 
-                if (file.ContentType != "application/pdf")
+                var allowedExtensions = new[] { ".pdf", ".xlsx", ".xls", ".csv" };
+                var fileExt = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+                if (!allowedExtensions.Contains(fileExt))
                 {
-                    return BadRequest(new { error = "Only PDF files are supported" });
+                    return BadRequest(new { error = "Only PDF, Excel (.xlsx/.xls), and CSV files are supported" });
                 }
 
                 // Max file size: 10MB
@@ -606,18 +643,30 @@ Be specific and extract actual values from the document when available.";
                     });
                 }
 
-                // Extract text from PDF
-                var pdfText = await ExtractTextFromPdf(file);
-
-                if (string.IsNullOrWhiteSpace(pdfText))
+                // Extract text based on file type
+                string documentText;
+                if (fileExt == ".csv" || file.ContentType == "text/csv" || file.ContentType == "application/csv")
                 {
-                    return BadRequest(new { error = "No text could be extracted from the PDF" });
+                    documentText = await ExtractTextFromCsv(file);
+                }
+                else if (fileExt == ".xlsx" || fileExt == ".xls")
+                {
+                    documentText = await ExtractTextFromExcel(file);
+                }
+                else
+                {
+                    documentText = await ExtractTextFromPdf(file);
+                }
+
+                if (string.IsNullOrWhiteSpace(documentText))
+                {
+                    return BadRequest(new { error = "No text could be extracted from the document" });
                 }
 
                 // Truncate if too long (keep to ~4000 chars for better analysis)
-                if (pdfText.Length > 4000)
+                if (documentText.Length > 4000)
                 {
-                    pdfText = pdfText.Substring(0, 4000) + "\n\n[Document truncated due to length...]";
+                    documentText = documentText.Substring(0, 4000) + "\n\n[Document truncated due to length...]";
                 }
 
                 // Prepare the enhanced prompt for AI with clear markers
@@ -626,7 +675,7 @@ Be specific and extract actual values from the document when available.";
 {userQuestion}
 
 --- DOCUMENT CONTENT ---
-{pdfText}";
+{documentText}";
 
                 var messages = new List<ChatMessage>
                 {
@@ -641,7 +690,7 @@ Be specific and extract actual values from the document when available.";
                     response = aiResponse,
                     fileName = file.FileName,
                     fileSize = file.Length,
-                    extractedTextLength = pdfText.Length
+                    extractedTextLength = documentText.Length
                 });
             }
             catch (Exception ex)
@@ -675,6 +724,141 @@ Be specific and extract actual values from the document when available.";
             }
 
             return text.ToString();
+        }
+
+        private async Task<string> ExtractTextFromExcel(IFormFile file)
+        {
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            var text = new StringBuilder();
+
+            using (var workbook = new XLWorkbook(memoryStream))
+            {
+                foreach (var worksheet in workbook.Worksheets)
+                {
+                    text.AppendLine($"--- Sheet: {worksheet.Name} ---");
+
+                    var usedRange = worksheet.RangeUsed();
+                    if (usedRange == null)
+                    {
+                        text.AppendLine("(empty sheet)");
+                        text.AppendLine();
+                        continue;
+                    }
+
+                    var rows = usedRange.RowsUsed().ToList();
+                    text.AppendLine($"Rows: {rows.Count}, Columns: {usedRange.ColumnCount()}");
+                    text.AppendLine();
+
+                    // Read header row
+                    var firstRow = rows.FirstOrDefault();
+                    if (firstRow != null)
+                    {
+                        var headers = new List<string>();
+                        foreach (var cell in firstRow.CellsUsed())
+                        {
+                            headers.Add(cell.GetFormattedString());
+                        }
+                        text.AppendLine("| " + string.Join(" | ", headers) + " |");
+                        text.AppendLine("| " + string.Join(" | ", headers.Select(_ => "---")) + " |");
+                    }
+
+                    // Read data rows (limit to first 200 rows to avoid token overflow)
+                    var maxRows = Math.Min(rows.Count, 201); // 1 header + 200 data
+                    for (int i = 1; i < maxRows; i++)
+                    {
+                        var row = rows[i];
+                        var cells = new List<string>();
+                        for (int col = usedRange.FirstColumn().ColumnNumber(); col <= usedRange.LastColumn().ColumnNumber(); col++)
+                        {
+                            cells.Add(row.Cell(col).GetFormattedString());
+                        }
+                        text.AppendLine("| " + string.Join(" | ", cells) + " |");
+                    }
+
+                    if (rows.Count > 201)
+                    {
+                        text.AppendLine($"\n[...{rows.Count - 201} more rows truncated...]");
+                    }
+
+                    text.AppendLine();
+                }
+            }
+
+            return text.ToString();
+        }
+
+        private async Task<string> ExtractTextFromCsv(IFormFile file)
+        {
+            using var reader = new StreamReader(file.OpenReadStream());
+            var text = new StringBuilder();
+            text.AppendLine($"--- CSV: {file.FileName} ---");
+
+            int rowCount = 0;
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                rowCount++;
+                if (rowCount <= 201) // header + 200 rows
+                {
+                    // Convert CSV to markdown table
+                    var cells = ParseCsvLine(line);
+                    text.AppendLine("| " + string.Join(" | ", cells) + " |");
+
+                    // Add separator after header row
+                    if (rowCount == 1)
+                    {
+                        text.AppendLine("| " + string.Join(" | ", cells.Select(_ => "---")) + " |");
+                    }
+                }
+            }
+
+            if (rowCount > 201)
+            {
+                text.AppendLine($"\n[...{rowCount - 201} more rows truncated...]");
+            }
+
+            text.AppendLine($"\nTotal rows: {rowCount}");
+
+            return text.ToString();
+        }
+
+        private static List<string> ParseCsvLine(string line)
+        {
+            var cells = new List<string>();
+            bool inQuotes = false;
+            var current = new StringBuilder();
+
+            for (int i = 0; i < line.Length; i++)
+            {
+                char c = line[i];
+                if (c == '"')
+                {
+                    if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i++; // skip escaped quote
+                    }
+                    else
+                    {
+                        inQuotes = !inQuotes;
+                    }
+                }
+                else if (c == ',' && !inQuotes)
+                {
+                    cells.Add(current.ToString().Trim());
+                    current.Clear();
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            cells.Add(current.ToString().Trim());
+
+            return cells;
         }
 
         private async Task WriteSSEToken(string token)

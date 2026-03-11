@@ -64,6 +64,7 @@ namespace ProjectTracker.API.Services
     ///   [ACTION:EDIT_EMPLOYEE] { "employee": "John Smith", "name": "...", "surname": "...", "email": "...", "role": "...", "title": "...", "department": "..." } [/ACTION]
     ///   [ACTION:RESET_PASSWORD] { "employee": "John Smith", "newPassword": "TempPass123!" } [/ACTION]
     ///   [ACTION:SYSTEM_OVERVIEW] {} [/ACTION]
+    ///   [ACTION:CREATE_ANNOUNCEMENT] { "title": "...", "content": "...", "priority": "Normal", "category": "General" } [/ACTION]
     /// </summary>
     public class AIActionService : IAIActionService
     {
@@ -121,6 +122,7 @@ namespace ProjectTracker.API.Services
                         "EDIT_EMPLOYEE" => await EditEmployeeAsync(jsonPayload, user),
                         "RESET_PASSWORD" => await ResetPasswordAsync(jsonPayload, user),
                         "SYSTEM_OVERVIEW" => await SystemOverviewAsync(),
+                        "CREATE_ANNOUNCEMENT" => await CreateAnnouncementAsync(jsonPayload, user),
                         _ => new AIActionResult
                         {
                             Success = false,
@@ -1823,6 +1825,143 @@ namespace ProjectTracker.API.Services
                     Success = false,
                     ActionType = "SYSTEM_OVERVIEW",
                     Message = $"Failed to generate system overview: {ex.Message}"
+                };
+            }
+        }
+
+        #endregion
+
+        #region Announcement Actions
+
+        private async Task<AIActionResult> CreateAnnouncementAsync(string json, ChatUserContext user)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var title = root.TryGetProperty("title", out var titleEl) ? titleEl.GetString() ?? "" : "";
+                var content = root.TryGetProperty("content", out var contentEl) ? contentEl.GetString() ?? "" : "";
+                var priority = root.TryGetProperty("priority", out var prioEl) ? prioEl.GetString() ?? "Normal" : "Normal";
+                var category = root.TryGetProperty("category", out var catEl) ? catEl.GetString() : null;
+
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "CREATE_ANNOUNCEMENT",
+                        Message = "A title is required for the announcement."
+                    };
+                }
+
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "CREATE_ANNOUNCEMENT",
+                        Message = "Content is required for the announcement."
+                    };
+                }
+
+                // Normalize priority
+                var validPriorities = new[] { "Low", "Normal", "High", "Urgent" };
+                if (!validPriorities.Contains(priority, StringComparer.OrdinalIgnoreCase))
+                    priority = "Normal";
+                priority = validPriorities.First(p => p.Equals(priority, StringComparison.OrdinalIgnoreCase));
+
+                // Parse optional expiry
+                DateTime? expiresAt = null;
+                if (root.TryGetProperty("expiresAt", out var expEl) && !string.IsNullOrWhiteSpace(expEl.GetString()))
+                {
+                    if (DateTime.TryParse(expEl.GetString(), out var parsed))
+                        expiresAt = parsed;
+                }
+                if (root.TryGetProperty("expiresInDays", out var expDaysEl))
+                {
+                    if (expDaysEl.TryGetInt32(out var days) && days > 0)
+                        expiresAt = DateTime.UtcNow.AddDays(days);
+                }
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                var announcement = new Announcement
+                {
+                    Title = title,
+                    Content = content,
+                    Priority = priority,
+                    Category = category,
+                    CreatedByUserId = user.UserId,
+                    ExpiresAt = expiresAt,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                context.Announcements.Add(announcement);
+                await context.SaveChangesAsync();
+
+                // Send real-time notification via SignalR
+                try
+                {
+                    var hubContext = scope.ServiceProvider.GetService<IHubContext<ChatHub>>();
+                    if (hubContext != null)
+                    {
+                        await hubContext.Clients.All.SendAsync("AnnouncementCreated", new
+                        {
+                            announcementId = announcement.AnnouncementId,
+                            title = announcement.Title,
+                            priority = announcement.Priority,
+                            createdBy = user.FullName
+                        });
+                    }
+                }
+                catch (Exception hubEx)
+                {
+                    _logger.LogWarning(hubEx, "Failed to send announcement SignalR notification");
+                }
+
+                var priorityIcon = priority switch
+                {
+                    "Urgent" => "🔴",
+                    "High" => "🟠",
+                    "Normal" => "🟢",
+                    "Low" => "⚪",
+                    _ => "🟢"
+                };
+
+                var expiryText = expiresAt.HasValue ? $"\n- Expires: {expiresAt.Value:dd MMM yyyy}" : "";
+                var categoryText = !string.IsNullOrEmpty(category) ? $"\n- Category: {category}" : "";
+
+                _logger.LogInformation("AI Action: Announcement created '{Title}' by {User} (Priority: {Priority})",
+                    title, user.FullName, priority);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "CREATE_ANNOUNCEMENT",
+                    EntityId = announcement.AnnouncementId,
+                    Message = $"{priorityIcon} Announcement published!\n\n**{title}**\n\n{content}\n\n- Priority: {priority}\n- Posted by: {user.FullName}{categoryText}{expiryText}"
+                };
+            }
+            catch (JsonException)
+            {
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "CREATE_ANNOUNCEMENT",
+                    Message = "Invalid data format for announcement."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create announcement via AI");
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "CREATE_ANNOUNCEMENT",
+                    Message = $"Failed to create announcement: {ex.Message}"
                 };
             }
         }
