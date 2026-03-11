@@ -28,8 +28,9 @@ namespace ProjectTracker.API.Services
         private readonly string _model;
         private string _systemPrompt = string.Empty;
 
-        // Token budget — Qwen2.5-14B supports 32K context, we use 8K in llama.cpp
-        private const int MaxContextTokens = 6000;
+        // Token budget — Qwen2.5-14B supports 32K context, we use 16K with 2 parallel (8K per slot)
+        // System prompt (~2500 tokens) + DB context + KB context + conversation history must fit within this
+        private const int MaxContextTokens = 7500;
         private const int ApproxCharsPerToken = 4;
         private const int MaxResponseTokens = 1024;
 
@@ -391,7 +392,15 @@ Be concise, professional, and friendly. Use the provided database context when a
             try
             {
                 response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-                response.EnsureSuccessStatusCode();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogError("LocalLLM session chat returned {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
+                    yield return $"AI service returned an error. Please try again.";
+                    _conversationMemory.AddMessage(sessionId, "assistant", "Sorry, I encountered an error. Please try again.");
+                    yield break;
+                }
 
                 stream = await response.Content.ReadAsStreamAsync(cancellationToken);
                 reader = new StreamReader(stream);

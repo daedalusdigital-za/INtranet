@@ -121,8 +121,17 @@ namespace ProjectTracker.API.Services
 
             if (!_sessions.TryGetValue(sessionId, out var session))
             {
-                _logger.LogWarning("Session {SessionId} not found when adding message", sessionId);
-                return;
+                // Auto-create session if it doesn't exist (e.g. frontend-generated session IDs)
+                session = new ConversationSession
+                {
+                    SessionId = sessionId,
+                    UserId = 0,
+                    Messages = new List<ConversationMessage>(),
+                    CreatedAt = DateTime.UtcNow,
+                    LastActivityAt = DateTime.UtcNow
+                };
+                _sessions[sessionId] = session;
+                _logger.LogInformation("Auto-created conversation session {SessionId}", sessionId);
             }
 
             // Truncate long messages

@@ -33,7 +33,7 @@ namespace ProjectTracker.API.Services
             ["logistics"] = new[] { "load", "loads", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "rf-", "ld-", "in transit", "delivered" },
             ["tripsheets"] = new[] { "tripsheet", "tripsheets", "trip sheet", "trip sheets", "ts-", "trip", "trips", "generate load", "available tripsheet", "active tripsheet" },
             ["invoices"] = new[] { "invoice", "invoices", "tfn", "transaction", "transactions", "sales amount", "cost of sales", "billing", "billed", "revenue", "imported invoice", "product sold", "quantity sold" },
-            ["stock"] = new[] { "stock", "inventory", "stock on hand", "soh", "warehouse", "warehouses", "stock level", "stock available", "item", "items", "qty", "quantity", "stock management", "gauteng", "kzn", "cape town", "pe", "gqeberha", "durban", "johannesburg" }
+            ["stock"] = new[] { "stock", "inventory", "stock on hand", "soh", "warehouse", "warehouses", "stock level", "stock available", "item", "items", "qty", "quantity", "stock management" }
         };
 
         public AIContextService(

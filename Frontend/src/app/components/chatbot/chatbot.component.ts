@@ -194,14 +194,28 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     const icon = action.success ? '✅' : '❌';
     const typeLabel = action.type === 'CREATE_TICKET' ? 'Support Ticket' :
                       action.type === 'CREATE_MEETING' ? 'Meeting' :
-                      action.type === 'SEND_EMAIL' ? 'Email' : action.type;
+                      action.type === 'SEND_EMAIL' ? 'Email' :
+                      action.type === 'ASSIGN_TODO' ? 'Todo Assigned' :
+                      action.type === 'TRACK_VEHICLE' ? 'Vehicle Tracking' :
+                      action.type === 'FLEET_STATUS' ? 'Fleet Status' :
+                      action.type === 'TRIPSHEET_CREATE' ? 'TripSheet Created' :
+                      action.type === 'TRIPSHEET_GET_WAREHOUSES' ? 'Warehouses' :
+                      action.type === 'TRIPSHEET_GET_INVOICES' ? 'Pending Invoices' :
+                      action.type === 'TRIPSHEET_GET_DRIVERS' ? 'Available Drivers' :
+                      action.type === 'TRIPSHEET_GET_VEHICLES' ? 'Available Vehicles' :
+                      action.type === 'TRIPSHEET_PREVIEW' ? 'TripSheet Preview' : action.type;
+
+    // For TripSheet data-fetch actions and vehicle tracking, show the data as a regular bot message (not a small action banner)
+    const isTripSheetData = action.type.startsWith('TRIPSHEET_') && action.type !== 'TRIPSHEET_CREATE';
+    const isTrackingData = action.type === 'TRACK_VEHICLE' || action.type === 'FLEET_STATUS';
+    const isDataAction = isTripSheetData || isTrackingData;
     
     this.messages.push({
-      text: `${icon} **${typeLabel}**: ${action.message}`,
+      text: isDataAction ? action.message : `${icon} **${typeLabel}**: ${action.message}`,
       isUser: false,
       timestamp: new Date(),
-      isAction: true,
-      actionSuccess: action.success
+      isAction: !isDataAction,
+      actionSuccess: isDataAction ? undefined : action.success
     });
     this.saveMessages();
     this.scrollToBottom();
@@ -314,7 +328,8 @@ export class ChatbotComponent implements OnInit, OnDestroy {
    * Strip AI action tags from displayed text so users only see the natural response
    */
   private stripActionTags(text: string): string {
-    return text.replace(/\[ACTION:\w+\]\s*\{[^}]*\}\s*\[\/ACTION\]/g, '').trim();
+    // Handle nested JSON (arrays, nested objects) in action tags
+    return text.replace(/\[ACTION:\w+\]\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*\[\/ACTION\]/g, '').trim();
   }
 }
 

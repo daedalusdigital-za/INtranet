@@ -192,6 +192,9 @@ builder.Services.AddSingleton<ILocalLlmService, LocalLlmService>();
 // Add AI Action Service for executing AI-requested actions (create tickets, meetings, etc.)
 builder.Services.AddScoped<IAIActionService, AIActionService>();
 
+// Add TripSheet Workflow Service for AI-guided TripSheet creation
+builder.Services.AddScoped<ITripSheetWorkflowService, TripSheetWorkflowService>();
+
 // Add Azure Sync Background Service
 builder.Services.AddHostedService<AzureSyncService>();
 
