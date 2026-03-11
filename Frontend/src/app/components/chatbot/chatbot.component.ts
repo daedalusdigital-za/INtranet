@@ -17,8 +17,7 @@ interface ChatMessage {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './chatbot.component.html',
-  styleUrls: ['./chatbot.component.scss'],
-  providers: [ChatService]
+  styleUrls: ['./chatbot.component.scss']
 })
 export class ChatbotComponent implements OnInit, OnDestroy {
   isOpen = false;
@@ -32,14 +31,15 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   fileInputError = '';
   
   private chatSubscription?: Subscription;
+  private readonly STORAGE_KEY = 'welly_chat_messages';
 
   constructor(private chatService: ChatService) {}
 
   ngOnInit(): void {
     // Check if AI service is available
     this.checkServiceHealth();
-    // Welcome message
-    this.addBotMessage('Hey there! 👋 I\'m Welly from IT. Need help with work or anything tech-related? Fire away!');
+    // Restore previous messages from session, or show welcome if first time
+    this.restoreMessages();
   }
 
   ngOnDestroy(): void {
@@ -50,7 +50,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.chatService.checkHealth().subscribe(available => {
       this.isServiceAvailable = available;
       if (!available) {
-        this.addBotMessage('⚠️ AI service is currently offline. Falling back to basic responses.');
+        this.addBotMessage('⚠️ AI is currently offline — using basic responses.');
       }
     });
   }
@@ -89,6 +89,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       attachmentName: this.selectedFile?.name,
       attachmentType: this.selectedFile?.type
     });
+    this.saveMessages();
 
     const fileToSend = this.selectedFile;
     this.userInput = '';
@@ -149,23 +150,23 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     let response = '';
 
     if (message.includes('attendance') || message.includes('clock in') || message.includes('time')) {
-      response = 'Ah, attendance stuff! Here\'s the deal:\n• Check the People page for live status\n• Weekly patterns are there too\n• On-time means before 07:30 AM - don\'t be that person who\'s always "just a minute late" 😉';
+      response = 'Check the **People** page for live attendance status and weekly patterns. On-time = before 07:30 AM.';
     } else if (message.includes('project') || message.includes('board') || message.includes('task')) {
-      response = 'Projects are my jam! You can:\n• Create boards for different projects\n• Drag cards between lists (very satisfying, trust me)\n• Track progress without endless email chains\n\nHonestly, once you get the hang of it, you\'ll wonder how you lived without it.';
+      response = 'Head to **Project Boards** to create boards, drag tasks between lists, and track progress.';
     } else if (message.includes('help') || message.includes('how')) {
-      response = 'I\'m your guy for:\n• Attendance & time tracking\n• Project boards & tasks\n• General IT stuff\n• Random tech questions\n\nWhat\'s on your mind?';
+      response = 'I can help with attendance, projects, login issues, and general IT queries. What do you need?';
     } else if (message.includes('login') || message.includes('password')) {
-      response = 'Login trouble? Classic. Here\'s what to try:\n• Double-check caps lock (happens to the best of us)\n• Try your default credentials from onboarding\n• If all else fails, shoot me or admin a message for a reset\n\nWe\'ll get you sorted!';
+      response = 'Check caps lock, try your default credentials, or contact IT/admin for a password reset.';
     } else if (message.includes('employee') || message.includes('people')) {
-      response = 'The People page is pretty handy:\n• See who\'s in, who\'s out, who\'s running late\n• Check profiles and attendance history\n• It updates in real-time, so no more walking to someone\'s desk only to find they\'re not there 😅';
+      response = 'The **People** page shows who\'s in, out, or late — updated in real-time.';
     } else if (message.includes('thank') || message.includes('thanks')) {
-      response = 'No problem at all! That\'s what I\'m here for. Give me a shout if anything else comes up. Cheers! 🙌';
+      response = 'Happy to help! Let me know if you need anything else. 🙌';
     } else if (message.includes('hi') || message.includes('hello') || message.includes('hey')) {
-      response = 'Hey! 👋 What can I help you with today?';
+      response = 'Hi! 👋 How can I help?';
     } else if (message.includes('who are you') || message.includes('what are you')) {
-      response = 'I\'m Welly! I work in IT and handle support for ProjectTracker and general tech stuff. Been here a few years now, so I know my way around. What do you need help with?';
+      response = 'I\'m Welly, the IT assistant for ProMed Technologies. I can help with attendance, projects, logistics, stock, and more.';
     } else {
-      response = 'Hmm, I\'m not quite sure about that one. Try asking me about:\n• Attendance & time tracking\n• Project boards\n• Login issues\n• General app help\n\nOr just describe your problem and I\'ll do my best!';
+      response = 'I\'m not sure about that. Try asking about attendance, projects, login issues, or app features.';
     }
 
     this.addBotMessage(response);
@@ -177,6 +178,32 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       isUser: false,
       timestamp: new Date()
     });
+    this.saveMessages();
+  }
+
+  private restoreMessages(): void {
+    try {
+      const saved = sessionStorage.getItem(this.STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        this.messages = parsed.map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp)
+        }));
+        setTimeout(() => this.scrollToBottom(), 100);
+        return;
+      }
+    } catch { }
+    // First visit — show welcome
+    this.addBotMessage('Hi there! 👋 I\'m Welly, your IT assistant. How can I help?');
+  }
+
+  private saveMessages(): void {
+    try {
+      // Keep last 50 messages to avoid filling storage
+      const toSave = this.messages.slice(-50);
+      sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave));
+    } catch { }
   }
 
   private scrollToBottom(): void {

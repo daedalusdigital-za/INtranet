@@ -12,6 +12,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatMenuModule } from '@angular/material/menu';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { SupportTicketService, SupportTicket, TicketStatistics } from '../../services/support-ticket.service';
@@ -31,8 +34,12 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     MatDialogModule,
     MatSelectModule,
     MatFormFieldModule,
+    MatInputModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
+    MatTooltipModule,
+    MatBadgeModule,
+    MatMenuModule,
     FormsModule,
     NavbarComponent
   ],
@@ -40,558 +47,793 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     <app-navbar></app-navbar>
 
     <div class="support-container">
-      <div class="header-section">
-        <div class="header-left">
-          <h1>
-            <mat-icon>support_agent</mat-icon>
-            Support Ticket System
-          </h1>
-        </div>
-        <div class="header-right">
-          <mat-form-field appearance="outline" class="date-filter">
-            <mat-label>Time Period</mat-label>
-            <mat-select [(value)]="selectedDateRange" (selectionChange)="onDateRangeChange()">
-              <mat-option value="today">Today</mat-option>
-              <mat-option value="7days">Last 7 Days</mat-option>
-              <mat-option value="30days">Last 30 Days</mat-option>
-              <mat-option value="90days">Last 90 Days</mat-option>
-            </mat-select>
-            <mat-icon matPrefix>date_range</mat-icon>
-          </mat-form-field>
-          <button mat-raised-button color="primary" class="create-ticket-btn" (click)="openCreateTicketDialog()">
-            <mat-icon>add</mat-icon>
-            Create New Ticket
-          </button>
+      <!-- Modern Header -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="header-left">
+            <div class="header-icon-wrapper">
+              <mat-icon>support_agent</mat-icon>
+            </div>
+            <div class="header-text">
+              <h1>Support Tickets</h1>
+              <p class="header-subtitle">Track, manage & resolve support requests</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <mat-form-field appearance="outline" class="search-field">
+              <mat-icon matPrefix>search</mat-icon>
+              <input matInput [(ngModel)]="searchQuery" placeholder="Search tickets..." (input)="filterTickets()">
+              @if (searchQuery) {
+                <button matSuffix mat-icon-button (click)="searchQuery = ''; filterTickets()">
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="period-field">
+              <mat-select [(value)]="selectedDateRange" (selectionChange)="onDateRangeChange()">
+                <mat-option value="today">Today</mat-option>
+                <mat-option value="7days">7 Days</mat-option>
+                <mat-option value="30days">30 Days</mat-option>
+                <mat-option value="90days">90 Days</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <button mat-flat-button class="create-btn" (click)="openCreateTicketDialog()">
+              <mat-icon>add</mat-icon>
+              New Ticket
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Statistics Cards -->
-      <div class="stats-grid">
-        <mat-card class="stat-card">
-          <div class="stat-icon-container blue">
-            <mat-icon>confirmation_number</mat-icon>
+      <!-- Statistics Strip -->
+      <div class="stats-strip">
+        <div class="stat-pill" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">
+          <div class="pill-icon total"><mat-icon>confirmation_number</mat-icon></div>
+          <div class="pill-info">
+            <span class="pill-value">{{ totalTickets }}</span>
+            <span class="pill-label">Total</span>
           </div>
-          <div class="stat-content">
-            <h3>Total Tickets</h3>
-            <p class="stat-value">{{ totalTickets }}</p>
+        </div>
+        <div class="stat-pill" [class.active]="activeFilter === 'open'" (click)="setFilter('open')">
+          <div class="pill-icon open"><mat-icon>radio_button_unchecked</mat-icon></div>
+          <div class="pill-info">
+            <span class="pill-value">{{ openTickets.length }}</span>
+            <span class="pill-label">Open</span>
           </div>
-        </mat-card>
-
-        <mat-card class="stat-card">
-          <div class="stat-icon-container green">
-            <mat-icon>schedule</mat-icon>
+        </div>
+        <div class="stat-pill" [class.active]="activeFilter === 'closed'" (click)="setFilter('closed')">
+          <div class="pill-icon closed"><mat-icon>check_circle</mat-icon></div>
+          <div class="pill-info">
+            <span class="pill-value">{{ closedTickets.length }}</span>
+            <span class="pill-label">Closed</span>
           </div>
-          <div class="stat-content">
-            <h3>Response Time</h3>
-            <p class="stat-value">{{ averageResponseTime }}</p>
+        </div>
+        <div class="stat-pill">
+          <div class="pill-icon response"><mat-icon>schedule</mat-icon></div>
+          <div class="pill-info">
+            <span class="pill-value">{{ averageResponseTime }}</span>
+            <span class="pill-label">Avg Response</span>
           </div>
-        </mat-card>
-
-        <mat-card class="stat-card">
-          <div class="stat-icon-container purple">
-            <mat-icon>task_alt</mat-icon>
+        </div>
+        <div class="stat-pill">
+          <div class="pill-icon resolution"><mat-icon>trending_up</mat-icon></div>
+          <div class="pill-info">
+            <span class="pill-value">{{ resolutionRate }}%</span>
+            <span class="pill-label">Resolved</span>
           </div>
-          <div class="stat-content">
-            <h3>Resolution Rate</h3>
-            <p class="stat-value">{{ resolutionRate }}%</p>
-          </div>
-        </mat-card>
+        </div>
       </div>
 
-      <!-- Loading Spinner -->
+      <!-- Loading -->
       @if (loading) {
-        <div class="loading-container">
-          <mat-spinner diameter="50"></mat-spinner>
+        <div class="loading-state">
+          <mat-spinner diameter="44" color="primary"></mat-spinner>
           <p>Loading tickets...</p>
         </div>
       }
 
-      <!-- Tickets Row: Open and Closed Side by Side -->
+      <!-- Tickets Content -->
       @if (!loading) {
-      <div class="tickets-row">
-        <!-- Open Tickets Section -->
-        <mat-card class="tickets-card">
-          <mat-card-header>
-            <mat-card-title>
-              <mat-icon>folder_open</mat-icon>
-              Open Tickets
-              <span class="ticket-count">({{ openTickets.length }})</span>
-            </mat-card-title>
-          </mat-card-header>
-          <mat-divider></mat-divider>
-          <mat-card-content>
-            @if (openTickets.length === 0) {
-              <div class="empty-state">
-                <mat-icon>check_circle</mat-icon>
-                <p>No open tickets at the moment</p>
-              </div>
-            } @else {
-              <div class="tickets-list">
-                @for (ticket of openTickets; track ticket.ticketId) {
-                  <div class="ticket-item">
-                    <div class="ticket-header">
-                      <div class="ticket-title-section">
-                        <h4>{{ ticket.title }}</h4>
-                        <span class="ticket-id">#{{ ticket.ticketId }}</span>
-                      </div>
-                      <div class="ticket-actions">
-                        <mat-chip [class]="'priority-' + ticket.priority.toLowerCase()">
-                          {{ ticket.priority }}
-                        </mat-chip>
-                        <button mat-icon-button color="primary" (click)="closeTicket(ticket)" title="Close Ticket">
-                          <mat-icon>check_circle</mat-icon>
-                        </button>
-                      </div>
-                    </div>
-                    <p class="ticket-description">{{ ticket.description }}</p>
-                    <div class="ticket-meta">
-                      <span><mat-icon>person</mat-icon>{{ ticket.submittedBy }}</span>
-                      <span><mat-icon>calendar_today</mat-icon>{{ ticket.submittedDate | date: 'MMM dd, yyyy' }}</span>
-                      <span><mat-icon>category</mat-icon>{{ ticket.category }}</span>
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-          </mat-card-content>
-        </mat-card>
+        <!-- Active Tab Bar -->
+        <div class="tab-bar">
+          <button class="tab-btn" [class.active]="activeFilter === 'all' || activeFilter === 'open'" (click)="setFilter('open')">
+            <mat-icon>folder_open</mat-icon>
+            Open Tickets
+            <span class="badge open">{{ filteredOpenTickets.length }}</span>
+          </button>
+          <button class="tab-btn" [class.active]="activeFilter === 'closed'" (click)="setFilter('closed')">
+            <mat-icon>task_alt</mat-icon>
+            Closed Tickets
+            <span class="badge closed">{{ filteredClosedTickets.length }}</span>
+          </button>
+        </div>
 
-        <!-- Closed Tickets Section -->
-        <mat-card class="tickets-card">
-          <mat-card-header>
-            <mat-card-title>
-              <mat-icon>check_circle</mat-icon>
-              Closed Tickets
-              <span class="ticket-count">({{ closedTickets.length }})</span>
-            </mat-card-title>
-          </mat-card-header>
-          <mat-divider></mat-divider>
-          <mat-card-content>
-            @if (closedTickets.length === 0) {
+        <!-- Open Tickets -->
+        @if (activeFilter !== 'closed') {
+          <div class="tickets-grid">
+            @if (filteredOpenTickets.length === 0) {
               <div class="empty-state">
-                <mat-icon>inbox</mat-icon>
-                <p>No closed tickets yet</p>
-              </div>
-            } @else {
-              <div class="tickets-list">
-                @for (ticket of closedTickets; track ticket.ticketId) {
-                  <div class="ticket-item closed">
-                    <div class="ticket-header">
-                      <div class="ticket-title-section">
-                        <h4>{{ ticket.title }}</h4>
-                        <span class="ticket-id">#{{ ticket.ticketId }}</span>
-                      </div>
-                      <div class="ticket-actions">
-                        <mat-chip class="status-closed">Resolved</mat-chip>
-                        <button mat-icon-button color="warn" (click)="reopenTicket(ticket)" title="Reopen Ticket">
-                          <mat-icon>refresh</mat-icon>
-                        </button>
-                      </div>
-                    </div>
-                    <p class="ticket-description">{{ ticket.description }}</p>
-                    @if (ticket.resolution) {
-                      <p class="ticket-resolution"><strong>Resolution:</strong> {{ ticket.resolution }}</p>
-                    }
-                    <div class="ticket-meta">
-                      <span><mat-icon>person</mat-icon>{{ ticket.submittedBy }}</span>
-                      <span><mat-icon>calendar_today</mat-icon>{{ ticket.submittedDate | date: 'MMM dd, yyyy' }}</span>
-                      <span><mat-icon>event_available</mat-icon>Closed: {{ ticket.closedDate | date: 'MMM dd, yyyy' }}</span>
-                    </div>
-                  </div>
-                }
+                <div class="empty-icon"><mat-icon>inbox</mat-icon></div>
+                <h3>No Open Tickets</h3>
+                <p>All caught up! Create a new ticket if you need help.</p>
+                <button mat-stroked-button class="empty-action" (click)="openCreateTicketDialog()">
+                  <mat-icon>add</mat-icon> Create Ticket
+                </button>
               </div>
             }
-          </mat-card-content>
-        </mat-card>
-      </div>
+            @for (ticket of filteredOpenTickets; track ticket.ticketId) {
+              <div class="ticket-card" [class]="'border-' + ticket.priority.toLowerCase()">
+                <div class="ticket-card-top">
+                  <div class="ticket-id-badge">#{{ ticket.ticketId }}</div>
+                  <div class="ticket-priority" [class]="'priority-' + ticket.priority.toLowerCase()">
+                    <mat-icon>{{ getPriorityIcon(ticket.priority) }}</mat-icon>
+                    {{ ticket.priority }}
+                  </div>
+                </div>
+                <h3 class="ticket-title">{{ ticket.title }}</h3>
+                <p class="ticket-desc">{{ ticket.description | slice:0:120 }}{{ ticket.description.length > 120 ? '...' : '' }}</p>
+                <div class="ticket-tags">
+                  <span class="tag category"><mat-icon>label</mat-icon>{{ ticket.category }}</span>
+                  <span class="tag status open"><mat-icon>radio_button_unchecked</mat-icon>{{ ticket.status }}</span>
+                </div>
+                <div class="ticket-footer">
+                  <div class="ticket-meta-row">
+                    <span class="meta-item"><mat-icon>person_outline</mat-icon>{{ ticket.submittedBy }}</span>
+                    <span class="meta-item"><mat-icon>schedule</mat-icon>{{ ticket.submittedDate | date: 'MMM d, y' }}</span>
+                  </div>
+                  <div class="ticket-card-actions">
+                    <button mat-icon-button matTooltip="Add Comment" class="action-btn comment" (click)="openCommentDialog(ticket)">
+                      <mat-icon>chat_bubble_outline</mat-icon>
+                    </button>
+                    <button mat-icon-button matTooltip="Close Ticket" class="action-btn resolve" (click)="closeTicket(ticket)">
+                      <mat-icon>check_circle_outline</mat-icon>
+                    </button>
+                    <button mat-icon-button matTooltip="Delete Ticket" class="action-btn delete" (click)="deleteTicket(ticket)">
+                      <mat-icon>delete_outline</mat-icon>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Closed Tickets -->
+        @if (activeFilter === 'closed') {
+          <div class="tickets-grid">
+            @if (filteredClosedTickets.length === 0) {
+              <div class="empty-state">
+                <div class="empty-icon"><mat-icon>check_circle</mat-icon></div>
+                <h3>No Closed Tickets</h3>
+                <p>Resolved tickets will appear here.</p>
+              </div>
+            }
+            @for (ticket of filteredClosedTickets; track ticket.ticketId) {
+              <div class="ticket-card closed-card">
+                <div class="ticket-card-top">
+                  <div class="ticket-id-badge">#{{ ticket.ticketId }}</div>
+                  <div class="ticket-priority resolved">
+                    <mat-icon>check_circle</mat-icon>
+                    Resolved
+                  </div>
+                </div>
+                <h3 class="ticket-title">{{ ticket.title }}</h3>
+                <p class="ticket-desc">{{ ticket.description | slice:0:120 }}{{ ticket.description.length > 120 ? '...' : '' }}</p>
+                @if (ticket.resolution) {
+                  <div class="resolution-box">
+                    <mat-icon>lightbulb</mat-icon>
+                    <span>{{ ticket.resolution }}</span>
+                  </div>
+                }
+                <div class="ticket-tags">
+                  <span class="tag category"><mat-icon>label</mat-icon>{{ ticket.category }}</span>
+                  <span class="tag status closed"><mat-icon>check_circle</mat-icon>Closed</span>
+                </div>
+                <div class="ticket-footer">
+                  <div class="ticket-meta-row">
+                    <span class="meta-item"><mat-icon>person_outline</mat-icon>{{ ticket.submittedBy }}</span>
+                    <span class="meta-item"><mat-icon>event_available</mat-icon>{{ ticket.closedDate | date: 'MMM d, y' }}</span>
+                  </div>
+                  <div class="ticket-card-actions">
+                    <button mat-icon-button matTooltip="Reopen Ticket" class="action-btn reopen" (click)="reopenTicket(ticket)">
+                      <mat-icon>refresh</mat-icon>
+                    </button>
+                    <button mat-icon-button matTooltip="Delete Ticket" class="action-btn delete" (click)="deleteTicket(ticket)">
+                      <mat-icon>delete_outline</mat-icon>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
       }
     </div>
   `,
   styles: [`
-    .support-container {
-      padding: 80px;
-      min-height: calc(100vh - 64px);
+    /* === Page Container === */
+    :host {
+      display: block;
       background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      min-height: 100vh;
     }
 
-    .loading-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px;
-      color: white;
+    .support-container {
+      padding: 88px 32px 40px;
+      min-height: calc(100vh - 64px);
+      background: transparent;
     }
 
-    .loading-container p {
-      margin-top: 16px;
-      font-size: 16px;
+    /* === Header === */
+    .page-header {
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
     }
 
-    .ticket-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .ticket-resolution {
-      font-size: 13px;
-      color: #059669;
-      background: #d1fae5;
-      padding: 8px 12px;
-      border-radius: 6px;
-      margin: 8px 0;
-    }
-
-    .header-section {
-      margin-bottom: 32px;
+    .header-content {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 24px;
+      flex-wrap: wrap;
+      gap: 20px;
     }
 
     .header-left {
-      flex: 1;
-      text-align: left;
-    }
-
-    .header-right {
       display: flex;
       align-items: center;
       gap: 16px;
     }
 
-    .date-filter {
-      min-width: 200px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 8px;
-      padding: 0;
+    .header-icon-wrapper {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(233, 69, 96, 0.4);
     }
 
-    .date-filter ::ng-deep .mat-mdc-form-field-infix {
+    .header-icon-wrapper mat-icon {
+      font-size: 30px;
+      width: 30px;
+      height: 30px;
+      color: white;
+    }
+
+    .header-text h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 700;
+      color: white;
+      letter-spacing: -0.5px;
+    }
+
+    .header-subtitle {
+      margin: 4px 0 0;
+      font-size: 14px;
+      color: rgba(255,255,255,0.6);
+      font-weight: 400;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-field {
+      width: 260px;
+    }
+
+    .search-field ::ng-deep .mat-mdc-text-field-wrapper {
+      background: rgba(255,255,255,0.1) !important;
+      border-radius: 10px !important;
+    }
+
+    .search-field ::ng-deep .mdc-notched-outline__leading,
+    .search-field ::ng-deep .mdc-notched-outline__notch,
+    .search-field ::ng-deep .mdc-notched-outline__trailing {
+      border-color: rgba(255,255,255,0.2) !important;
+    }
+
+    .search-field ::ng-deep input {
+      color: white !important;
+    }
+
+    .search-field ::ng-deep input::placeholder {
+      color: rgba(255,255,255,0.5) !important;
+    }
+
+    .search-field ::ng-deep .mat-mdc-form-field-icon-prefix mat-icon,
+    .search-field ::ng-deep .mat-mdc-form-field-icon-suffix mat-icon {
+      color: rgba(255,255,255,0.5) !important;
+    }
+
+    .search-field ::ng-deep .mat-mdc-form-field-infix {
       padding-top: 8px !important;
       padding-bottom: 8px !important;
       min-height: 40px !important;
     }
 
-    .date-filter ::ng-deep .mat-mdc-text-field-wrapper {
-      padding: 0 8px !important;
+    .period-field {
+      width: 120px;
     }
 
-    .date-filter ::ng-deep .mdc-notched-outline {
-      display: none !important;
+    .period-field ::ng-deep .mat-mdc-text-field-wrapper {
+      background: rgba(255,255,255,0.1) !important;
+      border-radius: 10px !important;
     }
 
-    h1 {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      color: white;
-      margin: 0 0 8px 0;
-      font-size: 36px;
-      font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    .period-field ::ng-deep .mdc-notched-outline__leading,
+    .period-field ::ng-deep .mdc-notched-outline__notch,
+    .period-field ::ng-deep .mdc-notched-outline__trailing {
+      border-color: rgba(255,255,255,0.2) !important;
     }
 
-    h1 mat-icon {
-      font-size: 42px;
-      width: 42px;
-      height: 42px;
+    .period-field ::ng-deep .mat-mdc-select-value-text {
+      color: white !important;
     }
 
-    .subtitle {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 18px;
-      margin: 0 0 20px 0;
+    .period-field ::ng-deep .mat-mdc-select-arrow {
+      color: rgba(255,255,255,0.5) !important;
     }
 
-    .create-ticket-btn {
-      padding: 12px 32px !important;
-      font-size: 16px !important;
-      font-weight: 500 !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 139, 0.3) !important;
+    .period-field ::ng-deep .mat-mdc-form-field-infix {
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+      min-height: 40px !important;
+    }
+
+    .create-btn {
+      background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%) !important;
+      color: white !important;
+      padding: 0 24px !important;
+      height: 44px;
+      border-radius: 10px !important;
+      font-weight: 600 !important;
+      font-size: 14px !important;
+      letter-spacing: 0.3px;
+      box-shadow: 0 4px 16px rgba(233, 69, 96, 0.3) !important;
       transition: all 0.3s ease !important;
     }
 
-    .create-ticket-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(0, 0, 139, 0.4) !important;
+    .create-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(233, 69, 96, 0.45) !important;
     }
 
-    .create-ticket-btn mat-icon {
-      margin-right: 8px;
+    .create-btn mat-icon {
+      margin-right: 6px;
+      font-size: 20px;
     }
 
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 24px;
-      margin-bottom: 32px;
-      max-width: 1400px;
-      margin-left: auto;
-      margin-right: auto;
+    /* === Stats Strip === */
+    .stats-strip {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      overflow-x: auto;
+      padding-bottom: 4px;
     }
 
-    .stat-card {
+    .stat-pill {
       display: flex;
       align-items: center;
-      gap: 20px;
-      padding: 24px !important;
-      background: rgba(255, 255, 255, 0.95);
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      border-radius: 16px !important;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
-      transition: transform 0.3s ease;
-    }
-
-    .stat-card:hover {
-      transform: translateY(-4px);
-    }
-
-    .stat-icon-container {
-      width: 64px;
-      height: 64px;
       border-radius: 12px;
+      padding: 14px 20px;
+      min-width: 150px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      transition: all 0.25s ease;
+    }
+
+    .stat-pill:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    }
+
+    .stat-pill.active {
+      border-color: #fff;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+    }
+
+    .pill-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
-    .stat-icon-container.blue {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-    }
-
-    .stat-icon-container.green {
-      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-    }
-
-    .stat-icon-container.purple {
-      background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
-    }
-
-    .stat-icon-container mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
+    .pill-icon mat-icon {
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
       color: white;
     }
 
-    .stat-content h3 {
-      margin: 0 0 8px 0;
-      font-size: 14px;
+    .pill-icon.total { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .pill-icon.open { background: linear-gradient(135deg, #f093fb, #f5576c); }
+    .pill-icon.closed { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+    .pill-icon.response { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+    .pill-icon.resolution { background: linear-gradient(135deg, #fa709a, #fee140); }
+
+    .pill-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pill-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+      line-height: 1.2;
+    }
+
+    .pill-label {
+      font-size: 12px;
+      color: #9ca3af;
       font-weight: 500;
-      color: #666;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .stat-value {
-      margin: 0;
-      font-size: 32px;
-      font-weight: 700;
-      color: #1e90ff;
-    }
-
-    .tickets-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      margin-bottom: 24px;
-      max-width: 1400px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    @media (max-width: 1024px) {
-      .tickets-row {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .tickets-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-radius: 16px !important;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
-      height: fit-content;
-    }
-
-    .tickets-card mat-card-header {
-      padding: 24px 24px 16px 24px;
-    }
-
-    .tickets-card mat-card-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 24px;
-      font-weight: 600;
-      color: #1e90ff;
-    }
-
-    .tickets-card mat-card-title mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-    }
-
-    .ticket-count {
-      font-size: 18px;
-      color: #666;
-      font-weight: 400;
-    }
-
-    .tickets-card mat-card-content {
-      padding: 24px !important;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      color: #999;
-    }
-
-    .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .empty-state p {
-      font-size: 16px;
-      margin: 0;
-    }
-
-    .tickets-list {
+    /* === Loading === */
+    .loading-state {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
     }
 
-    .ticket-item {
-      padding: 20px;
-      border: 2px solid #e5e7eb;
-      border-radius: 12px;
-      background: white;
-      transition: all 0.3s ease;
+    .loading-state p {
+      margin-top: 16px;
+      font-size: 15px;
+      color: rgba(255, 255, 255, 0.85);
     }
 
-    .ticket-item:hover {
-      border-color: #1e90ff;
-      box-shadow: 0 4px 12px rgba(0, 0, 139, 0.1);
-    }
-
-    .ticket-item.closed {
-      opacity: 0.8;
-      background: #f9fafb;
-    }
-
-    .ticket-header {
+    /* === Tab Bar === */
+    .tab-bar {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-      gap: 16px;
+      gap: 8px;
+      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 6px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      width: fit-content;
     }
 
-    .ticket-title-section {
+    .tab-btn {
       display: flex;
       align-items: center;
-      gap: 12px;
-      flex: 1;
-    }
-
-    .ticket-item h4 {
-      margin: 0;
-      font-size: 18px;
+      gap: 8px;
+      padding: 10px 20px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 14px;
       font-weight: 600;
-      color: #1f2937;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.25s ease;
     }
 
-    .ticket-id {
-      font-size: 14px;
-      color: #6b7280;
-      font-weight: 500;
+    .tab-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
     }
 
-    .ticket-description {
-      color: #4b5563;
-      font-size: 14px;
-      line-height: 1.6;
-      margin: 0 0 16px 0;
+    .tab-btn.active {
+      background: rgba(255, 255, 255, 0.95);
+      color: #1a1a2e;
     }
 
-    .ticket-meta {
+    .tab-btn mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .badge.open { background: rgba(233, 69, 96, 0.15); color: #e94560; }
+    .tab-btn.active .badge.open { background: rgba(233, 69, 96, 0.15); color: #e94560; }
+    .badge.closed { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .tab-btn.active .badge.closed { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+
+    /* === Tickets Grid === */
+    .tickets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+    }
+
+    /* === Ticket Card === */
+    .ticket-card {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      border-left: 4px solid #e5e7eb;
+      transition: all 0.3s ease;
       display: flex;
-      gap: 24px;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ticket-card:hover {
+      box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+      transform: translateY(-2px);
+    }
+
+    .ticket-card.border-low { border-left-color: #10b981; }
+    .ticket-card.border-medium { border-left-color: #f59e0b; }
+    .ticket-card.border-high { border-left-color: #ef4444; }
+    .ticket-card.border-critical { border-left-color: #7f1d1d; }
+    .ticket-card.closed-card { border-left-color: #6366f1; opacity: 0.9; }
+
+    .ticket-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .ticket-id-badge {
+      font-size: 12px;
+      font-weight: 700;
+      color: #9ca3af;
+      background: #f3f4f6;
+      padding: 3px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .ticket-priority {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .ticket-priority mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+    }
+
+    .ticket-priority.priority-low { background: #d1fae5; color: #065f46; }
+    .ticket-priority.priority-medium { background: #fef3c7; color: #92400e; }
+    .ticket-priority.priority-high { background: #fee2e2; color: #991b1b; }
+    .ticket-priority.priority-critical { background: #fecaca; color: #7f1d1d; }
+    .ticket-priority.resolved { background: #e0e7ff; color: #4338ca; }
+
+    .ticket-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a2e;
+      line-height: 1.4;
+    }
+
+    .ticket-desc {
+      margin: 0;
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+
+    .ticket-tags {
+      display: flex;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
-    .ticket-meta span {
-      display: flex;
+    .tag {
+      display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      color: #6b7280;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.3px;
     }
 
-    .ticket-meta mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
+    .tag mat-icon {
+      font-size: 13px;
+      width: 13px;
+      height: 13px;
+    }
+
+    .tag.category { background: #f3f4f6; color: #4b5563; }
+    .tag.status.open { background: #fff1f2; color: #e11d48; }
+    .tag.status.closed { background: #ecfdf5; color: #059669; }
+
+    .resolution-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #166534;
+      line-height: 1.5;
+    }
+
+    .resolution-box mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #16a34a;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    .ticket-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #f3f4f6;
+      margin-top: auto;
+    }
+
+    .ticket-meta-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .meta-item mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+    }
+
+    .ticket-card-actions {
+      display: flex;
+      gap: 2px;
+    }
+
+    .action-btn {
+      width: 34px !important;
+      height: 34px !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .action-btn mat-icon {
+      font-size: 19px !important;
+      width: 19px !important;
+      height: 19px !important;
+    }
+
+    .action-btn.comment { color: #6366f1 !important; }
+    .action-btn.comment:hover { background: #eef2ff !important; }
+    .action-btn.resolve { color: #10b981 !important; }
+    .action-btn.resolve:hover { background: #ecfdf5 !important; }
+    .action-btn.reopen { color: #f59e0b !important; }
+    .action-btn.reopen:hover { background: #fffbeb !important; }
+    .action-btn.delete { color: #ef4444 !important; }
+    .action-btn.delete:hover { background: #fef2f2 !important; }
+
+    /* === Empty State === */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+
+    .empty-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+
+    .empty-icon mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: #d1d5db;
+    }
+
+    .empty-state h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .empty-state p {
+      margin: 0 0 20px;
+      font-size: 14px;
       color: #9ca3af;
     }
 
-    mat-chip {
-      font-weight: 500 !important;
-      border-radius: 8px !important;
+    .empty-action {
+      border-color: #e94560 !important;
+      color: #e94560 !important;
     }
 
-    .priority-low {
-      background-color: #d1fae5 !important;
-      color: #065f46 !important;
+    /* === Responsive === */
+    @media (max-width: 1024px) {
+      .support-container { padding: 16px; }
+      .page-header { padding: 20px; }
+      .header-content { flex-direction: column; align-items: flex-start; }
+      .header-actions { width: 100%; flex-wrap: wrap; }
+      .search-field { width: 100%; flex: 1; }
+      .stats-strip { flex-wrap: wrap; }
+      .tickets-grid { grid-template-columns: 1fr; }
     }
 
-    .priority-medium {
-      background-color: #fef3c7 !important;
-      color: #92400e !important;
-    }
-
-    .priority-high {
-      background-color: #fee2e2 !important;
-      color: #991b1b !important;
-    }
-
-    .priority-critical {
-      background-color: #fecaca !important;
-      color: #7f1d1d !important;
-      font-weight: 600 !important;
-    }
-
-    .status-closed {
-      background-color: #e0e7ff !important;
-      color: #3730a3 !important;
-    }
-
-    .spacer {
-      flex: 1 1 auto;
+    @media (max-width: 600px) {
+      .stat-pill { min-width: 130px; padding: 10px 14px; }
+      .ticket-footer { flex-direction: column; gap: 10px; align-items: flex-start; }
     }
   `]
 })
 export class SupportTicketComponent implements OnInit {
   currentUser: any;
-  notificationCount = 3;
   loading = false;
+  searchQuery = '';
+  activeFilter: 'all' | 'open' | 'closed' = 'open';
 
   // Statistics
   totalTickets: number = 0;
-  averageResponseTime: string = '0 hrs';
+  averageResponseTime: string = '0h';
   resolutionRate: number = 0;
 
   // Date filter
@@ -600,6 +842,8 @@ export class SupportTicketComponent implements OnInit {
   // Tickets from database
   openTickets: SupportTicket[] = [];
   closedTickets: SupportTicket[] = [];
+  filteredOpenTickets: SupportTicket[] = [];
+  filteredClosedTickets: SupportTicket[] = [];
 
   constructor(
     private authService: AuthService,
@@ -618,10 +862,10 @@ export class SupportTicketComponent implements OnInit {
   loadTickets(): void {
     this.loading = true;
     
-    // Load open tickets
     this.ticketService.getOpenTickets().subscribe({
       next: (tickets) => {
         this.openTickets = tickets;
+        this.filteredOpenTickets = tickets;
         this.loadClosedTickets();
       },
       error: (error) => {
@@ -636,6 +880,7 @@ export class SupportTicketComponent implements OnInit {
     this.ticketService.getClosedTickets().subscribe({
       next: (tickets) => {
         this.closedTickets = tickets;
+        this.filteredClosedTickets = tickets;
         this.loadStatistics();
       },
       error: (error) => {
@@ -652,7 +897,7 @@ export class SupportTicketComponent implements OnInit {
         this.totalTickets = stats.totalTickets;
         this.resolutionRate = Math.round(stats.resolutionRate);
         if (stats.averageResponseTimeHours > 0) {
-          this.averageResponseTime = stats.averageResponseTimeHours.toFixed(1) + ' hrs';
+          this.averageResponseTime = stats.averageResponseTimeHours.toFixed(1) + 'h';
         }
         this.loading = false;
       },
@@ -691,9 +936,52 @@ export class SupportTicketComponent implements OnInit {
     this.loadStatistics();
   }
 
+  setFilter(filter: 'all' | 'open' | 'closed'): void {
+    this.activeFilter = filter;
+    this.filterTickets();
+  }
+
+  filterTickets(): void {
+    const q = this.searchQuery.toLowerCase().trim();
+
+    if (!q) {
+      this.filteredOpenTickets = this.openTickets;
+      this.filteredClosedTickets = this.closedTickets;
+      return;
+    }
+
+    this.filteredOpenTickets = this.openTickets.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q) ||
+      t.submittedBy.toLowerCase().includes(q) ||
+      t.category.toLowerCase().includes(q) ||
+      ('#' + t.ticketId).includes(q)
+    );
+
+    this.filteredClosedTickets = this.closedTickets.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q) ||
+      t.submittedBy.toLowerCase().includes(q) ||
+      t.category.toLowerCase().includes(q) ||
+      ('#' + t.ticketId).includes(q)
+    );
+  }
+
+  getPriorityIcon(priority: string): string {
+    switch (priority.toLowerCase()) {
+      case 'critical': return 'error';
+      case 'high': return 'warning';
+      case 'medium': return 'info';
+      case 'low': return 'check_circle';
+      default: return 'info';
+    }
+  }
+
   openCreateTicketDialog(): void {
     const dialogRef = this.dialog.open(CreateTicketDialogComponent, {
       width: '600px',
+      maxWidth: '95vw',
+      panelClass: 'modern-dialog',
       data: { submittedBy: this.currentUser?.name }
     });
 
@@ -710,8 +998,9 @@ export class SupportTicketComponent implements OnInit {
         this.ticketService.createTicket(createRequest).subscribe({
           next: (newTicket) => {
             this.openTickets.unshift(newTicket);
+            this.filterTickets();
             this.totalTickets++;
-            this.snackBar.open('Ticket created successfully!', 'Close', { duration: 3000 });
+            this.snackBar.open('✅ Ticket created successfully!', 'Close', { duration: 3000 });
           },
           error: (error) => {
             console.error('Error creating ticket:', error);
@@ -722,16 +1011,43 @@ export class SupportTicketComponent implements OnInit {
     });
   }
 
+  openCommentDialog(ticket: SupportTicket): void {
+    const dialogRef = this.dialog.open(AddCommentDialogComponent, {
+      width: '500px',
+      maxWidth: '95vw',
+      panelClass: 'modern-dialog',
+      data: { ticket, author: this.currentUser?.name }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.ticketService.addComment(ticket.ticketId, {
+          content: result.content,
+          author: this.currentUser?.name || 'Unknown',
+          isInternal: false
+        }).subscribe({
+          next: () => {
+            this.snackBar.open('💬 Comment added', 'Close', { duration: 3000 });
+          },
+          error: (error) => {
+            console.error('Error adding comment:', error);
+            this.snackBar.open('Failed to add comment', 'Close', { duration: 3000 });
+          }
+        });
+      }
+    });
+  }
+
   closeTicket(ticket: SupportTicket): void {
     this.ticketService.closeTicket(ticket.ticketId).subscribe({
       next: () => {
-        // Move from open to closed
         this.openTickets = this.openTickets.filter(t => t.ticketId !== ticket.ticketId);
         ticket.status = 'Closed';
         ticket.closedDate = new Date();
         this.closedTickets.unshift(ticket);
+        this.filterTickets();
         this.loadStatistics();
-        this.snackBar.open('Ticket closed', 'Close', { duration: 3000 });
+        this.snackBar.open('✅ Ticket closed', 'Close', { duration: 3000 });
       },
       error: (error) => {
         console.error('Error closing ticket:', error);
@@ -743,17 +1059,35 @@ export class SupportTicketComponent implements OnInit {
   reopenTicket(ticket: SupportTicket): void {
     this.ticketService.reopenTicket(ticket.ticketId).subscribe({
       next: () => {
-        // Move from closed to open
         this.closedTickets = this.closedTickets.filter(t => t.ticketId !== ticket.ticketId);
         ticket.status = 'Open';
         ticket.closedDate = undefined;
         this.openTickets.unshift(ticket);
+        this.filterTickets();
         this.loadStatistics();
-        this.snackBar.open('Ticket reopened', 'Close', { duration: 3000 });
+        this.snackBar.open('🔄 Ticket reopened', 'Close', { duration: 3000 });
       },
       error: (error) => {
         console.error('Error reopening ticket:', error);
         this.snackBar.open('Failed to reopen ticket', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  deleteTicket(ticket: SupportTicket): void {
+    if (!confirm(`Delete ticket #${ticket.ticketId} "${ticket.title}"?`)) return;
+
+    this.ticketService.deleteTicket(ticket.ticketId).subscribe({
+      next: () => {
+        this.openTickets = this.openTickets.filter(t => t.ticketId !== ticket.ticketId);
+        this.closedTickets = this.closedTickets.filter(t => t.ticketId !== ticket.ticketId);
+        this.filterTickets();
+        this.totalTickets--;
+        this.snackBar.open('🗑️ Ticket deleted', 'Close', { duration: 3000 });
+      },
+      error: (error) => {
+        console.error('Error deleting ticket:', error);
+        this.snackBar.open('Failed to delete ticket', 'Close', { duration: 3000 });
       }
     });
   }
@@ -764,7 +1098,9 @@ export class SupportTicketComponent implements OnInit {
   }
 }
 
-// Create Ticket Dialog Component
+// ============================================================
+// Create Ticket Dialog
+// ============================================================
 @Component({
   selector: 'app-create-ticket-dialog',
   standalone: true,
@@ -779,111 +1115,145 @@ export class SupportTicketComponent implements OnInit {
     MatIconModule
   ],
   template: `
-    <h2 mat-dialog-title>
-      <mat-icon>confirmation_number</mat-icon>
-      Create New Support Ticket
-    </h2>
-    <mat-dialog-content>
-      <form [formGroup]="ticketForm">
-        <mat-form-field appearance="outline" style="width: 100%;">
-          <mat-label>Title</mat-label>
-          <input matInput formControlName="title" placeholder="Brief description of the issue">
-          <mat-icon matPrefix>title</mat-icon>
-          @if (ticketForm.get('title')?.hasError('required') && ticketForm.get('title')?.touched) {
-            <mat-error>Title is required</mat-error>
-          }
-        </mat-form-field>
+    <div class="dialog-wrapper">
+      <div class="dialog-header">
+        <div class="dialog-icon"><mat-icon>add_circle</mat-icon></div>
+        <h2>New Support Ticket</h2>
+      </div>
+      <mat-dialog-content>
+        <form [formGroup]="ticketForm">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Title</mat-label>
+            <input matInput formControlName="title" placeholder="Brief description of the issue">
+            <mat-icon matPrefix>title</mat-icon>
+            @if (ticketForm.get('title')?.hasError('required') && ticketForm.get('title')?.touched) {
+              <mat-error>Title is required</mat-error>
+            }
+          </mat-form-field>
 
-        <mat-form-field appearance="outline" style="width: 100%;">
-          <mat-label>Category</mat-label>
-          <mat-select formControlName="category">
-            <mat-option value="IT Support">IT Support</mat-option>
-            <mat-option value="Software">Software</mat-option>
-            <mat-option value="Hardware">Hardware</mat-option>
-            <mat-option value="Network">Network</mat-option>
-            <mat-option value="Account">Account</mat-option>
-            <mat-option value="Access">Access</mat-option>
-            <mat-option value="Other">Other</mat-option>
-          </mat-select>
-          <mat-icon matPrefix>category</mat-icon>
-          @if (ticketForm.get('category')?.hasError('required') && ticketForm.get('category')?.touched) {
-            <mat-error>Category is required</mat-error>
-          }
-        </mat-form-field>
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Category</mat-label>
+              <mat-select formControlName="category">
+                <mat-option value="IT Support">🖥️ IT Support</mat-option>
+                <mat-option value="Software">💿 Software</mat-option>
+                <mat-option value="Hardware">🔧 Hardware</mat-option>
+                <mat-option value="Network">🌐 Network</mat-option>
+                <mat-option value="Account">👤 Account</mat-option>
+                <mat-option value="Access">🔑 Access</mat-option>
+                <mat-option value="Other">📋 Other</mat-option>
+              </mat-select>
+            </mat-form-field>
 
-        <mat-form-field appearance="outline" style="width: 100%;">
-          <mat-label>Priority</mat-label>
-          <mat-select formControlName="priority">
-            <mat-option value="Low">Low</mat-option>
-            <mat-option value="Medium">Medium</mat-option>
-            <mat-option value="High">High</mat-option>
-            <mat-option value="Critical">Critical</mat-option>
-          </mat-select>
-          <mat-icon matPrefix>priority_high</mat-icon>
-          @if (ticketForm.get('priority')?.hasError('required') && ticketForm.get('priority')?.touched) {
-            <mat-error>Priority is required</mat-error>
-          }
-        </mat-form-field>
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Priority</mat-label>
+              <mat-select formControlName="priority">
+                <mat-option value="Low">🟢 Low</mat-option>
+                <mat-option value="Medium">🟡 Medium</mat-option>
+                <mat-option value="High">🟠 High</mat-option>
+                <mat-option value="Critical">🔴 Critical</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
 
-        <mat-form-field appearance="outline" style="width: 100%;">
-          <mat-label>Description</mat-label>
-          <textarea matInput
-                    formControlName="description"
-                    rows="5"
-                    placeholder="Detailed description of the issue or request"></textarea>
-          <mat-icon matPrefix>description</mat-icon>
-          @if (ticketForm.get('description')?.hasError('required') && ticketForm.get('description')?.touched) {
-            <mat-error>Description is required</mat-error>
-          }
-        </mat-form-field>
-      </form>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Cancel</button>
-      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="!ticketForm.valid">
-        <mat-icon>send</mat-icon>
-        Submit Ticket
-      </button>
-    </mat-dialog-actions>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Description</mat-label>
+            <textarea matInput formControlName="description" rows="5" placeholder="Detailed description of the issue..."></textarea>
+            @if (ticketForm.get('description')?.hasError('required') && ticketForm.get('description')?.touched) {
+              <mat-error>Description is required</mat-error>
+            }
+          </mat-form-field>
+        </form>
+      </mat-dialog-content>
+      <mat-dialog-actions align="end">
+        <button mat-button class="cancel-btn" (click)="onCancel()">Cancel</button>
+        <button mat-flat-button class="submit-btn" (click)="onSubmit()" [disabled]="!ticketForm.valid">
+          <mat-icon>send</mat-icon>
+          Submit Ticket
+        </button>
+      </mat-dialog-actions>
+    </div>
   `,
   styles: [`
-    h2 {
+    .dialog-wrapper { padding: 0; background: white; border-radius: 12px; }
+
+    .dialog-header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      color: #1e90ff;
-      margin: 0;
+      gap: 14px;
+      padding: 24px 24px 8px;
+      background: white;
+      border-radius: 12px 12px 0 0;
     }
 
-    h2 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .dialog-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #e94560, #ff6b6b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dialog-icon mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: white;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
     }
 
     mat-dialog-content {
-      padding: 20px 24px !important;
-      min-height: 400px;
+      padding: 16px 24px !important;
+      background: white;
     }
 
-    mat-form-field {
-      margin-bottom: 16px;
+    .full-width { width: 100%; }
+
+    .form-row {
+      display: flex;
+      gap: 16px;
     }
+
+    .half-width { flex: 1; }
 
     mat-dialog-actions {
-      padding: 16px 24px !important;
+      padding: 12px 24px 20px !important;
       margin: 0 !important;
+      gap: 8px;
+      background: white;
+      border-radius: 0 0 12px 12px;
     }
 
-    mat-dialog-actions button {
-      margin-left: 8px;
+    :host ::ng-deep .mat-mdc-dialog-surface {
+      background: white !important;
+      border-radius: 12px !important;
     }
 
-    mat-dialog-actions button mat-icon {
-      margin-right: 4px;
+    .cancel-btn {
+      color: #6b7280 !important;
+      font-weight: 500 !important;
+    }
+
+    .submit-btn {
+      background: linear-gradient(135deg, #e94560, #ff6b6b) !important;
+      color: white !important;
+      padding: 0 24px !important;
+      height: 40px;
+      border-radius: 8px !important;
+      font-weight: 600 !important;
+    }
+
+    .submit-btn mat-icon {
+      margin-right: 6px;
       font-size: 18px;
-      width: 18px;
-      height: 18px;
     }
   `]
 })
@@ -911,6 +1281,171 @@ export class CreateTicketDialogComponent {
 
   onCancel(): void {
     this.dialogRef.close();
+  }
+}
+
+// ============================================================
+// Add Comment Dialog
+// ============================================================
+@Component({
+  selector: 'app-add-comment-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    MatIconModule
+  ],
+  template: `
+    <div class="dialog-wrapper">
+      <div class="dialog-header">
+        <div class="dialog-icon"><mat-icon>chat_bubble</mat-icon></div>
+        <div>
+          <h2>Add Comment</h2>
+          <p class="dialog-sub">Ticket #{{ data.ticket.ticketId }} — {{ data.ticket.title }}</p>
+        </div>
+      </div>
+      <mat-dialog-content>
+        <!-- Existing comments -->
+        @if (data.ticket.comments && data.ticket.comments.length > 0) {
+          <div class="comments-list">
+            @for (c of data.ticket.comments; track c.commentId) {
+              <div class="comment-item">
+                <div class="comment-author">
+                  <mat-icon>person</mat-icon>
+                  <strong>{{ c.author }}</strong>
+                  <span class="comment-date">{{ c.createdAt | date: 'MMM d, y h:mm a' }}</span>
+                </div>
+                <p class="comment-content">{{ c.content }}</p>
+              </div>
+            }
+          </div>
+        }
+        <form [formGroup]="commentForm">
+          <mat-form-field appearance="outline" style="width: 100%;">
+            <mat-label>Your comment</mat-label>
+            <textarea matInput formControlName="content" rows="4" placeholder="Type your comment..."></textarea>
+          </mat-form-field>
+        </form>
+      </mat-dialog-content>
+      <mat-dialog-actions align="end">
+        <button mat-button class="cancel-btn" (click)="dialogRef.close()">Cancel</button>
+        <button mat-flat-button class="submit-btn" (click)="onSubmit()" [disabled]="!commentForm.valid">
+          <mat-icon>send</mat-icon>
+          Post Comment
+        </button>
+      </mat-dialog-actions>
+    </div>
+  `,
+  styles: [`
+    .dialog-wrapper { padding: 0; background: white; border-radius: 12px; }
+
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 24px 24px 8px;
+      background: white;
+      border-radius: 12px 12px 0 0;
+    }
+
+    .dialog-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #6366f1, #818cf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .dialog-icon mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: white;
+    }
+
+    h2 { margin: 0; font-size: 18px; font-weight: 700; color: #1a1a2e; }
+    .dialog-sub { margin: 2px 0 0; font-size: 13px; color: #9ca3af; }
+
+    mat-dialog-content { padding: 16px 24px !important; background: white; }
+
+    .comments-list {
+      margin-bottom: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .comment-item {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    .comment-author {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+
+    .comment-author mat-icon { font-size: 16px; width: 16px; height: 16px; color: #9ca3af; }
+    .comment-date { font-size: 11px; color: #9ca3af; margin-left: auto; }
+    .comment-content { margin: 0; font-size: 13px; color: #4b5563; line-height: 1.5; }
+
+    mat-dialog-actions {
+      padding: 12px 24px 20px !important;
+      margin: 0 !important;
+      gap: 8px;
+      background: white;
+      border-radius: 0 0 12px 12px;
+    }
+
+    :host ::ng-deep .mat-mdc-dialog-surface {
+      background: white !important;
+      border-radius: 12px !important;
+    }
+
+    .cancel-btn { color: #6b7280 !important; }
+    .submit-btn {
+      background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+      color: white !important;
+      padding: 0 24px !important;
+      height: 40px;
+      border-radius: 8px !important;
+      font-weight: 600 !important;
+    }
+
+    .submit-btn mat-icon { margin-right: 6px; font-size: 18px; }
+  `]
+})
+export class AddCommentDialogComponent {
+  commentForm: FormGroup;
+
+  constructor(
+    public dialogRef: MatDialogRef<AddCommentDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: { ticket: SupportTicket; author: string },
+    private fb: FormBuilder
+  ) {
+    this.commentForm = this.fb.group({
+      content: ['', Validators.required]
+    });
+  }
+
+  onSubmit(): void {
+    if (this.commentForm.valid) {
+      this.dialogRef.close(this.commentForm.value);
+    }
   }
 }
 

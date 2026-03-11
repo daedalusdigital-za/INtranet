@@ -34,13 +34,20 @@ services:
       - NasSettings__Password=AccMed@2025
       - Ollama__BaseUrl=http://host.docker.internal:11434
       - Ollama__Model=phi3:mini
-      - Ollama__Enabled=true
+      - Ollama__Enabled=false
+      - Claude__ApiKey=${CLAUDE_API_KEY:-}
+      - Claude__Model=claude-sonnet-4-20250514
+      - Claude__Enabled=true
+      - LocalLlm__BaseUrl=http://host.docker.internal:8090
+      - LocalLlm__Model=qwen2.5-14b-instruct
+      - LocalLlm__Enabled=true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "0.0.0.0:5143:5143"
     volumes:
-      - kb-docs:/app/kb-docs
+      - ./kb-docs:/app/kb-docs
+      - ./ai-data:/app/ai-data
       - nas-documents:/app/documents
     depends_on:
       - database
@@ -64,8 +71,6 @@ services:
 
 volumes:
   sql-data:
-    driver: local
-  kb-docs:
     driver: local
   nas-documents:
     driver: local

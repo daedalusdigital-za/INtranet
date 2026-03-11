@@ -210,8 +210,7 @@ namespace ProjectTracker.API.Controllers
                     BACKUP DATABASE [{dbName}] 
                     TO DISK = '{sqlBackupPath}'
                     WITH FORMAT, INIT, 
-                    NAME = '{dbName} Full Backup',
-                    COMPRESSION";
+                    NAME = '{dbName} Full Backup'";
 
                 using var command = new SqlCommand(backupQuery, connection);
                 command.CommandTimeout = 300; // 5 minutes timeout

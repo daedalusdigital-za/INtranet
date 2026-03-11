@@ -289,7 +289,7 @@ interface SleepOut {
 
         <!-- Secondary Stats Row -->
         <div class="secondary-stats-grid">
-          <div class="secondary-stat-card">
+          <div class="secondary-stat-card clickable" (click)="openVehiclesDialog()">
             <div class="stat-icon-mini vehicles">
               <mat-icon>directions_car</mat-icon>
             </div>
@@ -311,10 +311,10 @@ interface SleepOut {
 
           <div class="secondary-stat-card clickable" (click)="openReportsDialog()">
             <div class="stat-icon-mini reports">
-              <mat-icon>assessment</mat-icon>
+              <mat-icon>schedule</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-label">Reports</span>
+              <span class="stat-label">Schedules</span>
             </div>
           </div>
 
@@ -1203,6 +1203,23 @@ interface SleepOut {
                           <mat-option value="cancelled">Cancelled</mat-option>
                         </mat-select>
                       </mat-form-field>
+                      <mat-form-field appearance="outline" class="date-filter-field">
+                        <mat-label>From Date</mat-label>
+                        <input matInput [matDatepicker]="tripFromPicker" [(ngModel)]="tripsheetFromDate" (dateChange)="onTripsheetDateFilterChange()">
+                        <mat-datepicker-toggle matIconSuffix [for]="tripFromPicker"></mat-datepicker-toggle>
+                        <mat-datepicker #tripFromPicker></mat-datepicker>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="date-filter-field">
+                        <mat-label>To Date</mat-label>
+                        <input matInput [matDatepicker]="tripToPicker" [(ngModel)]="tripsheetToDate" (dateChange)="onTripsheetDateFilterChange()">
+                        <mat-datepicker-toggle matIconSuffix [for]="tripToPicker"></mat-datepicker-toggle>
+                        <mat-datepicker #tripToPicker></mat-datepicker>
+                      </mat-form-field>
+                      @if (tripsheetFromDate || tripsheetToDate) {
+                        <button mat-icon-button color="warn" (click)="clearTripsheetDateFilter()" matTooltip="Clear date filter">
+                          <mat-icon>clear</mat-icon>
+                        </button>
+                      }
                     </div>
                   </div>
 
@@ -3860,6 +3877,14 @@ interface SleepOut {
       width: 150px;
     }
 
+    .date-filter-field {
+      width: 160px;
+    }
+
+    .date-filter-field .mat-mdc-form-field-infix {
+      min-height: 40px;
+    }
+
     .tripsheets-table {
       width: 100%;
       border-radius: 8px;
@@ -3910,7 +3935,7 @@ interface SleepOut {
         width: 100%;
       }
 
-      .search-field, .filter-field {
+      .search-field, .filter-field, .date-filter-field {
         width: 100%;
       }
     }
@@ -4262,6 +4287,8 @@ export class LogisticsDashboardComponent implements OnInit {
   tripsheets = signal<any[]>([]);
   tripsheetSearch = '';
   tripsheetStatusFilter = 'all';
+  tripsheetFromDate: Date | null = null;
+  tripsheetToDate: Date | null = null;
   tripsheetColumns = ['loadNumber', 'driver', 'vehicle', 'route', 'stops', 'distance', 'estTime', 'date', 'status', 'actions'];
 
   // Imported Invoices
@@ -5557,6 +5584,25 @@ Notes: ${record.notes || 'No notes'}
         t.vehicleReg?.toLowerCase().includes(search)
       );
     }
+
+    // Date range filter
+    if (this.tripsheetFromDate) {
+      const from = new Date(this.tripsheetFromDate);
+      from.setHours(0, 0, 0, 0);
+      trips = trips.filter(t => {
+        const tripDate = new Date(t.date);
+        tripDate.setHours(0, 0, 0, 0);
+        return tripDate >= from;
+      });
+    }
+    if (this.tripsheetToDate) {
+      const to = new Date(this.tripsheetToDate);
+      to.setHours(23, 59, 59, 999);
+      trips = trips.filter(t => {
+        const tripDate = new Date(t.date);
+        return tripDate <= to;
+      });
+    }
     
     // Sort: Delivered/Completed status always at the bottom
     trips = [...trips].sort((a, b) => {
@@ -5585,6 +5631,17 @@ Notes: ${record.notes || 'No notes'}
         ]);
       }
     });
+  }
+
+  onTripsheetDateFilterChange(): void {
+    // Trigger computed re-evaluation by updating the signal
+    this.tripsheets.update(trips => [...trips]);
+  }
+
+  clearTripsheetDateFilter(): void {
+    this.tripsheetFromDate = null;
+    this.tripsheetToDate = null;
+    this.tripsheets.update(trips => [...trips]);
   }
 
   getTripStatusClass(status: string): string {
@@ -6386,6 +6443,17 @@ Notes: ${record.notes || 'No notes'}
         height: 'auto',
         maxHeight: '90vh'
       });
+    });
+  }
+
+  openVehiclesDialog(): void {
+    this.dialog.open(VehicleStatusDialog, {
+      width: '750px',
+      maxWidth: '95vw',
+      maxHeight: '90vh',
+      data: {
+        vehicles: this.vehicles()
+      }
     });
   }
 
@@ -17802,33 +17870,33 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           @page { size: landscape; margin: 8mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; padding: 10px; background: white; }
-          .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 3px solid #1976d2; margin-bottom: 10px; }
+          .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 3px solid #033142; margin-bottom: 10px; }
           .header-left { display: flex; align-items: center; gap: 12px; }
-          .logo { font-size: 21px; font-weight: bold; color: #1976d2; }
-          .trip-badge { background: #1976d2; color: white; padding: 5px 15px; border-radius: 15px; font-size: 15px; font-weight: bold; }
+          .logo { font-size: 21px; font-weight: bold; color: #033142; }
+          .trip-badge { background: #033142; color: white; padding: 5px 15px; border-radius: 15px; font-size: 15px; font-weight: bold; }
           .company { text-align: right; font-size: 14px; font-weight: bold; color: #333; }
           .info-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%); border-radius: 5px; border: 1px solid #ddd; }
           .info-item { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: white; border-radius: 4px; border: 1px solid #e0e0e0; font-size: 11px; }
           .info-item strong { color: #333; }
           .info-sub { color: #666; font-size: 10px; }
           .route-map-section { margin: 8px 0; text-align: center; page-break-inside: avoid; }
-          .route-map-section h4 { font-size: 12px; color: #1976d2; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px; }
-          .route-map-section img { max-width: 100%; height: auto; border: 2px solid #1976d2; border-radius: 5px; }
+          .route-map-section h4 { font-size: 12px; color: #033142; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+          .route-map-section img { max-width: 100%; height: auto; border: 2px solid #033142; border-radius: 5px; }
           table { width: 100%; border-collapse: collapse; font-size: 11px; }
-          th { background: #1976d2; color: white; padding: 6px 4px; text-align: left; font-weight: 600; font-size: 11px; white-space: nowrap; }
+          th { background: #033142; color: white; padding: 6px 4px; text-align: left; font-weight: 600; font-size: 11px; white-space: nowrap; }
           th.center, td.center { text-align: center; }
           th.right, td.right { text-align: right; }
           td { padding: 5px 4px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
           tr:nth-child(even) { background: #f9f9f9; }
-          .stop-num { background: #1976d2; color: white; width: 21px; height: 21px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; }
+          .stop-num { background: #033142; color: white; width: 21px; height: 21px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; }
           .customer { font-weight: 600; color: #333; font-size: 11px; }
           .address { color: #666; font-size: 10px; max-width: 150px; }
           .product { font-size: 10px; }
-          .checkbox { width: 17px; height: 17px; border: 2px solid #1976d2; border-radius: 2px; display: inline-block; }
-          .totals td { background: #e3f2fd; font-weight: bold; border-top: 2px solid #1976d2; }
+          .checkbox { width: 17px; height: 17px; border: 2px solid #033142; border-radius: 2px; display: inline-block; }
+          .totals td { background: #e0ecf0; font-weight: bold; border-top: 2px solid #033142; }
           .bottom-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
           .section-box { border: 1px solid #ddd; border-radius: 5px; padding: 8px; }
-          .section-box h4 { font-size: 12px; color: #1976d2; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0; }
+          .section-box h4 { font-size: 12px; color: #033142; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0; }
           .km-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 6px; }
           .km-field label { display: block; font-size: 10px; color: #666; margin-bottom: 2px; }
           .input-box { border: 1px solid #ccc; border-radius: 3px; height: 21px; background: white; }
@@ -17845,7 +17913,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
             <span class="logo">🚛 TRIP SHEET</span>
             <span class="trip-badge">LOAD-${Date.now().toString().slice(-6)}</span>
           </div>
-          <div class="company">ProMed Technologies<br/><span style="color: #666; font-size: 8px;">Logistics Division</span></div>
+          <div class="company">Rocket Freight<br/><span style="color: #666; font-size: 8px;">Logistics Division</span></div>
         </div>
         
         <div class="info-strip">
@@ -17900,7 +17968,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           </div>
         </div>
         
-        <div class="footer">Generated ${new Date().toLocaleString('en-ZA')} | ProMed Technologies Logistics</div>
+        <div class="footer">Generated ${new Date().toLocaleString('en-ZA')} | Rocket Freight Logistics</div>
       </body>
       </html>
     `;
@@ -23823,6 +23891,269 @@ export class ReassignProvinceDialog {
 
   onAssign(): void {
     this.dialogRef.close({ province: this.selectedProvince });
+  }
+}
+
+// ===========================
+// VEHICLE STATUS DIALOG
+// ===========================
+@Component({
+  selector: 'vehicle-status-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatInputModule,
+    MatFormFieldModule
+  ],
+  template: `
+    <h2 mat-dialog-title class="vs-title">
+      <mat-icon style="color: #1e88e5;">directions_car</mat-icon>
+      Fleet Status Overview
+      <span class="vs-total">{{ data.vehicles.length }} vehicles</span>
+    </h2>
+    <mat-dialog-content class="vs-content">
+      <!-- Search -->
+      <mat-form-field appearance="outline" class="vs-search">
+        <mat-label>Search vehicles...</mat-label>
+        <input matInput [(ngModel)]="searchTerm" (ngModelChange)="filterVehicles()" placeholder="Registration, type, driver...">
+        <mat-icon matSuffix>search</mat-icon>
+      </mat-form-field>
+
+      <!-- Summary chips -->
+      <div class="vs-summary">
+        <div class="vs-chip available" (click)="filterByStatus('Available')">
+          <mat-icon>check_circle</mat-icon>
+          <span>Available: {{ statusCounts.available }}</span>
+        </div>
+        <div class="vs-chip maintenance" (click)="filterByStatus('Under Maintenance')">
+          <mat-icon>build</mat-icon>
+          <span>Maintenance: {{ statusCounts.maintenance }}</span>
+        </div>
+        <div class="vs-chip assigned" (click)="filterByStatus('In Use')">
+          <mat-icon>local_shipping</mat-icon>
+          <span>In Use: {{ statusCounts.inUse }}</span>
+        </div>
+        <div class="vs-chip decommissioned" (click)="filterByStatus('Decommissioned')">
+          <mat-icon>block</mat-icon>
+          <span>Decommissioned: {{ statusCounts.decommissioned }}</span>
+        </div>
+        <div class="vs-chip unavailable" (click)="filterByStatus('Unavailable')">
+          <mat-icon>cancel</mat-icon>
+          <span>Unavailable: {{ statusCounts.unavailable }}</span>
+        </div>
+        @if (activeFilter) {
+          <div class="vs-chip clear" (click)="clearFilter()">
+            <mat-icon>clear</mat-icon>
+            <span>Clear Filter</span>
+          </div>
+        }
+      </div>
+
+      <!-- Vehicle list -->
+      <div class="vs-list">
+        @for (vehicle of filteredVehicles; track vehicle.id) {
+          <div class="vs-vehicle-row" [class]="'status-' + getStatusClass(vehicle.status)">
+            <div class="vs-status-indicator" [class]="'bg-' + getStatusClass(vehicle.status)"></div>
+            <div class="vs-vehicle-info">
+              <div class="vs-reg">{{ vehicle.registrationNumber }}</div>
+              <div class="vs-details">
+                {{ vehicle.type || vehicle.vehicleTypeName || 'Unknown Type' }}
+                @if (vehicle.currentDriverName || vehicle.currentDriver) {
+                  <span class="vs-driver">
+                    <mat-icon class="vs-mini-icon">person</mat-icon>
+                    {{ vehicle.currentDriverName || vehicle.currentDriver }}
+                  </span>
+                }
+              </div>
+            </div>
+            <div class="vs-vehicle-meta">
+              @if (vehicle.province) {
+                <span class="vs-province">{{ vehicle.province }}</span>
+              }
+              <span class="vs-status-badge" [class]="'badge-' + getStatusClass(vehicle.status)">
+                {{ vehicle.status }}
+              </span>
+            </div>
+          </div>
+        }
+        @if (filteredVehicles.length === 0) {
+          <div class="vs-empty">
+            <mat-icon>search_off</mat-icon>
+            <span>No vehicles match your search</span>
+          </div>
+        }
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="dialogRef.close()">Close</button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .vs-title {
+      display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px;
+    }
+    .vs-total {
+      margin-left: auto; font-size: 13px; color: #888; font-weight: 400;
+    }
+    .vs-content {
+      padding: 0 4px !important; max-height: 70vh;
+    }
+    .vs-search {
+      width: 100%; margin-bottom: 8px;
+    }
+    .vs-summary {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+    }
+    .vs-chip {
+      display: flex; align-items: center; gap: 4px; padding: 6px 12px;
+      border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer;
+      transition: all 0.2s; border: 1px solid transparent;
+    }
+    .vs-chip:hover { transform: scale(1.05); }
+    .vs-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .vs-chip.available { background: #e8f5e9; color: #2e7d32; }
+    .vs-chip.maintenance { background: #fff3e0; color: #e65100; }
+    .vs-chip.assigned { background: #e3f2fd; color: #1565c0; }
+    .vs-chip.decommissioned { background: #fce4ec; color: #c62828; }
+    .vs-chip.unavailable { background: #f3e5f5; color: #6a1b9a; }
+    .vs-chip.clear { background: #eceff1; color: #455a64; }
+
+    .vs-list {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .vs-vehicle-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+      border-radius: 8px; background: #fafafa; transition: all 0.2s;
+      border-left: 4px solid transparent;
+    }
+    .vs-vehicle-row:hover { background: #f0f0f0; }
+    .vs-vehicle-row.status-available { border-left-color: #4caf50; }
+    .vs-vehicle-row.status-maintenance { border-left-color: #ff9800; }
+    .vs-vehicle-row.status-inuse { border-left-color: #2196f3; }
+    .vs-vehicle-row.status-decommissioned { border-left-color: #f44336; }
+    .vs-vehicle-row.status-unavailable { border-left-color: #9c27b0; }
+
+    .vs-status-indicator {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .bg-available { background: #4caf50; }
+    .bg-maintenance { background: #ff9800; }
+    .bg-inuse { background: #2196f3; }
+    .bg-decommissioned { background: #f44336; }
+    .bg-unavailable { background: #9c27b0; }
+
+    .vs-vehicle-info { flex: 1; min-width: 0; }
+    .vs-reg { font-weight: 600; font-size: 14px; color: #212121; }
+    .vs-details { font-size: 12px; color: #666; display: flex; align-items: center; gap: 8px; }
+    .vs-driver { display: inline-flex; align-items: center; gap: 2px; color: #1565c0; }
+    .vs-mini-icon { font-size: 14px !important; width: 14px !important; height: 14px !important; }
+
+    .vs-vehicle-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .vs-province { font-size: 11px; color: #888; background: #f5f5f5; padding: 2px 8px; border-radius: 10px; }
+    .vs-status-badge {
+      font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+    }
+    .badge-available { background: #e8f5e9; color: #2e7d32; }
+    .badge-maintenance { background: #fff3e0; color: #e65100; }
+    .badge-inuse { background: #e3f2fd; color: #1565c0; }
+    .badge-decommissioned { background: #fce4ec; color: #c62828; }
+    .badge-unavailable { background: #f3e5f5; color: #6a1b9a; }
+
+    .vs-empty {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 32px; color: #999;
+    }
+    .vs-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.5; }
+  `]
+})
+export class VehicleStatusDialog {
+  searchTerm = '';
+  activeFilter = '';
+  filteredVehicles: any[] = [];
+  statusCounts = { available: 0, maintenance: 0, inUse: 0, decommissioned: 0, unavailable: 0 };
+
+  constructor(
+    public dialogRef: MatDialogRef<VehicleStatusDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { vehicles: any[] }
+  ) {
+    this.computeCounts();
+    this.filteredVehicles = this.sortVehicles([...data.vehicles]);
+  }
+
+  computeCounts(): void {
+    const v = this.data.vehicles;
+    this.statusCounts = {
+      available: v.filter(x => x.status === 'Available').length,
+      maintenance: v.filter(x => x.status === 'Under Maintenance').length,
+      inUse: v.filter(x => x.status === 'In Use' || x.status === 'Assigned' || x.status === 'In Transit').length,
+      decommissioned: v.filter(x => x.status === 'Decommissioned').length,
+      unavailable: v.filter(x => x.status === 'Unavailable').length
+    };
+  }
+
+  getStatusClass(status: string): string {
+    switch (status) {
+      case 'Available': return 'available';
+      case 'Under Maintenance': return 'maintenance';
+      case 'In Use': case 'Assigned': case 'In Transit': return 'inuse';
+      case 'Decommissioned': return 'decommissioned';
+      default: return 'unavailable';
+    }
+  }
+
+  filterByStatus(status: string): void {
+    if (this.activeFilter === status) {
+      this.clearFilter();
+      return;
+    }
+    this.activeFilter = status;
+    this.applyFilters();
+  }
+
+  clearFilter(): void {
+    this.activeFilter = '';
+    this.applyFilters();
+  }
+
+  filterVehicles(): void {
+    this.applyFilters();
+  }
+
+  private applyFilters(): void {
+    let result = [...this.data.vehicles];
+
+    if (this.activeFilter) {
+      if (this.activeFilter === 'In Use') {
+        result = result.filter(v => v.status === 'In Use' || v.status === 'Assigned' || v.status === 'In Transit');
+      } else {
+        result = result.filter(v => v.status === this.activeFilter);
+      }
+    }
+
+    if (this.searchTerm) {
+      const term = this.searchTerm.toLowerCase();
+      result = result.filter(v =>
+        (v.registrationNumber || '').toLowerCase().includes(term) ||
+        (v.type || v.vehicleTypeName || '').toLowerCase().includes(term) ||
+        (v.currentDriverName || v.currentDriver || '').toLowerCase().includes(term) ||
+        (v.province || '').toLowerCase().includes(term) ||
+        (v.status || '').toLowerCase().includes(term)
+      );
+    }
+
+    this.filteredVehicles = this.sortVehicles(result);
+  }
+
+  private sortVehicles(vehicles: any[]): any[] {
+    const order: Record<string, number> = {
+      'Available': 0, 'In Use': 1, 'Assigned': 1, 'In Transit': 1,
+      'Under Maintenance': 2, 'Unavailable': 3, 'Decommissioned': 4
+    };
+    return vehicles.sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5));
   }
 }
 

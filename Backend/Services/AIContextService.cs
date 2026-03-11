@@ -25,7 +25,7 @@ namespace ProjectTracker.API.Services
             ["employees"] = new[] { "employee", "employees", "staff", "worker", "colleague", "team member", "who is", "who's", "person", "people", "user", "users", "works", "work in", "works in", "working in", "extension", "extensions", "ext", "phone", "contact", "who works", "list all" },
             ["attendance"] = new[] { "attendance", "clock in", "clock out", "clocked", "present", "absent", "late", "on time", "working hours", "time in", "time out", "checked in" },
             ["leave"] = new[] { "leave", "vacation", "holiday", "sick", "annual leave", "off", "day off", "days off", "time off", "pto", "away", "on leave" },
-            ["projects"] = new[] { "project", "projects", "board", "boards", "task", "tasks", "card", "cards", "kanban", "sprint", "backlog", "todo", "to do", "to-do" },
+            ["customers"] = new[] { "customer", "customers", "client", "clients", "account", "accounts", "customer code", "customer name", "contact person", "credit limit", "payment terms", "customer list", "customer info", "customer details", "customer address", "vat number", "company registration" },
             ["tickets"] = new[] { "ticket", "tickets", "support ticket", "issue", "issues", "problem", "problems", "help desk", "bug", "incident" },
             ["meetings"] = new[] { "meeting", "meetings", "appointment", "appointments", "schedule", "scheduled", "calendar", "boardroom", "call", "conference" },
             ["announcements"] = new[] { "announcement", "announcements", "news", "notice", "notices", "update", "updates", "bulletin", "memo" },
@@ -86,7 +86,7 @@ namespace ProjectTracker.API.Services
                         "employees" => await GetEmployeeContextAsync(query),
                         "attendance" => await GetAttendanceContextAsync(query),
                         "leave" => await GetLeaveContextAsync(query),
-                        "projects" => await GetProjectsContextAsync(query),
+                        "customers" => await GetCustomerContextAsync(query),
                         "tickets" => await GetTicketsContextAsync(query),
                         "meetings" => await GetMeetingsContextAsync(query),
                         "announcements" => await GetAnnouncementsContextAsync(query),
@@ -338,66 +338,139 @@ namespace ProjectTracker.API.Services
             return builder.ToString();
         }
 
-        private async Task<string?> GetProjectsContextAsync(string query)
+        private async Task<string?> GetCustomerContextAsync(string query)
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
             var lowerQuery = query.ToLower();
+            var builder = new StringBuilder();
+            builder.AppendLine("### Customer Information\n");
 
-            // Check for specific project/board name
-            var nameMatch = Regex.Match(query, @"(?:project|board)\s+[""']?([^""']+)[""']?", RegexOptions.IgnoreCase);
+            // Check for specific customer search by name or code
+            var nameMatch = Regex.Match(query, @"(?:customer|client|account)\s+[""']?([^""']+?)[""']?(?:\s+details|\s+info|\s+address|\s*$)", RegexOptions.IgnoreCase);
+            var codeMatch = Regex.Match(query, @"[A-Z]{2,5}-?\d{3,}", RegexOptions.IgnoreCase);
 
-            IQueryable<Board> boardsQuery = context.Boards
-                .Include(b => b.Department)
-                .Include(b => b.Lists)
-                    .ThenInclude(l => l.Cards);
+            IQueryable<Customer> customersQuery = context.LogisticsCustomers
+                .Include(c => c.Contracts)
+                .Include(c => c.DeliveryAddresses);
 
-            if (nameMatch.Success)
+            // Filter by specific customer code
+            if (codeMatch.Success)
+            {
+                var code = codeMatch.Value;
+                customersQuery = customersQuery.Where(c => c.CustomerCode != null && c.CustomerCode.Contains(code));
+            }
+            else if (nameMatch.Success)
             {
                 var searchName = nameMatch.Groups[1].Value.Trim().ToLower();
-                boardsQuery = boardsQuery.Where(b => b.Title.ToLower().Contains(searchName));
+                if (!new[] { "list", "all", "info", "details", "how many", "total" }.Contains(searchName))
+                {
+                    customersQuery = customersQuery.Where(c =>
+                        c.Name.ToLower().Contains(searchName) ||
+                        (c.ShortName != null && c.ShortName.ToLower().Contains(searchName)) ||
+                        (c.CustomerCode != null && c.CustomerCode.ToLower().Contains(searchName)));
+                }
             }
 
-            var boards = await boardsQuery.Take(5).ToListAsync();
+            // Filter by status
+            if (lowerQuery.Contains("inactive"))
+                customersQuery = customersQuery.Where(c => c.Status == "Inactive");
+            else if (lowerQuery.Contains("suspended"))
+                customersQuery = customersQuery.Where(c => c.Status == "Suspended");
+            else if (lowerQuery.Contains("active") && !lowerQuery.Contains("inactive"))
+                customersQuery = customersQuery.Where(c => c.Status == "Active");
 
-            var builder = new StringBuilder();
-            builder.AppendLine("### Projects/Boards");
+            // Filter by province
+            if (lowerQuery.Contains("gauteng") || lowerQuery.Contains("gp"))
+                customersQuery = customersQuery.Where(c => c.Province != null && c.Province.ToLower().Contains("gauteng"));
+            else if (lowerQuery.Contains("kzn") || lowerQuery.Contains("kwazulu"))
+                customersQuery = customersQuery.Where(c => c.Province != null && (c.Province.ToLower().Contains("kzn") || c.Province.ToLower().Contains("kwazulu")));
+            else if (lowerQuery.Contains("western cape") || lowerQuery.Contains("cape town"))
+                customersQuery = customersQuery.Where(c => c.Province != null && (c.Province.ToLower().Contains("western cape") || c.Province.ToLower().Contains("cape")));
+            else if (lowerQuery.Contains("eastern cape") || lowerQuery.Contains("pe") || lowerQuery.Contains("gqeberha"))
+                customersQuery = customersQuery.Where(c => c.Province != null && (c.Province.ToLower().Contains("eastern cape")));
 
-            if (!boards.Any())
+            var customers = await customersQuery
+                .OrderBy(c => c.Name)
+                .Take(25)
+                .ToListAsync();
+
+            // Summary stats
+            var totalCount = await context.LogisticsCustomers.CountAsync();
+            var activeCount = await context.LogisticsCustomers.CountAsync(c => c.Status == "Active");
+            var inactiveCount = await context.LogisticsCustomers.CountAsync(c => c.Status == "Inactive");
+            var suspendedCount = await context.LogisticsCustomers.CountAsync(c => c.Status == "Suspended");
+
+            var provinceCounts = await context.LogisticsCustomers
+                .Where(c => c.Province != null && c.Province != "")
+                .GroupBy(c => c.Province)
+                .Select(g => new { Province = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
+                .Take(10)
+                .ToListAsync();
+
+            builder.AppendLine($"**Customer Summary:**");
+            builder.AppendLine($"- Total Customers: {totalCount}");
+            builder.AppendLine($"- Active: {activeCount}");
+            if (inactiveCount > 0) builder.AppendLine($"- Inactive: {inactiveCount}");
+            if (suspendedCount > 0) builder.AppendLine($"- Suspended: {suspendedCount}");
+
+            if (provinceCounts.Any())
             {
-                // Return summary
-                var totalBoards = await context.Boards.CountAsync();
-                var statusCounts = await context.Boards
-                    .GroupBy(b => b.Status)
-                    .Select(g => new { Status = g.Key, Count = g.Count() })
-                    .ToListAsync();
-
-                builder.AppendLine($"**Total Projects:** {totalBoards}");
-                foreach (var sc in statusCounts)
+                builder.AppendLine($"\n**By Province:**");
+                foreach (var pc in provinceCounts)
                 {
-                    builder.AppendLine($"- {sc.Status}: {sc.Count}");
+                    builder.AppendLine($"- {pc.Province}: {pc.Count}");
                 }
-                return builder.ToString();
             }
 
-            foreach (var board in boards)
+            if (customers.Any())
             {
-                var totalCards = board.Lists.Sum(l => l.Cards.Count);
-                var completedCards = board.Lists
-                    .Where(l => l.Title.ToLower().Contains("done") || l.Title.ToLower().Contains("complete"))
-                    .Sum(l => l.Cards.Count);
-
-                builder.AppendLine($"\n**{board.Title}**");
-                builder.AppendLine($"- Status: {board.Status}");
-                builder.AppendLine($"- Department: {board.Department?.Name ?? "N/A"}");
-                builder.AppendLine($"- Total Tasks: {totalCards}");
-                if (totalCards > 0)
+                builder.AppendLine($"\n**Customers (showing {customers.Count} of {totalCount}):**");
+                foreach (var customer in customers)
                 {
-                    var progress = completedCards * 100 / totalCards;
-                    builder.AppendLine($"- Progress: ~{progress}% ({completedCards}/{totalCards} completed)");
+                    builder.AppendLine($"\n**{customer.Name}** {(!string.IsNullOrEmpty(customer.CustomerCode) ? $"({customer.CustomerCode})" : "")}");
+                    builder.AppendLine($"- Status: {customer.Status}");
+                    if (!string.IsNullOrEmpty(customer.ContactPerson))
+                        builder.AppendLine($"- Contact: {customer.ContactPerson}");
+                    if (!string.IsNullOrEmpty(customer.Email))
+                        builder.AppendLine($"- Email: {customer.Email}");
+                    if (!string.IsNullOrEmpty(customer.PhoneNumber))
+                        builder.AppendLine($"- Phone: {customer.PhoneNumber}");
+                    if (!string.IsNullOrEmpty(customer.City) || !string.IsNullOrEmpty(customer.Province))
+                        builder.AppendLine($"- Location: {customer.City ?? ""}{(!string.IsNullOrEmpty(customer.City) && !string.IsNullOrEmpty(customer.Province) ? ", " : "")}{customer.Province ?? ""}");
+                    if (!string.IsNullOrEmpty(customer.PaymentTerms))
+                        builder.AppendLine($"- Payment Terms: {customer.PaymentTerms}");
+                    if (customer.CreditLimit.HasValue)
+                        builder.AppendLine($"- Credit Limit: R{customer.CreditLimit:N2}");
+                    if (!string.IsNullOrEmpty(customer.VatNumber))
+                        builder.AppendLine($"- VAT: {customer.VatNumber}");
+                    if (customer.Contracts.Any())
+                    {
+                        var activeContracts = customer.Contracts.Where(c => c.Status == "Active").ToList();
+                        if (activeContracts.Any())
+                        {
+                            builder.AppendLine($"- Active Contracts: {activeContracts.Count}");
+                            foreach (var contract in activeContracts.Take(3))
+                            {
+                                builder.AppendLine($"  - {contract.ContractNumber}: {contract.ContractName ?? "N/A"} (R{contract.TotalValue:N2}, expires {contract.EndDate:dd MMM yyyy})");
+                            }
+                        }
+                    }
+                    if (customer.DeliveryAddresses.Any())
+                    {
+                        builder.AppendLine($"- Delivery Addresses: {customer.DeliveryAddresses.Count}");
+                    }
                 }
-                builder.AppendLine($"- Lists: {string.Join(", ", board.Lists.Select(l => $"{l.Title} ({l.Cards.Count})"))}");
+            }
+            else if (!codeMatch.Success && !nameMatch.Success)
+            {
+                // No specific search was done and no customers returned - shouldn't happen
+            }
+            else
+            {
+                builder.AppendLine("\nNo customers found matching your search.");
             }
 
             return builder.ToString();

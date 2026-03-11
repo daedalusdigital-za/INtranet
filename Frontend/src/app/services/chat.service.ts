@@ -25,11 +25,35 @@ export class ChatService {
   }
 
   /**
+   * Get the JWT token from localStorage
+   */
+  private getAuthHeaders(): Record<string, string> {
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }
+
+  /**
    * Get or create a session ID
    */
   private getSessionId(): string {
     if (!this.sessionId) {
-      this.sessionId = crypto.randomUUID();
+      // crypto.randomUUID() only works in secure contexts (HTTPS/localhost)
+      // Fallback for plain HTTP access on the local network
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        this.sessionId = crypto.randomUUID();
+      } else {
+        this.sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      }
       sessionStorage.setItem('welly_session_id', this.sessionId);
     }
     return this.sessionId;
@@ -62,9 +86,7 @@ export class ChatService {
     try {
       const response = await fetch(`${this.apiUrl}/chat/session`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify({
           prompt: userMessage,
           sessionId: this.getSessionId()
@@ -137,7 +159,8 @@ export class ChatService {
     // Clear server-side session
     if (this.sessionId) {
       fetch(`${this.apiUrl}/chat/session/${this.sessionId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       }).catch(err => console.warn('Failed to clear server session:', err));
     }
     
@@ -192,8 +215,10 @@ export class ChatService {
       formData.append('file', file);
       formData.append('message', message);
 
+      const token = localStorage.getItem('token');
       const response = await fetch(`${this.apiUrl}/upload-pdf`, {
         method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: formData
       });
 

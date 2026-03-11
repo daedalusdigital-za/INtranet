@@ -93,11 +93,11 @@ namespace ProjectTracker.API.Services
                     "**Attendance System:**\n• Access via sidebar → Attendance\n• Records are saved automatically\n• Check your history anytime\n\n**Next steps:** For attendance corrections, speak with your manager or HR."
                 },
                 
-                // Project/Board related
-                ["project|board|kanban|task|card"] = new[]
+                // Customer related
+                ["customer|client|account|credit limit|payment terms"] = new[]
                 {
-                    "**Project Management:**\n• Go to Project Management in sidebar\n• Select or create a board\n• Add lists (To Do, In Progress, Done)\n• Create cards for tasks\n• Drag cards to update status\n\n**Next steps:** Click any card to add details, comments, or attachments.",
-                    "**Using Kanban Boards:**\n• Access via sidebar → Project Management\n• Create boards for different projects\n• Add task cards and drag between lists\n\n**Next steps:** Need to add team members? Click the board settings icon."
+                    "**Customer Lookup:**\n• Go to the Customers section\n• Search by name, code, or province\n• View contact details, addresses, and contracts\n\n**Next steps:** Click on a customer to see full details including delivery addresses and contracts.",
+                    "**Customer Information:**\n• Access via sidebar → Customers\n• View active, inactive, or suspended accounts\n• Check payment terms, credit limits, and contacts\n\n**Next steps:** Use the search bar to find a specific customer by name or code."
                 },
                 
                 // Leave/Holiday related
@@ -124,7 +124,7 @@ namespace ProjectTracker.API.Services
                 // Reports
                 ["report|analytics|dashboard|statistics"] = new[]
                 {
-                    "**Available Reports:**\n• Attendance: time tracking data\n• Projects: task completion metrics\n• Department: team overview\n\n**Next steps:** Go to Reports section, select type and date range, then export to Excel if needed.",
+                    "**Available Reports:**\n• Attendance: time tracking data\n• Customers: account and delivery data\n• Department: team overview\n\n**Next steps:** Go to Reports section, select type and date range, then export to Excel if needed.",
                     "**Accessing Reports:**\n• Open Reports from sidebar\n• Choose report type\n• Set date range\n• View or export data\n\n**Next steps:** Most reports can be exported to Excel for further analysis."
                 },
                 
@@ -138,8 +138,8 @@ namespace ProjectTracker.API.Services
                 // Help
                 ["help|support|how do i|how to|what is|tutorial"] = new[]
                 {
-                    "**I can help with:**\n• Attendance: clock in/out, leave requests\n• Projects: boards and task management\n• Messages: team communication\n• IT Issues: basic troubleshooting\n• Reports: accessing data\n• Files: uploading and sharing\n\n**Next steps:** Ask me a specific question, or contact IT/HR for complex issues.",
-                    "**How I can assist:**\n• Navigate the intranet\n• Use attendance, projects, messaging\n• Basic IT troubleshooting\n• Find the right department\n\n**Next steps:** Tell me what you need help with!"
+                    "**I can help with:**\n• Attendance: clock in/out, leave requests\n• Customers: account lookups and details\n• Messages: team communication\n• IT Issues: basic troubleshooting\n• Reports: accessing data\n• Logistics: loads, tripsheets, deliveries\n\n**Next steps:** Ask me a specific question, or contact IT/HR for complex issues.",
+                    "**How I can assist:**\n• Navigate the intranet\n• Use attendance, customers, messaging\n• Basic IT troubleshooting\n• Find the right department\n\n**Next steps:** Tell me what you need help with!"
                 },
                 
                 // Thank you
@@ -349,9 +349,9 @@ namespace ProjectTracker.API.Services
         {
             var responses = new[]
             {
-                $"I don't have specific information about \"{TruncateText(input, 40)}\".\n\n**Can you tell me more?** Is this related to:\n• IT or technical issues\n• Attendance or leave\n• Projects or tasks\n• Something else\n\n**Next steps:** If I can't help, please contact IT Support, HR, or your manager.",
+                $"I don't have specific information about \"{TruncateText(input, 40)}\".\n\n**Can you tell me more?** Is this related to:\n• IT or technical issues\n• Attendance or leave\n• Customers or accounts\n• Something else\n\n**Next steps:** If I can't help, please contact IT Support, HR, or your manager.",
                 
-                $"I'm not sure I understand your question about \"{TruncateText(input, 40)}\".\n\n**I can help with:**\n• Intranet navigation\n• Attendance and leave\n• Project management\n• Basic IT troubleshooting\n• Files and messaging\n\n**Next steps:** Try rephrasing, or contact IT/HR for complex issues.",
+                $"I'm not sure I understand your question about \"{TruncateText(input, 40)}\".\n\n**I can help with:**\n• Intranet navigation\n• Attendance and leave\n• Customer lookups\n• Basic IT troubleshooting\n• Logistics and deliveries\n\n**Next steps:** Try rephrasing, or contact IT/HR for complex issues.",
                 
                 "I don't have information on that specific topic.\n\n**Who can help:**\n• **IT Support**: Technical issues\n• **HR**: Personnel matters\n• **Your Manager**: Work-related questions\n\n**Next steps:** Contact the appropriate department above, or ask me about a different topic."
             };

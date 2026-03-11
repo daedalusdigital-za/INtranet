@@ -183,6 +183,12 @@ builder.Services.AddSingleton<IConversationMemoryService, ConversationMemoryServ
 // Add Ollama AI Service for local LLM support
 builder.Services.AddSingleton<IOllamaAIService, OllamaAIService>();
 
+// Add Claude AI Service for cloud LLM support (primary provider)
+builder.Services.AddSingleton<IClaudeAIService, ClaudeAIService>();
+
+// Add Local LLM Service for Qwen2.5-14B via llama.cpp (primary provider)
+builder.Services.AddSingleton<ILocalLlmService, LocalLlmService>();
+
 // Add Azure Sync Background Service
 builder.Services.AddHostedService<AzureSyncService>();
 
@@ -236,5 +242,30 @@ app.MapHub<BoardHub>("/hubs/board");
 app.MapHub<AttendanceHub>("/hubs/attendance");
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapHub<CollaborativeDocsHub>("/hubs/collaborative-docs");
+
+// Auto-ingest knowledge base documents on startup
+_ = Task.Run(async () =>
+{
+    try
+    {
+        // Wait for DB migrations to complete
+        await Task.Delay(5000);
+        var kbService = app.Services.GetRequiredService<IKnowledgeBaseService>();
+        var kbPaths = new[] { "/app/kb-docs", Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "kb-docs") };
+        foreach (var kbPath in kbPaths)
+        {
+            if (Directory.Exists(kbPath))
+            {
+                var count = await kbService.IngestFolderAsync(kbPath);
+                Console.WriteLine($"[KB] Auto-ingested {count} documents from {kbPath}");
+                break;
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[KB] Auto-ingest failed: {ex.Message}");
+    }
+});
 
 app.Run();

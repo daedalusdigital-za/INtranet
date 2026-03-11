@@ -313,7 +313,9 @@ namespace ProjectTracker.API.Services
         {
             var results = await SearchAsync(query, topK);
 
-            if (results.Count == 0)
+            // Only include chunks with a meaningful relevance score
+            var relevant = results.Where(r => r.Score >= 1.5).ToList();
+            if (relevant.Count == 0)
             {
                 return "";
             }
@@ -321,7 +323,7 @@ namespace ProjectTracker.API.Services
             var sb = new StringBuilder();
             sb.AppendLine("--- KNOWLEDGE BASE CONTEXT ---");
             
-            foreach (var result in results)
+            foreach (var result in relevant)
             {
                 sb.AppendLine($"\n[Source: {result.FileName}]");
                 sb.AppendLine(result.Content);

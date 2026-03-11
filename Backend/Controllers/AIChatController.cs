@@ -17,17 +17,23 @@ namespace ProjectTracker.API.Controllers
         private readonly ILogger<AIChatController> _logger;
         private readonly ILlamaAIService _aiService;
         private readonly IOllamaAIService _ollamaService;
+        private readonly IClaudeAIService _claudeService;
+        private readonly ILocalLlmService _localLlmService;
         private readonly IConfiguration _configuration;
 
         public AIChatController(
             ILogger<AIChatController> logger, 
             ILlamaAIService aiService,
             IOllamaAIService ollamaService,
+            IClaudeAIService claudeService,
+            ILocalLlmService localLlmService,
             IConfiguration configuration)
         {
             _logger = logger;
             _aiService = aiService;
             _ollamaService = ollamaService;
+            _claudeService = claudeService;
+            _localLlmService = localLlmService;
             _configuration = configuration;
         }
 
@@ -38,15 +44,48 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("health")]
         public async Task<IActionResult> Health()
         {
-            var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
+            var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+            var localLlmAvailable = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+            var claudeEnabled = _configuration.GetValue<bool>("Claude:Enabled", false);
+            var claudeAvailable = claudeEnabled && await _claudeService.IsAvailableAsync();
+
+            var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", false);
             var ollamaAvailable = ollamaEnabled && await _ollamaService.IsAvailableAsync();
-            var model = ollamaAvailable ? _configuration["Ollama:Model"] ?? "llama3.2" : "rule-based-fallback";
+
+            string model;
+            string provider;
+
+            if (localLlmAvailable)
+            {
+                model = _configuration["LocalLlm:Model"] ?? "qwen2.5-14b-instruct";
+                provider = "local-llm";
+            }
+            else if (claudeAvailable)
+            {
+                model = _configuration["Claude:Model"] ?? "claude-sonnet-4-20250514";
+                provider = "claude";
+            }
+            else if (ollamaAvailable)
+            {
+                model = _configuration["Ollama:Model"] ?? "phi3:mini";
+                provider = "ollama";
+            }
+            else
+            {
+                model = "rule-based-fallback";
+                provider = "fallback";
+            }
             
             return Ok(new 
             { 
                 status = "ready",
                 model = model,
-                provider = ollamaAvailable ? "ollama" : "fallback",
+                provider = provider,
+                localLlmEnabled = localLlmEnabled,
+                localLlmAvailable = localLlmAvailable,
+                claudeEnabled = claudeEnabled,
+                claudeAvailable = claudeAvailable,
                 ollamaEnabled = ollamaEnabled,
                 ollamaAvailable = ollamaAvailable,
                 timestamp = DateTime.UtcNow
@@ -75,52 +114,84 @@ namespace ProjectTracker.API.Controllers
 
             try
             {
-                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
-                var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
+                var userMessage = request.Prompt ?? request.Messages?.LastOrDefault(m => m.Role == "user")?.Content ?? "";
 
-                if (useOllama)
+                // Provider priority: LocalLLM -> Claude -> Ollama -> Rule-based fallback
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (useLocalLlm)
                 {
-                    // Use Ollama for AI responses
-                    var messages = request.Messages?.Select(m => new OllamaMessage
-                    {
-                        Role = m.Role,
-                        Content = m.Content
-                    }).ToList() ?? new List<OllamaMessage>();
-
-                    if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
-                    {
-                        messages.Add(new OllamaMessage { Role = "user", Content = request.Prompt });
-                    }
-
-                    await foreach (var token in _ollamaService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                    _logger.LogInformation("Chat: Using Local LLM (Qwen2.5)");
+                    await foreach (var token in _localLlmService.ChatStreamingAsync(userMessage, HttpContext.RequestAborted))
                     {
                         await WriteSSEToken(token);
                     }
                 }
                 else
                 {
-                    // Fallback to rule-based service
-                    if (!_aiService.IsModelLoaded)
+                    var claudeEnabled = _configuration.GetValue<bool>("Claude:Enabled", false);
+                    var useClaude = claudeEnabled && await _claudeService.IsAvailableAsync();
+
+                    if (useClaude)
                     {
-                        await WriteSSEMessage("AI service is still loading. Please wait a moment and try again.");
-                        await WriteSSEDone();
-                        return;
+                        _logger.LogInformation("Chat: Using Claude provider");
+                        await foreach (var token in _claudeService.ChatStreamingAsync(userMessage, HttpContext.RequestAborted))
+                        {
+                            await WriteSSEToken(token);
+                        }
                     }
-
-                    var messages = request.Messages?.Select(m => new ChatMessage
+                    else
                     {
-                        Role = m.Role,
-                        Content = m.Content
-                    }).ToList() ?? new List<ChatMessage>();
+                    var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", false);
+                    var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
 
-                    if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
+                    if (useOllama)
                     {
-                        messages.Add(new ChatMessage { Role = "user", Content = request.Prompt });
+                        _logger.LogInformation("Chat: Using Ollama provider");
+                        var messages = request.Messages?.Select(m => new OllamaMessage
+                        {
+                            Role = m.Role,
+                            Content = m.Content
+                        }).ToList() ?? new List<OllamaMessage>();
+
+                        if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
+                        {
+                            messages.Add(new OllamaMessage { Role = "user", Content = request.Prompt });
+                        }
+
+                        await foreach (var token in _ollamaService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                        {
+                            await WriteSSEToken(token);
+                        }
                     }
-
-                    await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                    else
                     {
-                        await WriteSSEToken(token);
+                        // Fallback to rule-based service
+                        _logger.LogInformation("Chat: Using rule-based fallback");
+                        if (!_aiService.IsModelLoaded)
+                        {
+                            await WriteSSEMessage("AI service is still loading. Please wait a moment and try again.");
+                            await WriteSSEDone();
+                            return;
+                        }
+
+                        var messages = request.Messages?.Select(m => new ChatMessage
+                        {
+                            Role = m.Role,
+                            Content = m.Content
+                        }).ToList() ?? new List<ChatMessage>();
+
+                        if (messages.Count == 0 && !string.IsNullOrEmpty(request.Prompt))
+                        {
+                            messages.Add(new ChatMessage { Role = "user", Content = request.Prompt });
+                        }
+
+                        await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                        {
+                            await WriteSSEToken(token);
+                        }
+                    }
                     }
                 }
 
@@ -146,7 +217,28 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
-                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
+                var userMessage = request.Prompt ?? request.Messages?.LastOrDefault(m => m.Role == "user")?.Content ?? "";
+
+                // Provider priority: LocalLLM -> Claude -> Ollama -> Rule-based fallback
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (useLocalLlm)
+                {
+                    var response = await _localLlmService.ChatAsync(userMessage);
+                    return Ok(new { response = response, provider = "local-llm" });
+                }
+
+                var claudeEnabled = _configuration.GetValue<bool>("Claude:Enabled", false);
+                var useClaude = claudeEnabled && await _claudeService.IsAvailableAsync();
+
+                if (useClaude)
+                {
+                    var response = await _claudeService.ChatAsync(userMessage);
+                    return Ok(new { response = response, provider = "claude" });
+                }
+
+                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", false);
                 var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
 
                 if (useOllama)
@@ -220,38 +312,68 @@ namespace ProjectTracker.API.Controllers
                     return;
                 }
 
-                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
-                var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
+                // Provider priority: LocalLLM -> Claude -> Ollama -> Rule-based fallback
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
 
-                if (useOllama)
+                if (useLocalLlm)
                 {
-                    // Use session-based streaming with conversation memory
-                    await foreach (var token in _ollamaService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
+                    _logger.LogInformation("Session chat: Using Local LLM (Qwen2.5) for session {SessionId}", sessionId);
+                    await foreach (var token in _localLlmService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
                     {
                         await WriteSSEToken(token);
                     }
-                    
-                    // Send session ID in final message so frontend can track it
                     await WriteSSESessionId(sessionId);
                 }
                 else
                 {
-                    // Fallback - no session support
-                    if (!_aiService.IsModelLoaded)
+                    var claudeEnabled = _configuration.GetValue<bool>("Claude:Enabled", false);
+                    var useClaude = claudeEnabled && await _claudeService.IsAvailableAsync();
+
+                    if (useClaude)
                     {
-                        await WriteSSEMessage("AI service is still loading. Please wait a moment and try again.");
-                        await WriteSSEDone();
-                        return;
+                        _logger.LogInformation("Session chat: Using Claude provider for session {SessionId}", sessionId);
+                        await foreach (var token in _claudeService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
+                        {
+                            await WriteSSEToken(token);
+                        }
+                        await WriteSSESessionId(sessionId);
                     }
-
-                    var messages = new List<ChatMessage>
+                    else
                     {
-                        new ChatMessage { Role = "user", Content = userMessage }
-                    };
+                    var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", false);
+                    var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
 
-                    await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                    if (useOllama)
                     {
-                        await WriteSSEToken(token);
+                        _logger.LogInformation("Session chat: Using Ollama provider for session {SessionId}", sessionId);
+                        await foreach (var token in _ollamaService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
+                        {
+                            await WriteSSEToken(token);
+                        }
+                        await WriteSSESessionId(sessionId);
+                    }
+                    else
+                    {
+                        // Fallback - no session support
+                        _logger.LogInformation("Session chat: Using rule-based fallback");
+                        if (!_aiService.IsModelLoaded)
+                        {
+                            await WriteSSEMessage("AI service is still loading. Please wait a moment and try again.");
+                            await WriteSSEDone();
+                            return;
+                        }
+
+                        var messages = new List<ChatMessage>
+                        {
+                            new ChatMessage { Role = "user", Content = userMessage }
+                        };
+
+                        await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
+                        {
+                            await WriteSSEToken(token);
+                        }
+                    }
                     }
                 }
 
@@ -317,9 +439,6 @@ namespace ProjectTracker.API.Controllers
                     pdfText = pdfText.Substring(0, 8000) + "\n\n[Document truncated for analysis...]";
                 }
 
-                var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", true);
-                var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
-
                 // Build the analysis prompt
                 var systemPrompt = @"You are an expert tender document analyzer specializing in South African government procurement. 
 When analyzing tender documents, focus on:
@@ -343,34 +462,63 @@ Be specific and extract actual values from the document when available.";
 {pdfText}";
 
                 string aiResponse;
+                string usedProvider;
 
-                if (useOllama)
+                // Provider priority: LocalLLM -> Claude -> Ollama -> Rule-based fallback
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (useLocalLlm)
                 {
-                    var messages = new List<OllamaMessage>
-                    {
-                        new OllamaMessage { Role = "system", Content = systemPrompt },
-                        new OllamaMessage { Role = "user", Content = userPrompt }
-                    };
-
-                    aiResponse = await _ollamaService.ChatAsync(messages);
+                    aiResponse = await _localLlmService.AnalyzeDocumentAsync(systemPrompt, userPrompt);
+                    usedProvider = "local-llm";
                 }
                 else
                 {
-                    if (!_aiService.IsModelLoaded)
+                    var claudeEnabled = _configuration.GetValue<bool>("Claude:Enabled", false);
+                    var useClaude = claudeEnabled && await _claudeService.IsAvailableAsync();
+
+                    if (useClaude)
                     {
-                        return Ok(new 
-                        { 
-                            response = "AI service is still loading. Please try again in a moment.",
-                            provider = "none"
-                        });
+                        aiResponse = await _claudeService.AnalyzeDocumentAsync(systemPrompt, userPrompt);
+                        usedProvider = "claude";
                     }
-
-                    var messages = new List<ChatMessage>
+                    else
                     {
-                        new ChatMessage { Role = "user", Content = systemPrompt + "\n\n" + userPrompt }
-                    };
+                    var ollamaEnabled = _configuration.GetValue<bool>("Ollama:Enabled", false);
+                    var useOllama = ollamaEnabled && await _ollamaService.IsAvailableAsync();
 
-                    aiResponse = await _aiService.ChatAsync(messages);
+                    if (useOllama)
+                    {
+                        var messages = new List<OllamaMessage>
+                        {
+                            new OllamaMessage { Role = "system", Content = systemPrompt },
+                            new OllamaMessage { Role = "user", Content = userPrompt }
+                        };
+
+                        aiResponse = await _ollamaService.ChatAsync(messages);
+                        usedProvider = "ollama";
+                    }
+                    else
+                    {
+                        if (!_aiService.IsModelLoaded)
+                        {
+                            return Ok(new 
+                            { 
+                                response = "AI service is still loading. Please try again in a moment.",
+                                provider = "none"
+                            });
+                        }
+
+                        var messages = new List<ChatMessage>
+                        {
+                            new ChatMessage { Role = "user", Content = systemPrompt + "\n\n" + userPrompt }
+                        };
+
+                        aiResponse = await _aiService.ChatAsync(messages);
+                        usedProvider = "fallback";
+                    }
+                    }
                 }
 
                 return Ok(new 
@@ -378,7 +526,7 @@ Be specific and extract actual values from the document when available.";
                     response = aiResponse,
                     fileName = file.FileName,
                     fileSize = file.Length,
-                    provider = useOllama ? "ollama" : "fallback"
+                    provider = usedProvider
                 });
             }
             catch (Exception ex)

@@ -732,7 +732,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var emailBody = $@"
                 <html>
                 <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
-                    <h2 style='color: #1976d2;'>TripSheet {tripSheet.LoadNumber}</h2>
+                    <h2 style='color: #033142;'>TripSheet {tripSheet.LoadNumber}</h2>
                     
                     <p>Dear {warehouseManagerName},</p>
                     
@@ -769,12 +769,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     
                     <p style='margin-top: 30px;'>
                         Best regards,<br/>
-                        <strong>ProMed Logistics Team</strong>
+                        <strong>Rocket Freight Logistics Team</strong>
                     </p>
                     
                     <hr style='margin-top: 30px; border: none; border-top: 1px solid #ddd;'/>
                     <p style='font-size: 12px; color: #666;'>
-                        This is an automated message from the ProMed Logistics System.
+                        This is an automated message from the Rocket Freight Logistics System.
                     </p>
                 </body>
                 </html>";
@@ -921,7 +921,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var emailBody = $@"
                 <html>
                 <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
-                    <h2 style='color: #1976d2;'>TripSheet {tripSheet.LoadNumber}</h2>
+                    <h2 style='color: #033142;'>TripSheet {tripSheet.LoadNumber}</h2>
                     
                     <p>Dear {warehouseManagerName},</p>
                     
@@ -964,12 +964,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     
                     <p style='margin-top: 30px;'>
                         Best regards,<br/>
-                        <strong>ProMed Logistics Team</strong>
+                        <strong>Rocket Freight Logistics Team</strong>
                     </p>
                     
                     <hr style='margin-top: 30px; border: none; border-top: 1px solid #ddd;'/>
                     <p style='font-size: 12px; color: #666;'>
-                        This is an automated message from the ProMed Logistics System.<br/>
+                        This is an automated message from the Rocket Freight Logistics System.<br/>
                         For any queries, please contact the logistics department.
                     </p>
                 </body>
@@ -1154,7 +1154,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             justify-content: space-between;
             align-items: center;
             padding-bottom: 10px;
-            border-bottom: 3px solid #1976d2;
+            border-bottom: 3px solid #033142;
             margin-bottom: 15px;
         }
         .header-left {
@@ -1169,10 +1169,10 @@ namespace ProjectTracker.API.Controllers.Logistics
         .logo-text {
             font-size: 27px;
             font-weight: bold;
-            color: #1976d2;
+            color: #033142;
         }
         .trip-badge {
-            background: #1976d2;
+            background: #033142;
             color: white;
             padding: 8px 20px;
             border-radius: 20px;
@@ -1231,7 +1231,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             font-size: 12px;
         }
         .main-table th {
-            background: #1976d2;
+            background: #033142;
             color: white;
             padding: 8px 6px;
             text-align: left;
@@ -1252,10 +1252,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             background: #f9f9f9;
         }
         .main-table tr:hover {
-            background: #e3f2fd;
+            background: #e0ecf0;
         }
         .stop-num {
-            background: #1976d2;
+            background: #033142;
             color: white;
             width: 24px;
             height: 24px;
@@ -1283,14 +1283,14 @@ namespace ProjectTracker.API.Controllers.Logistics
         .checkbox-cell {
             width: 20px;
             height: 20px;
-            border: 2px solid #1976d2;
+            border: 2px solid #033142;
             border-radius: 3px;
             display: inline-block;
         }
         .totals-row td {
-            background: #e3f2fd;
+            background: #e0ecf0;
             font-weight: bold;
-            border-top: 2px solid #1976d2;
+            border-top: 2px solid #033142;
         }
         
         /* Bottom Section */
@@ -1309,7 +1309,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
         .km-fuel-section h4 {
             font-size: 14px;
-            color: #1976d2;
+            color: #033142;
             margin-bottom: 10px;
             padding-bottom: 5px;
             border-bottom: 1px solid #e0e0e0;
@@ -1366,7 +1366,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
         .signature-section h4 {
             font-size: 14px;
-            color: #1976d2;
+            color: #033142;
             margin-bottom: 10px;
             padding-bottom: 5px;
             border-bottom: 1px solid #e0e0e0;
@@ -1422,7 +1422,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             <span class='trip-badge'>{tripSheet.LoadNumber}</span>
         </div>
         <div class='header-right'>
-            <div class='company-name'>ProMed Technologies</div>
+            <div class='company-name'>Rocket Freight</div>
             <div style='color: #666; font-size: 9px;'>Logistics Division</div>
         </div>
     </div>");

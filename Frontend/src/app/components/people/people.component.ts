@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -2121,7 +2122,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private attendanceService: AttendanceService,
     private router: Router,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private http: HttpClient
   ) {
     this.currentUser = this.authService.currentUserValue;
   }
@@ -2412,7 +2414,26 @@ export class PeopleComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         const url = `${environment.apiUrl}/reports/weekly?weekOffset=${result.weekOffset}`;
-        window.open(url, '_blank');
+        this.http.get(url, { responseType: 'blob', observe: 'response' }).subscribe({
+          next: (response) => {
+            const blob = response.body;
+            if (!blob) return;
+            const contentDisposition = response.headers.get('content-disposition');
+            let fileName = `Weekly_Attendance_Report.xlsx`;
+            if (contentDisposition) {
+              const match = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]*)/i);
+              if (match && match[2]) fileName = match[2];
+            }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          },
+          error: (err) => {
+            console.error('Error downloading weekly report:', err);
+          }
+        });
       }
     });
   }
@@ -2425,7 +2446,26 @@ export class PeopleComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         const url = `${environment.apiUrl}/reports/monthly?month=${result.month}&year=${result.year}`;
-        window.open(url, '_blank');
+        this.http.get(url, { responseType: 'blob', observe: 'response' }).subscribe({
+          next: (response) => {
+            const blob = response.body;
+            if (!blob) return;
+            const contentDisposition = response.headers.get('content-disposition');
+            let fileName = `Monthly_Attendance_Report.xlsx`;
+            if (contentDisposition) {
+              const match = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]*)/i);
+              if (match && match[2]) fileName = match[2];
+            }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          },
+          error: (err) => {
+            console.error('Error downloading monthly report:', err);
+          }
+        });
       }
     });
   }

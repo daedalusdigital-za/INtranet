@@ -33,7 +33,7 @@ namespace ProjectTracker.API.Services
         private readonly IConversationMemoryService _conversationMemory;
         private readonly string _baseUrl;
         private readonly string _model;
-        private readonly string _systemPrompt;
+        private readonly string _systemPrompt = string.Empty;
         
         // Token limit management
         private const int MaxContextTokens = 6000;  // Reserve tokens for response
@@ -57,21 +57,40 @@ namespace ProjectTracker.API.Services
                 Timeout = TimeSpan.FromMinutes(5)
             };
 
-            // Load system prompt from file if available
-            var promptPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "ai-data", "prompts", "system.txt");
-            if (File.Exists(promptPath))
+            // Load system prompt from file - check multiple paths (local dev + Docker)
+            var promptPaths = new[]
             {
-                _systemPrompt = File.ReadAllText(promptPath);
+                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "ai-data", "prompts", "system.txt"), // Local dev
+                "/app/ai-data/prompts/system.txt",  // Docker mount
+                Path.Combine(AppContext.BaseDirectory, "ai-data", "prompts", "system.txt"), // Copied to output
+            };
+
+            var loadedPrompt = false;
+            foreach (var path in promptPaths)
+            {
+                if (File.Exists(path))
+                {
+                    _systemPrompt = File.ReadAllText(path);
+                    _logger.LogInformation("Loaded system prompt from: {Path}", path);
+                    loadedPrompt = true;
+                    break;
+                }
             }
-            else
+
+            if (!loadedPrompt)
             {
-                _systemPrompt = @"You are Welly, a helpful AI assistant for the company intranet. 
+                _logger.LogWarning("System prompt file not found in any of: {Paths}. Using fallback prompt.", string.Join(", ", promptPaths));
+                _systemPrompt = @"You are Welly, a helpful AI assistant for the ProMed Technologies intranet.
 Your role is to help employees with:
+- Customer lookups and account queries
+- Attendance and time tracking inquiries
 - IT support and troubleshooting
-- Using intranet features (attendance, projects, messaging)
-- Finding information and resources
-- General workplace questions
-- Logistics and delivery information
+- Logistics inquiries (loads, tripsheets, deliveries, drivers, vehicles)
+- Employee information and extensions
+- Stock and inventory information
+- Invoice and sales transaction queries
+- Meeting schedules and support tickets
+- Company announcements
 
 Guidelines:
 - Be concise and helpful
