@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Hubs;
 using ProjectTracker.API.Models;
+using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Google;
 
 namespace ProjectTracker.API.Services
 {
@@ -57,6 +59,11 @@ namespace ProjectTracker.API.Services
     ///   [ACTION:TRIPSHEET_CREATE] { "invoiceIds": [1,2,3], "warehouseId": 1, "driverId": 1, "vehicleId": 1, "scheduledDate": "2025-01-20", "notes": "" } [/ACTION]
     ///   [ACTION:TRACK_VEHICLE] { "registration": "ABC 123 GP" } [/ACTION]
     ///   [ACTION:FLEET_STATUS] {} [/ACTION]
+    ///   [ACTION:UPDATE_CUSTOMER] { "customer": "ABC001", "name": "...", "contactPerson": "...", "email": "...", "phone": "...", "address": "...", "city": "...", "province": "...", "postalCode": "..." } [/ACTION]
+    ///   [ACTION:LOOKUP_ADDRESS] { "address": "123 Main St, Johannesburg" } [/ACTION]
+    ///   [ACTION:EDIT_EMPLOYEE] { "employee": "John Smith", "name": "...", "surname": "...", "email": "...", "role": "...", "title": "...", "department": "..." } [/ACTION]
+    ///   [ACTION:RESET_PASSWORD] { "employee": "John Smith", "newPassword": "TempPass123!" } [/ACTION]
+    ///   [ACTION:SYSTEM_OVERVIEW] {} [/ACTION]
     /// </summary>
     public class AIActionService : IAIActionService
     {
@@ -109,6 +116,11 @@ namespace ProjectTracker.API.Services
                         "TRIPSHEET_CREATE" => await TripSheetCreateAsync(jsonPayload, user),
                         "TRACK_VEHICLE" => await TrackVehicleAsync(jsonPayload),
                         "FLEET_STATUS" => await FleetStatusAsync(),
+                        "UPDATE_CUSTOMER" => await UpdateCustomerAsync(jsonPayload, user),
+                        "LOOKUP_ADDRESS" => await LookupAddressAsync(jsonPayload),
+                        "EDIT_EMPLOYEE" => await EditEmployeeAsync(jsonPayload, user),
+                        "RESET_PASSWORD" => await ResetPasswordAsync(jsonPayload, user),
+                        "SYSTEM_OVERVIEW" => await SystemOverviewAsync(),
                         _ => new AIActionResult
                         {
                             Success = false,
@@ -1016,6 +1028,801 @@ namespace ProjectTracker.API.Services
                     Success = false,
                     ActionType = "FLEET_STATUS",
                     Message = $"Failed to get fleet status: {ex.Message}"
+                };
+            }
+        }
+
+        #endregion
+
+        #region Customer Management Actions
+
+        private async Task<AIActionResult> UpdateCustomerAsync(string json, ChatUserContext user)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var customerSearch = root.TryGetProperty("customer", out var cs) ? cs.GetString() ?? "" : "";
+
+                if (string.IsNullOrWhiteSpace(customerSearch))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "UPDATE_CUSTOMER",
+                        Message = "Customer name or code is required. Please specify which customer to update."
+                    };
+                }
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // Search by code first, then by name (fuzzy)
+                var customer = await context.LogisticsCustomers
+                    .FirstOrDefaultAsync(c => c.CustomerCode == customerSearch);
+
+                if (customer == null)
+                {
+                    // Try exact name match
+                    customer = await context.LogisticsCustomers
+                        .FirstOrDefaultAsync(c => c.Name.ToLower() == customerSearch.ToLower());
+                }
+
+                if (customer == null)
+                {
+                    // Fuzzy name search — contains match
+                    var searchLower = customerSearch.ToLower();
+                    customer = await context.LogisticsCustomers
+                        .Where(c => c.Name.ToLower().Contains(searchLower) ||
+                                    (c.ShortName != null && c.ShortName.ToLower().Contains(searchLower)))
+                        .FirstOrDefaultAsync();
+                }
+
+                if (customer == null)
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "UPDATE_CUSTOMER",
+                        Message = $"Could not find a customer matching \"{customerSearch}\". Please check the name or customer code and try again."
+                    };
+                }
+
+                // Track what was changed
+                var changes = new List<string>();
+
+                // Update fields only if provided
+                if (root.TryGetProperty("name", out var nameEl) && !string.IsNullOrWhiteSpace(nameEl.GetString()))
+                {
+                    var oldVal = customer.Name;
+                    customer.Name = nameEl.GetString()!;
+                    changes.Add($"Name: {oldVal} → {customer.Name}");
+                }
+
+                if (root.TryGetProperty("shortName", out var shortNameEl) && !string.IsNullOrWhiteSpace(shortNameEl.GetString()))
+                {
+                    customer.ShortName = shortNameEl.GetString()!;
+                    changes.Add($"Short Name → {customer.ShortName}");
+                }
+
+                if (root.TryGetProperty("contactPerson", out var contactEl) && !string.IsNullOrWhiteSpace(contactEl.GetString()))
+                {
+                    customer.ContactPerson = contactEl.GetString()!;
+                    changes.Add($"Contact Person → {customer.ContactPerson}");
+                }
+
+                if (root.TryGetProperty("email", out var emailEl) && !string.IsNullOrWhiteSpace(emailEl.GetString()))
+                {
+                    customer.Email = emailEl.GetString()!;
+                    changes.Add($"Email → {customer.Email}");
+                }
+
+                if (root.TryGetProperty("phone", out var phoneEl) && !string.IsNullOrWhiteSpace(phoneEl.GetString()))
+                {
+                    customer.PhoneNumber = phoneEl.GetString()!;
+                    changes.Add($"Phone → {customer.PhoneNumber}");
+                }
+
+                if (root.TryGetProperty("mobile", out var mobileEl) && !string.IsNullOrWhiteSpace(mobileEl.GetString()))
+                {
+                    customer.MobileNumber = mobileEl.GetString()!;
+                    changes.Add($"Mobile → {customer.MobileNumber}");
+                }
+
+                if (root.TryGetProperty("fax", out var faxEl) && !string.IsNullOrWhiteSpace(faxEl.GetString()))
+                {
+                    customer.Fax = faxEl.GetString()!;
+                    changes.Add($"Fax → {customer.Fax}");
+                }
+
+                if (root.TryGetProperty("vatNumber", out var vatEl) && !string.IsNullOrWhiteSpace(vatEl.GetString()))
+                {
+                    customer.VatNumber = vatEl.GetString()!;
+                    changes.Add($"VAT Number → {customer.VatNumber}");
+                }
+
+                // Address fields
+                bool addressChanged = false;
+                string? newAddress = null;
+
+                if (root.TryGetProperty("address", out var addrEl) && !string.IsNullOrWhiteSpace(addrEl.GetString()))
+                {
+                    newAddress = addrEl.GetString()!;
+                    customer.PhysicalAddress = newAddress;
+                    customer.Address = newAddress;
+                    addressChanged = true;
+                    changes.Add($"Address → {newAddress}");
+                }
+
+                if (root.TryGetProperty("city", out var cityEl) && !string.IsNullOrWhiteSpace(cityEl.GetString()))
+                {
+                    customer.City = cityEl.GetString()!;
+                    addressChanged = true;
+                    changes.Add($"City → {customer.City}");
+                }
+
+                if (root.TryGetProperty("province", out var provEl) && !string.IsNullOrWhiteSpace(provEl.GetString()))
+                {
+                    customer.Province = provEl.GetString()!;
+                    changes.Add($"Province → {customer.Province}");
+                }
+
+                if (root.TryGetProperty("postalCode", out var pcEl) && !string.IsNullOrWhiteSpace(pcEl.GetString()))
+                {
+                    customer.PostalCode = pcEl.GetString()!;
+                    changes.Add($"Postal Code → {customer.PostalCode}");
+                }
+
+                if (root.TryGetProperty("country", out var countryEl) && !string.IsNullOrWhiteSpace(countryEl.GetString()))
+                {
+                    customer.Country = countryEl.GetString()!;
+                    changes.Add($"Country → {customer.Country}");
+                }
+
+                // Delivery address fields
+                if (root.TryGetProperty("deliveryAddress", out var delAddrEl) && !string.IsNullOrWhiteSpace(delAddrEl.GetString()))
+                {
+                    customer.DeliveryAddress = delAddrEl.GetString()!;
+                    changes.Add($"Delivery Address → {customer.DeliveryAddress}");
+                }
+
+                if (root.TryGetProperty("deliveryCity", out var delCityEl) && !string.IsNullOrWhiteSpace(delCityEl.GetString()))
+                {
+                    customer.DeliveryCity = delCityEl.GetString()!;
+                    changes.Add($"Delivery City → {customer.DeliveryCity}");
+                }
+
+                if (root.TryGetProperty("deliveryProvince", out var delProvEl) && !string.IsNullOrWhiteSpace(delProvEl.GetString()))
+                {
+                    customer.DeliveryProvince = delProvEl.GetString()!;
+                    changes.Add($"Delivery Province → {customer.DeliveryProvince}");
+                }
+
+                if (root.TryGetProperty("deliveryPostalCode", out var delPcEl) && !string.IsNullOrWhiteSpace(delPcEl.GetString()))
+                {
+                    customer.DeliveryPostalCode = delPcEl.GetString()!;
+                    changes.Add($"Delivery Postal Code → {customer.DeliveryPostalCode}");
+                }
+
+                // Payment / credit
+                if (root.TryGetProperty("paymentTerms", out var ptEl) && !string.IsNullOrWhiteSpace(ptEl.GetString()))
+                {
+                    customer.PaymentTerms = ptEl.GetString()!;
+                    changes.Add($"Payment Terms → {customer.PaymentTerms}");
+                }
+
+                if (root.TryGetProperty("creditLimit", out var clEl))
+                {
+                    if (clEl.TryGetDecimal(out var creditLimit))
+                    {
+                        customer.CreditLimit = creditLimit;
+                        changes.Add($"Credit Limit → R{creditLimit:N2}");
+                    }
+                }
+
+                if (changes.Count == 0)
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "UPDATE_CUSTOMER",
+                        Message = $"No changes specified for **{customer.Name}** ({customer.CustomerCode}). Please tell me what you'd like to update."
+                    };
+                }
+
+                // Auto-geocode if address was changed
+                if (addressChanged)
+                {
+                    try
+                    {
+                        var geocodingService = scope.ServiceProvider.GetRequiredService<GeocodingService>();
+                        var fullAddress = $"{customer.PhysicalAddress ?? customer.Address}, {customer.City}, {customer.Province}, {customer.PostalCode}".Trim(' ', ',');
+                        var geoResult = await geocodingService.GeocodeAddressAsync(fullAddress);
+
+                        if (geoResult.Success)
+                        {
+                            customer.Latitude = geoResult.Latitude;
+                            customer.Longitude = geoResult.Longitude;
+                            customer.GooglePlaceId = geoResult.PlaceId;
+                            customer.AddressVerified = true;
+                            customer.AddressVerifiedAt = DateTime.UtcNow;
+
+                            // Fill in missing city/province from geocoding
+                            if (string.IsNullOrEmpty(customer.City) && !string.IsNullOrEmpty(geoResult.City))
+                                customer.City = geoResult.City;
+                            if (string.IsNullOrEmpty(customer.Province) && !string.IsNullOrEmpty(geoResult.Province))
+                                customer.Province = geoResult.Province;
+                            if (string.IsNullOrEmpty(customer.PostalCode) && !string.IsNullOrEmpty(geoResult.PostalCode))
+                                customer.PostalCode = geoResult.PostalCode;
+
+                            changes.Add($"📍 GPS → {geoResult.Latitude:F6}, {geoResult.Longitude:F6} (verified via Google)");
+                        }
+                        else
+                        {
+                            customer.AddressVerified = false;
+                            changes.Add($"⚠️ Address could not be verified: {geoResult.Error}");
+                        }
+                    }
+                    catch (Exception geoEx)
+                    {
+                        _logger.LogWarning(geoEx, "Geocoding failed for customer {Id} address update", customer.Id);
+                        changes.Add("⚠️ Address geocoding failed — GPS coordinates not updated");
+                    }
+                }
+
+                customer.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+
+                var changeList = string.Join("\n", changes.Select(c => $"- {c}"));
+                _logger.LogInformation("AI Action: Updated customer {Code} ({Name}) by {User} — {Count} changes",
+                    customer.CustomerCode, customer.Name, user.FullName, changes.Count);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "UPDATE_CUSTOMER",
+                    EntityId = customer.Id,
+                    Message = $"✅ Updated **{customer.Name}** ({customer.CustomerCode}):\n{changeList}"
+                };
+            }
+            catch (JsonException)
+            {
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "UPDATE_CUSTOMER",
+                    Message = "Invalid data format. Please try again with the correct customer details."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update customer via AI");
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "UPDATE_CUSTOMER",
+                    Message = $"Failed to update customer: {ex.Message}"
+                };
+            }
+        }
+
+        private async Task<AIActionResult> LookupAddressAsync(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var address = root.TryGetProperty("address", out var addrEl) ? addrEl.GetString() ?? "" : "";
+
+                if (string.IsNullOrWhiteSpace(address))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "LOOKUP_ADDRESS",
+                        Message = "Please provide an address to look up."
+                    };
+                }
+
+                using var scope = _scopeFactory.CreateScope();
+                var geocodingService = scope.ServiceProvider.GetRequiredService<GeocodingService>();
+                var result = await geocodingService.GeocodeAddressAsync(address);
+
+                if (!result.Success)
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "LOOKUP_ADDRESS",
+                        Message = $"Could not find that address: {result.Error}"
+                    };
+                }
+
+                var lines = new List<string>
+                {
+                    $"**📍 Address Lookup Result**",
+                    $"",
+                    $"| Field | Value |",
+                    $"|-------|-------|",
+                    $"| Formatted Address | {result.FormattedAddress} |",
+                    $"| Street | {result.StreetNumber} {result.Route} |",
+                    $"| Suburb | {result.Suburb ?? "—"} |",
+                    $"| City | {result.City ?? "—"} |",
+                    $"| Province | {result.Province ?? "—"} |",
+                    $"| Postal Code | {result.PostalCode ?? "—"} |",
+                    $"| Country | {result.Country ?? "—"} |",
+                    $"| GPS | {result.Latitude:F6}, {result.Longitude:F6} |",
+                    $"| Google Place ID | {result.PlaceId} |"
+                };
+
+                _logger.LogInformation("AI Action: Address lookup for '{Address}' → {FormattedAddress}",
+                    address, result.FormattedAddress);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "LOOKUP_ADDRESS",
+                    Message = string.Join("\n", lines)
+                };
+            }
+            catch (JsonException)
+            {
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "LOOKUP_ADDRESS",
+                    Message = "Invalid data format for address lookup."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to lookup address via AI");
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "LOOKUP_ADDRESS",
+                    Message = $"Failed to look up address: {ex.Message}"
+                };
+            }
+        }
+
+        #endregion
+
+        #region Admin / Employee Management Actions
+
+        private async Task<AIActionResult> EditEmployeeAsync(string json, ChatUserContext user)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var employeeSearch = root.TryGetProperty("employee", out var es) ? es.GetString() ?? "" : "";
+
+                if (string.IsNullOrWhiteSpace(employeeSearch))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "EDIT_EMPLOYEE",
+                        Message = "Please specify the employee's name or email to edit."
+                    };
+                }
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // Search by email first, then by name (fuzzy)
+                var searchLower = employeeSearch.ToLower().Trim();
+                var userEntity = await context.Users
+                    .Include(u => u.Department)
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == searchLower);
+
+                if (userEntity == null)
+                {
+                    // Exact full name match
+                    userEntity = await context.Users
+                        .Include(u => u.Department)
+                        .FirstOrDefaultAsync(u => (u.Name + " " + u.Surname).ToLower() == searchLower);
+                }
+
+                if (userEntity == null)
+                {
+                    // Fuzzy — contains on name or surname
+                    userEntity = await context.Users
+                        .Include(u => u.Department)
+                        .Where(u => u.Name.ToLower().Contains(searchLower) ||
+                                    u.Surname.ToLower().Contains(searchLower) ||
+                                    (u.Name + " " + u.Surname).ToLower().Contains(searchLower))
+                        .FirstOrDefaultAsync();
+                }
+
+                if (userEntity == null)
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "EDIT_EMPLOYEE",
+                        Message = $"Could not find an employee matching \"{employeeSearch}\". Please check the name or email."
+                    };
+                }
+
+                var changes = new List<string>();
+
+                if (root.TryGetProperty("name", out var nameEl) && !string.IsNullOrWhiteSpace(nameEl.GetString()))
+                {
+                    var oldVal = userEntity.Name;
+                    userEntity.Name = nameEl.GetString()!;
+                    changes.Add($"First Name: {oldVal} → {userEntity.Name}");
+                }
+
+                if (root.TryGetProperty("surname", out var surnameEl) && !string.IsNullOrWhiteSpace(surnameEl.GetString()))
+                {
+                    var oldVal = userEntity.Surname;
+                    userEntity.Surname = surnameEl.GetString()!;
+                    changes.Add($"Surname: {oldVal} → {userEntity.Surname}");
+                }
+
+                if (root.TryGetProperty("email", out var emailEl) && !string.IsNullOrWhiteSpace(emailEl.GetString()))
+                {
+                    var newEmail = emailEl.GetString()!;
+                    // Check for duplicates
+                    if (await context.Users.AnyAsync(u => u.Email.ToLower() == newEmail.ToLower() && u.UserId != userEntity.UserId))
+                    {
+                        return new AIActionResult
+                        {
+                            Success = false,
+                            ActionType = "EDIT_EMPLOYEE",
+                            Message = $"The email \"{newEmail}\" is already in use by another user."
+                        };
+                    }
+                    var oldVal = userEntity.Email;
+                    userEntity.Email = newEmail;
+                    changes.Add($"Email: {oldVal} → {newEmail}");
+                }
+
+                if (root.TryGetProperty("role", out var roleEl) && !string.IsNullOrWhiteSpace(roleEl.GetString()))
+                {
+                    var newRole = roleEl.GetString()!;
+                    // Normalize common role values
+                    var roleMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        { "admin", "Admin" }, { "administrator", "Admin" },
+                        { "manager", "Manager" }, { "mgr", "Manager" },
+                        { "employee", "Employee" }, { "staff", "Employee" }, { "user", "Employee" }
+                    };
+                    if (roleMap.TryGetValue(newRole, out var mapped)) newRole = mapped;
+
+                    var oldVal = userEntity.Role;
+                    userEntity.Role = newRole;
+                    changes.Add($"Role: {oldVal} → {newRole}");
+                }
+
+                if (root.TryGetProperty("title", out var titleEl) && !string.IsNullOrWhiteSpace(titleEl.GetString()))
+                {
+                    var oldVal = userEntity.Title ?? "—";
+                    userEntity.Title = titleEl.GetString()!;
+                    changes.Add($"Job Title: {oldVal} → {userEntity.Title}");
+                }
+
+                if (root.TryGetProperty("department", out var deptEl) && !string.IsNullOrWhiteSpace(deptEl.GetString()))
+                {
+                    var deptName = deptEl.GetString()!;
+                    var department = await context.Departments
+                        .FirstOrDefaultAsync(d => d.Name.ToLower() == deptName.ToLower());
+
+                    if (department == null)
+                    {
+                        // Fuzzy search
+                        department = await context.Departments
+                            .FirstOrDefaultAsync(d => d.Name.ToLower().Contains(deptName.ToLower()));
+                    }
+
+                    if (department != null)
+                    {
+                        var oldDept = userEntity.Department?.Name ?? "None";
+                        userEntity.DepartmentId = department.DepartmentId;
+                        changes.Add($"Department: {oldDept} → {department.Name}");
+                    }
+                    else
+                    {
+                        changes.Add($"⚠️ Department \"{deptName}\" not found — skipped");
+                    }
+                }
+
+                if (root.TryGetProperty("isActive", out var activeEl))
+                {
+                    bool? isActive = null;
+                    if (activeEl.ValueKind == JsonValueKind.True) isActive = true;
+                    else if (activeEl.ValueKind == JsonValueKind.False) isActive = false;
+                    else if (activeEl.ValueKind == JsonValueKind.String)
+                    {
+                        var val = activeEl.GetString()?.ToLower();
+                        if (val == "true" || val == "yes" || val == "active") isActive = true;
+                        else if (val == "false" || val == "no" || val == "inactive") isActive = false;
+                    }
+
+                    if (isActive.HasValue)
+                    {
+                        var oldVal = userEntity.IsActive ? "Active" : "Inactive";
+                        userEntity.IsActive = isActive.Value;
+                        changes.Add($"Status: {oldVal} → {(isActive.Value ? "Active" : "Inactive")}");
+                    }
+                }
+
+                if (root.TryGetProperty("birthday", out var bdayEl) && !string.IsNullOrWhiteSpace(bdayEl.GetString()))
+                {
+                    if (DateTime.TryParse(bdayEl.GetString(), out var birthday))
+                    {
+                        userEntity.Birthday = birthday;
+                        changes.Add($"Birthday → {birthday:dd MMM yyyy}");
+                    }
+                }
+
+                if (changes.Count == 0)
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "EDIT_EMPLOYEE",
+                        Message = $"No changes specified for **{userEntity.FullName}** ({userEntity.Email}). Please tell me what you'd like to update."
+                    };
+                }
+
+                userEntity.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+
+                var changeList = string.Join("\n", changes.Select(c => $"- {c}"));
+                _logger.LogInformation("AI Action: Edited employee {UserId} ({Name}) by {Admin} — {Count} changes",
+                    userEntity.UserId, userEntity.FullName, user.FullName, changes.Count);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "EDIT_EMPLOYEE",
+                    EntityId = userEntity.UserId,
+                    Message = $"✅ Updated **{userEntity.FullName}** ({userEntity.Email}):\n{changeList}"
+                };
+            }
+            catch (JsonException)
+            {
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "EDIT_EMPLOYEE",
+                    Message = "Invalid data format. Please try again."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to edit employee via AI");
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "EDIT_EMPLOYEE",
+                    Message = $"Failed to edit employee: {ex.Message}"
+                };
+            }
+        }
+
+        private async Task<AIActionResult> ResetPasswordAsync(string json, ChatUserContext user)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var employeeSearch = root.TryGetProperty("employee", out var es) ? es.GetString() ?? "" : "";
+                var newPassword = root.TryGetProperty("newPassword", out var pw) ? pw.GetString() ?? "" : "";
+
+                if (string.IsNullOrWhiteSpace(employeeSearch))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "RESET_PASSWORD",
+                        Message = "Please specify the employee's name or email."
+                    };
+                }
+
+                // Generate a secure temp password if none provided
+                if (string.IsNullOrWhiteSpace(newPassword))
+                {
+                    newPassword = GenerateTempPassword();
+                }
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                var searchLower = employeeSearch.ToLower().Trim();
+                var userEntity = await context.Users
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == searchLower);
+
+                if (userEntity == null)
+                {
+                    userEntity = await context.Users
+                        .FirstOrDefaultAsync(u => (u.Name + " " + u.Surname).ToLower() == searchLower);
+                }
+
+                if (userEntity == null)
+                {
+                    userEntity = await context.Users
+                        .Where(u => u.Name.ToLower().Contains(searchLower) ||
+                                    u.Surname.ToLower().Contains(searchLower) ||
+                                    (u.Name + " " + u.Surname).ToLower().Contains(searchLower))
+                        .FirstOrDefaultAsync();
+                }
+
+                if (userEntity == null)
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "RESET_PASSWORD",
+                        Message = $"Could not find an employee matching \"{employeeSearch}\"."
+                    };
+                }
+
+                userEntity.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+                userEntity.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+
+                _logger.LogInformation("AI Action: Password reset for user {UserId} ({Email}) by {Admin}",
+                    userEntity.UserId, userEntity.Email, user.FullName);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "RESET_PASSWORD",
+                    EntityId = userEntity.UserId,
+                    Message = $"🔑 Password reset for **{userEntity.FullName}** ({userEntity.Email}).\n\nNew temporary password: `{newPassword}`\n\n⚠️ Please share this securely and ask them to change it on first login."
+                };
+            }
+            catch (JsonException)
+            {
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "RESET_PASSWORD",
+                    Message = "Invalid data format for password reset."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to reset password via AI");
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "RESET_PASSWORD",
+                    Message = $"Failed to reset password: {ex.Message}"
+                };
+            }
+        }
+
+        private static string GenerateTempPassword()
+        {
+            const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+            const string lower = "abcdefghjkmnpqrstuvwxyz";
+            const string digits = "23456789";
+            const string special = "!@#$%";
+
+            var rng = new Random();
+            var chars = new char[12];
+            chars[0] = upper[rng.Next(upper.Length)];
+            chars[1] = lower[rng.Next(lower.Length)];
+            chars[2] = digits[rng.Next(digits.Length)];
+            chars[3] = special[rng.Next(special.Length)];
+
+            var all = upper + lower + digits + special;
+            for (int i = 4; i < 12; i++)
+                chars[i] = all[rng.Next(all.Length)];
+
+            // Shuffle
+            for (int i = chars.Length - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (chars[i], chars[j]) = (chars[j], chars[i]);
+            }
+
+            return new string(chars);
+        }
+
+        private async Task<AIActionResult> SystemOverviewAsync()
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // Gather all counts in parallel
+                var usersTotal = await context.Users.CountAsync();
+                var usersActive = await context.Users.CountAsync(u => u.IsActive);
+                var departments = await context.Departments.CountAsync();
+                var customers = await context.LogisticsCustomers.CountAsync();
+
+                var ticketsTotal = await context.SupportTickets.CountAsync();
+                var ticketsOpen = await context.SupportTickets.CountAsync(t => t.Status == "Open");
+                var ticketsInProgress = await context.SupportTickets.CountAsync(t => t.Status == "InProgress");
+                var ticketsResolved = await context.SupportTickets.CountAsync(t => t.Status == "Resolved");
+
+                var loadsTotal = await context.Loads.CountAsync();
+                var loadsActive = await context.Loads.CountAsync(l => l.Status == "InTransit" || l.Status == "Assigned");
+                var loadsPending = await context.Loads.CountAsync(l => l.Status == "Available");
+
+                var meetings = await context.Meetings.CountAsync(m => m.MeetingDate >= DateTime.Today);
+                var announcements = await context.Announcements.CountAsync(a => a.IsActive);
+
+                var todosTotal = await context.TodoTasks.CountAsync();
+                var todosPending = await context.TodoTasks.CountAsync(t => t.Status == "Pending" || t.Status == "InProgress");
+
+                var vehicles = await context.Vehicles.CountAsync();
+                var drivers = await context.Drivers.CountAsync();
+                var warehouses = await context.Warehouses.CountAsync();
+
+                var lines = new List<string>
+                {
+                    $"**📊 System Overview** (as of {DateTime.Now:dd MMM yyyy, HH:mm})",
+                    $"",
+                    $"### 👥 People",
+                    $"| Metric | Count |",
+                    $"|--------|-------|",
+                    $"| Total Users | {usersTotal} |",
+                    $"| Active Users | {usersActive} |",
+                    $"| Inactive Users | {usersTotal - usersActive} |",
+                    $"| Departments | {departments} |",
+                    $"",
+                    $"### 🏢 Customers",
+                    $"| Metric | Count |",
+                    $"|--------|-------|",
+                    $"| Total Customers | {customers} |",
+                    $"",
+                    $"### 🎫 Support Tickets",
+                    $"| Status | Count |",
+                    $"|--------|-------|",
+                    $"| Open | {ticketsOpen} |",
+                    $"| In Progress | {ticketsInProgress} |",
+                    $"| Resolved | {ticketsResolved} |",
+                    $"| Total | {ticketsTotal} |",
+                    $"",
+                    $"### 🚛 Logistics",
+                    $"| Metric | Count |",
+                    $"|--------|-------|",
+                    $"| Active Loads | {loadsActive} |",
+                    $"| Pending Loads | {loadsPending} |",
+                    $"| Total Loads | {loadsTotal} |",
+                    $"| Vehicles | {vehicles} |",
+                    $"| Drivers | {drivers} |",
+                    $"| Warehouses | {warehouses} |",
+                    $"",
+                    $"### 📋 Tasks & Activities",
+                    $"| Metric | Count |",
+                    $"|--------|-------|",
+                    $"| Pending Todos | {todosPending} |",
+                    $"| Total Todos | {todosTotal} |",
+                    $"| Upcoming Meetings | {meetings} |",
+                    $"| Active Announcements | {announcements} |"
+                };
+
+                _logger.LogInformation("AI Action: System overview requested — {Users} users, {Customers} customers, {Tickets} tickets",
+                    usersTotal, customers, ticketsTotal);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "SYSTEM_OVERVIEW",
+                    Message = string.Join("\n", lines)
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to generate system overview");
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "SYSTEM_OVERVIEW",
+                    Message = $"Failed to generate system overview: {ex.Message}"
                 };
             }
         }

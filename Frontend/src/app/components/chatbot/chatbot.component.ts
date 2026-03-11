@@ -198,6 +198,11 @@ export class ChatbotComponent implements OnInit, OnDestroy {
                       action.type === 'ASSIGN_TODO' ? 'Todo Assigned' :
                       action.type === 'TRACK_VEHICLE' ? 'Vehicle Tracking' :
                       action.type === 'FLEET_STATUS' ? 'Fleet Status' :
+                      action.type === 'UPDATE_CUSTOMER' ? 'Customer Updated' :
+                      action.type === 'LOOKUP_ADDRESS' ? 'Address Lookup' :
+                      action.type === 'EDIT_EMPLOYEE' ? 'Employee Updated' :
+                      action.type === 'RESET_PASSWORD' ? 'Password Reset' :
+                      action.type === 'SYSTEM_OVERVIEW' ? 'System Overview' :
                       action.type === 'TRIPSHEET_CREATE' ? 'TripSheet Created' :
                       action.type === 'TRIPSHEET_GET_WAREHOUSES' ? 'Warehouses' :
                       action.type === 'TRIPSHEET_GET_INVOICES' ? 'Pending Invoices' :
@@ -208,7 +213,9 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     // For TripSheet data-fetch actions and vehicle tracking, show the data as a regular bot message (not a small action banner)
     const isTripSheetData = action.type.startsWith('TRIPSHEET_') && action.type !== 'TRIPSHEET_CREATE';
     const isTrackingData = action.type === 'TRACK_VEHICLE' || action.type === 'FLEET_STATUS';
-    const isDataAction = isTripSheetData || isTrackingData;
+    const isAddressLookup = action.type === 'LOOKUP_ADDRESS';
+    const isOverview = action.type === 'SYSTEM_OVERVIEW';
+    const isDataAction = isTripSheetData || isTrackingData || isAddressLookup || isOverview;
     
     this.messages.push({
       text: isDataAction ? action.message : `${icon} **${typeLabel}**: ${action.message}`,
