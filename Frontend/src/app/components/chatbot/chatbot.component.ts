@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
-import { ChatService } from '../../services/chat.service';
+import { ChatService, ActionResult } from '../../services/chat.service';
 
 interface ChatMessage {
   text: string;
@@ -10,6 +10,8 @@ interface ChatMessage {
   timestamp: Date;
   attachmentName?: string;
   attachmentType?: string;
+  isAction?: boolean;
+  actionSuccess?: boolean;
 }
 
 @Component({
@@ -31,6 +33,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   fileInputError = '';
   
   private chatSubscription?: Subscription;
+  private actionSubscription?: Subscription;
   private readonly STORAGE_KEY = 'welly_chat_messages';
 
   constructor(private chatService: ChatService) {}
@@ -40,10 +43,15 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.checkServiceHealth();
     // Restore previous messages from session, or show welcome if first time
     this.restoreMessages();
+    // Subscribe to AI action results (ticket created, meeting scheduled, etc.)
+    this.actionSubscription = this.chatService.actionResults$.subscribe(action => {
+      this.handleActionResult(action);
+    });
   }
 
   ngOnDestroy(): void {
     this.chatSubscription?.unsubscribe();
+    this.actionSubscription?.unsubscribe();
   }
 
   private checkServiceHealth(): void {
@@ -134,9 +142,10 @@ export class ChatbotComponent implements OnInit, OnDestroy {
         this.scrollToBottom();
       },
       complete: () => {
-        // Add the complete response as a message
-        if (this.currentStreamingText.trim()) {
-          this.addBotMessage(this.currentStreamingText.trim());
+        // Add the complete response as a message (strip any action tags)
+        const cleanText = this.stripActionTags(this.currentStreamingText).trim();
+        if (cleanText) {
+          this.addBotMessage(cleanText);
         }
         this.currentStreamingText = '';
         this.isTyping = false;
@@ -179,6 +188,23 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       timestamp: new Date()
     });
     this.saveMessages();
+  }
+
+  private handleActionResult(action: ActionResult): void {
+    const icon = action.success ? '✅' : '❌';
+    const typeLabel = action.type === 'CREATE_TICKET' ? 'Support Ticket' :
+                      action.type === 'CREATE_MEETING' ? 'Meeting' :
+                      action.type === 'SEND_EMAIL' ? 'Email' : action.type;
+    
+    this.messages.push({
+      text: `${icon} **${typeLabel}**: ${action.message}`,
+      isUser: false,
+      timestamp: new Date(),
+      isAction: true,
+      actionSuccess: action.success
+    });
+    this.saveMessages();
+    this.scrollToBottom();
   }
 
   private restoreMessages(): void {
@@ -273,8 +299,9 @@ export class ChatbotComponent implements OnInit, OnDestroy {
         this.scrollToBottom();
       },
       complete: () => {
-        if (this.currentStreamingText.trim()) {
-          this.addBotMessage(this.currentStreamingText.trim());
+        const cleanText = this.stripActionTags(this.currentStreamingText).trim();
+        if (cleanText) {
+          this.addBotMessage(cleanText);
         }
         this.currentStreamingText = '';
         this.isTyping = false;
@@ -282,6 +309,12 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       }
     });
   }
-}
 
+  /**
+   * Strip AI action tags from displayed text so users only see the natural response
+   */
+  private stripActionTags(text: string): string {
+    return text.replace(/\[ACTION:\w+\]\s*\{[^}]*\}\s*\[\/ACTION\]/g, '').trim();
+  }
+}
 

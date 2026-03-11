@@ -8,6 +8,13 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export interface ActionResult {
+  type: string;
+  success: boolean;
+  message: string;
+  entityId?: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -18,6 +25,10 @@ export class ChatService {
   
   // Session ID for server-side conversation memory
   private sessionId: string | null = null;
+
+  // Subject for action results from AI
+  private actionSubject = new Subject<ActionResult>();
+  public actionResults$ = this.actionSubject.asObservable();
 
   constructor() {
     // Try to restore session from storage
@@ -130,6 +141,15 @@ export class ChatService {
               if (json.sessionId) {
                 this.sessionId = json.sessionId;
                 sessionStorage.setItem('welly_session_id', json.sessionId);
+              }
+              // Handle AI action results (create ticket, schedule meeting, etc.)
+              if (json.action) {
+                this.actionSubject.next({
+                  type: json.action.type,
+                  success: json.action.success,
+                  message: json.action.message,
+                  entityId: json.action.entityId
+                });
               }
             } catch (e) {
               // Skip invalid JSON

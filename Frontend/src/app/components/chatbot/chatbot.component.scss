@@ -283,6 +283,23 @@
     border-bottom-left-radius: 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   }
+
+  &.action-bubble {
+    max-width: 85%;
+    border-left: 4px solid #667eea;
+    border-radius: 4px 16px 16px 4px;
+    font-size: 13px;
+  }
+
+  &.action-success {
+    border-left-color: #10b981;
+    background: #ecfdf5;
+  }
+
+  &.action-failure {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+  }
 }
 
 .message-text {

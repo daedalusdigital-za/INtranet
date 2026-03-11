@@ -3,8 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using ProjectTracker.API.Data;
 using ProjectTracker.API.Services;
 
 namespace ProjectTracker.API.Controllers
@@ -19,7 +22,9 @@ namespace ProjectTracker.API.Controllers
         private readonly IOllamaAIService _ollamaService;
         private readonly IClaudeAIService _claudeService;
         private readonly ILocalLlmService _localLlmService;
+        private readonly IAIActionService _actionService;
         private readonly IConfiguration _configuration;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public AIChatController(
             ILogger<AIChatController> logger, 
@@ -27,14 +32,18 @@ namespace ProjectTracker.API.Controllers
             IOllamaAIService ollamaService,
             IClaudeAIService claudeService,
             ILocalLlmService localLlmService,
-            IConfiguration configuration)
+            IAIActionService actionService,
+            IConfiguration configuration,
+            IServiceScopeFactory scopeFactory)
         {
             _logger = logger;
             _aiService = aiService;
             _ollamaService = ollamaService;
             _claudeService = claudeService;
             _localLlmService = localLlmService;
+            _actionService = actionService;
             _configuration = configuration;
+            _scopeFactory = scopeFactory;
         }
 
         /// <summary>
@@ -115,16 +124,20 @@ namespace ProjectTracker.API.Controllers
             try
             {
                 var userMessage = request.Prompt ?? request.Messages?.LastOrDefault(m => m.Role == "user")?.Content ?? "";
+                var userContext = await GetCurrentUserContext();
 
                 // Provider priority: LocalLLM -> Claude -> Ollama -> Rule-based fallback
                 var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
                 var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
 
+                var fullResponse = new StringBuilder();
+
                 if (useLocalLlm)
                 {
-                    _logger.LogInformation("Chat: Using Local LLM (Qwen2.5)");
-                    await foreach (var token in _localLlmService.ChatStreamingAsync(userMessage, HttpContext.RequestAborted))
+                    _logger.LogInformation("Chat: Using Local LLM (Qwen2.5) for user {User}", userContext?.FullName ?? "unknown");
+                    await foreach (var token in _localLlmService.ChatStreamingAsync(userMessage, userContext, HttpContext.RequestAborted))
                     {
+                        fullResponse.Append(token);
                         await WriteSSEToken(token);
                     }
                 }
@@ -138,6 +151,7 @@ namespace ProjectTracker.API.Controllers
                         _logger.LogInformation("Chat: Using Claude provider");
                         await foreach (var token in _claudeService.ChatStreamingAsync(userMessage, HttpContext.RequestAborted))
                         {
+                            fullResponse.Append(token);
                             await WriteSSEToken(token);
                         }
                     }
@@ -162,6 +176,7 @@ namespace ProjectTracker.API.Controllers
 
                         await foreach (var token in _ollamaService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
                         {
+                            fullResponse.Append(token);
                             await WriteSSEToken(token);
                         }
                     }
@@ -189,10 +204,17 @@ namespace ProjectTracker.API.Controllers
 
                         await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
                         {
+                            fullResponse.Append(token);
                             await WriteSSEToken(token);
                         }
                     }
                     }
+                }
+
+                // Process any AI-requested actions from the response
+                if (userContext != null)
+                {
+                    await ProcessAndStreamActions(fullResponse.ToString(), userContext);
                 }
 
                 await WriteSSEDone();
@@ -304,6 +326,7 @@ namespace ProjectTracker.API.Controllers
                 
                 // Get the user message
                 var userMessage = request.Prompt ?? request.Messages?.LastOrDefault(m => m.Role == "user")?.Content ?? "";
+                var userContext = await GetCurrentUserContext();
                 
                 if (string.IsNullOrWhiteSpace(userMessage))
                 {
@@ -312,15 +335,18 @@ namespace ProjectTracker.API.Controllers
                     return;
                 }
 
+                var fullResponse = new StringBuilder();
+
                 // Provider priority: LocalLLM -> Claude -> Ollama -> Rule-based fallback
                 var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
                 var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
 
                 if (useLocalLlm)
                 {
-                    _logger.LogInformation("Session chat: Using Local LLM (Qwen2.5) for session {SessionId}", sessionId);
-                    await foreach (var token in _localLlmService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
+                    _logger.LogInformation("Session chat: Using Local LLM (Qwen2.5) for session {SessionId}, user {User}", sessionId, userContext?.FullName ?? "unknown");
+                    await foreach (var token in _localLlmService.ChatStreamingWithSessionAsync(sessionId, userMessage, userContext, HttpContext.RequestAborted))
                     {
+                        fullResponse.Append(token);
                         await WriteSSEToken(token);
                     }
                     await WriteSSESessionId(sessionId);
@@ -335,6 +361,7 @@ namespace ProjectTracker.API.Controllers
                         _logger.LogInformation("Session chat: Using Claude provider for session {SessionId}", sessionId);
                         await foreach (var token in _claudeService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
                         {
+                            fullResponse.Append(token);
                             await WriteSSEToken(token);
                         }
                         await WriteSSESessionId(sessionId);
@@ -349,6 +376,7 @@ namespace ProjectTracker.API.Controllers
                         _logger.LogInformation("Session chat: Using Ollama provider for session {SessionId}", sessionId);
                         await foreach (var token in _ollamaService.ChatStreamingWithSessionAsync(sessionId, userMessage, HttpContext.RequestAborted))
                         {
+                            fullResponse.Append(token);
                             await WriteSSEToken(token);
                         }
                         await WriteSSESessionId(sessionId);
@@ -371,10 +399,17 @@ namespace ProjectTracker.API.Controllers
 
                         await foreach (var token in _aiService.ChatStreamingAsync(messages, HttpContext.RequestAborted))
                         {
+                            fullResponse.Append(token);
                             await WriteSSEToken(token);
                         }
                     }
                     }
+                }
+
+                // Process any AI-requested actions from the response
+                if (userContext != null)
+                {
+                    await ProcessAndStreamActions(fullResponse.ToString(), userContext);
                 }
 
                 await WriteSSEDone();
@@ -667,6 +702,74 @@ Be specific and extract actual values from the document when available.";
             var data = JsonSerializer.Serialize(new { sessionId = sessionId });
             await Response.WriteAsync($"data: {data}\n\n");
             await Response.Body.FlushAsync();
+        }
+
+        /// <summary>
+        /// Extract the logged-in user's details from JWT claims + database
+        /// </summary>
+        private async Task<ChatUserContext?> GetCurrentUserContext()
+        {
+            try
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                    return null;
+
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                var user = await db.Users
+                    .Include(u => u.Department)
+                    .FirstOrDefaultAsync(u => u.UserId == userId);
+
+                if (user == null) return null;
+
+                return new ChatUserContext
+                {
+                    UserId = user.UserId,
+                    Name = user.Name,
+                    Surname = user.Surname,
+                    Email = user.Email,
+                    Role = user.Role,
+                    DepartmentId = user.DepartmentId,
+                    Department = user.Department?.Name ?? ""
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve user context from JWT");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Process action tags in AI response and stream action results as SSE events
+        /// </summary>
+        private async Task ProcessAndStreamActions(string fullResponse, ChatUserContext userContext)
+        {
+            try
+            {
+                var actions = await _actionService.ProcessActionsAsync(fullResponse, userContext);
+                foreach (var action in actions)
+                {
+                    var data = JsonSerializer.Serialize(new
+                    {
+                        action = new
+                        {
+                            type = action.ActionType,
+                            success = action.Success,
+                            message = action.Message,
+                            entityId = action.EntityId
+                        }
+                    });
+                    await Response.WriteAsync($"data: {data}\n\n");
+                    await Response.Body.FlushAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing AI actions");
+            }
         }
     }
 

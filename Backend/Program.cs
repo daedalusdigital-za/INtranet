@@ -189,6 +189,9 @@ builder.Services.AddSingleton<IClaudeAIService, ClaudeAIService>();
 // Add Local LLM Service for Qwen2.5-14B via llama.cpp (primary provider)
 builder.Services.AddSingleton<ILocalLlmService, LocalLlmService>();
 
+// Add AI Action Service for executing AI-requested actions (create tickets, meetings, etc.)
+builder.Services.AddScoped<IAIActionService, AIActionService>();
+
 // Add Azure Sync Background Service
 builder.Services.AddHostedService<AzureSyncService>();
 

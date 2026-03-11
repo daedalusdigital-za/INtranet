@@ -8,9 +8,12 @@ namespace ProjectTracker.API.Services
     public interface ILocalLlmService
     {
         Task<string> ChatAsync(string userMessage, CancellationToken cancellationToken = default);
+        Task<string> ChatAsync(string userMessage, ChatUserContext? userContext, CancellationToken cancellationToken = default);
         Task<string> ChatWithSessionAsync(string sessionId, string userMessage, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> ChatStreamingAsync(string userMessage, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> ChatStreamingAsync(string userMessage, ChatUserContext? userContext, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, ChatUserContext? userContext, CancellationToken cancellationToken = default);
         Task<string> AnalyzeDocumentAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken = default);
         Task<bool> IsAvailableAsync();
     }
@@ -151,9 +154,28 @@ Be concise, professional, and friendly. Use the provided database context when a
 
 
 
-        public async Task<string> ChatAsync(string userMessage, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Build a user identity block to inject into the system prompt
+        /// </summary>
+        private string BuildUserContextBlock(ChatUserContext? user)
         {
-            var systemContent = _systemPrompt;
+            if (user == null) return "";
+            var sb = new StringBuilder();
+            sb.AppendLine("\n## Current User");
+            sb.AppendLine($"- Name: {user.FullName}");
+            sb.AppendLine($"- Email: {user.Email}");
+            sb.AppendLine($"- Role: {user.Role}");
+            if (!string.IsNullOrEmpty(user.Department))
+                sb.AppendLine($"- Department: {user.Department}");
+            return sb.ToString();
+        }
+
+        public Task<string> ChatAsync(string userMessage, CancellationToken cancellationToken = default)
+            => ChatAsync(userMessage, null, cancellationToken);
+
+        public async Task<string> ChatAsync(string userMessage, ChatUserContext? userContext, CancellationToken cancellationToken = default)
+        {
+            var systemContent = _systemPrompt + BuildUserContextBlock(userContext);
 
             var dbContext = await GetContextForQueryAsync(userMessage);
             if (!string.IsNullOrEmpty(dbContext))
@@ -188,11 +210,17 @@ Be concise, professional, and friendly. Use the provided database context when a
             return answer;
         }
 
+        public IAsyncEnumerable<string> ChatStreamingAsync(
+            string userMessage,
+            CancellationToken cancellationToken = default)
+            => ChatStreamingAsync(userMessage, null, cancellationToken);
+
         public async IAsyncEnumerable<string> ChatStreamingAsync(
             string userMessage,
+            ChatUserContext? userContext,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var systemContent = _systemPrompt;
+            var systemContent = _systemPrompt + BuildUserContextBlock(userContext);
 
             var dbContext = await GetContextForQueryAsync(userMessage);
             if (!string.IsNullOrEmpty(dbContext))
@@ -314,15 +342,22 @@ Be concise, professional, and friendly. Use the provided database context when a
             return responseText;
         }
 
+        public IAsyncEnumerable<string> ChatStreamingWithSessionAsync(
+            string sessionId,
+            string userMessage,
+            CancellationToken cancellationToken = default)
+            => ChatStreamingWithSessionAsync(sessionId, userMessage, null, cancellationToken);
+
         public async IAsyncEnumerable<string> ChatStreamingWithSessionAsync(
             string sessionId,
             string userMessage,
+            ChatUserContext? userContext,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             _conversationMemory.AddMessage(sessionId, "user", userMessage);
 
             var history = _conversationMemory.GetHistory(sessionId);
-            var systemContent = _systemPrompt;
+            var systemContent = _systemPrompt + BuildUserContextBlock(userContext);
 
             var dbContext = await GetContextForQueryAsync(userMessage);
             if (!string.IsNullOrEmpty(dbContext))
