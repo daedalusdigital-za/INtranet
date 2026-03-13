@@ -6,11 +6,11 @@
 $LlamaServer = "C:\Models\llama-cpp\llama-server.exe"
 $ModelPath = "C:\Models\Qwen2.5-14B-Instruct-Q4_K_M.gguf"
 $Port = 8090
-$Threads = 24          # Pin to 1 NUMA node (24 threads) — avoids slow cross-socket memory access
-$ThreadsBatch = 36     # Use more threads for prompt processing (batch is less NUMA-sensitive)
-$ContextSize = 32768   # Context window (8192 per slot x 4 slots — fits large system prompt + KB + conversation)
+$Threads = 12          # Physical cores on 1 NUMA node only — HT hurts generation speed on Xeon
+$ThreadsBatch = 24     # All physical cores across both sockets for prompt processing
+$ContextSize = 16384   # Context window (8192 per slot x 2 slots — sufficient for system prompt + RAG + history)
 $BatchSize = 2048      # Larger batch for faster prompt ingestion
-$ParallelSlots = 4     # Number of concurrent users
+$ParallelSlots = 2     # 2 concurrent slots — less KV cache pressure, faster per-request
 
 # Verify files exist
 if (-not (Test-Path $LlamaServer)) {
@@ -32,8 +32,8 @@ Write-Host "============================================================" -Foreg
 Write-Host "Model:     Qwen2.5-14B-Instruct (Q4_K_M, ${modelSize}GB)"
 Write-Host "Engine:    llama.cpp server"
 Write-Host "Port:      $Port"
-Write-Host "Threads:   $Threads (generation) / $ThreadsBatch (batch processing)"
-Write-Host "Context:   $ContextSize tokens"
+Write-Host "Threads:   $Threads (generation, 1 NUMA node) / $ThreadsBatch (batch, both sockets)"
+Write-Host "Context:   $ContextSize tokens ($($ContextSize / $ParallelSlots) per slot)"
 Write-Host "Parallel:  $ParallelSlots slots"
 Write-Host "API:       http://localhost:${Port}/v1/chat/completions (OpenAI-compatible)"
 Write-Host "Health:    http://localhost:${Port}/health"
@@ -59,6 +59,4 @@ Write-Host ""
     --mlock `
     --no-mmap `
     --prio 2 `
-    --prio-batch 2 `
-    --cpu-strict 1 `
-    --poll 50
+    --prio-batch 3
