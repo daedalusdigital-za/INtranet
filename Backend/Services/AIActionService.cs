@@ -66,6 +66,7 @@ namespace ProjectTracker.API.Services
     ///   [ACTION:SYSTEM_OVERVIEW] {} [/ACTION]
     ///   [ACTION:CREATE_ANNOUNCEMENT] { "title": "...", "content": "...", "priority": "Normal", "category": "General" } [/ACTION]
     ///   [ACTION:BACKUP_DATABASE] { "notes": "Weekly manual backup" } [/ACTION]
+    ///   [ACTION:SEARCH_WEB] { "query": "current weather in Johannesburg" } [/ACTION]
     /// </summary>
     public class AIActionService : IAIActionService
     {
@@ -125,6 +126,7 @@ namespace ProjectTracker.API.Services
                         "SYSTEM_OVERVIEW" => await SystemOverviewAsync(),
                         "CREATE_ANNOUNCEMENT" => await CreateAnnouncementAsync(jsonPayload, user),
                         "BACKUP_DATABASE" => await BackupDatabaseAsync(jsonPayload, user),
+                        "SEARCH_WEB" => await SearchWebAsync(jsonPayload),
                         _ => new AIActionResult
                         {
                             Success = false,
@@ -2193,6 +2195,103 @@ namespace ProjectTracker.API.Services
                     Success = false,
                     ActionType = "BACKUP_DATABASE",
                     Message = $"❌ Database backup failed: {ex.Message}"
+                };
+            }
+        }
+
+        #endregion
+
+        #region Web Search Actions
+
+        private async Task<AIActionResult> SearchWebAsync(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var query = root.TryGetProperty("query", out var q) ? q.GetString() ?? "" : "";
+                var numResults = root.TryGetProperty("numResults", out var n) && n.TryGetInt32(out var nr) ? nr : 5;
+
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "SEARCH_WEB",
+                        Message = "A search query is required."
+                    };
+                }
+
+                using var scope = _scopeFactory.CreateScope();
+                var searchService = scope.ServiceProvider.GetRequiredService<Services.Google.WebSearchService>();
+
+                var result = await searchService.SearchAsync(query, numResults);
+
+                if (!result.Success)
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "SEARCH_WEB",
+                        Message = $"🔍 Search failed: {result.Error}"
+                    };
+                }
+
+                if (result.Items.Count == 0)
+                {
+                    return new AIActionResult
+                    {
+                        Success = true,
+                        ActionType = "SEARCH_WEB",
+                        Message = $"🔍 No results found for \"{query}\". Try a different search query."
+                    };
+                }
+
+                // Build a clean result summary for the AI to interpret
+                var lines = new List<string>
+                {
+                    $"🔍 **Web Search Results for:** \"{query}\"",
+                    $"*{result.Items.Count} results found*",
+                    ""
+                };
+
+                for (var i = 0; i < result.Items.Count; i++)
+                {
+                    var item = result.Items[i];
+                    lines.Add($"**{i + 1}. [{item.Title}]({item.Url})**");
+                    if (!string.IsNullOrWhiteSpace(item.Snippet))
+                        lines.Add($"   {item.Snippet}");
+                    lines.Add("");
+                }
+
+                _logger.LogInformation("AI Action: Web search for \"{Query}\" returned {Count} results",
+                    query, result.Items.Count);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "SEARCH_WEB",
+                    Message = string.Join("\n", lines)
+                };
+            }
+            catch (JsonException)
+            {
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "SEARCH_WEB",
+                    Message = "Invalid search request format."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Web search action failed");
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "SEARCH_WEB",
+                    Message = $"❌ Web search failed: {ex.Message}"
                 };
             }
         }

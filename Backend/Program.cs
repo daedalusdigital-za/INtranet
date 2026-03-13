@@ -161,6 +161,7 @@ builder.Services.AddScoped<ProjectTracker.API.Services.Google.GeocodingService>(
 builder.Services.AddScoped<ProjectTracker.API.Services.Google.AddressValidationService>();
 builder.Services.AddScoped<ProjectTracker.API.Services.Google.RoutesService>();
 builder.Services.AddScoped<ProjectTracker.API.Services.Google.RouteOptimizationService>();
+builder.Services.AddScoped<ProjectTracker.API.Services.Google.WebSearchService>();
 
 // Sales Report Import Service
 builder.Services.AddScoped<SalesReportImportService>();

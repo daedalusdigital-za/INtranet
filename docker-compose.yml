@@ -42,6 +42,7 @@ services:
       - LocalLlm__BaseUrl=http://host.docker.internal:8090
       - LocalLlm__Model=qwen2.5-14b-instruct
       - LocalLlm__Enabled=true
+      - SearXNG__BaseUrl=http://searxng:8080
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -52,6 +53,19 @@ services:
       - nas-documents:/app/documents
     depends_on:
       - database
+      - searxng
+    networks:
+      - projecttracker-network
+    restart: unless-stopped
+
+  # SearXNG - Self-hosted web search engine for Welly
+  searxng:
+    image: searxng/searxng:latest
+    container_name: projecttracker-searxng
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    ports:
+      - "127.0.0.1:8888:8080"
     networks:
       - projecttracker-network
     restart: unless-stopped
