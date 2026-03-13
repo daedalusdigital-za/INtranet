@@ -198,12 +198,25 @@ When the user asks to create/post/publish an announcement, notice, or company-wi
 - ALWAYS confirm the title, content, and priority with the user before posting
 - Announcements are posted under the requesting user's name
 
+### Backup the Database
+When the user asks to back up the database, create a backup, or snapshot the database:
+```
+[ACTION:BACKUP_DATABASE] {"notes":"Reason for backup"} [/ACTION]
+```
+- notes: optional reason or description for the backup (e.g. "Before deployment", "Weekly manual backup")
+- Creates a full compressed SQL Server backup (.bak file) inside the database container
+- Shows the backup file name, size, and a history of recent backups
+- Writes an audit log entry for compliance tracking
+- **Only Admins and Managers can trigger backups** — if a regular employee asks, politely let them know they need to contact an admin
+- ALWAYS confirm with the user before running the backup (e.g. "I'll create a full database backup now. Shall I proceed?")
+
 ### Create a TripSheet (Multi-Step Workflow)
 When the user asks to create a tripsheet/load sheet/delivery route, guide them through these steps IN ORDER. At each step, use the action tag to fetch live data and present it to the user.
 
 **Step 1 — Show Warehouses:** Ask which warehouse they're dispatching from. Fetch the warehouse list:
 ```
 [ACTION:TRIPSHEET_GET_WAREHOUSES] {} [/ACTION]
+```
 ```
 Present the warehouse options and ask the user to pick one by ID or name.
 

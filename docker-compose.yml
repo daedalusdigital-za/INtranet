@@ -11,6 +11,7 @@ services:
       - "0.0.0.0:1434:1433"
     volumes:
       - sql-data:/var/opt/mssql
+      - C:\Backups\ProjectTrackerDB:/var/opt/mssql/backup
     networks:
       - projecttracker-network
 

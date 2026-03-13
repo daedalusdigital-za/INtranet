@@ -65,6 +65,7 @@ namespace ProjectTracker.API.Services
     ///   [ACTION:RESET_PASSWORD] { "employee": "John Smith", "newPassword": "TempPass123!" } [/ACTION]
     ///   [ACTION:SYSTEM_OVERVIEW] {} [/ACTION]
     ///   [ACTION:CREATE_ANNOUNCEMENT] { "title": "...", "content": "...", "priority": "Normal", "category": "General" } [/ACTION]
+    ///   [ACTION:BACKUP_DATABASE] { "notes": "Weekly manual backup" } [/ACTION]
     /// </summary>
     public class AIActionService : IAIActionService
     {
@@ -123,6 +124,7 @@ namespace ProjectTracker.API.Services
                         "RESET_PASSWORD" => await ResetPasswordAsync(jsonPayload, user),
                         "SYSTEM_OVERVIEW" => await SystemOverviewAsync(),
                         "CREATE_ANNOUNCEMENT" => await CreateAnnouncementAsync(jsonPayload, user),
+                        "BACKUP_DATABASE" => await BackupDatabaseAsync(jsonPayload, user),
                         _ => new AIActionResult
                         {
                             Success = false,
@@ -1962,6 +1964,235 @@ namespace ProjectTracker.API.Services
                     Success = false,
                     ActionType = "CREATE_ANNOUNCEMENT",
                     Message = $"Failed to create announcement: {ex.Message}"
+                };
+            }
+        }
+
+        #endregion
+
+        #region Database Backup Actions
+
+        private async Task<AIActionResult> BackupDatabaseAsync(string json, ChatUserContext user)
+        {
+            try
+            {
+                // Only Admins and Managers can trigger backups
+                if (!user.Role.Contains("Admin", StringComparison.OrdinalIgnoreCase) &&
+                    !user.Role.Equals("Manager", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "BACKUP_DATABASE",
+                        Message = "⛔ Only administrators and managers can trigger database backups."
+                    };
+                }
+
+                // Parse optional notes
+                var notes = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+                    notes = root.TryGetProperty("notes", out var n) ? n.GetString() ?? "" : "";
+                }
+                catch { /* empty payload is fine */ }
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var backupFileName = $"ProjectTrackerDB_{timestamp}.bak";
+                var containerBackupPath = $"/var/opt/mssql/backup/{backupFileName}";
+
+                _logger.LogInformation("AI Action: Database backup requested by {User} (Role: {Role})",
+                    user.FullName, user.Role);
+
+                // Ensure the backup directory exists inside the SQL container
+                await context.Database.ExecuteSqlRawAsync(
+                    "EXEC xp_create_subdir N'/var/opt/mssql/backup'");
+
+                // Execute the BACKUP DATABASE command via raw SQL
+                var backupSql = $@"
+                    BACKUP DATABASE [ProjectTrackerDB]
+                    TO DISK = N'{containerBackupPath}'
+                    WITH FORMAT, INIT,
+                    NAME = N'ProjectTrackerDB-Full-{timestamp}',
+                    SKIP, NOREWIND, NOUNLOAD, STATS = 10";
+
+                // BACKUP DATABASE can take a while — use a generous timeout
+                var conn = context.Database.GetDbConnection();
+                var wasOpen = conn.State == System.Data.ConnectionState.Open;
+                if (!wasOpen) await conn.OpenAsync();
+
+                try
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = backupSql;
+                    cmd.CommandTimeout = 300; // 5 minutes
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                finally
+                {
+                    if (!wasOpen) await conn.CloseAsync();
+                }
+
+                // Query backup metadata from msdb to confirm and get size
+                double backupSizeMB = 0;
+                try
+                {
+                    var sizeSql = @"
+                        SELECT TOP 1
+                            CAST(bs.backup_size / 1048576.0 AS DECIMAL(10,2)) AS SizeMB
+                        FROM msdb.dbo.backupset bs
+                        WHERE bs.database_name = 'ProjectTrackerDB'
+                        ORDER BY bs.backup_finish_date DESC";
+
+                    if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+                    using var sizeCmd = conn.CreateCommand();
+                    sizeCmd.CommandText = sizeSql;
+                    sizeCmd.CommandTimeout = 30;
+                    var result = await sizeCmd.ExecuteScalarAsync();
+                    if (result != null && result != DBNull.Value)
+                        backupSizeMB = Convert.ToDouble(result);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not query backup size from msdb");
+                }
+
+                // Get recent backup history
+                var recentBackups = new List<string>();
+                try
+                {
+                    var historySql = @"
+                        SELECT TOP 5
+                            bs.backup_finish_date,
+                            CAST(bs.backup_size / 1048576.0 AS DECIMAL(10,2)) AS SizeMB,
+                            bmf.physical_device_name
+                        FROM msdb.dbo.backupset bs
+                        JOIN msdb.dbo.backupmediafamily bmf ON bs.media_set_id = bmf.media_set_id
+                        WHERE bs.database_name = 'ProjectTrackerDB'
+                        ORDER BY bs.backup_finish_date DESC";
+
+                    if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+                    using var histCmd = conn.CreateCommand();
+                    histCmd.CommandText = historySql;
+                    histCmd.CommandTimeout = 30;
+                    using var reader = await histCmd.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        var finishDate = reader.GetDateTime(0);
+                        var sizeMb = reader.GetDecimal(1);
+                        var fileName = System.IO.Path.GetFileName(reader.GetString(2));
+                        recentBackups.Add($"| {finishDate:dd MMM yyyy HH:mm} | {sizeMb:N2} MB | {fileName} |");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not query backup history from msdb");
+                }
+
+                // Write audit log
+                try
+                {
+                    var auditLog = new AuditLog
+                    {
+                        UserId = user.UserId,
+                        Action = "Database Backup",
+                        Category = "backup",
+                        EntityType = "Database",
+                        Description = $"Database backup created: {backupFileName} ({backupSizeMB:N2} MB)",
+                        Details = System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            fileName = backupFileName,
+                            sizeMB = backupSizeMB,
+                            path = containerBackupPath,
+                            notes,
+                            requestedBy = user.FullName
+                        }),
+                        UserName = user.FullName,
+                        UserEmail = user.Email,
+                        UserRole = user.Role,
+                        Severity = "info",
+                        IsSuccess = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    context.AuditLogs.Add(auditLog);
+                    await context.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to write backup audit log");
+                }
+
+                // Build response message
+                var lines = new List<string>
+                {
+                    "✅ **Database backup completed successfully!**",
+                    "",
+                    $"- **File:** {backupFileName}",
+                    $"- **Size:** {backupSizeMB:N2} MB",
+                    $"- **Location:** SQL Server container (`/var/opt/mssql/backup/`)",
+                    $"- **Requested by:** {user.FullName}",
+                    $"- **Time:** {DateTime.Now:dd MMM yyyy, HH:mm:ss}"
+                };
+
+                if (!string.IsNullOrWhiteSpace(notes))
+                    lines.Add($"- **Notes:** {notes}");
+
+                if (recentBackups.Count > 0)
+                {
+                    lines.Add("");
+                    lines.Add("### 📋 Recent Backups");
+                    lines.Add("| Date | Size | File |");
+                    lines.Add("|------|------|------|");
+                    lines.AddRange(recentBackups);
+                }
+
+                _logger.LogInformation("AI Action: Database backup completed — {FileName} ({SizeMB:N2} MB) by {User}",
+                    backupFileName, backupSizeMB, user.FullName);
+
+                return new AIActionResult
+                {
+                    Success = true,
+                    ActionType = "BACKUP_DATABASE",
+                    Message = string.Join("\n", lines)
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Database backup failed (requested by {User})", user.FullName);
+
+                // Write failure audit log
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    context.AuditLogs.Add(new AuditLog
+                    {
+                        UserId = user.UserId,
+                        Action = "Database Backup Failed",
+                        Category = "backup",
+                        EntityType = "Database",
+                        Description = $"Database backup FAILED: {ex.Message}",
+                        UserName = user.FullName,
+                        UserEmail = user.Email,
+                        UserRole = user.Role,
+                        Severity = "critical",
+                        IsSuccess = false,
+                        ErrorMessage = ex.Message,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await context.SaveChangesAsync();
+                }
+                catch { /* don't fail on audit failure */ }
+
+                return new AIActionResult
+                {
+                    Success = false,
+                    ActionType = "BACKUP_DATABASE",
+                    Message = $"❌ Database backup failed: {ex.Message}"
                 };
             }
         }
