@@ -1,0 +1,248 @@
+# ProMed Technologies - Administration & System Management Guide
+
+## Overview
+This guide covers system administration features available to Admin and Super Admin users, including user management, database administration, audit logging, and department management.
+
+## User Management
+
+### Accessing User Management
+Go to Settings > User Management (Admin/Super Admin only)
+
+### Creating a New User
+1. Click "Create User"
+2. Enter name, surname, email
+3. Set a temporary password
+4. Select department
+5. Assign role (User, Manager, Admin, Super Admin)
+6. Configure module permissions
+7. Assign operating company (if applicable)
+8. Save
+
+### Editing Users
+- Update personal information (name, email, department)
+- Change role assignments
+- Update module permissions
+- Assign or change operating company
+- Upload profile photo
+
+### Deactivating Users
+- Toggle user active/inactive status
+- Deactivated users cannot log in
+- Their data is preserved in the system
+
+### Password Resets
+Admins can reset any user's password:
+- Go to User Management > Find user > Reset Password
+- Or ask Welly: "Reset password for [name]"
+- A new temporary password is generated
+- User should change it on first login
+
+### Module Permissions
+Assign which modules each user can access:
+- **Sales**: Sales dashboard and imports
+- **Logistics**: Full logistics operations
+- **Tenders**: Tender management and compliance
+- **Project Management**: Kanban boards and projects
+- **Human Resource**: Employee directory, attendance, leave
+- **Stock Management**: Inventory and warehouse management
+- **Support Tickets**: IT support ticketing
+- **Messaging**: Internal messaging system
+- **AI**: Access to Welly AI assistant
+- **PBX**: Phone system and call history
+- **Calendar**: Meetings and events
+- **Settings**: System configuration (admin-level)
+
+## Roles
+
+### Standard User
+- Access to assigned modules only
+- Can view data within their permissions
+- Submit requests (leave, tickets, tasks)
+- Use messaging and calendar
+
+### Manager
+- Everything a standard user can do
+- View and manage team data
+- Approve/reject requests (leave, sleep outs)
+- Run reports
+- Create announcements
+
+### Admin
+- Full access to all modules
+- User management (create, edit, deactivate)
+- Module permission assignment
+- Department management
+- Audit log viewing
+- System configuration
+
+### Super Admin
+- Everything an admin can do
+- Database backup and restore
+- Data import and export
+- Full system control
+- Seeding and initialization
+
+## Department Management
+
+### Managing Departments
+Admins can manage organizational departments:
+- Create new departments
+- Edit department names and managers
+- Delete departments (if no users assigned)
+- View user counts per department
+
+### Available Departments
+Typical ProMed departments:
+- Executive Management
+- Finance & Accounts
+- Human Resources
+- IT Department
+- Sales & Marketing
+- Operations
+- Logistics
+- Customer Service
+- Warehouse (by location)
+
+## Database Administration
+
+### Database Backup
+Create backups of the entire database:
+1. Go to Settings > Database (Super Admin)
+2. Click "Backup Database"
+3. Backup file is created as SQL Server backup
+4. View backup history with timestamps
+5. Or ask Welly: "Backup the database"
+
+### Database Info
+View database information:
+- Database size
+- Table counts
+- Record counts per table
+
+### Data Export
+Export database data:
+- Export full database as JSON
+- Export individual tables
+- View list of all database tables
+
+### Data Import
+Import data from exported JSON:
+- Upload JSON export file
+- System imports the data
+- Used for migration or recovery
+
+### Database Restore
+Restore database from a backup:
+- Select a backup file
+- Restore to the backup point
+- Caution: This replaces current data
+
+## Audit Logs
+
+### What are Audit Logs?
+Every significant action in the system is recorded for accountability and compliance.
+
+### Logged Actions
+- User login and logout
+- Data creation, updates, and deletions
+- Permission changes
+- System administration actions
+- AI assistant interactions
+- File uploads and downloads
+
+### Audit Log Fields
+- Timestamp
+- User who performed the action
+- Action type (Login, Create, Update, Delete, etc.)
+- Category (Auth, Employee, Logistics, etc.)
+- Entity type and ID (what was affected)
+- Details and description
+- Severity level
+
+### Viewing Audit Logs
+1. Go to Settings > Audit Logs (Admin only)
+2. View paginated log entries
+3. Filter by user, action, category, date
+4. View recent logs for quick overview
+5. Export logs for compliance reporting
+
+### Audit Log Statistics
+- Action counts by type
+- Actions by user
+- Activity trends over time
+- Category breakdown
+
+### Exporting Audit Logs
+- Export filtered logs for external reporting
+- Available in downloadable format
+- Used for compliance audits and investigations
+
+## Seeding Data
+
+### Employee Seeding
+For initial setup or testing:
+- Seed employee data with sample records
+- Initialize employee records from existing data
+- Used during system deployment
+
+## Operating Companies
+
+### Multi-Company Support
+ProMed operates multiple companies:
+- ProMed Medical
+- ProMed Logistics
+- Other entities as configured
+
+### Company Management
+- View all active operating companies
+- Each company has: Name, Code, Logo, Primary Color
+- Users can be linked to specific companies
+- Data filtering available by company across modules
+
+## System Health
+
+### Monitoring
+- Welly health check shows AI status (which provider is active)
+- Database info shows storage usage
+- Audit logs show system activity
+- Support tickets track ongoing issues
+
+### System Overview
+Ask Welly: "Give me a system overview" for a quick snapshot:
+- Active user count
+- Open ticket count
+- Active load count
+- Pending approvals
+- System metrics
+
+## Common Questions
+
+Q: How do I create a new user account?
+A: Go to Settings > User Management > Create User > Fill in details > Set permissions > Save
+
+Q: How do I reset someone's password?
+A: Go to User Management > Find user > Reset Password, or ask Welly "Reset password for [name]"
+
+Q: How do I give someone access to a module?
+A: Go to User Management > Edit user > Module Permissions > Toggle the module on > Save
+
+Q: How do I backup the database?
+A: Go to Settings > Database > Backup, or ask Welly "Backup the database"
+
+Q: How do I see who logged in today?
+A: Check Audit Logs filtered by "Login" action type for today's date
+
+Q: How do I deactivate an employee who left?
+A: Go to User Management > Find user > Click Deactivate. Their data is preserved.
+
+Q: How do I create a new department?
+A: Go to Settings > Departments > Create Department > Enter name and manager > Save
+
+Q: How do I export data from the system?
+A: Go to Settings > Database > Export. You can export the full database or individual tables as JSON.
+
+Q: How do I view system activity?
+A: Go to Settings > Audit Logs to see all system actions with timestamps and user details
+
+Q: Who can access the database admin features?
+A: Only Super Admin users can backup, restore, export, and import the database

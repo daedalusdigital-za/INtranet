@@ -1,7 +1,10 @@
 # ProMed Technologies - Logistics Module Knowledge Base
 
 ## Overview
-The Logistics module manages all aspects of delivery operations including tripsheets, loads, drivers, vehicles, fuel management, and customer deliveries.
+The Logistics module manages all aspects of delivery operations including tripsheets, loads, drivers, vehicles, fleet tracking, fuel management (TFN), customer management, invoices, sleep outs, vehicle maintenance, scrap records, partial deliveries, order cancellations, and route optimization.
+
+Access the Logistics module from the main navigation. The module has multiple tabs:
+- Dashboard, TripSheets, Loads, Invoices, Drivers, Vehicles, Fleet Tracking, Warehouses, Customers, TFN (Fuel), Sleep Outs, Maintenance, Reports, Scrap, Part Delivered, Cancellations
 
 ## Dashboard Cards
 The Logistics Dashboard displays key metrics:
@@ -24,6 +27,7 @@ A TripSheet (TS-XXXXXX) is a document that groups multiple delivery invoices for
 - List of delivery stops (invoices)
 - KM readings (start/end)
 - Status tracking
+- Commodities and quantities per stop
 
 ### TripSheet Statuses
 1. **Available**: Created but not yet assigned to a driver/vehicle
@@ -32,16 +36,27 @@ A TripSheet (TS-XXXXXX) is a document that groups multiple delivery invoices for
 4. **Cancelled**: TripSheet was cancelled
 
 ### TripSheet Workflow
-1. Import invoices from ERP system
-2. Create tripsheet from pending invoices (can group by route/province)
+1. Import invoices from SYSPRO ERP (JSON or Excel format)
+2. Create tripsheet from pending invoices (can group by route/province/area)
 3. Assign driver and vehicle
-4. Print/email tripsheet to warehouse manager
-5. Driver activates tripsheet when leaving
-6. Driver completes deliveries and captures POD (Proof of Delivery)
-7. Mark tripsheet as complete when all stops delivered
+4. Generate tripsheet PDF for printing or emailing
+5. Email tripsheet to warehouse manager for dispatch
+6. Driver activates tripsheet when leaving warehouse
+7. Driver completes deliveries and captures POD (Proof of Delivery)
+8. Mark tripsheet as complete when all stops delivered
+
+### TripSheet Actions
+- Create from invoices (auto-groups by area)
+- Assign driver and vehicle
+- Activate (start trip)
+- Update status
+- Generate PDF
+- Email to driver or warehouse manager
+- Import from Excel (preview and commit)
+- Delete
 
 ### POD (Proof of Delivery) Status Colors
-- **Green**: POD uploaded/captured
+- **Green**: POD uploaded/captured successfully
 - **Orange/Amber**: Partial delivery (some items not delivered)
 - **Red**: No POD captured yet
 
@@ -54,6 +69,8 @@ A Load (LD-XXXXXX) represents a delivery assignment with:
 - Assigned vehicle and driver
 - Scheduled delivery date
 - Delivery status
+- Stops with customer addresses and commodities
+- Line items with invoice details
 
 ### Load Statuses
 - **Pending**: Created, awaiting assignment
@@ -62,37 +79,124 @@ A Load (LD-XXXXXX) represents a delivery assignment with:
 - **Delivered**: Successfully completed
 - **Cancelled**: Load was cancelled
 
+### Load Features
+- Create loads with multiple stops and items
+- Assign and reassign drivers/vehicles
+- Upload proof of delivery (photo/document)
+- Download POD files
+- Sync invoice statuses with load statuses
+- Address issue detection for load stops
+- AI address suggestions for incomplete addresses
+- Bulk fix stop addresses from customer data
+- Bulk fix stop provinces
+
 ## Invoices
 
 ### Invoice Import Process
-1. Export invoices from SYSPRO ERP as JSON
-2. Import via the "Import Invoices" button
-3. Review imported invoices
-4. Create tripsheets from pending invoices
+1. Export invoices from SYSPRO ERP as JSON or Excel
+2. Go to Invoices tab in Logistics
+3. Click "Import" and select your file
+4. For bulk import, use "Bulk Import" for Excel files
+5. Review imported invoices
+6. Create tripsheets from pending invoices
 
 ### Invoice Fields
 - Transaction Number (unique identifier from ERP)
-- Customer Name and Code
+- Customer Name and Customer Code
 - Product Code and Description
 - Quantity and Sales Amount
 - Delivery Address (Province, City, Street)
 - Delivery Status
+- Company Code (for multi-company operations)
+- Import Batch tracking
+
+### Invoice Features
+- Filter by status, customer, date range, company
+- Paginated list with search
+- View import batches
+- Unassign invoices from loads
+- Delete invoices
+- AI-suggested load groupings
+- Summary statistics
+- Delivery priority dashboard with automatic priority scoring
+- Recalculate delivery priorities
+
+## Customers
+
+### Customer Management
+The Customers tab manages delivery customers:
+- Add, edit, and delete customers
+- Import single or bulk customers (JSON or Excel)
+- Track customer contracts
+- Manage multiple delivery addresses per customer
+- Address issue detection and resolution
+- AI-powered address cleanup and suggestions
+
+### Customer Fields
+- Customer Code (from ERP)
+- Customer Name
+- Delivery Address (street, city, province)
+- GPS Coordinates (latitude/longitude)
+- Status (active/inactive)
+- Contact information
+
+### Customer Delivery Addresses
+Each customer can have multiple delivery addresses:
+- Default address for primary deliveries
+- Additional addresses for different sites
+- GPS coordinates for route planning
+- Address usage tracking (frequency of use)
+- Batch save addresses
+
+### Address Issues
+Customers imported from ERP may have incomplete address information:
+
+#### Types of Address Issues
+1. **No Address**: Missing street address
+2. **No City**: Missing city name
+3. **No Province**: Missing province
+4. **No GPS**: Missing latitude/longitude coordinates
+
+#### Fixing Address Issues
+1. Click "Address Issues" card on dashboard (shows count)
+2. Select issue type tab
+3. Click edit button on customer
+4. Fill in missing information (use AI suggestions if available)
+5. Save changes
+
+#### AI Address Tools
+- **Address Suggestions**: AI generates address corrections
+- **Apply Suggestion**: One-click apply AI suggestions
+- **Cleanup Addresses**: Batch AI address standardization
+- **Map Provinces**: Auto-map provinces from address text
+- **Map Provinces (Gemini)**: Use Google Gemini AI for province mapping
+- **Match by Names**: Match customers by similar names
+- **Match Addresses AI**: AI-powered address matching across records
+- **Sync from Tripsheets**: Sync addresses from existing tripsheet data
+- **Address Quality Stats**: View data quality metrics
+
+### Customer Contracts
+Track contracts per customer:
+- Contract terms and conditions
+- Contract period
+- Create and view contracts
 
 ## Drivers
 
 ### Driver Management
-- Add/edit driver information
-- Track driver availability
-- View assigned trips
-- Monitor performance
+- Add, edit, and delete drivers
+- Track driver availability and active status
+- View assigned trips and loads
+- Monitor performance statistics
 
-### Driver Information Stored
+### Driver Information
 - Employee Number
 - Full Name
 - License Number
-- Contact Details
+- Contact Details (phone)
 - Assigned Vehicle
 - Active Status
+- Delivery statistics (completed deliveries, on-time rate)
 
 ## Vehicles
 
@@ -105,45 +209,84 @@ A Load (LD-XXXXXX) represents a delivery assignment with:
 
 ### Vehicle Information
 - Registration Number
-- Make/Model/Year
+- Make, Model, Year
 - Vehicle Type
-- Current Driver
-- CarTrack ID (for live tracking)
+- Current Driver assignment
+- CarTrack ID (for GPS tracking)
 - TFN Card Number (for fuel)
-- Maintenance Schedule
+- Province assignment
+- Status (available, in use, maintenance)
+- Maintenance schedule
 
-### Vehicle Tracking (CarTrack Integration)
-- Real-time GPS location
+### Vehicle Management
+- Add, edit, delete vehicles
+- Update vehicle province assignment
+- Sync from CarTrack (import vehicles)
+- Preview CarTrack sync data before committing
+- Create and manage vehicle types
+
+## Fleet Tracking (CarTrack Integration)
+
+### Real-Time GPS Tracking
+The fleet tracking tab shows live vehicle positions on a map:
+- Real-time GPS location via CarTrack integration
 - Speed monitoring
-- Fuel level
-- Ignition status
+- Ignition status (on/off)
 - Movement history
+- Active load tracking
+
+### Fleet Features
+- View all vehicle positions on a map
+- Track specific vehicles
+- Track specific loads in transit
+- View active loads for tracking
+- Test CarTrack API connection
+- Camera livestream for equipped vehicles (CarTrack Vision)
+- List camera-equipped vehicles
+
+### How to Track a Vehicle
+1. Go to Fleet Tracking tab
+2. Select vehicle from list or map
+3. View real-time position, speed, and status
+4. Click on a vehicle for detailed information
 
 ## TFN (TransFleet Network) - Fuel Management
 
 ### What is TFN?
-TFN is the fuel card system used for vehicle refueling. Integration allows:
-- View fuel transactions
-- Monitor fuel balances
-- Track fuel consumption
+TFN is the fuel card system used for vehicle refueling. The integration allows:
+- View and sync fuel transactions
+- Monitor fuel card balances
+- Track fuel consumption per vehicle
 - Find nearest fuel depots
+- Manage fuel orders
 
 ### TFN Features
+- **Fuel Transactions**: All fuel purchases by vehicle (filterable by vehicle, date, type)
+- **Fuel Efficiency**: Fuel efficiency data analysis per vehicle
+- **TFN Vehicles**: View vehicles registered with TFN
+- **Account Balances**: Current fuel card account balances
 - **Fuel Orders**: Pending fuel authorization requests
 - **Fuel Depots**: Map of TFN depot locations nationwide
-- **Transaction History**: All fuel purchases by vehicle
-- **Balance Monitoring**: Current fuel card balances
+- **Nearest Depot**: Find closest fuel depot to any location
+- **Dashboard Summary**: TFN overview metrics
+
+### TFN Sync
+- Sync vehicles from TFN
+- Sync fuel transactions from TFN
+- Full sync (both vehicles and transactions)
 
 ## Sleep Outs (Driver Overnight Allowance)
 
 ### What is a Sleep Out?
-When drivers must stay overnight away from home, they receive a R250 food allowance.
+When drivers must stay overnight away from home, they receive a food allowance (typically R250).
 
 ### Sleep Out Process
-1. Request submitted (usually by dispatcher)
-2. Manager reviews and approves/rejects
-3. Once approved, marked for payment
-4. Finance processes payment
+1. Request submitted (usually by dispatcher or logistics coordinator)
+2. Manager reviews the request
+3. Approve or reject the sleep out
+4. Once approved, marked for payment processing
+5. Finance processes payment
+6. Marked as paid
 
 ### Sleep Out Statuses
 - **Requested**: Pending approval
@@ -151,45 +294,11 @@ When drivers must stay overnight away from home, they receive a R250 food allowa
 - **Rejected**: Request denied
 - **Paid**: Payment processed
 
-## Address Issues
-
-### What are Address Issues?
-Customers imported from ERP may have incomplete address information. This affects:
-- Route optimization
-- Delivery accuracy
-- GPS navigation
-
-### Types of Address Issues
-1. **No Address**: Missing street address
-2. **No City**: Missing city name
-3. **No Province**: Missing province
-4. **No GPS**: Missing latitude/longitude coordinates
-
-### Fixing Address Issues
-1. Click "Address Issues" card on dashboard
-2. Select issue type tab
-3. Click edit button on customer
-4. Fill in missing information
-5. Save changes
-
-## Warehouses
-
-ProMed operates from 4 warehouse locations:
-
-| Code | Location | Province | Manager |
-|------|----------|----------|---------|
-| GP | Johannesburg | Gauteng | Charles |
-| KZN | Durban | KwaZulu-Natal | Devan |
-| CPT | Cape Town | Western Cape | Tsepho |
-| PE | Gqeberha | Eastern Cape | Cheese |
-
-## Reports Available
-
-1. **Delivery Performance**: On-time delivery metrics
-2. **POD Report**: Proof of delivery status by tripsheet
-3. **Fuel Consumption**: Vehicle fuel usage analysis
-4. **Driver Performance**: Driver efficiency metrics
-5. **Route Efficiency**: Route optimization data
+### Sleep Out Features
+- Filter by driver, status, date range, company
+- View summary statistics
+- Create, edit, delete sleep out records
+- Approve and mark as paid workflows
 
 ## Vehicle Maintenance
 
@@ -206,28 +315,150 @@ ProMed operates from 4 warehouse locations:
 - Completed
 - Overdue
 
+### Maintenance Features
+- Create maintenance records for any vehicle
+- Track upcoming scheduled maintenance
+- Complete maintenance records
+- Upload maintenance documents
+- Filter by vehicle, type, status
+- View overdue maintenance alerts
+
+## Scrap Records
+
+### What are Scrap Records?
+Track damaged, expired, or waste products in logistics:
+- Record scrap events with details
+- Link to specific products/commodities
+- Track scrap quantities
+
+### Scrap Management
+- Create scrap records
+- View list of all scrap records
+- Delete scrap records
+
+## Partial Deliveries
+
+### What is a Partial Delivery?
+When only some items in an order are delivered (not the full quantity):
+- Record partial delivery against an invoice
+- Track delivery history per invoice
+- View partial delivery statistics
+
+### Partial Delivery Features
+- Record partial delivery with quantity delivered
+- View delivery history for any invoice
+- Partial delivery statistics and reporting
+
+## Order Cancellations
+
+### Order Cancellation Workflow
+1. Create cancellation request with reason
+2. Cancellation is reviewed
+3. Approve or reject the cancellation
+4. Process refund if applicable
+
+### Cancellation Statuses
+- Pending
+- Approved
+- Rejected
+- Refunded
+
+### Cancellation Features
+- Filter by status, company, date range
+- View cancellation statistics
+- Get cancellations by customer
+- Process refunds
+- Delete pending cancellations
+
+## Route Optimization (Google Maps Integration)
+
+### Features
+- **Geocoding**: Convert addresses to GPS coordinates
+- **Reverse Geocoding**: Convert coordinates to addresses
+- **Address Validation**: Validate delivery addresses
+- **Deliverability Check**: Check if an address is deliverable
+- **Route Calculation**: Calculate optimal delivery routes
+- **Distance Matrix**: Get distances between multiple points
+- **Load Optimization**: Optimize delivery route for a specific load
+- **Invoice Optimization**: Group invoices for optimal load creation
+- **AI-Suggested Optimized Loads**: Get suggestions for optimal load groupings
+
+## Warehouses
+
+ProMed operates from 4 warehouse locations:
+
+| Code | Location | Province | Manager |
+|------|----------|----------|---------|
+| GP | Johannesburg | Gauteng | Charles |
+| KZN | Durban | KwaZulu-Natal | Devan |
+| CPT | Cape Town | Western Cape | Tsepho |
+| PE | Gqeberha | Eastern Cape | Cheese |
+
+### Warehouse Features
+- View warehouse details and summary
+- Manage warehouse inventory (commodities, quantities)
+- Building-level inventory management
+- Stock transfers between warehouses
+- Backorder tracking
+- Commodity management
+- 3D warehouse visualization
+
+## Logistics Reports
+
+1. **Delivery Performance**: On-time delivery metrics
+2. **POD Report**: Proof of delivery status by tripsheet
+3. **Fuel Consumption**: Vehicle fuel usage analysis
+4. **Driver Performance**: Driver efficiency metrics
+5. **Route Efficiency**: Route optimization data
+6. **Daily Dispatch**: Daily dispatch summary (exportable)
+
+## Printing
+
+The logistics module supports printing:
+- View available printers
+- Check printer status
+- Send print jobs (tripsheet PDFs, reports)
+
 ## Common Questions
 
 Q: How do I create a tripsheet?
-A: Go to Tripsheets tab > Click "Create Tripsheet" > Select pending invoices > Assign driver/vehicle > Save
+A: Go to TripSheets tab > Click "Create TripSheet" > Select pending invoices > Assign driver/vehicle > Save
 
 Q: How do I track a vehicle?
-A: Go to Fleet Tracking tab > Select vehicle from list > View on map
+A: Go to Fleet Tracking tab > Select vehicle from list > View on map in real-time
 
 Q: How do I approve a sleep out?
-A: Click Sleep Outs card > Find pending request > Click approve/reject
+A: Click Sleep Outs tab > Find pending request > Click Approve or Reject
 
 Q: How do I fix a customer's address?
-A: Click Address Issues card > Find customer > Edit > Fill in details > Save
+A: Click Address Issues on dashboard > Find customer > Edit > Fill in details (or use AI suggestions) > Save
 
 Q: How do I see fuel consumption?
-A: Go to Reports > Fuel Consumption Report > Select date range
+A: Go to TFN tab > View transactions and fuel efficiency data
 
 Q: How do I import invoices?
-A: Go to Invoices tab > Click Import > Select JSON file > Review > Confirm
+A: Go to Invoices tab > Click Import > Select JSON or Excel file > Review > Confirm
 
-## Keyboard Shortcuts
-- Ctrl+N: New Tripsheet
-- Ctrl+P: Print current view
-- Ctrl+F: Search/Filter
-- Escape: Close dialog
+Q: How do I record a partial delivery?
+A: Go to Part Delivered tab > Select invoice > Record delivered quantity
+
+Q: How do I cancel an order?
+A: Go to Cancellations tab > Create cancellation > Enter reason > Submit for approval
+
+Q: How do I schedule vehicle maintenance?
+A: Go to Maintenance tab > Click create > Select vehicle and type > Set schedule
+
+Q: How do I optimize delivery routes?
+A: The system uses Google Maps to optimize routes. Use "Optimize Load" on any load for suggested route order.
+
+Q: Who manages the GP warehouse?
+A: Charles manages the Gauteng (Johannesburg) warehouse.
+
+Q: Who manages the KZN warehouse?
+A: Devan manages the KZN (Durban) warehouse.
+
+Q: Who manages the CPT warehouse?
+A: Tsepho manages the Cape Town warehouse.
+
+Q: Who manages the PE warehouse?
+A: Cheese manages the PE (Gqeberha/Port Elizabeth) warehouse.

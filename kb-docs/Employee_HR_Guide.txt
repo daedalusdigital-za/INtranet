@@ -3,19 +3,35 @@
 ## Employee Directory
 
 ### Finding Employees
-- Search by name
-- Search by department
-- Search by extension number
-- Browse by team
+The People module provides a full employee directory. Access it from the main navigation.
+- Search by name, department, or extension number
+- Browse employees by team or department
+- View employee profiles with contact details
+- See who is currently online, present, absent, or on leave
 
 ### Employee Information Available
-- Full name
-- Job title
+Each employee profile includes:
+- Full name (Name and Surname)
+- Employee code
+- Job title and position
 - Department
 - Email address
-- Phone extension
+- Phone extension (linked to 3CX PBX system)
 - Office location
 - Manager
+- Shift details (start time, end time)
+- Profile photo
+- Active/inactive status
+- Module permissions (which intranet modules they can access)
+- Operating company assignment (ProMed Medical, ProMed Logistics, etc.)
+
+### Profile Management
+Employees can manage their own profile:
+- Update personal information
+- Change password (old password required)
+- Upload profile photo
+- View assigned extensions
+- Check module access permissions
 
 ## Departments
 
@@ -30,122 +46,227 @@
 - Customer Service
 - Warehouse (GP, KZN, CPT, PE)
 
-## Phone Extensions
+### Department Management (Admin)
+Administrators can:
+- Create new departments
+- Edit department names and managers
+- Delete departments
+- View user counts per department
+
+## Operating Companies
+
+ProMed operates multiple companies. Each employee and transaction can be linked to a specific operating company:
+- ProMed Medical
+- ProMed Logistics
+- Other operating entities as configured
+
+## Phone Extensions (3CX PBX)
 
 ### How to Find Extensions
-- Search employee directory
+- Search employee directory for any person's extension
 - Ask Welly: "What's the extension for [name]?"
-- Check department contact list
+- Go to Call History page to see all extensions
+- Filter by department or search by name
 
-### Extension Format
-- Internal: 4-digit extension (e.g., 1234)
-- External: Full number + extension
+### Extension Details
+- Extension number (e.g., 1001, 2034)
+- Assigned user
+- Department
+- Phone model
+- Location
+- PBX device ID
+- Status (active/inactive)
+
+### Call History (CDR)
+The PBX system tracks all calls:
+- Active calls in real-time
+- Call detail records (CDR) with date, duration, caller, destination
+- Extension status monitoring
+- CDR reports for analysis
 
 ## Attendance
 
 ### Clock In/Out
-- Employees clock in at start of day
+- Employees clock in at the start of their shift
 - Clock out at end of day
-- System tracks presence automatically
+- System automatically calculates if employee is late based on shift start time
+- Real-time attendance updates via SignalR (live dashboard)
+- Azure sync integration for external attendance data
+
+### Attendance Dashboard
+The attendance dashboard shows:
+- Total present, absent, and late counts
+- Attendance rate percentage
+- Department breakdown
+- Early birds (first to clock in) and late birds (last to clock in)
+- Weekly attendance grid (Monday to Friday per employee)
 
 ### Attendance Statuses
 - **Present**: Clocked in and working
-- **Absent**: Not clocked in
-- **Late**: Clocked in after start time
-- **On Leave**: Approved leave day
+- **Absent**: Not clocked in for the day
+- **Late**: Clocked in after scheduled shift start time
+- **On Leave**: Approved leave for the day
 - **Half Day**: Working partial day
 
 ### Viewing Attendance
-- Managers can view team attendance
-- HR can view all attendance
-- Reports available for date ranges
+- The People page shows today's attendance for all employees
+- Managers can view their team's attendance
+- HR and admins can view all employee attendance
+- View attendance by specific date
+- Weekly grid view shows patterns across the work week
 
 ## Leave Management
 
 ### Leave Types
-- Annual Leave (21 days per year)
-- Sick Leave (with medical certificate for 2+ days)
+- Annual Leave
+- Sick Leave (medical certificate required for extended absence)
 - Family Responsibility Leave
 - Study Leave
-- Maternity/Paternity Leave
+- Maternity Leave
+- Paternity Leave
 - Unpaid Leave
 
 ### Leave Request Process
-1. Employee submits leave request
-2. Manager reviews and approves/rejects
-3. HR processes approved leave
-4. Leave balance updated
+1. Go to the Attendance section on the People page
+2. Click "Request Leave"
+3. Select leave type
+4. Choose start and end dates
+5. Add notes if needed
+6. Submit for manager approval
 
-### Leave Balances
-- Check remaining leave days
-- View leave history
-- Plan leave in advance
+### Leave Approvals
+- Managers receive leave request notifications
+- Manager can approve or reject with comments
+- HR can view and process all leave requests
+- Leave balance is automatically updated on approval
+
+## Todo / Task Management
+
+### Assigning Tasks
+Tasks can be assigned between employees:
+1. Open the Todo module or ask Welly to create a task
+2. Enter task title and description
+3. Select assignee (any employee)
+4. Set due date and priority (Low, Medium, High, Critical)
+5. Submit task
+
+### Task Workflow
+- **Assigned**: Task has been assigned to someone
+- **Accepted**: Assignee accepted the task
+- **Declined**: Assignee declined the task
+- **In Progress**: Work has started
+- **Completed**: Task is finished
+
+### Task Notifications
+- Assignees receive notifications for new tasks
+- Assigners are notified when tasks are accepted, declined, or completed
+- Calendar view shows tasks with due dates
+
+### Welly Task Creation
+Ask Welly: "Assign a task to [name] to [description] by [date]"
+Welly will create the task automatically.
 
 ## Support Tickets
 
 ### Submitting Tickets
-1. Go to Support > New Ticket
-2. Select category (IT, HR, Facilities, etc.)
-3. Describe the issue
-4. Set priority
-5. Submit
+1. Go to Support Tickets from the navigation
+2. Click "New Ticket"
+3. Enter title and description
+4. Select category (IT, HR, Facilities, General)
+5. Set priority
+6. Submit
 
 ### Ticket Priorities
 - **Low**: Non-urgent, general requests
 - **Medium**: Important but not critical
 - **High**: Affects work, needs quick response
-- **Critical**: System down, immediate attention
+- **Critical**: System down, immediate attention needed
 
 ### Ticket Statuses
-- Open: New ticket
-- In Progress: Being worked on
-- Pending: Waiting for information
-- Resolved: Fix implemented
-- Closed: Confirmed resolved
+- **Open**: Newly submitted ticket
+- **In Progress**: Being worked on by assigned staff
+- **Pending**: Waiting for information from requester
+- **Resolved**: Fix has been implemented
+- **Closed**: Confirmed resolved and closed
 
-## Meetings
+### Ticket Features
+- Assign tickets to specific users
+- Add comments for discussion
+- Track ticket statistics (open count, resolution time)
+- View open tickets and closed tickets separately
+- Welly can create tickets: "Create a support ticket for [issue]"
+
+## Meetings & Calendar
 
 ### Scheduling Meetings
-- Use calendar to check availability
-- Book meeting rooms
-- Send invitations
-- Set agenda
+1. Go to the Calendar page
+2. Click on a date/time to create a meeting
+3. Enter title, description, date, start time, end time
+4. Select location or add a meeting link
+5. Add attendees (search by name)
+6. Save to send invitations
 
-### Meeting Rooms
-- Board Room (20 capacity)
-- Conference Room A (10 capacity)
-- Conference Room B (8 capacity)
-- Training Room (30 capacity)
+### Meeting Responses
+Attendees can respond:
+- **Accept**: Confirmed attendance
+- **Decline**: Cannot attend
+- Meeting auto-confirms when all attendees respond
+
+### Calendar View
+- Color-coded events based on response status
+- Filter by date range
+- View all your meetings and invitations
+- Meeting notifications for new invitations and updates
+
+### Welly Meeting Creation
+Ask Welly: "Schedule a meeting with [name] on [date] at [time] about [topic]"
 
 ## Announcements
 
 ### Company Announcements
-- Posted by management/HR
-- Important updates
-- Policy changes
-- Events and news
+- Posted by managers and administrators
+- Categories: General, Policy, Event, Urgent
+- Priority levels: Normal, Important, Critical
+- Expiry dates (announcements can auto-expire)
 
 ### Viewing Announcements
-- Dashboard shows recent announcements
-- Click to read full details
-- Archive of past announcements
+- Dashboard shows the latest announcements
+- Unread count badge on navigation
+- Mark announcements as read
+- View announcement history
+- Welly can create announcements for admins
+
+## Employee Birthdays
+The system tracks employee birthdays and shows upcoming birthdays on the dashboard widget.
 
 ## Common Questions
 
-Q: What's John Smith's extension?
-A: Search employee directory or ask "What's the extension for John Smith?"
+Q: How do I find someone's phone extension?
+A: Search the employee directory, check the Call History page, or ask Welly "What is [name]'s extension?"
 
-Q: Who's on leave today?
-A: Check attendance dashboard or ask "Who's on leave today?"
+Q: Who is on leave today?
+A: Check the attendance dashboard on the People page, or ask Welly "Who is on leave today?"
 
 Q: How do I request leave?
-A: HR > Leave Management > New Request > Select dates > Submit
+A: Go to People > Attendance > Request Leave > Select type and dates > Submit for approval
 
 Q: How do I submit a support ticket?
-A: Support > New Ticket > Fill details > Submit
+A: Go to Support Tickets > New Ticket > Fill in details > Submit
 
-Q: Who's my manager?
-A: Check your employee profile or org chart
+Q: How do I assign a task to someone?
+A: Use the Todo module or ask Welly "Assign a task to [name] to [description]"
 
-Q: How many leave days do I have?
-A: HR > My Leave > View balance
+Q: How do I schedule a meeting?
+A: Go to Calendar > Click a date > Fill in meeting details > Add attendees > Save
+
+Q: How do I update my profile?
+A: Go to your Profile page > Edit your information > Upload a photo > Save
+
+Q: Who is my manager?
+A: Check your employee profile or the department listing
+
+Q: How do I check my leave balance?
+A: Go to the Attendance section and view your leave balance
+
+Q: How do I change my password?
+A: Go to Profile > Change Password > Enter old and new password > Save

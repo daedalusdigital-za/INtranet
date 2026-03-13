@@ -1,0 +1,155 @@
+# ProMed Technologies - Welly AI Assistant Knowledge Base
+
+## What is Welly?
+
+Welly is the AI assistant built into the ProMed Technologies Intranet. Welly is available on every page as a floating chat bubble in the bottom corner. Welly is powered by a local AI model (Qwen2.5-14B-Instruct) running directly on the ProMed server — no data leaves the company network.
+
+## How to Use Welly
+
+### Starting a Chat
+1. Click the chat bubble icon in the bottom-right corner of any page
+2. Type your question or request in the text box
+3. Press Enter or click Send
+4. Welly will respond with information or perform actions
+
+### Conversation Sessions
+- Welly remembers context within a conversation session
+- You can ask follow-up questions without repeating context
+- Clear your session to start fresh if needed
+- Each session maintains conversation history
+
+## Welly's Capabilities
+
+### 1. Answering Questions
+Welly can answer questions about:
+- Company data (employees, departments, attendance)
+- Logistics operations (loads, tripsheets, drivers, vehicles)
+- Stock and inventory levels
+- Company policies and procedures (from knowledge base)
+- General information (via web search)
+
+### 2. Employee & HR Actions
+- **Look up employees**: "Who is [name]?", "What department is [name] in?"
+- **Find extensions**: "What is [name]'s extension number?"
+- **Check attendance**: "Who is on leave today?", "Show me today's attendance"
+- **Edit employee info**: "Update [name]'s job title to [title]"
+- **Reset passwords**: "Reset password for [name]" (admin only)
+
+### 3. Create Support Tickets
+Ask Welly: "Create a support ticket for [describe the issue]"
+Welly will create a ticket with appropriate title, description, and priority.
+
+### 4. Schedule Meetings
+Ask Welly: "Schedule a meeting with [name] on [date] at [time] about [topic]"
+Welly will create the meeting and send invitations to attendees.
+
+### 5. Assign Tasks (Todos)
+Ask Welly: "Assign a task to [name] to [description] by [date]"
+Welly will create the task and notify the assignee.
+
+### 6. Send Emails
+Ask Welly: "Send an email to [name/email] about [subject]"
+Welly will compose and send the email via the system.
+
+### 7. Track Vehicles
+Ask Welly: "Track vehicle [registration]" or "Where is [vehicle]?"
+Welly will show the vehicle's current GPS location via CarTrack integration.
+
+### 8. Fleet Status
+Ask Welly: "Get fleet status" or "Show me all vehicle positions"
+Welly will show an overview of the fleet with current locations and statuses.
+
+### 9. Update Customer Information
+Ask Welly: "Update customer [name]'s address to [new address]"
+Welly will update the customer record in the system.
+
+### 10. Lookup Addresses
+Ask Welly: "Look up address for [location]"
+Welly uses Google Maps to geocode and validate addresses.
+
+### 11. System Overview
+Ask Welly: "Give me a system overview" or "Show system statistics"
+Welly provides a snapshot of current system metrics: active users, loads, tickets, etc.
+
+### 12. Create Announcements
+Ask Welly: "Create an announcement about [topic]" (manager/admin only)
+Welly will create a company announcement visible to all employees.
+
+### 13. Search the Web
+Ask Welly: "Search the web for [topic]"
+Welly uses the built-in SearXNG search engine to find current information from the internet and summarize results.
+
+### 14. Backup Database
+Ask Welly: "Backup the database" (admin only)
+Welly will trigger a database backup.
+
+### 15. TripSheet Workflow
+Welly can guide you through the tripsheet creation process:
+1. "Show pending invoices" — Lists invoices ready for tripsheet creation
+2. "Create tripsheet from invoices [list]" — Creates the tripsheet
+3. "Assign driver [name] and vehicle [reg] to tripsheet [number]"
+4. "Activate tripsheet [number]" — Starts the trip
+5. "Complete tripsheet [number]" — Marks as complete
+
+### 16. Document Analysis
+Upload documents for AI analysis:
+- PDF files (contracts, tenders, reports)
+- Excel spreadsheets (financial data, stock reports)
+- CSV files (data imports)
+Welly will read and summarize the document content, answer questions about it.
+
+## Knowledge Base Search
+
+Welly has access to a knowledge base of company documents and guides:
+- Employee & HR procedures
+- Leave policies
+- IT support guides
+- Logistics operations guides
+- Stock management guides
+- Tender and compliance information
+- Sales and CRM guides
+
+When you ask a question, Welly automatically searches the knowledge base for relevant information and includes it in the response.
+
+## Web Search
+
+When Welly doesn't have the answer in local data or the knowledge base, it can search the internet:
+- Uses SearXNG (self-hosted meta-search engine)
+- Aggregates results from Google, Bing, DuckDuckGo, Wikipedia
+- Returns summarized results with source links
+- No data leaves the company network (search runs through company's own SearXNG instance)
+
+## Tips for Best Results
+
+1. **Be specific**: "What is John Smith's extension?" works better than "extension?"
+2. **Use names**: Include employee names, vehicle registrations, or load numbers
+3. **One thing at a time**: Ask one question or request per message for best results
+4. **Follow-up**: You can ask follow-up questions within the same session
+5. **Action words**: Use words like "create", "assign", "schedule", "track" to trigger actions
+6. **Provide context**: "Create a high priority ticket for the printer on floor 2 not working"
+
+## Common Questions About Welly
+
+Q: Where do I find Welly?
+A: Click the chat bubble icon in the bottom-right corner of any page
+
+Q: Can Welly access my data?
+A: Welly accesses company data based on your permissions and can see employees, attendance, logistics, and stock data
+
+Q: Can Welly create things for me?
+A: Yes, Welly can create support tickets, meetings, tasks, announcements, and emails on your behalf
+
+Q: Can Welly search the internet?
+A: Yes, ask "Search the web for [topic]" and Welly will search using the company's own search engine
+
+Q: Can I upload files to Welly?
+A: Yes, you can upload PDF, Excel, and CSV files for Welly to analyze and answer questions about
+
+Q: Is my conversation private?
+A: Welly runs on a local AI model on the company server. No conversation data leaves the company network.
+
+Q: What if Welly gives a wrong answer?
+A: Welly is an AI assistant and may occasionally make mistakes. Always verify critical information. You can rephrase your question for a better answer.
+
+Q: Can Welly help with logistics?
+A: Yes, Welly has full access to logistics data including loads, tripsheets, drivers, vehicles, customers, and can perform logistics actions like creating tripsheets and tracking vehicles.

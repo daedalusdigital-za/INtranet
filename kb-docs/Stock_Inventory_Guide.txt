@@ -3,17 +3,26 @@
 ## Stock on Hand (SOH)
 
 ### Overview
-Stock on Hand tracks inventory levels across all warehouse locations. Data is imported from SYSPRO ERP.
+Stock on Hand tracks inventory levels across all warehouse locations. Data is imported from SYSPRO ERP via Excel files.
 
 ### SOH Import Process
-1. Export SOH report from SYSPRO as CSV
-2. Go to Stock Management > Import SOH
-3. Select warehouse and upload file
-4. Review import preview
-5. Commit to save stock levels
+1. Export SOH report from SYSPRO as Excel (CSV/XLSX)
+2. Go to Stock Management module
+3. Click "Import SOH"
+4. Upload the Excel file
+5. Review import preview (check for issues)
+6. Commit to save stock levels to the system
+7. View import issues and export as CSV if needed
+
+### SOH Import Features
+- Preview before committing (review data before saving)
+- Issue detection (missing fields, invalid data)
+- Export issues as CSV for correction
+- Delete incomplete imports
+- View import details and line items
 
 ### SOH Fields
-- **Item Code**: Unique product identifier
+- **Item Code**: Unique product identifier from SYSPRO
 - **Description**: Product name/description
 - **Quantity**: Units in stock
 - **Unit of Measure**: Each, Box, Pallet, etc.
@@ -24,70 +33,183 @@ Stock on Hand tracks inventory levels across all warehouse locations. Data is im
 
 ### Warehouse Locations
 
-| Code | Name | City | Province | Manager | Contact |
-|------|------|------|----------|---------|---------|
-| GP | Gauteng Warehouse | Johannesburg | Gauteng | Charles | - |
-| KZN | KZN Warehouse | Durban | KwaZulu-Natal | Devan | - |
-| CPT | Cape Town Warehouse | Cape Town | Western Cape | Tsepho | - |
-| PE | PE Warehouse | Gqeberha | Eastern Cape | Cheese | - |
+| Code | Name | City | Province | Manager |
+|------|------|------|----------|---------|
+| GP | Gauteng Warehouse | Johannesburg | Gauteng | Charles |
+| KZN | KZN Warehouse | Durban | KwaZulu-Natal | Devan |
+| CPT | Cape Town Warehouse | Cape Town | Western Cape | Tsepho |
+| PE | PE Warehouse | Gqeberha | Eastern Cape | Cheese |
 
 ### Warehouse Functions
 - Receive deliveries from suppliers
 - Pick and pack customer orders
 - Load vehicles for delivery
 - Stock counting and adjustments
+- Building-level inventory tracking
+- 3D warehouse visualization
 
-## Stock Queries
+### Warehouse Summary
+View warehouse summary with:
+- Building counts per warehouse
+- Total inventory value
+- Commodity breakdown
+- Inventory levels
 
-### Checking Stock Levels
-- View stock by warehouse
-- Search by item code or description
-- Filter by category
-- Export stock reports
+### Warehouse Buildings
+Each warehouse contains multiple buildings/sections:
+- View buildings within each warehouse
+- Building-level inventory tracking
+- Transfer stock between buildings
+- 3D visualization of building layout
 
-### Stock Reports
-- Stock Valuation Report
-- Stock Movement Report
-- Low Stock Alert
-- Expiry Date Report
+## 3D Warehouse Visualization
 
-## Stock Transfer
+### What is the 3D View?
+The Warehouse 3D page provides a visual representation of warehouse layout:
+- See inventory positioned in 3D space
+- View commodity locations within buildings
+- Drag items to update positions
+- Visualize stock distribution
+
+### Accessing 3D View
+- Go to Stock Management or Logistics > Warehouses
+- Select a warehouse
+- Click "3D View" to open the visualization
+- Items can be positioned in 3D space with X, Y, Z coordinates
+
+## Inventory Management
+
+### Warehouse-Level Inventory
+- View all inventory across warehouses
+- Create new inventory items
+- Update quantities and details
+- Filter by warehouse
+
+### Building-Level Inventory
+- Drill down to specific buildings within warehouses
+- Track commodities per building
+- Position items with 3D coordinates
+- Transfer between buildings
+
+### Commodities
+Manage product/commodity types:
+- Create new commodities
+- Track commodity names and units of measure
+- Link commodities to inventory items
+
+## Stock Transfers
 
 ### Transfer Process
-1. Create transfer request
-2. Select source warehouse
-3. Select destination warehouse
-4. Add items and quantities
-5. Dispatch from source
-6. Receive at destination
+1. Go to Stock Management or Logistics > Warehouses
+2. Click "Stock Transfers"
+3. Create new transfer
+4. Select source warehouse/building
+5. Select destination warehouse/building
+6. Add items and quantities
+7. Submit transfer
+8. Update transfer status (dispatched, received)
+
+### Transfer Types
+- **Warehouse to Warehouse**: Transfer between GP, KZN, CPT, PE
+- **Building to Building**: Transfer within the same warehouse
+
+### Transfer Statuses
+- Pending
+- In Transit / Dispatched
+- Received / Completed
+
+## Stock Movements
+
+### Movement Tracking
+All stock changes are recorded as movements:
+- Transfers in and out
+- Adjustments (increase/decrease)
+- View movement history with dates, quantities, and types
+
+### Movement Types
+- **Transfer**: Stock moved between locations
+- **Adjustment**: Manual quantity correction
+- **In**: Stock received
+- **Out**: Stock dispatched
 
 ## Stock Adjustments
 
 ### When to Adjust
-- Physical count discrepancies
-- Damaged goods
-- Expired products
-- Write-offs
+- Physical stock count reveals discrepancies
+- Damaged goods need to be written off
+- Expired products removed from inventory
+- System corrections after audits
 
-### Adjustment Types
-- Count Adjustment
-- Damage
-- Expiry
-- Write-off
+### Adjustment Process
+1. Go to Inventory section
+2. Select item to adjust
+3. Create stock adjustment
+4. Enter reason and new quantity
+5. Submit adjustment (recorded in movements)
+
+## Backorders
+
+### What are Backorders?
+Items that are out of stock but needed for delivery:
+- Track backorder quantities
+- Monitor which commodities are short
+- Create backorder records
+- Link to pending orders
+
+## Low Stock Alerts
+The system monitors inventory levels:
+- Low stock alerts when quantities fall below threshold
+- View all items with low stock
+- Summary dashboard showing stock health
+
+## Stock Reports & Queries
+
+### Checking Stock Levels
+- View stock by warehouse (select from dropdown)
+- Filter by building within a warehouse
+- Search by item code or description
+- View inventory summary across all locations
+
+### Available Reports
+- Inventory summary by warehouse
+- Low stock alert report
+- Stock movement history
+- Stock transfer records
 
 ## Common Questions
 
 Q: How do I check stock at a specific warehouse?
 A: Go to Stock Management > Select warehouse from dropdown > View stock list
 
+Q: Who manages the GP warehouse?
+A: Charles manages the Gauteng (Johannesburg) warehouse
+
 Q: Who manages the KZN warehouse?
 A: Devan manages the KZN (Durban) warehouse
 
+Q: Who manages the CPT warehouse?
+A: Tsepho manages the Cape Town warehouse
+
+Q: Who manages the PE warehouse?
+A: Cheese manages the PE (Gqeberha) warehouse
+
 Q: How do I import new stock levels?
-A: Stock Management > Import SOH > Upload CSV > Review > Commit
+A: Stock Management > Import SOH > Upload Excel > Review preview > Commit
 
 Q: How do I find a specific item?
 A: Use the search box to search by item code or description
 
 Q: How often should SOH be updated?
-A: Daily or after each major stock movement
+A: Daily or after each major stock movement for accuracy
+
+Q: How do I transfer stock between warehouses?
+A: Go to Stock Transfers > Create Transfer > Select source and destination > Add items > Submit
+
+Q: How do I see the 3D warehouse view?
+A: Go to Warehouses > Select a warehouse > Click 3D View
+
+Q: How do I record damaged stock?
+A: Create a stock adjustment with reason "Damage" for the affected items
+
+Q: How do I check for low stock?
+A: Go to Inventory > Low Stock section to see all items below threshold

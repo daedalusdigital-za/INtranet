@@ -1,0 +1,144 @@
+# ProMed Technologies - Sales & CRM Knowledge Base
+
+## Overview
+The Sales module handles sales data imports, transaction tracking, order cancellations, and customer relationship management for ProMed Technologies' operating companies.
+
+## Sales Dashboard
+
+### Accessing Sales
+Go to Sales from the main navigation. The Sales Dashboard provides:
+- Sales analytics and visualizations
+- Import management
+- Transaction tracking
+- Sales performance metrics
+
+## Sales Report Import
+
+### Importing Sales Data
+Sales data is imported from SYSPRO ERP via Excel reports:
+
+1. Go to Sales Dashboard
+2. Click "Import Sales Report"
+3. Upload the Excel file containing sales transactions
+4. Review the imported data (preview)
+5. Check for any issues or discrepancies
+6. Click "Commit" to save the data permanently
+7. Or delete the import if there are problems
+
+### Import Features
+- Preview imported data before committing
+- View transactions within each import
+- Track import batches with timestamps
+- Delete incomplete or incorrect imports
+- View all historical imports
+
+### Sales Transaction Fields
+- Transaction date
+- Customer information
+- Product/commodity details
+- Quantity sold
+- Sales amount
+- Operating company
+
+## Order Cancellations
+
+### Overview
+Track and manage order cancellations through a structured workflow.
+
+### Creating a Cancellation
+1. Go to Sales or Logistics > Cancellations tab
+2. Click "New Cancellation"
+3. Enter the order number
+4. Select customer name
+5. Enter reason for cancellation
+6. Specify refund amount if applicable
+7. Submit for review
+
+### Cancellation Workflow
+1. **Pending**: Cancellation request created
+2. **Approved**: Manager approved the cancellation
+3. **Rejected**: Cancellation request denied
+4. **Refunded**: Refund has been processed
+
+### Cancellation Features
+- Filter by status, company, date range
+- View cancellation statistics
+- View cancellations by customer
+- Process refunds for approved cancellations
+- Delete pending cancellations
+- Approve or reject requests
+
+### Cancellation Statistics
+Dashboard showing:
+- Total cancellations by status
+- Cancellation value
+- Trends over time
+
+## Customer Management (CRM)
+
+### Overview
+Customer management is primarily handled through the Logistics > Customers section, but CRM data flows through the sales module as well.
+
+### Customer Data Sources
+- SYSPRO ERP imports (bulk and individual)
+- Excel imports
+- Manual creation
+- Synced from invoice data
+
+### Customer Information
+- Customer code (from ERP)
+- Customer name
+- Delivery addresses (multiple per customer)
+- GPS coordinates
+- Province and city
+- Contact details
+- Active/inactive status
+- Contracts
+
+### Customer Features
+- Search and filter customers
+- Bulk import from Excel or JSON
+- AI-powered address cleanup
+- Address quality statistics
+- Customer contracts management
+- Multiple delivery address support
+- Match customers by name across systems
+
+## Invoices and Sales Tracking
+
+### Invoice Management
+Invoices track individual sales transactions:
+- Invoice number
+- Customer details
+- Line items (products, quantities, amounts)
+- Payment recording
+- Link to delivery loads
+
+### Invoice Features
+- Create invoices
+- View invoice with line items
+- Record payments against invoices
+- Filter and search invoices
+
+## Common Questions
+
+Q: How do I import a sales report?
+A: Go to Sales > Import Sales Report > Upload Excel file > Review > Commit
+
+Q: How do I cancel an order?
+A: Go to Cancellations > New Cancellation > Enter order number and reason > Submit
+
+Q: How do I approve a cancellation?
+A: Go to Cancellations > Find the pending request > Click Approve
+
+Q: How do I process a refund?
+A: Go to Cancellations > Find the approved cancellation > Click Process Refund
+
+Q: How do I import customers?
+A: Go to Logistics > Customers > Import > Upload Excel or JSON file > Review > Save
+
+Q: How do I view sales statistics?
+A: Go to Sales Dashboard to see sales analytics and performance metrics
+
+Q: How do I track customer orders?
+A: Search for the customer in Logistics > Customers, or view invoices linked to loads

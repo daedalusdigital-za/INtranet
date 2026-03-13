@@ -1,0 +1,140 @@
+# ProMed Technologies - Messaging & Collaboration Knowledge Base
+
+## Internal Messaging System
+
+### Overview
+The ProMed Intranet includes a full internal messaging system for communication between employees. Messages are delivered in real-time using SignalR.
+
+### Messaging Features
+- Direct messages (one-to-one conversations)
+- Group conversations (multiple participants)
+- Message attachments (files, images)
+- Read receipts
+- Message search
+- Real-time delivery
+- Typing indicators
+- Unread message count badges
+- Message editing and deletion
+
+### Starting a Conversation
+
+#### Direct Message
+1. Go to Messages from the navigation
+2. Click "New Conversation" or "Send Direct Message"
+3. Search for the person by name
+4. Type your message
+5. Click Send
+
+#### Group Conversation
+1. Go to Messages
+2. Click "New Conversation"
+3. Add multiple participants by searching names
+4. Give the group a name (optional)
+5. Type your message and send
+
+### Sending Messages
+- Type in the message box and press Enter or click Send
+- Attach files by clicking the attachment button
+- Reply to specific messages
+- Edit your sent messages
+- Delete your messages (soft delete)
+
+### Message Search
+Search through messages:
+- Search by text/term
+- Filter by conversation
+- Filter by sender
+- Filter by date range
+- Filter for messages with attachments
+
+### Read Receipts
+- Messages show when they have been read
+- Mark messages as read when viewed
+- Unread count displayed on navigation
+
+### Messaging Statistics
+View your messaging activity:
+- Unread message count
+- Message counts by day
+- Conversation activity
+
+### Real-Time Features
+- Messages appear instantly (no need to refresh)
+- Typing indicators show when someone is typing
+- Join/leave conversation events
+- Delivered via SignalR websocket connection
+
+## Collaborative Documents
+
+### Overview
+The Collaborative Documents feature allows multiple users to edit documents simultaneously in real-time, similar to Google Docs.
+
+### Features
+- Real-time collaborative editing
+- Multiple users can edit at the same time
+- Cursor positions visible for all collaborators
+- Version history with automatic snapshots
+- Share with specific users
+- Public or private document options
+- Rich text editing
+
+### Creating a Collaborative Document
+1. Go to Collaborative Documents from the navigation
+2. Click "New Document"
+3. Enter title and description
+4. Choose visibility (private or public)
+5. Save to create the document
+6. Start editing in the document editor
+
+### Sharing Documents
+- Add collaborators by searching for users
+- Remove collaborators when needed
+- Collaborators can see and edit the document
+- Public documents are visible to all users
+
+### Document Editor
+- Rich text editor powered by Yjs (conflict-free replicated data type)
+- See other users' cursors in real-time
+- Changes sync automatically between all editors
+- No manual saving needed (auto-saves)
+
+### Version History
+- Automatic snapshots are saved periodically
+- Last 10 snapshots are retained
+- View and restore previous versions
+- Each snapshot records when it was saved
+
+### Document Management
+- View all your documents (owned, shared, public)
+- Search for documents
+- Edit document metadata (title, description, visibility)
+- Delete documents (soft delete, can be recovered)
+
+## Common Questions
+
+Q: How do I send a direct message to someone?
+A: Go to Messages > New Conversation > Search for the person > Type message > Send
+
+Q: How do I create a group chat?
+A: Go to Messages > New Conversation > Add multiple people > Name the group > Send first message
+
+Q: Can I search old messages?
+A: Yes, use the search feature in Messages to search by text, sender, date, or conversation
+
+Q: How do I know if someone read my message?
+A: Read receipts show when messages have been seen by the recipient
+
+Q: How do I create a collaborative document?
+A: Go to Collaborative Documents > New Document > Enter title > Start editing
+
+Q: Can multiple people edit a document at the same time?
+A: Yes, collaborative documents support real-time simultaneous editing. You can see other users' cursors.
+
+Q: How do I share a document with someone?
+A: Open the document > Add collaborator > Search for the user > Add them
+
+Q: How do I attach a file to a message?
+A: In a conversation, click the attachment button, select your file, and send
+
+Q: Where can I see my unread messages?
+A: The Messages icon in the navigation shows an unread count badge

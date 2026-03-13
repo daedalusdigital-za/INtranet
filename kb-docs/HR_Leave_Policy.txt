@@ -1,72 +1,128 @@
-# Employee Handbook - Leave Policies
+# ProMed Technologies - Leave Policies & Attendance Guide
 
 ## Annual Leave
 
-All full-time employees are entitled to annual leave based on years of service:
-
-- 0-2 years: 15 days per year
-- 3-5 years: 20 days per year  
-- 6-10 years: 25 days per year
-- 10+ years: 30 days per year
+All full-time employees are entitled to annual leave as per South African labour law:
+- Minimum 15 working days (3 weeks) annual leave per year
+- Additional leave may be granted based on seniority and company policy
+- Leave accrues monthly (1.25 days per month)
 
 ### How to Request Annual Leave
+1. Log into the ProMed Intranet
+2. Navigate to the People page
+3. Go to the Attendance section
+4. Click "Request Leave"
+5. Select "Annual Leave" as the type
+6. Choose your start and end dates
+7. Add any notes if needed
+8. Submit for manager approval
 
-1. Log into the Intranet portal
-2. Navigate to Attendance section
-3. Click "Request Leave"
-4. Select "Annual Leave" as the type
-5. Choose your start and end dates
-6. Add any notes if needed
-7. Submit for manager approval
+Leave requests should be submitted at least 2 weeks in advance for periods of 5 or more days.
 
-Leave requests should be submitted at least 2 weeks in advance for periods of 5+ days.
+### Leave Approval
+- Your direct manager will receive a notification
+- Manager reviews and approves or rejects the request
+- You will be notified of the decision
+- Approved leave is reflected in the attendance system
+- Your leave balance is automatically updated
 
 ## Sick Leave
 
-Employees are entitled to 10 days of paid sick leave per year.
+Employees are entitled to sick leave as per the Basic Conditions of Employment Act:
+- 30 days sick leave per 3-year cycle
+- Approximately 10 days per year
 
 ### Reporting Sick
-
-1. Notify your manager as early as possible
-2. Submit a sick leave request in the Intranet
-3. Provide a medical certificate if absent for 3+ days
-4. HR will update your records
+1. Notify your manager as early as possible (phone or message)
+2. Submit a sick leave request in the Intranet when able
+3. Provide a medical certificate if absent for more than 2 consecutive days
+4. HR will update your attendance records
 
 ## Parental Leave
 
 ### Maternity Leave
-- 16 weeks paid leave
-- Additional 4 weeks unpaid if needed
-- Notify HR at least 8 weeks before due date
+- 4 months (consecutive) maternity leave
+- Notify HR at least 4 weeks before due date
+- UIF claims may apply for salary during leave
 
 ### Paternity Leave
-- 4 weeks paid leave
-- Can be taken within 3 months of birth
+- 10 consecutive days paternity leave
+- Can be taken from date of birth
+- Notify HR in advance
 
-## Public Holidays
+### Adoption Leave
+- 10 consecutive days upon adoption
+- Apply through HR with supporting documentation
 
-The company observes the following public holidays:
-- New Year's Day
-- Good Friday
-- Easter Monday
-- Labor Day
-- Memorial Day
-- Independence Day
-- Labor Day (September)
-- Thanksgiving
-- Christmas Day
-- Boxing Day
+## Family Responsibility Leave
+- 3 days per year for:
+  - Birth of a child
+  - Illness of a child
+  - Death of an immediate family member (spouse, parent, child, sibling, grandparent)
+- Proof may be required
 
-## Requesting Time Off
+## Study Leave
+- As agreed with management
+- Submit study leave request with supporting documentation
+- Typically requires proof of examination
+
+## Public Holidays (South Africa)
+ProMed Technologies observes all South African public holidays:
+- 1 January: New Year's Day
+- 21 March: Human Rights Day
+- Good Friday (varies)
+- Family Day / Easter Monday (varies)
+- 27 April: Freedom Day
+- 1 May: Workers' Day
+- 16 June: Youth Day
+- 9 August: National Women's Day
+- 24 September: Heritage Day
+- 16 December: Day of Reconciliation
+- 25 December: Christmas Day
+- 26 December: Day of Goodwill
+
+When a public holiday falls on a Sunday, the following Monday is observed.
+
+## Requesting Time Off (General Process)
 
 For any type of leave:
-1. Check your remaining balance in the Intranet
-2. Submit request through the Attendance module
-3. Wait for manager approval
-4. Update your calendar and set out-of-office
+1. Check your remaining leave balance in the Attendance section
+2. Submit a leave request through the Intranet
+3. Wait for your manager's approval
+4. Once approved, the system updates your attendance record
+5. Set your out-of-office message if applicable
+
+## Attendance Tracking
+
+### Daily Attendance
+- Clock in at the start of your shift
+- Clock out at the end of your day
+- The system tracks your attendance automatically
+- Late arrivals are flagged based on your assigned shift time
+
+### Attendance Statuses
+- **Present**: Clocked in and at work
+- **Absent**: Did not clock in
+- **Late**: Clocked in after shift start time
+- **On Leave**: On approved leave
+- **Half Day**: Working partial day
+
+### Viewing Your Attendance
+- Go to People page to see today's attendance
+- View attendance by date
+- Weekly attendance grid shows your Mon-Fri pattern
+- Department breakdown shows team attendance rates
+
+## Using Welly for Leave Questions
+
+You can ask Welly the AI assistant:
+- "Who is on leave today?" — shows current leave status
+- "How do I request leave?" — explains the leave process
+- "What is the leave policy?" — explains entitlements
 
 ## Contact
 
 For questions about leave policies, contact:
-- HR Department: hr@company.local
-- Phone: Extension 2345
+- HR Department via the internal messaging system
+- Submit an HR support ticket through the ticketing system
+- Ask Welly for guidance on leave procedures

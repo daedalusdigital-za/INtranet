@@ -1,0 +1,187 @@
+# ProMed Technologies - Tenders & Compliance Knowledge Base
+
+## Overview
+The Tenders module manages government and private tender submissions, government contracts, and compliance documentation for ProMed Technologies' operating companies.
+
+## Tender Management
+
+### What is a Tender?
+A tender is a formal bid submitted in response to a request for quotation (RFQ) or request for proposal (RFP). ProMed tracks all tenders through their lifecycle.
+
+### Tender Fields
+- Tender Number (unique identifier)
+- Title and description
+- Operating Company (ProMed Medical, ProMed Logistics, etc.)
+- Status (Draft, Submitted, Under Review, Awarded, Lost, Cancelled)
+- Closing Date (deadline for submission)
+- Estimated Value
+- Priority (Low, Medium, High, Critical)
+- Workflow State
+- Team Members
+- Documents
+- Bill of Quantities (BOQ)
+
+### Tender Lifecycle
+1. **Draft**: Initial tender creation, gather information
+2. **In Progress**: Working on the tender submission
+3. **Submitted**: Tender submitted before closing date
+4. **Under Review**: Awaiting evaluation outcome
+5. **Awarded**: ProMed won the tender
+6. **Lost**: Tender was not awarded to ProMed
+7. **Cancelled**: Tender was withdrawn
+
+### Creating a Tender
+1. Go to Tenders from the main navigation
+2. Click "New Tender"
+3. Fill in tender number, title, company
+4. Set closing date and estimated value
+5. Assign priority
+6. Add team members
+7. Upload required documents
+8. Add BOQ (Bill of Quantities) line items
+9. Save
+
+### Tender Team Members
+Assign team members to work on tenders:
+- Add employees by name
+- Set their role on the tender (e.g., Lead, Pricing, Technical)
+- Track who is responsible for which sections
+- Update team member roles as needed
+
+### Tender Documents
+Upload documents required for tender submission:
+- Company profiles
+- BEE certificates
+- Financial statements
+- Tax clearance
+- Technical proposals
+- Pricing schedules
+- Download documents when needed
+- Delete outdated documents
+
+### Bill of Quantities (BOQ)
+Manage pricing for tender items:
+- Add BOQ line items with description, quantity, unit price
+- Update pricing as needed
+- Delete line items
+- Total value calculated automatically
+
+### Tender Calendar
+View all tender closing dates in calendar format:
+- Color-coded by priority
+- Plan ahead for upcoming deadlines
+- Filter by company
+
+### Tender Statistics
+Dashboard showing:
+- Total tenders by status
+- Win rate
+- Value of awarded tenders
+- Upcoming closing dates
+
+### Filtering and Search
+- Filter tenders by status, company, priority
+- Search by tender number or title
+- Sort by closing date, value, status
+
+## Government Contracts
+
+### What is a Government Contract?
+Contracts awarded through government tender processes:
+- Track active government contracts
+- Monitor contract expiry dates
+- Link contracts to original tenders
+
+### Contract Fields
+- Contract number
+- Operating Company
+- Tender number (if applicable)
+- Commodity/service type
+- Start date and expiry date
+- Estimated annual value
+- Status (Active, Expiring, Expired)
+
+### Contract Management
+- Create and edit contracts
+- Track by operating company
+- View expiring contracts (alerts)
+- Auto-refresh contract statuses (expire old contracts)
+- Filter by company and status
+- View contract categories
+
+## Compliance Vault
+
+### What is the Compliance Vault?
+The Compliance Vault stores and tracks all regulatory and compliance documents required for tenders and government contracts.
+
+### Document Types
+Common compliance documents tracked:
+- BEE Certificate
+- Tax Clearance Certificate
+- Company Registration (CIPC)
+- VAT Registration
+- COIDA (Workmen's Compensation)
+- Professional Indemnity Insurance
+- Public Liability Insurance
+- Health & Safety Certificate
+- ISO Certifications
+- SABS Certificates
+
+### Compliance Document Fields
+- Document Type
+- Operating Company
+- Upload Date
+- Expiry Date
+- File attachment
+- Status (Valid, Expiring Soon, Expired)
+
+### Compliance Alerts
+The system monitors document expiry dates:
+- Alerts generated for documents expiring soon
+- Alerts for already expired documents
+- Acknowledge alerts when action has been taken
+- Manual alert check can be triggered
+
+### Managing Compliance Documents
+1. Go to Tenders > Compliance Vault
+2. Click "Upload Document"
+3. Select document type and company
+4. Upload the file (PDF, image, etc.)
+5. Set expiry date
+6. Save
+
+### Compliance Summary
+View compliance health:
+- Documents by company
+- Documents by type
+- Expired document count
+- Expiring soon count
+- Overall compliance status
+
+### Filtering
+- Filter by operating company
+- Filter by document type
+- Filter by status (valid, expiring, expired)
+
+## Common Questions
+
+Q: How do I create a new tender?
+A: Go to Tenders > New Tender > Fill in details > Add team members and documents > Save
+
+Q: How do I see which tenders are closing soon?
+A: Go to Tenders > Calendar view to see closing dates, or filter by closing date
+
+Q: How do I upload a compliance document?
+A: Go to Tenders > Compliance Vault > Upload Document > Select type and company > Upload file > Save
+
+Q: How do I check which compliance documents are expired?
+A: Go to Compliance Vault > Filter by "Expired" status, or check the Compliance Alerts
+
+Q: How do I add pricing to a tender?
+A: Open the tender > Go to BOQ section > Add line items with description, quantity, and unit price
+
+Q: How do I track government contracts?
+A: Go to Tenders > Government Contracts tab > View active and expiring contracts
+
+Q: How do I see tender statistics?
+A: Go to Tenders > View the statistics dashboard showing counts by status and win rate

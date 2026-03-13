@@ -1,73 +1,152 @@
-# IT Support Knowledge Base
+# ProMed Technologies - IT Support & System Guide
 
-## Password Reset Procedure
+## Intranet Access
 
-If you need to reset your password, follow these steps:
+### Logging In
+1. Open your web browser (Chrome or Edge recommended)
+2. Navigate to the ProMed Intranet URL
+3. Enter your email address and password
+4. Click Login
 
-1. Go to the login page at http://intranet.company.local
-2. Click on "Forgot Password" link
-3. Enter your company email address
-4. Check your inbox for the password reset email
-5. Click the reset link (valid for 24 hours)
-6. Create a new password following the password policy
-7. Log in with your new password
+### Password Reset
+If you forgot your password or need it reset:
+- Contact an administrator or IT support
+- An admin can reset your password via User Management
+- Welly can reset passwords for admins: "Reset password for [name]"
+- After reset, you will receive a temporary password to log in with
 
-### Password Policy
-- Minimum 12 characters
-- Must include uppercase and lowercase letters
-- Must include at least one number
-- Must include at least one special character
-- Cannot reuse last 5 passwords
-- Expires every 90 days
+### Account Issues
+- If your account is deactivated, contact an administrator
+- Admins can activate/deactivate accounts via User Management
+- Module permissions control which sections you can access
 
-## VPN Setup Guide
+## Support Ticket System
 
-To connect to the company VPN from home:
+### Submitting an IT Support Ticket
+1. Go to Support Tickets from the main navigation
+2. Click "New Ticket"
+3. Enter a descriptive title
+4. Describe the issue in detail
+5. Select priority: Low, Medium, High, or Critical
+6. Submit the ticket
 
-1. Download the VPN client from the IT portal
-2. Install the application on your computer
-3. Launch the VPN client
-4. Enter the server address: vpn.company.local
-5. Use your company credentials to authenticate
-6. Wait for connection confirmation
-7. You now have access to internal resources
+### Tracking Your Ticket
+- View all your open tickets on the Support Tickets page
+- Check ticket status: Open, In Progress, Pending, Resolved, Closed
+- Add comments to provide additional information
+- Get notified when your ticket is updated
 
-### Troubleshooting VPN Issues
-- Ensure your internet connection is stable
-- Check if firewall is blocking VPN traffic
-- Try restarting the VPN client
-- Contact IT Support if issues persist
+### Ticket Statistics
+- View open ticket count and resolution statistics
+- Filter tickets by status (open, closed)
+- Admins can assign tickets to specific staff members
 
-## Printer Setup
+### Using Welly for Support
+Ask Welly: "Create a support ticket for [describe your issue]"
+Welly will create the ticket automatically on your behalf.
 
-To add a network printer:
+## Module Access & Permissions
 
-1. Open Settings > Printers & Scanners
-2. Click "Add a printer"
-3. Select "Add a printer using TCP/IP address"
-4. Enter the printer IP address (check IT portal for list)
-5. Wait for driver installation
-6. Print a test page to verify
+### Available Modules
+The intranet has the following modules that require permission:
+- **Sales**: Sales dashboard, imports, CRM
+- **Logistics**: Full logistics operations
+- **Tenders**: Tender management and compliance
+- **Project Management**: Kanban boards and projects
+- **Human Resource**: Employee directory, attendance, leave
+- **Stock Management**: Inventory and warehouse management
+- **Support Tickets**: IT support ticketing
+- **Messaging**: Internal messaging system
+- **AI**: Access to Welly AI assistant
+- **PBX**: Phone system and call history
+- **Calendar**: Meetings and events
+- **Settings**: System configuration
 
-Common printer IP addresses:
-- Floor 1: 192.168.1.10
-- Floor 2: 192.168.1.20
-- Floor 3: 192.168.1.30
+### Requesting Module Access
+If you cannot access a module you need:
+1. Submit a support ticket requesting access
+2. Your manager or admin will review and grant permissions
+3. Permissions are updated in your user profile
 
-## Software Installation Requests
+## User Roles
 
-To request new software:
+### Role Types
+- **Standard User**: Basic access to assigned modules
+- **Manager**: Team management, approvals, reports
+- **Admin**: Full system configuration and user management
+- **Super Admin**: Complete system control including database operations
 
-1. Submit a request through the IT Help Desk
-2. Include the software name and version
-3. Provide business justification
-4. Wait for manager approval
-5. IT will evaluate security and licensing
-6. Software will be deployed if approved
+## Browser Compatibility
 
-## Contact Information
+Recommended browsers for the best experience:
+- Google Chrome (latest version)
+- Microsoft Edge (latest version)
+- Mozilla Firefox (latest version)
 
-- IT Help Desk: helpdesk@company.local
-- Phone: Extension 1234
-- Hours: Monday-Friday 8AM-6PM
-- Emergency: After-hours pager 555-0199
+## Troubleshooting
+
+### Page Not Loading
+1. Check your internet connection
+2. Clear your browser cache (Ctrl+Shift+Delete)
+3. Try a different browser
+4. Check if the intranet server is reachable
+5. Submit a support ticket if the issue persists
+
+### Cannot Log In
+1. Verify your email address is correct
+2. Check that Caps Lock is off
+3. Try resetting your password through IT
+4. Ensure your account is active (contact admin)
+
+### Data Not Displaying
+1. Refresh the page (F5 or Ctrl+R)
+2. Check if any filters are applied
+3. Verify you have permission to view that module
+4. Clear browser cache and try again
+5. Report the issue via a support ticket
+
+### Real-Time Features Not Working
+The intranet uses SignalR for real-time updates (attendance, messaging, Kanban boards, collaborative documents). If live updates stop:
+1. Refresh the page
+2. Check your internet connection
+3. The system will attempt to reconnect automatically
+
+## Welly AI Assistant (Quick IT Help)
+
+Welly can help with common IT tasks:
+- "Reset password for [name]" (admin only)
+- "Create a support ticket for [issue]"
+- "What modules do I have access to?"
+- "How do I [perform a task]?"
+
+Welly can also search the web for technical answers using the built-in web search feature.
+
+## Data Backups
+
+### Database Backups
+- The system supports automatic and manual database backups
+- Admins can trigger backups via the Database settings page
+- Backups are stored as SQL Server backup files
+- Backup history is available in the admin panel
+- Welly can initiate backups for admins: "Backup the database"
+
+### Data Export
+- Database tables can be exported individually as JSON
+- Full database export is available for admins
+- Audit logs can be exported for compliance
+
+## Audit Logs
+
+All significant system actions are logged:
+- Login/logout events
+- Data changes (creates, updates, deletes)
+- Permission changes
+- System administration actions
+- Logs include timestamp, user, action, and details
+
+## Contact IT Support
+
+For urgent IT issues:
+- Submit a Critical priority support ticket
+- Use the internal messaging system to contact IT department
+- Ask Welly for immediate guidance on common issues
