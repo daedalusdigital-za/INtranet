@@ -85,6 +85,10 @@ interface WarehouseInventory {
         </div>
         <div class="header-actions">
           @if (selectedWarehouse) {
+            <button mat-raised-button class="welly-stock-btn" (click)="wellyAnalyzeStock()" matTooltip="Ask Welly to analyze stock levels">
+              <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
+              Ask Welly to Analyze
+            </button>
             <button mat-raised-button (click)="clearSelection()">
               <mat-icon>arrow_back</mat-icon>
               Back to Warehouses
@@ -308,6 +312,40 @@ interface WarehouseInventory {
               </div>
             </div>
           }
+        </div>
+      }
+
+      <!-- Welly Stock Analysis Panel -->
+      @if (showWellyPanel) {
+        <div class="welly-panel-overlay" (click)="showWellyPanel = false">
+          <div class="welly-panel" (click)="$event.stopPropagation()">
+            <div class="welly-panel-header">
+              <div class="welly-panel-title">
+                <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
+                <h3>Welly Stock Analysis</h3>
+              </div>
+              <button mat-icon-button (click)="showWellyPanel = false">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="welly-panel-body">
+              @if (wellyLoading) {
+                <div class="welly-loading">
+                  <mat-spinner diameter="36"></mat-spinner>
+                  <p>Welly is analyzing stock levels for {{ selectedWarehouse?.name }}...</p>
+                </div>
+              } @else if (wellyResult) {
+                <div class="welly-result">
+                  <div class="welly-result-text">{{ wellyResult }}</div>
+                  <div class="welly-result-actions">
+                    <button mat-button (click)="copyWellyResult()">
+                      <mat-icon>content_copy</mat-icon> Copy Analysis
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
         </div>
       }
     </div>
@@ -949,6 +987,115 @@ interface WarehouseInventory {
       font-size: 1.5rem;
       font-weight: 600;
     }
+
+    /* Welly Stock Analysis Styles */
+    .welly-stock-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+      border: none !important;
+      transition: all 0.3s ease;
+    }
+
+    .welly-stock-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .welly-stock-btn .welly-sparkle {
+      color: #ffd700;
+      margin-right: 4px;
+    }
+
+    .welly-panel-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .welly-panel {
+      background: white;
+      border-radius: 16px;
+      width: 600px;
+      max-width: 90vw;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .welly-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .welly-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .welly-panel-title h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .welly-sparkle {
+      color: #ffd700;
+    }
+
+    .welly-panel-header button {
+      color: white;
+    }
+
+    .welly-panel-body {
+      padding: 24px;
+      overflow-y: auto;
+      max-height: 60vh;
+    }
+
+    .welly-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 32px;
+    }
+
+    .welly-loading p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .welly-result-text {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      max-height: 50vh;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+
+    .welly-result-actions {
+      display: flex;
+      gap: 8px;
+    }
   `]
 })
 export class StockManagementComponent implements OnInit {
@@ -1100,6 +1247,72 @@ export class StockManagementComponent implements OnInit {
   logout(): void {
     this.authService.logout();
     this.router.navigate(['/login']);
+  }
+
+  // ═══════════════════════════════════════════
+  // Welly AI Stock Analysis
+  // ═══════════════════════════════════════════
+
+  showWellyPanel = false;
+  wellyLoading = false;
+  wellyResult = '';
+
+  wellyAnalyzeStock(): void {
+    if (!this.selectedWarehouse) return;
+    this.showWellyPanel = true;
+    this.wellyLoading = true;
+    this.wellyResult = '';
+
+    // First fetch the inventory data for this warehouse
+    this.http.get<WarehouseInventory[]>(`${environment.apiUrl}/warehouses/${this.selectedWarehouse.id}/inventory`).subscribe({
+      next: (inventory) => {
+        const stockSummary = inventory.map(item =>
+          `${item.commodityName}: QTY=${item.quantityOnHand}, Reorder=${item.reorderLevel}, Max=${item.maximumLevel}, Bin=${item.binLocation || 'N/A'}, LastCount=${item.lastCountDate || 'N/A'}`
+        ).join('\n');
+
+        const content = `Warehouse: ${this.selectedWarehouse.name}\nLocation: ${this.selectedWarehouse.location}\nCapacity: ${this.selectedWarehouse.capacityPercent}% used (${this.selectedWarehouse.totalCapacity - this.selectedWarehouse.availableCapacity}/${this.selectedWarehouse.totalCapacity} m³)\nTotal Items: ${this.selectedWarehouse.totalItems}\nTotal Stock Value: R${this.selectedWarehouse.totalStockValue}\n\nInventory Details:\n${stockSummary || 'No inventory items found'}`;
+
+        this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+          assistType: 'analyze-stock',
+          content: content
+        }).subscribe({
+          next: (res) => {
+            this.wellyResult = res.result;
+            this.wellyLoading = false;
+          },
+          error: () => {
+            this.snackBar.open('Welly could not analyze stock. Please try again.', 'Close', { duration: 3000 });
+            this.wellyLoading = false;
+            this.showWellyPanel = false;
+          }
+        });
+      },
+      error: () => {
+        // If inventory fetch fails, analyze with summary data only
+        const content = `Warehouse: ${this.selectedWarehouse.name}\nLocation: ${this.selectedWarehouse.location}\nCapacity: ${this.selectedWarehouse.capacityPercent}% used\nTotal Items: ${this.selectedWarehouse.totalItems}\nTotal Stock Value: R${this.selectedWarehouse.totalStockValue}\n\nNote: Detailed inventory data could not be loaded.`;
+
+        this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+          assistType: 'analyze-stock',
+          content: content
+        }).subscribe({
+          next: (res) => {
+            this.wellyResult = res.result;
+            this.wellyLoading = false;
+          },
+          error: () => {
+            this.snackBar.open('Welly could not analyze stock. Please try again.', 'Close', { duration: 3000 });
+            this.wellyLoading = false;
+            this.showWellyPanel = false;
+          }
+        });
+      }
+    });
+  }
+
+  copyWellyResult(): void {
+    navigator.clipboard.writeText(this.wellyResult).then(() => {
+      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
+    });
   }
 }
 

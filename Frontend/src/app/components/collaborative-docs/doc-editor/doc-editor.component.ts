@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit } fr
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,6 +19,7 @@ import { Subscription, debounceTime, Subject } from 'rxjs';
 import { CollaborativeDocsService } from '../../../services/collaborative-docs.service';
 import { AuthService } from '../../../services/auth.service';
 import { DocumentDetail, UserPresence } from '../../../models/collaborative-doc.model';
+import { environment } from '../../../../environments/environment';
 
 // Mammoth for Word document import
 import * as mammoth from 'mammoth';
@@ -320,6 +322,56 @@ import { Collaboration } from '@tiptap/extension-collaboration';
               </div>
               <div class="ribbon-group-label">Import</div>
             </div>
+
+            <div class="ribbon-separator"></div>
+
+            <!-- AI Assist Group -->
+            <div class="ribbon-group welly-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large welly-btn" [matMenuTriggerFor]="wellyMenu" matTooltip="Ask Welly AI">
+                  <mat-icon class="welly-icon">auto_awesome</mat-icon>
+                  <span>Ask Welly</span>
+                </button>
+                <mat-menu #wellyMenu="matMenu" class="welly-menu">
+                  <button mat-menu-item (click)="wellyAssist('grammar')">
+                    <mat-icon>spellcheck</mat-icon>
+                    <span>Fix Grammar & Spelling</span>
+                  </button>
+                  <button mat-menu-item (click)="wellyAssist('summarize')">
+                    <mat-icon>summarize</mat-icon>
+                    <span>Summarize</span>
+                  </button>
+                  <button mat-menu-item (click)="wellyAssist('rewrite')">
+                    <mat-icon>edit_note</mat-icon>
+                    <span>Rewrite Professionally</span>
+                  </button>
+                  <button mat-menu-item (click)="wellyAssist('improve')">
+                    <mat-icon>trending_up</mat-icon>
+                    <span>Improve Writing</span>
+                  </button>
+                  <mat-divider></mat-divider>
+                  <button mat-menu-item [matMenuTriggerFor]="translateMenu">
+                    <mat-icon>translate</mat-icon>
+                    <span>Translate</span>
+                  </button>
+                  <mat-divider></mat-divider>
+                  <button mat-menu-item (click)="wellyAssist('generate')">
+                    <mat-icon>auto_fix_high</mat-icon>
+                    <span>Generate Content</span>
+                  </button>
+                </mat-menu>
+                <mat-menu #translateMenu="matMenu">
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Afrikaans')">Afrikaans</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Zulu')">Zulu</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Xhosa')">Xhosa</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Sotho')">Sotho</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Tswana')">Tswana</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'French')">French</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Portuguese')">Portuguese</button>
+                </mat-menu>
+              </div>
+              <div class="ribbon-group-label">AI Assist</div>
+            </div>
           </div>
         }
 
@@ -464,6 +516,58 @@ import { Collaboration } from '@tiptap/extension-collaboration';
           <div #editorElement class="tiptap-editor"></div>
         </div>
       </div>
+
+      <!-- Welly AI Panel -->
+      @if (showWellyPanel) {
+        <div class="welly-panel-overlay" (click)="showWellyPanel = false">
+          <div class="welly-panel" (click)="$event.stopPropagation()">
+            <div class="welly-panel-header">
+              <div class="welly-panel-title">
+                <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
+                <h3>Welly AI Assistant</h3>
+              </div>
+              <button mat-icon-button (click)="showWellyPanel = false">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="welly-panel-body">
+              @if (wellyLoading) {
+                <div class="welly-loading">
+                  <mat-spinner diameter="36"></mat-spinner>
+                  <p>Welly is {{ wellyActionLabel }}...</p>
+                </div>
+              } @else if (wellyResult) {
+                <div class="welly-result">
+                  <div class="welly-result-text">{{ wellyResult }}</div>
+                  <div class="welly-result-actions">
+                    @if (wellyLastAction === 'grammar' || wellyLastAction === 'rewrite' || wellyLastAction === 'improve' || wellyLastAction === 'translate') {
+                      <button mat-raised-button color="primary" (click)="applyWellyResult()">
+                        <mat-icon>check</mat-icon> Apply to Document
+                      </button>
+                    }
+                    @if (wellyLastAction === 'generate') {
+                      <button mat-raised-button color="primary" (click)="insertWellyResult()">
+                        <mat-icon>add</mat-icon> Insert at Cursor
+                      </button>
+                    }
+                    <button mat-button (click)="copyWellyResult()">
+                      <mat-icon>content_copy</mat-icon> Copy
+                    </button>
+                  </div>
+                </div>
+              } @else if (wellyLastAction === 'generate') {
+                <div class="welly-generate-form">
+                  <p>Describe what you'd like Welly to write:</p>
+                  <textarea [(ngModel)]="wellyGeneratePrompt" placeholder="e.g., Write a professional email about the upcoming team meeting..." rows="4"></textarea>
+                  <button mat-raised-button color="primary" (click)="submitWellyGenerate()" [disabled]="!wellyGeneratePrompt.trim()">
+                    <mat-icon>auto_fix_high</mat-icon> Generate
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
 
       <!-- Status Bar -->
       <div class="status-bar">
@@ -1288,6 +1392,143 @@ import { Collaboration } from '@tiptap/extension-collaboration';
         width: 100%;
       }
     }
+
+    /* Welly AI Assist Styles */
+    .welly-group .welly-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .welly-group .welly-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .welly-group .welly-icon {
+      color: #ffd700;
+    }
+
+    .welly-panel-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .welly-panel {
+      background: white;
+      border-radius: 16px;
+      width: 560px;
+      max-width: 90vw;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .welly-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .welly-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .welly-panel-title h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .welly-sparkle {
+      color: #ffd700;
+    }
+
+    .welly-panel-header button {
+      color: white;
+    }
+
+    .welly-panel-body {
+      padding: 24px;
+      overflow-y: auto;
+      max-height: 60vh;
+    }
+
+    .welly-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 32px;
+    }
+
+    .welly-loading p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .welly-result-text {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      max-height: 40vh;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+
+    .welly-result-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .welly-generate-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .welly-generate-form p {
+      margin: 0;
+      color: #555;
+      font-size: 14px;
+    }
+
+    .welly-generate-form textarea {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .welly-generate-form textarea:focus {
+      border-color: #667eea;
+    }
   `]
 })
 export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
@@ -1346,12 +1587,21 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private currentUserName = '';
   private currentUserColor = '';
 
+  // Welly AI Assist
+  showWellyPanel = false;
+  wellyLoading = false;
+  wellyResult = '';
+  wellyLastAction = '';
+  wellyActionLabel = '';
+  wellyGeneratePrompt = '';
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private docsService: CollaborativeDocsService,
     private authService: AuthService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
@@ -1891,5 +2141,108 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       // Reset file input so the same file can be selected again
       input.value = '';
     }
+  }
+
+  // ═══════════════════════════════════════════
+  // Welly AI Assist Methods
+  // ═══════════════════════════════════════════
+
+  wellyAssist(action: string, targetLanguage?: string): void {
+    this.wellyLastAction = action;
+    this.wellyResult = '';
+    this.showWellyPanel = true;
+
+    if (action === 'generate') {
+      this.wellyGeneratePrompt = '';
+      this.wellyLoading = false;
+      return;
+    }
+
+    // Get selected text or full document text
+    if (!this.editor) return;
+    const { from, to } = this.editor.state.selection;
+    const selectedText = from !== to ? this.editor.state.doc.textBetween(from, to, '\n') : '';
+    const content = selectedText || this.editor.getText();
+
+    if (!content.trim()) {
+      this.snackBar.open('Please write some text first, or select text to process', 'Close', { duration: 3000 });
+      this.showWellyPanel = false;
+      return;
+    }
+
+    this.wellyActionLabel = action === 'grammar' ? 'checking grammar' :
+      action === 'summarize' ? 'summarizing' :
+      action === 'rewrite' ? 'rewriting' :
+      action === 'improve' ? 'improving' :
+      action === 'translate' ? `translating to ${targetLanguage}` : 'processing';
+
+    this.wellyLoading = true;
+
+    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+      assistType: action,
+      content: content,
+      targetLanguage: targetLanguage
+    }).subscribe({
+      next: (res) => {
+        this.wellyResult = res.result;
+        this.wellyLoading = false;
+      },
+      error: (err) => {
+        console.error('Welly assist error:', err);
+        this.snackBar.open('Welly could not process your request. Please try again.', 'Close', { duration: 3000 });
+        this.wellyLoading = false;
+        this.showWellyPanel = false;
+      }
+    });
+  }
+
+  submitWellyGenerate(): void {
+    if (!this.wellyGeneratePrompt.trim()) return;
+    this.wellyLoading = true;
+    this.wellyActionLabel = 'generating content';
+
+    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+      assistType: 'generate',
+      content: this.wellyGeneratePrompt
+    }).subscribe({
+      next: (res) => {
+        this.wellyResult = res.result;
+        this.wellyLoading = false;
+      },
+      error: (err) => {
+        console.error('Welly generate error:', err);
+        this.snackBar.open('Welly could not generate content. Please try again.', 'Close', { duration: 3000 });
+        this.wellyLoading = false;
+      }
+    });
+  }
+
+  applyWellyResult(): void {
+    if (!this.editor || !this.wellyResult) return;
+    const { from, to } = this.editor.state.selection;
+    if (from !== to) {
+      // Replace selected text
+      this.editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, this.wellyResult).run();
+    } else {
+      // Replace full document
+      this.editor.chain().focus().setContent(this.wellyResult).run();
+    }
+    this.snackBar.open('Applied to document ✓', 'Close', { duration: 2000 });
+    this.showWellyPanel = false;
+    this.autosaveSubject.next();
+  }
+
+  insertWellyResult(): void {
+    if (!this.editor || !this.wellyResult) return;
+    this.editor.chain().focus().insertContent(this.wellyResult).run();
+    this.snackBar.open('Inserted into document ✓', 'Close', { duration: 2000 });
+    this.showWellyPanel = false;
+    this.autosaveSubject.next();
+  }
+
+  copyWellyResult(): void {
+    navigator.clipboard.writeText(this.wellyResult).then(() => {
+      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
+    });
   }
 }

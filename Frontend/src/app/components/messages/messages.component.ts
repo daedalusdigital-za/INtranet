@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -322,6 +323,23 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
               <button mat-icon-button class="input-action" (click)="toggleEmojiPicker()" matTooltip="Add emoji" [class.active]="showEmojiPicker">
                 <mat-icon>sentiment_satisfied_alt</mat-icon>
               </button>
+              <button mat-icon-button class="input-action welly-msg-btn" [matMenuTriggerFor]="wellyMsgMenu" matTooltip="Ask Welly AI">
+                <mat-icon class="welly-sparkle-icon">auto_awesome</mat-icon>
+              </button>
+              <mat-menu #wellyMsgMenu="matMenu">
+                <button mat-menu-item (click)="wellyDraftMessage()">
+                  <mat-icon>edit_note</mat-icon>
+                  <span>Draft a Message</span>
+                </button>
+                <button mat-menu-item (click)="wellyTranslateMessage()" [disabled]="!newMessage.trim()">
+                  <mat-icon>translate</mat-icon>
+                  <span>Translate Message</span>
+                </button>
+                <button mat-menu-item (click)="wellySummarizeConversation()" [disabled]="messages.length === 0">
+                  <mat-icon>summarize</mat-icon>
+                  <span>Summarize Conversation</span>
+                </button>
+              </mat-menu>
               <div class="message-input-wrapper">
                 <input type="text"
                        #messageInput
@@ -355,6 +373,58 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       (close)="showNewConversation = false"
       (userSelected)="startConversationWithUser($event)">
     </app-user-search-popup>
+
+    <!-- Welly AI Message Assistant Panel -->
+    <div *ngIf="showWellyPanel" class="welly-panel-overlay" (click)="showWellyPanel = false">
+      <div class="welly-panel" (click)="$event.stopPropagation()">
+        <div class="welly-panel-header">
+          <div class="welly-panel-title">
+            <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
+            <h3>Welly Message Assistant</h3>
+          </div>
+          <button mat-icon-button (click)="showWellyPanel = false">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <div class="welly-panel-body">
+          <div *ngIf="wellyLoading" class="welly-loading">
+            <mat-spinner diameter="36"></mat-spinner>
+            <p>{{ wellyActionLabel }}</p>
+          </div>
+          <div *ngIf="!wellyLoading && wellyResult" class="welly-result">
+            <div class="welly-result-text">{{ wellyResult }}</div>
+            <div class="welly-result-actions">
+              <button mat-raised-button color="primary" (click)="useWellyDraft()" *ngIf="wellyLastAction === 'draft' || wellyLastAction === 'translate'">
+                <mat-icon>check</mat-icon> Use This
+              </button>
+              <button mat-button (click)="copyWellyResult()">
+                <mat-icon>content_copy</mat-icon> Copy
+              </button>
+            </div>
+          </div>
+          <div *ngIf="!wellyLoading && !wellyResult && wellyLastAction === 'draft'" class="welly-draft-form">
+            <p>Describe the message you'd like Welly to draft:</p>
+            <textarea [(ngModel)]="wellyDraftPrompt" placeholder="e.g., Let the team know the meeting has been moved to 3pm..." rows="3"></textarea>
+            <div class="welly-draft-form-actions">
+              <button mat-raised-button color="primary" (click)="submitWellyDraft()" [disabled]="!wellyDraftPrompt.trim()">
+                <mat-icon>auto_fix_high</mat-icon> Draft
+              </button>
+            </div>
+          </div>
+          <div *ngIf="!wellyLoading && !wellyResult && wellyLastAction === 'translate'" class="welly-translate-form">
+            <p>Translate to:</p>
+            <div class="welly-lang-buttons">
+              <button mat-raised-button (click)="submitWellyTranslate('Afrikaans')">Afrikaans</button>
+              <button mat-raised-button (click)="submitWellyTranslate('Zulu')">Zulu</button>
+              <button mat-raised-button (click)="submitWellyTranslate('Xhosa')">Xhosa</button>
+              <button mat-raised-button (click)="submitWellyTranslate('Sotho')">Sotho</button>
+              <button mat-raised-button (click)="submitWellyTranslate('French')">French</button>
+              <button mat-raised-button (click)="submitWellyTranslate('Portuguese')">Portuguese</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Attachment Preview Overlay -->
     <div *ngIf="previewingAttachment" class="attachment-preview-overlay" (click)="closePreview()">
@@ -1464,6 +1534,151 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         height: calc(100vh - 64px - 104px - 20px);
       }
     }
+
+    /* Welly Message Assistant Styles */
+    .welly-msg-btn .welly-sparkle-icon {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .welly-msg-btn:hover {
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    .welly-panel-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .welly-panel {
+      background: white;
+      border-radius: 16px;
+      width: 520px;
+      max-width: 90vw;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .welly-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .welly-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .welly-panel-title h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .welly-sparkle {
+      color: #ffd700;
+    }
+
+    .welly-panel-header button {
+      color: white;
+    }
+
+    .welly-panel-body {
+      padding: 24px;
+      overflow-y: auto;
+      max-height: 60vh;
+    }
+
+    .welly-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 32px;
+    }
+
+    .welly-loading p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .welly-result-text {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      max-height: 40vh;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+
+    .welly-result-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .welly-draft-form, .welly-translate-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .welly-draft-form p, .welly-translate-form p {
+      margin: 0;
+      color: #555;
+      font-size: 14px;
+    }
+
+    .welly-draft-form textarea {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+    }
+
+    .welly-draft-form textarea:focus {
+      border-color: #667eea;
+    }
+
+    .welly-draft-form-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .welly-lang-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .welly-lang-buttons button {
+      flex: 0 0 auto;
+    }
   `]
 })
 export class MessagesComponent implements OnInit, OnDestroy {
@@ -1499,7 +1714,8 @@ export class MessagesComponent implements OnInit, OnDestroy {
     private messageService: MessageService,
     private snackBar: MatSnackBar,
     private router: Router,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
@@ -2112,6 +2328,117 @@ export class MessagesComponent implements OnInit, OnDestroy {
       };
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
+    });
+  }
+
+  // ═══════════════════════════════════════════
+  // Welly AI Message Assistant
+  // ═══════════════════════════════════════════
+
+  showWellyPanel = false;
+  wellyLoading = false;
+  wellyResult = '';
+  wellyLastAction = '';
+  wellyActionLabel = '';
+  wellyDraftPrompt = '';
+
+  wellyDraftMessage(): void {
+    this.wellyLastAction = 'draft';
+    this.wellyResult = '';
+    this.wellyDraftPrompt = '';
+    this.wellyLoading = false;
+    this.showWellyPanel = true;
+  }
+
+  submitWellyDraft(): void {
+    if (!this.wellyDraftPrompt.trim()) return;
+    this.wellyLoading = true;
+    this.wellyActionLabel = 'Welly is drafting your message...';
+
+    const context = this.selectedConversation
+      ? `Conversation with: ${this.selectedConversation.participants?.map(p => p.fullName).join(', ') || 'colleague'}\n\n`
+      : '';
+
+    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+      assistType: 'draft-message',
+      content: context + this.wellyDraftPrompt
+    }).subscribe({
+      next: (res) => {
+        this.wellyResult = res.result;
+        this.wellyLoading = false;
+      },
+      error: () => {
+        this.snackBar.open('Welly could not draft message. Please try again.', 'Close', { duration: 3000 });
+        this.wellyLoading = false;
+      }
+    });
+  }
+
+  wellyTranslateMessage(): void {
+    if (!this.newMessage.trim()) return;
+    this.wellyLastAction = 'translate';
+    this.wellyResult = '';
+    this.wellyLoading = false;
+    this.showWellyPanel = true;
+  }
+
+  submitWellyTranslate(language: string): void {
+    this.wellyLoading = true;
+    this.wellyActionLabel = `Welly is translating to ${language}...`;
+
+    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+      assistType: 'translate-message',
+      content: this.newMessage,
+      targetLanguage: language
+    }).subscribe({
+      next: (res) => {
+        this.wellyResult = res.result;
+        this.wellyLoading = false;
+      },
+      error: () => {
+        this.snackBar.open('Welly could not translate. Please try again.', 'Close', { duration: 3000 });
+        this.wellyLoading = false;
+      }
+    });
+  }
+
+  wellySummarizeConversation(): void {
+    if (this.messages.length === 0) return;
+    this.wellyLastAction = 'summarize';
+    this.wellyResult = '';
+    this.wellyLoading = true;
+    this.wellyActionLabel = 'Welly is summarizing the conversation...';
+    this.showWellyPanel = true;
+
+    const msgThread = this.messages.slice(-50).map(m =>
+      `${m.senderFullName || m.senderName}: ${m.content}`
+    ).join('\n');
+
+    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+      assistType: 'summarize-messages',
+      content: msgThread
+    }).subscribe({
+      next: (res) => {
+        this.wellyResult = res.result;
+        this.wellyLoading = false;
+      },
+      error: () => {
+        this.snackBar.open('Welly could not summarize. Please try again.', 'Close', { duration: 3000 });
+        this.wellyLoading = false;
+      }
+    });
+  }
+
+  useWellyDraft(): void {
+    this.newMessage = this.wellyResult;
+    this.showWellyPanel = false;
+    this.snackBar.open('Message inserted ✓', 'Close', { duration: 2000 });
+    setTimeout(() => this.messageInput?.nativeElement?.focus(), 100);
+  }
+
+  copyWellyResult(): void {
+    navigator.clipboard.writeText(this.wellyResult).then(() => {
+      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
     });
   }
 }

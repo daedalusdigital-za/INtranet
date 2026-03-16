@@ -861,6 +861,77 @@ Be specific and extract actual values from the document when available.";
             return cells;
         }
 
+        /// <summary>
+        /// Generic Welly Assist endpoint for Doc Editor, Stock, Tenders, Messages
+        /// </summary>
+        [HttpPost("welly-assist")]
+        public async Task<IActionResult> WellyAssist([FromBody] WellyAssistRequest request)
+        {
+            try
+            {
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (!useLocalLlm)
+                {
+                    return StatusCode(503, new { error = "AI service is not available. Please try again later." });
+                }
+
+                var systemPrompt = request.AssistType switch
+                {
+                    // Document Editor actions
+                    "grammar" => "You are Welly, an AI writing assistant. Fix all grammar, spelling, and punctuation errors in the provided text. Return ONLY the corrected text without any explanations or preamble.",
+                    "summarize" => "You are Welly, an AI writing assistant. Provide a clear, concise summary of the following text. Use bullet points for key takeaways.",
+                    "rewrite" => "You are Welly, an AI writing assistant. Rewrite the following text to be more professional, clear, and well-structured. Maintain the original meaning.",
+                    "translate" => $"You are Welly, an AI translator. Translate the following text to {request.TargetLanguage ?? "Afrikaans"}. Return ONLY the translated text.",
+                    "generate" => "You are Welly, an AI writing assistant for ProMed Technologies. Generate professional content based on the user's description. Be detailed and well-structured.",
+                    "improve" => "You are Welly, an AI writing assistant. Improve the following text by enhancing clarity, flow, and professional tone while preserving the original meaning.",
+
+                    // Stock Management actions
+                    "analyze-stock" => @"You are Welly, an AI inventory analyst for ProMed Technologies. Analyze the provided warehouse stock data and provide actionable insights. Include:
+1. **Critical Items** — Items below reorder level that need immediate restocking
+2. **Slow-Moving Stock** — Items that may be overstocked based on quantity vs reorder patterns
+3. **Reorder Recommendations** — Suggested reorder quantities
+4. **Anomalies** — Any unusual patterns in the stock levels
+Format your response with clear headings and bullet points. Use ZAR for currency.",
+
+                    // Tender/BOQ actions
+                    "analyze-boq" => @"You are Welly, an AI tender analyst for ProMed Technologies. Analyze the provided Bill of Quantities (BOQ) data and provide insights:
+1. **Pricing Analysis** — Are unit prices competitive? Flag any unusually high or low items
+2. **Margin Review** — Evaluate profit margins and suggest adjustments
+3. **Risk Items** — Items with thin margins or high total cost exposure
+4. **Recommendations** — Overall BOQ optimization suggestions
+Format with clear headings. Use ZAR for currency.",
+                    "check-compliance" => @"You are Welly, an AI compliance assistant for ProMed Technologies. Review the tender details and check for compliance readiness:
+1. **Documentation Status** — Are all required documents in place?
+2. **Team Readiness** — Is the team properly assigned?
+3. **Timeline Risks** — Any deadline concerns?
+4. **Missing Requirements** — What might be missing for submission?
+Be specific and actionable.",
+
+                    // Messages actions
+                    "draft-message" => "You are Welly, an AI assistant helping compose internal messages at ProMed Technologies. Draft a professional yet friendly message based on the user's description. Keep it concise and appropriate for workplace communication.",
+                    "translate-message" => $"You are Welly, an AI translator. Translate the following message to {request.TargetLanguage ?? "Afrikaans"}. Keep the tone appropriate for workplace messaging. Return ONLY the translated text.",
+                    "summarize-messages" => "You are Welly, an AI assistant. Summarize the following conversation thread, highlighting key decisions, action items, and important information. Use bullet points.",
+
+                    _ => "You are Welly, a helpful AI assistant for ProMed Technologies. Help the user with their request."
+                };
+
+                var result = await _localLlmService.AnalyzeDocumentAsync(systemPrompt, request.Content, HttpContext.RequestAborted);
+
+                return Ok(new { result = result, assistType = request.AssistType });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, new { error = "Request was cancelled" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "WellyAssist: Error processing {AssistType} request", request.AssistType);
+                return StatusCode(500, new { error = "Failed to process AI request. Please try again." });
+            }
+        }
+
         private async Task WriteSSEToken(string token)
         {
             var data = JsonSerializer.Serialize(new { token = token });
@@ -975,5 +1046,12 @@ Be specific and extract actual values from the document when available.";
     {
         public float Temperature { get; set; } = 0.7f;
         public int MaxTokens { get; set; } = 512;
+    }
+
+    public class WellyAssistRequest
+    {
+        public string AssistType { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public string? TargetLanguage { get; set; }
     }
 }
