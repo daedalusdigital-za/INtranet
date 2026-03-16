@@ -872,7 +872,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                      Math.Abs(c.Longitude.Value - defaultLng) < 0.001));
             }
 
-            var customers = await query.Take(100).ToListAsync();
+            var customers = await query.Take(customerIds != null && customerIds.Any() ? 500 : 100).ToListAsync();
             var suggestions = new List<object>();
 
             foreach (var customer in customers)
@@ -934,7 +934,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     error = result.Success ? null : result.Error
                 });
 
-                await Task.Delay(80); // Rate limiting
+                await Task.Delay(50); // Rate limiting
             }
 
             return Ok(new { total = suggestions.Count, suggestions });
@@ -970,6 +970,18 @@ namespace ProjectTracker.API.Controllers.Logistics
                 customer.DeliveryProvince = fix.Province;
                 customer.DeliveryCity = fix.City;
                 customer.DeliveryPostalCode = fix.PostalCode;
+                
+                // Also set address fields from formatted address if they're empty
+                if (!string.IsNullOrEmpty(fix.FormattedAddress))
+                {
+                    if (string.IsNullOrEmpty(customer.DeliveryAddress))
+                        customer.DeliveryAddress = fix.FormattedAddress;
+                    if (string.IsNullOrEmpty(customer.Address))
+                        customer.Address = fix.FormattedAddress;
+                    if (string.IsNullOrEmpty(customer.PhysicalAddress))
+                        customer.PhysicalAddress = fix.FormattedAddress;
+                }
+                
                 customer.UpdatedAt = DateTime.UtcNow;
 
                 results.Add(new { customerId = fix.CustomerId, customerName = customer.Name, success = true });
@@ -1140,6 +1152,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             public string? PostalCode { get; set; }
             public double? Latitude { get; set; }
             public double? Longitude { get; set; }
+            public string? FormattedAddress { get; set; }
         }
 
         public class InvoiceFixDto

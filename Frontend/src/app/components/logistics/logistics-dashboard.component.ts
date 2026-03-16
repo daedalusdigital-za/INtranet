@@ -12768,7 +12768,8 @@ export class AddressIssuesDialog {
       city: f.suggestedCity,
       postalCode: f.suggestedPostalCode,
       latitude: f.suggestedLatitude,
-      longitude: f.suggestedLongitude
+      longitude: f.suggestedLongitude,
+      formattedAddress: f.suggestedFormattedAddress
     }));
 
     this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/welly-apply-customer-fixes`, fixes).subscribe({
