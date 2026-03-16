@@ -12037,7 +12037,7 @@ interface CustomerAddressIssue {
         </mat-form-field>
         <div class="total-count">
           <mat-icon>people</mat-icon>
-          {{ customers.length }} total issues
+          {{ totalCount }} total issues
         </div>
       </div>
 
@@ -12691,6 +12691,7 @@ export class AddressIssuesDialog {
   selectedTab = 0;
   loading = true;
   saving = false;
+  totalCount = 0;
   customers: CustomerAddressIssue[] = [];
   filteredCustomers: CustomerAddressIssue[] = [];
   editingCustomerId: number | null = null;
@@ -12804,7 +12805,7 @@ export class AddressIssuesDialog {
 
   loadCustomers(): void {
     this.loading = true;
-    const params: any = { pageSize: 500 };
+    const params: any = { pageSize: 5000 };
     if (this.searchTerm) {
       params.search = this.searchTerm;
     }
@@ -12815,6 +12816,7 @@ export class AddressIssuesDialog {
     ).subscribe({
       next: (response) => {
         this.customers = response.customers;
+        this.totalCount = response.totalCount;
         this.applyFilter();
         this.loading = false;
       },
