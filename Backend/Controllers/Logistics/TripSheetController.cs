@@ -1729,7 +1729,350 @@ namespace ProjectTracker.API.Controllers.Logistics
                 return BadRequest(new { message = $"Failed to import tripsheet: {ex.Message}" });
             }
         }
+
+        #region Welly AI Tripsheet Wizard
+
+        /// <summary>
+        /// Welly analyzes an uploaded Excel file — parses rows, matches customers/invoices,
+        /// geocodes addresses, suggests warehouse, driver, vehicle. Returns full analysis.
+        /// </summary>
+        [HttpPost("welly-analyze-excel")]
+        public async Task<IActionResult> WellyAnalyzeExcel(IFormFile file, [FromQuery] string? sheetName = null)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "No file provided" });
+            if (file.Length > 10 * 1024 * 1024)
+                return BadRequest(new { message = "File size exceeds 10MB limit" });
+            if (Path.GetExtension(file.FileName).ToLower() != ".xlsx")
+                return BadRequest(new { message = "Please upload an Excel file (.xlsx)" });
+
+            try
+            {
+                using var stream = file.OpenReadStream();
+                var preview = await _importService.ParseAndPreviewAsync(stream, file.FileName, sheetName);
+
+                // Get warehouses for suggestion
+                var warehouses = await _context.Warehouses
+                    .Where(w => w.Status == "Active")
+                    .Select(w => new { w.Id, w.Name, w.Code, w.City, w.Province, w.Address, w.ManagerName })
+                    .ToListAsync();
+
+                // Get available drivers
+                var drivers = await _context.Drivers
+                    .Where(d => d.Status == "Active")
+                    .Select(d => new {
+                        d.Id,
+                        Name = d.FirstName + " " + d.LastName,
+                        d.EmployeeNumber,
+                        d.LicenseType,
+                        d.PhoneNumber,
+                        ActiveLoads = _context.Loads.Count(l => l.DriverId == d.Id &&
+                            (l.Status == "Active" || l.Status == "In Transit" || l.Status == "Assigned"))
+                    })
+                    .ToListAsync();
+
+                // Get available vehicles
+                var vehicles = await _context.Vehicles
+                    .Include(v => v.VehicleType)
+                    .Where(v => v.Status == "Available" || v.Status == "In Use")
+                    .Select(v => new {
+                        v.Id,
+                        v.RegistrationNumber,
+                        Type = v.VehicleType != null ? v.VehicleType.Name : "Unknown",
+                        v.Make,
+                        v.Model,
+                        v.Status,
+                        v.Province,
+                        ActiveLoads = _context.Loads.Count(l => l.VehicleId == v.Id &&
+                            (l.Status == "Active" || l.Status == "In Transit" || l.Status == "Assigned"))
+                    })
+                    .ToListAsync();
+
+                // Try to detect warehouse from delivery cities (majority city → nearest warehouse)
+                int? suggestedWarehouseId = null;
+                var cityCounts = preview.Rows
+                    .Where(r => !string.IsNullOrEmpty(r.Data?.City))
+                    .GroupBy(r => r.Data!.City!.Trim().ToUpper())
+                    .OrderByDescending(g => g.Count())
+                    .ToList();
+
+                if (cityCounts.Any())
+                {
+                    var topCity = cityCounts.First().Key;
+                    // Try to find warehouse in same province/city
+                    var matchedWh = warehouses.FirstOrDefault(w =>
+                        (w.City ?? "").Equals(topCity, StringComparison.OrdinalIgnoreCase) ||
+                        (w.Province ?? "").ToUpper().Contains(topCity));
+                    if (matchedWh != null)
+                        suggestedWarehouseId = matchedWh.Id;
+                    else if (warehouses.Any())
+                        suggestedWarehouseId = warehouses.First().Id; // default to first
+                }
+                else if (warehouses.Any())
+                {
+                    suggestedWarehouseId = warehouses.First().Id;
+                }
+
+                // Suggest driver (least busy free driver)
+                var suggestedDriver = drivers
+                    .OrderBy(d => d.ActiveLoads)
+                    .ThenBy(d => d.Name)
+                    .FirstOrDefault();
+
+                // Suggest vehicle (free vehicle)
+                var suggestedVehicle = vehicles
+                    .OrderBy(v => v.ActiveLoads)
+                    .ThenBy(v => v.RegistrationNumber)
+                    .FirstOrDefault();
+
+                // Build address issues list
+                var addressIssues = preview.Rows
+                    .Where(r => r.Status != ImportRowStatus.Error)
+                    .Where(r => string.IsNullOrWhiteSpace(r.Data?.DeliveryAddress) && string.IsNullOrWhiteSpace(r.Data?.City))
+                    .Select(r => new {
+                        rowIndex = r.RowIndex,
+                        customerName = r.Data?.CustomerName,
+                        invoiceNumber = r.Data?.InvoiceNumber
+                    })
+                    .ToList();
+
+                // Load Welly learning notes if any
+                var learningNotes = await LoadWellyLearningNotes();
+
+                return Ok(new
+                {
+                    batchId = preview.BatchId,
+                    fileName = preview.FileName,
+                    sheetName = preview.SheetName,
+                    totalRows = preview.TotalRowsExtracted,
+                    matched = preview.MatchedCount,
+                    partialMatch = preview.PartialMatchCount,
+                    unmatched = preview.UnmatchedCount,
+                    errors = preview.ErrorCount,
+                    rows = preview.Rows.Select(r => new
+                    {
+                        rowIndex = r.RowIndex,
+                        status = r.Status.ToString(),
+                        confidence = r.ConfidenceScore,
+                        matchedCustomerId = r.MatchedCustomerId,
+                        matchedInvoiceId = r.MatchedInvoiceId,
+                        suggestedCustomers = r.SuggestedCustomers,
+                        suggestedInvoices = r.SuggestedInvoices,
+                        validationErrors = r.ValidationErrors,
+                        warnings = r.Warnings,
+                        data = r.Data
+                    }),
+                    warehouses,
+                    suggestedWarehouseId,
+                    drivers = drivers.Select(d => new {
+                        d.Id, d.Name, d.EmployeeNumber, d.LicenseType, d.PhoneNumber, d.ActiveLoads
+                    }),
+                    suggestedDriverId = suggestedDriver?.Id,
+                    vehicles = vehicles.Select(v => new {
+                        v.Id, v.RegistrationNumber, v.Type, v.Make, v.Model, v.Status, v.Province, v.ActiveLoads
+                    }),
+                    suggestedVehicleId = suggestedVehicle?.Id,
+                    addressIssues,
+                    learningNotes
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Welly Excel analysis failed");
+                return BadRequest(new { message = $"Analysis failed: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
+        /// Welly creates a tripsheet from the analyzed Excel data after user confirms/corrects
+        /// </summary>
+        [HttpPost("welly-create-tripsheet")]
+        public async Task<IActionResult> WellyCreateTripsheet([FromBody] WellyCreateTripsheetRequest request)
+        {
+            try
+            {
+                var commitRequest = new TripSheetImportCommitRequest
+                {
+                    BatchId = request.BatchId,
+                    WarehouseId = request.WarehouseId,
+                    DriverId = request.DriverId,
+                    VehicleId = request.VehicleId,
+                    ScheduledDate = request.ScheduledDate ?? DateTime.Today,
+                    Notes = $"[Created via Welly AI Tripsheet Wizard]\n{request.Notes ?? ""}".Trim(),
+                    Confirmations = request.Rows.Select(r => new TripSheetImportConfirmation
+                    {
+                        RowIndex = r.RowIndex,
+                        CustomerName = r.CustomerName,
+                        CustomerNumber = r.CustomerNumber,
+                        DeliveryAddress = r.DeliveryAddress,
+                        City = r.City,
+                        Province = r.Province,
+                        InvoiceNumber = r.InvoiceNumber,
+                        ProductDescription = r.ProductDescription,
+                        Quantity = r.Quantity,
+                        SalesAmount = r.SalesAmount,
+                        ContactPerson = r.ContactPerson,
+                        ContactPhone = r.ContactPhone,
+                        ConfirmedCustomerId = r.ConfirmedCustomerId,
+                        ConfirmedInvoiceId = r.ConfirmedInvoiceId,
+                        CreateNewCustomer = r.CreateNewCustomer
+                    }).ToList()
+                };
+
+                // Get user ID from claims
+                int? userId = null;
+                var userIdClaim = User.FindFirst("UserId")?.Value ?? User.FindFirst("sub")?.Value;
+                if (int.TryParse(userIdClaim, out int uid)) userId = uid;
+
+                var result = await _importService.CommitImportAsync(commitRequest, userId);
+
+                if (!result.Success)
+                    return BadRequest(new { message = "Failed to create tripsheet", errors = result.Errors });
+
+                return Ok(new
+                {
+                    success = true,
+                    tripSheetNumber = result.TripSheetNumber,
+                    loadId = result.LoadId,
+                    totalStops = result.TotalStops,
+                    importedCount = result.ImportedCount,
+                    totalValue = result.TotalValue,
+                    message = $"Welly created tripsheet {result.TripSheetNumber} with {result.TotalStops} stops"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Welly tripsheet creation failed");
+                return StatusCode(500, new { message = $"Failed to create tripsheet: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
+        /// Store Welly's learning notes — user corrections that help improve future suggestions
+        /// </summary>
+        [HttpPost("welly-feedback")]
+        public async Task<IActionResult> WellyFeedback([FromBody] WellyFeedbackRequest request)
+        {
+            try
+            {
+                var feedbackPath = Path.Combine(_nasBasePath, "welly-learning", "tripsheet-feedback.json");
+                var dir = Path.GetDirectoryName(feedbackPath)!;
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+                // Load existing feedback
+                var existingFeedback = new List<WellyFeedbackEntry>();
+                if (System.IO.File.Exists(feedbackPath))
+                {
+                    var json = await System.IO.File.ReadAllTextAsync(feedbackPath);
+                    existingFeedback = System.Text.Json.JsonSerializer.Deserialize<List<WellyFeedbackEntry>>(json) ?? new();
+                }
+
+                // Add new feedback entries
+                foreach (var correction in request.Corrections)
+                {
+                    existingFeedback.Add(new WellyFeedbackEntry
+                    {
+                        Timestamp = DateTime.UtcNow,
+                        Type = correction.Type,
+                        Original = correction.Original,
+                        Corrected = correction.Corrected,
+                        Context = correction.Context,
+                        TripSheetNumber = request.TripSheetNumber
+                    });
+                }
+
+                // Keep only last 500 entries
+                if (existingFeedback.Count > 500)
+                    existingFeedback = existingFeedback.Skip(existingFeedback.Count - 500).ToList();
+
+                await System.IO.File.WriteAllTextAsync(feedbackPath,
+                    System.Text.Json.JsonSerializer.Serialize(existingFeedback, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+                _logger.LogInformation("Welly learning: stored {Count} corrections for tripsheet {TripSheet}",
+                    request.Corrections.Count, request.TripSheetNumber);
+
+                return Ok(new { message = $"Welly noted {request.Corrections.Count} corrections for future improvement" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to store Welly feedback");
+                return Ok(new { message = "Feedback noted (storage unavailable)" });
+            }
+        }
+
+        private async Task<List<WellyFeedbackEntry>> LoadWellyLearningNotes()
+        {
+            try
+            {
+                var feedbackPath = Path.Combine(_nasBasePath, "welly-learning", "tripsheet-feedback.json");
+                if (!System.IO.File.Exists(feedbackPath)) return new();
+                var json = await System.IO.File.ReadAllTextAsync(feedbackPath);
+                return System.Text.Json.JsonSerializer.Deserialize<List<WellyFeedbackEntry>>(json) ?? new();
+            }
+            catch { return new(); }
+        }
+
+        #endregion
     }
+
+    #region Welly Tripsheet DTOs
+
+    public class WellyCreateTripsheetRequest
+    {
+        public string BatchId { get; set; } = string.Empty;
+        public int? WarehouseId { get; set; }
+        public int? DriverId { get; set; }
+        public int? VehicleId { get; set; }
+        public DateTime? ScheduledDate { get; set; }
+        public string? Notes { get; set; }
+        public bool OptimizeRoute { get; set; } = true;
+        public List<WellyTripsheetRow> Rows { get; set; } = new();
+    }
+
+    public class WellyTripsheetRow
+    {
+        public int RowIndex { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerNumber { get; set; }
+        public string? DeliveryAddress { get; set; }
+        public string? City { get; set; }
+        public string? Province { get; set; }
+        public string? InvoiceNumber { get; set; }
+        public string? ProductDescription { get; set; }
+        public decimal? Quantity { get; set; }
+        public decimal? SalesAmount { get; set; }
+        public string? ContactPerson { get; set; }
+        public string? ContactPhone { get; set; }
+        public int? ConfirmedCustomerId { get; set; }
+        public int? ConfirmedInvoiceId { get; set; }
+        public bool CreateNewCustomer { get; set; }
+    }
+
+    public class WellyFeedbackRequest
+    {
+        public string? TripSheetNumber { get; set; }
+        public List<WellyCorrection> Corrections { get; set; } = new();
+    }
+
+    public class WellyCorrection
+    {
+        public string Type { get; set; } = string.Empty; // "address", "customer", "warehouse", "driver", "vehicle", "route"
+        public string Original { get; set; } = string.Empty;
+        public string Corrected { get; set; } = string.Empty;
+        public string? Context { get; set; }
+    }
+
+    public class WellyFeedbackEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string Original { get; set; } = string.Empty;
+        public string Corrected { get; set; } = string.Empty;
+        public string? Context { get; set; }
+        public string? TripSheetNumber { get; set; }
+    }
+
+    #endregion
 
     // DTOs for Trip Sheet
     public class TripSheetDto

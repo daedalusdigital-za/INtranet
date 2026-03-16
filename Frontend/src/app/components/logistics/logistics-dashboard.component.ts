@@ -5738,7 +5738,35 @@ Notes: ${record.notes || 'No notes'}
           case 'transfer':
             this.openInternalTransferDialog();
             break;
+          case 'welly':
+            this.openWellyTripsheetWizard();
+            break;
         }
+      }
+    });
+  }
+
+  // Open Welly AI Tripsheet Wizard
+  openWellyTripsheetWizard(): void {
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+
+    const dialogRef = this.dialog.open(WellyTripsheetWizardDialog, {
+      width: '95vw',
+      maxWidth: '1100px',
+      height: '90vh',
+      panelClass: 'welly-wizard-dialog-panel',
+      data: {
+        apiUrl: this.apiUrl,
+        drivers: this.drivers(),
+        vehicles: availableVehicles,
+        warehouses: this.warehouses(),
+      }
+    });
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.created) {
+        this.loadTripsheets();
+        this.loadImportedInvoices();
       }
     });
   }
@@ -18382,6 +18410,15 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
             <h3>Internal Transfer</h3>
             <p>Move stock between warehouses</p>
           </div>
+          
+          <div class="type-card welly-card" (click)="selectType('welly')" matTooltip="Let Welly AI analyze your Excel and build the tripsheet step by step">
+            <div class="type-icon welly">
+              <mat-icon>smart_toy</mat-icon>
+            </div>
+            <h3>Ask Welly</h3>
+            <p>Upload Excel &amp; let Welly analyze, resolve addresses, assign driver &amp; optimize route</p>
+            <span class="ai-badge">AI Powered</span>
+          </div>
         </div>
       </div>
     </div>
@@ -18470,6 +18507,30 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     .type-icon.transfer {
       background: linear-gradient(135deg, #9c27b0, #7b1fa2);
     }
+    .type-icon.welly {
+      background: linear-gradient(135deg, #00bcd4, #0097a7);
+    }
+    .welly-card {
+      border-color: #b2ebf2;
+      background: linear-gradient(135deg, #e0f7fa, #fff);
+    }
+    .welly-card:hover {
+      border-color: #00bcd4 !important;
+      background: linear-gradient(135deg, #b2ebf2, #e0f7fa) !important;
+      box-shadow: 0 6px 16px rgba(0, 188, 212, 0.3) !important;
+    }
+    .ai-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #00bcd4, #0097a7);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 12px;
+      margin-top: 8px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
     .type-card h3 {
       margin: 0 0 8px;
       font-size: 16px;
@@ -18488,7 +18549,7 @@ export class TripsheetTypeDialog {
     public dialogRef: MatDialogRef<TripsheetTypeDialog>
   ) {}
 
-  selectType(type: 'import' | 'automatic' | 'manual' | 'transfer'): void {
+  selectType(type: 'import' | 'automatic' | 'manual' | 'transfer' | 'welly'): void {
     this.dialogRef.close({ type });
   }
 }
@@ -24509,3 +24570,832 @@ export class VehicleStatusDialog {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Welly AI Tripsheet Wizard Dialog
+// Multi-step wizard: Upload → Analysis → Warehouse → Addresses → Driver/Vehicle → Confirm
+// ═══════════════════════════════════════════════════════════════════════
+@Component({
+  selector: 'welly-tripsheet-wizard-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatIconModule,
+    MatTooltipModule,
+    MatProgressSpinnerModule,
+    MatProgressBarModule,
+    MatChipsModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatDividerModule,
+    MatSlideToggleModule,
+    MatCheckboxModule
+  ],
+  template: `
+    <div class="welly-wizard">
+      <!-- Header -->
+      <div class="wizard-header">
+        <div class="header-left">
+          <div class="welly-avatar">
+            <mat-icon>smart_toy</mat-icon>
+          </div>
+          <div>
+            <h2>Welly's Tripsheet Wizard</h2>
+            <p class="header-sub">{{ stepDescriptions[currentStep] }}</p>
+          </div>
+        </div>
+        <button mat-icon-button mat-dialog-close>
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Step indicator -->
+      <div class="step-bar">
+        @for (step of steps; track step.id; let i = $index) {
+          <div class="step-dot" [class.active]="i === currentStep" [class.completed]="i < currentStep"
+               [matTooltip]="step.label">
+            <span class="dot">
+              @if (i < currentStep) { <mat-icon>check</mat-icon> }
+              @else { {{ i + 1 }} }
+            </span>
+            <span class="step-label">{{ step.label }}</span>
+          </div>
+          @if (i < steps.length - 1) {
+            <div class="step-line" [class.completed]="i < currentStep"></div>
+          }
+        }
+      </div>
+
+      <!-- Content Area -->
+      <div class="wizard-content">
+
+        <!-- STEP 0: Upload -->
+        @if (currentStep === 0) {
+          <div class="step-upload">
+            <div class="welly-says">
+              <mat-icon class="welly-icon">smart_toy</mat-icon>
+              <div class="bubble">
+                Hi! Upload your Excel file and I'll analyze it — finding customers, matching invoices,
+                resolving addresses, and setting up an optimized tripsheet for you. 🚛
+              </div>
+            </div>
+            <div class="upload-zone" (click)="fileInput.click()"
+                 (dragover)="onDragOver($event)" (drop)="onDrop($event)"
+                 [class.has-file]="selectedFile">
+              <input #fileInput type="file" accept=".xlsx" (change)="onFileSelected($event)" hidden>
+              @if (!selectedFile) {
+                <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                <h3>Drop your Excel file here</h3>
+                <p>or click to browse — .xlsx files up to 10MB</p>
+              } @else {
+                <mat-icon class="upload-icon done">description</mat-icon>
+                <h3>{{ selectedFile.name }}</h3>
+                <p>{{ (selectedFile.size / 1024).toFixed(1) }} KB — Ready to analyze</p>
+              }
+            </div>
+            <div class="step-actions">
+              <button mat-button mat-dialog-close>Cancel</button>
+              <button mat-raised-button color="primary" (click)="analyzeExcel()" [disabled]="!selectedFile || analyzing">
+                @if (analyzing) {
+                  <mat-spinner diameter="20"></mat-spinner> Welly is analyzing...
+                } @else {
+                  <mat-icon>auto_awesome</mat-icon> Analyze with Welly
+                }
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- STEP 1: Analysis Results -->
+        @if (currentStep === 1) {
+          <div class="step-analysis">
+            <div class="welly-says">
+              <mat-icon class="welly-icon">smart_toy</mat-icon>
+              <div class="bubble">
+                I found <strong>{{ analysisResult.totalRows }}</strong> delivery rows!
+                <span class="badge ok">{{ analysisResult.matched }} matched</span>
+                @if (analysisResult.partialMatch > 0) {
+                  <span class="badge warn">{{ analysisResult.partialMatch }} partial</span>
+                }
+                @if (analysisResult.unmatched > 0) {
+                  <span class="badge err">{{ analysisResult.unmatched }} unmatched</span>
+                }
+                @if (analysisResult.errors > 0) {
+                  <span class="badge err">{{ analysisResult.errors }} errors</span>
+                }
+                — Review below and I'll handle the rest!
+              </div>
+            </div>
+
+            <div class="analysis-table-wrap">
+              <table class="analysis-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th>Address</th>
+                    <th>City</th>
+                    <th>Qty</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of analysisResult.rows; track row.rowIndex) {
+                    <tr [class.error-row]="row.status === 'Error'" [class.warn-row]="row.status === 'PartialMatch' || row.status === 'Unmatched'">
+                      <td>
+                        @if (row.status === 'Matched') { <mat-icon class="s-ok">check_circle</mat-icon> }
+                        @else if (row.status === 'PartialMatch') { <mat-icon class="s-warn">help</mat-icon> }
+                        @else if (row.status === 'Unmatched') { <mat-icon class="s-warn">warning</mat-icon> }
+                        @else { <mat-icon class="s-err">error</mat-icon> }
+                      </td>
+                      <td>{{ row.data?.invoiceNumber || '—' }}</td>
+                      <td>{{ row.data?.customerName || '—' }}</td>
+                      <td class="addr-cell">{{ row.data?.deliveryAddress || '—' }}</td>
+                      <td>{{ row.data?.city || '—' }}</td>
+                      <td class="num">{{ row.data?.quantity || 0 }}</td>
+                      <td class="num">R{{ (row.data?.salesAmount || 0) | number:'1.2-2' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="step-actions">
+              <button mat-button (click)="currentStep = 0">
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <button mat-raised-button color="primary" (click)="proceedToWarehouse()">
+                Next: Select Warehouse <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- STEP 2: Warehouse Selection -->
+        @if (currentStep === 2) {
+          <div class="step-warehouse">
+            <div class="welly-says">
+              <mat-icon class="welly-icon">smart_toy</mat-icon>
+              <div class="bubble">
+                @if (analysisResult.suggestedWarehouseId) {
+                  Based on the delivery locations, I suggest dispatching from
+                  <strong>{{ getWarehouseName(analysisResult.suggestedWarehouseId) }}</strong>.
+                  You can change this if needed.
+                } @else {
+                  Which warehouse should these deliveries originate from?
+                }
+              </div>
+            </div>
+
+            <div class="warehouse-cards">
+              @for (wh of analysisResult.warehouses; track wh.id) {
+                <div class="wh-card" [class.selected]="selectedWarehouseId === wh.id"
+                     (click)="selectedWarehouseId = wh.id">
+                  <mat-icon>warehouse</mat-icon>
+                  <div class="wh-info">
+                    <strong>{{ wh.name }}</strong>
+                    <span>{{ wh.city }}, {{ wh.province }}</span>
+                    <span class="wh-mgr">Manager: {{ wh.managerName || 'N/A' }}</span>
+                  </div>
+                  @if (selectedWarehouseId === wh.id) {
+                    <mat-icon class="wh-check">check_circle</mat-icon>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="step-actions">
+              <button mat-button (click)="currentStep = 1">
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <button mat-raised-button color="primary" (click)="proceedToAddresses()" [disabled]="!selectedWarehouseId">
+                Next: Check Addresses <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- STEP 3: Address Resolution -->
+        @if (currentStep === 3) {
+          <div class="step-addresses">
+            <div class="welly-says">
+              <mat-icon class="welly-icon">smart_toy</mat-icon>
+              <div class="bubble">
+                @if (addressIssueRows.length === 0) {
+                  All addresses look good! ✅ No issues found.
+                } @else {
+                  I found <strong>{{ addressIssueRows.length }}</strong> rows with missing or unclear addresses.
+                  Please fill in the correct addresses below so I can include them in the route.
+                }
+              </div>
+            </div>
+
+            @if (addressIssueRows.length > 0) {
+              <div class="address-fix-list">
+                @for (row of addressIssueRows; track row.rowIndex) {
+                  <div class="address-fix-card">
+                    <div class="afc-header">
+                      <mat-icon class="s-warn">location_off</mat-icon>
+                      <strong>{{ row.data?.customerName || 'Unknown' }}</strong>
+                      <span class="inv-chip">{{ row.data?.invoiceNumber || '—' }}</span>
+                    </div>
+                    <div class="afc-fields">
+                      <mat-form-field appearance="outline" class="addr-field">
+                        <mat-label>Delivery Address</mat-label>
+                        <input matInput [(ngModel)]="row.data.deliveryAddress" placeholder="e.g. 123 Main Rd, Industrial Park">
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="city-field">
+                        <mat-label>City</mat-label>
+                        <input matInput [(ngModel)]="row.data.city" placeholder="e.g. Durban">
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="prov-field">
+                        <mat-label>Province</mat-label>
+                        <mat-select [(ngModel)]="row.data.province">
+                          <mat-option value="Gauteng">Gauteng</mat-option>
+                          <mat-option value="KwaZulu-Natal">KwaZulu-Natal</mat-option>
+                          <mat-option value="Western Cape">Western Cape</mat-option>
+                          <mat-option value="Eastern Cape">Eastern Cape</mat-option>
+                          <mat-option value="Free State">Free State</mat-option>
+                          <mat-option value="Limpopo">Limpopo</mat-option>
+                          <mat-option value="Mpumalanga">Mpumalanga</mat-option>
+                          <mat-option value="North West">North West</mat-option>
+                          <mat-option value="Northern Cape">Northern Cape</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <div class="step-actions">
+              <button mat-button (click)="currentStep = 2">
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <button mat-raised-button color="primary" (click)="proceedToDriverVehicle()">
+                Next: Driver &amp; Vehicle <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- STEP 4: Driver & Vehicle Assignment -->
+        @if (currentStep === 4) {
+          <div class="step-driver-vehicle">
+            <div class="welly-says">
+              <mat-icon class="welly-icon">smart_toy</mat-icon>
+              <div class="bubble">
+                @if (analysisResult.suggestedDriverId || analysisResult.suggestedVehicleId) {
+                  I've pre-selected the least busy driver and vehicle for you. Feel free to change them!
+                } @else {
+                  Pick a driver and vehicle for this tripsheet, or leave blank to assign later.
+                }
+              </div>
+            </div>
+
+            <div class="dv-grid">
+              <div class="dv-section">
+                <h4><mat-icon>person</mat-icon> Driver</h4>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Select Driver</mat-label>
+                  <mat-select [(ngModel)]="selectedDriverId">
+                    <mat-option [value]="null">— Assign Later —</mat-option>
+                    @for (d of analysisResult.drivers; track d.id) {
+                      <mat-option [value]="d.id">
+                        {{ d.name }} ({{ d.licenseType }}) {{ d.activeLoads === 0 ? '✅' : '⚠️ ' + d.activeLoads + ' active' }}
+                      </mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
+              <div class="dv-section">
+                <h4><mat-icon>local_shipping</mat-icon> Vehicle</h4>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Select Vehicle</mat-label>
+                  <mat-select [(ngModel)]="selectedVehicleId">
+                    <mat-option [value]="null">— Assign Later —</mat-option>
+                    @for (v of analysisResult.vehicles; track v.id) {
+                      <mat-option [value]="v.id">
+                        {{ v.registrationNumber }} — {{ v.type }} ({{ v.make }} {{ v.model }}) {{ v.activeLoads === 0 ? '✅' : '⚠️' }}
+                      </mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
+              <div class="dv-section">
+                <h4><mat-icon>event</mat-icon> Schedule</h4>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Scheduled Date</mat-label>
+                  <input matInput [matDatepicker]="schedulePicker" [(ngModel)]="scheduledDate">
+                  <mat-datepicker-toggle matIconSuffix [for]="schedulePicker"></mat-datepicker-toggle>
+                  <mat-datepicker #schedulePicker></mat-datepicker>
+                </mat-form-field>
+              </div>
+
+              <div class="dv-section">
+                <h4><mat-icon>notes</mat-icon> Notes</h4>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Special Instructions</mat-label>
+                  <textarea matInput [(ngModel)]="tripNotes" rows="3" placeholder="Any special instructions..."></textarea>
+                </mat-form-field>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button mat-button (click)="currentStep = 3">
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <button mat-raised-button color="primary" (click)="proceedToConfirm()">
+                Next: Review &amp; Confirm <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- STEP 5: Confirmation -->
+        @if (currentStep === 5) {
+          <div class="step-confirm">
+            <div class="welly-says">
+              <mat-icon class="welly-icon">smart_toy</mat-icon>
+              <div class="bubble">
+                Here's your tripsheet summary. Review everything and hit <strong>Create Tripsheet</strong> when you're happy!
+                If I got something wrong, go back and fix it — I'll learn from your corrections. 🧠
+              </div>
+            </div>
+
+            <div class="confirm-summary">
+              <div class="summary-card">
+                <mat-icon>description</mat-icon>
+                <div><strong>{{ validRows.length }}</strong><span>Deliveries</span></div>
+              </div>
+              <div class="summary-card">
+                <mat-icon>people</mat-icon>
+                <div><strong>{{ uniqueCustomers }}</strong><span>Customers (Stops)</span></div>
+              </div>
+              <div class="summary-card">
+                <mat-icon>payments</mat-icon>
+                <div><strong>R{{ totalValue | number:'1.2-2' }}</strong><span>Total Value</span></div>
+              </div>
+              <div class="summary-card">
+                <mat-icon>warehouse</mat-icon>
+                <div><strong>{{ getWarehouseName(selectedWarehouseId) }}</strong><span>Warehouse</span></div>
+              </div>
+              <div class="summary-card">
+                <mat-icon>person</mat-icon>
+                <div><strong>{{ getDriverName(selectedDriverId) }}</strong><span>Driver</span></div>
+              </div>
+              <div class="summary-card">
+                <mat-icon>local_shipping</mat-icon>
+                <div><strong>{{ getVehicleName(selectedVehicleId) }}</strong><span>Vehicle</span></div>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button mat-button (click)="currentStep = 4">
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <button mat-raised-button color="primary" (click)="createTripsheet()" [disabled]="creating"
+                      class="create-btn">
+                @if (creating) {
+                  <mat-spinner diameter="20"></mat-spinner> Creating...
+                } @else {
+                  <mat-icon>rocket_launch</mat-icon> Create Tripsheet
+                }
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- STEP 6: Done -->
+        @if (currentStep === 6) {
+          <div class="step-done">
+            <div class="done-icon">
+              <mat-icon>check_circle</mat-icon>
+            </div>
+            <h2>Tripsheet Created! 🎉</h2>
+            <p class="done-number">{{ createdTripsheetNumber }}</p>
+            <p>{{ createdMessage }}</p>
+
+            <div class="welly-says" style="margin-top: 24px;">
+              <mat-icon class="welly-icon">smart_toy</mat-icon>
+              <div class="bubble">
+                Did I get everything right? If you made any corrections along the way, I've already noted them.
+                I'll use those to do even better next time! 💪
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button mat-raised-button color="primary" (click)="dialogRef.close({ created: true })">
+                <mat-icon>done</mat-icon> Done
+              </button>
+            </div>
+          </div>
+        }
+
+      </div>
+    </div>
+  `,
+  styles: [`
+    .welly-wizard { display: flex; flex-direction: column; height: 100%; }
+    .wizard-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #00bcd4, #0097a7);
+      color: white; margin: -24px -24px 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .welly-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); display: flex;
+      align-items: center; justify-content: center;
+    }
+    .welly-avatar mat-icon { font-size: 28px; width: 28px; height: 28px; }
+    .wizard-header h2 { margin: 0; font-size: 20px; }
+    .header-sub { margin: 2px 0 0; font-size: 13px; opacity: 0.9; }
+    .wizard-header button { color: white; }
+
+    .step-bar {
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px 16px 12px; gap: 0;
+    }
+    .step-dot {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      min-width: 60px;
+    }
+    .dot {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #e0e0e0; color: #999; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; transition: all 0.3s;
+    }
+    .step-dot.active .dot { background: #00bcd4; color: white; }
+    .step-dot.completed .dot { background: #4caf50; color: white; }
+    .step-dot.completed .dot mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .step-label { font-size: 10px; color: #999; text-align: center; }
+    .step-dot.active .step-label { color: #00bcd4; font-weight: 600; }
+    .step-dot.completed .step-label { color: #4caf50; }
+    .step-line {
+      flex: 1; height: 2px; background: #e0e0e0;
+      min-width: 20px; max-width: 60px; margin: 0 4px;
+      margin-bottom: 18px; transition: background 0.3s;
+    }
+    .step-line.completed { background: #4caf50; }
+
+    .wizard-content { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+
+    .welly-says {
+      display: flex; gap: 12px; align-items: flex-start; margin-bottom: 20px;
+    }
+    .welly-icon {
+      color: #00bcd4; background: #e0f7fa; border-radius: 50%;
+      padding: 8px; font-size: 24px; width: 24px; height: 24px;
+      flex-shrink: 0;
+    }
+    .bubble {
+      background: #f5f5f5; border-radius: 12px; padding: 12px 16px;
+      font-size: 14px; line-height: 1.5; flex: 1;
+      border: 1px solid #e0e0e0;
+    }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; margin-left: 4px; }
+    .badge.ok { background: #e8f5e9; color: #2e7d32; }
+    .badge.warn { background: #fff3e0; color: #e65100; }
+    .badge.err { background: #ffebee; color: #c62828; }
+
+    /* Upload */
+    .upload-zone {
+      border: 2px dashed #bdbdbd; border-radius: 16px; padding: 48px 24px;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+      margin: 16px 0;
+    }
+    .upload-zone:hover { border-color: #00bcd4; background: #e0f7fa; }
+    .upload-zone.has-file { border-color: #4caf50; background: #e8f5e9; }
+    .upload-icon { font-size: 48px !important; width: 48px !important; height: 48px !important; color: #bdbdbd; }
+    .upload-icon.done { color: #4caf50; }
+    .upload-zone h3 { margin: 12px 0 4px; color: #333; }
+    .upload-zone p { margin: 0; color: #666; font-size: 13px; }
+
+    .step-actions {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 16px; border-top: 1px solid #e0e0e0; margin-top: 16px;
+    }
+    .step-actions button mat-icon { margin-right: 4px; }
+
+    /* Analysis table */
+    .analysis-table-wrap { max-height: 350px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
+    .analysis-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .analysis-table th { background: #fafafa; padding: 8px 10px; text-align: left; font-weight: 600; position: sticky; top: 0; border-bottom: 2px solid #e0e0e0; }
+    .analysis-table td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
+    .analysis-table .s-ok { color: #4caf50; font-size: 18px; }
+    .analysis-table .s-warn { color: #ff9800; font-size: 18px; }
+    .analysis-table .s-err { color: #f44336; font-size: 18px; }
+    .analysis-table .num { text-align: right; font-family: monospace; }
+    .analysis-table .addr-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .error-row { background: #fff5f5; }
+    .warn-row { background: #fffbf0; }
+
+    /* Warehouse cards */
+    .warehouse-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 8px 0; }
+    .wh-card {
+      display: flex; align-items: center; gap: 12px;
+      border: 2px solid #e0e0e0; border-radius: 12px; padding: 16px;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .wh-card:hover { border-color: #00bcd4; background: #e0f7fa; }
+    .wh-card.selected { border-color: #4caf50; background: #e8f5e9; }
+    .wh-card mat-icon:first-child { font-size: 32px; width: 32px; height: 32px; color: #78909c; }
+    .wh-info { display: flex; flex-direction: column; flex: 1; }
+    .wh-info strong { font-size: 15px; }
+    .wh-info span { font-size: 12px; color: #666; }
+    .wh-mgr { font-style: italic; }
+    .wh-check { color: #4caf50; }
+
+    /* Address fixes */
+    .address-fix-list { display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; }
+    .address-fix-card { border: 1px solid #ffe0b2; border-radius: 10px; padding: 12px 16px; background: #fffbf0; }
+    .afc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .afc-header .s-warn { color: #ff9800; }
+    .inv-chip { background: #e0e0e0; padding: 2px 8px; border-radius: 8px; font-size: 11px; margin-left: auto; }
+    .afc-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+    .afc-fields mat-form-field { font-size: 13px; }
+
+    /* Driver / Vehicle */
+    .dv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .dv-section h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: #333; }
+    .full-width { width: 100%; }
+
+    /* Confirm */
+    .confirm-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 8px 0; }
+    .summary-card {
+      display: flex; align-items: center; gap: 12px;
+      border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px;
+      background: #fafafa;
+    }
+    .summary-card mat-icon { font-size: 28px; width: 28px; height: 28px; color: #00bcd4; }
+    .summary-card div { display: flex; flex-direction: column; }
+    .summary-card strong { font-size: 16px; color: #333; }
+    .summary-card span { font-size: 11px; color: #999; }
+    .create-btn { font-size: 15px !important; padding: 8px 24px !important; }
+
+    /* Done */
+    .step-done { text-align: center; padding: 32px 0; }
+    .done-icon mat-icon { font-size: 72px; width: 72px; height: 72px; color: #4caf50; }
+    .done-number { font-size: 28px; font-weight: 700; color: #00bcd4; margin: 8px 0; }
+  `]
+})
+export class WellyTripsheetWizardDialog {
+  steps = [
+    { id: 0, label: 'Upload' },
+    { id: 1, label: 'Analysis' },
+    { id: 2, label: 'Warehouse' },
+    { id: 3, label: 'Addresses' },
+    { id: 4, label: 'Driver' },
+    { id: 5, label: 'Confirm' },
+    { id: 6, label: 'Done' }
+  ];
+
+  stepDescriptions = [
+    'Upload your Excel file',
+    'Review extracted data',
+    'Select origin warehouse',
+    'Resolve missing addresses',
+    'Assign driver & vehicle',
+    'Review & confirm',
+    'Tripsheet created!'
+  ];
+
+  currentStep = 0;
+  selectedFile: File | null = null;
+  analyzing = false;
+  creating = false;
+  analysisResult: any = { rows: [], warehouses: [], drivers: [], vehicles: [] };
+  addressIssueRows: any[] = [];
+
+  selectedWarehouseId: number | null = null;
+  selectedDriverId: number | null = null;
+  selectedVehicleId: number | null = null;
+  scheduledDate: Date = new Date();
+  tripNotes = '';
+
+  createdTripsheetNumber = '';
+  createdMessage = '';
+  corrections: any[] = [];
+
+  private http = inject(HttpClient);
+
+  constructor(
+    public dialogRef: MatDialogRef<WellyTripsheetWizardDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {}
+
+  // --- Upload ---
+  onFileSelected(event: any): void {
+    const file = event.target.files[0];
+    if (file && file.name.endsWith('.xlsx')) {
+      this.selectedFile = file;
+    }
+  }
+
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const file = event.dataTransfer?.files[0];
+    if (file && file.name.endsWith('.xlsx')) {
+      this.selectedFile = file;
+    }
+  }
+
+  // --- Analyze ---
+  analyzeExcel(): void {
+    if (!this.selectedFile) return;
+    this.analyzing = true;
+
+    const formData = new FormData();
+    formData.append('file', this.selectedFile);
+
+    this.http.post<any>(`${this.data.apiUrl}/logistics/tripsheet/welly-analyze-excel`, formData).subscribe({
+      next: (result) => {
+        this.analysisResult = result;
+        this.selectedWarehouseId = result.suggestedWarehouseId || null;
+        this.selectedDriverId = result.suggestedDriverId || null;
+        this.selectedVehicleId = result.suggestedVehicleId || null;
+
+        // Build address issue rows
+        this.addressIssueRows = (result.rows || []).filter((r: any) =>
+          r.status !== 'Error' &&
+          (!r.data?.deliveryAddress || r.data.deliveryAddress.trim() === '') &&
+          (!r.data?.city || r.data.city.trim() === '')
+        );
+
+        this.analyzing = false;
+        this.currentStep = 1;
+      },
+      error: (err) => {
+        this.analyzing = false;
+        alert('Analysis failed: ' + (err.error?.message || err.message));
+      }
+    });
+  }
+
+  // --- Navigation ---
+  proceedToWarehouse(): void {
+    this.currentStep = 2;
+  }
+
+  proceedToAddresses(): void {
+    this.currentStep = 3;
+  }
+
+  proceedToDriverVehicle(): void {
+    this.currentStep = 4;
+  }
+
+  proceedToConfirm(): void {
+    this.currentStep = 5;
+  }
+
+  // --- Helpers ---
+  get validRows(): any[] {
+    return (this.analysisResult.rows || []).filter((r: any) => r.status !== 'Error');
+  }
+
+  get uniqueCustomers(): number {
+    const names = new Set(this.validRows.map((r: any) => (r.data?.customerName || '').toLowerCase().trim()));
+    return names.size;
+  }
+
+  get totalValue(): number {
+    return this.validRows.reduce((sum: number, r: any) => sum + (r.data?.salesAmount || 0), 0);
+  }
+
+  getWarehouseName(id: number | null): string {
+    if (!id) return 'Not selected';
+    const wh = (this.analysisResult.warehouses || []).find((w: any) => w.id === id);
+    return wh ? wh.name : 'Unknown';
+  }
+
+  getDriverName(id: number | null): string {
+    if (!id) return 'Assign later';
+    const d = (this.analysisResult.drivers || []).find((x: any) => x.id === id);
+    return d ? d.name : 'Unknown';
+  }
+
+  getVehicleName(id: number | null): string {
+    if (!id) return 'Assign later';
+    const v = (this.analysisResult.vehicles || []).find((x: any) => x.id === id);
+    return v ? v.registrationNumber : 'Unknown';
+  }
+
+  // --- Create ---
+  createTripsheet(): void {
+    this.creating = true;
+
+    const body = {
+      batchId: this.analysisResult.batchId,
+      warehouseId: this.selectedWarehouseId,
+      driverId: this.selectedDriverId,
+      vehicleId: this.selectedVehicleId,
+      scheduledDate: this.scheduledDate?.toISOString(),
+      notes: this.tripNotes,
+      optimizeRoute: true,
+      rows: this.validRows.map((r: any) => ({
+        rowIndex: r.rowIndex,
+        customerName: r.data?.customerName,
+        customerNumber: r.data?.customerNumber,
+        deliveryAddress: r.data?.deliveryAddress,
+        city: r.data?.city,
+        province: r.data?.province,
+        invoiceNumber: r.data?.invoiceNumber,
+        productDescription: r.data?.productDescription,
+        quantity: r.data?.quantity,
+        salesAmount: r.data?.salesAmount,
+        contactPerson: r.data?.contactPerson,
+        contactPhone: r.data?.contactPhone,
+        confirmedCustomerId: r.matchedCustomerId || null,
+        confirmedInvoiceId: r.matchedInvoiceId || null,
+        createNewCustomer: !r.matchedCustomerId
+      }))
+    };
+
+    this.http.post<any>(`${this.data.apiUrl}/logistics/tripsheet/welly-create-tripsheet`, body).subscribe({
+      next: (result) => {
+        this.creating = false;
+        this.createdTripsheetNumber = result.tripSheetNumber;
+        this.createdMessage = result.message;
+        this.currentStep = 6;
+
+        // Send any corrections as feedback for learning
+        this.sendFeedback(result.tripSheetNumber);
+      },
+      error: (err) => {
+        this.creating = false;
+        alert('Failed to create tripsheet: ' + (err.error?.message || err.message));
+      }
+    });
+  }
+
+  private sendFeedback(tripSheetNumber: string): void {
+    // Collect corrections: address fixes the user entered
+    const corrections: any[] = [];
+
+    for (const row of this.addressIssueRows) {
+      if (row.data?.deliveryAddress && row.data.deliveryAddress.trim() !== '') {
+        corrections.push({
+          type: 'address',
+          original: 'Missing address',
+          corrected: `${row.data.deliveryAddress}, ${row.data.city || ''}, ${row.data.province || ''}`,
+          context: `Customer: ${row.data?.customerName || 'Unknown'}, Invoice: ${row.data?.invoiceNumber || 'N/A'}`
+        });
+      }
+    }
+
+    // Track warehouse selection if different from suggestion
+    if (this.selectedWarehouseId !== this.analysisResult.suggestedWarehouseId) {
+      corrections.push({
+        type: 'warehouse',
+        original: this.getWarehouseName(this.analysisResult.suggestedWarehouseId),
+        corrected: this.getWarehouseName(this.selectedWarehouseId),
+        context: `User changed warehouse from Welly suggestion`
+      });
+    }
+
+    // Track driver change
+    if (this.selectedDriverId !== this.analysisResult.suggestedDriverId) {
+      corrections.push({
+        type: 'driver',
+        original: this.getDriverName(this.analysisResult.suggestedDriverId),
+        corrected: this.getDriverName(this.selectedDriverId),
+        context: `User changed driver from Welly suggestion`
+      });
+    }
+
+    // Track vehicle change
+    if (this.selectedVehicleId !== this.analysisResult.suggestedVehicleId) {
+      corrections.push({
+        type: 'vehicle',
+        original: this.getVehicleName(this.analysisResult.suggestedVehicleId),
+        corrected: this.getVehicleName(this.selectedVehicleId),
+        context: `User changed vehicle from Welly suggestion`
+      });
+    }
+
+    if (corrections.length > 0) {
+      this.http.post(`${this.data.apiUrl}/logistics/tripsheet/welly-feedback`, {
+        tripSheetNumber,
+        corrections
+      }).subscribe();
+    }
+  }
+}
