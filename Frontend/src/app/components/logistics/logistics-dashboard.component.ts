@@ -6372,11 +6372,10 @@ Notes: ${record.notes || 'No notes'}
       data: { apiUrl: environment.apiUrl }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result === 'refresh') {
-        this.loadAddressIssuesCount();
-        this.loadCustomers();
-      }
+    dialogRef.afterClosed().subscribe(() => {
+      // Always refresh count after dialog closes — Welly fixes may have been applied
+      this.loadAddressIssuesCount();
+      this.loadCustomers();
     });
   }
 
