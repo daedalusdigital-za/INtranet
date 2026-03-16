@@ -87,6 +87,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"] ??
                 "YourSuperSecretKeyForJWTTokenGeneration123!"))
         };
+
+        // Allow SignalR hubs to authenticate via access_token query string
+        // WebSockets cannot send custom HTTP headers, so SignalR passes the JWT token
+        // as a query parameter instead of an Authorization header
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
