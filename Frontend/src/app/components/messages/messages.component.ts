@@ -2359,7 +2359,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       ? `Conversation with: ${this.selectedConversation.participants?.map(p => p.fullName).join(', ') || 'colleague'}\n\n`
       : '';
 
-    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'draft-message',
       content: context + this.wellyDraftPrompt
     }).subscribe({
@@ -2386,7 +2386,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
     this.wellyLoading = true;
     this.wellyActionLabel = `Welly is translating to ${language}...`;
 
-    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'translate-message',
       content: this.newMessage,
       targetLanguage: language
@@ -2414,7 +2414,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       `${m.senderFullName || m.senderName}: ${m.content}`
     ).join('\n');
 
-    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'summarize-messages',
       content: msgThread
     }).subscribe({

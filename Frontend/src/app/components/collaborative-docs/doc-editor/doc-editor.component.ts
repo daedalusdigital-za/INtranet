@@ -2178,7 +2178,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.wellyLoading = true;
 
-    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: action,
       content: content,
       targetLanguage: targetLanguage
@@ -2201,7 +2201,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     this.wellyLoading = true;
     this.wellyActionLabel = 'generating content';
 
-    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'generate',
       content: this.wellyGeneratePrompt
     }).subscribe({

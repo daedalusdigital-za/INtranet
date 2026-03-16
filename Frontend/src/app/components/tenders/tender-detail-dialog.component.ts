@@ -1413,7 +1413,7 @@ export class TenderDetailDialogComponent {
 
     const content = `Tender: ${this.data.tender.tenderNumber} — ${this.data.tender.title}\nIssuing Dept: ${this.data.tender.issuingDepartment}\nStatus: ${this.data.tender.status}\nTotal BOQ Value: R${this.calculateBOQTotal().toFixed(2)}\nAvg Margin: ${this.calculateAvgMargin().toFixed(1)}%\nNumber of Line Items: ${boqItems.length}\n\nBOQ Line Items:\n${boqSummary || 'No BOQ items found'}`;
 
-    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'analyze-boq',
       content: content
     }).subscribe({
@@ -1441,7 +1441,7 @@ export class TenderDetailDialogComponent {
 
     const content = `Tender: ${this.data.tender.tenderNumber} — ${this.data.tender.title}\nStatus: ${this.data.tender.status}\nClosing Date: ${this.data.tender.closingDate}\nCompany: ${this.data.tender.companyCode}\n\nDocuments:\n${docList || 'No documents uploaded'}\n\nTeam:\n${teamList || 'No team members assigned'}\n\nBOQ Items: ${(this.data.tender.boqItems || []).length} items, Total: R${this.calculateBOQTotal().toFixed(2)}`;
 
-    this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'check-compliance',
       content: content
     }).subscribe({

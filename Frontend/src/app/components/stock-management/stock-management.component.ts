@@ -1272,7 +1272,7 @@ export class StockManagementComponent implements OnInit {
 
         const content = `Warehouse: ${this.selectedWarehouse.name}\nLocation: ${this.selectedWarehouse.location}\nCapacity: ${this.selectedWarehouse.capacityPercent}% used (${this.selectedWarehouse.totalCapacity - this.selectedWarehouse.availableCapacity}/${this.selectedWarehouse.totalCapacity} m³)\nTotal Items: ${this.selectedWarehouse.totalItems}\nTotal Stock Value: R${this.selectedWarehouse.totalStockValue}\n\nInventory Details:\n${stockSummary || 'No inventory items found'}`;
 
-        this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+        this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
           assistType: 'analyze-stock',
           content: content
         }).subscribe({
@@ -1291,7 +1291,7 @@ export class StockManagementComponent implements OnInit {
         // If inventory fetch fails, analyze with summary data only
         const content = `Warehouse: ${this.selectedWarehouse.name}\nLocation: ${this.selectedWarehouse.location}\nCapacity: ${this.selectedWarehouse.capacityPercent}% used\nTotal Items: ${this.selectedWarehouse.totalItems}\nTotal Stock Value: R${this.selectedWarehouse.totalStockValue}\n\nNote: Detailed inventory data could not be loaded.`;
 
-        this.http.post<{ result: string }>(`${environment.apiUrl}/api/aichat/welly-assist`, {
+        this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
           assistType: 'analyze-stock',
           content: content
         }).subscribe({
