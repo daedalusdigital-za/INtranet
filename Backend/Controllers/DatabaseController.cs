@@ -275,8 +275,8 @@ namespace ProjectTracker.API.Controllers
                     {
                         StartDate = reader.GetDateTime(0),
                         FinishDate = reader.GetDateTime(1),
-                        SizeBytes = reader.GetInt64(2),
-                        CompressedSizeBytes = reader.IsDBNull(3) ? null : reader.GetInt64(3),
+                        SizeBytes = Convert.ToInt64(reader.GetValue(2)),
+                        CompressedSizeBytes = reader.IsDBNull(3) ? null : Convert.ToInt64(reader.GetValue(3)),
                         FilePath = reader.GetString(4),
                         BackupType = reader.GetString(5) switch
                         {
