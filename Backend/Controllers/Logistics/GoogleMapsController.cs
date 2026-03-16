@@ -843,6 +843,314 @@ namespace ProjectTracker.API.Controllers.Logistics
 
         #endregion
 
+        #region Welly Fix Suggestions
+
+        /// <summary>
+        /// Welly suggests fixes for customers without locations by geocoding their addresses (preview only, no DB changes)
+        /// </summary>
+        [HttpPost("welly-suggest-customer-fixes")]
+        public async Task<IActionResult> WellySuggestCustomerFixes([FromBody] List<int>? customerIds = null)
+        {
+            var query = _context.LogisticsCustomers.AsQueryable();
+
+            if (customerIds != null && customerIds.Any())
+            {
+                query = query.Where(c => customerIds.Contains(c.Id));
+            }
+            else
+            {
+                // Default centroid for South Africa
+                double defaultLat = -30.559482;
+                double defaultLng = 22.937506;
+                
+                query = query.Where(c => 
+                    c.Province == null || c.Province == "" || 
+                    c.City == null || c.City == "" ||
+                    c.Latitude == null || c.Longitude == null ||
+                    (c.Latitude != null && c.Longitude != null && 
+                     Math.Abs(c.Latitude.Value - defaultLat) < 0.001 && 
+                     Math.Abs(c.Longitude.Value - defaultLng) < 0.001));
+            }
+
+            var customers = await query.Take(100).ToListAsync();
+            var suggestions = new List<object>();
+
+            foreach (var customer in customers)
+            {
+                var addressParts = new List<string>();
+                
+                if (!string.IsNullOrEmpty(customer.AddressLinesJson))
+                {
+                    try
+                    {
+                        var lines = JsonSerializer.Deserialize<List<string>>(customer.AddressLinesJson);
+                        if (lines != null) addressParts.AddRange(lines);
+                    }
+                    catch { }
+                }
+
+                if (!string.IsNullOrEmpty(customer.PhysicalAddress))
+                    addressParts.Add(customer.PhysicalAddress);
+                
+                if (!string.IsNullOrEmpty(customer.DeliveryAddress))
+                    addressParts.Add(customer.DeliveryAddress);
+                
+                if (!string.IsNullOrEmpty(customer.Name))
+                    addressParts.Add(customer.Name);
+                    
+                addressParts.Add("South Africa");
+
+                var searchQuery = string.Join(", ", addressParts.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct());
+
+                if (string.IsNullOrWhiteSpace(searchQuery) || searchQuery == "South Africa")
+                {
+                    suggestions.Add(new
+                    {
+                        customerId = customer.Id,
+                        customerCode = customer.CustomerCode,
+                        customerName = customer.Name,
+                        currentAddress = customer.PhysicalAddress ?? customer.DeliveryAddress ?? "",
+                        success = false,
+                        error = "No address data available to geocode"
+                    });
+                    continue;
+                }
+
+                var result = await _geocodingService.GeocodeAddressAsync(searchQuery);
+
+                suggestions.Add(new
+                {
+                    customerId = customer.Id,
+                    customerCode = customer.CustomerCode,
+                    customerName = customer.Name,
+                    currentAddress = customer.PhysicalAddress ?? customer.DeliveryAddress ?? "",
+                    success = result.Success,
+                    suggestedProvince = result.Province,
+                    suggestedCity = result.City,
+                    suggestedPostalCode = result.PostalCode,
+                    suggestedLatitude = result.Latitude,
+                    suggestedLongitude = result.Longitude,
+                    suggestedFormattedAddress = result.FormattedAddress,
+                    error = result.Success ? null : result.Error
+                });
+
+                await Task.Delay(80); // Rate limiting
+            }
+
+            return Ok(new { total = suggestions.Count, suggestions });
+        }
+
+        /// <summary>
+        /// Apply approved customer location fixes
+        /// </summary>
+        [HttpPost("welly-apply-customer-fixes")]
+        public async Task<IActionResult> WellyApplyCustomerFixes([FromBody] List<CustomerFixDto> fixes)
+        {
+            if (fixes == null || !fixes.Any())
+                return BadRequest(new { error = "No fixes provided" });
+
+            int applied = 0, failed = 0;
+            var results = new List<object>();
+
+            foreach (var fix in fixes)
+            {
+                var customer = await _context.LogisticsCustomers.FindAsync(fix.CustomerId);
+                if (customer == null)
+                {
+                    results.Add(new { customerId = fix.CustomerId, success = false, error = "Customer not found" });
+                    failed++;
+                    continue;
+                }
+
+                customer.Province = fix.Province;
+                customer.City = fix.City;
+                customer.PostalCode = fix.PostalCode;
+                customer.Latitude = fix.Latitude;
+                customer.Longitude = fix.Longitude;
+                customer.DeliveryProvince = fix.Province;
+                customer.DeliveryCity = fix.City;
+                customer.DeliveryPostalCode = fix.PostalCode;
+                customer.UpdatedAt = DateTime.UtcNow;
+
+                results.Add(new { customerId = fix.CustomerId, customerName = customer.Name, success = true });
+                applied++;
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Welly applied {Applied} customer location fixes ({Failed} failed)", applied, failed);
+
+            return Ok(new { applied, failed, results });
+        }
+
+        /// <summary>
+        /// Welly suggests province fixes for invoices by looking up their linked customer's province
+        /// </summary>
+        [HttpPost("welly-suggest-invoice-fixes")]
+        public async Task<IActionResult> WellySuggestInvoiceFixes([FromBody] List<int>? invoiceIds = null)
+        {
+            var query = _context.ImportedInvoices
+                .Include(i => i.Customer)
+                .Where(i => i.DeliveryProvince == null || i.DeliveryProvince == "");
+
+            if (invoiceIds != null && invoiceIds.Any())
+            {
+                query = _context.ImportedInvoices
+                    .Include(i => i.Customer)
+                    .Where(i => invoiceIds.Contains(i.Id));
+            }
+
+            var invoices = await query.Take(500).ToListAsync();
+            var suggestions = new List<object>();
+
+            // Cache customer lookups
+            var customerProvinceCache = new Dictionary<string, (string? province, string? city, string? source)>();
+
+            foreach (var invoice in invoices)
+            {
+                string? suggestedProvince = null;
+                string? suggestedCity = null;
+                string source = "";
+
+                // Strategy 1: Get from linked customer record
+                if (invoice.Customer != null)
+                {
+                    if (!string.IsNullOrEmpty(invoice.Customer.DeliveryProvince))
+                    {
+                        suggestedProvince = invoice.Customer.DeliveryProvince;
+                        suggestedCity = invoice.Customer.DeliveryCity;
+                        source = "Customer delivery address";
+                    }
+                    else if (!string.IsNullOrEmpty(invoice.Customer.Province))
+                    {
+                        suggestedProvince = invoice.Customer.Province;
+                        suggestedCity = invoice.Customer.City;
+                        source = "Customer address";
+                    }
+                }
+
+                // Strategy 2: Look up customer by number from other invoices that have province
+                if (string.IsNullOrEmpty(suggestedProvince))
+                {
+                    if (customerProvinceCache.TryGetValue(invoice.CustomerNumber, out var cached))
+                    {
+                        suggestedProvince = cached.province;
+                        suggestedCity = cached.city;
+                        source = cached.source ?? "";
+                    }
+                    else
+                    {
+                        // Check other invoices for same customer that have a province
+                        var otherInvoice = await _context.ImportedInvoices
+                            .Where(i => i.CustomerNumber == invoice.CustomerNumber && 
+                                       i.DeliveryProvince != null && i.DeliveryProvince != "")
+                            .Select(i => new { i.DeliveryProvince, i.DeliveryCity })
+                            .FirstOrDefaultAsync();
+
+                        if (otherInvoice != null)
+                        {
+                            suggestedProvince = otherInvoice.DeliveryProvince;
+                            suggestedCity = otherInvoice.DeliveryCity;
+                            source = "Other invoices for same customer";
+                        }
+
+                        customerProvinceCache[invoice.CustomerNumber] = (suggestedProvince, suggestedCity, source);
+                    }
+                }
+
+                // Strategy 3: Look up the customer record from LogisticsCustomers by customer code
+                if (string.IsNullOrEmpty(suggestedProvince))
+                {
+                    var custRecord = await _context.LogisticsCustomers
+                        .Where(c => c.CustomerCode == invoice.CustomerNumber)
+                        .Select(c => new { c.Province, c.City, c.DeliveryProvince, c.DeliveryCity })
+                        .FirstOrDefaultAsync();
+
+                    if (custRecord != null)
+                    {
+                        suggestedProvince = custRecord.DeliveryProvince ?? custRecord.Province;
+                        suggestedCity = custRecord.DeliveryCity ?? custRecord.City;
+                        if (!string.IsNullOrEmpty(suggestedProvince))
+                            source = "Customer master data";
+                    }
+                }
+
+                suggestions.Add(new
+                {
+                    invoiceId = invoice.Id,
+                    transactionNumber = invoice.TransactionNumber,
+                    customerNumber = invoice.CustomerNumber,
+                    customerName = invoice.CustomerName,
+                    salesAmount = invoice.SalesAmount,
+                    success = !string.IsNullOrEmpty(suggestedProvince),
+                    suggestedProvince,
+                    suggestedCity,
+                    source,
+                    error = string.IsNullOrEmpty(suggestedProvince) ? "Could not determine province from available data" : null
+                });
+            }
+
+            return Ok(new 
+            { 
+                total = suggestions.Count, 
+                fixable = suggestions.Count(s => ((dynamic)s).success == true),
+                suggestions 
+            });
+        }
+
+        /// <summary>
+        /// Apply approved invoice province fixes
+        /// </summary>
+        [HttpPost("welly-apply-invoice-fixes")]
+        public async Task<IActionResult> WellyApplyInvoiceFixes([FromBody] List<InvoiceFixDto> fixes)
+        {
+            if (fixes == null || !fixes.Any())
+                return BadRequest(new { error = "No fixes provided" });
+
+            int applied = 0, failed = 0;
+
+            foreach (var fix in fixes)
+            {
+                var invoice = await _context.ImportedInvoices.FindAsync(fix.InvoiceId);
+                if (invoice == null)
+                {
+                    failed++;
+                    continue;
+                }
+
+                invoice.DeliveryProvince = fix.Province;
+                if (!string.IsNullOrEmpty(fix.City))
+                    invoice.DeliveryCity = fix.City;
+                
+                applied++;
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Welly applied {Applied} invoice province fixes ({Failed} failed)", applied, failed);
+
+            return Ok(new { applied, failed });
+        }
+
+        public class CustomerFixDto
+        {
+            public int CustomerId { get; set; }
+            public string? Province { get; set; }
+            public string? City { get; set; }
+            public string? PostalCode { get; set; }
+            public double? Latitude { get; set; }
+            public double? Longitude { get; set; }
+        }
+
+        public class InvoiceFixDto
+        {
+            public int InvoiceId { get; set; }
+            public string Province { get; set; } = string.Empty;
+            public string? City { get; set; }
+        }
+
+        #endregion
+
         #region Helper Methods
 
         private RoutesService.Location MapLocation(LocationDto dto)

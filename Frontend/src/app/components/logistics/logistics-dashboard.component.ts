@@ -19,6 +19,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatNativeDateModule } from '@angular/material/core';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatStepperModule } from '@angular/material/stepper';
@@ -12014,6 +12015,7 @@ interface CustomerAddressIssue {
     MatTableModule,
     MatTabsModule,
     MatBadgeModule,
+    MatSlideToggleModule,
     FormsModule
   ],
   template: `
@@ -12074,7 +12076,93 @@ interface CustomerAddressIssue {
       <div class="content" *ngIf="!loading; else loadingTpl">
         <div class="tab-info">
           <span class="showing">Showing {{ filteredCustomers.length }} customers</span>
+          <button class="welly-fix-btn" (click)="wellyFixAll()" [disabled]="wellyLoading || showWellyReview">
+            @if (wellyLoading) {
+              <mat-spinner diameter="16"></mat-spinner>
+              <span>Welly is analyzing...</span>
+            } @else {
+              <span>🤖</span>
+              <span>Ask Welly to Fix All</span>
+            }
+          </button>
         </div>
+
+        <!-- Welly Review Panel -->
+        @if (showWellyReview) {
+          <div class="welly-review-panel">
+            <div class="welly-review-header">
+              <div class="welly-avatar">🤖</div>
+              <div>
+                <h3>Welly's Suggested Fixes</h3>
+                <p>Review each suggestion below. Toggle off any you don't want to apply.</p>
+              </div>
+              <div class="welly-review-actions-header">
+                <button mat-button (click)="toggleAllFixes(true)">
+                  <mat-icon>check_box</mat-icon> Select All
+                </button>
+                <button mat-button (click)="toggleAllFixes(false)">
+                  <mat-icon>check_box_outline_blank</mat-icon> Deselect All
+                </button>
+              </div>
+            </div>
+            <div class="welly-review-list">
+              @for (fix of wellyFixes; track fix.customerId) {
+                <div class="welly-review-item" [class.failed]="!fix.success" [class.rejected]="!fix.approved">
+                  <div class="welly-review-toggle">
+                    @if (fix.success) {
+                      <mat-slide-toggle [(ngModel)]="fix.approved" color="primary"></mat-slide-toggle>
+                    } @else {
+                      <mat-icon class="fix-failed-icon">error_outline</mat-icon>
+                    }
+                  </div>
+                  <div class="welly-review-info">
+                    <div class="welly-review-name">
+                      <strong>{{ fix.customerName }}</strong>
+                      <span class="code">{{ fix.customerCode }}</span>
+                    </div>
+                    @if (fix.success) {
+                      <div class="welly-review-suggestion">
+                        <mat-icon>arrow_forward</mat-icon>
+                        <span>{{ fix.suggestedFormattedAddress }}</span>
+                      </div>
+                      <div class="welly-review-details">
+                        @if (fix.suggestedProvince) {
+                          <span class="welly-chip province">{{ fix.suggestedProvince }}</span>
+                        }
+                        @if (fix.suggestedCity) {
+                          <span class="welly-chip city">{{ fix.suggestedCity }}</span>
+                        }
+                        @if (fix.suggestedPostalCode) {
+                          <span class="welly-chip postal">{{ fix.suggestedPostalCode }}</span>
+                        }
+                        @if (fix.suggestedLatitude && fix.suggestedLongitude) {
+                          <span class="welly-chip gps">📍 GPS</span>
+                        }
+                      </div>
+                    } @else {
+                      <div class="welly-review-error">{{ fix.error }}</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+            <div class="welly-review-actions">
+              <button mat-stroked-button (click)="cancelWellyReview()">
+                <mat-icon>close</mat-icon> Cancel
+              </button>
+              <button mat-raised-button color="primary" (click)="applyWellyFixes()"
+                      [disabled]="wellyApplying || approvedFixCount === 0">
+                @if (wellyApplying) {
+                  <mat-spinner diameter="18"></mat-spinner> Applying...
+                } @else {
+                  <mat-icon>check_circle</mat-icon>
+                  Apply {{ approvedFixCount }} Fixes
+                }
+              </button>
+            </div>
+          </div>
+        }
+
         <div class="customers-list">
           @for (customer of filteredCustomers; track customer.id) {
             <div class="customer-card" [class.editing]="editingCustomerId === customer.id">
@@ -12416,6 +12504,180 @@ interface CustomerAddressIssue {
       padding: 12px 24px;
       border-top: 1px solid #e0e0e0;
     }
+    /* Welly Fix Styles */
+    .tab-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .welly-fix-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+    .welly-fix-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+    }
+    .welly-fix-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    .welly-review-panel {
+      background: #f8f6ff;
+      border: 2px solid #667eea;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .welly-review-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0d8f5;
+    }
+    .welly-avatar {
+      font-size: 32px;
+      line-height: 1;
+    }
+    .welly-review-header h3 {
+      margin: 0 0 4px;
+      color: #4a3b8f;
+      font-size: 16px;
+    }
+    .welly-review-header p {
+      margin: 0;
+      color: #666;
+      font-size: 13px;
+    }
+    .welly-review-actions-header {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+    }
+    .welly-review-actions-header button {
+      font-size: 12px;
+    }
+    .welly-review-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+    .welly-review-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e8e0f5;
+      transition: all 0.2s;
+    }
+    .welly-review-item.failed {
+      background: #fff8f8;
+      border-color: #fdd;
+    }
+    .welly-review-item.rejected {
+      opacity: 0.5;
+    }
+    .welly-review-toggle {
+      display: flex;
+      align-items: center;
+      padding-top: 2px;
+    }
+    .fix-failed-icon {
+      color: #f44336;
+    }
+    .welly-review-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .welly-review-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .welly-review-name strong {
+      font-size: 14px;
+    }
+    .welly-review-name .code {
+      font-size: 11px;
+      color: #667eea;
+      background: #f0f2ff;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .welly-review-suggestion {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #555;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .welly-review-suggestion mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #667eea;
+    }
+    .welly-review-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .welly-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .welly-chip.province {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    .welly-chip.city {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    .welly-chip.postal {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+    .welly-chip.gps {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    .welly-review-error {
+      font-size: 12px;
+      color: #d32f2f;
+      font-style: italic;
+    }
+    .welly-review-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e0d8f5;
+    }
     @media (max-width: 768px) {
       .form-row.three-col, .form-row.two-col { grid-template-columns: 1fr; }
       .customer-header { flex-wrap: wrap; }
@@ -12442,6 +12704,12 @@ export class AddressIssuesDialog {
     longitude: null as number | null
   };
 
+  // Welly Fix properties
+  wellyFixes: any[] = [];
+  wellyLoading = false;
+  wellyApplying = false;
+  showWellyReview = false;
+
   private http = inject(HttpClient);
   private snackBar = inject(MatSnackBar);
 
@@ -12450,6 +12718,88 @@ export class AddressIssuesDialog {
     public dialogRef: MatDialogRef<AddressIssuesDialog>
   ) {
     this.loadCustomers();
+  }
+
+  get approvedFixCount(): number {
+    return this.wellyFixes.filter(f => f.approved && f.success).length;
+  }
+
+  wellyFixAll(): void {
+    this.wellyLoading = true;
+    this.showWellyReview = false;
+    this.wellyFixes = [];
+
+    // Send the customer IDs from the current filtered list
+    const customerIds = this.filteredCustomers.map(c => c.id);
+
+    this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/welly-suggest-customer-fixes`, customerIds).subscribe({
+      next: (response) => {
+        this.wellyFixes = (response.suggestions || []).map((s: any) => ({
+          ...s,
+          approved: s.success
+        }));
+        this.wellyLoading = false;
+        this.showWellyReview = true;
+
+        const fixable = this.wellyFixes.filter(f => f.success).length;
+        this.snackBar.open(
+          `Welly found fixes for ${fixable} of ${this.wellyFixes.length} customers`,
+          'Close', { duration: 4000 }
+        );
+      },
+      error: (err) => {
+        this.wellyLoading = false;
+        console.error('Welly fix error:', err);
+        this.snackBar.open('Welly could not analyze customers. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  applyWellyFixes(): void {
+    const approved = this.wellyFixes.filter(f => f.approved && f.success);
+    if (approved.length === 0) {
+      this.snackBar.open('No fixes approved to apply', 'Close', { duration: 2000 });
+      return;
+    }
+
+    this.wellyApplying = true;
+    const fixes = approved.map(f => ({
+      customerId: f.customerId,
+      province: f.suggestedProvince,
+      city: f.suggestedCity,
+      postalCode: f.suggestedPostalCode,
+      latitude: f.suggestedLatitude,
+      longitude: f.suggestedLongitude
+    }));
+
+    this.http.post<any>(`${this.data.apiUrl}/logistics/googlemaps/welly-apply-customer-fixes`, fixes).subscribe({
+      next: (result) => {
+        this.wellyApplying = false;
+        this.showWellyReview = false;
+        this.wellyFixes = [];
+        this.snackBar.open(
+          `✅ Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
+          'Close', { duration: 4000 }
+        );
+        // Reload the customers list to reflect changes
+        this.loadCustomers();
+      },
+      error: () => {
+        this.wellyApplying = false;
+        this.snackBar.open('Failed to apply fixes. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  cancelWellyReview(): void {
+    this.showWellyReview = false;
+    this.wellyFixes = [];
+  }
+
+  toggleAllFixes(approved: boolean): void {
+    this.wellyFixes.forEach(f => {
+      if (f.success) f.approved = approved;
+    });
   }
 
   loadCustomers(): void {

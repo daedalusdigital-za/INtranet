@@ -1214,23 +1214,100 @@ interface CancellationStats {
                 </ng-template>
                 
                 <div class="attention-content">
-                  @if (customersWithoutLocation().length === 0) {
+                  @if (customersWithoutLocation().length === 0 && !showWellyCustomerReview) {
                     <div class="empty-state">
                       <mat-icon>check_circle</mat-icon>
                       <h3>All Good!</h3>
                       <p>All customers have location data set.</p>
                     </div>
+                  } @else if (showWellyCustomerReview) {
+                    <!-- Welly Review Panel -->
+                    <div class="welly-review-panel">
+                      <div class="welly-review-header">
+                        <div class="welly-avatar">🤖</div>
+                        <div>
+                          <h3>Welly's Suggested Fixes</h3>
+                          <p>Review each suggestion below. Toggle off any you don't want to apply.</p>
+                        </div>
+                        <div class="welly-review-actions-header">
+                          <button mat-button (click)="toggleAllCustomerFixes(true)">
+                            <mat-icon>check_box</mat-icon> Select All
+                          </button>
+                          <button mat-button (click)="toggleAllCustomerFixes(false)">
+                            <mat-icon>check_box_outline_blank</mat-icon> Deselect All
+                          </button>
+                        </div>
+                      </div>
+                      <div class="welly-review-list">
+                        @for (fix of wellyCustomerFixes; track fix.customerId) {
+                          <div class="welly-review-item" [class.failed]="!fix.success" [class.rejected]="!fix.approved">
+                            <div class="welly-review-toggle">
+                              @if (fix.success) {
+                                <mat-slide-toggle [(ngModel)]="fix.approved" color="primary"></mat-slide-toggle>
+                              } @else {
+                                <mat-icon class="fix-failed-icon">error_outline</mat-icon>
+                              }
+                            </div>
+                            <div class="welly-review-info">
+                              <div class="welly-review-name">
+                                <strong>{{ fix.customerName }}</strong>
+                                <span class="code">{{ fix.customerCode }}</span>
+                              </div>
+                              @if (fix.success) {
+                                <div class="welly-review-suggestion">
+                                  <mat-icon>arrow_forward</mat-icon>
+                                  <span>{{ fix.suggestedFormattedAddress }}</span>
+                                </div>
+                                <div class="welly-review-details">
+                                  <span class="welly-chip">{{ fix.suggestedProvince }}</span>
+                                  @if (fix.suggestedCity) {
+                                    <span class="welly-chip">{{ fix.suggestedCity }}</span>
+                                  }
+                                </div>
+                              } @else {
+                                <div class="welly-review-error">{{ fix.error }}</div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                      <div class="welly-review-actions">
+                        <button mat-stroked-button (click)="cancelWellyCustomerReview()">
+                          <mat-icon>close</mat-icon> Cancel
+                        </button>
+                        <button mat-raised-button color="primary" (click)="applyWellyCustomerFixes()" 
+                                [disabled]="wellyCustomerFixApplying || approvedCustomerFixCount === 0">
+                          @if (wellyCustomerFixApplying) {
+                            <mat-spinner diameter="18"></mat-spinner> Applying...
+                          } @else {
+                            <mat-icon>check_circle</mat-icon>
+                            Apply {{ approvedCustomerFixCount }} Fixes
+                          }
+                        </button>
+                      </div>
+                    </div>
                   } @else {
                     <div class="attention-desc-row">
                       <p class="attention-desc">These customers don't have GPS coordinates set. Click to edit and add location.</p>
-                      <button mat-raised-button color="accent" (click)="geocodeAllCustomers()" [disabled]="isGeocoding">
-                        @if (isGeocoding) {
-                          <mat-spinner diameter="18"></mat-spinner>
-                          Geocoding {{ geocodeProgress }}...
-                        } @else {
-                          <ng-container><mat-icon>my_location</mat-icon> Geocode All ({{ customersWithoutLocation().length }})</ng-container>
-                        }
-                      </button>
+                      <div class="attention-desc-buttons">
+                        <button mat-raised-button class="welly-fix-btn" (click)="wellyFixCustomerLocations()" 
+                                [disabled]="wellyCustomerFixLoading">
+                          @if (wellyCustomerFixLoading) {
+                            <mat-spinner diameter="18"></mat-spinner>
+                            Welly is analyzing...
+                          } @else {
+                            <span class="welly-btn-icon">🤖</span> Ask Welly to Fix
+                          }
+                        </button>
+                        <button mat-raised-button color="accent" (click)="geocodeAllCustomers()" [disabled]="isGeocoding">
+                          @if (isGeocoding) {
+                            <mat-spinner diameter="18"></mat-spinner>
+                            Geocoding {{ geocodeProgress }}...
+                          } @else {
+                            <ng-container><mat-icon>my_location</mat-icon> Geocode All ({{ customersWithoutLocation().length }})</ng-container>
+                          }
+                        </button>
+                      </div>
                     </div>
                     <div class="attention-list">
                       @for (customer of customersWithoutLocation(); track customer.id) {
@@ -1264,14 +1341,92 @@ interface CancellationStats {
                 </ng-template>
                 
                 <div class="attention-content">
-                  @if (invoicesWithoutProvince().length === 0) {
+                  @if (invoicesWithoutProvince().length === 0 && !showWellyInvoiceReview) {
                     <div class="empty-state">
                       <mat-icon>check_circle</mat-icon>
                       <h3>All Good!</h3>
                       <p>All invoices have delivery province set.</p>
                     </div>
+                  } @else if (showWellyInvoiceReview) {
+                    <!-- Welly Invoice Review Panel -->
+                    <div class="welly-review-panel">
+                      <div class="welly-review-header">
+                        <div class="welly-avatar">🤖</div>
+                        <div>
+                          <h3>Welly's Province Suggestions</h3>
+                          <p>Review each suggestion. Toggle off any you don't want to apply.</p>
+                        </div>
+                        <div class="welly-review-actions-header">
+                          <button mat-button (click)="toggleAllInvoiceFixes(true)">
+                            <mat-icon>check_box</mat-icon> Select All
+                          </button>
+                          <button mat-button (click)="toggleAllInvoiceFixes(false)">
+                            <mat-icon>check_box_outline_blank</mat-icon> Deselect All
+                          </button>
+                        </div>
+                      </div>
+                      <div class="welly-review-list">
+                        @for (fix of wellyInvoiceFixes; track fix.invoiceId) {
+                          <div class="welly-review-item" [class.failed]="!fix.success" [class.rejected]="!fix.approved">
+                            <div class="welly-review-toggle">
+                              @if (fix.success) {
+                                <mat-slide-toggle [(ngModel)]="fix.approved" color="primary"></mat-slide-toggle>
+                              } @else {
+                                <mat-icon class="fix-failed-icon">error_outline</mat-icon>
+                              }
+                            </div>
+                            <div class="welly-review-info">
+                              <div class="welly-review-name">
+                                <strong>{{ fix.transactionNumber }}</strong>
+                                <span class="customer">{{ fix.customerName }}</span>
+                                <span class="amount">R{{ fix.salesAmount * 1.15 | number:'1.2-2' }}</span>
+                              </div>
+                              @if (fix.success) {
+                                <div class="welly-review-suggestion">
+                                  <mat-icon>arrow_forward</mat-icon>
+                                  <span class="welly-chip province">{{ fix.suggestedProvince }}</span>
+                                  @if (fix.suggestedCity) {
+                                    <span class="welly-chip">{{ fix.suggestedCity }}</span>
+                                  }
+                                </div>
+                                <div class="welly-review-source">
+                                  <mat-icon>info_outline</mat-icon> Source: {{ fix.source }}
+                                </div>
+                              } @else {
+                                <div class="welly-review-error">{{ fix.error }}</div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                      <div class="welly-review-actions">
+                        <button mat-stroked-button (click)="cancelWellyInvoiceReview()">
+                          <mat-icon>close</mat-icon> Cancel
+                        </button>
+                        <button mat-raised-button color="primary" (click)="applyWellyInvoiceFixes()"
+                                [disabled]="wellyInvoiceFixApplying || approvedInvoiceFixCount === 0">
+                          @if (wellyInvoiceFixApplying) {
+                            <mat-spinner diameter="18"></mat-spinner> Applying...
+                          } @else {
+                            <mat-icon>check_circle</mat-icon>
+                            Apply {{ approvedInvoiceFixCount }} Fixes
+                          }
+                        </button>
+                      </div>
+                    </div>
                   } @else {
-                    <p class="attention-desc">These invoices don't have a delivery province set. Select a province to assign.</p>
+                    <div class="attention-desc-row">
+                      <p class="attention-desc">These invoices don't have a delivery province set. Select a province to assign.</p>
+                      <button mat-raised-button class="welly-fix-btn" (click)="wellyFixInvoiceProvinces()"
+                              [disabled]="wellyInvoiceFixLoading">
+                        @if (wellyInvoiceFixLoading) {
+                          <mat-spinner diameter="18"></mat-spinner>
+                          Welly is analyzing...
+                        } @else {
+                          <span class="welly-btn-icon">🤖</span> Ask Welly to Fix
+                        }
+                      </button>
+                    </div>
                     <div class="attention-list">
                       @for (invoice of invoicesWithoutProvince(); track invoice.id) {
                         <div class="attention-item">
@@ -3201,6 +3356,242 @@ interface CancellationStats {
       width: 200px;
     }
 
+    /* Welly Fix Button */
+    .welly-fix-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+      font-weight: 500;
+      border: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 20px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .welly-fix-btn:hover:not([disabled]) {
+      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .welly-fix-btn[disabled] {
+      opacity: 0.7;
+    }
+
+    .welly-btn-icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .attention-desc-buttons {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .attention-desc-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* Welly Review Panel */
+    .welly-review-panel {
+      padding: 0;
+    }
+
+    .welly-review-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%);
+      border: 1px solid #667eea22;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .welly-avatar {
+      font-size: 36px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .welly-review-header h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .welly-review-header p {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .welly-review-actions-header {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .welly-review-actions-header button {
+      font-size: 12px;
+    }
+
+    .welly-review-list {
+      max-height: 400px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 4px;
+    }
+
+    .welly-review-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .welly-review-item:hover {
+      border-color: #667eea;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .welly-review-item.failed {
+      background: #fff5f5;
+      border-color: #ffcdd2;
+    }
+
+    .welly-review-item.rejected {
+      opacity: 0.5;
+    }
+
+    .welly-review-toggle {
+      padding-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .fix-failed-icon {
+      color: #ef5350;
+    }
+
+    .welly-review-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .welly-review-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .welly-review-name strong {
+      font-size: 14px;
+      color: #333;
+    }
+
+    .welly-review-name .code,
+    .welly-review-name .customer {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .welly-review-name .amount {
+      font-size: 12px;
+      font-weight: 600;
+      color: #2e7d32;
+    }
+
+    .welly-review-suggestion {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .welly-review-suggestion mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #667eea;
+    }
+
+    .welly-review-details {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .welly-chip {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #e8eaf6;
+      color: #3949ab;
+    }
+
+    .welly-chip.province {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .welly-review-source {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: #999;
+    }
+
+    .welly-review-source mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .welly-review-error {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #ef5350;
+      font-style: italic;
+    }
+
+    .welly-review-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding-top: 16px;
+      margin-top: 16px;
+      border-top: 1px solid #eee;
+    }
+
+    .welly-review-actions button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     /* Responsive */
     @media (max-width: 1200px) {
       .stats-grid {
@@ -3643,6 +4034,16 @@ export class SalesDashboardComponent implements OnInit {
   bulkProvince = '';
   isGeocoding = false;
   geocodeProgress = '';
+
+  // Welly Fix suggestions
+  wellyCustomerFixes: any[] = [];
+  wellyInvoiceFixes: any[] = [];
+  wellyCustomerFixLoading = false;
+  wellyInvoiceFixLoading = false;
+  wellyCustomerFixApplying = false;
+  wellyInvoiceFixApplying = false;
+  showWellyCustomerReview = false;
+  showWellyInvoiceReview = false;
 
   // Company Sales Dialog
   showCompanySalesDialog = false;
@@ -4551,8 +4952,7 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   setInvoiceProvince(invoice: Invoice, province: string): void {
-    this.http.put(`${this.apiUrl}/logistics/importedinvoices/${invoice.id}`, {
-      ...invoice,
+    this.http.put(`${this.apiUrl}/logistics/importedinvoices/${invoice.id}/delivery`, {
       deliveryProvince: province
     }).subscribe({
       next: () => {
@@ -4575,8 +4975,7 @@ export class SalesDashboardComponent implements OnInit {
     this.snackBar.open(`Updating ${total} invoices...`, 'Close', { duration: 2000 });
 
     invoicesToUpdate.forEach(invoice => {
-      this.http.put(`${this.apiUrl}/logistics/importedinvoices/${invoice.id}`, {
-        ...invoice,
+      this.http.put(`${this.apiUrl}/logistics/importedinvoices/${invoice.id}/delivery`, {
         deliveryProvince: this.bulkProvince
       }).subscribe({
         next: () => {
@@ -4591,6 +4990,165 @@ export class SalesDashboardComponent implements OnInit {
           completed++;
         }
       });
+    });
+  }
+
+  // === Welly Fix Methods ===
+
+  wellyFixCustomerLocations(): void {
+    this.wellyCustomerFixLoading = true;
+    this.showWellyCustomerReview = false;
+    this.wellyCustomerFixes = [];
+
+    const customerIds = this.customersWithoutLocation().map(c => c.id);
+
+    this.http.post<any>(`${this.apiUrl}/logistics/googlemaps/welly-suggest-customer-fixes`, customerIds).subscribe({
+      next: (response) => {
+        this.wellyCustomerFixes = (response.suggestions || []).map((s: any) => ({
+          ...s,
+          approved: s.success // Auto-approve successful ones, user can toggle
+        }));
+        this.wellyCustomerFixLoading = false;
+        this.showWellyCustomerReview = true;
+
+        const fixable = this.wellyCustomerFixes.filter(f => f.success).length;
+        this.snackBar.open(
+          `Welly found fixes for ${fixable} of ${this.wellyCustomerFixes.length} customers`,
+          'Close', { duration: 4000 }
+        );
+      },
+      error: (err) => {
+        this.wellyCustomerFixLoading = false;
+        console.error('Welly customer fix error:', err);
+        this.snackBar.open('Welly could not analyze customers. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  applyWellyCustomerFixes(): void {
+    const approved = this.wellyCustomerFixes.filter(f => f.approved && f.success);
+    if (approved.length === 0) {
+      this.snackBar.open('No fixes approved to apply', 'Close', { duration: 2000 });
+      return;
+    }
+
+    this.wellyCustomerFixApplying = true;
+    const fixes = approved.map(f => ({
+      customerId: f.customerId,
+      province: f.suggestedProvince,
+      city: f.suggestedCity,
+      postalCode: f.suggestedPostalCode,
+      latitude: f.suggestedLatitude,
+      longitude: f.suggestedLongitude
+    }));
+
+    this.http.post<any>(`${this.apiUrl}/logistics/googlemaps/welly-apply-customer-fixes`, fixes).subscribe({
+      next: (result) => {
+        this.wellyCustomerFixApplying = false;
+        this.showWellyCustomerReview = false;
+        this.wellyCustomerFixes = [];
+        this.snackBar.open(
+          `✅ Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
+          'Close', { duration: 4000 }
+        );
+        this.loadCustomers();
+      },
+      error: () => {
+        this.wellyCustomerFixApplying = false;
+        this.snackBar.open('Failed to apply fixes. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  cancelWellyCustomerReview(): void {
+    this.showWellyCustomerReview = false;
+    this.wellyCustomerFixes = [];
+  }
+
+  toggleAllCustomerFixes(approved: boolean): void {
+    this.wellyCustomerFixes.forEach(f => {
+      if (f.success) f.approved = approved;
+    });
+  }
+
+  get approvedCustomerFixCount(): number {
+    return this.wellyCustomerFixes.filter(f => f.approved && f.success).length;
+  }
+
+  get approvedInvoiceFixCount(): number {
+    return this.wellyInvoiceFixes.filter(f => f.approved && f.success).length;
+  }
+
+  wellyFixInvoiceProvinces(): void {
+    this.wellyInvoiceFixLoading = true;
+    this.showWellyInvoiceReview = false;
+    this.wellyInvoiceFixes = [];
+
+    const invoiceIds = this.invoicesWithoutProvince().map(i => i.id);
+
+    this.http.post<any>(`${this.apiUrl}/logistics/googlemaps/welly-suggest-invoice-fixes`, invoiceIds).subscribe({
+      next: (response) => {
+        this.wellyInvoiceFixes = (response.suggestions || []).map((s: any) => ({
+          ...s,
+          approved: s.success
+        }));
+        this.wellyInvoiceFixLoading = false;
+        this.showWellyInvoiceReview = true;
+
+        const fixable = this.wellyInvoiceFixes.filter(f => f.success).length;
+        this.snackBar.open(
+          `Welly found province data for ${fixable} of ${this.wellyInvoiceFixes.length} invoices`,
+          'Close', { duration: 4000 }
+        );
+      },
+      error: (err) => {
+        this.wellyInvoiceFixLoading = false;
+        console.error('Welly invoice fix error:', err);
+        this.snackBar.open('Welly could not analyze invoices. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  applyWellyInvoiceFixes(): void {
+    const approved = this.wellyInvoiceFixes.filter(f => f.approved && f.success);
+    if (approved.length === 0) {
+      this.snackBar.open('No fixes approved to apply', 'Close', { duration: 2000 });
+      return;
+    }
+
+    this.wellyInvoiceFixApplying = true;
+    const fixes = approved.map(f => ({
+      invoiceId: f.invoiceId,
+      province: f.suggestedProvince,
+      city: f.suggestedCity
+    }));
+
+    this.http.post<any>(`${this.apiUrl}/logistics/googlemaps/welly-apply-invoice-fixes`, fixes).subscribe({
+      next: (result) => {
+        this.wellyInvoiceFixApplying = false;
+        this.showWellyInvoiceReview = false;
+        this.wellyInvoiceFixes = [];
+        this.snackBar.open(
+          `✅ Welly updated ${result.applied} invoice provinces` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
+          'Close', { duration: 4000 }
+        );
+        this.loadInvoices();
+      },
+      error: () => {
+        this.wellyInvoiceFixApplying = false;
+        this.snackBar.open('Failed to apply fixes. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  cancelWellyInvoiceReview(): void {
+    this.showWellyInvoiceReview = false;
+    this.wellyInvoiceFixes = [];
+  }
+
+  toggleAllInvoiceFixes(approved: boolean): void {
+    this.wellyInvoiceFixes.forEach(f => {
+      if (f.success) f.approved = approved;
     });
   }
 
