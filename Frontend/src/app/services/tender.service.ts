@@ -164,6 +164,26 @@ export interface ComplianceAlert {
   complianceDocument?: ComplianceDocument;
 }
 
+export interface TenderReminder {
+  id: number;
+  tenderId: number;
+  tenderTitle?: string;
+  tenderNumber?: string;
+  eventType: string;
+  eventDate: Date;
+  daysBefore: number;
+  emailRecipients?: string;
+  notes?: string;
+  isSent: boolean;
+  sentAt?: Date;
+  isActive: boolean;
+  createdByUserId: number;
+  createdByUserName?: string;
+  createdAt: Date;
+  reminderDate?: Date;
+  isDue?: boolean;
+}
+
 export interface ComplianceSummary {
   total: number;
   valid: number;
@@ -353,5 +373,49 @@ export class TenderService {
 
   deleteComplianceDocument(id: number): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/compliance/${id}`);
+  }
+
+  // Tender Reminders
+  getReminders(tenderId?: number): Observable<TenderReminder[]> {
+    let params = new HttpParams();
+    if (tenderId) params = params.set('tenderId', tenderId.toString());
+    return this.http.get<TenderReminder[]>(`${this.apiUrl}/tenders/reminders`, { params });
+  }
+
+  getReminder(id: number): Observable<TenderReminder> {
+    return this.http.get<TenderReminder>(`${this.apiUrl}/tenders/reminders/${id}`);
+  }
+
+  createReminder(request: {
+    tenderId: number;
+    eventType: string;
+    daysBefore: number;
+    emailRecipients?: string;
+    notes?: string;
+    createdByUserId: number;
+    createdByUserName?: string;
+  }): Observable<TenderReminder> {
+    return this.http.post<TenderReminder>(`${this.apiUrl}/tenders/reminders`, request);
+  }
+
+  updateReminder(id: number, update: {
+    daysBefore?: number;
+    emailRecipients?: string;
+    notes?: string;
+    isActive?: boolean;
+  }): Observable<void> {
+    return this.http.put<void>(`${this.apiUrl}/tenders/reminders/${id}`, update);
+  }
+
+  deleteReminder(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/tenders/reminders/${id}`);
+  }
+
+  sendReminderNow(id: number): Observable<{ success: boolean; message: string }> {
+    return this.http.post<{ success: boolean; message: string }>(`${this.apiUrl}/tenders/reminders/send-now/${id}`, {});
+  }
+
+  checkAndSendReminders(): Observable<{ sent: number; total: number; errors?: string[] }> {
+    return this.http.post<{ sent: number; total: number; errors?: string[] }>(`${this.apiUrl}/tenders/reminders/check-and-send`, {});
   }
 }

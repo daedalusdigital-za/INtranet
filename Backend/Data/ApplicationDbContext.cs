@@ -135,6 +135,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Tenders.ComplianceDocument> ComplianceDocuments { get; set; }
         public DbSet<Models.Tenders.ComplianceAlert> ComplianceAlerts { get; set; }
         public DbSet<Models.Tenders.TenderKnowledgeBase> TenderKnowledgeBase { get; set; }
+        public DbSet<Models.Tenders.TenderReminder> TenderReminders { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

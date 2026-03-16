@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Tenders;
+using System.Net;
+using System.Net.Mail;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -13,11 +15,15 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<TendersController> _logger;
 
-        public TendersController(ApplicationDbContext context, IWebHostEnvironment env)
+        public TendersController(ApplicationDbContext context, IWebHostEnvironment env, IConfiguration configuration, ILogger<TendersController> logger)
         {
             _context = context;
             _env = env;
+            _configuration = configuration;
+            _logger = logger;
         }
 
         // GET: api/Tenders
@@ -632,6 +638,337 @@ namespace ProjectTracker.API.Controllers
 
             return NoContent();
         }
+
+        // ==================== TENDER REMINDERS ====================
+
+        // GET: api/Tenders/reminders
+        [HttpGet("reminders")]
+        public async Task<ActionResult<IEnumerable<TenderReminder>>> GetReminders([FromQuery] int? tenderId = null)
+        {
+            var query = _context.TenderReminders
+                .Include(r => r.Tender)
+                .Where(r => r.IsActive)
+                .AsQueryable();
+
+            if (tenderId.HasValue)
+                query = query.Where(r => r.TenderId == tenderId.Value);
+
+            var reminders = await query
+                .OrderBy(r => r.EventDate)
+                .Select(r => new {
+                    r.Id,
+                    r.TenderId,
+                    TenderTitle = r.Tender!.Title,
+                    TenderNumber = r.Tender.TenderNumber,
+                    r.EventType,
+                    r.EventDate,
+                    r.DaysBefore,
+                    r.EmailRecipients,
+                    r.Notes,
+                    r.IsSent,
+                    r.SentAt,
+                    r.IsActive,
+                    r.CreatedByUserId,
+                    r.CreatedByUserName,
+                    r.CreatedAt,
+                    ReminderDate = r.EventDate.AddDays(-r.DaysBefore),
+                    IsDue = r.EventDate.AddDays(-r.DaysBefore) <= DateTime.UtcNow && !r.IsSent
+                })
+                .ToListAsync();
+
+            return Ok(reminders);
+        }
+
+        // GET: api/Tenders/reminders/5
+        [HttpGet("reminders/{id}")]
+        public async Task<ActionResult> GetReminder(int id)
+        {
+            var reminder = await _context.TenderReminders
+                .Include(r => r.Tender)
+                .Where(r => r.Id == id)
+                .Select(r => new {
+                    r.Id,
+                    r.TenderId,
+                    TenderTitle = r.Tender!.Title,
+                    TenderNumber = r.Tender.TenderNumber,
+                    r.EventType,
+                    r.EventDate,
+                    r.DaysBefore,
+                    r.EmailRecipients,
+                    r.Notes,
+                    r.IsSent,
+                    r.SentAt,
+                    r.IsActive,
+                    r.CreatedByUserId,
+                    r.CreatedByUserName,
+                    r.CreatedAt
+                })
+                .FirstOrDefaultAsync();
+
+            if (reminder == null) return NotFound();
+            return Ok(reminder);
+        }
+
+        // POST: api/Tenders/reminders
+        [HttpPost("reminders")]
+        public async Task<ActionResult<TenderReminder>> CreateReminder([FromBody] CreateReminderRequest request)
+        {
+            var tender = await _context.Tenders.FindAsync(request.TenderId);
+            if (tender == null) return NotFound("Tender not found");
+
+            // Resolve event date from tender
+            DateTime? eventDate = request.EventType switch
+            {
+                "ClosingDate" => tender.ClosingDate,
+                "Briefing" => tender.CompulsoryBriefingDate,
+                "SiteVisit" => tender.SiteVisitDate,
+                "Clarification" => tender.ClarificationDeadline,
+                "Evaluation" => tender.EvaluationDate,
+                _ => null
+            };
+
+            if (!eventDate.HasValue)
+                return BadRequest($"Tender does not have a date set for {request.EventType}");
+
+            var reminder = new TenderReminder
+            {
+                TenderId = request.TenderId,
+                EventType = request.EventType,
+                EventDate = eventDate.Value,
+                DaysBefore = request.DaysBefore,
+                EmailRecipients = request.EmailRecipients,
+                Notes = request.Notes,
+                CreatedByUserId = request.CreatedByUserId,
+                CreatedByUserName = request.CreatedByUserName,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true,
+                IsSent = false
+            };
+
+            _context.TenderReminders.Add(reminder);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetReminder), new { id = reminder.Id }, reminder);
+        }
+
+        // PUT: api/Tenders/reminders/5
+        [HttpPut("reminders/{id}")]
+        public async Task<IActionResult> UpdateReminder(int id, [FromBody] UpdateReminderRequest request)
+        {
+            var reminder = await _context.TenderReminders.FindAsync(id);
+            if (reminder == null) return NotFound();
+
+            if (request.DaysBefore.HasValue)
+                reminder.DaysBefore = request.DaysBefore.Value;
+            if (request.EmailRecipients != null)
+                reminder.EmailRecipients = request.EmailRecipients;
+            if (request.Notes != null)
+                reminder.Notes = request.Notes;
+            if (request.IsActive.HasValue)
+                reminder.IsActive = request.IsActive.Value;
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // DELETE: api/Tenders/reminders/5
+        [HttpDelete("reminders/{id}")]
+        public async Task<IActionResult> DeleteReminder(int id)
+        {
+            var reminder = await _context.TenderReminders.FindAsync(id);
+            if (reminder == null) return NotFound();
+
+            _context.TenderReminders.Remove(reminder);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // POST: api/Tenders/reminders/check-and-send
+        [HttpPost("reminders/check-and-send")]
+        public async Task<ActionResult> CheckAndSendReminders()
+        {
+            var now = DateTime.UtcNow;
+            var dueReminders = await _context.TenderReminders
+                .Include(r => r.Tender)
+                .Where(r => r.IsActive && !r.IsSent && r.EventDate.AddDays(-r.DaysBefore) <= now)
+                .ToListAsync();
+
+            if (!dueReminders.Any())
+                return Ok(new { sent = 0, message = "No reminders due" });
+
+            var smtpHost = _configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
+            var smtpPort = int.TryParse(_configuration["AIEmail:SmtpPort"], out var port) ? port : 587;
+            var senderEmail = _configuration["AIEmail:SenderEmail"] ?? "ai@promedtechnologies.co.za";
+            var senderName = _configuration["AIEmail:SenderName"] ?? "Welly - ProMed AI Assistant";
+            var senderPassword = _configuration["AIEmail:SenderPassword"] ?? "";
+            var enableSsl = bool.TryParse(_configuration["AIEmail:EnableSsl"], out var ssl) ? ssl : true;
+
+            int sentCount = 0;
+            var errors = new List<string>();
+
+            foreach (var reminder in dueReminders)
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(reminder.EmailRecipients)) continue;
+
+                    var recipients = reminder.EmailRecipients.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (recipients.Length == 0) continue;
+
+                    var eventLabel = reminder.EventType switch
+                    {
+                        "ClosingDate" => "Closing Date",
+                        "Briefing" => "Compulsory Briefing",
+                        "SiteVisit" => "Site Visit",
+                        "Clarification" => "Clarification Deadline",
+                        "Evaluation" => "Evaluation Date",
+                        _ => reminder.EventType
+                    };
+
+                    var daysUntil = (reminder.EventDate - now).Days;
+                    var urgency = daysUntil <= 1 ? "🔴 URGENT" : daysUntil <= 3 ? "🟡 UPCOMING" : "🔵 REMINDER";
+
+                    var htmlBody = $@"
+<div style=""font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;"">
+    <div style=""background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px 30px; border-radius: 8px 8px 0 0;"">
+        <h2 style=""color: white; margin: 0; font-size: 18px;"">📋 Tender Reminder - {urgency}</h2>
+    </div>
+    <div style=""padding: 25px 30px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none;"">
+        <h3 style=""color: #1f2937; margin: 0 0 15px 0;"">{reminder.Tender?.Title ?? "Tender"}</h3>
+        <table style=""width: 100%; border-collapse: collapse;"">
+            <tr><td style=""padding: 8px 0; color: #6b7280; width: 140px;"">Tender Number:</td><td style=""padding: 8px 0; color: #1f2937; font-weight: 600;"">{reminder.Tender?.TenderNumber}</td></tr>
+            <tr><td style=""padding: 8px 0; color: #6b7280;"">Event:</td><td style=""padding: 8px 0; color: #1f2937; font-weight: 600;"">{eventLabel}</td></tr>
+            <tr><td style=""padding: 8px 0; color: #6b7280;"">Event Date:</td><td style=""padding: 8px 0; color: #1f2937; font-weight: 600;"">{reminder.EventDate:dddd, dd MMMM yyyy}</td></tr>
+            <tr><td style=""padding: 8px 0; color: #6b7280;"">Days Until Event:</td><td style=""padding: 8px 0; color: {(daysUntil <= 1 ? "#ef4444" : daysUntil <= 3 ? "#f59e0b" : "#3b82f6")}; font-weight: 700; font-size: 16px;"">{Math.Max(0, daysUntil)} day{(daysUntil != 1 ? "s" : "")}</td></tr>
+            {(string.IsNullOrEmpty(reminder.Notes) ? "" : $"<tr><td style=\"padding: 8px 0; color: #6b7280;\">Notes:</td><td style=\"padding: 8px 0; color: #1f2937;\">{reminder.Notes}</td></tr>")}
+        </table>
+    </div>
+    <div style=""padding: 15px 30px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; font-size: 12px; color: #6b7280;"">
+        <p style=""margin: 0;"">Sent via <strong>Welly AI Assistant</strong> • ProMed Technologies Tender Management</p>
+        <p style=""margin: 4px 0 0 0;"">Set by {reminder.CreatedByUserName ?? "System"} on {reminder.CreatedAt:dd MMM yyyy}</p>
+    </div>
+</div>";
+
+                    using var message = new MailMessage();
+                    message.From = new MailAddress(senderEmail, senderName);
+                    foreach (var recipient in recipients)
+                    {
+                        message.To.Add(recipient);
+                    }
+                    message.Subject = $"{urgency} Tender Reminder: {eventLabel} - {reminder.Tender?.TenderNumber ?? "N/A"}";
+                    message.Body = htmlBody;
+                    message.IsBodyHtml = true;
+
+                    using var client = new SmtpClient(smtpHost, smtpPort);
+                    client.EnableSsl = enableSsl;
+                    client.UseDefaultCredentials = false;
+                    client.Credentials = new NetworkCredential(senderEmail, senderPassword);
+
+                    await client.SendMailAsync(message);
+
+                    reminder.IsSent = true;
+                    reminder.SentAt = DateTime.UtcNow;
+                    sentCount++;
+
+                    _logger.LogInformation("Tender reminder sent for {TenderNumber} - {EventType} to {Recipients}",
+                        reminder.Tender?.TenderNumber, reminder.EventType, reminder.EmailRecipients);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send tender reminder {ReminderId}", reminder.Id);
+                    errors.Add($"Reminder {reminder.Id}: {ex.Message}");
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { sent = sentCount, total = dueReminders.Count, errors = errors.Any() ? errors : null });
+        }
+
+        // POST: api/Tenders/reminders/send-now/5
+        [HttpPost("reminders/send-now/{id}")]
+        public async Task<ActionResult> SendReminderNow(int id)
+        {
+            var reminder = await _context.TenderReminders
+                .Include(r => r.Tender)
+                .FirstOrDefaultAsync(r => r.Id == id);
+
+            if (reminder == null) return NotFound();
+            if (string.IsNullOrWhiteSpace(reminder.EmailRecipients))
+                return BadRequest("No email recipients set for this reminder");
+
+            var smtpHost = _configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
+            var smtpPort = int.TryParse(_configuration["AIEmail:SmtpPort"], out var port) ? port : 587;
+            var senderEmail = _configuration["AIEmail:SenderEmail"] ?? "ai@promedtechnologies.co.za";
+            var senderName = _configuration["AIEmail:SenderName"] ?? "Welly - ProMed AI Assistant";
+            var senderPassword = _configuration["AIEmail:SenderPassword"] ?? "";
+            var enableSsl = bool.TryParse(_configuration["AIEmail:EnableSsl"], out var ssl) ? ssl : true;
+
+            var eventLabel = reminder.EventType switch
+            {
+                "ClosingDate" => "Closing Date",
+                "Briefing" => "Compulsory Briefing",
+                "SiteVisit" => "Site Visit",
+                "Clarification" => "Clarification Deadline",
+                "Evaluation" => "Evaluation Date",
+                _ => reminder.EventType
+            };
+
+            var daysUntil = (reminder.EventDate - DateTime.UtcNow).Days;
+
+            var htmlBody = $@"
+<div style=""font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;"">
+    <div style=""background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px 30px; border-radius: 8px 8px 0 0;"">
+        <h2 style=""color: white; margin: 0; font-size: 18px;"">📋 Tender Reminder</h2>
+    </div>
+    <div style=""padding: 25px 30px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none;"">
+        <h3 style=""color: #1f2937; margin: 0 0 15px 0;"">{reminder.Tender?.Title ?? "Tender"}</h3>
+        <table style=""width: 100%; border-collapse: collapse;"">
+            <tr><td style=""padding: 8px 0; color: #6b7280; width: 140px;"">Tender Number:</td><td style=""padding: 8px 0; color: #1f2937; font-weight: 600;"">{reminder.Tender?.TenderNumber}</td></tr>
+            <tr><td style=""padding: 8px 0; color: #6b7280;"">Event:</td><td style=""padding: 8px 0; color: #1f2937; font-weight: 600;"">{eventLabel}</td></tr>
+            <tr><td style=""padding: 8px 0; color: #6b7280;"">Event Date:</td><td style=""padding: 8px 0; color: #1f2937; font-weight: 600;"">{reminder.EventDate:dddd, dd MMMM yyyy}</td></tr>
+            <tr><td style=""padding: 8px 0; color: #6b7280;"">Days Until Event:</td><td style=""padding: 8px 0; color: #1f2937; font-weight: 600;"">{Math.Max(0, daysUntil)} day{(daysUntil != 1 ? "s" : "")}</td></tr>
+            {(string.IsNullOrEmpty(reminder.Notes) ? "" : $"<tr><td style=\"padding: 8px 0; color: #6b7280;\">Notes:</td><td style=\"padding: 8px 0; color: #1f2937;\">{reminder.Notes}</td></tr>")}
+        </table>
+    </div>
+    <div style=""padding: 15px 30px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; font-size: 12px; color: #6b7280;"">
+        <p style=""margin: 0;"">Sent via <strong>Welly AI Assistant</strong> • ProMed Technologies Tender Management</p>
+    </div>
+</div>";
+
+            try
+            {
+                var recipients = reminder.EmailRecipients.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                using var message = new MailMessage();
+                message.From = new MailAddress(senderEmail, senderName);
+                foreach (var recipient in recipients)
+                {
+                    message.To.Add(recipient);
+                }
+                message.Subject = $"Tender Reminder: {eventLabel} - {reminder.Tender?.TenderNumber ?? "N/A"}";
+                message.Body = htmlBody;
+                message.IsBodyHtml = true;
+
+                using var client = new SmtpClient(smtpHost, smtpPort);
+                client.EnableSsl = enableSsl;
+                client.UseDefaultCredentials = false;
+                client.Credentials = new NetworkCredential(senderEmail, senderPassword);
+
+                await client.SendMailAsync(message);
+
+                reminder.IsSent = true;
+                reminder.SentAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = $"Reminder email sent to {reminder.EmailRecipients}" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send reminder {ReminderId} manually", id);
+                return StatusCode(500, new { success = false, message = $"Failed to send email: {ex.Message}" });
+            }
+        }
     }
 
     // Request DTOs
@@ -743,5 +1080,24 @@ namespace ProjectTracker.API.Controllers
         public decimal? UnitCost { get; set; }
         public decimal? UnitPrice { get; set; }
         public string? Notes { get; set; }
+    }
+
+    public class CreateReminderRequest
+    {
+        public int TenderId { get; set; }
+        public string EventType { get; set; } = string.Empty;  // ClosingDate, Briefing, SiteVisit, Clarification, Evaluation
+        public int DaysBefore { get; set; } = 3;
+        public string? EmailRecipients { get; set; }  // Comma-separated
+        public string? Notes { get; set; }
+        public int CreatedByUserId { get; set; }
+        public string? CreatedByUserName { get; set; }
+    }
+
+    public class UpdateReminderRequest
+    {
+        public int? DaysBefore { get; set; }
+        public string? EmailRecipients { get; set; }
+        public string? Notes { get; set; }
+        public bool? IsActive { get; set; }
     }
 }

@@ -26,7 +26,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { Subject, forkJoin } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { TenderService, Tender, TenderStats, ComplianceDocument, ComplianceSummary, CalendarEvent, TenderBOQItem, TenderTeamMember, TenderDocument } from '../../services/tender.service';
+import { TenderService, Tender, TenderStats, ComplianceDocument, ComplianceSummary, CalendarEvent, TenderBOQItem, TenderTeamMember, TenderDocument, TenderReminder } from '../../services/tender.service';
 import { AuthService } from '../../services/auth.service';
 import { TenderDetailDialogComponent } from './tender-detail-dialog.component';
 import { ComplianceDialogComponent } from './compliance-dialog.component';
@@ -346,6 +346,10 @@ interface Company {
                           <mat-icon>account_tree</mat-icon> Update Workflow
                         </button>
                         <mat-divider></mat-divider>
+                        <button mat-menu-item (click)="openReminderDialog(tender)">
+                          <mat-icon>notifications_active</mat-icon> Set Reminder
+                        </button>
+                        <mat-divider></mat-divider>
                         <button mat-menu-item (click)="deleteTender(tender)" class="delete-action">
                           <mat-icon>delete</mat-icon> Delete
                         </button>
@@ -504,6 +508,9 @@ interface Company {
                   <span class="legend-item site-visit"><span class="dot"></span> Site Visit</span>
                   <span class="legend-item clarification"><span class="dot"></span> Clarification</span>
                   <span class="legend-item evaluation"><span class="dot"></span> Evaluation</span>
+                  <button mat-raised-button color="primary" class="create-reminder-btn" (click)="openReminderDialog()">
+                    <mat-icon>notification_add</mat-icon> Create Reminder
+                  </button>
                 </div>
               </mat-card-header>
               <mat-card-content>
@@ -529,6 +536,73 @@ interface Company {
                     </div>
                   }
                 </div>
+              </mat-card-content>
+            </mat-card>
+
+            <!-- Active Reminders Section -->
+            <mat-card class="reminders-card" style="margin-top: 16px;">
+              <mat-card-header>
+                <mat-card-title>
+                  <mat-icon style="vertical-align: middle; margin-right: 8px;">notifications</mat-icon>
+                  Active Reminders
+                  @if (reminders.length > 0) {
+                    <span class="reminder-count-badge">{{ reminders.length }}</span>
+                  }
+                </mat-card-title>
+                <div style="margin-left: auto; display: flex; gap: 8px;">
+                  <button mat-stroked-button color="accent" (click)="checkReminders()" matTooltip="Check & send due reminders now">
+                    <mat-icon>send</mat-icon> Check & Send Due
+                  </button>
+                </div>
+              </mat-card-header>
+              <mat-card-content>
+                @if (reminders.length === 0) {
+                  <div class="no-reminders">
+                    <mat-icon style="font-size: 48px; width: 48px; height: 48px; color: #ccc;">notifications_off</mat-icon>
+                    <p style="color: #999; margin-top: 8px;">No active reminders. Create one from the button above or from a tender's action menu.</p>
+                  </div>
+                } @else {
+                  <div class="reminders-list">
+                    @for (reminder of reminders; track reminder.id) {
+                      <div class="reminder-item" [class.reminder-sent]="reminder.isSent" [class.reminder-due]="reminder.isDue">
+                        <div class="reminder-left">
+                          <mat-icon [class]="'reminder-type-icon event-type-' + reminder.eventType.toLowerCase()">
+                            {{ getEventTypeIcon(reminder.eventType) }}
+                          </mat-icon>
+                          <div class="reminder-info">
+                            <strong>{{ reminder.tenderTitle || 'Tender #' + reminder.tenderId }}</strong>
+                            <span class="reminder-meta">
+                              {{ getEventTypeLabel(reminder.eventType) }} • {{ reminder.eventDate | date:'dd MMM yyyy' }} • {{ reminder.daysBefore }} day{{ reminder.daysBefore !== 1 ? 's' : '' }} before
+                            </span>
+                            @if (reminder.emailRecipients) {
+                              <span class="reminder-emails"><mat-icon style="font-size: 14px; width: 14px; height: 14px;">email</mat-icon> {{ reminder.emailRecipients }}</span>
+                            }
+                            @if (reminder.notes) {
+                              <span class="reminder-notes">{{ reminder.notes }}</span>
+                            }
+                          </div>
+                        </div>
+                        <div class="reminder-actions">
+                          @if (reminder.isSent) {
+                            <mat-chip class="sent-chip">
+                              <mat-icon>check_circle</mat-icon> Sent {{ reminder.sentAt | date:'dd MMM' }}
+                            </mat-chip>
+                          } @else if (reminder.isDue) {
+                            <mat-chip class="due-chip">
+                              <mat-icon>warning</mat-icon> Due Now
+                            </mat-chip>
+                          }
+                          <button mat-icon-button matTooltip="Send Now" (click)="sendReminderNow(reminder)" [disabled]="reminder.isSent">
+                            <mat-icon>send</mat-icon>
+                          </button>
+                          <button mat-icon-button matTooltip="Delete Reminder" (click)="deleteReminder(reminder)" color="warn">
+                            <mat-icon>delete</mat-icon>
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
               </mat-card-content>
             </mat-card>
           </div>
@@ -658,6 +732,86 @@ interface Company {
         </mat-tab>
       </mat-tab-group>
     </div>
+
+    <!-- Reminder Dialog Overlay -->
+    @if (showReminderDialog) {
+      <div class="reminder-overlay" (click)="closeReminderDialog()">
+        <div class="reminder-dialog" (click)="$event.stopPropagation()">
+          <div class="reminder-dialog-header">
+            <mat-icon>notification_add</mat-icon>
+            <h2>Create Tender Reminder</h2>
+            <button mat-icon-button (click)="closeReminderDialog()"><mat-icon>close</mat-icon></button>
+          </div>
+          <div class="reminder-dialog-body">
+            <!-- Tender Selection -->
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Select Tender</mat-label>
+              <mat-select [(ngModel)]="reminderForm.tenderId" (selectionChange)="onReminderTenderChange()">
+                @for (tender of tenders; track tender.id) {
+                  <mat-option [value]="tender.id">{{ tender.tenderNumber }} - {{ tender.title | slice:0:50 }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <!-- Event Type -->
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Event Type</mat-label>
+              <mat-select [(ngModel)]="reminderForm.eventType">
+                @for (evt of reminderEventTypes; track evt.value) {
+                  <mat-option [value]="evt.value" [disabled]="!isEventAvailable(evt.value)">
+                    <mat-icon>{{ evt.icon }}</mat-icon> {{ evt.label }}
+                    @if (!isEventAvailable(evt.value)) {
+                      <span style="color: #999; font-size: 12px;"> (no date set)</span>
+                    }
+                  </mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <!-- Days Before -->
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Days Before Event to Send Reminder</mat-label>
+              <mat-select [(ngModel)]="reminderForm.daysBefore">
+                <mat-option [value]="1">1 day before</mat-option>
+                <mat-option [value]="2">2 days before</mat-option>
+                <mat-option [value]="3">3 days before</mat-option>
+                <mat-option [value]="5">5 days before</mat-option>
+                <mat-option [value]="7">1 week before</mat-option>
+                <mat-option [value]="14">2 weeks before</mat-option>
+                <mat-option [value]="30">1 month before</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <!-- Email Recipients -->
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Email Recipients (comma-separated)</mat-label>
+              <input matInput [(ngModel)]="reminderForm.emailRecipients" placeholder="e.g., user1&#64;email.com, user2&#64;email.com">
+              <mat-icon matSuffix>email</mat-icon>
+              <mat-hint>Welly will send a professionally formatted email to these addresses</mat-hint>
+            </mat-form-field>
+
+            <!-- Notes -->
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Notes (optional)</mat-label>
+              <textarea matInput [(ngModel)]="reminderForm.notes" rows="3" placeholder="Any additional notes for the reminder..."></textarea>
+            </mat-form-field>
+
+            @if (reminderForm.tenderId && reminderForm.eventType) {
+              <div class="reminder-preview">
+                <mat-icon>info</mat-icon>
+                <span>Reminder will be emailed <strong>{{ reminderForm.daysBefore }} day{{ reminderForm.daysBefore !== 1 ? 's' : '' }}</strong> before the <strong>{{ getEventTypeLabel(reminderForm.eventType) }}</strong> event</span>
+              </div>
+            }
+          </div>
+          <div class="reminder-dialog-actions">
+            <button mat-stroked-button (click)="closeReminderDialog()">Cancel</button>
+            <button mat-raised-button color="primary" (click)="submitReminder()" [disabled]="!reminderForm.tenderId || !reminderForm.eventType || !reminderForm.emailRecipients">
+              <mat-icon>notification_add</mat-icon> Create Reminder
+            </button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     :host {
@@ -1683,6 +1837,217 @@ interface Company {
       .quick-actions { flex-wrap: wrap; }
       .quick-actions button { flex: 1; min-width: 120px; }
     }
+
+    /* Create Reminder Button */
+    .create-reminder-btn {
+      margin-left: 16px;
+      font-size: 12px;
+      height: 32px;
+      line-height: 32px;
+    }
+    .create-reminder-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      margin-right: 4px;
+    }
+
+    /* Reminders Card */
+    .reminders-card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+    }
+    .reminder-count-badge {
+      background: #667eea;
+      color: white;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 12px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .no-reminders {
+      text-align: center;
+      padding: 32px;
+    }
+    .reminders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .reminder-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: #f8f9ff;
+      border: 1px solid #e8eaf6;
+      transition: all 0.2s;
+    }
+    .reminder-item:hover {
+      background: #f0f1ff;
+      border-color: #c5cae9;
+    }
+    .reminder-sent {
+      opacity: 0.6;
+      background: #f5f5f5;
+      border-color: #e0e0e0;
+    }
+    .reminder-due {
+      background: #fff3e0;
+      border-color: #ffcc02;
+      animation: pulse-border 2s infinite;
+    }
+    @keyframes pulse-border {
+      0%, 100% { border-color: #ffcc02; }
+      50% { border-color: #ff9800; }
+    }
+    .reminder-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+    .reminder-type-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: white;
+    }
+    .event-type-closingdate { background: #f44336; color: white; }
+    .event-type-briefing { background: #2196f3; color: white; }
+    .event-type-sitevisit { background: #4caf50; color: white; }
+    .event-type-clarification { background: #ff9800; color: white; }
+    .event-type-evaluation { background: #9c27b0; color: white; }
+    .reminder-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .reminder-info strong {
+      font-size: 14px;
+      color: #1f2937;
+    }
+    .reminder-meta {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .reminder-emails {
+      font-size: 11px;
+      color: #667eea;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .reminder-notes {
+      font-size: 11px;
+      color: #9e9e9e;
+      font-style: italic;
+    }
+    .reminder-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .sent-chip {
+      font-size: 11px !important;
+      min-height: 24px !important;
+      background: #e8f5e9 !important;
+      color: #2e7d32 !important;
+    }
+    .due-chip {
+      font-size: 11px !important;
+      min-height: 24px !important;
+      background: #fff3e0 !important;
+      color: #ef6c00 !important;
+    }
+    .sent-chip mat-icon, .due-chip mat-icon {
+      font-size: 14px !important;
+      width: 14px !important;
+      height: 14px !important;
+      margin-right: 4px;
+    }
+
+    /* Reminder Dialog Overlay */
+    .reminder-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .reminder-dialog {
+      background: white;
+      border-radius: 16px;
+      width: 520px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+      animation: dialog-in 0.25s ease-out;
+    }
+    @keyframes dialog-in {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .reminder-dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 16px 16px 0 0;
+    }
+    .reminder-dialog-header h2 {
+      margin: 0;
+      font-size: 18px;
+      flex: 1;
+    }
+    .reminder-dialog-header button {
+      color: white;
+    }
+    .reminder-dialog-body {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .full-width {
+      width: 100%;
+    }
+    .reminder-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #e8f5e9;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #2e7d32;
+    }
+    .reminder-preview mat-icon {
+      font-size: 20px;
+      color: #4caf50;
+    }
+    .reminder-dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #eee;
+    }
   `]
 })
 export class TendersComponent implements OnInit, OnDestroy {
@@ -1757,6 +2122,25 @@ export class TendersComponent implements OnInit, OnDestroy {
   aiThinking = false;
   analyzerQuestion = '';
 
+  // Tender Reminders
+  reminders: TenderReminder[] = [];
+  showReminderDialog = false;
+  reminderForm = {
+    tenderId: 0,
+    eventType: '',
+    daysBefore: 3,
+    emailRecipients: '',
+    notes: ''
+  };
+  selectedReminderTender: Tender | null = null;
+  reminderEventTypes = [
+    { value: 'ClosingDate', label: 'Closing Date', icon: 'event_busy' },
+    { value: 'Briefing', label: 'Compulsory Briefing', icon: 'groups' },
+    { value: 'SiteVisit', label: 'Site Visit', icon: 'location_on' },
+    { value: 'Clarification', label: 'Clarification Deadline', icon: 'help_outline' },
+    { value: 'Evaluation', label: 'Evaluation Date', icon: 'rate_review' }
+  ];
+
   constructor(
     private tenderService: TenderService,
     private authService: AuthService,
@@ -1797,6 +2181,7 @@ export class TendersComponent implements OnInit, OnDestroy {
         this.calendarEvents = data.calendar;
         this.buildCalendar();
         this.loading = false;
+        this.loadReminders();
       },
       error: (err) => {
         console.error('Error loading data:', err);
@@ -2244,5 +2629,134 @@ export class TendersComponent implements OnInit, OnDestroy {
       .replace(/\n- /g, '<br>• ')
       .replace(/\n\d+\. /g, (match) => '<br>' + match.trim() + ' ')
       .replace(/\n/g, '<br>');
+  }
+
+  // ==================== TENDER REMINDERS ====================
+
+  loadReminders(): void {
+    this.tenderService.getReminders().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (reminders) => {
+        this.reminders = reminders;
+      },
+      error: (err) => {
+        console.error('Error loading reminders:', err);
+      }
+    });
+  }
+
+  openReminderDialog(tender?: Tender): void {
+    this.showReminderDialog = true;
+    this.reminderForm = {
+      tenderId: tender?.id || 0,
+      eventType: '',
+      daysBefore: 3,
+      emailRecipients: '',
+      notes: ''
+    };
+    if (tender) {
+      this.selectedReminderTender = tender;
+    } else {
+      this.selectedReminderTender = null;
+    }
+  }
+
+  closeReminderDialog(): void {
+    this.showReminderDialog = false;
+    this.selectedReminderTender = null;
+  }
+
+  onReminderTenderChange(): void {
+    this.selectedReminderTender = this.tenders.find(t => t.id === this.reminderForm.tenderId) || null;
+    this.reminderForm.eventType = '';
+  }
+
+  isEventAvailable(eventType: string): boolean {
+    if (!this.selectedReminderTender) return false;
+    const t = this.selectedReminderTender;
+    switch (eventType) {
+      case 'ClosingDate': return !!t.closingDate;
+      case 'Briefing': return !!t.compulsoryBriefingDate;
+      case 'SiteVisit': return !!t.siteVisitDate;
+      case 'Clarification': return !!t.clarificationDeadline;
+      case 'Evaluation': return !!t.evaluationDate;
+      default: return false;
+    }
+  }
+
+  getEventTypeLabel(eventType: string): string {
+    const found = this.reminderEventTypes.find(e => e.value === eventType);
+    return found ? found.label : eventType;
+  }
+
+  getEventTypeIcon(eventType: string): string {
+    const found = this.reminderEventTypes.find(e => e.value === eventType);
+    return found ? found.icon : 'notifications';
+  }
+
+  submitReminder(): void {
+    if (!this.reminderForm.tenderId || !this.reminderForm.eventType || !this.reminderForm.emailRecipients) return;
+
+    const user = this.authService.currentUserValue;
+    this.tenderService.createReminder({
+      tenderId: this.reminderForm.tenderId,
+      eventType: this.reminderForm.eventType,
+      daysBefore: this.reminderForm.daysBefore,
+      emailRecipients: this.reminderForm.emailRecipients,
+      notes: this.reminderForm.notes || undefined,
+      createdByUserId: user?.userId || 0,
+      createdByUserName: user ? `${user.name} ${user.surname || ''}`.trim() : 'Unknown'
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.closeReminderDialog();
+        this.loadReminders();
+        this.snackBar.open('✅ Reminder created successfully! Welly will send the email.', 'Close', { duration: 4000 });
+      },
+      error: (err) => {
+        const msg = err.error || 'Failed to create reminder';
+        this.snackBar.open('Error: ' + msg, 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  deleteReminder(reminder: TenderReminder): void {
+    if (!confirm(`Delete this ${this.getEventTypeLabel(reminder.eventType)} reminder?`)) return;
+
+    this.tenderService.deleteReminder(reminder.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.loadReminders();
+        this.snackBar.open('Reminder deleted', 'Close', { duration: 3000 });
+      },
+      error: () => {
+        this.snackBar.open('Error deleting reminder', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  sendReminderNow(reminder: TenderReminder): void {
+    this.tenderService.sendReminderNow(reminder.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (result) => {
+        this.loadReminders();
+        this.snackBar.open(result.success ? '✅ ' + result.message : '❌ ' + result.message, 'Close', { duration: 4000 });
+      },
+      error: (err) => {
+        this.snackBar.open('Failed to send reminder: ' + (err.error?.message || 'Unknown error'), 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  checkReminders(): void {
+    this.tenderService.checkAndSendReminders().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (result) => {
+        this.loadReminders();
+        if (result.sent > 0) {
+          this.snackBar.open(`✅ Sent ${result.sent} of ${result.total} due reminders`, 'Close', { duration: 4000 });
+        } else {
+          this.snackBar.open('No reminders due at this time', 'Close', { duration: 3000 });
+        }
+      },
+      error: () => {
+        this.snackBar.open('Error checking reminders', 'Close', { duration: 3000 });
+      }
+    });
   }
 }

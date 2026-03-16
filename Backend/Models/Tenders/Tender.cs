@@ -280,4 +280,46 @@ namespace ProjectTracker.API.Models.Tenders
         [ForeignKey("TenderId")]
         public virtual Tender? Tender { get; set; }
     }
+
+    /// <summary>
+    /// Reminder/notification linked to a tender event (Closing, Briefing, Site Visit, Clarification, Evaluation)
+    /// </summary>
+    public class TenderReminder
+    {
+        [Key]
+        public int Id { get; set; }
+
+        public int TenderId { get; set; }
+
+        [Required]
+        [MaxLength(50)]
+        public string EventType { get; set; } = string.Empty; // ClosingDate, Briefing, SiteVisit, Clarification, Evaluation
+
+        public DateTime EventDate { get; set; }
+
+        public int DaysBefore { get; set; } = 3; // Number of days before the event to send reminder
+
+        [MaxLength(1000)]
+        public string? EmailRecipients { get; set; } // Comma-separated email addresses
+
+        [MaxLength(500)]
+        public string? Notes { get; set; }
+
+        public bool IsSent { get; set; } = false;
+
+        public DateTime? SentAt { get; set; }
+
+        public bool IsActive { get; set; } = true;
+
+        public int CreatedByUserId { get; set; }
+
+        [MaxLength(100)]
+        public string? CreatedByUserName { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // Navigation
+        [ForeignKey("TenderId")]
+        public virtual Tender? Tender { get; set; }
+    }
 }
