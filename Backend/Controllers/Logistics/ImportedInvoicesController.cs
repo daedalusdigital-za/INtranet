@@ -375,14 +375,17 @@ namespace ProjectTracker.API.Controllers.Logistics
 
         /// <summary>
         /// Welly Suggests — AI-powered tripsheet suggestions grouped by warehouse origin.
-        /// Analyzes all pending invoices, batches them by nearest warehouse, then optimizes
-        /// into route-efficient tripsheet groups by province/city/customer.
+        /// Analyzes all pending invoices, infers delivery locations from customer names and
+        /// account prefixes, batches them by warehouse → province → city/customer,
+        /// and splits large groups into practical tripsheet sizes.
         /// </summary>
         [HttpGet("welly-suggest-tripsheets")]
         public async Task<ActionResult> WellySuggestTripsheets()
         {
             try
             {
+                const int MaxInvoicesPerTrip = 30;
+
                 // Get ALL pending invoices (not assigned to a load)
                 var pendingInvoices = await _context.ImportedInvoices
                     .Include(i => i.Customer)
@@ -401,14 +404,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     .ToListAsync();
 
                 // Map SourceCompany → Warehouse
-                // PMT = Promed Technologies (primary warehouse: KZN Distribution Centre)
-                // ACM = Access Medical (Gauteng Main Warehouse)
-                // PHT = Pharmatech (Cape Town Warehouse)
-                // SBT = Sebenzani Trading (KZN Distribution Centre)
                 var companyWarehouseMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 foreach (var wh in warehouses)
                 {
-                    // Try to match warehouse by code or known mappings
                     if (wh.Code == "WH-KZN") { companyWarehouseMap.TryAdd("PMT", wh.Id); companyWarehouseMap.TryAdd("SBT", wh.Id); }
                     else if (wh.Code == "WH-GP") companyWarehouseMap.TryAdd("ACM", wh.Id);
                     else if (wh.Code == "WH-CPT") companyWarehouseMap.TryAdd("PHT", wh.Id);
@@ -432,49 +430,90 @@ namespace ProjectTracker.API.Controllers.Logistics
                     var warehouse = warehouses.FirstOrDefault(w => w.Id == whGroup.Key);
                     if (warehouse == null) continue;
 
-                    // Within this warehouse, group by province → city for route batching
-                    var routeBatches = whGroup
-                        .GroupBy(i =>
+                    // Infer province + city for every invoice using multiple strategies
+                    var enriched = whGroup.Select(i =>
+                    {
+                        var (prov, city) = InferLocation(i);
+                        return new { Invoice = i, Province = prov, City = city };
+                    }).ToList();
+
+                    // Group by province → city
+                    var provCityGroups = enriched
+                        .GroupBy(e => new { e.Province, e.City })
+                        .ToList();
+
+                    var routeBatches = new List<object>();
+
+                    foreach (var pcGroup in provCityGroups)
+                    {
+                        var invoicesInGroup = pcGroup.Select(e => e.Invoice).ToList();
+
+                        // If the group is small enough, make it one batch
+                        if (invoicesInGroup.Count <= MaxInvoicesPerTrip)
                         {
-                            var province = i.DeliveryProvince ?? i.Customer?.Province ?? "Unknown";
-                            var city = i.DeliveryCity ?? i.Customer?.City ?? "Unknown";
-                            return new { Province = province, City = city };
-                        })
-                        .Select(batch =>
+                            routeBatches.Add(BuildBatchObject(pcGroup.Key.Province, pcGroup.Key.City, invoicesInGroup, null));
+                        }
+                        else
                         {
-                            var invoices = batch.ToList();
-                            var customerGroups = invoices
-                                .GroupBy(i => new { i.CustomerNumber, i.CustomerName })
+                            // Split by individual customer first
+                            var customerChunks = invoicesInGroup
+                                .GroupBy(inv => new { inv.CustomerNumber, inv.CustomerName })
+                                .OrderByDescending(cg => cg.Count())
                                 .ToList();
 
-                            return new
+                            var currentBatch = new List<ImportedInvoice>();
+                            int batchNum = 1;
+
+                            foreach (var custGroup in customerChunks)
                             {
-                                province = batch.Key.Province,
-                                city = batch.Key.City,
-                                totalInvoices = invoices.Count,
-                                uniqueCustomers = customerGroups.Count,
-                                totalValue = Math.Round((double)invoices.Sum(i => i.SalesAmount - i.SalesReturns), 2),
-                                totalItems = Math.Round((double)invoices.Sum(i => i.Quantity), 0),
-                                oldestDays = invoices.Max(i => (int)(DateTime.UtcNow - i.ImportedAt).TotalDays),
-                                highestPriority = GetHighestPriorityFromInvoices(invoices),
-                                invoiceIds = invoices.Select(i => i.Id).ToList(),
-                                customers = customerGroups.Select(cg => new
+                                var custInvoices = custGroup.ToList();
+
+                                // If this single customer exceeds the limit, split them into their own trips
+                                if (custInvoices.Count > MaxInvoicesPerTrip)
                                 {
-                                    customerNumber = cg.Key.CustomerNumber,
-                                    customerName = cg.Key.CustomerName,
-                                    invoiceCount = cg.Count(),
-                                    totalAmount = Math.Round((double)cg.Sum(inv => inv.SalesAmount - inv.SalesReturns), 2),
-                                    city = cg.First().DeliveryCity ?? cg.First().Customer?.City,
-                                    address = cg.First().DeliveryAddress ?? cg.First().Customer?.DeliveryAddress,
-                                    province = cg.First().DeliveryProvince ?? cg.First().Customer?.Province
-                                }).OrderByDescending(c => c.totalAmount).ToList(),
-                                recommendedVehicle = invoices.Count > 50 ? "Large Truck (10+ Ton)" :
-                                    invoices.Count > 20 ? "Medium Truck (5 Ton)" : "Light Delivery Vehicle",
-                                urgencyScore = CalculateUrgencyScore(invoices)
-                            };
-                        })
-                        .OrderByDescending(b => b.urgencyScore)
-                        .ThenByDescending(b => b.totalValue)
+                                    // Flush any partial batch first
+                                    if (currentBatch.Any())
+                                    {
+                                        routeBatches.Add(BuildBatchObject(pcGroup.Key.Province, pcGroup.Key.City, currentBatch, batchNum));
+                                        batchNum++;
+                                        currentBatch = new List<ImportedInvoice>();
+                                    }
+                                    // Split this large customer into MaxInvoicesPerTrip-sized chunks
+                                    for (int i = 0; i < custInvoices.Count; i += MaxInvoicesPerTrip)
+                                    {
+                                        var chunk = custInvoices.Skip(i).Take(MaxInvoicesPerTrip).ToList();
+                                        routeBatches.Add(BuildBatchObject(pcGroup.Key.Province, pcGroup.Key.City, chunk, batchNum));
+                                        batchNum++;
+                                    }
+                                }
+                                else if (currentBatch.Count + custInvoices.Count > MaxInvoicesPerTrip)
+                                {
+                                    // Flush current batch, start new one
+                                    if (currentBatch.Any())
+                                    {
+                                        routeBatches.Add(BuildBatchObject(pcGroup.Key.Province, pcGroup.Key.City, currentBatch, batchNum));
+                                        batchNum++;
+                                    }
+                                    currentBatch = new List<ImportedInvoice>(custInvoices);
+                                }
+                                else
+                                {
+                                    currentBatch.AddRange(custInvoices);
+                                }
+                            }
+
+                            // Don't forget the last partial batch
+                            if (currentBatch.Any())
+                            {
+                                routeBatches.Add(BuildBatchObject(pcGroup.Key.Province, pcGroup.Key.City, currentBatch, batchNum));
+                            }
+                        }
+                    }
+
+                    // Sort by urgency
+                    routeBatches = routeBatches
+                        .OrderByDescending(b => ((dynamic)b).urgencyScore)
+                        .ThenByDescending(b => ((dynamic)b).totalValue)
                         .ToList();
 
                     var sourceCompanies = whGroup
@@ -494,7 +533,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         totalPendingInvoices = whGroup.Count(),
                         totalValue = Math.Round((double)whGroup.Sum(i => i.SalesAmount - i.SalesReturns), 2),
                         suggestedTripsheets = routeBatches,
-                        summary = $"{routeBatches.Count} suggested trip(s) from {warehouse.Name} covering {routeBatches.Sum(b => b.uniqueCustomers)} customers across {routeBatches.Select(b => b.province).Distinct().Count()} province(s)"
+                        summary = $"{routeBatches.Count} suggested trip(s) from {warehouse.Name} covering {routeBatches.Sum(b => (int)((dynamic)b).uniqueCustomers)} customers across {routeBatches.Select(b => (string)((dynamic)b).province).Distinct().Count()} province(s)"
                     });
                 }
 
@@ -513,6 +552,329 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        /// <summary>
+        /// Build a suggestion batch object from a list of invoices.
+        /// </summary>
+        private static object BuildBatchObject(string province, string city, List<ImportedInvoice> invoices, int? batchNum)
+        {
+            var customerGroups = invoices
+                .GroupBy(i => new { i.CustomerNumber, i.CustomerName })
+                .ToList();
+
+            var label = batchNum.HasValue ? $"{city} (Batch {batchNum})" : city;
+
+            return new
+            {
+                province,
+                city = label,
+                totalInvoices = invoices.Count,
+                uniqueCustomers = customerGroups.Count,
+                totalValue = Math.Round((double)invoices.Sum(i => i.SalesAmount - i.SalesReturns), 2),
+                totalItems = Math.Round((double)invoices.Sum(i => i.Quantity), 0),
+                oldestDays = invoices.Max(i => (int)(DateTime.UtcNow - i.ImportedAt).TotalDays),
+                highestPriority = GetHighestPriorityFromInvoices(invoices),
+                invoiceIds = invoices.Select(i => i.Id).ToList(),
+                customers = customerGroups.Select(cg => new
+                {
+                    customerNumber = cg.Key.CustomerNumber,
+                    customerName = cg.Key.CustomerName,
+                    invoiceCount = cg.Count(),
+                    totalAmount = Math.Round((double)cg.Sum(inv => inv.SalesAmount - inv.SalesReturns), 2),
+                    city = cg.First().DeliveryCity ?? cg.First().Customer?.City,
+                    address = cg.First().DeliveryAddress ?? cg.First().Customer?.DeliveryAddress,
+                    province = cg.First().DeliveryProvince ?? cg.First().Customer?.Province
+                }).OrderByDescending(c => c.totalAmount).ToList(),
+                recommendedVehicle = invoices.Count > 25 ? "Medium Truck (5 Ton)" :
+                    invoices.Count > 12 ? "Light Delivery Vehicle" : "Panel Van / Bakkie",
+                urgencyScore = CalculateUrgencyScore(invoices)
+            };
+        }
+
+        /// <summary>
+        /// Infer province and city from invoice data, customer name, and account prefix.
+        /// Uses a multi-strategy approach: explicit fields → customer record → name keywords → prefix codes.
+        /// </summary>
+        private static (string Province, string City) InferLocation(ImportedInvoice invoice)
+        {
+            // Strategy 1: Use explicit delivery fields if populated
+            var prov = invoice.DeliveryProvince;
+            var city = invoice.DeliveryCity;
+            if (!string.IsNullOrWhiteSpace(prov) && !string.IsNullOrWhiteSpace(city))
+                return (prov, city);
+
+            // Strategy 2: Use linked Customer record
+            var custProv = invoice.Customer?.Province;
+            var custCity = invoice.Customer?.City ?? invoice.Customer?.DeliveryCity;
+            if (!string.IsNullOrWhiteSpace(custProv) && !string.IsNullOrWhiteSpace(custCity))
+                return (custProv, custCity);
+
+            // Strategy 3: Infer from customer name using known SA city/region keywords
+            var name = (invoice.CustomerName ?? "").ToUpperInvariant();
+            var inferred = InferFromCustomerName(name);
+            if (inferred.Province != null)
+                return (inferred.Province, inferred.City ?? "General");
+
+            // Strategy 4: Infer from customer number prefix (XX-...)
+            var prefix = (invoice.CustomerNumber ?? "").Length >= 2
+                ? invoice.CustomerNumber!.Substring(0, 2).ToUpperInvariant()
+                : "";
+            var prefixResult = InferFromPrefix(prefix);
+            if (prefixResult.Province != null)
+                return (prefixResult.Province, prefixResult.City ?? "General");
+
+            // Fallback — use whatever partial data we have
+            return (prov ?? custProv ?? "Unclassified", city ?? custCity ?? "General");
+        }
+
+        /// <summary>
+        /// Match customer name against known South African city/region keywords.
+        /// </summary>
+        private static (string? Province, string? City) InferFromCustomerName(string upperName)
+        {
+            // KwaZulu-Natal cities/towns
+            if (upperName.Contains("DURBAN") || upperName.Contains("ETHEKWINI") || upperName.Contains("ETSHENI"))
+                return ("KwaZulu-Natal", "Durban");
+            if (upperName.Contains("PIETERMARITZBURG") || upperName.Contains("PMB") || upperName.Contains("MSUNDUZI"))
+                return ("KwaZulu-Natal", "Pietermaritzburg");
+            if (upperName.Contains("DUNDEE")) return ("KwaZulu-Natal", "Dundee");
+            if (upperName.Contains("LADYSMITH")) return ("KwaZulu-Natal", "Ladysmith");
+            if (upperName.Contains("NEWCASTLE")) return ("KwaZulu-Natal", "Newcastle");
+            if (upperName.Contains("RICHARDS BAY") || upperName.Contains("RICHARDSBAY"))
+                return ("KwaZulu-Natal", "Richards Bay");
+            if (upperName.Contains("EMPANGENI")) return ("KwaZulu-Natal", "Empangeni");
+            if (upperName.Contains("ESHOWE")) return ("KwaZulu-Natal", "Eshowe");
+            if (upperName.Contains("SCOTTBURGH")) return ("KwaZulu-Natal", "Scottburgh");
+            if (upperName.Contains("PORT SHEPSTONE") || upperName.Contains("SHELLY BEACH"))
+                return ("KwaZulu-Natal", "Port Shepstone");
+            if (upperName.Contains("STANGER") || upperName.Contains("KWADUKUZA"))
+                return ("KwaZulu-Natal", "Stanger");
+            if (upperName.Contains("VRYHEID")) return ("KwaZulu-Natal", "Vryheid");
+            if (upperName.Contains("ULUNDI")) return ("KwaZulu-Natal", "Ulundi");
+            if (upperName.Contains("IXOPO")) return ("KwaZulu-Natal", "Ixopo");
+            if (upperName.Contains("GREYTOWN")) return ("KwaZulu-Natal", "Greytown");
+            if (upperName.Contains("WENTWORTH")) return ("KwaZulu-Natal", "Durban South");
+            if (upperName.Contains("INKOSI ALBERT LUTHULI") || upperName.Contains("IALCH"))
+                return ("KwaZulu-Natal", "Durban");
+            if (upperName.Contains("APPLESBOSCH") || upperName.Contains("KRANSKOP"))
+                return ("KwaZulu-Natal", "Kranskop");
+            if (upperName.Contains("NKANDLA")) return ("KwaZulu-Natal", "Nkandla");
+            if (upperName.Contains("HLABISA")) return ("KwaZulu-Natal", "Hlabisa");
+            if (upperName.Contains("MADADENI")) return ("KwaZulu-Natal", "Newcastle");
+
+            // Gauteng cities
+            if (upperName.Contains("HILLBROW") || upperName.Contains("JOHANNESBURG") || upperName.Contains("JHB"))
+                return ("Gauteng", "Johannesburg");
+            if (upperName.Contains("PRETORIA") || upperName.Contains("TSHWANE"))
+                return ("Gauteng", "Pretoria");
+            if (upperName.Contains("SOWETO")) return ("Gauteng", "Soweto");
+            if (upperName.Contains("SANDTON")) return ("Gauteng", "Sandton");
+            if (upperName.Contains("BARAGWANATH") || upperName.Contains("CHRIS HANI"))
+                return ("Gauteng", "Johannesburg South");
+            if (upperName.Contains("WATERKLOOF") || upperName.Contains("AFB WATERKLOOF"))
+                return ("Gauteng", "Pretoria");
+            if (upperName.Contains("KGOSI MAMPURU") || upperName.Contains("MAMPURU"))
+                return ("Gauteng", "Pretoria");
+            if (upperName.Contains("GERMISTON") || upperName.Contains("EKURHULENI"))
+                return ("Gauteng", "Ekurhuleni");
+            if (upperName.Contains("BENONI") || upperName.Contains("SPRINGS") || upperName.Contains("KEMPTON"))
+                return ("Gauteng", "Ekurhuleni");
+            if (upperName.Contains("VEREENIGING") || upperName.Contains("VANDERBIJL"))
+                return ("Gauteng", "Vaal Triangle");
+            if (upperName.Contains("EDENVALE") || upperName.Contains("BEDFORDVIEW"))
+                return ("Gauteng", "Ekurhuleni");
+            if (upperName.Contains("CENTURION") || upperName.Contains("MIDRAND"))
+                return ("Gauteng", "Centurion/Midrand");
+
+            // Eastern Cape
+            if (upperName.Contains("PORT ELIZABETH") || upperName.Contains("GQEBERHA") || upperName.Contains("PE "))
+                return ("Eastern Cape", "Gqeberha");
+            if (upperName.Contains("EAST LONDON") || upperName.Contains("BUFFALO CITY") || upperName.Contains("BCM"))
+                return ("Eastern Cape", "East London");
+            if (upperName.Contains("UMTATA") || upperName.Contains("MTHATHA"))
+                return ("Eastern Cape", "Mthatha");
+            if (upperName.Contains("BHISHO") || upperName.Contains("BISHO"))
+                return ("Eastern Cape", "Bhisho");
+            if (upperName.Contains("QUEENSTOWN")) return ("Eastern Cape", "Queenstown");
+            if (upperName.Contains("GRAHAMSTOWN") || upperName.Contains("MAKHANDA"))
+                return ("Eastern Cape", "Makhanda");
+            if (upperName.Contains("KING WILLIAM")) return ("Eastern Cape", "King Williams Town");
+            if (upperName.Contains("UITENHAGE") || upperName.Contains("KARIEGA"))
+                return ("Eastern Cape", "Kariega");
+            if (upperName.Contains("CRADOCK")) return ("Eastern Cape", "Cradock");
+            if (upperName.Contains("GRAAFF") || upperName.Contains("GRAAFF-REINET"))
+                return ("Eastern Cape", "Graaff-Reinet");
+
+            // Western Cape
+            if (upperName.Contains("CAPE TOWN") || upperName.Contains("KHAYELITSHA") || upperName.Contains("GROOTE SCHUUR"))
+                return ("Western Cape", "Cape Town");
+            if (upperName.Contains("TYGERBERG")) return ("Western Cape", "Cape Town North");
+            if (upperName.Contains("STELLENBOSCH")) return ("Western Cape", "Stellenbosch");
+            if (upperName.Contains("PAARL") || upperName.Contains("WELLINGTON"))
+                return ("Western Cape", "Paarl");
+            if (upperName.Contains("WORCESTER")) return ("Western Cape", "Worcester");
+            if (upperName.Contains("GEORGE")) return ("Western Cape", "George");
+            if (upperName.Contains("KNYSNA")) return ("Western Cape", "Knysna");
+            if (upperName.Contains("OUDTSHOORN")) return ("Western Cape", "Oudtshoorn");
+            if (upperName.Contains("BREDASDORP") || upperName.Contains("OVERBERG"))
+                return ("Western Cape", "Bredasdorp");
+            if (upperName.Contains("BEAUFORT WEST") || upperName.Contains("BEAUFORT"))
+                return ("Western Cape", "Beaufort West");
+            if (upperName.Contains("MOSSEL BAY")) return ("Western Cape", "Mossel Bay");
+
+            // Free State
+            if (upperName.Contains("BLOEMFONTEIN") || upperName.Contains("MANGAUNG"))
+                return ("Free State", "Bloemfontein");
+            if (upperName.Contains("WELKOM")) return ("Free State", "Welkom");
+            if (upperName.Contains("BETHLEHEM")) return ("Free State", "Bethlehem");
+            if (upperName.Contains("KROONSTAD")) return ("Free State", "Kroonstad");
+            if (upperName.Contains("SASOLBURG")) return ("Free State", "Sasolburg");
+            if (upperName.Contains("PHEKOLONG")) return ("Free State", "Bethlehem");
+            if (upperName.Contains("ARTHUR LETELE")) return ("Free State", "Trompsburg");
+
+            // Limpopo
+            if (upperName.Contains("POLOKWANE") || upperName.Contains("PIETERSBURG"))
+                return ("Limpopo", "Polokwane");
+            if (upperName.Contains("LIMPOPO")) return ("Limpopo", "General");
+            if (upperName.Contains("MANKWENG")) return ("Limpopo", "Mankweng");
+            if (upperName.Contains("THOHOYANDOU") || upperName.Contains("VHEMBE"))
+                return ("Limpopo", "Thohoyandou");
+            if (upperName.Contains("TZANEEN") || upperName.Contains("LETABA"))
+                return ("Limpopo", "Tzaneen");
+            if (upperName.Contains("MUSINA") || upperName.Contains("MESSINA"))
+                return ("Limpopo", "Musina");
+            if (upperName.Contains("MOKOPANE") || upperName.Contains("POTGIETERSRUS"))
+                return ("Limpopo", "Mokopane");
+            if (upperName.Contains("LPPD") || upperName.Contains("LIMPOPO.*DEPOT"))
+                return ("Limpopo", "Polokwane");
+
+            // North West
+            if (upperName.Contains("MMABATHO") || upperName.Contains("MAFIKENG") || upperName.Contains("MAHIKENG"))
+                return ("North West", "Mahikeng");
+            if (upperName.Contains("RUSTENBURG")) return ("North West", "Rustenburg");
+            if (upperName.Contains("POTCHEFSTROOM") || upperName.Contains("TLOKWE"))
+                return ("North West", "Potchefstroom");
+            if (upperName.Contains("KLERKSDORP") || upperName.Contains("KLERDORP") || upperName.Contains("TSHEPONG"))
+                return ("North West", "Klerksdorp");
+            if (upperName.Contains("BRITS") || upperName.Contains("MADIBENG"))
+                return ("North West", "Brits");
+            if (upperName.Contains("NORTH WEST")) return ("North West", "General");
+
+            // Mpumalanga
+            if (upperName.Contains("NELSPRUIT") || upperName.Contains("MBOMBELA"))
+                return ("Mpumalanga", "Nelspruit");
+            if (upperName.Contains("WITBANK") || upperName.Contains("EMALAHLENI"))
+                return ("Mpumalanga", "Witbank");
+            if (upperName.Contains("MIDDELBURG") && !upperName.Contains("CAPE"))
+                return ("Mpumalanga", "Middelburg");
+            if (upperName.Contains("PIET RETIEF") || upperName.Contains("MKHONDO"))
+                return ("Mpumalanga", "Piet Retief");
+            if (upperName.Contains("ERMELO")) return ("Mpumalanga", "Ermelo");
+            if (upperName.Contains("STANDERTON")) return ("Mpumalanga", "Standerton");
+            if (upperName.Contains("MPUMALANGA")) return ("Mpumalanga", "General");
+
+            // Northern Cape
+            if (upperName.Contains("KIMBERLEY")) return ("Northern Cape", "Kimberley");
+            if (upperName.Contains("UPINGTON")) return ("Northern Cape", "Upington");
+            if (upperName.Contains("NORTHERN CAPE") || upperName.Contains("ROBERT MANGALISO"))
+                return ("Northern Cape", "Kimberley");
+            if (upperName.Contains("DE AAR")) return ("Northern Cape", "De Aar");
+            if (upperName.Contains("SPRINGBOK")) return ("Northern Cape", "Springbok");
+
+            // Generic patterns
+            if (upperName.Contains("CORRECTIONAL SERVICE")) return (null, null); // will fall through to prefix
+            if (upperName.Contains("DEPARTMENT OF HEALTH"))
+            {
+                // Try to extract province from name
+                if (upperName.Contains("KZN") || upperName.Contains("KWAZULU"))
+                    return ("KwaZulu-Natal", "General");
+                if (upperName.Contains("GAUTENG") || upperName.Contains("GP"))
+                    return ("Gauteng", "General");
+                if (upperName.Contains("EC") || upperName.Contains("EASTERN CAPE"))
+                    return ("Eastern Cape", "General");
+                if (upperName.Contains("WC") || upperName.Contains("WESTERN CAPE"))
+                    return ("Western Cape", "General");
+                if (upperName.Contains("LIMPOPO") || upperName.Contains("LP"))
+                    return ("Limpopo", "General");
+                if (upperName.Contains("MPUMALANGA") || upperName.Contains("MP"))
+                    return ("Mpumalanga", "General");
+                if (upperName.Contains("NORTH WEST") || upperName.Contains("NW"))
+                    return ("North West", "General");
+                if (upperName.Contains("FREE STATE") || upperName.Contains("FS"))
+                    return ("Free State", "General");
+                if (upperName.Contains("NORTHERN CAPE") || upperName.Contains("NC"))
+                    return ("Northern Cape", "General");
+            }
+
+            // WC DOHW pattern (Western Cape Dept of Health)
+            if (upperName.StartsWith("WC ") || upperName.Contains("WC DOHW"))
+                return ("Western Cape", "General");
+
+            // EC HEALTH pattern
+            if (upperName.StartsWith("EC ") || upperName.Contains("EC HEALTH"))
+                return ("Eastern Cape", "General");
+
+            // FS HEALTH pattern
+            if (upperName.StartsWith("FS ") || upperName.Contains("FS HEALTH"))
+                return ("Free State", "General");
+
+            // NC HEALTH pattern
+            if (upperName.StartsWith("NC ") || upperName.Contains("NC HEALTH"))
+                return ("Northern Cape", "General");
+
+            return (null, null);
+        }
+
+        /// <summary>
+        /// Infer province from the 2-character customer number prefix.
+        /// Pattern: 01=KZN, 02=Limpopo, 03=North West, 04=Free State,
+        /// 05=Western Cape, 06=Eastern Cape, 07=Northern Cape, 08=Gauteng, 09=Mpumalanga
+        /// </summary>
+        private static (string? Province, string? City) InferFromPrefix(string prefix)
+        {
+            return prefix switch
+            {
+                "01" => ("KwaZulu-Natal", null),
+                "02" => ("Limpopo", null),
+                "03" => ("North West", null),
+                "04" => ("Free State", null),
+                "05" => ("Western Cape", null),
+                "06" => ("Eastern Cape", null),
+                "07" => ("Northern Cape", null),
+                "08" => ("Gauteng", null),
+                "09" => ("Mpumalanga", null),
+                "10" => ("Gauteng", null),  // Misc Gauteng
+                "GP" => ("Gauteng", null),
+                "KZ" => ("KwaZulu-Natal", null),
+                "EC" => ("Eastern Cape", null),
+                "WC" => ("Western Cape", null),
+                "NC" => ("Northern Cape", null),
+                "LP" => ("Limpopo", null),
+                "NW" => ("North West", null),
+                "FS" => ("Free State", null),
+                "MP" => ("Mpumalanga", null),
+                "PE" => ("Eastern Cape", "Gqeberha"),
+                "BL" => ("Free State", "Bloemfontein"),
+                "UM" => ("Eastern Cape", "Mthatha"),
+                "MM" => ("North West", "Mahikeng"),
+                "KL" => ("North West", "Klerksdorp"),
+                "PI" => ("Limpopo", "Polokwane"),
+                "PO" => ("North West", "Potchefstroom"),
+                "TY" => ("Western Cape", "Cape Town North"),
+                "GR" => ("Western Cape", "Cape Town"),
+                "KH" => ("Western Cape", "Cape Town"),
+                "OU" => ("Western Cape", "Oudtshoorn"),
+                "BE" => ("Western Cape", "Beaufort West"),
+                "MA" => ("Limpopo", "Mankweng"),
+                "DR" => ("Free State", "Trompsburg"),
+                "IA" => ("KwaZulu-Natal", "Durban"),
+                "AP" => ("KwaZulu-Natal", "Kranskop"),
+                "DO" => ("Mpumalanga", null),
+                "HQ" => ("Western Cape", "Cape Town"),
+                "ME" => ("Gauteng", "Johannesburg"),
+                _ => (null, null)
+            };
+        }
+
         private static string GetHighestPriorityFromInvoices(List<ImportedInvoice> invoices)
         {
             var maxDays = invoices.Max(i => (DateTime.UtcNow - i.ImportedAt).TotalDays);
@@ -525,7 +887,6 @@ namespace ProjectTracker.API.Controllers.Logistics
 
         private static double CalculateUrgencyScore(List<ImportedInvoice> invoices)
         {
-            // Combine age urgency + value to produce a sort score
             var avgDays = invoices.Average(i => (DateTime.UtcNow - i.ImportedAt).TotalDays);
             var totalValue = (double)invoices.Sum(i => i.SalesAmount - i.SalesReturns);
             return (avgDays * 10) + (totalValue / 10000);
