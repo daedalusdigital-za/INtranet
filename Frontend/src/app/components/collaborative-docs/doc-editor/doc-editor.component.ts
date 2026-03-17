@@ -1163,11 +1163,18 @@ import { Collaboration } from '@tiptap/extension-collaboration';
       box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
       border-radius: 0;
       padding: 96px 96px 96px 96px;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      overflow-x: hidden;
+      box-sizing: border-box;
     }
 
     .tiptap-editor {
       outline: none;
       min-height: 100%;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      white-space: pre-wrap;
     }
 
     /* Status Bar */
@@ -1217,6 +1224,8 @@ import { Collaboration } from '@tiptap/extension-collaboration';
       font-size: 11pt;
       line-height: 1.5;
       color: #000;
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
 
     :host ::ng-deep .tiptap-editor p {
@@ -1267,6 +1276,9 @@ import { Collaboration } from '@tiptap/extension-collaboration';
       overflow-x: auto;
       margin: 16px 0;
       font-family: 'Courier New', monospace;
+      max-width: 100%;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     :host ::ng-deep .tiptap-editor code {
@@ -1296,6 +1308,8 @@ import { Collaboration } from '@tiptap/extension-collaboration';
       border-collapse: collapse;
       width: 100%;
       margin: 16px 0;
+      table-layout: fixed;
+      overflow-wrap: break-word;
     }
 
     :host ::ng-deep .tiptap-editor th,
