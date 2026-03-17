@@ -85,6 +85,10 @@ import { Awareness } from 'y-protocols/awareness';
                   <mat-icon>upload_file</mat-icon>
                   <span>Import Word Document</span>
                 </button>
+                <button mat-menu-item (click)="triggerImportPdf()">
+                  <mat-icon>picture_as_pdf</mat-icon>
+                  <span>Import PDF</span>
+                </button>
                 <button mat-menu-item (click)="exportAsHtml()">
                   <mat-icon>download</mat-icon>
                   <span>Export as HTML</span>
@@ -321,6 +325,11 @@ import { Awareness } from 'y-protocols/awareness';
                   <span>Word Doc</span>
                 </button>
                 <input type="file" #docxFileInput hidden accept=".docx" (change)="importDocx($event)">
+                <button class="ribbon-btn large" (click)="triggerImportPdf()" matTooltip="Import PDF Document">
+                  <mat-icon>picture_as_pdf</mat-icon>
+                  <span>PDF</span>
+                </button>
+                <input type="file" #pdfFileInput hidden accept=".pdf" (change)="importPdf($event)">
               </div>
               <div class="ribbon-group-label">Import</div>
             </div>
@@ -1550,6 +1559,7 @@ import { Awareness } from 'y-protocols/awareness';
 export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('editorElement') editorElement!: ElementRef;
   @ViewChild('docxFileInput') docxFileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('pdfFileInput') pdfFileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('imageInput') imageInput!: ElementRef<HTMLInputElement>;
 
   documentId!: number;
@@ -2233,6 +2243,120 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       // Reset file input so the same file can be selected again
       input.value = '';
     }
+  }
+
+  // PDF document import
+  triggerImportPdf(): void {
+    this.pdfFileInput.nativeElement.click();
+  }
+
+  async importPdf(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      this.snackBar.open('Please select a valid PDF file (.pdf)', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.saving = true;
+    this.snackBar.open('Importing PDF document...', undefined, { duration: 2000 });
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+
+      // Dynamically import pdfjs-dist
+      const pdfjsLib = await import('pdfjs-dist');
+
+      // Set the worker source
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
+      // Load the PDF document
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const totalPages = pdf.numPages;
+
+      let htmlContent = '';
+
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+
+        // Group text items by their vertical position (y-coordinate) to reconstruct lines
+        const lineMap = new Map<number, { x: number; text: string; fontSize: number; bold: boolean }[]>();
+
+        for (const item of textContent.items) {
+          if (!('str' in item) || !item.str.trim()) continue;
+
+          // Round y to group items on the same line (within 2px tolerance)
+          const y = Math.round((item as any).transform[5] * 10) / 10;
+          const x = (item as any).transform[4];
+          const fontSize = Math.abs((item as any).transform[0]) || 12;
+          const fontName: string = (item as any).fontName || '';
+          const bold = fontName.toLowerCase().includes('bold');
+
+          if (!lineMap.has(y)) {
+            lineMap.set(y, []);
+          }
+          lineMap.get(y)!.push({ x, text: item.str, fontSize, bold });
+        }
+
+        // Sort lines top-to-bottom (PDF y-axis is bottom-up, so sort descending)
+        const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a);
+
+        if (pageNum > 1) {
+          htmlContent += '<hr>';
+        }
+
+        for (const y of sortedYs) {
+          const lineItems = lineMap.get(y)!;
+          // Sort items left-to-right
+          lineItems.sort((a, b) => a.x - b.x);
+
+          const lineText = lineItems.map(item => item.text).join(' ');
+          const avgFontSize = lineItems.reduce((sum, item) => sum + item.fontSize, 0) / lineItems.length;
+          const isBold = lineItems.some(item => item.bold);
+
+          // Determine heading level based on font size
+          if (avgFontSize >= 22) {
+            htmlContent += `<h1>${this.escapeHtml(lineText)}</h1>`;
+          } else if (avgFontSize >= 18) {
+            htmlContent += `<h2>${this.escapeHtml(lineText)}</h2>`;
+          } else if (avgFontSize >= 15) {
+            htmlContent += `<h3>${this.escapeHtml(lineText)}</h3>`;
+          } else if (isBold) {
+            htmlContent += `<p><strong>${this.escapeHtml(lineText)}</strong></p>`;
+          } else {
+            htmlContent += `<p>${this.escapeHtml(lineText)}</p>`;
+          }
+        }
+      }
+
+      if (this.editor && htmlContent) {
+        this.editor.chain().focus().setContent(htmlContent).run();
+        this.snackBar.open(`PDF imported successfully! (${totalPages} page${totalPages > 1 ? 's' : ''})`, 'Close', { duration: 3000 });
+        this.autosaveSubject.next();
+      } else if (!htmlContent) {
+        this.snackBar.open('PDF appears to contain no extractable text (may be scanned/image-based)', 'Close', { duration: 5000 });
+      }
+    } catch (error) {
+      console.error('Error importing PDF:', error);
+      this.snackBar.open('Failed to import PDF document', 'Close', { duration: 3000 });
+    } finally {
+      this.saving = false;
+      input.value = '';
+    }
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   // ═══════════════════════════════════════════

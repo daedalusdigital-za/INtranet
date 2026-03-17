@@ -35,6 +35,7 @@
     "@tiptap/starter-kit": "^2.27.2",
     "@types/three": "^0.182.0",
     "mammoth": "^1.11.0",
+    "pdfjs-dist": "^4.9.155",
     "rxjs": "~7.8.0",
     "three": "^0.182.0",
     "tslib": "^2.3.0",
