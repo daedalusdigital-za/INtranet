@@ -113,7 +113,7 @@ namespace ProjectTracker.API.Services
 
         public async Task<AuditLogPagedResult> GetLogsAsync(AuditLogFilterDto filter)
         {
-            var query = _context.AuditLogs.AsQueryable();
+            var query = _context.AuditLogs.AsNoTracking().AsQueryable();
 
             // Apply filters
             if (!string.IsNullOrEmpty(filter.Category) && filter.Category != "all")
@@ -188,7 +188,7 @@ namespace ProjectTracker.API.Services
         public async Task<AuditLogStatsDto> GetStatsAsync()
         {
             var today = DateTime.UtcNow.Date;
-            var logs = await _context.AuditLogs.ToListAsync();
+            var logs = await _context.AuditLogs.AsNoTracking().ToListAsync();
 
             var stats = new AuditLogStatsDto
             {
@@ -221,6 +221,7 @@ namespace ProjectTracker.API.Services
         public async Task<List<AuditLogDto>> GetUserActivityAsync(int userId, int count = 50)
         {
             return await _context.AuditLogs
+                .AsNoTracking()
                 .Where(l => l.UserId == userId)
                 .OrderByDescending(l => l.CreatedAt)
                 .Take(count)
@@ -244,6 +245,7 @@ namespace ProjectTracker.API.Services
         public async Task<List<AuditLogDto>> GetRecentLogsAsync(int count = 100)
         {
             return await _context.AuditLogs
+                .AsNoTracking()
                 .OrderByDescending(l => l.CreatedAt)
                 .Take(count)
                 .Select(l => new AuditLogDto

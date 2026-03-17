@@ -30,7 +30,7 @@ public class ContractsController : ControllerBase
         [FromQuery] string? category = null,
         [FromQuery] bool? activeOnly = null)
     {
-        var query = _context.GovernmentContracts.AsQueryable();
+        var query = _context.GovernmentContracts.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrEmpty(companyCode))
         {
@@ -100,6 +100,7 @@ public class ContractsController : ControllerBase
     public async Task<ActionResult<List<ContractDto>>> GetContractsByCompany(string companyCode)
     {
         var contracts = await _context.GovernmentContracts
+            .AsNoTracking()
             .Where(c => c.CompanyCode == companyCode.ToUpper())
             .OrderByDescending(c => c.IsActive)
             .ThenBy(c => c.ExpiryDate)
@@ -117,6 +118,7 @@ public class ContractsController : ControllerBase
         var cutoffDate = DateTime.UtcNow.AddMonths(months);
         
         var contracts = await _context.GovernmentContracts
+            .AsNoTracking()
             .Where(c => c.IsActive && c.ExpiryDate.HasValue && c.ExpiryDate.Value <= cutoffDate)
             .OrderBy(c => c.ExpiryDate)
             .ToListAsync();
@@ -236,6 +238,7 @@ public class ContractsController : ControllerBase
     public async Task<ActionResult<List<string>>> GetCategories()
     {
         var categories = await _context.GovernmentContracts
+            .AsNoTracking()
             .Where(c => !string.IsNullOrEmpty(c.Category))
             .Select(c => c.Category!)
             .Distinct()

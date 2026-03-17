@@ -24,6 +24,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<BoardDto>>> GetAllBoards()
         {
             var boards = await _context.Boards
+                .AsNoTracking()
                 .Include(b => b.Department)
                 .Include(b => b.CreatedBy)
                 .Include(b => b.ChecklistItems)
@@ -119,6 +120,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<BoardDto>>> GetBoardsByDepartment(int departmentId)
         {
             var boards = await _context.Boards
+                .AsNoTracking()
                 .Include(b => b.Department)
                 .Include(b => b.CreatedBy)
                 .Include(b => b.ChecklistItems)
@@ -215,6 +217,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<BoardDto>> GetBoard(int id)
         {
             var board = await _context.Boards
+                .AsNoTracking()
                 .Include(b => b.Department)
                 .Include(b => b.CreatedBy)
                 .Include(b => b.ChecklistItems)

@@ -30,6 +30,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<ConversationDto>>> GetConversations([FromQuery] int userId)
         {
             var conversations = await _context.Conversations
+                .AsNoTracking()
                 .Include(c => c.Participants)
                     .ThenInclude(p => p.User)
                 .Include(c => c.Messages.OrderByDescending(m => m.SentAt).Take(1))
@@ -47,6 +48,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<ConversationDto>> GetConversation(int id, [FromQuery] int userId)
         {
             var conversation = await _context.Conversations
+                .AsNoTracking()
                 .Include(c => c.Participants)
                     .ThenInclude(p => p.User)
                 .Include(c => c.Messages.OrderByDescending(m => m.SentAt).Take(1))
@@ -71,6 +73,7 @@ namespace ProjectTracker.API.Controllers
             [FromQuery] int pageSize = 50)
         {
             var conversation = await _context.Conversations
+                .AsNoTracking()
                 .Include(c => c.Participants)
                 .FirstOrDefaultAsync(c => c.ConversationId == id);
 
@@ -81,6 +84,7 @@ namespace ProjectTracker.API.Controllers
                 return Forbid();
 
             var messages = await _context.Messages
+                .AsNoTracking()
                 .Include(m => m.Sender)
                 .Include(m => m.Attachments)
                 .Include(m => m.ReadReceipts)
@@ -425,6 +429,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<MessageDto>>> SearchMessages([FromQuery] MessageSearchRequest request, [FromQuery] int userId)
         {
             var query = _context.Messages
+                .AsNoTracking()
                 .Include(m => m.Sender)
                 .Include(m => m.Conversation)
                     .ThenInclude(c => c.Participants)
@@ -465,6 +470,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<MessagingStatsDto>> GetStats([FromQuery] int userId)
         {
             var userConversations = await _context.Conversations
+                .AsNoTracking()
                 .Include(c => c.Participants)
                 .Include(c => c.Messages)
                 .Where(c => c.Participants.Any(p => p.UserId == userId && !p.HasLeft))
@@ -473,6 +479,7 @@ namespace ProjectTracker.API.Controllers
             var conversationIds = userConversations.Select(c => c.ConversationId).ToList();
 
             var unreadCount = await _context.Messages
+                .AsNoTracking()
                 .Where(m => conversationIds.Contains(m.ConversationId))
                 .Where(m => m.SenderId != userId)
                 .Where(m => !m.ReadReceipts.Any(r => r.UserId == userId))
@@ -480,6 +487,7 @@ namespace ProjectTracker.API.Controllers
 
             var last7Days = DateTime.UtcNow.AddDays(-7);
             var messagesByDay = await _context.Messages
+                .AsNoTracking()
                 .Where(m => conversationIds.Contains(m.ConversationId))
                 .Where(m => m.SentAt >= last7Days)
                 .GroupBy(m => m.SentAt.Date)
@@ -506,11 +514,13 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<int>> GetUnreadCount([FromQuery] int userId)
         {
             var conversationIds = await _context.ConversationParticipants
+                .AsNoTracking()
                 .Where(p => p.UserId == userId && !p.HasLeft)
                 .Select(p => p.ConversationId)
                 .ToListAsync();
 
             var count = await _context.Messages
+                .AsNoTracking()
                 .Where(m => conversationIds.Contains(m.ConversationId))
                 .Where(m => m.SenderId != userId)
                 .Where(m => !m.IsDeleted)
@@ -525,6 +535,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<UserSearchDto>>> SearchUsers([FromQuery] string? query = "", [FromQuery] int excludeUserId = 0)
         {
             var usersQuery = _context.Users
+                .AsNoTracking()
                 .Include(u => u.Department)
                 .Where(u => u.IsActive)
                 .AsQueryable();

@@ -26,6 +26,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<SupportTicketDto>>> GetTickets([FromQuery] TicketFilterRequest? filter)
         {
             var query = _context.SupportTickets
+                .AsNoTracking()
                 .Include(t => t.Comments)
                 .AsQueryable();
 
@@ -66,6 +67,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<SupportTicketDto>>> GetOpenTickets()
         {
             var tickets = await _context.SupportTickets
+                .AsNoTracking()
                 .Include(t => t.Comments)
                 .Where(t => t.Status == "Open" || t.Status == "InProgress")
                 .OrderByDescending(t => t.SubmittedDate)
@@ -79,6 +81,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<SupportTicketDto>>> GetClosedTickets()
         {
             var tickets = await _context.SupportTickets
+                .AsNoTracking()
                 .Include(t => t.Comments)
                 .Where(t => t.Status == "Closed" || t.Status == "Resolved")
                 .OrderByDescending(t => t.ClosedDate ?? t.ResolvedDate ?? t.SubmittedDate)
@@ -92,6 +95,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<SupportTicketDto>> GetTicket(int id)
         {
             var ticket = await _context.SupportTickets
+                .AsNoTracking()
                 .Include(t => t.Comments.OrderByDescending(c => c.CreatedAt))
                 .FirstOrDefaultAsync(t => t.TicketId == id);
 
@@ -107,7 +111,7 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("statistics")]
         public async Task<ActionResult<TicketStatisticsDto>> GetStatistics([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
         {
-            var query = _context.SupportTickets.AsQueryable();
+            var query = _context.SupportTickets.AsNoTracking().AsQueryable();
 
             if (fromDate.HasValue)
                 query = query.Where(t => t.SubmittedDate >= fromDate.Value);

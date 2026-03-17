@@ -38,6 +38,7 @@ namespace ProjectTracker.API.Controllers
             [FromQuery] string? search = null)
         {
             var query = _context.Tenders
+                .AsNoTracking()
                 .Include(t => t.TeamMembers)
                 .AsQueryable();
 
@@ -76,6 +77,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<Tender>> GetTender(int id)
         {
             var tender = await _context.Tenders
+                .AsNoTracking()
                 .Include(t => t.Documents)
                 .Include(t => t.TeamMembers)
                 .Include(t => t.Activities.OrderByDescending(a => a.CreatedAt).Take(20))
@@ -96,8 +98,8 @@ namespace ProjectTracker.API.Controllers
             var startOfYear = new DateTime(now.Year, 1, 1);
             var endOfWeek = now.AddDays(7);
 
-            var tenders = await _context.Tenders.ToListAsync();
-            var complianceDocs = await _context.ComplianceDocuments.ToListAsync();
+            var tenders = await _context.Tenders.AsNoTracking().ToListAsync();
+            var complianceDocs = await _context.ComplianceDocuments.AsNoTracking().ToListAsync();
 
             var stats = new TenderStats
             {
@@ -131,6 +133,7 @@ namespace ProjectTracker.API.Controllers
             end ??= DateTime.UtcNow.AddMonths(3);
 
             var tenders = await _context.Tenders
+                .AsNoTracking()
                 .Where(t => t.ClosingDate >= start && t.ClosingDate <= end)
                 .ToListAsync();
 
@@ -646,6 +649,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<TenderReminder>>> GetReminders([FromQuery] int? tenderId = null)
         {
             var query = _context.TenderReminders
+                .AsNoTracking()
                 .Include(r => r.Tender)
                 .Where(r => r.IsActive)
                 .AsQueryable();
@@ -684,6 +688,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult> GetReminder(int id)
         {
             var reminder = await _context.TenderReminders
+                .AsNoTracking()
                 .Include(r => r.Tender)
                 .Where(r => r.Id == id)
                 .Select(r => new {

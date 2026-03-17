@@ -25,6 +25,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<UserProfileDto>> GetProfile(int userId)
         {
             var user = await _context.Users
+                .AsNoTracking()
                 .Include(u => u.Department)
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 

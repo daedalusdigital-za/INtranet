@@ -38,6 +38,7 @@ namespace ProjectTracker.API.Controllers
             {
                 var currentUserId = GetCurrentUserId();
                 var query = _context.Announcements
+                    .AsNoTracking()
                     .Include(a => a.CreatedByUser)
                     .Include(a => a.ReadByUsers)
                     .AsQueryable();
@@ -84,6 +85,7 @@ namespace ProjectTracker.API.Controllers
             {
                 var currentUserId = GetCurrentUserId();
                 var announcement = await _context.Announcements
+                    .AsNoTracking()
                     .Include(a => a.CreatedByUser)
                     .Include(a => a.ReadByUsers)
                     .FirstOrDefaultAsync(a => a.AnnouncementId == id);
@@ -323,6 +325,7 @@ namespace ProjectTracker.API.Controllers
                 }
 
                 var count = await _context.Announcements
+                    .AsNoTracking()
                     .Where(a => a.IsActive && 
                         (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow) &&
                         !a.ReadByUsers.Any(r => r.UserId == currentUserId))

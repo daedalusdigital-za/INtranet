@@ -8,12 +8,24 @@ services:
       - SA_PASSWORD=YourStrong@Passw0rd
       - MSSQL_PID=Express
     ports:
-      - "0.0.0.0:1434:1433"
+      - "127.0.0.1:1435:1433"
     volumes:
       - sql-data:/var/opt/mssql
       - C:\Backups\ProjectTrackerDB:/var/opt/mssql/backup
     networks:
       - projecttracker-network
+    restart: unless-stopped
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "YourStrong@Passw0rd" -C -Q "SELECT 1" -b -o /dev/null
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+          cpus: '4.0'
 
   # ASP.NET Core Backend with AI assistant
   backend:
@@ -52,11 +64,24 @@ services:
       - ./ai-data:/app/ai-data
       - nas-documents:/app/documents
     depends_on:
-      - database
-      - searxng
+      database:
+        condition: service_healthy
+      searxng:
+        condition: service_started
     networks:
       - projecttracker-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5143/api/aichat/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: '4.0'
 
   # SearXNG - Self-hosted web search engine for Welly
   searxng:
@@ -69,6 +94,11 @@ services:
     networks:
       - projecttracker-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1.0'
 
   # Angular Frontend
   frontend:
@@ -79,10 +109,16 @@ services:
     ports:
       - "0.0.0.0:4200:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - projecttracker-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '1.0'
 
 volumes:
   sql-data:

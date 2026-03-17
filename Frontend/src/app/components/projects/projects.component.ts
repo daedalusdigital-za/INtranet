@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Inject, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -20,6 +20,7 @@ import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-projects',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
     CommonModule,

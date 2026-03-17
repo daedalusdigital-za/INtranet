@@ -27,7 +27,7 @@ namespace ProjectTracker.API.Controllers
             [FromQuery] string? documentType = null,
             [FromQuery] string? status = null)
         {
-            var query = _context.ComplianceDocuments.AsQueryable();
+            var query = _context.ComplianceDocuments.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrEmpty(companyCode))
                 query = query.Where(c => c.CompanyCode == companyCode);
@@ -72,6 +72,7 @@ namespace ProjectTracker.API.Controllers
             var now = DateTime.UtcNow;
 
             return await _context.ComplianceDocuments
+                .AsNoTracking()
                 .Where(c => c.ExpiryDate <= cutoff && c.ExpiryDate >= now)
                 .OrderBy(c => c.ExpiryDate)
                 .ToListAsync();
@@ -82,6 +83,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<ComplianceDocument>>> GetExpiredDocuments()
         {
             return await _context.ComplianceDocuments
+                .AsNoTracking()
                 .Where(c => c.ExpiryDate < DateTime.UtcNow)
                 .OrderBy(c => c.ExpiryDate)
                 .ToListAsync();
@@ -92,7 +94,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<object>> GetSummary()
         {
             var now = DateTime.UtcNow;
-            var docs = await _context.ComplianceDocuments.ToListAsync();
+            var docs = await _context.ComplianceDocuments.AsNoTracking().ToListAsync();
 
             var summary = new
             {
@@ -129,6 +131,7 @@ namespace ProjectTracker.API.Controllers
             [FromQuery] bool? acknowledged = null)
         {
             var query = _context.ComplianceAlerts
+                .AsNoTracking()
                 .Include(a => a.ComplianceDocument)
                 .AsQueryable();
 

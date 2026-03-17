@@ -29,6 +29,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<UserListDto>>> GetUsers()
         {
             var users = await _context.Users
+                .AsNoTracking()
                 .Include(u => u.Department)
                 .Include(u => u.LinkedEmployee)
                 .Include(u => u.Extensions)
@@ -38,6 +39,7 @@ namespace ProjectTracker.API.Controllers
 
             // Get all company assignments
             var allCompanyAssignments = await _context.Set<StaffOperatingCompany>()
+                .AsNoTracking()
                 .Where(soc => soc.IsActive)
                 .ToListAsync();
 
@@ -75,6 +77,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<UserDetailDto>> GetUser(int id)
         {
             var user = await _context.Users
+                .AsNoTracking()
                 .Include(u => u.Department)
                 .Include(u => u.LinkedEmployee)
                 .Include(u => u.Extensions)
@@ -86,6 +89,7 @@ namespace ProjectTracker.API.Controllers
             }
 
             var companyIds = await _context.Set<StaffOperatingCompany>()
+                .AsNoTracking()
                 .Where(soc => soc.StaffMemberId == id && soc.IsActive)
                 .Select(soc => soc.OperatingCompanyId)
                 .ToListAsync();
@@ -135,6 +139,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<ClockInEmployeeDto>>> GetClockInEmployees()
         {
             var employees = await _context.EmpRegistrations
+                .AsNoTracking()
                 .OrderBy(e => e.Name)
                 .ThenBy(e => e.LastName)
                 .Select(e => new ClockInEmployeeDto
@@ -156,6 +161,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<UserBirthdayDto>>> GetBirthdays([FromQuery] int? month, [FromQuery] int? year)
         {
             var query = _context.Users
+                .AsNoTracking()
                 .Include(u => u.Department)
                 .Where(u => u.IsActive && u.Birthday.HasValue);
 

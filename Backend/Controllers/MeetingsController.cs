@@ -35,6 +35,7 @@ public class MeetingsController : ControllerBase
         var userId = GetCurrentUserId();
         
         var meetings = await _context.Meetings
+            .AsNoTracking()
             .Include(m => m.Organizer)
             .Include(m => m.Attendees)
                 .ThenInclude(a => a.User)
@@ -57,6 +58,7 @@ public class MeetingsController : ControllerBase
         var end = endDate ?? DateTime.UtcNow.AddMonths(3);
 
         var meetings = await _context.Meetings
+            .AsNoTracking()
             .Include(m => m.Organizer)
             .Include(m => m.Attendees)
             .Where(m => m.MeetingDate >= start && m.MeetingDate <= end)
@@ -106,6 +108,7 @@ public class MeetingsController : ControllerBase
     public async Task<ActionResult<MeetingDto>> GetMeeting(int id)
     {
         var meeting = await _context.Meetings
+            .AsNoTracking()
             .Include(m => m.Organizer)
             .Include(m => m.Attendees)
                 .ThenInclude(a => a.User)
@@ -341,6 +344,7 @@ public class MeetingsController : ControllerBase
         var userId = GetCurrentUserId();
         
         var query = _context.MeetingNotifications
+            .AsNoTracking()
             .Include(n => n.Meeting)
                 .ThenInclude(m => m!.Organizer)
             .Where(n => n.UserId == userId);
@@ -404,6 +408,7 @@ public class MeetingsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var count = await _context.MeetingNotifications
+            .AsNoTracking()
             .CountAsync(n => n.UserId == userId && !n.IsRead);
 
         return Ok(new { count });

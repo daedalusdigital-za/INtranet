@@ -40,6 +40,7 @@ namespace ProjectTracker.API.Controllers
             var userId = GetCurrentUserId();
 
             var documents = await _context.CollaborativeDocuments
+                .AsNoTracking()
                 .Include(d => d.CreatedBy)
                 .Include(d => d.LastModifiedBy)
                 .Include(d => d.Collaborators)
@@ -76,6 +77,7 @@ namespace ProjectTracker.API.Controllers
             var userId = GetCurrentUserId();
 
             var document = await _context.CollaborativeDocuments
+                .AsNoTracking()
                 .Include(d => d.CreatedBy)
                 .Include(d => d.Collaborators)
                     .ThenInclude(c => c.User)
@@ -298,6 +300,7 @@ namespace ProjectTracker.API.Controllers
             var userId = GetCurrentUserId();
 
             var document = await _context.CollaborativeDocuments
+                .AsNoTracking()
                 .Include(d => d.Collaborators)
                 .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted);
 
@@ -313,6 +316,7 @@ namespace ProjectTracker.API.Controllers
             }
 
             var snapshot = await _context.DocumentSnapshots
+                .AsNoTracking()
                 .Where(s => s.DocumentId == id)
                 .OrderByDescending(s => s.Version)
                 .FirstOrDefaultAsync();

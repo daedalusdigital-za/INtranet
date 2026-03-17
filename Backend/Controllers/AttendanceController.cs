@@ -58,10 +58,11 @@ namespace ProjectTracker.API.Controllers
             var workStartTime = new TimeOnly(7, 30); // 7:30 AM work start time
 
             // First, get all employees
-            var employees = await _context.EmpRegistrations.ToListAsync();
+            var employees = await _context.EmpRegistrations.AsNoTracking().ToListAsync();
             
             // Then, get today's attendance records in one query
             var todayAttendance = await _context.AttendanceRecords
+                .AsNoTracking()
                 .Where(a => a.Date != null && a.Date.Value.Date == today)
                 .ToListAsync();
             
@@ -112,10 +113,11 @@ namespace ProjectTracker.API.Controllers
             var today = DateTime.UtcNow.Date;
             
             // Get total employees from EmpRegistrations
-            var totalEmployees = await _context.EmpRegistrations.CountAsync();
+            var totalEmployees = await _context.EmpRegistrations.AsNoTracking().CountAsync();
             
             // Get today's attendance records
             var todayAttendance = await _context.AttendanceRecords
+                .AsNoTracking()
                 .Where(a => a.Date != null && a.Date.Value.Date == today)
                 .ToListAsync();
 
@@ -125,6 +127,7 @@ namespace ProjectTracker.API.Controllers
 
             // Department breakdown
             var departmentBreakdown = await _context.EmpRegistrations
+                .AsNoTracking()
                 .GroupBy(e => e.Department ?? "Unassigned")
                 .Select(g => new
                 {
@@ -175,13 +178,14 @@ namespace ProjectTracker.API.Controllers
             
             // Get all attendance records for this week (Monday-Friday)
             var weekAttendance = await _context.AttendanceRecords
+                .AsNoTracking()
                 .Where(a => a.Date != null && 
                            a.Date.Value.Date >= mondayOfWeek && 
                            a.Date.Value.Date <= fridayOfWeek)
                 .ToListAsync();
             
             // Get all employees
-            var employees = await _context.EmpRegistrations.ToListAsync();
+            var employees = await _context.EmpRegistrations.AsNoTracking().ToListAsync();
             
             // Build weekly attendance for each employee
             var weeklyData = employees.Select(emp => new
@@ -239,6 +243,7 @@ namespace ProjectTracker.API.Controllers
             var today = DateTime.UtcNow.Date;
             
             var records = await _context.Attendances
+                .AsNoTracking()
                 .Include(a => a.Employee)
                 .Where(a => a.Date == today)
                 .Select(a => new AttendanceDto
@@ -267,6 +272,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<ActionResult<IEnumerable<AttendanceDto>>> GetAttendanceByDate(DateTime date)
         {
             var records = await _context.Attendances
+                .AsNoTracking()
                 .Include(a => a.Employee)
                 .Where(a => a.Date.Date == date.Date)
                 .Select(a => new AttendanceDto
@@ -399,6 +405,7 @@ namespace ProjectTracker.API.Controllers
             var today = DateTime.UtcNow.Date;
             
             var employee = await _context.Employees
+                .AsNoTracking()
                 .Where(e => e.EmployeeId == id)
                 .Select(e => new EmployeeDto
                 {
@@ -453,6 +460,7 @@ namespace ProjectTracker.API.Controllers
             
             // Get all check-ins from today
             var allAttendance = await _context.AttendanceRecords
+                .AsNoTracking()
                 .Where(a => a.Date != null && a.TimeIn != null)
                 .ToListAsync();
 
@@ -483,6 +491,7 @@ namespace ProjectTracker.API.Controllers
             // Get employee details
             var employeeIds = todayAttendance.Select(a => a.EmpID).Distinct().ToList();
             var employees = await _context.EmpRegistrations
+                .AsNoTracking()
                 .Where(e => employeeIds.Contains(e.EmpId))
                 .ToListAsync();
 
