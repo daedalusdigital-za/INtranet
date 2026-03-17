@@ -37,6 +37,8 @@ import TaskItem from '@tiptap/extension-task-item';
 // Yjs imports
 import * as Y from 'yjs';
 import { Collaboration } from '@tiptap/extension-collaboration';
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+import { Awareness } from 'y-protocols/awareness';
 
 @Component({
   selector: 'app-doc-editor',
@@ -1559,8 +1561,10 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   editor: Editor | null = null;
   ydoc: Y.Doc | null = null;
+  awareness: Awareness | null = null;
 
   activeUsers: UserPresence[] = [];
+  private connectionUserMap = new Map<string, number>(); // connectionId → userId
   connectionState = 'Disconnected';
 
   // Ribbon state
@@ -1618,6 +1622,22 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     private http: HttpClient
   ) {}
 
+  /** Safe base64 encode that won't overflow the call stack on large Uint8Arrays */
+  private uint8ToBase64(data: Uint8Array): string {
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const chunk = data.subarray(i, Math.min(i + chunkSize, data.length));
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  /** Safe base64 decode to Uint8Array */
+  private base64ToUint8(base64: string): Uint8Array {
+    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  }
+
   ngOnInit(): void {
     this.documentId = Number(this.route.snapshot.paramMap.get('id'));
 
@@ -1661,7 +1681,10 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       this.editor.destroy();
     }
 
-    // Destroy Yjs doc
+    // Destroy awareness and Yjs doc
+    if (this.awareness) {
+      this.awareness.destroy();
+    }
     if (this.ydoc) {
       this.ydoc.destroy();
     }
@@ -1688,10 +1711,13 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     // Create Yjs document
     this.ydoc = new Y.Doc();
 
+    // Create Awareness for cursor sharing
+    this.awareness = new Awareness(this.ydoc);
+
     // Load initial state if exists
     if (initialState) {
       try {
-        const state = Uint8Array.from(atob(initialState), c => c.charCodeAt(0));
+        const state = this.base64ToUint8(initialState);
         Y.applyUpdate(this.ydoc, state);
       } catch (e) {
         console.error('Error loading initial state:', e);
@@ -1722,6 +1748,15 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         Collaboration.configure({
           document: this.ydoc,
         }),
+        CollaborationCursor.configure({
+          provider: {
+            awareness: this.awareness,
+          } as any,
+          user: {
+            name: this.currentUserName,
+            color: this.currentUserColor,
+          },
+        }),
       ],
       editorProps: {
         attributes: {
@@ -1741,8 +1776,20 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     // Listen for Yjs updates to broadcast
     this.ydoc.on('update', (update: Uint8Array, origin: any) => {
       if (origin !== 'remote') {
-        const base64Update = btoa(String.fromCharCode(...update));
+        const base64Update = this.uint8ToBase64(update);
         this.docsService.broadcastUpdate(this.documentId, base64Update).catch(console.error);
+      }
+    });
+
+    // Listen for awareness changes (cursor/presence) to broadcast via SignalR
+    this.awareness!.on('update', ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
+      const changedClients = added.concat(updated).concat(removed);
+      if (changedClients.includes(this.ydoc!.clientID)) {
+        const localState = this.awareness!.getLocalState();
+        if (localState) {
+          const stateJson = JSON.stringify(localState);
+          this.docsService.updateAwareness(this.documentId, stateJson).catch(console.error);
+        }
       }
     });
 
@@ -1763,11 +1810,34 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         this.docsService.documentUpdate$.subscribe(update => {
           if (this.ydoc) {
             try {
-              const updateArray = Uint8Array.from(atob(update), c => c.charCodeAt(0));
+              const updateArray = this.base64ToUint8(update);
               Y.applyUpdate(this.ydoc, updateArray, 'remote');
             } catch (e) {
               console.error('Error applying update:', e);
             }
+          }
+        })
+      );
+
+      // Handle awareness updates from other users (remote cursor positions)
+      this.subscriptions.push(
+        this.docsService.awarenessUpdate$.subscribe(({ connectionId, state }) => {
+          // Awareness is handled by the CollaborationCursor extension via the shared awareness instance
+          // But we also use SignalR to relay awareness to clients that may not be directly connected
+          try {
+            const remoteState = JSON.parse(state);
+            // Find a free clientID for this remote user
+            const states = this.awareness?.getStates();
+            let remoteClientId: number | null = null;
+            if (states) {
+              states.forEach((val, key) => {
+                if (val?.['user']?.['name'] === remoteState?.['user']?.['name'] && key !== this.ydoc?.clientID) {
+                  remoteClientId = key;
+                }
+              });
+            }
+          } catch (e) {
+            // Awareness updates are best-effort
           }
         })
       );
@@ -1781,6 +1851,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       this.subscriptions.push(
         this.docsService.userJoined$.subscribe(({ connectionId, presence }) => {
+          this.connectionUserMap.set(connectionId, presence.userId);
           if (!this.activeUsers.find(u => u.userId === presence.userId)) {
             this.activeUsers = [...this.activeUsers, presence];
           }
@@ -1789,8 +1860,15 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       this.subscriptions.push(
         this.docsService.userLeft$.subscribe(connectionId => {
-          // We'd need to track connectionId to userId mapping for proper removal
-          // For now, we'll rely on presence sync
+          const userId = this.connectionUserMap.get(connectionId);
+          this.connectionUserMap.delete(connectionId);
+          if (userId) {
+            // Only remove the user if they have no other active connections
+            const stillConnected = Array.from(this.connectionUserMap.values()).includes(userId);
+            if (!stillConnected) {
+              this.activeUsers = this.activeUsers.filter(u => u.userId !== userId);
+            }
+          }
         })
       );
 
@@ -1799,7 +1877,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         this.docsService.syncRequested$.subscribe(async (connectionId) => {
           if (this.ydoc) {
             const state = Y.encodeStateAsUpdate(this.ydoc);
-            const base64State = btoa(String.fromCharCode(...state));
+            const base64State = this.uint8ToBase64(state);
             await this.docsService.sendSyncData(connectionId, base64State);
           }
         })
@@ -1809,7 +1887,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         this.docsService.syncData$.subscribe(yjsState => {
           if (this.ydoc) {
             try {
-              const state = Uint8Array.from(atob(yjsState), c => c.charCodeAt(0));
+              const state = this.base64ToUint8(yjsState);
               Y.applyUpdate(this.ydoc, state, 'remote');
             } catch (e) {
               console.error('Error applying sync data:', e);
@@ -1830,7 +1908,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
     try {
       const state = Y.encodeStateAsUpdate(this.ydoc);
-      const base64State = btoa(String.fromCharCode(...state));
+      const base64State = this.uint8ToBase64(state);
 
       await this.docsService.saveSnapshot(this.documentId, {
         documentId: this.documentId,
