@@ -30,6 +30,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { environment } from '../../../environments/environment';
+import Chart from 'chart.js/auto';
 
 // Company definitions
 const COMPANIES = [
@@ -159,6 +160,38 @@ interface CancellationStats {
   pendingRefundAmount: number;
   byReason: { [key: string]: number };
   byCompany: { [key: string]: number };
+}
+
+interface SalesReportChartData {
+  labels: string[];
+  values: number[];
+}
+
+interface SalesReportSummary {
+  totalInvoices: number;
+  totalRevenue: number;
+  netSales: number;
+  grossProfit: number;
+  marginPercent: number;
+  totalReturns: number;
+  uniqueCustomers: number;
+  uniqueProducts: number;
+  totalCancellations: number;
+  cancellationValue: number;
+}
+
+interface SalesReportResponse {
+  analysis: string;
+  reportType: string;
+  charts: {
+    salesByCompany: SalesReportChartData;
+    topCustomers: SalesReportChartData;
+    salesByProvince: SalesReportChartData;
+    topProducts: SalesReportChartData;
+    dailySales: SalesReportChartData;
+    cancellationsByReason: SalesReportChartData;
+  };
+  summary: SalesReportSummary;
 }
 
 @Component({
@@ -1083,7 +1116,7 @@ interface CancellationStats {
               </div>
 
               <div class="reports-grid">
-                <mat-card class="report-card" (click)="runReport('sales-summary')">
+                <mat-card class="report-card" [class.active]="activeReportType === 'sales-summary'" (click)="runReport('sales-summary')">
                   <mat-card-content>
                     <mat-icon>summarize</mat-icon>
                     <h4>Sales Summary</h4>
@@ -1091,7 +1124,7 @@ interface CancellationStats {
                   </mat-card-content>
                 </mat-card>
 
-                <mat-card class="report-card" (click)="runReport('customer-analysis')">
+                <mat-card class="report-card" [class.active]="activeReportType === 'customer-analysis'" (click)="runReport('customer-analysis')">
                   <mat-card-content>
                     <mat-icon>analytics</mat-icon>
                     <h4>Customer Analysis</h4>
@@ -1099,7 +1132,7 @@ interface CancellationStats {
                   </mat-card-content>
                 </mat-card>
 
-                <mat-card class="report-card" (click)="runReport('province-breakdown')">
+                <mat-card class="report-card" [class.active]="activeReportType === 'province-breakdown'" (click)="runReport('province-breakdown')">
                   <mat-card-content>
                     <mat-icon>map</mat-icon>
                     <h4>Province Breakdown</h4>
@@ -1107,7 +1140,7 @@ interface CancellationStats {
                   </mat-card-content>
                 </mat-card>
 
-                <mat-card class="report-card" (click)="runReport('product-performance')">
+                <mat-card class="report-card" [class.active]="activeReportType === 'product-performance'" (click)="runReport('product-performance')">
                   <mat-card-content>
                     <mat-icon>inventory_2</mat-icon>
                     <h4>Product Performance</h4>
@@ -1115,6 +1148,125 @@ interface CancellationStats {
                   </mat-card-content>
                 </mat-card>
               </div>
+
+              <!-- Welly Report Panel -->
+              @if (showReportPanel) {
+                <div class="welly-report-panel" id="welly-report-content">
+                  <div class="welly-report-header">
+                    <div class="welly-report-title">
+                      <mat-icon class="welly-sparkle-gold">auto_awesome</mat-icon>
+                      <h3>{{ reportPanelTitle }}</h3>
+                    </div>
+                    <div class="welly-report-header-actions">
+                      @if (!reportLoading && reportResult) {
+                        <button mat-raised-button color="primary" (click)="downloadReportPdf()">
+                          <mat-icon>picture_as_pdf</mat-icon> Download PDF
+                        </button>
+                        <button mat-button (click)="copyReportResult()">
+                          <mat-icon>content_copy</mat-icon> Copy
+                        </button>
+                      }
+                      <button mat-icon-button (click)="closeReportPanel()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+
+                  @if (reportLoading) {
+                    <div class="welly-report-loading">
+                      <mat-spinner diameter="40"></mat-spinner>
+                      <p>Welly is generating your {{ reportPanelTitle }}...</p>
+                      <span class="loading-sub">Analyzing invoices, customers & cancellations</span>
+                    </div>
+                  } @else if (reportResult) {
+                    <!-- Summary Cards -->
+                    @if (reportSummary) {
+                      <div class="report-summary-grid">
+                        <div class="report-summary-card">
+                          <mat-icon>receipt_long</mat-icon>
+                          <div class="rs-info">
+                            <span class="rs-value">{{ reportSummary.totalInvoices | number }}</span>
+                            <span class="rs-label">Invoices</span>
+                          </div>
+                        </div>
+                        <div class="report-summary-card">
+                          <mat-icon>payments</mat-icon>
+                          <div class="rs-info">
+                            <span class="rs-value">R{{ reportSummary.totalRevenue | number:'1.0-0' }}</span>
+                            <span class="rs-label">Revenue</span>
+                          </div>
+                        </div>
+                        <div class="report-summary-card">
+                          <mat-icon>trending_up</mat-icon>
+                          <div class="rs-info">
+                            <span class="rs-value">R{{ reportSummary.grossProfit | number:'1.0-0' }}</span>
+                            <span class="rs-label">Gross Profit</span>
+                          </div>
+                        </div>
+                        <div class="report-summary-card">
+                          <mat-icon>speed</mat-icon>
+                          <div class="rs-info">
+                            <span class="rs-value">{{ reportSummary.marginPercent }}%</span>
+                            <span class="rs-label">Margin</span>
+                          </div>
+                        </div>
+                        <div class="report-summary-card">
+                          <mat-icon>people</mat-icon>
+                          <div class="rs-info">
+                            <span class="rs-value">{{ reportSummary.uniqueCustomers | number }}</span>
+                            <span class="rs-label">Customers</span>
+                          </div>
+                        </div>
+                        <div class="report-summary-card">
+                          <mat-icon>cancel</mat-icon>
+                          <div class="rs-info">
+                            <span class="rs-value">{{ reportSummary.totalCancellations }}</span>
+                            <span class="rs-label">Cancellations</span>
+                          </div>
+                        </div>
+                      </div>
+                    }
+
+                    <!-- Charts -->
+                    @if (reportCharts) {
+                      <div class="report-charts-grid">
+                        <div class="report-chart-card">
+                          <h4>Sales by Division</h4>
+                          <canvas id="report-chart-company"></canvas>
+                        </div>
+                        <div class="report-chart-card">
+                          <h4>Daily Sales Trend</h4>
+                          <canvas id="report-chart-daily"></canvas>
+                        </div>
+                        <div class="report-chart-card">
+                          <h4>Top Customers</h4>
+                          <canvas id="report-chart-customers"></canvas>
+                        </div>
+                        <div class="report-chart-card">
+                          <h4>Sales by Province</h4>
+                          <canvas id="report-chart-province"></canvas>
+                        </div>
+                        <div class="report-chart-card">
+                          <h4>Top Products</h4>
+                          <canvas id="report-chart-products"></canvas>
+                        </div>
+                        @if (reportCharts.cancellationsByReason.labels.length > 0) {
+                          <div class="report-chart-card">
+                            <h4>Cancellation Reasons</h4>
+                            <canvas id="report-chart-cancellations"></canvas>
+                          </div>
+                        }
+                      </div>
+                    }
+
+                    <!-- AI Analysis Text -->
+                    <div class="report-analysis-section">
+                      <h4 class="report-analysis-title"><mat-icon>psychology</mat-icon> Welly's Analysis</h4>
+                      <div class="report-analysis-text">{{ reportResult }}</div>
+                    </div>
+                  }
+                </div>
+              }
             </div>
           </mat-tab>
         </mat-tab-group>
@@ -3037,6 +3189,195 @@ interface CancellationStats {
       color: #666;
     }
 
+    .report-card.active {
+      border: 2px solid #1a237e;
+      box-shadow: 0 4px 16px rgba(26, 35, 126, 0.2);
+    }
+
+    /* Welly Report Panel */
+    .welly-report-panel {
+      margin-top: 24px;
+      background: #f5f5f7;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .welly-report-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #1a237e 0%, #4a148c 100%);
+      color: white;
+    }
+
+    .welly-report-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .welly-report-title h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .welly-sparkle-gold {
+      color: #ffd700;
+    }
+
+    .welly-report-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .welly-report-header-actions button {
+      color: white;
+    }
+
+    .welly-report-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 48px;
+    }
+
+    .welly-report-loading p {
+      color: #444;
+      font-size: 15px;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    .welly-report-loading .loading-sub {
+      color: #888;
+      font-size: 12px;
+    }
+
+    /* Report Summary Cards */
+    .report-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      padding: 20px;
+    }
+
+    .report-summary-card {
+      background: white;
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .report-summary-card mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: #1a237e;
+    }
+
+    .rs-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .rs-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #333;
+      line-height: 1.2;
+    }
+
+    .rs-label {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
+    /* Report Charts Grid */
+    .report-charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 0 20px 20px;
+    }
+
+    .report-chart-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .report-chart-card h4 {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .report-chart-card canvas {
+      width: 100% !important;
+      max-height: 240px;
+    }
+
+    /* Report Analysis Section */
+    .report-analysis-section {
+      padding: 0 20px 20px;
+    }
+
+    .report-analysis-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .report-analysis-title mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #1a237e;
+    }
+
+    .report-analysis-text {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 18px;
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      max-height: 50vh;
+      overflow-y: auto;
+      color: #333;
+    }
+
+    @media (max-width: 900px) {
+      .report-summary-grid { grid-template-columns: repeat(3, 1fr); }
+      .report-charts-grid { grid-template-columns: 1fr; }
+    }
+
     /* Customer Sidebar */
     .customer-sidebar {
       position: fixed;
@@ -4654,13 +4995,233 @@ export class SalesDashboardComponent implements OnInit {
     });
   }
 
-  // Report methods
+  // ═══════════════════════════════════════════
+  // Welly Sales Reports (AI-Powered)
+  // ═══════════════════════════════════════════
+
+  showReportPanel = false;
+  reportLoading = false;
+  reportResult = '';
+  reportSummary: SalesReportSummary | null = null;
+  reportCharts: SalesReportResponse['charts'] | null = null;
+  activeReportType = '';
+  reportPanelTitle = 'Sales Report';
+  private reportChartInstances: Chart[] = [];
+
+  private readonly reportColors = [
+    '#1a237e', '#00695c', '#c62828', '#6a1b9a', '#ef6c00',
+    '#0277bd', '#2e7d32', '#ad1457', '#4527a0', '#00838f',
+    '#558b2f', '#d84315', '#6d4c41', '#37474f', '#ff6f00'
+  ];
+
+  private readonly reportTitles: Record<string, string> = {
+    'sales-summary': 'Sales Summary Report',
+    'customer-analysis': 'Customer Analysis Report',
+    'province-breakdown': 'Province Breakdown Report',
+    'product-performance': 'Product Performance Report'
+  };
+
   generateReport(): void {
-    this.snackBar.open('Generating report...', 'Close', { duration: 2000 });
+    this.runReport('sales-summary');
   }
 
   runReport(reportType: string): void {
-    this.snackBar.open('Running ' + reportType + ' report...', 'Close', { duration: 2000 });
+    this.activeReportType = reportType;
+    this.reportPanelTitle = this.reportTitles[reportType] || 'Sales Report';
+    this.showReportPanel = true;
+    this.reportLoading = true;
+    this.reportResult = '';
+    this.reportSummary = null;
+    this.reportCharts = null;
+    this.destroyReportCharts();
+
+    this.http.post<SalesReportResponse>(
+      `${this.apiUrl}/aichat/welly-sales-report`,
+      {
+        reportType,
+        fromDate: this.reportFromDate.toISOString(),
+        toDate: this.reportToDate.toISOString()
+      }
+    ).subscribe({
+      next: (res) => {
+        this.reportResult = res.analysis;
+        this.reportSummary = res.summary;
+        this.reportCharts = res.charts;
+        this.reportLoading = false;
+        setTimeout(() => this.renderReportCharts(), 150);
+      },
+      error: () => {
+        this.snackBar.open('Welly could not generate the report. Please try again.', 'Close', { duration: 3000 });
+        this.reportLoading = false;
+      }
+    });
+  }
+
+  private destroyReportCharts(): void {
+    this.reportChartInstances.forEach(c => c.destroy());
+    this.reportChartInstances = [];
+  }
+
+  closeReportPanel(): void {
+    this.showReportPanel = false;
+    this.activeReportType = '';
+    this.destroyReportCharts();
+  }
+
+  private renderReportCharts(): void {
+    if (!this.reportCharts) return;
+    this.destroyReportCharts();
+
+    // Sales by Company (doughnut)
+    this.pushReportChart('report-chart-company', 'doughnut',
+      this.reportCharts.salesByCompany.labels,
+      this.reportCharts.salesByCompany.values, 'Revenue (R)');
+
+    // Daily Sales Trend (line)
+    this.pushReportLineChart('report-chart-daily',
+      this.reportCharts.dailySales.labels,
+      this.reportCharts.dailySales.values);
+
+    // Top Customers (bar - horizontal)
+    this.pushReportChart('report-chart-customers', 'bar',
+      this.reportCharts.topCustomers.labels,
+      this.reportCharts.topCustomers.values, 'Revenue (R)', true);
+
+    // Sales by Province (doughnut)
+    this.pushReportChart('report-chart-province', 'doughnut',
+      this.reportCharts.salesByProvince.labels,
+      this.reportCharts.salesByProvince.values, 'Revenue (R)');
+
+    // Top Products (bar - horizontal)
+    this.pushReportChart('report-chart-products', 'bar',
+      this.reportCharts.topProducts.labels,
+      this.reportCharts.topProducts.values, 'Revenue (R)', true);
+
+    // Cancellations by Reason (doughnut)
+    if (this.reportCharts.cancellationsByReason.labels.length > 0) {
+      this.pushReportChart('report-chart-cancellations', 'doughnut',
+        this.reportCharts.cancellationsByReason.labels,
+        this.reportCharts.cancellationsByReason.values, 'Count');
+    }
+  }
+
+  private pushReportChart(canvasId: string, type: 'doughnut' | 'bar', labels: string[], values: number[], label: string, horizontal = false): void {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (!canvas || !labels?.length) return;
+    const colors = labels.map((_, i) => this.reportColors[i % this.reportColors.length]);
+
+    if (type === 'doughnut') {
+      this.reportChartInstances.push(new Chart(canvas, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12, boxWidth: 12 } } }
+        }
+      }));
+    } else {
+      this.reportChartInstances.push(new Chart(canvas, {
+        type: 'bar',
+        data: { labels, datasets: [{ label, data: values, backgroundColor: colors, borderRadius: 6, borderSkipped: false }] },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          indexAxis: horizontal ? 'y' : 'x',
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: !horizontal }, ticks: { font: { size: 10 } } },
+            y: { grid: { display: horizontal }, ticks: { font: { size: 10 } } }
+          }
+        }
+      }));
+    }
+  }
+
+  private pushReportLineChart(canvasId: string, labels: string[], values: number[]): void {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (!canvas || !labels?.length) return;
+
+    this.reportChartInstances.push(new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Daily Sales (R)',
+          data: values,
+          borderColor: '#1a237e',
+          backgroundColor: 'rgba(26, 35, 126, 0.08)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointBackgroundColor: '#1a237e'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
+          y: { ticks: { font: { size: 10 } } }
+        }
+      }
+    }));
+  }
+
+  async downloadReportPdf(): Promise<void> {
+    const element = document.getElementById('welly-report-content');
+    if (!element) return;
+
+    this.snackBar.open('Generating PDF...', '', { duration: 2000 });
+
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+
+      const canvas = await html2canvas(element, {
+        scale: 2, useCORS: true, backgroundColor: '#f5f5f7', logging: false
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth() - 20;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pageHeight = pdf.internal.pageSize.getHeight() - 20;
+
+      // Title
+      pdf.setFontSize(10);
+      pdf.setTextColor(100);
+      pdf.text(`ProMed Technologies — ${this.reportPanelTitle}`, 10, 8);
+      pdf.text(`${this.reportFromDate.toLocaleDateString()} to ${this.reportToDate.toLocaleDateString()}`, 10, 13);
+      let yOffset = 16;
+
+      let remainingHeight = pdfHeight;
+      while (remainingHeight > 0) {
+        const sourceY = (pdfHeight - remainingHeight) * (canvas.height / pdfHeight);
+        const sourceHeight = Math.min(pageHeight, remainingHeight) * (canvas.height / pdfHeight);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sourceHeight;
+        const ctx = pageCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+          pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 10, yOffset, pdfWidth, Math.min(pageHeight, remainingHeight));
+        }
+        remainingHeight -= pageHeight;
+        if (remainingHeight > 0) { pdf.addPage(); yOffset = 10; }
+      }
+
+      const filename = `${this.reportPanelTitle.replace(/\s+/g, '-')}-${this.reportFromDate.toISOString().split('T')[0]}-to-${this.reportToDate.toISOString().split('T')[0]}.pdf`;
+      pdf.save(filename);
+      this.snackBar.open('PDF downloaded ✓', 'Close', { duration: 2000 });
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      this.snackBar.open('Failed to generate PDF.', 'Close', { duration: 3000 });
+    }
+  }
+
+  copyReportResult(): void {
+    navigator.clipboard.writeText(this.reportResult).then(() => {
+      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
+    });
   }
 
   // ============= Import Methods (Sales & Customers) =============

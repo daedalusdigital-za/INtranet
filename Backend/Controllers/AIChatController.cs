@@ -1162,6 +1162,261 @@ Use ZAR (R) for currency. Be concise, use bullet points. Focus on actionable ins
             }
         }
 
+        /// <summary>
+        /// Welly Sales Report — generates AI-powered sales reports with charts
+        /// </summary>
+        [HttpPost("welly-sales-report")]
+        public async Task<IActionResult> WellySalesReport([FromBody] SalesReportRequest request)
+        {
+            try
+            {
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (!useLocalLlm)
+                    return StatusCode(503, new { error = "AI service is not available. Please try again later." });
+
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                var fromDate = request.FromDate ?? DateTime.UtcNow.AddDays(-30);
+                var toDate = request.ToDate ?? DateTime.UtcNow;
+
+                // Pull all imported invoices within the date range
+                var invoices = await db.ImportedInvoices
+                    .Where(i => i.TransactionDate >= fromDate && i.TransactionDate <= toDate)
+                    .ToListAsync();
+
+                // Pull customers
+                var customers = await db.LogisticsCustomers
+                    .ToListAsync();
+
+                // Pull order cancellations within range
+                var cancellations = await db.OrderCancellations
+                    .Where(c => c.CancelledAt >= fromDate && c.CancelledAt <= toDate)
+                    .ToListAsync();
+
+                // ─── Compute data per report type ───
+                var reportType = request.ReportType ?? "sales-summary";
+
+                // Chart 1: Sales by Company (always computed)
+                var salesByCompany = invoices
+                    .GroupBy(i => i.SourceCompany ?? "Unknown")
+                    .Select(g => new { label = MapCompanyCode(g.Key), value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
+                    .Where(x => x.value > 0)
+                    .OrderByDescending(x => x.value)
+                    .ToList();
+
+                // Chart 2: Top 10 Customers by Revenue
+                var topCustomers = invoices
+                    .GroupBy(i => i.CustomerName)
+                    .Select(g => new { label = g.Key.Length > 20 ? g.Key.Substring(0, 20) + "…" : g.Key, value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
+                    .OrderByDescending(x => x.value)
+                    .Take(10)
+                    .ToList();
+
+                // Chart 3: Sales by Province
+                var customerProvinceMap = customers.ToDictionary(c => c.CustomerCode ?? "", c => c.Province ?? "Unknown");
+                var salesByProvince = invoices
+                    .GroupBy(i => {
+                        if (!string.IsNullOrEmpty(i.DeliveryProvince)) return i.DeliveryProvince;
+                        customerProvinceMap.TryGetValue(i.CustomerNumber, out var province);
+                        return province ?? "Unknown";
+                    })
+                    .Select(g => new { label = g.Key, value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
+                    .Where(x => x.label != "Unknown" || x.value > 0)
+                    .OrderByDescending(x => x.value)
+                    .ToList();
+
+                // Chart 4: Top 10 Products by Revenue
+                var topProducts = invoices
+                    .GroupBy(i => i.ProductDescription)
+                    .Select(g => new { label = g.Key.Length > 25 ? g.Key.Substring(0, 25) + "…" : g.Key, value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
+                    .OrderByDescending(x => x.value)
+                    .Take(10)
+                    .ToList();
+
+                // Chart 5: Daily Sales Trend
+                var dailySales = invoices
+                    .GroupBy(i => i.TransactionDate.Date)
+                    .OrderBy(g => g.Key)
+                    .Select(g => new { label = g.Key.ToString("dd MMM"), value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
+                    .ToList();
+
+                // Chart 6: Cancellation Stats (pie)
+                var cancellationsByReason = cancellations
+                    .GroupBy(c => c.CancellationReason ?? "Other")
+                    .Select(g => new { label = g.Key, value = (double)g.Count() })
+                    .OrderByDescending(x => x.value)
+                    .ToList();
+
+                // ─── Build LLM context ───
+                var contentBuilder = new StringBuilder();
+                contentBuilder.AppendLine($"=== SALES REPORT: {reportType.ToUpper()} ===");
+                contentBuilder.AppendLine($"Period: {fromDate:dd MMM yyyy} to {toDate:dd MMM yyyy}");
+                contentBuilder.AppendLine($"Total Invoices: {invoices.Count}");
+                contentBuilder.AppendLine($"Total Revenue: R{invoices.Sum(i => i.SalesAmount):N2}");
+                contentBuilder.AppendLine($"Net Sales: R{invoices.Sum(i => i.SalesAmount - i.SalesReturns):N2}");
+                contentBuilder.AppendLine($"Cost of Sales: R{invoices.Sum(i => i.CostOfSales):N2}");
+                contentBuilder.AppendLine($"Gross Profit: R{invoices.Sum(i => i.SalesAmount - i.SalesReturns - i.CostOfSales):N2}");
+                contentBuilder.AppendLine($"Total Returns: R{invoices.Sum(i => i.SalesReturns):N2}");
+                contentBuilder.AppendLine($"Total Customers Transacted: {invoices.Select(i => i.CustomerNumber).Distinct().Count()}");
+                contentBuilder.AppendLine($"Total Products Sold: {invoices.Select(i => i.ProductCode).Distinct().Count()}");
+
+                // Company breakdown
+                contentBuilder.AppendLine("\n=== SALES BY DIVISION ===");
+                foreach (var grp in invoices.GroupBy(i => i.SourceCompany ?? "Unknown").OrderByDescending(g => g.Sum(i => i.SalesAmount)))
+                {
+                    var companyName = MapCompanyCode(grp.Key);
+                    contentBuilder.AppendLine($"  {companyName}: R{grp.Sum(i => i.SalesAmount):N2} ({grp.Count()} invoices), Returns: R{grp.Sum(i => i.SalesReturns):N2}");
+                }
+
+                // Top customers
+                contentBuilder.AppendLine("\n=== TOP 10 CUSTOMERS ===");
+                foreach (var cust in invoices.GroupBy(i => i.CustomerName).OrderByDescending(g => g.Sum(i => i.SalesAmount)).Take(10))
+                {
+                    contentBuilder.AppendLine($"  {cust.Key}: R{cust.Sum(i => i.SalesAmount):N2} ({cust.Count()} transactions)");
+                }
+
+                // Province breakdown
+                if (salesByProvince.Any(x => x.label != "Unknown"))
+                {
+                    contentBuilder.AppendLine("\n=== SALES BY PROVINCE ===");
+                    foreach (var prov in salesByProvince.Where(x => x.label != "Unknown"))
+                    {
+                        contentBuilder.AppendLine($"  {prov.label}: R{prov.value:N2}");
+                    }
+                }
+
+                // Top products
+                contentBuilder.AppendLine("\n=== TOP 10 PRODUCTS ===");
+                foreach (var prod in invoices.GroupBy(i => i.ProductDescription).OrderByDescending(g => g.Sum(i => i.SalesAmount)).Take(10))
+                {
+                    contentBuilder.AppendLine($"  {prod.Key}: R{prod.Sum(i => i.SalesAmount):N2} ({prod.Sum(i => i.Quantity)} units)");
+                }
+
+                // Cancellations
+                if (cancellations.Any())
+                {
+                    contentBuilder.AppendLine($"\n=== ORDER CANCELLATIONS ({cancellations.Count}) ===");
+                    contentBuilder.AppendLine($"  Total cancellation value: R{cancellations.Sum(c => c.OrderAmount):N2}");
+                    contentBuilder.AppendLine($"  Pending approval: {cancellations.Count(c => c.ApprovalStatus == "Pending")}");
+                    contentBuilder.AppendLine($"  Approved: {cancellations.Count(c => c.ApprovalStatus == "Approved")}");
+                    foreach (var reason in cancellations.GroupBy(c => c.CancellationReason).OrderByDescending(g => g.Count()))
+                    {
+                        contentBuilder.AppendLine($"  {reason.Key ?? "Other"}: {reason.Count()} cancellations");
+                    }
+                }
+
+                // ─── Select LLM prompt based on report type ───
+                var systemPrompt = reportType switch
+                {
+                    "sales-summary" => @"You are Welly, an AI sales analyst for ProMed Technologies (medical supplies, 4 divisions: Promed Technologies, Access Medical, Pharmatech, Sebenzani Trading). Generate a comprehensive Sales Summary Report.
+
+Include:
+1. **Executive Summary** — Key figures, overall trend
+2. **Division Performance** — How each company is performing, relative strengths
+3. **Revenue Analysis** — Total vs net sales, margins, returns impact
+4. **Key Highlights** — Notable achievements or concerns
+5. **Recommendations** — 3-5 actionable steps to boost sales
+
+Use ZAR (R) currency. Be concise with bullet points. Focus on insights, not just restating numbers.",
+
+                    "customer-analysis" => @"You are Welly, an AI sales analyst for ProMed Technologies. Generate a Customer Analysis Report.
+
+Include:
+1. **Customer Overview** — Total active customers, concentration risk
+2. **Top Customers** — Revenue leaders, dependency analysis
+3. **Customer Segments** — Group by revenue tiers (platinum, gold, silver, bronze)
+4. **Growth Opportunities** — Under-penetrated customers, cross-sell potential
+5. **Risk Factors** — Customer concentration, any declining accounts
+6. **Recommendations** — Customer retention and growth strategies
+
+Use ZAR (R) currency. Focus on strategic insights.",
+
+                    "province-breakdown" => @"You are Welly, an AI sales analyst for ProMed Technologies. Generate a Geographic/Province Sales Breakdown Report.
+
+Include:
+1. **Provincial Overview** — Sales distribution across South African provinces
+2. **Regional Performance** — Top and bottom performing regions
+3. **Market Penetration** — Coverage gaps, underserved areas
+4. **Division by Region** — Which companies are strong/weak in which provinces
+5. **Growth Opportunities** — Expansion targets
+6. **Recommendations** — Regional sales strategy
+
+Use ZAR (R) currency. Reference SA province names.",
+
+                    "product-performance" => @"You are Welly, an AI sales analyst for ProMed Technologies (medical supplies). Generate a Product Performance Report.
+
+Include:
+1. **Product Overview** — Total unique products sold, revenue concentration
+2. **Top Performers** — Best-selling products by revenue and volume
+3. **Margin Analysis** — Products with best/worst cost-of-sales ratio
+4. **Product Mix** — Distribution across product categories
+5. **Slow Movers** — Products with declining or low sales
+6. **Recommendations** — Product strategy, stock optimization
+
+Use ZAR (R) currency. Focus on actionable product insights.",
+
+                    _ => @"You are Welly, an AI sales analyst for ProMed Technologies. Analyze the sales data and provide a comprehensive report with key insights, trends, and recommendations. Use ZAR (R) currency."
+                };
+
+                var analysis = await _localLlmService.AnalyzeDocumentAsync(systemPrompt, contentBuilder.ToString(), HttpContext.RequestAborted);
+
+                // ─── Compute summary metrics ───
+                var totalRevenue = (double)invoices.Sum(i => i.SalesAmount);
+                var netSales = (double)invoices.Sum(i => i.SalesAmount - i.SalesReturns);
+                var grossProfit = (double)invoices.Sum(i => i.SalesAmount - i.SalesReturns - i.CostOfSales);
+                var marginPct = netSales > 0 ? Math.Round(grossProfit / netSales * 100, 1) : 0;
+
+                return Ok(new
+                {
+                    analysis,
+                    reportType,
+                    charts = new
+                    {
+                        salesByCompany = new { labels = salesByCompany.Select(x => x.label), values = salesByCompany.Select(x => x.value) },
+                        topCustomers = new { labels = topCustomers.Select(x => x.label), values = topCustomers.Select(x => x.value) },
+                        salesByProvince = new { labels = salesByProvince.Select(x => x.label), values = salesByProvince.Select(x => x.value) },
+                        topProducts = new { labels = topProducts.Select(x => x.label), values = topProducts.Select(x => x.value) },
+                        dailySales = new { labels = dailySales.Select(x => x.label), values = dailySales.Select(x => x.value) },
+                        cancellationsByReason = new { labels = cancellationsByReason.Select(x => x.label), values = cancellationsByReason.Select(x => x.value) }
+                    },
+                    summary = new
+                    {
+                        totalInvoices = invoices.Count,
+                        totalRevenue = Math.Round(totalRevenue, 2),
+                        netSales = Math.Round(netSales, 2),
+                        grossProfit = Math.Round(grossProfit, 2),
+                        marginPercent = marginPct,
+                        totalReturns = Math.Round((double)invoices.Sum(i => i.SalesReturns), 2),
+                        uniqueCustomers = invoices.Select(i => i.CustomerNumber).Distinct().Count(),
+                        uniqueProducts = invoices.Select(i => i.ProductCode).Distinct().Count(),
+                        totalCancellations = cancellations.Count,
+                        cancellationValue = Math.Round((double)cancellations.Sum(c => c.OrderAmount), 2)
+                    }
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, new { error = "Request was cancelled" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "WellySalesReport: Error processing {ReportType} report", request.ReportType);
+                return StatusCode(500, new { error = "Failed to generate sales report. Please try again." });
+            }
+        }
+
+        private static string MapCompanyCode(string code) => code switch
+        {
+            "PMT" => "Promed Technologies",
+            "ACM" => "Access Medical",
+            "PHT" => "Pharmatech",
+            "SBT" => "Sebenzani Trading",
+            _ => code
+        };
+
         private async Task WriteSSEToken(string token)
         {
             var data = JsonSerializer.Serialize(new { token = token });
@@ -1288,5 +1543,12 @@ Use ZAR (R) for currency. Be concise, use bullet points. Focus on actionable ins
     public class ComprehensiveStockRequest
     {
         public int WarehouseId { get; set; }
+    }
+
+    public class SalesReportRequest
+    {
+        public string? ReportType { get; set; } // sales-summary, customer-analysis, province-breakdown, product-performance
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
     }
 }
