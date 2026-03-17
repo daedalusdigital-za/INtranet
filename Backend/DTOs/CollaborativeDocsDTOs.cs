@@ -97,4 +97,16 @@ namespace ProjectTracker.API.DTOs
         public string Update { get; set; } = string.Empty; // Base64 encoded Yjs update
         public int UserId { get; set; }
     }
+
+    // Email DTOs
+    public class SendDocumentEmailDto
+    {
+        public List<string> To { get; set; } = new();
+        public List<string>? Cc { get; set; }
+        public string Subject { get; set; } = string.Empty;
+        public string Body { get; set; } = string.Empty;
+        public string HtmlContent { get; set; } = string.Empty;
+        public bool AttachDocument { get; set; } = true;
+        public bool IncludeInBody { get; set; } = false;
+    }
 }

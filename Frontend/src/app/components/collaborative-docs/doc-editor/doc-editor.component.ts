@@ -98,6 +98,11 @@ import { Awareness } from 'y-protocols/awareness';
                   <span>Export as HTML</span>
                 </button>
                 <mat-divider></mat-divider>
+                <button mat-menu-item (click)="openEmailDialog()">
+                  <mat-icon>email</mat-icon>
+                  <span>Email Document</span>
+                </button>
+                <mat-divider></mat-divider>
                 <button mat-menu-item (click)="print()">
                   <mat-icon>print</mat-icon>
                   <span>Print</span>
@@ -341,6 +346,19 @@ import { Awareness } from 'y-protocols/awareness';
                 <input type="file" #scanFileInput hidden accept=".png,.jpg,.jpeg,.bmp,.tiff,.tif,.webp,.pdf" (change)="importScanned($event)">
               </div>
               <div class="ribbon-group-label">Import</div>
+            </div>
+
+            <div class="ribbon-separator"></div>
+
+            <!-- Share Group -->
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large email-btn" (click)="openEmailDialog()" matTooltip="Email this document">
+                  <mat-icon>email</mat-icon>
+                  <span>Email</span>
+                </button>
+              </div>
+              <div class="ribbon-group-label">Share</div>
             </div>
 
             <div class="ribbon-separator"></div>
@@ -599,6 +617,75 @@ import { Awareness } from 'y-protocols/awareness';
                   </button>
                 </div>
               }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Email Document Dialog -->
+      @if (showEmailDialog) {
+        <div class="welly-panel-overlay" (click)="showEmailDialog = false">
+          <div class="email-dialog" (click)="$event.stopPropagation()">
+            <div class="email-dialog-header">
+              <div class="email-dialog-title">
+                <mat-icon>email</mat-icon>
+                <h3>Email Document</h3>
+              </div>
+              <button mat-icon-button (click)="showEmailDialog = false">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="email-dialog-body">
+              <div class="email-field">
+                <label>To <span class="required">*</span></label>
+                <input type="text" [(ngModel)]="emailTo" placeholder="email@example.com, another@example.com" class="email-input">
+              </div>
+              <div class="email-field">
+                <label>CC</label>
+                <input type="text" [(ngModel)]="emailCc" placeholder="cc@example.com (optional)" class="email-input">
+              </div>
+              <div class="email-field">
+                <label>Subject</label>
+                <input type="text" [(ngModel)]="emailSubject" class="email-input">
+              </div>
+              <div class="email-field">
+                <label>Message</label>
+                <div class="email-textarea-wrapper">
+                  <textarea [(ngModel)]="emailBody" placeholder="Add a message to go with the document..." rows="5" class="email-textarea"></textarea>
+                  <button class="welly-compose-btn" (click)="wellyComposeEmail()" [disabled]="emailComposing" matTooltip="Let Welly help compose your message">
+                    @if (emailComposing) {
+                      <mat-spinner diameter="16"></mat-spinner>
+                    } @else {
+                      <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
+                    }
+                    <span>{{ emailComposing ? 'Composing...' : 'Welly Compose' }}</span>
+                  </button>
+                </div>
+              </div>
+              <div class="email-options">
+                <label class="email-checkbox">
+                  <input type="checkbox" [(ngModel)]="emailAttachDoc">
+                  <mat-icon>attach_file</mat-icon>
+                  <span>Attach document as HTML file</span>
+                </label>
+                <label class="email-checkbox">
+                  <input type="checkbox" [(ngModel)]="emailIncludeInBody">
+                  <mat-icon>article</mat-icon>
+                  <span>Include document content in email body</span>
+                </label>
+              </div>
+            </div>
+            <div class="email-dialog-footer">
+              <button mat-button (click)="showEmailDialog = false">Cancel</button>
+              <button mat-raised-button color="primary" (click)="sendEmail()" [disabled]="emailSending || !emailTo.trim()">
+                @if (emailSending) {
+                  <mat-spinner diameter="18" class="btn-spinner"></mat-spinner>
+                  <span>Sending...</span>
+                } @else {
+                  <mat-icon>send</mat-icon>
+                  <span>Send Email</span>
+                }
+              </button>
             </div>
           </div>
         </div>
@@ -1623,6 +1710,208 @@ import { Awareness } from 'y-protocols/awareness';
     .welly-generate-form textarea:focus {
       border-color: #667eea;
     }
+
+    /* Email Dialog */
+    .email-dialog {
+      background: white;
+      border-radius: 16px;
+      width: 620px;
+      max-width: 92vw;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .email-dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #2196F3 0%, #1565C0 100%);
+      color: white;
+    }
+
+    .email-dialog-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .email-dialog-title h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .email-dialog-header button {
+      color: white;
+    }
+
+    .email-dialog-body {
+      padding: 20px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .email-field {
+      margin-bottom: 16px;
+    }
+
+    .email-field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 6px;
+    }
+
+    .email-field .required {
+      color: #f44336;
+    }
+
+    .email-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+
+    .email-input:focus {
+      border-color: #2196F3;
+      box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+    }
+
+    .email-textarea-wrapper {
+      position: relative;
+    }
+
+    .email-textarea {
+      width: 100%;
+      padding: 10px 12px;
+      padding-bottom: 44px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+      min-height: 100px;
+    }
+
+    .email-textarea:focus {
+      border-color: #2196F3;
+      box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+    }
+
+    .welly-compose-btn {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .welly-compose-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .welly-compose-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .welly-compose-btn mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .welly-compose-btn .welly-sparkle {
+      color: #ffd700;
+    }
+
+    .email-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      margin-top: 4px;
+    }
+
+    .email-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .email-checkbox input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #2196F3;
+      cursor: pointer;
+    }
+
+    .email-checkbox mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #888;
+    }
+
+    .email-dialog-footer {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-top: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+
+    .email-dialog-footer button[mat-raised-button] {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-spinner {
+      display: inline-block;
+    }
+
+    .email-btn {
+      background: linear-gradient(135deg, #2196F3, #1565C0) !important;
+      color: white !important;
+      border-radius: 6px !important;
+    }
+
+    .email-btn:hover {
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+    }
   `]
 })
 export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
@@ -1697,6 +1986,17 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   ocrScanning = false;
   ocrStatusMessage = '';
   ocrProgress = 0;
+
+  // Email Document
+  showEmailDialog = false;
+  emailTo = '';
+  emailCc = '';
+  emailSubject = '';
+  emailBody = '';
+  emailAttachDoc = true;
+  emailIncludeInBody = true;
+  emailSending = false;
+  emailComposing = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -2606,6 +2906,92 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
           resolve(html);
         }
       });
+    });
+  }
+
+  // ═══════════════════════════════════════════
+  // Email Document Methods
+  // ═══════════════════════════════════════════
+
+  openEmailDialog(): void {
+    if (!this.editor) return;
+    this.emailTo = '';
+    this.emailCc = '';
+    this.emailSubject = this.documentTitle || 'Document';
+    this.emailBody = '';
+    this.emailAttachDoc = true;
+    this.emailIncludeInBody = true;
+    this.emailSending = false;
+    this.emailComposing = false;
+    this.showEmailDialog = true;
+  }
+
+  wellyComposeEmail(): void {
+    if (this.emailComposing) return;
+    this.emailComposing = true;
+
+    const docTitle = this.documentTitle || 'Document';
+    const prompt = this.emailBody.trim()
+      ? `The user wants to share a document titled "${docTitle}". Here's what they want to say: "${this.emailBody}". Please compose the full email body message based on this.`
+      : `The user wants to share a document titled "${docTitle}" with colleagues. Please compose a short, professional email body message to accompany this document. Be friendly and concise.`;
+
+    this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
+      assistType: 'compose-email',
+      content: prompt
+    }).subscribe({
+      next: (res) => {
+        this.emailBody = res.result;
+        this.emailComposing = false;
+      },
+      error: () => {
+        this.snackBar.open('Welly could not compose the email. Please write it manually.', 'Close', { duration: 3000 });
+        this.emailComposing = false;
+      }
+    });
+  }
+
+  sendEmail(): void {
+    if (!this.emailTo.trim()) {
+      this.snackBar.open('Please enter at least one recipient email address', 'Close', { duration: 3000 });
+      return;
+    }
+
+    if (!this.editor) return;
+
+    const htmlContent = this.editor.getHTML();
+    const toList = this.emailTo.split(/[,;]/).map(e => e.trim()).filter(e => e);
+    const ccList = this.emailCc ? this.emailCc.split(/[,;]/).map(e => e.trim()).filter(e => e) : [];
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = toList.filter(e => !emailRegex.test(e));
+    if (invalidEmails.length > 0) {
+      this.snackBar.open(`Invalid email address: ${invalidEmails[0]}`, 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.emailSending = true;
+
+    this.docsService.sendDocumentEmail(this.documentId, {
+      to: toList,
+      cc: ccList.length > 0 ? ccList : undefined,
+      subject: this.emailSubject,
+      body: this.emailBody,
+      htmlContent: htmlContent,
+      attachDocument: this.emailAttachDoc,
+      includeInBody: this.emailIncludeInBody
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('📧 Email sent successfully!', 'Close', { duration: 4000 });
+        this.showEmailDialog = false;
+        this.emailSending = false;
+      },
+      error: (err) => {
+        console.error('Email send error:', err);
+        const msg = err.error?.message || 'Failed to send email. Please try again.';
+        this.snackBar.open(msg, 'Close', { duration: 5000 });
+        this.emailSending = false;
+      }
     });
   }
 

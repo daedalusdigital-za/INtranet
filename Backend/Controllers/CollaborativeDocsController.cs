@@ -4,7 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs;
 using ProjectTracker.API.Models;
+using System.Net;
+using System.Net.Mail;
 using System.Security.Claims;
+using System.Text;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -15,11 +18,13 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<CollaborativeDocsController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public CollaborativeDocsController(ApplicationDbContext context, ILogger<CollaborativeDocsController> logger)
+        public CollaborativeDocsController(ApplicationDbContext context, ILogger<CollaborativeDocsController> logger, IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
+            _configuration = configuration;
         }
 
         private int GetCurrentUserId()
@@ -429,6 +434,132 @@ namespace ProjectTracker.API.Controllers
                 .ToListAsync();
 
             return Ok(users);
+        }
+
+        // POST: api/collaborativedocs/{id}/email
+        [HttpPost("{id}/email")]
+        public async Task<IActionResult> SendDocumentEmail(int id, [FromBody] SendDocumentEmailDto dto)
+        {
+            var userId = GetCurrentUserId();
+
+            var document = await _context.CollaborativeDocuments
+                .Include(d => d.Collaborators)
+                .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted);
+
+            if (document == null)
+                return NotFound(new { message = "Document not found" });
+
+            // Check access
+            if (!document.IsPublic &&
+                document.CreatedById != userId &&
+                !document.Collaborators.Any(c => c.UserId == userId))
+            {
+                return Forbid();
+            }
+
+            if (dto.To == null || !dto.To.Any(t => !string.IsNullOrWhiteSpace(t)))
+                return BadRequest(new { message = "At least one recipient is required" });
+
+            try
+            {
+                // Get sender info
+                var sender = await _context.Users.FindAsync(userId);
+                var senderName = sender?.FullName ?? "ProMed User";
+
+                // Read AIEmail config for sending
+                var smtpHost = _configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
+                var smtpPort = int.Parse(_configuration["AIEmail:SmtpPort"] ?? "587");
+                var senderEmail = _configuration["AIEmail:SenderEmail"] ?? "ai@promedtechnologies.co.za";
+                var senderDisplayName = _configuration["AIEmail:SenderName"] ?? "Welly - ProMed AI Assistant";
+                var senderPassword = _configuration["AIEmail:SenderPassword"] ?? "";
+                var enableSsl = bool.Parse(_configuration["AIEmail:EnableSsl"] ?? "true");
+
+                using var message = new MailMessage();
+                message.From = new MailAddress(senderEmail, $"{senderName} via Welly");
+
+                foreach (var to in dto.To.Where(t => !string.IsNullOrWhiteSpace(t)))
+                    message.To.Add(to.Trim());
+
+                if (dto.Cc != null)
+                {
+                    foreach (var cc in dto.Cc.Where(c => !string.IsNullOrWhiteSpace(c)))
+                        message.CC.Add(cc.Trim());
+                }
+
+                message.Subject = dto.Subject;
+                message.IsBodyHtml = true;
+
+                // Build email body
+                var emailBody = new StringBuilder();
+                emailBody.Append(@"<!DOCTYPE html><html><head><meta charset='utf-8'><style>
+                    body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+                    .email-wrapper { max-width: 680px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px 24px; border-radius: 8px 8px 0 0; }
+                    .header h2 { margin: 0 0 4px 0; font-size: 18px; }
+                    .header p { margin: 0; font-size: 12px; opacity: 0.85; }
+                    .content { background: #ffffff; border: 1px solid #e0e0e0; border-top: none; padding: 24px; border-radius: 0 0 8px 8px; }
+                    .message { margin-bottom: 20px; white-space: pre-wrap; }
+                    .document-section { margin-top: 20px; padding-top: 20px; border-top: 2px solid #667eea; }
+                    .document-section h3 { color: #667eea; margin: 0 0 12px 0; font-size: 14px; }
+                    .document-content { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px; }
+                    .footer { text-align: center; padding: 16px; color: #999; font-size: 11px; }
+                </style></head><body><div class='email-wrapper'>");
+
+                emailBody.Append($"<div class='header'><h2>{System.Web.HttpUtility.HtmlEncode(dto.Subject)}</h2>");
+                emailBody.Append($"<p>Sent by {System.Web.HttpUtility.HtmlEncode(senderName)} via ProMed Documents</p></div>");
+                emailBody.Append("<div class='content'>");
+
+                if (!string.IsNullOrWhiteSpace(dto.Body))
+                {
+                    emailBody.Append($"<div class='message'>{System.Web.HttpUtility.HtmlEncode(dto.Body)}</div>");
+                }
+
+                if (dto.IncludeInBody && !string.IsNullOrEmpty(dto.HtmlContent))
+                {
+                    emailBody.Append("<div class='document-section'>");
+                    emailBody.Append($"<h3>📄 {System.Web.HttpUtility.HtmlEncode(document.Title)}</h3>");
+                    emailBody.Append($"<div class='document-content'>{dto.HtmlContent}</div>");
+                    emailBody.Append("</div>");
+                }
+
+                emailBody.Append("</div>");
+                emailBody.Append("<div class='footer'>Sent from ProMed Technologies Intranet — Powered by Welly AI</div>");
+                emailBody.Append("</div></body></html>");
+
+                message.Body = emailBody.ToString();
+
+                // Attach document as HTML file if requested
+                if (dto.AttachDocument && !string.IsNullOrEmpty(dto.HtmlContent))
+                {
+                    var docHtml = $@"<!DOCTYPE html><html><head><meta charset='utf-8'>
+                        <title>{System.Web.HttpUtility.HtmlEncode(document.Title)}</title>
+                        <style>body {{ font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; color: #333; line-height: 1.6; }} h1,h2,h3 {{ color: #1a1a2e; }} table {{ border-collapse: collapse; width: 100%; }} td,th {{ border: 1px solid #ddd; padding: 8px; }}</style>
+                        </head><body>{dto.HtmlContent}</body></html>";
+
+                    var fileName = (document.Title ?? "Document").Replace(" ", "_") + ".html";
+                    var bytes = Encoding.UTF8.GetBytes(docHtml);
+                    var stream = new MemoryStream(bytes);
+                    message.Attachments.Add(new Attachment(stream, fileName, "text/html"));
+                }
+
+                using var client = new SmtpClient(smtpHost, smtpPort);
+                client.EnableSsl = enableSsl;
+                client.UseDefaultCredentials = false;
+                if (!string.IsNullOrEmpty(senderPassword))
+                    client.Credentials = new NetworkCredential(senderEmail, senderPassword);
+
+                await client.SendMailAsync(message);
+
+                _logger.LogInformation("User {UserId} emailed document {DocumentId} to {Recipients}",
+                    userId, id, string.Join(", ", dto.To));
+
+                return Ok(new { message = "Email sent successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send document email for document {DocumentId}", id);
+                return StatusCode(500, new { message = "Failed to send email. Please try again.", error = ex.Message });
+            }
         }
     }
 }

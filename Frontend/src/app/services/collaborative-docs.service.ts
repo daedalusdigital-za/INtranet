@@ -89,6 +89,18 @@ export class CollaborativeDocsService {
     return this.http.get<DocumentUser[]>(`${this.apiUrl}/users${params}`);
   }
 
+  sendDocumentEmail(docId: number, payload: {
+    to: string[];
+    cc?: string[];
+    subject: string;
+    body: string;
+    htmlContent: string;
+    attachDocument: boolean;
+    includeInBody: boolean;
+  }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.apiUrl}/${docId}/email`, payload);
+  }
+
   // SignalR Methods
   async startConnection(token: string): Promise<void> {
     if (this.hubConnection?.state === signalR.HubConnectionState.Connected) {
