@@ -2476,31 +2476,38 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Run OCR with Tesseract.js
       this.ocrStatusMessage = 'Loading OCR engine...';
-      const Tesseract = await import('tesseract.js');
+      const { createWorker } = await import('tesseract.js');
 
       let fullText = '';
       const totalPages = imageSources.length;
 
+      // Create a Tesseract worker
+      let currentPage = 0;
+      const worker = await createWorker('eng', undefined, {
+        logger: (m: any) => {
+          if (m.status === 'recognizing text') {
+            this.ocrProgress = Math.round(((currentPage + m.progress) / totalPages) * 100);
+          } else if (m.status === 'loading language traineddata') {
+            this.ocrStatusMessage = 'Loading language data...';
+          }
+        }
+      });
+
       for (let i = 0; i < totalPages; i++) {
+        currentPage = i;
         this.ocrStatusMessage = totalPages > 1
           ? `Scanning page ${i + 1} of ${totalPages}...`
           : 'Scanning document...';
 
-        const result = await Tesseract.recognize(imageSources[i] as any, 'eng', {
-          logger: (m: any) => {
-            if (m.status === 'recognizing text') {
-              const pageProgress = Math.round(m.progress * 100);
-              const overallProgress = Math.round(((i + m.progress) / totalPages) * 100);
-              this.ocrProgress = overallProgress;
-            }
-          }
-        });
+        const result = await worker.recognize(imageSources[i] as any);
 
         if (result.data.text.trim()) {
           if (i > 0) fullText += '\n\n---\n\n';
           fullText += result.data.text.trim();
         }
       }
+
+      await worker.terminate();
 
       if (!fullText.trim()) {
         this.snackBar.open('No text could be extracted from the scanned document', 'Close', { duration: 4000 });
