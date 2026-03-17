@@ -634,12 +634,12 @@ interface SalesReportResponse {
                 <div class="section-actions">
                   <mat-form-field appearance="outline" class="search-field">
                     <mat-label>Search customers</mat-label>
-                    <input matInput [value]="customerSearch()" (input)="customerSearch.set($any($event.target).value)">
+                    <input matInput [value]="customerSearch()" (input)="customerSearch.set($any($event.target).value); customerPageIndex.set(0)">
                     <mat-icon matSuffix>search</mat-icon>
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="filter-field">
                     <mat-label>Province</mat-label>
-                    <mat-select [value]="customerProvinceFilter()" (selectionChange)="customerProvinceFilter.set($event.value)">
+                    <mat-select [value]="customerProvinceFilter()" (selectionChange)="customerProvinceFilter.set($event.value); customerPageIndex.set(0)">
                       <mat-option value="all">All Provinces</mat-option>
                       @for (province of provinces; track province) {
                         <mat-option [value]="province">{{ province }}</mat-option>
@@ -756,9 +756,11 @@ interface SalesReportResponse {
                         [class.selected]="selectedCustomer()?.id === row.id"></tr>
                   </table>
                 </div>
-                <mat-paginator [length]="customers().length"
-                               [pageSize]="10"
+                <mat-paginator [length]="allFilteredCustomers().length"
+                               [pageSize]="customerPageSize()"
+                               [pageIndex]="customerPageIndex()"
                                [pageSizeOptions]="[5, 10, 25, 50]"
+                               (page)="onCustomerPageChange($event)"
                                showFirstLastButtons>
                 </mat-paginator>
               }
@@ -777,12 +779,12 @@ interface SalesReportResponse {
                 <div class="section-actions">
                   <mat-form-field appearance="outline" class="search-field">
                     <mat-label>Search invoices</mat-label>
-                    <input matInput [value]="invoiceSearch()" (input)="invoiceSearch.set($any($event.target).value)">
+                    <input matInput [value]="invoiceSearch()" (input)="invoiceSearch.set($any($event.target).value); invoicePageIndex.set(0)">
                     <mat-icon matSuffix>search</mat-icon>
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="filter-field">
                     <mat-label>Status</mat-label>
-                    <mat-select [value]="invoiceStatusFilter()" (selectionChange)="invoiceStatusFilter.set($event.value)">
+                    <mat-select [value]="invoiceStatusFilter()" (selectionChange)="invoiceStatusFilter.set($event.value); invoicePageIndex.set(0)">
                       <mat-option value="all">All Status</mat-option>
                       <mat-option value="Pending">Pending</mat-option>
                       <mat-option value="Assigned">Assigned</mat-option>
@@ -916,9 +918,11 @@ interface SalesReportResponse {
                     <tr mat-row *matRowDef="let row; columns: invoiceColumns;"></tr>
                   </table>
                 </div>
-                <mat-paginator [length]="invoices().length"
-                               [pageSize]="15"
-                               [pageSizeOptions]="[10, 15, 25, 50]"
+                <mat-paginator [length]="allFilteredInvoices().length"
+                               [pageSize]="invoicePageSize()"
+                               [pageIndex]="invoicePageIndex()"
+                               [pageSizeOptions]="[10, 15, 25, 50, 100]"
+                               (page)="onInvoicePageChange($event)"
                                showFirstLastButtons>
                 </mat-paginator>
               }
@@ -4492,6 +4496,12 @@ export class SalesDashboardComponent implements OnInit {
   customerColumns = ['customerCode', 'name', 'contact', 'location', 'status', 'actions'];
   invoiceColumns = ['transactionNumber', 'date', 'customer', 'product', 'amount', 'province', 'source', 'status', 'actions'];
 
+  // Pagination state
+  customerPageIndex = signal(0);
+  customerPageSize = signal(10);
+  invoicePageIndex = signal(0);
+  invoicePageSize = signal(15);
+
   // Province list
   provinces = [
     'Eastern Cape',
@@ -4505,8 +4515,8 @@ export class SalesDashboardComponent implements OnInit {
     'Western Cape'
   ];
 
-  // Computed filtered lists
-  filteredCustomers = computed(() => {
+  // Computed filtered lists (full set for counting)
+  allFilteredCustomers = computed(() => {
     let list = this.customers();
     const search = this.customerSearch().toLowerCase();
     const province = this.customerProvinceFilter();
@@ -4527,7 +4537,15 @@ export class SalesDashboardComponent implements OnInit {
     return list;
   });
 
-  filteredInvoices = computed(() => {
+  // Paginated customers for table display
+  filteredCustomers = computed(() => {
+    const all = this.allFilteredCustomers();
+    const start = this.customerPageIndex() * this.customerPageSize();
+    return all.slice(start, start + this.customerPageSize());
+  });
+
+  // Full filtered invoices for counting
+  allFilteredInvoices = computed(() => {
     let list = this.invoices();
     const search = this.invoiceSearch().toLowerCase();
     const status = this.invoiceStatusFilter();
@@ -4546,6 +4564,13 @@ export class SalesDashboardComponent implements OnInit {
     }
 
     return list;
+  });
+
+  // Paginated invoices for table display
+  filteredInvoices = computed(() => {
+    const all = this.allFilteredInvoices();
+    const start = this.invoicePageIndex() * this.invoicePageSize();
+    return all.slice(start, start + this.invoicePageSize());
   });
 
   filteredOrders = computed(() => {
@@ -4724,6 +4749,17 @@ export class SalesDashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadDashboardData();
+  }
+
+  // Pagination handlers
+  onCustomerPageChange(event: PageEvent): void {
+    this.customerPageIndex.set(event.pageIndex);
+    this.customerPageSize.set(event.pageSize);
+  }
+
+  onInvoicePageChange(event: PageEvent): void {
+    this.invoicePageIndex.set(event.pageIndex);
+    this.invoicePageSize.set(event.pageSize);
   }
 
   loadDashboardData(): void {

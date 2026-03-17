@@ -22,6 +22,7 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -191,6 +192,7 @@ interface SleepOut {
     MatInputModule,
     MatSelectModule,
     MatDividerModule,
+    MatPaginatorModule,
     FormsModule,
     NavbarComponent
   ],
@@ -1010,12 +1012,12 @@ interface SleepOut {
                     <div class="invoices-actions">
                       <mat-form-field appearance="outline" class="search-field">
                         <mat-label>Search Invoices</mat-label>
-                        <input matInput [value]="invoiceSearch()" (input)="invoiceSearch.set($any($event.target).value)" placeholder="Invoice #, customer, product...">
+                        <input matInput [value]="invoiceSearch()" (input)="invoiceSearch.set($any($event.target).value); invoicePageIndex.set(0)" placeholder="Invoice #, customer, product...">
                         <mat-icon matSuffix>search</mat-icon>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
                         <mat-label>Status</mat-label>
-                        <mat-select [value]="invoiceStatusFilter()" (selectionChange)="invoiceStatusFilter.set($event.value)">
+                        <mat-select [value]="invoiceStatusFilter()" (selectionChange)="invoiceStatusFilter.set($event.value); invoicePageIndex.set(0)">
                           <mat-option value="all">All</mat-option>
                           <mat-option value="pending">Pending</mat-option>
                           <mat-option value="assigned">Assigned</mat-option>
@@ -1024,7 +1026,7 @@ interface SleepOut {
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
                         <mat-label>Company</mat-label>
-                        <mat-select [value]="invoiceSourceFilter()" (selectionChange)="invoiceSourceFilter.set($event.value)">
+                        <mat-select [value]="invoiceSourceFilter()" (selectionChange)="invoiceSourceFilter.set($event.value); invoicePageIndex.set(0)">
                           <mat-option value="all">All Sources</mat-option>
                           <mat-option value="Promed Technologies">Promed Technologies</mat-option>
                           <mat-option value="Access Medical">Access Medical</mat-option>
@@ -1032,7 +1034,7 @@ interface SleepOut {
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
                         <mat-label>Province</mat-label>
-                        <mat-select [value]="invoiceProvinceFilter()" (selectionChange)="invoiceProvinceFilter.set($event.value)">
+                        <mat-select [value]="invoiceProvinceFilter()" (selectionChange)="invoiceProvinceFilter.set($event.value); invoicePageIndex.set(0)">
                           <mat-option value="all">All Provinces</mat-option>
                           @for (province of uniqueProvinces(); track province) {
                             <mat-option [value]="province">{{ province }} ({{ getProvinceInvoiceCount(province) }})</mat-option>
@@ -1166,6 +1168,13 @@ interface SleepOut {
                         <tr mat-row *matRowDef="let row; columns: invoiceColumns;"></tr>
                       </table>
                     </div>
+                    <mat-paginator [length]="allFilteredInvoices().length"
+                                   [pageSize]="invoicePageSize()"
+                                   [pageIndex]="invoicePageIndex()"
+                                   [pageSizeOptions]="[10, 25, 50, 100]"
+                                   (page)="onInvoicePageChange($event)"
+                                   showFirstLastButtons>
+                    </mat-paginator>
                   }
                 </div>
               </div>
@@ -1188,12 +1197,12 @@ interface SleepOut {
                       </button>
                       <mat-form-field appearance="outline" class="search-field">
                         <mat-label>Search Tripsheets</mat-label>
-                        <input matInput [(ngModel)]="tripsheetSearch" placeholder="Load #, driver, date...">
+                        <input matInput [(ngModel)]="tripsheetSearch" placeholder="Load #, driver, date..." (ngModelChange)="onTripsheetFilterChange()">
                         <mat-icon matSuffix>search</mat-icon>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
                         <mat-label>Status</mat-label>
-                        <mat-select [(ngModel)]="tripsheetStatusFilter">
+                        <mat-select [(ngModel)]="tripsheetStatusFilter" (ngModelChange)="onTripsheetFilterChange()">
                           <mat-option value="all">All</mat-option>
                           <mat-option value="pending">Pending</mat-option>
                           <mat-option value="assigned">Assigned</mat-option>
@@ -1364,6 +1373,13 @@ interface SleepOut {
                       <tr mat-header-row *matHeaderRowDef="tripsheetColumns"></tr>
                       <tr mat-row *matRowDef="let row; columns: tripsheetColumns;" [ngClass]="getTripsheetRowClass(row)"></tr>
                     </table>
+                    <mat-paginator [length]="allFilteredTripsheets().length"
+                                   [pageSize]="tripsheetPageSize()"
+                                   [pageIndex]="tripsheetPageIndex()"
+                                   [pageSizeOptions]="[10, 25, 50, 100]"
+                                   (page)="onTripsheetPageChange($event)"
+                                   showFirstLastButtons>
+                    </mat-paginator>
                   }
                 </div>
               </div>
@@ -4300,6 +4316,14 @@ export class LogisticsDashboardComponent implements OnInit {
   invoiceProvinceFilter = signal('all');
   invoiceColumns = ['transactionNumber', 'date', 'customer', 'product', 'quantity', 'salesAmount', 'costOfSales', 'status', 'actions'];
 
+  // Invoice pagination
+  invoicePageIndex = signal(0);
+  invoicePageSize = signal(25);
+
+  // Tripsheet pagination
+  tripsheetPageIndex = signal(0);
+  tripsheetPageSize = signal(25);
+
   loadColumns = ['loadNumber', 'customer', 'route', 'vehicle', 'driver', 'status', 'progress', 'actions'];
 
   // Part Delivered Tracking
@@ -4345,6 +4369,17 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadWarehouses();
     this.loadSleepOuts();
     this.loadAddressIssuesCount();
+  }
+
+  // Pagination handlers
+  onInvoicePageChange(event: PageEvent): void {
+    this.invoicePageIndex.set(event.pageIndex);
+    this.invoicePageSize.set(event.pageSize);
+  }
+
+  onTripsheetPageChange(event: PageEvent): void {
+    this.tripsheetPageIndex.set(event.pageIndex);
+    this.tripsheetPageSize.set(event.pageSize);
   }
 
   loadWarehouses(): void {
@@ -5418,7 +5453,7 @@ Notes: ${record.notes || 'No notes'}
     return this.provinceInvoiceCounts().get(province) || 0;
   }
 
-  filteredInvoices = computed(() => {
+  allFilteredInvoices = computed(() => {
     let invoices = this.importedInvoices();
     const statusFilter = this.invoiceStatusFilter();
     const sourceFilter = this.invoiceSourceFilter();
@@ -5449,6 +5484,13 @@ Notes: ${record.notes || 'No notes'}
     }
     
     return invoices;
+  });
+
+  // Paginated invoices for table display
+  filteredInvoices = computed(() => {
+    const all = this.allFilteredInvoices();
+    const start = this.invoicePageIndex() * this.invoicePageSize();
+    return all.slice(start, start + this.invoicePageSize());
   });
 
   // Pre-computed status counts - single pass over all invoices
@@ -5569,7 +5611,7 @@ Notes: ${record.notes || 'No notes'}
   }
 
   // Tripsheet methods
-  filteredTripsheets = computed(() => {
+  allFilteredTripsheets = computed(() => {
     let trips = this.tripsheets();
     
     if (this.tripsheetStatusFilter !== 'all') {
@@ -5618,6 +5660,13 @@ Notes: ${record.notes || 'No notes'}
     return trips;
   });
 
+  // Paginated tripsheets for table display
+  filteredTripsheets = computed(() => {
+    const all = this.allFilteredTripsheets();
+    const start = this.tripsheetPageIndex() * this.tripsheetPageSize();
+    return all.slice(start, start + this.tripsheetPageSize());
+  });
+
   loadTripsheets(): void {
     this.http.get<any[]>(`${this.apiUrl}/logistics/tripsheet`).subscribe({
       next: (trips) => {
@@ -5634,14 +5683,21 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
+  onTripsheetFilterChange(): void {
+    this.tripsheetPageIndex.set(0);
+    this.tripsheets.update(trips => [...trips]);
+  }
+
   onTripsheetDateFilterChange(): void {
     // Trigger computed re-evaluation by updating the signal
+    this.tripsheetPageIndex.set(0);
     this.tripsheets.update(trips => [...trips]);
   }
 
   clearTripsheetDateFilter(): void {
     this.tripsheetFromDate = null;
     this.tripsheetToDate = null;
+    this.tripsheetPageIndex.set(0);
     this.tripsheets.update(trips => [...trips]);
   }
 
