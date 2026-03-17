@@ -374,6 +374,164 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Welly Suggests — AI-powered tripsheet suggestions grouped by warehouse origin.
+        /// Analyzes all pending invoices, batches them by nearest warehouse, then optimizes
+        /// into route-efficient tripsheet groups by province/city/customer.
+        /// </summary>
+        [HttpGet("welly-suggest-tripsheets")]
+        public async Task<ActionResult> WellySuggestTripsheets()
+        {
+            try
+            {
+                // Get ALL pending invoices (not assigned to a load)
+                var pendingInvoices = await _context.ImportedInvoices
+                    .Include(i => i.Customer)
+                    .Where(i => i.LoadId == null && i.Status == "Pending")
+                    .OrderBy(i => i.TransactionDate)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                if (!pendingInvoices.Any())
+                    return Ok(new { warehouses = new List<object>(), totalPending = 0, message = "No pending invoices found." });
+
+                // Get all active warehouses
+                var warehouses = await _context.Warehouses
+                    .Where(w => w.Status == "Active")
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                // Map SourceCompany → Warehouse
+                // PMT = Promed Technologies (primary warehouse: KZN Distribution Centre)
+                // ACM = Access Medical (Gauteng Main Warehouse)
+                // PHT = Pharmatech (Cape Town Warehouse)
+                // SBT = Sebenzani Trading (KZN Distribution Centre)
+                var companyWarehouseMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var wh in warehouses)
+                {
+                    // Try to match warehouse by code or known mappings
+                    if (wh.Code == "WH-KZN") { companyWarehouseMap.TryAdd("PMT", wh.Id); companyWarehouseMap.TryAdd("SBT", wh.Id); }
+                    else if (wh.Code == "WH-GP") companyWarehouseMap.TryAdd("ACM", wh.Id);
+                    else if (wh.Code == "WH-CPT") companyWarehouseMap.TryAdd("PHT", wh.Id);
+                }
+
+                // Group invoices by warehouse origin
+                var warehouseGroups = pendingInvoices
+                    .GroupBy(i =>
+                    {
+                        var company = i.SourceCompany?.ToUpper() ?? "";
+                        companyWarehouseMap.TryGetValue(company, out var whId);
+                        return whId > 0 ? whId : warehouses.FirstOrDefault()?.Id ?? 0;
+                    })
+                    .Where(g => g.Key > 0)
+                    .ToList();
+
+                var warehouseSuggestions = new List<object>();
+
+                foreach (var whGroup in warehouseGroups)
+                {
+                    var warehouse = warehouses.FirstOrDefault(w => w.Id == whGroup.Key);
+                    if (warehouse == null) continue;
+
+                    // Within this warehouse, group by province → city for route batching
+                    var routeBatches = whGroup
+                        .GroupBy(i =>
+                        {
+                            var province = i.DeliveryProvince ?? i.Customer?.Province ?? "Unknown";
+                            var city = i.DeliveryCity ?? i.Customer?.City ?? "Unknown";
+                            return new { Province = province, City = city };
+                        })
+                        .Select(batch =>
+                        {
+                            var invoices = batch.ToList();
+                            var customerGroups = invoices
+                                .GroupBy(i => new { i.CustomerNumber, i.CustomerName })
+                                .ToList();
+
+                            return new
+                            {
+                                province = batch.Key.Province,
+                                city = batch.Key.City,
+                                totalInvoices = invoices.Count,
+                                uniqueCustomers = customerGroups.Count,
+                                totalValue = Math.Round((double)invoices.Sum(i => i.SalesAmount - i.SalesReturns), 2),
+                                totalItems = Math.Round((double)invoices.Sum(i => i.Quantity), 0),
+                                oldestDays = invoices.Max(i => (int)(DateTime.UtcNow - i.ImportedAt).TotalDays),
+                                highestPriority = GetHighestPriorityFromInvoices(invoices),
+                                invoiceIds = invoices.Select(i => i.Id).ToList(),
+                                customers = customerGroups.Select(cg => new
+                                {
+                                    customerNumber = cg.Key.CustomerNumber,
+                                    customerName = cg.Key.CustomerName,
+                                    invoiceCount = cg.Count(),
+                                    totalAmount = Math.Round((double)cg.Sum(inv => inv.SalesAmount - inv.SalesReturns), 2),
+                                    city = cg.First().DeliveryCity ?? cg.First().Customer?.City,
+                                    address = cg.First().DeliveryAddress ?? cg.First().Customer?.DeliveryAddress,
+                                    province = cg.First().DeliveryProvince ?? cg.First().Customer?.Province
+                                }).OrderByDescending(c => c.totalAmount).ToList(),
+                                recommendedVehicle = invoices.Count > 50 ? "Large Truck (10+ Ton)" :
+                                    invoices.Count > 20 ? "Medium Truck (5 Ton)" : "Light Delivery Vehicle",
+                                urgencyScore = CalculateUrgencyScore(invoices)
+                            };
+                        })
+                        .OrderByDescending(b => b.urgencyScore)
+                        .ThenByDescending(b => b.totalValue)
+                        .ToList();
+
+                    var sourceCompanies = whGroup
+                        .Select(i => i.SourceCompany)
+                        .Where(s => !string.IsNullOrEmpty(s))
+                        .Distinct()
+                        .ToList();
+
+                    warehouseSuggestions.Add(new
+                    {
+                        warehouseId = warehouse.Id,
+                        warehouseName = warehouse.Name,
+                        warehouseCode = warehouse.Code,
+                        warehouseCity = warehouse.City,
+                        warehouseProvince = warehouse.Province,
+                        sourceCompanies,
+                        totalPendingInvoices = whGroup.Count(),
+                        totalValue = Math.Round((double)whGroup.Sum(i => i.SalesAmount - i.SalesReturns), 2),
+                        suggestedTripsheets = routeBatches,
+                        summary = $"{routeBatches.Count} suggested trip(s) from {warehouse.Name} covering {routeBatches.Sum(b => b.uniqueCustomers)} customers across {routeBatches.Select(b => b.province).Distinct().Count()} province(s)"
+                    });
+                }
+
+                return Ok(new
+                {
+                    warehouses = warehouseSuggestions.OrderByDescending(w => ((dynamic)w).totalPendingInvoices),
+                    totalPending = pendingInvoices.Count,
+                    totalWarehouses = warehouseSuggestions.Count,
+                    generatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating Welly tripsheet suggestions");
+                return StatusCode(500, new { error = "Failed to generate tripsheet suggestions", details = ex.Message });
+            }
+        }
+
+        private static string GetHighestPriorityFromInvoices(List<ImportedInvoice> invoices)
+        {
+            var maxDays = invoices.Max(i => (DateTime.UtcNow - i.ImportedAt).TotalDays);
+            if (maxDays >= 14) return "Critical";
+            if (maxDays >= 11) return "Urgent";
+            if (maxDays >= 7) return "High";
+            if (maxDays >= 4) return "Normal";
+            return "Low";
+        }
+
+        private static double CalculateUrgencyScore(List<ImportedInvoice> invoices)
+        {
+            // Combine age urgency + value to produce a sort score
+            var avgDays = invoices.Average(i => (DateTime.UtcNow - i.ImportedAt).TotalDays);
+            var totalValue = (double)invoices.Sum(i => i.SalesAmount - i.SalesReturns);
+            return (avgDays * 10) + (totalValue / 10000);
+        }
+
+        /// <summary>
         /// Create a trip sheet/load from selected imported invoices
         /// </summary>
         [HttpPost("create-tripsheet")]
