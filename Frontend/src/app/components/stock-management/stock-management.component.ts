@@ -26,6 +26,7 @@ import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
+import Chart from 'chart.js/auto';
 
 interface WarehouseSummary {
   id: number;
@@ -52,6 +53,35 @@ interface WarehouseInventory {
   binLocation: string;
   lastCountDate: string;
   lastRestockDate: string;
+}
+
+interface ChartData {
+  labels: string[];
+  values: number[];
+}
+
+interface StockAnalysisSummary {
+  totalSkus: number;
+  itemsWithStock: number;
+  totalStockValue: number;
+  lowStockCount: number;
+  totalInvoices: number;
+  invoiceValue: number;
+  outstandingAmount: number;
+  totalLoads: number;
+  deliveredLoads: number;
+  deliveryRate: number;
+}
+
+interface ComprehensiveAnalysisResponse {
+  analysis: string;
+  charts: {
+    stockByBuilding: ChartData;
+    topItems: ChartData;
+    invoiceStatus: ChartData;
+    loadStatus: ChartData;
+  };
+  summary: StockAnalysisSummary;
 }
 
 @Component({
@@ -317,31 +347,108 @@ interface WarehouseInventory {
 
       <!-- Welly Stock Analysis Panel -->
       @if (showWellyPanel) {
-        <div class="welly-panel-overlay" (click)="showWellyPanel = false">
+        <div class="welly-panel-overlay" (click)="closeWellyPanel()">
           <div class="welly-panel" (click)="$event.stopPropagation()">
             <div class="welly-panel-header">
               <div class="welly-panel-title">
                 <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
                 <h3>Welly Stock Analysis</h3>
               </div>
-              <button mat-icon-button (click)="showWellyPanel = false">
+              <button mat-icon-button (click)="closeWellyPanel()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
-            <div class="welly-panel-body">
+            <div class="welly-panel-body" id="welly-analysis-content">
               @if (wellyLoading) {
                 <div class="welly-loading">
                   <mat-spinner diameter="36"></mat-spinner>
-                  <p>Welly is analyzing stock levels for {{ selectedWarehouse?.name }}...</p>
+                  <p>Welly is analyzing stock, invoices & logistics for {{ selectedWarehouse?.name }}...</p>
                 </div>
               } @else if (wellyResult) {
-                <div class="welly-result">
-                  <div class="welly-result-text">{{ wellyResult }}</div>
-                  <div class="welly-result-actions">
-                    <button mat-button (click)="copyWellyResult()">
-                      <mat-icon>content_copy</mat-icon> Copy Analysis
-                    </button>
+                <!-- Summary Cards -->
+                @if (wellySummary) {
+                  <div class="welly-summary-grid">
+                    <div class="welly-summary-card card-stock">
+                      <div class="summary-icon"><mat-icon>inventory_2</mat-icon></div>
+                      <div class="summary-info">
+                        <span class="summary-value">{{ wellySummary.itemsWithStock | number }}</span>
+                        <span class="summary-label">Items In Stock</span>
+                      </div>
+                    </div>
+                    <div class="welly-summary-card card-value">
+                      <div class="summary-icon"><mat-icon>payments</mat-icon></div>
+                      <div class="summary-info">
+                        <span class="summary-value">R{{ wellySummary.totalStockValue | number:'1.0-0' }}</span>
+                        <span class="summary-label">Stock Value</span>
+                      </div>
+                    </div>
+                    <div class="welly-summary-card card-alert">
+                      <div class="summary-icon"><mat-icon>warning</mat-icon></div>
+                      <div class="summary-info">
+                        <span class="summary-value">{{ wellySummary.lowStockCount | number }}</span>
+                        <span class="summary-label">Low Stock Items</span>
+                      </div>
+                    </div>
+                    <div class="welly-summary-card card-invoice">
+                      <div class="summary-icon"><mat-icon>receipt_long</mat-icon></div>
+                      <div class="summary-info">
+                        <span class="summary-value">{{ wellySummary.totalInvoices | number }}</span>
+                        <span class="summary-label">Invoices</span>
+                      </div>
+                    </div>
+                    <div class="welly-summary-card card-delivery">
+                      <div class="summary-icon"><mat-icon>local_shipping</mat-icon></div>
+                      <div class="summary-info">
+                        <span class="summary-value">{{ wellySummary.deliveredLoads }}/{{ wellySummary.totalLoads }}</span>
+                        <span class="summary-label">Deliveries</span>
+                      </div>
+                    </div>
+                    <div class="welly-summary-card card-rate">
+                      <div class="summary-icon"><mat-icon>speed</mat-icon></div>
+                      <div class="summary-info">
+                        <span class="summary-value">{{ wellySummary.deliveryRate }}%</span>
+                        <span class="summary-label">Delivery Rate</span>
+                      </div>
+                    </div>
                   </div>
+                }
+
+                <!-- Charts -->
+                @if (wellyCharts) {
+                  <div class="welly-charts-grid">
+                    <div class="welly-chart-card">
+                      <h4>Stock Value by Building</h4>
+                      <canvas id="chart-stock-building"></canvas>
+                    </div>
+                    <div class="welly-chart-card">
+                      <h4>Top Items by Value</h4>
+                      <canvas id="chart-top-items"></canvas>
+                    </div>
+                    <div class="welly-chart-card">
+                      <h4>Invoice Status</h4>
+                      <canvas id="chart-invoice-status"></canvas>
+                    </div>
+                    <div class="welly-chart-card">
+                      <h4>TripSheet Status</h4>
+                      <canvas id="chart-load-status"></canvas>
+                    </div>
+                  </div>
+                }
+
+                <!-- AI Analysis Text -->
+                <div class="welly-result">
+                  <h4 class="welly-section-title"><mat-icon>psychology</mat-icon> Welly's Analysis</h4>
+                  <div class="welly-result-text">{{ wellyResult }}</div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="welly-result-actions">
+                  <button mat-raised-button color="primary" (click)="downloadWellyPdf()">
+                    <mat-icon>picture_as_pdf</mat-icon> Download PDF
+                  </button>
+                  <button mat-button (click)="copyWellyResult()">
+                    <mat-icon>content_copy</mat-icon> Copy Analysis
+                  </button>
                 </div>
               }
             </div>
@@ -1025,25 +1132,32 @@ interface WarehouseInventory {
       align-items: center;
       justify-content: center;
       z-index: 1000;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     .welly-panel {
-      background: white;
+      background: #f5f5f7;
       border-radius: 16px;
-      width: 600px;
-      max-width: 90vw;
-      max-height: 80vh;
+      width: 900px;
+      max-width: 94vw;
+      max-height: 90vh;
       display: flex;
       flex-direction: column;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       overflow: hidden;
+      animation: slideUp 0.3s ease-out;
     }
 
     .welly-panel-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
+      padding: 16px 24px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
     }
@@ -1056,7 +1170,7 @@ interface WarehouseInventory {
 
     .welly-panel-title h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 600;
     }
 
@@ -1069,9 +1183,9 @@ interface WarehouseInventory {
     }
 
     .welly-panel-body {
-      padding: 24px;
+      padding: 20px 24px;
       overflow-y: auto;
-      max-height: 60vh;
+      max-height: calc(90vh - 60px);
     }
 
     .welly-loading {
@@ -1079,7 +1193,7 @@ interface WarehouseInventory {
       flex-direction: column;
       align-items: center;
       gap: 16px;
-      padding: 32px;
+      padding: 48px 32px;
     }
 
     .welly-loading p {
@@ -1087,22 +1201,133 @@ interface WarehouseInventory {
       font-size: 14px;
     }
 
-    .welly-result-text {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 10px;
+    /* Summary Cards */
+    .welly-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .welly-summary-card {
+      background: white;
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border-left: 4px solid #667eea;
+    }
+
+    .welly-summary-card.card-stock { border-left-color: #667eea; }
+    .welly-summary-card.card-stock .summary-icon { color: #667eea; }
+    .welly-summary-card.card-value { border-left-color: #43a047; }
+    .welly-summary-card.card-value .summary-icon { color: #43a047; }
+    .welly-summary-card.card-alert { border-left-color: #ef5350; }
+    .welly-summary-card.card-alert .summary-icon { color: #ef5350; }
+    .welly-summary-card.card-invoice { border-left-color: #ff9800; }
+    .welly-summary-card.card-invoice .summary-icon { color: #ff9800; }
+    .welly-summary-card.card-delivery { border-left-color: #26a69a; }
+    .welly-summary-card.card-delivery .summary-icon { color: #26a69a; }
+    .welly-summary-card.card-rate { border-left-color: #7e57c2; }
+    .welly-summary-card.card-rate .summary-icon { color: #7e57c2; }
+
+    .summary-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .summary-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .summary-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      line-height: 1.2;
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
+    /* Charts Grid */
+    .welly-charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .welly-chart-card {
+      background: white;
+      border-radius: 12px;
       padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .welly-chart-card h4 {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .welly-chart-card canvas {
+      width: 100% !important;
+      max-height: 220px;
+    }
+
+    /* Analysis text section */
+    .welly-section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px 0;
       font-size: 14px;
-      line-height: 1.6;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .welly-section-title mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #667eea;
+    }
+
+    .welly-result-text {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 18px;
+      font-size: 13px;
+      line-height: 1.7;
       white-space: pre-wrap;
-      max-height: 50vh;
+      max-height: 40vh;
       overflow-y: auto;
       margin-bottom: 16px;
+      color: #333;
     }
 
     .welly-result-actions {
       display: flex;
-      gap: 8px;
+      gap: 12px;
+      padding-top: 4px;
+    }
+
+    .welly-result-actions button mat-icon {
+      margin-right: 4px;
     }
   `]
 })
@@ -1258,63 +1483,209 @@ export class StockManagementComponent implements OnInit {
   }
 
   // ═══════════════════════════════════════════
-  // Welly AI Stock Analysis
+  // Welly AI Stock Analysis (Enhanced with Charts + PDF)
   // ═══════════════════════════════════════════
 
   showWellyPanel = false;
   wellyLoading = false;
   wellyResult = '';
+  wellySummary: StockAnalysisSummary | null = null;
+  wellyCharts: ComprehensiveAnalysisResponse['charts'] | null = null;
+  private chartInstances: Chart[] = [];
 
   wellyAnalyzeStock(): void {
     if (!this.selectedWarehouse) return;
     this.showWellyPanel = true;
     this.wellyLoading = true;
     this.wellyResult = '';
+    this.wellySummary = null;
+    this.wellyCharts = null;
+    this.destroyCharts();
 
-    // First fetch the inventory data for this warehouse
-    this.http.get<WarehouseInventory[]>(`${environment.apiUrl}/warehouses/${this.selectedWarehouse.id}/inventory`).subscribe({
-      next: (inventory) => {
-        const stockSummary = inventory.map(item =>
-          `${item.commodityName}: QTY=${item.quantityOnHand}, Reorder=${item.reorderLevel}, Max=${item.maximumLevel}, Bin=${item.binLocation || 'N/A'}, LastCount=${item.lastCountDate || 'N/A'}`
-        ).join('\n');
+    this.http.post<ComprehensiveAnalysisResponse>(
+      `${environment.apiUrl}/aichat/welly-stock-comprehensive`,
+      { warehouseId: this.selectedWarehouse.id }
+    ).subscribe({
+      next: (res) => {
+        this.wellyResult = res.analysis;
+        this.wellySummary = res.summary;
+        this.wellyCharts = res.charts;
+        this.wellyLoading = false;
 
-        const content = `Warehouse: ${this.selectedWarehouse.name}\nLocation: ${this.selectedWarehouse.location}\nCapacity: ${this.selectedWarehouse.capacityPercent}% used (${this.selectedWarehouse.totalCapacity - this.selectedWarehouse.availableCapacity}/${this.selectedWarehouse.totalCapacity} m³)\nTotal Items: ${this.selectedWarehouse.totalItems}\nTotal Stock Value: R${this.selectedWarehouse.totalStockValue}\n\nInventory Details:\n${stockSummary || 'No inventory items found'}`;
-
-        this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
-          assistType: 'analyze-stock',
-          content: content
-        }).subscribe({
-          next: (res) => {
-            this.wellyResult = res.result;
-            this.wellyLoading = false;
-          },
-          error: () => {
-            this.snackBar.open('Welly could not analyze stock. Please try again.', 'Close', { duration: 3000 });
-            this.wellyLoading = false;
-            this.showWellyPanel = false;
-          }
-        });
+        // Render charts after DOM updates
+        setTimeout(() => this.renderWellyCharts(), 150);
       },
       error: () => {
-        // If inventory fetch fails, analyze with summary data only
-        const content = `Warehouse: ${this.selectedWarehouse.name}\nLocation: ${this.selectedWarehouse.location}\nCapacity: ${this.selectedWarehouse.capacityPercent}% used\nTotal Items: ${this.selectedWarehouse.totalItems}\nTotal Stock Value: R${this.selectedWarehouse.totalStockValue}\n\nNote: Detailed inventory data could not be loaded.`;
-
-        this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
-          assistType: 'analyze-stock',
-          content: content
-        }).subscribe({
-          next: (res) => {
-            this.wellyResult = res.result;
-            this.wellyLoading = false;
-          },
-          error: () => {
-            this.snackBar.open('Welly could not analyze stock. Please try again.', 'Close', { duration: 3000 });
-            this.wellyLoading = false;
-            this.showWellyPanel = false;
-          }
-        });
+        this.snackBar.open('Welly could not analyze stock. Please try again.', 'Close', { duration: 3000 });
+        this.wellyLoading = false;
+        this.showWellyPanel = false;
       }
     });
+  }
+
+  private destroyCharts(): void {
+    this.chartInstances.forEach(c => c.destroy());
+    this.chartInstances = [];
+  }
+
+  closeWellyPanel(): void {
+    this.showWellyPanel = false;
+    this.destroyCharts();
+  }
+
+  private readonly chartColors = [
+    '#667eea', '#764ba2', '#43a047', '#ff9800', '#ef5350',
+    '#26a69a', '#7e57c2', '#5c6bc0', '#ec407a', '#66bb6a',
+    '#ffa726', '#42a5f5', '#ab47bc', '#26c6da', '#8d6e63'
+  ];
+
+  private renderWellyCharts(): void {
+    if (!this.wellyCharts) return;
+    this.destroyCharts();
+
+    // Chart 1: Stock by Building (doughnut)
+    const c1 = this.createChart('chart-stock-building', 'doughnut',
+      this.wellyCharts.stockByBuilding.labels,
+      this.wellyCharts.stockByBuilding.values,
+      'Stock Value (R)');
+
+    // Chart 2: Top Items (horizontal bar)
+    const c2 = this.createChart('chart-top-items', 'bar',
+      this.wellyCharts.topItems.labels,
+      this.wellyCharts.topItems.values,
+      'Value (R)', true);
+
+    // Chart 3: Invoice Status (doughnut)
+    const c3 = this.createChart('chart-invoice-status', 'doughnut',
+      this.wellyCharts.invoiceStatus.labels,
+      this.wellyCharts.invoiceStatus.values,
+      'Invoices');
+
+    // Chart 4: Load Status (doughnut)
+    const c4 = this.createChart('chart-load-status', 'doughnut',
+      this.wellyCharts.loadStatus.labels,
+      this.wellyCharts.loadStatus.values,
+      'TripSheets');
+
+    if (c1) this.chartInstances.push(c1);
+    if (c2) this.chartInstances.push(c2);
+    if (c3) this.chartInstances.push(c3);
+    if (c4) this.chartInstances.push(c4);
+  }
+
+  private createChart(canvasId: string, type: 'doughnut' | 'bar', labels: string[], values: number[], label: string, horizontal = false): Chart | null {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (!canvas || !labels?.length) return null;
+
+    const colors = labels.map((_, i) => this.chartColors[i % this.chartColors.length]);
+
+    if (type === 'doughnut') {
+      return new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12, boxWidth: 12 } }
+          }
+        }
+      });
+    } else {
+      return new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label,
+            data: values,
+            backgroundColor: colors,
+            borderRadius: 6,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          indexAxis: horizontal ? 'y' : 'x',
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { grid: { display: !horizontal }, ticks: { font: { size: 10 } } },
+            y: { grid: { display: horizontal }, ticks: { font: { size: 10 } } }
+          }
+        }
+      });
+    }
+  }
+
+  async downloadWellyPdf(): Promise<void> {
+    const element = document.getElementById('welly-analysis-content');
+    if (!element) return;
+
+    this.snackBar.open('Generating PDF...', '', { duration: 2000 });
+
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#f5f5f7',
+        logging: false
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth() - 20;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pageHeight = pdf.internal.pageSize.getHeight() - 20;
+
+      let yOffset = 10;
+      let remainingHeight = pdfHeight;
+
+      // Add title
+      pdf.setFontSize(10);
+      pdf.setTextColor(100);
+      pdf.text(`ProMed Technologies — Welly Stock Analysis`, 10, 8);
+      pdf.text(`${this.selectedWarehouse?.name || 'Warehouse'} — ${new Date().toLocaleDateString()}`, 10, 13);
+      yOffset = 16;
+
+      // Multi-page support
+      while (remainingHeight > 0) {
+        const sourceY = (pdfHeight - remainingHeight) * (canvas.height / pdfHeight);
+        const sourceHeight = Math.min(pageHeight, remainingHeight) * (canvas.height / pdfHeight);
+
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sourceHeight;
+        const ctx = pageCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+          const pageImgData = pageCanvas.toDataURL('image/png');
+          const drawHeight = Math.min(pageHeight, remainingHeight);
+          pdf.addImage(pageImgData, 'PNG', 10, yOffset, pdfWidth, drawHeight);
+        }
+
+        remainingHeight -= pageHeight;
+        if (remainingHeight > 0) {
+          pdf.addPage();
+          yOffset = 10;
+        }
+      }
+
+      const filename = `Stock-Analysis-${(this.selectedWarehouse?.name || 'Report').replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(filename);
+      this.snackBar.open('PDF downloaded ✓', 'Close', { duration: 2000 });
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      this.snackBar.open('Failed to generate PDF. Please try again.', 'Close', { duration: 3000 });
+    }
   }
 
   copyWellyResult(): void {

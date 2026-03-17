@@ -945,6 +945,223 @@ Return ONLY the cleaned HTML content, no explanations or preamble.",
             }
         }
 
+        /// <summary>
+        /// Comprehensive stock analysis with charts — pulls BuildingInventory + Invoices + TripSheets
+        /// </summary>
+        [HttpPost("welly-stock-comprehensive")]
+        public async Task<IActionResult> WellyStockComprehensive([FromBody] ComprehensiveStockRequest request)
+        {
+            try
+            {
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (!useLocalLlm)
+                    return StatusCode(503, new { error = "AI service is not available. Please try again later." });
+
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // 1. Get warehouse
+                var warehouse = await db.Warehouses.FindAsync(request.WarehouseId);
+                if (warehouse == null)
+                    return NotFound(new { error = "Warehouse not found" });
+
+                // 2. Get buildings with inventory
+                var buildings = await db.WarehouseBuildings
+                    .Where(b => b.WarehouseId == request.WarehouseId && b.IsActive)
+                    .Include(b => b.Inventory)
+                    .ToListAsync();
+
+                var allInventory = buildings.SelectMany(b => b.Inventory).ToList();
+
+                // 3. Get loads/tripsheets for this warehouse
+                var loads = await db.Loads
+                    .Where(l => l.WarehouseId == request.WarehouseId)
+                    .ToListAsync();
+
+                // 4. Get invoices linked to loads for this warehouse
+                var invoices = await db.Invoices
+                    .Where(i => i.Load != null && i.Load.WarehouseId == request.WarehouseId)
+                    .Include(i => i.LineItems)
+                    .ToListAsync();
+
+                // Also get invoices from ImportedInvoices linked to this warehouse's loads
+                var loadIds = loads.Select(l => l.Id).ToList();
+                var importedInvoices = loadIds.Any()
+                    ? await db.ImportedInvoices
+                        .Where(ii => ii.LoadId != null && loadIds.Contains(ii.LoadId.Value))
+                        .ToListAsync()
+                    : new List<Models.Logistics.ImportedInvoice>();
+
+                // ─── Compute chart data ───
+
+                // Chart 1: Stock Value by Building (pie)
+                var stockByBuilding = buildings
+                    .Select(b => new
+                    {
+                        label = b.Name,
+                        value = Math.Round((double)b.Inventory.Sum(i => i.QuantityOnHand * (i.UnitCost ?? 0m)), 2)
+                    })
+                    .Where(x => x.value > 0)
+                    .OrderByDescending(x => x.value)
+                    .ToList();
+
+                // Chart 2: Top 10 Items by Stock Value (bar)
+                var topItems = allInventory
+                    .Where(i => i.QuantityOnHand > 0 && (i.UnitCost ?? 0) > 0)
+                    .OrderByDescending(i => i.QuantityOnHand * (i.UnitCost ?? 0))
+                    .Take(10)
+                    .Select(i => new
+                    {
+                        label = i.ItemCode.Length > 15 ? i.ItemCode.Substring(0, 15) : i.ItemCode,
+                        value = Math.Round((double)(i.QuantityOnHand * (i.UnitCost ?? 0)), 2)
+                    })
+                    .ToList();
+
+                // Chart 3: Invoice Status (pie)
+                var invoiceStatus = invoices
+                    .GroupBy(i => i.Status ?? "Unknown")
+                    .Select(g => new { label = g.Key, value = (double)g.Count() })
+                    .OrderByDescending(x => x.value)
+                    .ToList();
+
+                // Chart 4: TripSheet/Load Status (pie)
+                var loadStatus = loads
+                    .GroupBy(l => l.Status ?? "Unknown")
+                    .Select(g => new { label = g.Key, value = (double)g.Count() })
+                    .OrderByDescending(x => x.value)
+                    .ToList();
+
+                // ─── Build LLM context ───
+                var contentBuilder = new StringBuilder();
+                contentBuilder.AppendLine($"=== WAREHOUSE: {warehouse.Name} ===");
+                contentBuilder.AppendLine($"Province: {warehouse.Province ?? "N/A"}");
+                contentBuilder.AppendLine($"City: {warehouse.City ?? "N/A"}");
+                contentBuilder.AppendLine($"Buildings: {buildings.Count}");
+
+                // Inventory summary
+                var totalValue = allInventory.Sum(i => i.QuantityOnHand * (i.UnitCost ?? 0m));
+                var itemsWithStock = allInventory.Count(i => i.QuantityOnHand > 0);
+                var lowStockItems = allInventory.Where(i => i.ReorderLevel.HasValue && i.ReorderLevel > 0 && i.QuantityOnHand <= i.ReorderLevel).ToList();
+
+                contentBuilder.AppendLine($"\n=== INVENTORY SUMMARY ===");
+                contentBuilder.AppendLine($"Total SKUs: {allInventory.Count}");
+                contentBuilder.AppendLine($"Items with stock: {itemsWithStock}");
+                contentBuilder.AppendLine($"Total stock value: R{totalValue:N2}");
+                contentBuilder.AppendLine($"Low stock items (at or below reorder level): {lowStockItems.Count}");
+
+                if (lowStockItems.Any())
+                {
+                    contentBuilder.AppendLine("\nCritical low-stock items:");
+                    foreach (var item in lowStockItems.Take(20))
+                    {
+                        var bldg = buildings.FirstOrDefault(b => b.Id == item.BuildingId);
+                        contentBuilder.AppendLine($"  - [{bldg?.Code ?? "?"}] {item.ItemCode}: {item.ItemDescription ?? "N/A"}, QTY={item.QuantityOnHand}, Reorder={item.ReorderLevel}, UOM={item.Uom}");
+                    }
+                }
+
+                // Per-building breakdown
+                foreach (var building in buildings)
+                {
+                    var inv = building.Inventory;
+                    var bldgValue = inv.Sum(i => i.QuantityOnHand * (i.UnitCost ?? 0m));
+                    contentBuilder.AppendLine($"\n--- {building.Name} ({building.Code}) ---");
+                    contentBuilder.AppendLine($"  Total items: {inv.Count}, With stock: {inv.Count(i => i.QuantityOnHand > 0)}, Value: R{bldgValue:N2}");
+                }
+
+                // Invoice data
+                contentBuilder.AppendLine($"\n=== INVOICES ({invoices.Count} total) ===");
+                if (invoices.Any())
+                {
+                    foreach (var grp in invoices.GroupBy(i => i.Status))
+                    {
+                        contentBuilder.AppendLine($"  {grp.Key}: {grp.Count()} invoices, total R{grp.Sum(i => i.Total):N2}");
+                    }
+                    contentBuilder.AppendLine($"  Outstanding amount: R{invoices.Where(i => i.Status == "Unpaid" || i.Status == "Overdue" || i.Status == "Partially Paid").Sum(i => i.Total - i.AmountPaid):N2}");
+                }
+                else
+                {
+                    contentBuilder.AppendLine("  No invoices linked to this warehouse.");
+                }
+
+                // TripSheet/Load data
+                contentBuilder.AppendLine($"\n=== TRIPSHEETS / LOADS ({loads.Count} total) ===");
+                if (loads.Any())
+                {
+                    foreach (var grp in loads.GroupBy(l => l.Status))
+                    {
+                        contentBuilder.AppendLine($"  {grp.Key}: {grp.Count()} loads");
+                    }
+                    var delivered = loads.Count(l => l.Status == "Delivered");
+                    var total = loads.Count;
+                    contentBuilder.AppendLine($"  Delivery rate: {(total > 0 ? (delivered * 100.0 / total).ToString("F1") : "0")}%");
+                }
+                else
+                {
+                    contentBuilder.AppendLine("  No tripsheets linked to this warehouse.");
+                }
+
+                // Imported invoices summary
+                if (importedInvoices.Any())
+                {
+                    contentBuilder.AppendLine($"\n=== IMPORTED ERP INVOICES ({importedInvoices.Count} total) ===");
+                    contentBuilder.AppendLine($"  Total sales value: R{importedInvoices.Sum(ii => ii.SalesAmount):N2}");
+                    contentBuilder.AppendLine($"  Net sales: R{importedInvoices.Sum(ii => ii.NetSales):N2}");
+                }
+
+                // ─── Call LLM ───
+                var systemPrompt = @"You are Welly, an AI inventory and logistics analyst for ProMed Technologies (medical supplies). Analyze the comprehensive warehouse data below covering inventory, invoices, and tripsheets/deliveries.
+
+Provide a structured analysis with these sections:
+1. **Stock Health Overview** — Overall inventory status, utilization rate, stock coverage
+2. **Critical Items** — Items below reorder level needing immediate restocking
+3. **Stock Value Analysis** — Value distribution across buildings, high-value items to watch
+4. **Invoice & Revenue Insights** — Payment status, outstanding amounts, collection priorities
+5. **Logistics Performance** — Delivery completion rate, pending dispatches, fulfillment efficiency
+6. **Top Recommendations** — 3-5 actionable steps to improve operations
+
+Use ZAR (R) for currency. Be concise, use bullet points. Focus on actionable insights.";
+
+                var analysis = await _localLlmService.AnalyzeDocumentAsync(systemPrompt, contentBuilder.ToString(), HttpContext.RequestAborted);
+
+                // ─── Return response ───
+                return Ok(new
+                {
+                    analysis,
+                    charts = new
+                    {
+                        stockByBuilding = new { labels = stockByBuilding.Select(x => x.label), values = stockByBuilding.Select(x => x.value) },
+                        topItems = new { labels = topItems.Select(x => x.label), values = topItems.Select(x => x.value) },
+                        invoiceStatus = new { labels = invoiceStatus.Select(x => x.label), values = invoiceStatus.Select(x => x.value) },
+                        loadStatus = new { labels = loadStatus.Select(x => x.label), values = loadStatus.Select(x => x.value) }
+                    },
+                    summary = new
+                    {
+                        totalSkus = allInventory.Count,
+                        itemsWithStock,
+                        totalStockValue = Math.Round((double)totalValue, 2),
+                        lowStockCount = lowStockItems.Count,
+                        totalInvoices = invoices.Count,
+                        invoiceValue = Math.Round((double)invoices.Sum(i => i.Total), 2),
+                        outstandingAmount = Math.Round((double)invoices.Where(i => i.Status == "Unpaid" || i.Status == "Overdue" || i.Status == "Partially Paid").Sum(i => i.Total - i.AmountPaid), 2),
+                        totalLoads = loads.Count,
+                        deliveredLoads = loads.Count(l => l.Status == "Delivered"),
+                        deliveryRate = loads.Count > 0 ? Math.Round(loads.Count(l => l.Status == "Delivered") * 100.0 / loads.Count, 1) : 0
+                    }
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, new { error = "Request was cancelled" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "WellyStockComprehensive: Error processing comprehensive stock analysis");
+                return StatusCode(500, new { error = "Failed to analyze stock data. Please try again." });
+            }
+        }
+
         private async Task WriteSSEToken(string token)
         {
             var data = JsonSerializer.Serialize(new { token = token });
@@ -1066,5 +1283,10 @@ Return ONLY the cleaned HTML content, no explanations or preamble.",
         public string AssistType { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public string? TargetLanguage { get; set; }
+    }
+
+    public class ComprehensiveStockRequest
+    {
+        public int WarehouseId { get; set; }
     }
 }
