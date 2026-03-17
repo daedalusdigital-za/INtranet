@@ -1209,14 +1209,17 @@ Use ZAR (R) for currency. Be concise, use bullet points. Focus on actionable ins
 
                 // Chart 2: Top 10 Customers by Revenue
                 var topCustomers = invoices
-                    .GroupBy(i => i.CustomerName)
-                    .Select(g => new { label = g.Key.Length > 20 ? g.Key.Substring(0, 20) + "…" : g.Key, value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
+                    .GroupBy(i => i.CustomerName ?? "Unknown")
+                    .Select(g => new { label = g.Key.Length > 25 ? g.Key.Substring(0, 25) + "…" : g.Key, value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
                     .OrderByDescending(x => x.value)
                     .Take(10)
                     .ToList();
 
                 // Chart 3: Sales by Province
-                var customerProvinceMap = customers.ToDictionary(c => c.CustomerCode ?? "", c => c.Province ?? "Unknown");
+                var customerProvinceMap = customers
+                    .Where(c => !string.IsNullOrEmpty(c.CustomerCode))
+                    .GroupBy(c => c.CustomerCode!)
+                    .ToDictionary(g => g.Key, g => g.First().Province ?? "Unknown");
                 var salesByProvince = invoices
                     .GroupBy(i => {
                         if (!string.IsNullOrEmpty(i.DeliveryProvince)) return i.DeliveryProvince;
@@ -1230,8 +1233,8 @@ Use ZAR (R) for currency. Be concise, use bullet points. Focus on actionable ins
 
                 // Chart 4: Top 10 Products by Revenue
                 var topProducts = invoices
-                    .GroupBy(i => i.ProductDescription)
-                    .Select(g => new { label = g.Key.Length > 25 ? g.Key.Substring(0, 25) + "…" : g.Key, value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
+                    .GroupBy(i => i.ProductDescription ?? "Unknown")
+                    .Select(g => new { label = g.Key.Length > 30 ? g.Key.Substring(0, 30) + "…" : g.Key, value = Math.Round((double)g.Sum(i => i.SalesAmount), 2) })
                     .OrderByDescending(x => x.value)
                     .Take(10)
                     .ToList();
