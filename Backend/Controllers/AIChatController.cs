@@ -4,6 +4,7 @@ using ClosedXML.Excel;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using System.Diagnostics;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -26,6 +27,7 @@ namespace ProjectTracker.API.Controllers
         private readonly IAIActionService _actionService;
         private readonly IConfiguration _configuration;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IReportCacheService _reportCacheService;
 
         public AIChatController(
             ILogger<AIChatController> logger, 
@@ -35,7 +37,8 @@ namespace ProjectTracker.API.Controllers
             ILocalLlmService localLlmService,
             IAIActionService actionService,
             IConfiguration configuration,
-            IServiceScopeFactory scopeFactory)
+            IServiceScopeFactory scopeFactory,
+            IReportCacheService reportCacheService)
         {
             _logger = logger;
             _aiService = aiService;
@@ -45,6 +48,7 @@ namespace ProjectTracker.API.Controllers
             _actionService = actionService;
             _configuration = configuration;
             _scopeFactory = scopeFactory;
+            _reportCacheService = reportCacheService;
         }
 
         /// <summary>
@@ -1181,6 +1185,38 @@ Use ZAR (R) for currency. Be concise, use bullet points. Focus on actionable ins
 
                 var fromDate = request.FromDate ?? DateTime.UtcNow.AddDays(-30);
                 var toDate = request.ToDate ?? DateTime.UtcNow;
+                var reportType = request.ReportType ?? "sales-summary";
+
+                // ─── Check report cache first ───
+                try
+                {
+                    var cached = await _reportCacheService.GetCachedReportAsync(reportType, fromDate, toDate);
+                    if (cached != null)
+                    {
+                        _logger.LogInformation("WellySalesReport: Cache HIT for {ReportType} ({From:dd MMM} → {To:dd MMM}). Original generation took {Ms}ms, hit #{HitCount}",
+                            reportType, fromDate, toDate, cached.OriginalGenerationTimeMs, cached.HitCount);
+
+                        var cachedResult = JsonSerializer.Deserialize<JsonElement>(cached.ResultJson);
+                        return Ok(new
+                        {
+                            analysis = cachedResult.GetProperty("analysis").GetString(),
+                            reportType = cachedResult.GetProperty("reportType").GetString(),
+                            charts = cachedResult.GetProperty("charts"),
+                            summary = cachedResult.GetProperty("summary"),
+                            fromCache = true,
+                            cachedAt = cached.GeneratedAt,
+                            originalGenerationMs = cached.OriginalGenerationTimeMs,
+                            cacheHitCount = cached.HitCount
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "WellySalesReport: Cache lookup failed, proceeding with fresh generation");
+                }
+
+                // ─── Cache MISS — generate fresh report ───
+                var stopwatch = Stopwatch.StartNew();
 
                 // Pull all imported invoices within the date range
                 var invoices = await db.ImportedInvoices
@@ -1197,7 +1233,6 @@ Use ZAR (R) for currency. Be concise, use bullet points. Focus on actionable ins
                     .ToListAsync();
 
                 // ─── Compute data per report type ───
-                var reportType = request.ReportType ?? "sales-summary";
 
                 // Chart 1: Sales by Company (always computed)
                 var salesByCompany = invoices
@@ -1366,13 +1401,16 @@ Use ZAR (R) currency. Focus on actionable product insights.",
 
                 var analysis = await _localLlmService.AnalyzeDocumentAsync(systemPrompt, contentBuilder.ToString(), HttpContext.RequestAborted);
 
+                stopwatch.Stop();
+                var generationTimeMs = (int)stopwatch.ElapsedMilliseconds;
+
                 // ─── Compute summary metrics ───
                 var totalRevenue = (double)invoices.Sum(i => i.SalesAmount);
                 var netSales = (double)invoices.Sum(i => i.SalesAmount - i.SalesReturns);
                 var grossProfit = (double)invoices.Sum(i => i.SalesAmount - i.SalesReturns - i.CostOfSales);
                 var marginPct = netSales > 0 ? Math.Round(grossProfit / netSales * 100, 1) : 0;
 
-                return Ok(new
+                var result = new
                 {
                     analysis,
                     reportType,
@@ -1398,6 +1436,29 @@ Use ZAR (R) currency. Focus on actionable product insights.",
                         totalCancellations = cancellations.Count,
                         cancellationValue = Math.Round((double)cancellations.Sum(c => c.OrderAmount), 2)
                     }
+                };
+
+                // ─── Store in cache for next time ───
+                try
+                {
+                    var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? User.FindFirst("name")?.Value ?? "system";
+                    await _reportCacheService.StoreCachedReportAsync(reportType, fromDate, toDate, result, generationTimeMs, userName);
+                    _logger.LogInformation("WellySalesReport: Cached {ReportType} report ({From:dd MMM} → {To:dd MMM}). Generation took {Ms}ms",
+                        reportType, fromDate, toDate, generationTimeMs);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "WellySalesReport: Failed to cache report, returning fresh result anyway");
+                }
+
+                return Ok(new
+                {
+                    result.analysis,
+                    result.reportType,
+                    result.charts,
+                    result.summary,
+                    fromCache = false,
+                    generationTimeMs
                 });
             }
             catch (OperationCanceledException)

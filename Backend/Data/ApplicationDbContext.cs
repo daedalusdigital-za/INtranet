@@ -126,6 +126,9 @@ namespace ProjectTracker.API.Data
         public DbSet<DocumentSnapshot> DocumentSnapshots { get; set; }
         public DbSet<DocumentCollaborator> DocumentCollaborators { get; set; }
 
+        // Report Cache System
+        public DbSet<ReportCache> ReportCaches { get; set; }
+
         // Tenders Management System
         public DbSet<Models.Tenders.Tender> Tenders { get; set; }
         public DbSet<Models.Tenders.TenderDocument> TenderDocuments { get; set; }
@@ -685,6 +688,14 @@ namespace ProjectTracker.API.Data
                 .WithMany()
                 .HasForeignKey(c => c.UserId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            // Report Cache - unique index on CacheKey for fast lookups
+            modelBuilder.Entity<ReportCache>(entity =>
+            {
+                entity.HasIndex(e => e.CacheKey).IsUnique();
+                entity.HasIndex(e => e.ExpiresAt); // For cleanup queries
+                entity.HasIndex(e => new { e.ReportType, e.FromDate, e.ToDate }); // For browsing
+            });
         }
     }
 }

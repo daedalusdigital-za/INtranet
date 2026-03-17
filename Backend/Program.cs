@@ -188,6 +188,9 @@ builder.Services.AddScoped<ProjectTracker.API.Services.Google.WebSearchService>(
 // Sales Report Import Service
 builder.Services.AddScoped<SalesReportImportService>();
 
+// Report Cache Service — caches generated sales reports for fast repeat lookups
+builder.Services.AddScoped<IReportCacheService, ReportCacheService>();
+
 // Stock on Hand Import Service
 builder.Services.AddScoped<StockOnHandImportService>();
 

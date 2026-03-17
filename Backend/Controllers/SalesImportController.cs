@@ -12,13 +12,16 @@ namespace ProjectTracker.API.Controllers;
 public class SalesImportController : ControllerBase
 {
     private readonly SalesReportImportService _importService;
+    private readonly IReportCacheService _reportCacheService;
     private readonly ILogger<SalesImportController> _logger;
 
     public SalesImportController(
         SalesReportImportService importService,
+        IReportCacheService reportCacheService,
         ILogger<SalesImportController> logger)
     {
         _importService = importService;
+        _reportCacheService = reportCacheService;
         _logger = logger;
     }
 
@@ -149,6 +152,17 @@ public class SalesImportController : ControllerBase
         if (!result.Success)
         {
             return BadRequest(result);
+        }
+
+        // Invalidate all cached sales reports since new data has been imported
+        try
+        {
+            await _reportCacheService.InvalidateAllAsync();
+            _logger.LogInformation("Report cache invalidated after import {ImportId} commit ({Count} transactions)", importId, result.TransactionsCommitted);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to invalidate report cache after import commit");
         }
 
         return Ok(result);
