@@ -914,6 +914,16 @@ Be specific and actionable.",
                     "translate-message" => $"You are Welly, an AI translator. Translate the following message to {request.TargetLanguage ?? "Afrikaans"}. Keep the tone appropriate for workplace messaging. Return ONLY the translated text.",
                     "summarize-messages" => "You are Welly, an AI assistant. Summarize the following conversation thread, highlighting key decisions, action items, and important information. Use bullet points.",
 
+                    // OCR cleanup
+                    "ocr-cleanup" => @"You are Welly, an AI document assistant. The following text was extracted from a scanned document using OCR and may contain errors, garbled characters, or formatting issues. Please:
+1. Fix any obvious OCR errors, misspellings, and garbled text
+2. Reconstruct proper paragraphs and sentence structure
+3. Preserve the original meaning and content as closely as possible
+4. Format the output as clean, well-structured HTML using <h1>, <h2>, <h3> for headings, <p> for paragraphs, <ul>/<li> for lists, and <strong> for emphasis
+5. Remove any artifacts like random symbols, repeated characters, or page numbers
+6. If the text contains tables, try to reconstruct them using <table>, <tr>, <td> tags
+Return ONLY the cleaned HTML content, no explanations or preamble.",
+
                     _ => "You are Welly, a helpful AI assistant for ProMed Technologies. Help the user with their request."
                 };
 

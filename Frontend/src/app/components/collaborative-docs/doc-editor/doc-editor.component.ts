@@ -89,6 +89,10 @@ import { Awareness } from 'y-protocols/awareness';
                   <mat-icon>picture_as_pdf</mat-icon>
                   <span>Import PDF</span>
                 </button>
+                <button mat-menu-item (click)="triggerScanImport()">
+                  <mat-icon>document_scanner</mat-icon>
+                  <span>Import Scanned Document</span>
+                </button>
                 <button mat-menu-item (click)="exportAsHtml()">
                   <mat-icon>download</mat-icon>
                   <span>Export as HTML</span>
@@ -330,6 +334,11 @@ import { Awareness } from 'y-protocols/awareness';
                   <span>PDF</span>
                 </button>
                 <input type="file" #pdfFileInput hidden accept=".pdf" (change)="importPdf($event)">
+                <button class="ribbon-btn large" (click)="triggerScanImport()" matTooltip="Import Scanned Document (OCR)">
+                  <mat-icon>document_scanner</mat-icon>
+                  <span>Scan</span>
+                </button>
+                <input type="file" #scanFileInput hidden accept=".png,.jpg,.jpeg,.bmp,.tiff,.tif,.webp,.pdf" (change)="importScanned($event)">
               </div>
               <div class="ribbon-group-label">Import</div>
             </div>
@@ -505,6 +514,21 @@ import { Awareness } from 'y-protocols/awareness';
         <div class="loading-overlay">
           <mat-spinner diameter="48"></mat-spinner>
           <p>Loading document...</p>
+        </div>
+      }
+
+      <!-- OCR Scanning overlay -->
+      @if (ocrScanning) {
+        <div class="loading-overlay ocr-overlay">
+          <mat-icon class="ocr-scan-icon">document_scanner</mat-icon>
+          <mat-spinner diameter="48"></mat-spinner>
+          <p class="ocr-status">{{ ocrStatusMessage }}</p>
+          @if (ocrProgress > 0) {
+            <div class="ocr-progress-bar">
+              <div class="ocr-progress-fill" [style.width.%]="ocrProgress"></div>
+            </div>
+            <span class="ocr-progress-text">{{ ocrProgress }}%</span>
+          }
         </div>
       }
 
@@ -1156,6 +1180,51 @@ import { Awareness } from 'y-protocols/awareness';
       color: #5f6368;
     }
 
+    .ocr-overlay {
+      background: rgba(255, 255, 255, 0.95) !important;
+      gap: 8px;
+    }
+
+    .ocr-scan-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #667eea;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+
+    .ocr-status {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+      margin: 4px 0 !important;
+    }
+
+    .ocr-progress-bar {
+      width: 250px;
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .ocr-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .ocr-progress-text {
+      font-size: 12px;
+      color: #5f6368;
+    }
+
     /* Editor Wrapper */
     .editor-wrapper {
       flex: 1;
@@ -1560,6 +1629,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('editorElement') editorElement!: ElementRef;
   @ViewChild('docxFileInput') docxFileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('pdfFileInput') pdfFileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('scanFileInput') scanFileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('imageInput') imageInput!: ElementRef<HTMLInputElement>;
 
   documentId!: number;
@@ -1622,6 +1692,11 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   wellyLastAction = '';
   wellyActionLabel = '';
   wellyGeneratePrompt = '';
+
+  // OCR Scanning
+  ocrScanning = false;
+  ocrStatusMessage = '';
+  ocrProgress = 0;
 
   constructor(
     private route: ActivatedRoute,
@@ -2357,6 +2432,174 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  // ═══════════════════════════════════════════
+  // Scanned Document Import (OCR)
+  // ═══════════════════════════════════════════
+
+  triggerScanImport(): void {
+    this.scanFileInput.nativeElement.click();
+  }
+
+  async importScanned(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const validExts = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.webp', '.pdf'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!validExts.includes(ext)) {
+      this.snackBar.open('Please select an image or PDF file', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.ocrScanning = true;
+    this.ocrProgress = 0;
+    this.ocrStatusMessage = 'Preparing document for scanning...';
+
+    try {
+      let imageSources: (string | Blob)[] = [];
+
+      if (ext === '.pdf') {
+        // Render PDF pages to images for OCR
+        this.ocrStatusMessage = 'Rendering PDF pages...';
+        imageSources = await this.renderPdfToImages(file);
+      } else {
+        imageSources = [file];
+      }
+
+      if (imageSources.length === 0) {
+        this.snackBar.open('Could not process the document', 'Close', { duration: 3000 });
+        return;
+      }
+
+      // Run OCR with Tesseract.js
+      this.ocrStatusMessage = 'Loading OCR engine...';
+      const Tesseract = await import('tesseract.js');
+
+      let fullText = '';
+      const totalPages = imageSources.length;
+
+      for (let i = 0; i < totalPages; i++) {
+        this.ocrStatusMessage = totalPages > 1
+          ? `Scanning page ${i + 1} of ${totalPages}...`
+          : 'Scanning document...';
+
+        const result = await Tesseract.recognize(imageSources[i] as any, 'eng', {
+          logger: (m: any) => {
+            if (m.status === 'recognizing text') {
+              const pageProgress = Math.round(m.progress * 100);
+              const overallProgress = Math.round(((i + m.progress) / totalPages) * 100);
+              this.ocrProgress = overallProgress;
+            }
+          }
+        });
+
+        if (result.data.text.trim()) {
+          if (i > 0) fullText += '\n\n---\n\n';
+          fullText += result.data.text.trim();
+        }
+      }
+
+      if (!fullText.trim()) {
+        this.snackBar.open('No text could be extracted from the scanned document', 'Close', { duration: 4000 });
+        return;
+      }
+
+      // Send to Welly for cleanup and formatting
+      this.ocrStatusMessage = 'Welly is cleaning up the extracted text...';
+      this.ocrProgress = 0;
+
+      const cleanedHtml = await this.wellyCleanupOcrText(fullText);
+
+      if (this.editor && cleanedHtml) {
+        this.editor.chain().focus().setContent(cleanedHtml).run();
+        this.snackBar.open(
+          `Scanned document imported! (${totalPages} page${totalPages > 1 ? 's' : ''})`,
+          'Close',
+          { duration: 4000 }
+        );
+        this.autosaveSubject.next();
+      }
+    } catch (error) {
+      console.error('Error scanning document:', error);
+      this.snackBar.open('Failed to scan document. Please try again.', 'Close', { duration: 3000 });
+    } finally {
+      this.ocrScanning = false;
+      this.ocrProgress = 0;
+      this.ocrStatusMessage = '';
+      input.value = '';
+    }
+  }
+
+  private async renderPdfToImages(file: File): Promise<Blob[]> {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const blobs: Blob[] = [];
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      // Render at 2x scale for better OCR accuracy
+      const scale = 2.0;
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d')!;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/png');
+      });
+      blobs.push(blob);
+    }
+
+    return blobs;
+  }
+
+  private wellyCleanupOcrText(rawText: string): Promise<string> {
+    return new Promise((resolve) => {
+      this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
+        assistType: 'ocr-cleanup',
+        content: rawText
+      }).subscribe({
+        next: (res) => {
+          // Convert the cleaned text to HTML paragraphs
+          let html = res.result;
+          // If Welly returned plain text, convert to paragraphs
+          if (!html.includes('<p>') && !html.includes('<h')) {
+            html = html
+              .split('\n\n')
+              .filter((p: string) => p.trim())
+              .map((p: string) => {
+                const trimmed = p.trim();
+                // Detect headings from common OCR patterns
+                if (trimmed === trimmed.toUpperCase() && trimmed.length < 100 && trimmed.length > 2) {
+                  return `<h2>${this.escapeHtml(trimmed)}</h2>`;
+                }
+                return `<p>${this.escapeHtml(trimmed)}</p>`;
+              })
+              .join('');
+          }
+          resolve(html);
+        },
+        error: () => {
+          // If Welly fails, fall back to raw text formatted as paragraphs
+          const html = rawText
+            .split('\n\n')
+            .filter(p => p.trim())
+            .map(p => `<p>${this.escapeHtml(p.trim())}</p>`)
+            .join('');
+          resolve(html);
+        }
+      });
+    });
   }
 
   // ═══════════════════════════════════════════
