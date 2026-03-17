@@ -449,6 +449,14 @@ interface WarehouseInventory {
       background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
     }
 
+    .warehouse-card-modern.warehouse-5 .warehouse-gradient-bg {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .warehouse-card-modern.warehouse-6 .warehouse-gradient-bg {
+      background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+    }
+
     .warehouse-card-modern::before {
       content: '';
       position: absolute;
@@ -1483,9 +1491,9 @@ export class StockManagementComponent implements OnInit {
               </td>
             </ng-container>
 
-            <!-- Company Column -->
+            <!-- Division Column -->
             <ng-container matColumnDef="category">
-              <th mat-header-cell *matHeaderCellDef>Company</th>
+              <th mat-header-cell *matHeaderCellDef>Division</th>
               <td mat-cell *matCellDef="let item">
                 <mat-chip [style.background]="getCategoryColor(item.category)" style="color: white;">
                   {{ item.category }}
@@ -1505,7 +1513,7 @@ export class StockManagementComponent implements OnInit {
             <ng-container matColumnDef="unitPrice">
               <th mat-header-cell *matHeaderCellDef>UOM</th>
               <td mat-cell *matCellDef="let item">
-                <span class="price-value">R{{ item.unitPrice.toLocaleString() }}</span>
+                <span class="price-value">{{ item.uom || 'Each' }}</span>
               </td>
             </ng-container>
 
@@ -2514,7 +2522,7 @@ export class StockManagementComponent implements OnInit {
   `]
 })
 export class WarehouseDetailsDialog implements OnInit, OnDestroy {
-  displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'status'];
+  displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'unitPrice', 'status'];
   searchQuery: string = '';
   selection = new SelectionModel<any>(true, []);
   showTransferDialog = false;
@@ -2607,7 +2615,9 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
             location: item.buildingName,
             quantity: item.qtyOnHand || 0,
             reorderLevel: item.reorderLevel,
-            binLocation: item.binLocation || item.uom,
+            binLocation: item.binLocation,
+            uom: item.uom || 'Each',
+            unitPrice: 0,
             totalCost: item.totalCost,
             unitCost: item.unitCost,
             qtyOnPO: item.qtyOnOrder,
@@ -2834,9 +2844,12 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
   getCategoryColor(category: string): string {
     const colors: any = {
       'Access': '#667eea',
+      'ProMed': '#f5576c',
       'Promed': '#f5576c',
-      'Pharama': '#4facfe',
-      'Sebenzani': '#43e97b'
+      'SEB': '#43e97b',
+      'Sebenzani': '#43e97b',
+      'KOG': '#ff6b35',
+      'Pharama': '#4facfe'
     };
     return colors[category] || '#999';
   }
@@ -2844,9 +2857,12 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
   getCategoryIcon(category: string): string {
     const icons: any = {
       'Access': 'business',
+      'ProMed': 'medical_services',
       'Promed': 'medical_services',
-      'Pharama': 'local_pharmacy',
-      'Sebenzani': 'store'
+      'SEB': 'store',
+      'Sebenzani': 'store',
+      'KOG': 'local_shipping',
+      'Pharama': 'local_pharmacy'
     };
     return icons[category] || 'inventory_2';
   }
