@@ -1803,13 +1803,13 @@ interface SalesReportResponse {
   styles: [`
     :host {
       display: block;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
+      background: linear-gradient(160deg, #1976d2 0%, #1565c0 40%, #0d47a1 100%);
       min-height: 100vh;
     }
 
     .sales-dashboard {
-      padding: 24px;
-      padding-top: 88px;
+      padding: 28px;
+      padding-top: 90px;
       min-height: calc(100vh - 64px);
       max-width: 1600px;
       margin: 0 auto;
@@ -1832,16 +1832,22 @@ interface SalesReportResponse {
     }
 
     .header-icon-wrapper {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
+      width: 68px;
+      height: 68px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 18px;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+    }
+
+    .header-icon-wrapper:hover {
+      transform: scale(1.04);
     }
 
     .header-icon-wrapper mat-icon {
@@ -1854,15 +1860,17 @@ interface SalesReportResponse {
     .header-text-area h1 {
       margin: 0;
       color: white;
-      font-size: 32px;
+      font-size: 30px;
       font-weight: 700;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      letter-spacing: -0.3px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
     }
 
     .header-text-area .subtitle {
-      margin: 4px 0 0 0;
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 15px;
+      margin: 6px 0 0 0;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 14px;
+      letter-spacing: 0.1px;
     }
 
     .header-stats-row {
@@ -1874,11 +1882,17 @@ interface SalesReportResponse {
       display: flex;
       align-items: center;
       gap: 10px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding: 12px 18px;
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: background 0.25s ease;
+    }
+
+    .mini-stat:hover {
+      background: rgba(255, 255, 255, 0.2);
     }
 
     .mini-stat mat-icon {
@@ -1915,13 +1929,14 @@ interface SalesReportResponse {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 20px;
+      padding: 11px 20px;
       border: none;
       border-radius: 12px;
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.25s cubic-bezier(.4,0,.2,1);
+      letter-spacing: 0.1px;
     }
 
     .action-btn mat-icon {
@@ -2361,11 +2376,15 @@ interface SalesReportResponse {
     }
 
     .comparison-label {
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      background: rgba(255, 255, 255, 0.15);
-      padding: 6px 14px;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 6px 16px;
       border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      letter-spacing: 0.2px;
     }
 
     .company-cards-grid {
@@ -2379,8 +2398,9 @@ interface SalesReportResponse {
       border-radius: 16px;
       padding: 20px;
       cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s cubic-bezier(.4,0,.2,1);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.04);
       position: relative;
       overflow: hidden;
     }
@@ -2391,13 +2411,19 @@ interface SalesReportResponse {
       top: 0;
       left: 0;
       right: 0;
-      height: 4px;
+      height: 3px;
       background: var(--company-color);
+      transition: height 0.25s cubic-bezier(.4,0,.2,1);
+    }
+
+    .modern-company-card:hover::before {
+      height: 4px;
     }
 
     .modern-company-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+      border-color: rgba(0, 0, 0, 0.06);
     }
 
     .company-card-header {
@@ -2410,13 +2436,19 @@ interface SalesReportResponse {
     .company-badge {
       width: 42px;
       height: 42px;
-      border-radius: 12px;
+      border-radius: 11px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
       font-size: 18px;
       font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      transition: transform 0.2s ease;
+    }
+
+    .modern-company-card:hover .company-badge {
+      transform: scale(1.06);
     }
 
     .company-title {
@@ -2439,11 +2471,12 @@ interface SalesReportResponse {
     .trend-indicator {
       display: flex;
       align-items: center;
-      gap: 4px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-size: 13px;
+      gap: 3px;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12.5px;
       font-weight: 600;
+      letter-spacing: -0.2px;
     }
 
     .trend-indicator.up {
@@ -2554,23 +2587,26 @@ interface SalesReportResponse {
       display: flex;
       align-items: flex-start;
       gap: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-      transition: all 0.3s ease;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(0, 0, 0, 0.04);
+      transition: all 0.3s cubic-bezier(.4,0,.2,1);
     }
 
     .modern-stat-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+      transform: translateY(-3px);
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.04);
+      border-color: rgba(0, 0, 0, 0.06);
     }
 
     .stat-icon-wrapper {
-      width: 56px;
-      height: 56px;
+      width: 52px;
+      height: 52px;
       border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     .stat-icon-wrapper mat-icon {
@@ -2592,22 +2628,24 @@ interface SalesReportResponse {
     }
 
     .stat-value {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 700;
       color: #1a237e;
       line-height: 1.2;
+      letter-spacing: -0.5px;
     }
 
     .stat-label {
-      font-size: 14px;
-      color: #666;
+      font-size: 13px;
+      color: #78909c;
       margin-top: 4px;
+      letter-spacing: 0.1px;
     }
 
     .stat-progress {
       height: 4px;
-      background: #eee;
-      border-radius: 2px;
+      background: #e8eaf6;
+      border-radius: 4px;
       margin-top: 12px;
       overflow: hidden;
     }
@@ -2615,8 +2653,8 @@ interface SalesReportResponse {
     .stat-progress .progress-bar {
       height: 100%;
       background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-      border-radius: 2px;
-      transition: width 0.5s ease;
+      border-radius: 4px;
+      transition: width 0.8s cubic-bezier(.4,0,.2,1);
     }
 
     .stat-progress .progress-bar.pending {
@@ -2661,11 +2699,12 @@ interface SalesReportResponse {
     .main-content {
       border-radius: 20px;
       overflow: hidden;
-      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07), 0 1px 4px rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.04);
     }
 
     .tab-content {
-      padding: 24px;
+      padding: 24px 28px;
     }
 
     .section-header {
@@ -2678,8 +2717,9 @@ interface SalesReportResponse {
     .section-header h3 {
       margin: 0;
       color: #1a237e;
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 600;
+      letter-spacing: -0.2px;
     }
 
     .section-actions {
@@ -2721,14 +2761,14 @@ interface SalesReportResponse {
     }
 
     .order-card {
-      border-radius: 12px;
-      transition: transform 0.2s, box-shadow 0.2s;
+      border-radius: 14px;
+      transition: all 0.25s cubic-bezier(.4,0,.2,1);
       border-left: 4px solid #ccc;
     }
 
     .order-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
     }
 
     .order-card.priority-high { border-left-color: #f44336; }
@@ -2832,13 +2872,14 @@ interface SalesReportResponse {
       padding: 16px;
       border-radius: 12px;
       background: white;
-      border: 1px solid #e0e0e0;
-      transition: transform 0.2s;
+      border: 1px solid #e8e8e8;
+      transition: all 0.25s cubic-bezier(.4,0,.2,1);
     }
 
     .cancel-stat:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+      border-color: #d0d0d0;
     }
 
     .cancel-stat mat-icon {
@@ -2876,14 +2917,14 @@ interface SalesReportResponse {
     }
 
     .cancellation-card {
-      border-radius: 12px;
-      transition: transform 0.2s, box-shadow 0.2s;
+      border-radius: 14px;
+      transition: all 0.25s cubic-bezier(.4,0,.2,1);
       border-left: 4px solid #ccc;
     }
 
     .cancellation-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
     }
 
     .cancellation-card.status-pending { border-left-color: #ff9800; }
@@ -3030,8 +3071,8 @@ interface SalesReportResponse {
     /* Tables */
     .table-container {
       overflow-x: auto;
-      border-radius: 12px;
-      border: 1px solid #e0e0e0;
+      border-radius: 14px;
+      border: 1px solid #e8eaf6;
       background: white;
     }
 
@@ -3121,12 +3162,16 @@ interface SalesReportResponse {
       font-style: italic;
     }
 
+    tr.mat-mdc-row {
+      transition: background 0.15s ease;
+    }
+
     tr.mat-mdc-row:hover {
-      background: rgba(0, 0, 0, 0.04);
+      background: rgba(26, 35, 126, 0.03);
     }
 
     tr.mat-mdc-row.selected {
-      background: rgba(26, 35, 126, 0.08);
+      background: rgba(26, 35, 126, 0.07);
     }
 
     /* Status Chips */
@@ -3152,14 +3197,16 @@ interface SalesReportResponse {
     }
 
     .report-card {
-      border-radius: 12px;
+      border-radius: 14px;
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: all 0.25s cubic-bezier(.4,0,.2,1);
+      border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
     .report-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 28px rgba(26, 35, 126, 0.10);
+      border-color: rgba(26, 35, 126, 0.15);
     }
 
     .report-card mat-card-content {
@@ -3167,45 +3214,55 @@ interface SalesReportResponse {
       flex-direction: column;
       align-items: center;
       text-align: center;
-      padding: 24px;
+      padding: 28px 24px;
     }
 
     .report-card mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
+      font-size: 44px;
+      width: 44px;
+      height: 44px;
       color: #1a237e;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
+      transition: transform 0.25s ease;
+    }
+
+    .report-card:hover mat-icon {
+      transform: scale(1.08);
     }
 
     .report-card h4 {
-      margin: 0 0 8px 0;
+      margin: 0 0 6px 0;
       color: #1a237e;
+      font-size: 15px;
+      letter-spacing: -0.1px;
     }
 
     .report-card p {
       margin: 0;
       font-size: 12px;
-      color: #666;
+      color: #78909c;
+      line-height: 1.4;
     }
 
     .report-card.active {
       border: 2px solid #1a237e;
-      box-shadow: 0 4px 16px rgba(26, 35, 126, 0.2);
+      box-shadow: 0 6px 20px rgba(26, 35, 126, 0.18);
+      background: linear-gradient(180deg, #f8f9ff 0%, #ffffff 100%);
     }
 
     /* Welly Report Panel */
     .welly-report-panel {
       margin-top: 24px;
-      background: #f5f5f7;
+      background: #f8f9fa;
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-      animation: slideUp 0.3s ease-out;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      animation: slideUp 0.35s cubic-bezier(.4,0,.2,1);
     }
 
     @keyframes slideUp {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -3214,7 +3271,7 @@ interface SalesReportResponse {
       align-items: center;
       justify-content: space-between;
       padding: 14px 20px;
-      background: linear-gradient(135deg, #1a237e 0%, #4a148c 100%);
+      background: linear-gradient(135deg, #1a237e 0%, #311b92 100%);
       color: white;
     }
 
@@ -3279,7 +3336,14 @@ interface SalesReportResponse {
       display: flex;
       align-items: center;
       gap: 10px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.04);
+      transition: all 0.2s ease;
+    }
+
+    .report-summary-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      transform: translateY(-1px);
     }
 
     .report-summary-card mat-icon {
@@ -3319,18 +3383,24 @@ interface SalesReportResponse {
 
     .report-chart-card {
       background: white;
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.04);
+      transition: box-shadow 0.2s ease;
+    }
+
+    .report-chart-card:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
     }
 
     .report-chart-card h4 {
-      margin: 0 0 12px 0;
-      font-size: 13px;
+      margin: 0 0 14px 0;
+      font-size: 12px;
       font-weight: 600;
-      color: #555;
+      color: #78909c;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
     }
 
     .report-chart-card canvas {
@@ -3362,15 +3432,15 @@ interface SalesReportResponse {
 
     .report-analysis-text {
       background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 12px;
-      padding: 18px;
-      font-size: 13px;
-      line-height: 1.7;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 14px;
+      padding: 20px;
+      font-size: 13.5px;
+      line-height: 1.75;
       white-space: pre-wrap;
       max-height: 50vh;
       overflow-y: auto;
-      color: #333;
+      color: #37474f;
     }
 
     @media (max-width: 900px) {
@@ -3386,7 +3456,8 @@ interface SalesReportResponse {
       width: 360px;
       height: calc(100vh - 64px);
       background: white;
-      box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.03);
+      border-left: 1px solid rgba(0, 0, 0, 0.05);
       z-index: 100;
       overflow-y: auto;
     }
@@ -3490,21 +3561,23 @@ interface SalesReportResponse {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 60px;
-      color: #666;
+      padding: 64px;
+      color: #78909c;
     }
 
     .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      color: #ccc;
+      font-size: 60px;
+      width: 60px;
+      height: 60px;
+      color: #b0bec5;
       margin-bottom: 16px;
+      opacity: 0.7;
     }
 
     .empty-state h3 {
       margin: 0 0 8px 0;
-      color: #333;
+      color: #455a64;
+      font-weight: 600;
     }
 
     .empty-state p {
@@ -3543,13 +3616,13 @@ interface SalesReportResponse {
 
     .attention-dialog {
       background: white;
-      border-radius: 16px;
+      border-radius: 18px;
       width: 90%;
       max-width: 900px;
       max-height: 80vh;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
     }
 
     .attention-header {
@@ -3631,13 +3704,14 @@ interface SalesReportResponse {
       justify-content: space-between;
       align-items: center;
       padding: 16px;
-      background: #f5f5f5;
-      border-radius: 8px;
+      background: #f8f9fa;
+      border-radius: 10px;
       gap: 16px;
+      transition: background 0.15s ease;
     }
 
     .attention-item:hover {
-      background: #eeeeee;
+      background: #eceff1;
     }
 
     .attention-item-info {
@@ -4013,13 +4087,13 @@ interface SalesReportResponse {
 
     .company-sales-dialog {
       background: white;
-      border-radius: 16px;
+      border-radius: 18px;
       width: 95%;
       max-width: 1200px;
       max-height: 90vh;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 16px 56px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.08);
       overflow: hidden;
     }
 
@@ -4074,12 +4148,18 @@ interface SalesReportResponse {
 
     .summary-card {
       background: white;
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 20px;
       display: flex;
       align-items: center;
       gap: 16px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.04);
+      transition: transform 0.2s ease;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-1px);
     }
 
     .summary-icon {
@@ -4127,10 +4207,11 @@ interface SalesReportResponse {
 
     .chart-section {
       background: white;
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 24px;
       margin-bottom: 24px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.04);
     }
 
     .chart-header {
