@@ -198,12 +198,17 @@ interface CompanyProject {
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+    }
+
     .projects-container {
-      padding: 24px 32px;
+      padding: 80px;
       max-width: 1400px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
-      background: #f5f7fa;
     }
 
     .page-header {
@@ -219,25 +224,26 @@ interface CompanyProject {
     }
 
     .header-text h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a2e;
+      font-size: 2.5rem;
+      font-weight: 600;
+      color: white;
       margin: 0 0 8px 0;
       display: flex;
       align-items: center;
       gap: 12px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .header-icon {
       font-size: 32px;
       width: 32px;
       height: 32px;
-      color: #5c6bc0;
+      color: white;
     }
 
     .subtitle {
-      color: #666;
-      font-size: 15px;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 1.1rem;
       margin: 0;
     }
 
@@ -249,9 +255,10 @@ interface CompanyProject {
     .header-stat {
       text-align: center;
       padding: 12px 20px;
-      background: white;
+      background: rgba(255, 255, 255, 0.15);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       min-width: 100px;
     }
 
@@ -259,12 +266,12 @@ interface CompanyProject {
       display: block;
       font-size: 24px;
       font-weight: 700;
-      color: #5c6bc0;
+      color: white;
     }
 
     .header-stat .stat-label {
       font-size: 12px;
-      color: #888;
+      color: rgba(255, 255, 255, 0.8);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -277,22 +284,22 @@ interface CompanyProject {
     }
 
     .project-card {
-      background: white;
-      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
       overflow: hidden;
       cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
       position: relative;
     }
 
     .project-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      transform: translateY(-6px);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
     }
 
     .card-gradient {
-      height: 6px;
+      height: 8px;
       width: 100%;
     }
 
@@ -452,9 +459,16 @@ interface CompanyProject {
     .detail-header h2 {
       font-size: 24px;
       font-weight: 700;
-      color: #1a1a2e;
+      color: white;
       margin: 0;
       flex: 1;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .detail-header button {
+      background: rgba(255,255,255,0.2) !important;
+      color: white !important;
+      backdrop-filter: blur(10px);
     }
 
     .detail-content {
@@ -464,10 +478,10 @@ interface CompanyProject {
     }
 
     .detail-card {
-      background: white;
-      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
       padding: 28px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
       border-left: 4px solid;
     }
 
@@ -533,11 +547,11 @@ interface CompanyProject {
     }
 
     .detail-stat-card {
-      background: white;
-      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
       padding: 20px;
       text-align: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     }
 
     .detail-stat-card .stat-value {
@@ -558,28 +572,29 @@ interface CompanyProject {
       display: flex;
       align-items: center;
       gap: 20px;
-      background: linear-gradient(135deg, #e8eaf6 0%, #f3e5f5 100%);
+      background: rgba(255, 255, 255, 0.15);
       border-radius: 16px;
       padding: 28px;
-      border: 1px dashed #9fa8da;
+      border: 1px dashed rgba(255, 255, 255, 0.4);
+      backdrop-filter: blur(10px);
     }
 
     .coming-soon-banner mat-icon {
       font-size: 40px;
       width: 40px;
       height: 40px;
-      color: #5c6bc0;
+      color: white;
     }
 
     .coming-soon-banner h3 {
       font-size: 16px;
       font-weight: 700;
-      color: #1a1a2e;
+      color: white;
       margin: 0 0 6px 0;
     }
 
     .coming-soon-banner p {
-      color: #666;
+      color: rgba(255, 255, 255, 0.85);
       font-size: 14px;
       margin: 0;
       line-height: 1.5;
@@ -588,7 +603,7 @@ interface CompanyProject {
     /* Responsive */
     @media (max-width: 768px) {
       .projects-container {
-        padding: 16px;
+        padding: 20px;
       }
 
       .header-content {
