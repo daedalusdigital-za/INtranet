@@ -149,6 +149,9 @@ builder.Services.AddSingleton<IPbxService, PbxService>();
 // Add CarTrack Service for logistics GPS tracking
 builder.Services.AddHttpClient<ICarTrackService, CarTrackService>();
 
+// Add HBA1C API Service for medical management project
+builder.Services.AddHttpClient<ProjectTracker.API.Services.HBA1C.IHBA1CApiService, ProjectTracker.API.Services.HBA1C.HBA1CApiService>();
+
 // Add TFN (TruckFuelNet) Services for fuel management
 // TfnTokenService must be Singleton so all clients share the same token
 builder.Services.AddSingleton<ProjectTracker.API.Services.TFN.TfnTokenService>();

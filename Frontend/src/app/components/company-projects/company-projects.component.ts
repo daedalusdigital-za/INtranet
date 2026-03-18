@@ -14,6 +14,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { HBA1CDashboardComponent } from './hba1c-dashboard/hba1c-dashboard.component';
 import { environment } from '../../../environments/environment';
 
 interface CompanyProject {
@@ -47,7 +48,8 @@ interface CompanyProject {
     MatSnackBarModule,
     MatProgressSpinnerModule,
     MatMenuModule,
-    NavbarComponent
+    NavbarComponent,
+    HBA1CDashboardComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -80,8 +82,12 @@ interface CompanyProject {
       </div>
 
       @if (selectedProject) {
-        <!-- Project Detail View -->
-        <div class="project-detail">
+        @if (selectedProject.id === 'hba1c') {
+          <!-- HBA1C Live Dashboard -->
+          <app-hba1c-dashboard (goBack)="clearSelection()"></app-hba1c-dashboard>
+        } @else {
+          <!-- Generic Project Detail View -->
+          <div class="project-detail">
           <div class="detail-header">
             <button mat-raised-button (click)="clearSelection()">
               <mat-icon>arrow_back</mat-icon>
@@ -145,7 +151,8 @@ interface CompanyProject {
               </div>
             </div>
           </div>
-        </div>
+          </div>
+        }
       } @else {
         <!-- Projects Grid -->
         <div class="projects-grid">
