@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Inject, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -86,7 +86,6 @@ interface ComprehensiveAnalysisResponse {
 
 @Component({
   selector: 'app-stock-management',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
     CommonModule,
