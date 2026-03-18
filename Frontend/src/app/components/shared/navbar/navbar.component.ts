@@ -76,6 +76,9 @@ import { Subscription } from 'rxjs';
           <mat-icon>inventory</mat-icon> Stock Management
         </button>
       }
+      <button mat-button routerLink="/company-projects" routerLinkActive="active-link">
+        <mat-icon>assignment</mat-icon> Projects
+      </button>
       @if (hasPermission('documents')) {
         <button mat-button routerLink="/documents" routerLinkActive="active-link">
           <mat-icon>folder</mat-icon> Documents

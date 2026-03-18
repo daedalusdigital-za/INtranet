@@ -24,6 +24,7 @@ export const MODULE_KEYS = {
   PROJECT_MANAGEMENT: 'project_management',
   HUMAN_RESOURCE: 'human_resource',
   STOCK_MANAGEMENT: 'stock_management',
+  COMPANY_PROJECTS: 'company_projects',
   DOCUMENTS: 'documents',
   SUPPORT_TICKETS: 'support_tickets',
   MESSAGING: 'messaging',
@@ -121,6 +122,17 @@ export const MODULES: ModuleConfig[] = [
     route: '/stock-management',
     color: '#795548',
     requiresPermission: true,
+    showInNavbar: true,
+    showInDashboard: true
+  },
+  {
+    key: 'company_projects',
+    name: 'Projects',
+    description: 'Company projects and distribution initiatives',
+    icon: 'assignment',
+    route: '/company-projects',
+    color: '#5C6BC0',
+    requiresPermission: false,
     showInNavbar: true,
     showInDashboard: true
   },
@@ -311,6 +323,13 @@ export function getModuleRoutes(): Routes {
       loadComponent: () => import('../components/warehouse-3d/warehouse-3d.component').then(m => m.Warehouse3DComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'stock_management' } 
+    },
+    
+    // Company Projects Module
+    { 
+      path: 'company-projects', 
+      loadComponent: () => import('../components/company-projects/company-projects.component').then(m => m.CompanyProjectsComponent),
+      canActivate: [authGuard] 
     },
     
     // Support Tickets Module
