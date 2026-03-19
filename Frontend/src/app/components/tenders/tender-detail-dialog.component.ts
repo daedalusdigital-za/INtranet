@@ -288,9 +288,32 @@ interface DialogData {
                   <button mat-raised-button color="primary" (click)="addBOQItem()">
                     <mat-icon>add</mat-icon> Add Line Item
                   </button>
-                  <button mat-raised-button class="welly-boq-btn" (click)="wellyAnalyzeBOQ()" matTooltip="Ask Welly to analyze BOQ">
+                  <button mat-raised-button class="welly-boq-btn" [matMenuTriggerFor]="wellyMenu" matTooltip="Welly AI Pricing Assistant">
                     <mat-icon class="welly-sparkle">auto_awesome</mat-icon> Ask Welly
                   </button>
+                  <mat-menu #wellyMenu="matMenu">
+                    <button mat-menu-item (click)="wellyDocumentAnalyze('analyze')">
+                      <mat-icon>analytics</mat-icon>
+                      <span>Analyze Documents & BOQ</span>
+                    </button>
+                    <button mat-menu-item (click)="wellyDocumentAnalyze('pricing-review')">
+                      <mat-icon>price_check</mat-icon>
+                      <span>Pricing Review</span>
+                    </button>
+                    <button mat-menu-item (click)="wellyDocumentAnalyze('extract-boq')">
+                      <mat-icon>playlist_add</mat-icon>
+                      <span>Extract BOQ from Documents</span>
+                    </button>
+                    <mat-divider></mat-divider>
+                    <button mat-menu-item (click)="wellyAnalyzeBOQ()">
+                      <mat-icon>calculate</mat-icon>
+                      <span>Quick BOQ Analysis (no docs)</span>
+                    </button>
+                    <button mat-menu-item (click)="wellyCheckCompliance()">
+                      <mat-icon>verified</mat-icon>
+                      <span>Compliance Check</span>
+                    </button>
+                  </mat-menu>
                   <div class="boq-summary">
                     <span>Total: <strong>{{ calculateBOQTotal() | currency:'ZAR':'symbol':'1.2-2' }}</strong></span>
                     <span>Avg Margin: <strong>{{ calculateAvgMargin() | number:'1.1-1' }}%</strong></span>
@@ -550,18 +573,47 @@ interface DialogData {
                 <mat-icon>close</mat-icon>
               </button>
             </div>
+            @if (wellyAnalysisInfo) {
+              <div class="welly-analysis-info">
+                <mat-icon>{{ wellyAnalysisInfo.icon }}</mat-icon>
+                <span>{{ wellyAnalysisInfo.label }}</span>
+                @if (wellyDocsAnalyzed > 0) {
+                  <span class="doc-count">📄 {{ wellyDocsAnalyzed }} doc(s) read</span>
+                }
+              </div>
+            }
             <div class="welly-panel-body">
               @if (wellyLoading) {
                 <div class="welly-loading">
                   <mat-spinner diameter="36"></mat-spinner>
-                  <p>Welly is analyzing the tender...</p>
+                  <p>{{ wellyLoadingMessage }}</p>
                 </div>
               } @else if (wellyResult) {
                 <div class="welly-result">
-                  <div class="welly-result-text">{{ wellyResult }}</div>
+                  <div class="welly-result-text" [innerHTML]="formatWellyResult(wellyResult)"></div>
+                  @if (wellyExtractedItems.length > 0) {
+                    <div class="welly-extracted-boq">
+                      <h4>📋 Extracted BOQ Items ({{ wellyExtractedItems.length }})</h4>
+                      <div class="extracted-items-list">
+                        @for (item of wellyExtractedItems; track item.lineNumber) {
+                          <div class="extracted-item">
+                            <span class="item-num">#{{ item.lineNumber }}</span>
+                            <span class="item-desc">{{ item.description }}</span>
+                            <span class="item-price">R{{ item.unitPrice }}</span>
+                          </div>
+                        }
+                      </div>
+                      <button mat-raised-button color="primary" class="import-btn" (click)="importExtractedBOQItems()">
+                        <mat-icon>playlist_add</mat-icon> Import {{ wellyExtractedItems.length }} Items to BOQ
+                      </button>
+                    </div>
+                  }
                   <div class="welly-result-actions">
                     <button mat-button (click)="copyWellyResult()">
                       <mat-icon>content_copy</mat-icon> Copy Analysis
+                    </button>
+                    <button mat-button (click)="wellyDocumentAnalyze('pricing-review')">
+                      <mat-icon>price_check</mat-icon> Pricing Review
                     </button>
                     <button mat-button (click)="wellyCheckCompliance()">
                       <mat-icon>verified</mat-icon> Check Compliance
@@ -1093,6 +1145,112 @@ interface DialogData {
     .welly-result-actions {
       display: flex;
       gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .welly-analysis-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      background: rgba(102, 126, 234, 0.08);
+      border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+      font-size: 13px;
+      color: #555;
+    }
+
+    .welly-analysis-info mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #667eea;
+    }
+
+    .welly-analysis-info .doc-count {
+      margin-left: auto;
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .welly-extracted-boq {
+      margin: 16px 0;
+      border: 2px solid #667eea;
+      border-radius: 12px;
+      padding: 16px;
+      background: #f5f3ff;
+    }
+
+    .welly-extracted-boq h4 {
+      margin: 0 0 12px 0;
+      color: #4527a0;
+      font-size: 14px;
+    }
+
+    .extracted-items-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+
+    .extracted-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .extracted-item .item-num {
+      color: #667eea;
+      font-weight: 600;
+      min-width: 30px;
+    }
+
+    .extracted-item .item-desc {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .extracted-item .item-price {
+      font-weight: 600;
+      color: #2e7d32;
+      white-space: nowrap;
+    }
+
+    .import-btn {
+      width: 100%;
+    }
+
+    .welly-result-text ::ng-deep h1,
+    .welly-result-text ::ng-deep h2,
+    .welly-result-text ::ng-deep h3 {
+      margin: 12px 0 6px 0;
+      font-size: 15px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .welly-result-text ::ng-deep strong {
+      color: #4527a0;
+    }
+
+    .welly-result-text ::ng-deep ul,
+    .welly-result-text ::ng-deep ol {
+      padding-left: 20px;
+      margin: 6px 0;
+    }
+
+    .welly-result-text ::ng-deep li {
+      margin-bottom: 4px;
     }
   `]
 })
@@ -1399,12 +1557,118 @@ export class TenderDetailDialogComponent {
   showWellyPanel = false;
   wellyLoading = false;
   wellyResult = '';
+  wellyLoadingMessage = 'Welly is analyzing the tender...';
+  wellyDocsAnalyzed = 0;
+  wellyAnalysisInfo: { icon: string; label: string } | null = null;
+  wellyExtractedItems: { lineNumber: number; itemCode: string; description: string; unit: string; quantity: number; unitCost: number; unitPrice: number; marginPercent: number }[] = [];
+
+  wellyDocumentAnalyze(analysisType: 'analyze' | 'pricing-review' | 'extract-boq'): void {
+    if (!this.data.tender) return;
+    this.showWellyPanel = true;
+    this.wellyLoading = true;
+    this.wellyResult = '';
+    this.wellyDocsAnalyzed = 0;
+    this.wellyExtractedItems = [];
+
+    const typeInfo: Record<string, { icon: string; label: string; loadMsg: string }> = {
+      'analyze': { icon: 'analytics', label: 'Full Document & BOQ Analysis', loadMsg: 'Welly is reading your tender documents and analyzing the BOQ...' },
+      'pricing-review': { icon: 'price_check', label: 'Pricing Review', loadMsg: 'Welly is reviewing pricing from your tender documents...' },
+      'extract-boq': { icon: 'playlist_add', label: 'Extract BOQ from Documents', loadMsg: 'Welly is extracting BOQ items from your uploaded documents...' }
+    };
+
+    const info = typeInfo[analysisType];
+    this.wellyAnalysisInfo = { icon: info.icon, label: info.label };
+    this.wellyLoadingMessage = info.loadMsg;
+
+    this.http.post<{ result: string; analysisType: string; documentsAnalyzed: number; boqItemCount: number }>(
+      `${environment.apiUrl}/aichat/tender-document-analyze`, {
+        tenderId: this.data.tender.id,
+        analysisType: analysisType
+      }
+    ).subscribe({
+      next: (res) => {
+        this.wellyResult = res.result;
+        this.wellyDocsAnalyzed = res.documentsAnalyzed;
+        this.wellyLoading = false;
+
+        // Parse extracted BOQ items if extract-boq type
+        if (analysisType === 'extract-boq') {
+          this.parseExtractedBOQItems(res.result);
+        }
+      },
+      error: () => {
+        this.snackBar.open('Welly could not analyze tender documents. Please try again.', 'Close', { duration: 3000 });
+        this.wellyLoading = false;
+        this.showWellyPanel = false;
+      }
+    });
+  }
+
+  parseExtractedBOQItems(result: string): void {
+    const lines = result.split('\n');
+    this.wellyExtractedItems = [];
+    for (const line of lines) {
+      const match = line.match(/\[BOQ_ITEM\]\s*(.+)/);
+      if (match) {
+        const parts = match[1].split('|').map(p => p.trim());
+        if (parts.length >= 7) {
+          this.wellyExtractedItems.push({
+            lineNumber: parseInt(parts[0]) || this.wellyExtractedItems.length + 1,
+            itemCode: parts[1] !== 'N/A' ? parts[1] : '',
+            description: parts[2] || 'Unknown item',
+            unit: parts[3] !== 'N/A' ? parts[3] : 'each',
+            quantity: parseFloat(parts[4]) || 1,
+            unitCost: parseFloat(parts[5]) || 0,
+            unitPrice: parseFloat(parts[6]) || 0,
+            marginPercent: parseFloat(parts[7]) || 0
+          });
+        }
+      }
+    }
+  }
+
+  importExtractedBOQItems(): void {
+    if (!this.data.tender || this.wellyExtractedItems.length === 0) return;
+
+    let imported = 0;
+    const total = this.wellyExtractedItems.length;
+
+    for (const item of this.wellyExtractedItems) {
+      this.tenderService.addBOQItem(this.data.tender.id, {
+        description: item.description,
+        quantity: item.quantity,
+        unitCost: item.unitCost || undefined,
+        unitPrice: item.unitPrice,
+        unit: item.unit,
+        itemCode: item.itemCode
+      }).subscribe({
+        next: (newItem) => {
+          this.data.tender!.boqItems = [...(this.data.tender!.boqItems || []), newItem];
+          imported++;
+          if (imported === total) {
+            this.snackBar.open(`✅ ${imported} BOQ items imported from documents!`, 'Close', { duration: 4000 });
+            this.wellyExtractedItems = [];
+          }
+        },
+        error: () => {
+          imported++;
+          if (imported === total) {
+            this.snackBar.open(`Imported some items. Check for errors.`, 'Close', { duration: 3000 });
+          }
+        }
+      });
+    }
+  }
 
   wellyAnalyzeBOQ(): void {
     if (!this.data.tender) return;
     this.showWellyPanel = true;
     this.wellyLoading = true;
     this.wellyResult = '';
+    this.wellyDocsAnalyzed = 0;
+    this.wellyExtractedItems = [];
+    this.wellyAnalysisInfo = { icon: 'calculate', label: 'Quick BOQ Analysis' };
+    this.wellyLoadingMessage = 'Welly is analyzing your BOQ items...';
 
     const boqItems = this.data.tender.boqItems || [];
     const boqSummary = boqItems.map(item =>
@@ -1431,8 +1695,12 @@ export class TenderDetailDialogComponent {
 
   wellyCheckCompliance(): void {
     if (!this.data.tender) return;
+    this.showWellyPanel = true;
     this.wellyLoading = true;
     this.wellyResult = '';
+    this.wellyExtractedItems = [];
+    this.wellyAnalysisInfo = { icon: 'verified', label: 'Compliance Check' };
+    this.wellyLoadingMessage = 'Welly is checking tender compliance...';
 
     const docs = this.data.tender.documents || [];
     const docList = docs.map(d => `${d.documentType}: ${d.fileName} (v${d.version})`).join('\n');
@@ -1454,6 +1722,18 @@ export class TenderDetailDialogComponent {
         this.wellyLoading = false;
       }
     });
+  }
+
+  formatWellyResult(text: string): string {
+    // Convert markdown-like formatting to HTML
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^\- (.+)$/gm, '• $1')
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      .replace(/\n/g, '<br>');
   }
 
   copyWellyResult(): void {

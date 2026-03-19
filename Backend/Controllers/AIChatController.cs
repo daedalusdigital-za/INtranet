@@ -866,6 +866,314 @@ Be specific and extract actual values from the document when available.";
         }
 
         /// <summary>
+        /// Analyze tender documents with Welly — reads uploaded files, extracts text, combines with BOQ data
+        /// </summary>
+        [HttpPost("tender-document-analyze")]
+        public async Task<IActionResult> TenderDocumentAnalyze([FromBody] TenderDocumentAnalyzeRequest request)
+        {
+            try
+            {
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (!useLocalLlm)
+                    return StatusCode(503, new { error = "AI service is not available. Please try again later." });
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                var tender = await context.Tenders
+                    .Include(t => t.Documents)
+                    .Include(t => t.BOQItems)
+                    .FirstOrDefaultAsync(t => t.Id == request.TenderId);
+
+                if (tender == null)
+                    return NotFound(new { error = "Tender not found" });
+
+                // Get documents to analyze — if specific IDs provided, use those; otherwise use pricing-relevant types
+                var documents = tender.Documents?.AsEnumerable() ?? Enumerable.Empty<Models.Tenders.TenderDocument>();
+                if (request.DocumentIds != null && request.DocumentIds.Any())
+                {
+                    documents = documents.Where(d => request.DocumentIds.Contains(d.Id));
+                }
+                else
+                {
+                    // Auto-select pricing-relevant document types
+                    var pricingTypes = new[] { "BOQ", "RFQ", "RFP", "FinancialProposal", "Pricing", "Addendum" };
+                    documents = documents.Where(d => pricingTypes.Contains(d.DocumentType));
+                    // If no pricing docs, try all documents
+                    if (!documents.Any())
+                        documents = tender.Documents?.AsEnumerable() ?? Enumerable.Empty<Models.Tenders.TenderDocument>();
+                }
+
+                var documentTexts = new StringBuilder();
+                int docCount = 0;
+                int totalChars = 0;
+                const int maxTotalChars = 12000; // Leave room for BOQ data and system prompt
+
+                foreach (var doc in documents)
+                {
+                    if (string.IsNullOrEmpty(doc.FilePath) || !System.IO.File.Exists(doc.FilePath))
+                        continue;
+
+                    try
+                    {
+                        string extractedText = string.Empty;
+                        var ext = Path.GetExtension(doc.FileName).ToLowerInvariant();
+
+                        if (ext == ".pdf")
+                        {
+                            extractedText = ExtractTextFromPdfFile(doc.FilePath);
+                        }
+                        else if (ext is ".xlsx" or ".xls")
+                        {
+                            extractedText = ExtractTextFromExcelFile(doc.FilePath);
+                        }
+                        else if (ext is ".csv")
+                        {
+                            extractedText = await ExtractTextFromCsvFile(doc.FilePath);
+                        }
+                        else if (ext is ".txt" or ".md" or ".text")
+                        {
+                            extractedText = await System.IO.File.ReadAllTextAsync(doc.FilePath);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(extractedText))
+                        {
+                            // Truncate if adding this would exceed limit
+                            var available = maxTotalChars - totalChars;
+                            if (available <= 200) break;
+
+                            if (extractedText.Length > available)
+                                extractedText = extractedText[..available] + "\n[...document truncated...]";
+
+                            documentTexts.AppendLine($"\n══════ DOCUMENT: {doc.FileName} (Type: {doc.DocumentType}) ══════");
+                            documentTexts.AppendLine(extractedText);
+                            totalChars += extractedText.Length;
+                            docCount++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to extract text from tender document {DocId}: {FileName}", doc.Id, doc.FileName);
+                        documentTexts.AppendLine($"\n[Could not extract text from: {doc.FileName}]");
+                    }
+                }
+
+                // Build BOQ summary
+                var boqSummary = new StringBuilder();
+                var boqItems = tender.BOQItems?.OrderBy(b => b.LineNumber).ToList() ?? new List<Models.Tenders.TenderBOQItem>();
+                if (boqItems.Any())
+                {
+                    boqSummary.AppendLine("\n══════ CURRENT BOQ LINE ITEMS ══════");
+                    foreach (var item in boqItems)
+                    {
+                        boqSummary.AppendLine($"Line {item.LineNumber}: {item.Description} | Code: {item.ItemCode ?? "N/A"} | Qty: {item.Quantity} {item.Unit} | Cost: R{item.UnitCost?.ToString("N2") ?? "N/A"} | Price: R{item.UnitPrice:N2} | Margin: {item.MarginPercent?.ToString("N1") ?? "N/A"}% | Total: R{item.TotalPrice:N2}");
+                    }
+                    var total = boqItems.Sum(b => b.TotalPrice);
+                    var avgMargin = boqItems.Where(b => b.MarginPercent.HasValue).Select(b => b.MarginPercent!.Value).DefaultIfEmpty(0).Average();
+                    boqSummary.AppendLine($"\nBOQ Total: R{total:N2} | Avg Margin: {avgMargin:N1}%");
+                }
+
+                // Choose analysis type and system prompt
+                string systemPrompt;
+                if (request.AnalysisType == "extract-boq")
+                {
+                    systemPrompt = @"You are Welly, an AI tender analyst for ProMed Technologies. You have been given the content of uploaded tender documents. 
+Your task is to EXTRACT Bill of Quantities (BOQ) line items from these documents.
+
+For each line item found, output it in this EXACT format (one per line):
+[BOQ_ITEM] LineNumber | ItemCode | Description | Unit | Quantity | UnitCost | UnitPrice | MarginPercent
+
+Rules:
+- Use the line numbers from the document if available, otherwise number sequentially
+- If a field is unknown, use 'N/A'
+- UnitCost, UnitPrice should be numbers without currency symbols
+- MarginPercent should be calculated as ((UnitPrice - UnitCost) / UnitPrice * 100) if both values are known
+- After listing all items, provide a brief summary of what you found
+
+Example:
+[BOQ_ITEM] 1 | MED-001 | Surgical Gloves (Box of 100) | box | 500 | 45.00 | 65.00 | 30.8
+[BOQ_ITEM] 2 | MED-002 | Disposable Masks (Box of 50) | box | 1000 | 22.00 | 35.00 | 37.1
+
+Use ZAR for currency in summaries.";
+                }
+                else if (request.AnalysisType == "pricing-review")
+                {
+                    systemPrompt = @"You are Welly, an AI tender pricing specialist for ProMed Technologies. You have been given:
+1. The actual tender documents (RFQ/RFP/BOQ files uploaded by the user)
+2. The current BOQ line items entered in the system
+
+Analyze the documents and provide a comprehensive pricing review:
+1. **Document Insights** — Key pricing requirements, terms, or constraints found in the tender documents
+2. **Price Comparison** — Compare document prices with current BOQ entries (if both exist)
+3. **Missing Items** — BOQ items mentioned in documents but not yet in the system
+4. **Pricing Risks** — Items that seem underpriced, overpriced, or have unusual quantities
+5. **Margin Optimization** — Suggestions to improve overall margins while staying competitive
+6. **Compliance Notes** — Any pricing format requirements or special conditions in the tender docs
+
+Format with clear headings. Use ZAR for currency.";
+                }
+                else
+                {
+                    systemPrompt = @"You are Welly, an AI tender analyst for ProMed Technologies. You have been given:
+1. The actual tender documents uploaded for this tender
+2. The current BOQ line items
+
+Analyze everything and provide insights:
+1. **Document Summary** — Key information from the uploaded tender documents
+2. **Pricing Analysis** — Are unit prices competitive? Flag any issues
+3. **Margin Review** — Evaluate profit margins and suggest adjustments
+4. **Risk Items** — Items with thin margins or high exposure
+5. **Compliance** — Are required documents present? Any gaps?
+6. **Recommendations** — Actionable next steps
+
+Format with clear headings. Use ZAR for currency.";
+                }
+
+                var fullContent = new StringBuilder();
+                fullContent.AppendLine($"Tender: {tender.TenderNumber} — {tender.Title}");
+                fullContent.AppendLine($"Issuing Department: {tender.IssuingDepartment}");
+                fullContent.AppendLine($"Status: {tender.Status} | Closing Date: {tender.ClosingDate:dd MMM yyyy}");
+                fullContent.AppendLine($"Company: {tender.CompanyCode} | Province: {tender.Province}");
+                
+                if (docCount > 0)
+                {
+                    fullContent.AppendLine($"\n📄 {docCount} document(s) analyzed:");
+                    fullContent.Append(documentTexts);
+                }
+                else
+                {
+                    fullContent.AppendLine("\n[No readable documents found for this tender]");
+                }
+
+                fullContent.Append(boqSummary);
+
+                if (!string.IsNullOrWhiteSpace(request.UserQuestion))
+                {
+                    fullContent.AppendLine($"\n══════ USER QUESTION ══════\n{request.UserQuestion}");
+                }
+
+                var result = await _localLlmService.AnalyzeDocumentAsync(systemPrompt, fullContent.ToString(), HttpContext.RequestAborted);
+
+                return Ok(new { 
+                    result, 
+                    analysisType = request.AnalysisType,
+                    documentsAnalyzed = docCount,
+                    boqItemCount = boqItems.Count
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, new { error = "Request was cancelled" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "TenderDocumentAnalyze: Error analyzing tender {TenderId}", request.TenderId);
+                return StatusCode(500, new { error = "Failed to analyze tender documents. Please try again." });
+            }
+        }
+
+        /// <summary>
+        /// Extract text from a PDF file on disk
+        /// </summary>
+        private string ExtractTextFromPdfFile(string filePath)
+        {
+            var text = new StringBuilder();
+            using var pdfReader = new PdfReader(filePath);
+            using var pdfDocument = new PdfDocument(pdfReader);
+
+            for (int pageNum = 1; pageNum <= pdfDocument.GetNumberOfPages(); pageNum++)
+            {
+                var page = pdfDocument.GetPage(pageNum);
+                var strategy = new SimpleTextExtractionStrategy();
+                var pageText = PdfTextExtractor.GetTextFromPage(page, strategy);
+                text.AppendLine($"--- Page {pageNum} ---");
+                text.AppendLine(pageText);
+                text.AppendLine();
+            }
+
+            return text.ToString();
+        }
+
+        /// <summary>
+        /// Extract text from an Excel file on disk
+        /// </summary>
+        private string ExtractTextFromExcelFile(string filePath)
+        {
+            var text = new StringBuilder();
+            using var workbook = new XLWorkbook(filePath);
+
+            foreach (var worksheet in workbook.Worksheets)
+            {
+                text.AppendLine($"--- Sheet: {worksheet.Name} ---");
+                var usedRange = worksheet.RangeUsed();
+                if (usedRange == null)
+                {
+                    text.AppendLine("(empty sheet)");
+                    continue;
+                }
+
+                var rows = usedRange.RowsUsed().ToList();
+                var firstRow = rows.FirstOrDefault();
+                if (firstRow != null)
+                {
+                    var headers = new List<string>();
+                    foreach (var cell in firstRow.CellsUsed())
+                        headers.Add(cell.GetFormattedString());
+                    text.AppendLine("| " + string.Join(" | ", headers) + " |");
+                    text.AppendLine("| " + string.Join(" | ", headers.Select(_ => "---")) + " |");
+                }
+
+                var maxRows = Math.Min(rows.Count, 201);
+                for (int i = 1; i < maxRows; i++)
+                {
+                    var row = rows[i];
+                    var cells = new List<string>();
+                    for (int col = usedRange.FirstColumn().ColumnNumber(); col <= usedRange.LastColumn().ColumnNumber(); col++)
+                        cells.Add(row.Cell(col).GetFormattedString());
+                    text.AppendLine("| " + string.Join(" | ", cells) + " |");
+                }
+
+                if (rows.Count > 201)
+                    text.AppendLine($"\n[...{rows.Count - 201} more rows truncated...]");
+                text.AppendLine();
+            }
+
+            return text.ToString();
+        }
+
+        /// <summary>
+        /// Extract text from a CSV file on disk
+        /// </summary>
+        private async Task<string> ExtractTextFromCsvFile(string filePath)
+        {
+            var text = new StringBuilder();
+            text.AppendLine($"--- CSV ---");
+
+            int rowCount = 0;
+            using var reader = new StreamReader(filePath);
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                rowCount++;
+                if (rowCount <= 201)
+                {
+                    var cells = ParseCsvLine(line);
+                    text.AppendLine("| " + string.Join(" | ", cells) + " |");
+                    if (rowCount == 1)
+                        text.AppendLine("| " + string.Join(" | ", cells.Select(_ => "---")) + " |");
+                }
+            }
+
+            if (rowCount > 201)
+                text.AppendLine($"\n[...{rowCount - 201} more rows truncated...]");
+            text.AppendLine($"\nTotal rows: {rowCount}");
+
+            return text.ToString();
+        }
+
+        /// <summary>
         /// Generic Welly Assist endpoint for Doc Editor, Stock, Tenders, Messages
         /// </summary>
         [HttpPost("welly-assist")]
@@ -1614,5 +1922,13 @@ Use ZAR (R) currency. Focus on actionable product insights.",
         public string? ReportType { get; set; } // sales-summary, customer-analysis, province-breakdown, product-performance
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
+    }
+
+    public class TenderDocumentAnalyzeRequest
+    {
+        public int TenderId { get; set; }
+        public List<int>? DocumentIds { get; set; } // Specific docs to analyze; null = auto-select pricing docs
+        public string AnalysisType { get; set; } = "analyze"; // analyze, extract-boq, pricing-review
+        public string? UserQuestion { get; set; } // Optional question from user
     }
 }
