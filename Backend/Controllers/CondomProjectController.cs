@@ -256,5 +256,224 @@ namespace ProjectTracker.API.Controllers
                 return StatusCode(500, new { error = "Failed to create stock entry" });
             }
         }
+
+        // ==================== SAMPLES ====================
+
+        /// <summary>
+        /// Get all condom samples
+        /// </summary>
+        [HttpGet("samples")]
+        public async Task<IActionResult> GetSamples()
+        {
+            try
+            {
+                var samples = await _context.CondomSamples
+                    .OrderByDescending(s => s.DateSent)
+                    .ToListAsync();
+
+                return Ok(samples);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching condom samples");
+                return StatusCode(500, new { error = "Failed to load samples" });
+            }
+        }
+
+        /// <summary>
+        /// Create a new condom sample entry
+        /// </summary>
+        [HttpPost("samples")]
+        public async Task<IActionResult> CreateSample([FromBody] CreateCondomSampleDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var sample = new CondomSample
+                {
+                    Scent = dto.Scent,
+                    Type = dto.Type,
+                    BatchCode = dto.BatchCode,
+                    Quantity = dto.Quantity,
+                    DateSent = dto.DateSent.Date,
+                    Status = string.IsNullOrWhiteSpace(dto.Status) ? "Pending" : dto.Status,
+                    Recipient = dto.Recipient,
+                    Notes = dto.Notes,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.CondomSamples.Add(sample);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Created condom sample: {BatchCode} - {Scent} {Type} - {Status}",
+                    sample.BatchCode, sample.Scent, sample.Type, sample.Status);
+
+                return Ok(new { success = true, id = sample.Id, message = $"Sample created: {sample.BatchCode} - {sample.Scent} {sample.Type}" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating condom sample");
+                return StatusCode(500, new { error = "Failed to create sample" });
+            }
+        }
+
+        /// <summary>
+        /// Update sample status
+        /// </summary>
+        [HttpPut("samples/{id}/status")]
+        public async Task<IActionResult> UpdateSampleStatus(int id, [FromBody] UpdateStatusDto dto)
+        {
+            try
+            {
+                var sample = await _context.CondomSamples.FindAsync(id);
+                if (sample == null) return NotFound(new { error = "Sample not found" });
+
+                sample.Status = dto.Status;
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = $"Sample status updated to {dto.Status}" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating sample status");
+                return StatusCode(500, new { error = "Failed to update sample status" });
+            }
+        }
+
+        /// <summary>
+        /// Delete a sample
+        /// </summary>
+        [HttpDelete("samples/{id}")]
+        public async Task<IActionResult> DeleteSample(int id)
+        {
+            try
+            {
+                var sample = await _context.CondomSamples.FindAsync(id);
+                if (sample == null) return NotFound(new { error = "Sample not found" });
+
+                _context.CondomSamples.Remove(sample);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Sample deleted" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting sample");
+                return StatusCode(500, new { error = "Failed to delete sample" });
+            }
+        }
+
+        // ==================== ARTWORK ====================
+
+        /// <summary>
+        /// Get all condom artwork entries
+        /// </summary>
+        [HttpGet("artwork")]
+        public async Task<IActionResult> GetArtwork()
+        {
+            try
+            {
+                var artwork = await _context.CondomArtworks
+                    .OrderByDescending(a => a.UpdatedAt)
+                    .ToListAsync();
+
+                return Ok(artwork);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching condom artwork");
+                return StatusCode(500, new { error = "Failed to load artwork" });
+            }
+        }
+
+        /// <summary>
+        /// Create a new condom artwork entry
+        /// </summary>
+        [HttpPost("artwork")]
+        public async Task<IActionResult> CreateArtwork([FromBody] CreateCondomArtworkDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var artwork = new CondomArtwork
+                {
+                    Scent = dto.Scent,
+                    Type = dto.Type,
+                    Title = dto.Title,
+                    Status = string.IsNullOrWhiteSpace(dto.Status) ? "Draft" : dto.Status,
+                    Version = dto.Version,
+                    Designer = dto.Designer,
+                    Notes = dto.Notes,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.CondomArtworks.Add(artwork);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Created condom artwork: {Title} - {Scent} {Type} - {Status}",
+                    artwork.Title, artwork.Scent, artwork.Type, artwork.Status);
+
+                return Ok(new { success = true, id = artwork.Id, message = $"Artwork created: {artwork.Title}" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating condom artwork");
+                return StatusCode(500, new { error = "Failed to create artwork" });
+            }
+        }
+
+        /// <summary>
+        /// Update artwork status
+        /// </summary>
+        [HttpPut("artwork/{id}/status")]
+        public async Task<IActionResult> UpdateArtworkStatus(int id, [FromBody] UpdateStatusDto dto)
+        {
+            try
+            {
+                var artwork = await _context.CondomArtworks.FindAsync(id);
+                if (artwork == null) return NotFound(new { error = "Artwork not found" });
+
+                artwork.Status = dto.Status;
+                artwork.UpdatedAt = DateTime.UtcNow;
+                if (dto.Status == "Approved")
+                    artwork.ApprovalDate = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = $"Artwork status updated to {dto.Status}" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating artwork status");
+                return StatusCode(500, new { error = "Failed to update artwork status" });
+            }
+        }
+
+        /// <summary>
+        /// Delete artwork
+        /// </summary>
+        [HttpDelete("artwork/{id}")]
+        public async Task<IActionResult> DeleteArtwork(int id)
+        {
+            try
+            {
+                var artwork = await _context.CondomArtworks.FindAsync(id);
+                if (artwork == null) return NotFound(new { error = "Artwork not found" });
+
+                _context.CondomArtworks.Remove(artwork);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Artwork deleted" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting artwork");
+                return StatusCode(500, new { error = "Failed to delete artwork" });
+            }
+        }
     }
 }

@@ -55,7 +55,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("admin", (string)null);
+                    b.ToTable("admin");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Announcement", b =>
@@ -100,7 +100,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("Announcements", (string)null);
+                    b.ToTable("Announcements");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.AnnouncementRead", b =>
@@ -126,7 +126,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AnnouncementReads", (string)null);
+                    b.ToTable("AnnouncementReads");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Attendance", b =>
@@ -178,7 +178,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("Attendances", (string)null);
+                    b.ToTable("Attendances");
 
                     b.HasData(
                         new
@@ -330,7 +330,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("AdminId");
 
-                    b.ToTable("AttendanceAdmins", (string)null);
+                    b.ToTable("AttendanceAdmins");
 
                     b.HasData(
                         new
@@ -420,7 +420,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("EmpID");
 
-                    b.ToTable("attendance", (string)null);
+                    b.ToTable("attendance");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.AuditLog", b =>
@@ -500,7 +500,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AuditLogs", (string)null);
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Board", b =>
@@ -543,7 +543,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("Boards", (string)null);
+                    b.ToTable("Boards");
 
                     b.HasData(
                         new
@@ -837,7 +837,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CompletedByUserId");
 
-                    b.ToTable("BoardChecklistItems", (string)null);
+                    b.ToTable("BoardChecklistItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.BoardMember", b =>
@@ -873,1756 +873,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("BoardMembers", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Campaign", b =>
-                {
-                    b.Property<int>("CampaignId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CampaignId"));
-
-                    b.Property<decimal?>("Budget")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("CampaignType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Channel")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("CreatedById")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime?>("EndDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Instructions")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Script")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int?>("TargetConversions")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("TargetLeads")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedById")
-                        .HasColumnType("int");
-
-                    b.HasKey("CampaignId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.ToTable("Campaigns", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.CampaignAgent", b =>
-                {
-                    b.Property<int>("CampaignAgentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CampaignAgentId"));
-
-                    b.Property<int>("AgentId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("AssignedById")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CampaignId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("RemovedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("RemovedById")
-                        .HasColumnType("int");
-
-                    b.HasKey("CampaignAgentId");
-
-                    b.HasIndex("AgentId");
-
-                    b.HasIndex("CampaignId");
-
-                    b.ToTable("CampaignAgents", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Disposition", b =>
-                {
-                    b.Property<int>("DispositionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DispositionId"));
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Icon")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDoNotCall")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsFinal")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPositive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("RequiresCallback")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("RequiresNotes")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("DispositionId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.ToTable("Dispositions", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            DispositionId = 1,
-                            Color = "#6c757d",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "No one answered",
-                            Icon = "phone_missed",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "No Answer",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            DispositionId = 2,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Left voicemail",
-                            Icon = "voicemail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Voicemail",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            DispositionId = 3,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Number is invalid",
-                            Icon = "phone_disabled",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Invalid Number",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            DispositionId = 4,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Not interested in offer",
-                            Icon = "thumb_down",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Not Interested",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            DispositionId = 5,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Interested, schedule callback",
-                            Icon = "event",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Call Back",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            DispositionId = 6,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Send more information",
-                            Icon = "mail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Send Info",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            DispositionId = 7,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Need to reach decision maker",
-                            Icon = "person_search",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Decision Maker Not Available",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            DispositionId = 8,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Do Not Call",
-                            Icon = "block",
-                            IsActive = true,
-                            IsDoNotCall = true,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "DNC",
-                            OperatingCompanyId = 1,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 8
-                        },
-                        new
-                        {
-                            DispositionId = 9,
-                            Color = "#6c757d",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "No one answered",
-                            Icon = "phone_missed",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "No Answer",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            DispositionId = 10,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Left voicemail",
-                            Icon = "voicemail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Voicemail",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            DispositionId = 11,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Number is invalid",
-                            Icon = "phone_disabled",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Invalid Number",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            DispositionId = 12,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Not interested in offer",
-                            Icon = "thumb_down",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Not Interested",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            DispositionId = 13,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Interested, schedule callback",
-                            Icon = "event",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Call Back",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            DispositionId = 14,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Send more information",
-                            Icon = "mail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Send Info",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            DispositionId = 15,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Need to reach decision maker",
-                            Icon = "person_search",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Decision Maker Not Available",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            DispositionId = 16,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Do Not Call",
-                            Icon = "block",
-                            IsActive = true,
-                            IsDoNotCall = true,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "DNC",
-                            OperatingCompanyId = 2,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 8
-                        },
-                        new
-                        {
-                            DispositionId = 17,
-                            Color = "#6c757d",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "No one answered",
-                            Icon = "phone_missed",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "No Answer",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            DispositionId = 18,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Left voicemail",
-                            Icon = "voicemail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Voicemail",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            DispositionId = 19,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Number is invalid",
-                            Icon = "phone_disabled",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Invalid Number",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            DispositionId = 20,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Not interested in offer",
-                            Icon = "thumb_down",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Not Interested",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            DispositionId = 21,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Interested, schedule callback",
-                            Icon = "event",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Call Back",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            DispositionId = 22,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Send more information",
-                            Icon = "mail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Send Info",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            DispositionId = 23,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Need to reach decision maker",
-                            Icon = "person_search",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Decision Maker Not Available",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            DispositionId = 24,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Do Not Call",
-                            Icon = "block",
-                            IsActive = true,
-                            IsDoNotCall = true,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "DNC",
-                            OperatingCompanyId = 3,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 8
-                        },
-                        new
-                        {
-                            DispositionId = 25,
-                            Color = "#6c757d",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "No one answered",
-                            Icon = "phone_missed",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "No Answer",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            DispositionId = 26,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Left voicemail",
-                            Icon = "voicemail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Voicemail",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            DispositionId = 27,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Number is invalid",
-                            Icon = "phone_disabled",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Invalid Number",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            DispositionId = 28,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Not interested in offer",
-                            Icon = "thumb_down",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "Not Interested",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            DispositionId = 29,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Interested, schedule callback",
-                            Icon = "event",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Call Back",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            DispositionId = 30,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Send more information",
-                            Icon = "mail",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = true,
-                            Name = "Interested - Send Info",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            DispositionId = 31,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Need to reach decision maker",
-                            Icon = "person_search",
-                            IsActive = true,
-                            IsDoNotCall = false,
-                            IsFinal = false,
-                            IsPositive = false,
-                            Name = "Decision Maker Not Available",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = true,
-                            RequiresNotes = false,
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            DispositionId = 32,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Do Not Call",
-                            Icon = "block",
-                            IsActive = true,
-                            IsDoNotCall = true,
-                            IsFinal = true,
-                            IsPositive = false,
-                            Name = "DNC",
-                            OperatingCompanyId = 4,
-                            RequiresCallback = false,
-                            RequiresNotes = false,
-                            SortOrder = 8
-                        });
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Lead", b =>
-                {
-                    b.Property<int>("LeadId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadId"));
-
-                    b.Property<decimal?>("ActualValue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Address")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("AlternatePhone")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Area")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("AssignedAgentId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("CampaignId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("CompanyName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Country")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("CreatedById")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("DeletedById")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("DoNotCall")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("DoNotCallReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("DoNotCallSetAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("DoNotCallSetById")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<decimal?>("EstimatedValue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsHot")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("JobTitle")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("LastContactedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("LastDispositionId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("LastName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("LeadScore")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("LeadStatusId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("MobilePhone")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime?>("NextCallbackAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("PostalCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Province")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Source")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("TotalCallAttempts")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedById")
-                        .HasColumnType("int");
-
-                    b.HasKey("LeadId");
-
-                    b.HasIndex("AssignedAgentId");
-
-                    b.HasIndex("CampaignId");
-
-                    b.HasIndex("LastDispositionId");
-
-                    b.HasIndex("LeadStatusId");
-
-                    b.HasIndex("NextCallbackAt");
-
-                    b.HasIndex("Phone");
-
-                    b.HasIndex("OperatingCompanyId", "AssignedAgentId");
-
-                    b.HasIndex("OperatingCompanyId", "LeadStatusId");
-
-                    b.ToTable("Leads", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadAssignmentHistory", b =>
-                {
-                    b.Property<int>("LeadAssignmentHistoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadAssignmentHistoryId"));
-
-                    b.Property<DateTime>("ChangedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("ChangedById")
-                        .HasColumnType("int");
-
-                    b.Property<int>("LeadId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("NewAgentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("PreviousAgentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("LeadAssignmentHistoryId");
-
-                    b.HasIndex("ChangedById");
-
-                    b.HasIndex("LeadId");
-
-                    b.HasIndex("NewAgentId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.HasIndex("PreviousAgentId");
-
-                    b.ToTable("LeadAssignmentHistories", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadInterest", b =>
-                {
-                    b.Property<int>("LeadInterestId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadInterestId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("InterestLevel")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("LeadId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProductOrService")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int?>("PromotionId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("RecordedById")
-                        .HasColumnType("int");
-
-                    b.HasKey("LeadInterestId");
-
-                    b.HasIndex("LeadId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.HasIndex("PromotionId");
-
-                    b.HasIndex("RecordedById");
-
-                    b.ToTable("LeadInterests", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadLog", b =>
-                {
-                    b.Property<int>("LeadLogId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadLogId"));
-
-                    b.Property<int>("AgentId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("DispositionId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("DurationSeconds")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsPositiveOutcome")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("LeadId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("LogDateTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LogType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int?>("NewLeadStatusId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Notes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("PromotionId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("ScheduledCallbackAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("WasContacted")
-                        .HasColumnType("bit");
-
-                    b.HasKey("LeadLogId");
-
-                    b.HasIndex("AgentId");
-
-                    b.HasIndex("DispositionId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.HasIndex("PromotionId");
-
-                    b.HasIndex("LeadId", "LogDateTime");
-
-                    b.ToTable("LeadLogs", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadStatus", b =>
-                {
-                    b.Property<int>("LeadStatusId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadStatusId"));
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Icon")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsFinal")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("LeadStatusId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.ToTable("LeadStatuses", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            LeadStatusId = 1,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "New lead",
-                            Icon = "fiber_new",
-                            IsActive = true,
-                            IsDefault = true,
-                            IsFinal = false,
-                            Name = "New",
-                            OperatingCompanyId = 1,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            LeadStatusId = 2,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Trying to reach",
-                            Icon = "phone_callback",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Attempting Contact",
-                            OperatingCompanyId = 1,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            LeadStatusId = 3,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Successfully contacted",
-                            Icon = "phone_in_talk",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Contacted",
-                            OperatingCompanyId = 1,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            LeadStatusId = 4,
-                            Color = "#007bff",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Qualified lead",
-                            Icon = "verified",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Qualified",
-                            OperatingCompanyId = 1,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            LeadStatusId = 5,
-                            Color = "#6f42c1",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Needs follow-up",
-                            Icon = "schedule",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Follow-up",
-                            OperatingCompanyId = 1,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            LeadStatusId = 6,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal closed successfully",
-                            Icon = "emoji_events",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Won",
-                            OperatingCompanyId = 1,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            LeadStatusId = 7,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal lost",
-                            Icon = "cancel",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Lost",
-                            OperatingCompanyId = 1,
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            LeadStatusId = 8,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "New lead",
-                            Icon = "fiber_new",
-                            IsActive = true,
-                            IsDefault = true,
-                            IsFinal = false,
-                            Name = "New",
-                            OperatingCompanyId = 2,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            LeadStatusId = 9,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Trying to reach",
-                            Icon = "phone_callback",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Attempting Contact",
-                            OperatingCompanyId = 2,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            LeadStatusId = 10,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Successfully contacted",
-                            Icon = "phone_in_talk",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Contacted",
-                            OperatingCompanyId = 2,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            LeadStatusId = 11,
-                            Color = "#007bff",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Qualified lead",
-                            Icon = "verified",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Qualified",
-                            OperatingCompanyId = 2,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            LeadStatusId = 12,
-                            Color = "#6f42c1",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Needs follow-up",
-                            Icon = "schedule",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Follow-up",
-                            OperatingCompanyId = 2,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            LeadStatusId = 13,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal closed successfully",
-                            Icon = "emoji_events",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Won",
-                            OperatingCompanyId = 2,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            LeadStatusId = 14,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal lost",
-                            Icon = "cancel",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Lost",
-                            OperatingCompanyId = 2,
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            LeadStatusId = 15,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "New lead",
-                            Icon = "fiber_new",
-                            IsActive = true,
-                            IsDefault = true,
-                            IsFinal = false,
-                            Name = "New",
-                            OperatingCompanyId = 3,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            LeadStatusId = 16,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Trying to reach",
-                            Icon = "phone_callback",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Attempting Contact",
-                            OperatingCompanyId = 3,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            LeadStatusId = 17,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Successfully contacted",
-                            Icon = "phone_in_talk",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Contacted",
-                            OperatingCompanyId = 3,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            LeadStatusId = 18,
-                            Color = "#007bff",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Qualified lead",
-                            Icon = "verified",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Qualified",
-                            OperatingCompanyId = 3,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            LeadStatusId = 19,
-                            Color = "#6f42c1",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Needs follow-up",
-                            Icon = "schedule",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Follow-up",
-                            OperatingCompanyId = 3,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            LeadStatusId = 20,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal closed successfully",
-                            Icon = "emoji_events",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Won",
-                            OperatingCompanyId = 3,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            LeadStatusId = 21,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal lost",
-                            Icon = "cancel",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Lost",
-                            OperatingCompanyId = 3,
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            LeadStatusId = 22,
-                            Color = "#17a2b8",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "New lead",
-                            Icon = "fiber_new",
-                            IsActive = true,
-                            IsDefault = true,
-                            IsFinal = false,
-                            Name = "New",
-                            OperatingCompanyId = 4,
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            LeadStatusId = 23,
-                            Color = "#ffc107",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Trying to reach",
-                            Icon = "phone_callback",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Attempting Contact",
-                            OperatingCompanyId = 4,
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            LeadStatusId = 24,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Successfully contacted",
-                            Icon = "phone_in_talk",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Contacted",
-                            OperatingCompanyId = 4,
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            LeadStatusId = 25,
-                            Color = "#007bff",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Qualified lead",
-                            Icon = "verified",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Qualified",
-                            OperatingCompanyId = 4,
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            LeadStatusId = 26,
-                            Color = "#6f42c1",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Needs follow-up",
-                            Icon = "schedule",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = false,
-                            Name = "Follow-up",
-                            OperatingCompanyId = 4,
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            LeadStatusId = 27,
-                            Color = "#28a745",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal closed successfully",
-                            Icon = "emoji_events",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Won",
-                            OperatingCompanyId = 4,
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            LeadStatusId = 28,
-                            Color = "#dc3545",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Deal lost",
-                            Icon = "cancel",
-                            IsActive = true,
-                            IsDefault = false,
-                            IsFinal = true,
-                            Name = "Lost",
-                            OperatingCompanyId = 4,
-                            SortOrder = 7
-                        });
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.OperatingCompany", b =>
-                {
-                    b.Property<int>("OperatingCompanyId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OperatingCompanyId"));
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("CreatedById")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("LogoUrl")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PrimaryColor")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedById")
-                        .HasColumnType("int");
-
-                    b.HasKey("OperatingCompanyId");
-
-                    b.ToTable("OperatingCompanies", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            OperatingCompanyId = 1,
-                            Code = "PROMED",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Medical technology solutions",
-                            IsActive = true,
-                            Name = "PromedTechnologies",
-                            PrimaryColor = "#1e90ff"
-                        },
-                        new
-                        {
-                            OperatingCompanyId = 2,
-                            Code = "ACCMED",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Medical access solutions",
-                            IsActive = true,
-                            Name = "AccessMedical",
-                            PrimaryColor = "#28a745"
-                        },
-                        new
-                        {
-                            OperatingCompanyId = 3,
-                            Code = "PHARMA",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Pharmaceutical technology",
-                            IsActive = true,
-                            Name = "Pharmatech",
-                            PrimaryColor = "#6f42c1"
-                        },
-                        new
-                        {
-                            OperatingCompanyId = 4,
-                            Code = "SEBENZ",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Trading solutions",
-                            IsActive = true,
-                            Name = "SebenzaniTrading",
-                            PrimaryColor = "#fd7e14"
-                        });
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Promotion", b =>
-                {
-                    b.Property<int>("PromotionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PromotionId"));
-
-                    b.Property<string>("AgentScript")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("CreatedById")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("DiscountType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<decimal?>("DiscountValue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("EndDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PromoCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("TargetAudience")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("TargetProducts")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Terms")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedById")
-                        .HasColumnType("int");
-
-                    b.HasKey("PromotionId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.ToTable("Promotions", (string)null);
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.StaffOperatingCompany", b =>
-                {
-                    b.Property<int>("StaffOperatingCompanyId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("StaffOperatingCompanyId"));
-
-                    b.Property<string>("CompanyRole")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPrimaryCompany")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("OperatingCompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("StaffMemberId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("StaffOperatingCompanyId");
-
-                    b.HasIndex("OperatingCompanyId");
-
-                    b.HasIndex("StaffMemberId", "OperatingCompanyId")
-                        .IsUnique();
-
-                    b.ToTable("StaffOperatingCompanies", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            StaffOperatingCompanyId = 1,
-                            CompanyRole = "SalesManager",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsActive = true,
-                            IsPrimaryCompany = true,
-                            OperatingCompanyId = 1,
-                            StaffMemberId = 1
-                        },
-                        new
-                        {
-                            StaffOperatingCompanyId = 2,
-                            CompanyRole = "SalesManager",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsActive = true,
-                            IsPrimaryCompany = false,
-                            OperatingCompanyId = 2,
-                            StaffMemberId = 1
-                        },
-                        new
-                        {
-                            StaffOperatingCompanyId = 3,
-                            CompanyRole = "SalesManager",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsActive = true,
-                            IsPrimaryCompany = false,
-                            OperatingCompanyId = 3,
-                            StaffMemberId = 1
-                        },
-                        new
-                        {
-                            StaffOperatingCompanyId = 4,
-                            CompanyRole = "SalesManager",
-                            CreatedAt = new DateTime(2025, 11, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsActive = true,
-                            IsPrimaryCompany = false,
-                            OperatingCompanyId = 4,
-                            StaffMemberId = 1
-                        });
+                    b.ToTable("BoardMembers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Card", b =>
@@ -2676,7 +927,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ListId");
 
-                    b.ToTable("Cards", (string)null);
+                    b.ToTable("Cards");
 
                     b.HasData(
                         new
@@ -2847,7 +1098,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UploadedByUserId");
 
-                    b.ToTable("CardAttachments", (string)null);
+                    b.ToTable("CardAttachments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CardComment", b =>
@@ -2881,7 +1132,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("CardComments", (string)null);
+                    b.ToTable("CardComments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CollaborativeDocument", b =>
@@ -2925,7 +1176,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LastModifiedById");
 
-                    b.ToTable("CollaborativeDocuments", (string)null);
+                    b.ToTable("CollaborativeDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Conversation", b =>
@@ -2955,7 +1206,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("ConversationId");
 
-                    b.ToTable("Conversations", (string)null);
+                    b.ToTable("Conversations");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.ConversationParticipant", b =>
@@ -2993,7 +1244,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ConversationParticipants", (string)null);
+                    b.ToTable("ConversationParticipants");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Department", b =>
@@ -3021,7 +1272,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("DepartmentId");
 
-                    b.ToTable("Departments", (string)null);
+                    b.ToTable("Departments");
 
                     b.HasData(
                         new
@@ -3075,7 +1326,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("DocumentCollaborators", (string)null);
+                    b.ToTable("DocumentCollaborators");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.DocumentSnapshot", b =>
@@ -3108,7 +1359,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.ToTable("DocumentSnapshots", (string)null);
+                    b.ToTable("DocumentSnapshots");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.EmpRegistration", b =>
@@ -3163,7 +1414,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmpId");
 
-                    b.ToTable("empregistration", (string)null);
+                    b.ToTable("empregistration");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Employee", b =>
@@ -3227,7 +1478,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmployeeId");
 
-                    b.ToTable("Employees", (string)null);
+                    b.ToTable("Employees");
 
                     b.HasData(
                         new
@@ -3457,7 +1708,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Extensions", (string)null);
+                    b.ToTable("Extensions");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.GovernmentContract", b =>
@@ -3527,7 +1778,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GovernmentContracts", (string)null);
+                    b.ToTable("GovernmentContracts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseChunk", b =>
@@ -3570,7 +1821,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.ToTable("KnowledgeBaseChunks", (string)null);
+                    b.ToTable("KnowledgeBaseChunks");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseDocument", b =>
@@ -3641,7 +1892,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KnowledgeBaseDocuments", (string)null);
+                    b.ToTable("KnowledgeBaseDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseIngestionLog", b =>
@@ -3680,7 +1931,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KnowledgeBaseIngestionLogs", (string)null);
+                    b.ToTable("KnowledgeBaseIngestionLogs");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.List", b =>
@@ -3712,7 +1963,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("BoardId");
 
-                    b.ToTable("Lists", (string)null);
+                    b.ToTable("Lists");
 
                     b.HasData(
                         new
@@ -3804,7 +2055,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("InventoryId");
 
-                    b.ToTable("Backorders", (string)null);
+                    b.ToTable("Backorders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.BuildingInventory", b =>
@@ -3875,7 +2126,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex(new[] { "BuildingId", "ItemCode" }, "UQ_BuildingInventory_Building_Item")
                         .IsUnique();
 
-                    b.ToTable("BuildingInventory", (string)null);
+                    b.ToTable("BuildingInventory");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Commodity", b =>
@@ -3934,7 +2185,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Commodities", (string)null);
+                    b.ToTable("Commodities");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Customer", b =>
@@ -4092,7 +2343,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LogisticsCustomers", (string)null);
+                    b.ToTable("LogisticsCustomers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.CustomerContract", b =>
@@ -4170,7 +2421,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerContracts", (string)null);
+                    b.ToTable("CustomerContracts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.CustomerDeliveryAddress", b =>
@@ -4260,7 +2511,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerDeliveryAddresses", (string)null);
+                    b.ToTable("CustomerDeliveryAddresses");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Driver", b =>
@@ -4325,7 +2576,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Drivers", (string)null);
+                    b.ToTable("Drivers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ImportBatch", b =>
@@ -4377,7 +2628,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportedByUserId");
 
-                    b.ToTable("ImportBatches", (string)null);
+                    b.ToTable("ImportBatches");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ImportedInvoice", b =>
@@ -4433,11 +2684,19 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateTime?>("DeliveryDeadline")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("DeliveryNotes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("DeliveryPostalCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("DeliveryPriority")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
@@ -4534,7 +2793,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("ImportedInvoices", (string)null);
+                    b.ToTable("ImportedInvoices");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Invoice", b =>
@@ -4608,7 +2867,7 @@ namespace ProjectTracker.API.Migrations
                         .IsUnique()
                         .HasFilter("[LoadId] IS NOT NULL");
 
-                    b.ToTable("Invoices", (string)null);
+                    b.ToTable("Invoices");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.InvoiceLineItem", b =>
@@ -4646,7 +2905,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("InvoiceId");
 
-                    b.ToTable("InvoiceLineItems", (string)null);
+                    b.ToTable("InvoiceLineItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Load", b =>
@@ -4781,7 +3040,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("Loads", (string)null);
+                    b.ToTable("Loads");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LoadItem", b =>
@@ -4824,7 +3083,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("LoadItems", (string)null);
+                    b.ToTable("LoadItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LoadStop", b =>
@@ -4932,7 +3191,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("LoadStops", (string)null);
+                    b.ToTable("LoadStops");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.OrderCancellation", b =>
@@ -5040,7 +3299,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportedInvoiceId");
 
-                    b.ToTable("OrderCancellations", (string)null);
+                    b.ToTable("OrderCancellations");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PartDeliveryHistory", b =>
@@ -5094,7 +3353,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("PartDeliveryHistories", (string)null);
+                    b.ToTable("PartDeliveryHistories");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ProofOfDelivery", b =>
@@ -5160,7 +3419,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("LoadId")
                         .IsUnique();
 
-                    b.ToTable("ProofOfDeliveries", (string)null);
+                    b.ToTable("ProofOfDeliveries");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ScrapRecord", b =>
@@ -5206,7 +3465,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("ScrapRecords", (string)null);
+                    b.ToTable("ScrapRecords");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SleepOut", b =>
@@ -5263,7 +3522,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("SleepOuts", (string)null);
+                    b.ToTable("SleepOuts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockMovement", b =>
@@ -5330,7 +3589,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex(new[] { "ToBuildingId" }, "IX_StockMovements_ToBuildingId");
 
-                    b.ToTable("StockMovements", (string)null);
+                    b.ToTable("StockMovements");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockTransfer", b =>
@@ -5398,7 +3657,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ToWarehouseId");
 
-                    b.ToTable("StockTransfers", (string)null);
+                    b.ToTable("StockTransfers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StopCommodity", b =>
@@ -5460,7 +3719,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadStopId");
 
-                    b.ToTable("StopCommodities", (string)null);
+                    b.ToTable("StopCommodities");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnAccountBalance", b =>
@@ -5531,7 +3790,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnAccountBalances", (string)null);
+                    b.ToTable("TfnAccountBalances");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnDepot", b =>
@@ -5604,7 +3863,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TfnDepots", (string)null);
+                    b.ToTable("TfnDepots");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnOrder", b =>
@@ -5717,7 +3976,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnOrders", (string)null);
+                    b.ToTable("TfnOrders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnTransaction", b =>
@@ -5829,7 +4088,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnTransactions", (string)null);
+                    b.ToTable("TfnTransactions");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Vehicle", b =>
@@ -5976,7 +4235,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleTypeId");
 
-                    b.ToTable("Vehicles", (string)null);
+                    b.ToTable("Vehicles");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleMaintenance", b =>
@@ -6052,7 +4311,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("VehicleMaintenance", (string)null);
+                    b.ToTable("VehicleMaintenance");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleType", b =>
@@ -6090,7 +4349,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("VehicleTypes", (string)null);
+                    b.ToTable("VehicleTypes");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Warehouse", b =>
@@ -6163,7 +4422,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Warehouses", (string)null);
+                    b.ToTable("Warehouses");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseBuilding", b =>
@@ -6218,7 +4477,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("WarehouseBuildings", (string)null);
+                    b.ToTable("WarehouseBuildings");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseInventory", b =>
@@ -6266,7 +4525,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("WarehouseInventory", (string)null);
+                    b.ToTable("WarehouseInventory");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Meeting", b =>
@@ -6322,7 +4581,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("OrganizerId");
 
-                    b.ToTable("Meetings", (string)null);
+                    b.ToTable("Meetings");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MeetingAttendee", b =>
@@ -6356,7 +4615,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MeetingAttendees", (string)null);
+                    b.ToTable("MeetingAttendees");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MeetingNotification", b =>
@@ -6395,7 +4654,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MeetingNotifications", (string)null);
+                    b.ToTable("MeetingNotifications");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Message", b =>
@@ -6444,7 +4703,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("SenderId");
 
-                    b.ToTable("Messages", (string)null);
+                    b.ToTable("Messages");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MessageAttachment", b =>
@@ -6489,7 +4748,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("MessageId");
 
-                    b.ToTable("MessageAttachments", (string)null);
+                    b.ToTable("MessageAttachments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MessageReadReceipt", b =>
@@ -6515,7 +4774,280 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MessageReadReceipts", (string)null);
+                    b.ToTable("MessageReadReceipts");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.OperatingCompany", b =>
+                {
+                    b.Property<int>("OperatingCompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OperatingCompanyId"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedById")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PrimaryColor")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedById")
+                        .HasColumnType("int");
+
+                    b.HasKey("OperatingCompanyId");
+
+                    b.ToTable("OperatingCompanies");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Projects.CondomArtwork", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovalDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Designer")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("Scent")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CondomArtworks");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Projects.CondomProductionSchedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("QuantityNote")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Scent")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ScentGroup")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("ScheduleDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("UOM")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CondomProductionSchedules");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Projects.CondomSample", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateSent")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Recipient")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Scent")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CondomSamples");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.ReportCache", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CacheKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("FromDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GeneratedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("GenerationTimeMs")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HitCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastAccessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Parameters")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("ResultSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ToDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CacheKey")
+                        .IsUnique();
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("ReportType", "FromDate", "ToDate");
+
+                    b.ToTable("ReportCaches");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportBatch", b =>
@@ -6571,7 +5103,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("ImportBatchId");
 
-                    b.ToTable("SalesImportBatches", (string)null);
+                    b.ToTable("SalesImportBatches");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportIssue", b =>
@@ -6610,7 +5142,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportBatchId");
 
-                    b.ToTable("SalesImportIssues", (string)null);
+                    b.ToTable("SalesImportIssues");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesTransactionStaging", b =>
@@ -6687,7 +5219,47 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportBatchId");
 
-                    b.ToTable("SalesTransactionStagings", (string)null);
+                    b.ToTable("SalesTransactionStagings");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.StaffOperatingCompany", b =>
+                {
+                    b.Property<int>("StaffOperatingCompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("StaffOperatingCompanyId"));
+
+                    b.Property<string>("CompanyRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPrimaryCompany")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OperatingCompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StaffMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("StaffOperatingCompanyId");
+
+                    b.HasIndex("OperatingCompanyId");
+
+                    b.HasIndex("StaffMemberId", "OperatingCompanyId")
+                        .IsUnique();
+
+                    b.ToTable("StaffOperatingCompanies");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SupportTicket", b =>
@@ -6766,7 +5338,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("SubmittedByUserId");
 
-                    b.ToTable("SupportTickets", (string)null);
+                    b.ToTable("SupportTickets");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ComplianceAlert", b =>
@@ -6816,7 +5388,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ComplianceDocumentId");
 
-                    b.ToTable("ComplianceAlerts", (string)null);
+                    b.ToTable("ComplianceAlerts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ComplianceDocument", b =>
@@ -6894,7 +5466,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ComplianceDocuments", (string)null);
+                    b.ToTable("ComplianceDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.Tender", b =>
@@ -7037,7 +5609,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("Tenders", (string)null);
+                    b.ToTable("Tenders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderActivity", b =>
@@ -7079,7 +5651,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderActivities", (string)null);
+                    b.ToTable("TenderActivities");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderBOQItem", b =>
@@ -7132,7 +5704,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderBOQItems", (string)null);
+                    b.ToTable("TenderBOQItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderDocument", b =>
@@ -7192,7 +5764,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderDocuments", (string)null);
+                    b.ToTable("TenderDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderKnowledgeBase", b =>
@@ -7268,7 +5840,63 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TenderKnowledgeBase", (string)null);
+                    b.ToTable("TenderKnowledgeBase");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderReminder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedByUserName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DaysBefore")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EmailRecipients")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("EventDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSent")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TenderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenderId");
+
+                    b.ToTable("TenderReminders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderTeamMember", b =>
@@ -7313,7 +5941,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderTeamMembers", (string)null);
+                    b.ToTable("TenderTeamMembers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TicketComment", b =>
@@ -7349,7 +5977,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TicketId");
 
-                    b.ToTable("TicketComments", (string)null);
+                    b.ToTable("TicketComments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TodoNotification", b =>
@@ -7391,7 +6019,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("TodoNotifications", (string)null);
+                    b.ToTable("TodoNotifications");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TodoTask", b =>
@@ -7462,7 +6090,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("TodoTasks", (string)null);
+                    b.ToTable("TodoTasks");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.User", b =>
@@ -7545,7 +6173,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LinkedEmpId");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
 
                     b.HasData(
                         new
@@ -7715,237 +6343,6 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("InvitedBy");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Campaign", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany("Campaigns")
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("OperatingCompany");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.CampaignAgent", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.User", "Agent")
-                        .WithMany()
-                        .HasForeignKey("AgentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Campaign", "Campaign")
-                        .WithMany("AssignedAgents")
-                        .HasForeignKey("CampaignId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Agent");
-
-                    b.Navigation("Campaign");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Disposition", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany("Dispositions")
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("OperatingCompany");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Lead", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.User", "AssignedAgent")
-                        .WithMany()
-                        .HasForeignKey("AssignedAgentId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Campaign", "Campaign")
-                        .WithMany("Leads")
-                        .HasForeignKey("CampaignId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Disposition", "LastDisposition")
-                        .WithMany()
-                        .HasForeignKey("LastDispositionId");
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.LeadStatus", "LeadStatus")
-                        .WithMany("Leads")
-                        .HasForeignKey("LeadStatusId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany("Leads")
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AssignedAgent");
-
-                    b.Navigation("Campaign");
-
-                    b.Navigation("LastDisposition");
-
-                    b.Navigation("LeadStatus");
-
-                    b.Navigation("OperatingCompany");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadAssignmentHistory", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.User", "ChangedBy")
-                        .WithMany()
-                        .HasForeignKey("ChangedById")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Lead", "Lead")
-                        .WithMany("AssignmentHistory")
-                        .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.User", "NewAgent")
-                        .WithMany()
-                        .HasForeignKey("NewAgentId");
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany()
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.User", "PreviousAgent")
-                        .WithMany()
-                        .HasForeignKey("PreviousAgentId");
-
-                    b.Navigation("ChangedBy");
-
-                    b.Navigation("Lead");
-
-                    b.Navigation("NewAgent");
-
-                    b.Navigation("OperatingCompany");
-
-                    b.Navigation("PreviousAgent");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadInterest", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.CRM.Lead", "Lead")
-                        .WithMany("Interests")
-                        .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany()
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Promotion", "Promotion")
-                        .WithMany("LeadInterests")
-                        .HasForeignKey("PromotionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ProjectTracker.API.Models.User", "RecordedBy")
-                        .WithMany()
-                        .HasForeignKey("RecordedById");
-
-                    b.Navigation("Lead");
-
-                    b.Navigation("OperatingCompany");
-
-                    b.Navigation("Promotion");
-
-                    b.Navigation("RecordedBy");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadLog", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.User", "Agent")
-                        .WithMany()
-                        .HasForeignKey("AgentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Disposition", "Disposition")
-                        .WithMany("LeadLogs")
-                        .HasForeignKey("DispositionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Lead", "Lead")
-                        .WithMany("Logs")
-                        .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany()
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.CRM.Promotion", "Promotion")
-                        .WithMany()
-                        .HasForeignKey("PromotionId");
-
-                    b.Navigation("Agent");
-
-                    b.Navigation("Disposition");
-
-                    b.Navigation("Lead");
-
-                    b.Navigation("OperatingCompany");
-
-                    b.Navigation("Promotion");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadStatus", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany("LeadStatuses")
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("OperatingCompany");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Promotion", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany("Promotions")
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("OperatingCompany");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.StaffOperatingCompany", b =>
-                {
-                    b.HasOne("ProjectTracker.API.Models.CRM.OperatingCompany", "OperatingCompany")
-                        .WithMany("StaffMappings")
-                        .HasForeignKey("OperatingCompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ProjectTracker.API.Models.User", "StaffMember")
-                        .WithMany()
-                        .HasForeignKey("StaffMemberId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("OperatingCompany");
-
-                    b.Navigation("StaffMember");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Card", b =>
@@ -8744,6 +7141,17 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("ImportBatch");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.StaffOperatingCompany", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.OperatingCompany", "OperatingCompany")
+                        .WithMany("StaffMappings")
+                        .HasForeignKey("OperatingCompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OperatingCompany");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.SupportTicket", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.User", "AssignedToUser")
@@ -8807,6 +7215,17 @@ namespace ProjectTracker.API.Migrations
                 {
                     b.HasOne("ProjectTracker.API.Models.Tenders.Tender", "Tender")
                         .WithMany("Documents")
+                        .HasForeignKey("TenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tender");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderReminder", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Tenders.Tender", "Tender")
+                        .WithMany()
                         .HasForeignKey("TenderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -8902,52 +7321,6 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Lists");
 
                     b.Navigation("Members");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Campaign", b =>
-                {
-                    b.Navigation("AssignedAgents");
-
-                    b.Navigation("Leads");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Disposition", b =>
-                {
-                    b.Navigation("LeadLogs");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Lead", b =>
-                {
-                    b.Navigation("AssignmentHistory");
-
-                    b.Navigation("Interests");
-
-                    b.Navigation("Logs");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.LeadStatus", b =>
-                {
-                    b.Navigation("Leads");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.OperatingCompany", b =>
-                {
-                    b.Navigation("Campaigns");
-
-                    b.Navigation("Dispositions");
-
-                    b.Navigation("LeadStatuses");
-
-                    b.Navigation("Leads");
-
-                    b.Navigation("Promotions");
-
-                    b.Navigation("StaffMappings");
-                });
-
-            modelBuilder.Entity("ProjectTracker.API.Models.CRM.Promotion", b =>
-                {
-                    b.Navigation("LeadInterests");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Card", b =>
@@ -9099,6 +7472,11 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Attachments");
 
                     b.Navigation("ReadReceipts");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.OperatingCompany", b =>
+                {
+                    b.Navigation("StaffMappings");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportBatch", b =>

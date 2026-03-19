@@ -56,6 +56,33 @@ interface DashboardData {
   dailyTotals: { date: string; total: number }[];
 }
 
+interface CondomSample {
+  id: number;
+  scent: string;
+  type: string;
+  batchCode: string;
+  quantity: number;
+  dateSent: string;
+  status: string;
+  recipient?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+interface CondomArtwork {
+  id: number;
+  scent: string;
+  type: string;
+  title: string;
+  status: string;
+  version?: string;
+  designer?: string;
+  approvalDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 @Component({
   selector: 'app-condoms-dashboard',
   standalone: true,
@@ -667,6 +694,368 @@ interface DashboardData {
             </table>
           </div>
         </div>
+
+        <!-- ==================== SAMPLES SECTION ==================== -->
+        <div class="samples-section">
+          <div class="section-header">
+            <h3><mat-icon>science</mat-icon> Samples</h3>
+            <button mat-raised-button class="add-btn samples-add-btn" (click)="openSampleDialog()">
+              <mat-icon>add_circle</mat-icon> Add Sample
+            </button>
+          </div>
+
+          @if (samplesLoading) {
+            <div class="section-loading"><mat-spinner diameter="28" strokeWidth="3"></mat-spinner> Loading samples...</div>
+          } @else if (samples.length === 0) {
+            <div class="empty-state">
+              <mat-icon>science</mat-icon>
+              <p>No samples recorded yet</p>
+            </div>
+          } @else {
+            <div class="samples-kpi-row">
+              <div class="mini-kpi mkpi-orange">
+                <span class="mkpi-val">{{ samples.length }}</span>
+                <span class="mkpi-lbl">Total Samples</span>
+              </div>
+              <div class="mini-kpi mkpi-blue">
+                <span class="mkpi-val">{{ getSamplesByStatus('Pending').length }}</span>
+                <span class="mkpi-lbl">Pending</span>
+              </div>
+              <div class="mini-kpi mkpi-green">
+                <span class="mkpi-val">{{ getSamplesByStatus('Approved').length }}</span>
+                <span class="mkpi-lbl">Approved</span>
+              </div>
+              <div class="mini-kpi mkpi-pink">
+                <span class="mkpi-val">{{ getSamplesByStatus('Rejected').length }}</span>
+                <span class="mkpi-lbl">Rejected</span>
+              </div>
+              <div class="mini-kpi mkpi-purple">
+                <span class="mkpi-val">{{ getSamplesByStatus('In Testing').length }}</span>
+                <span class="mkpi-lbl">In Testing</span>
+              </div>
+            </div>
+            <div class="dialog-table-wrap">
+              <table class="dialog-table samples-table">
+                <thead>
+                  <tr>
+                    <th>Scent</th>
+                    <th>Type</th>
+                    <th>Batch Code</th>
+                    <th class="right">Qty</th>
+                    <th>Date Sent</th>
+                    <th>Status</th>
+                    <th>Recipient</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of samples; track s.id) {
+                    <tr>
+                      <td class="primary-cell">{{ getScentEmoji(s.scent) }} {{ s.scent }}</td>
+                      <td><span class="type-pill" [class.type-pill-f]="s.type==='Female'" [class.type-pill-m]="s.type==='Male'">{{ s.type }}</span></td>
+                      <td class="mono-text">{{ s.batchCode }}</td>
+                      <td class="right mono-text">{{ s.quantity }}</td>
+                      <td>{{ s.dateSent | date:'dd MMM yyyy' }}</td>
+                      <td>
+                        <span class="status-chip" [class]="'sc-' + s.status.toLowerCase().replace(' ', '-')">{{ s.status }}</span>
+                      </td>
+                      <td>{{ s.recipient || '-' }}</td>
+                      <td class="notes-cell">{{ s.notes || '-' }}</td>
+                      <td class="actions-cell">
+                        <select class="status-select" [value]="s.status" (change)="updateSampleStatus(s.id, $any($event.target).value)">
+                          <option value="Pending">Pending</option>
+                          <option value="In Testing">In Testing</option>
+                          <option value="Approved">Approved</option>
+                          <option value="Rejected">Rejected</option>
+                        </select>
+                        <button class="icon-btn delete-btn" matTooltip="Delete" (click)="deleteSample(s.id)">
+                          <mat-icon>delete_outline</mat-icon>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+
+        <!-- ==================== ARTWORK SECTION ==================== -->
+        <div class="artwork-section">
+          <div class="section-header">
+            <h3><mat-icon>palette</mat-icon> Artwork</h3>
+            <button mat-raised-button class="add-btn artwork-add-btn" (click)="openArtworkDialog()">
+              <mat-icon>add_circle</mat-icon> Add Artwork
+            </button>
+          </div>
+
+          @if (artworkLoading) {
+            <div class="section-loading"><mat-spinner diameter="28" strokeWidth="3"></mat-spinner> Loading artwork...</div>
+          } @else if (artworkList.length === 0) {
+            <div class="empty-state">
+              <mat-icon>palette</mat-icon>
+              <p>No artwork entries yet</p>
+            </div>
+          } @else {
+            <div class="samples-kpi-row">
+              <div class="mini-kpi mkpi-purple">
+                <span class="mkpi-val">{{ artworkList.length }}</span>
+                <span class="mkpi-lbl">Total Artwork</span>
+              </div>
+              <div class="mini-kpi mkpi-orange">
+                <span class="mkpi-val">{{ getArtworkByStatus('Draft').length }}</span>
+                <span class="mkpi-lbl">Draft</span>
+              </div>
+              <div class="mini-kpi mkpi-blue">
+                <span class="mkpi-val">{{ getArtworkByStatus('In Review').length }}</span>
+                <span class="mkpi-lbl">In Review</span>
+              </div>
+              <div class="mini-kpi mkpi-pink">
+                <span class="mkpi-val">{{ getArtworkByStatus('Revision').length }}</span>
+                <span class="mkpi-lbl">Revision</span>
+              </div>
+              <div class="mini-kpi mkpi-green">
+                <span class="mkpi-val">{{ getArtworkByStatus('Approved').length }}</span>
+                <span class="mkpi-lbl">Approved</span>
+              </div>
+            </div>
+            <div class="artwork-cards-grid">
+              @for (a of artworkList; track a.id) {
+                <div class="artwork-card" [style.border-left-color]="getScentColor(a.scent)">
+                  <div class="ac-header">
+                    <div class="ac-title-group">
+                      <span class="ac-emoji">{{ getScentEmoji(a.scent) }}</span>
+                      <div class="ac-title-info">
+                        <span class="ac-title">{{ a.title }}</span>
+                        <span class="ac-subtitle">{{ a.scent }} · {{ a.type }}</span>
+                      </div>
+                    </div>
+                    <div class="ac-actions">
+                      <select class="status-select" [value]="a.status" (change)="updateArtworkStatus(a.id, $any($event.target).value)">
+                        <option value="Draft">Draft</option>
+                        <option value="In Review">In Review</option>
+                        <option value="Revision">Revision</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Printing">Printing</option>
+                      </select>
+                      <button class="icon-btn delete-btn" matTooltip="Delete" (click)="deleteArtwork(a.id)">
+                        <mat-icon>delete_outline</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="ac-body">
+                    <div class="ac-meta-row">
+                      <span class="ac-meta"><mat-icon>label</mat-icon> {{ a.version || 'v1.0' }}</span>
+                      <span class="ac-meta"><mat-icon>person</mat-icon> {{ a.designer || '-' }}</span>
+                      <span class="ac-meta"><mat-icon>schedule</mat-icon> {{ a.updatedAt | date:'dd MMM yyyy' }}</span>
+                    </div>
+                    <span class="status-chip" [class]="'sc-' + a.status.toLowerCase().replace(' ', '-')">{{ a.status }}</span>
+                    @if (a.approvalDate) {
+                      <span class="ac-approved-tag"><mat-icon>verified</mat-icon> Approved {{ a.approvalDate | date:'dd MMM' }}</span>
+                    }
+                    @if (a.notes) {
+                      <p class="ac-notes">{{ a.notes }}</p>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- ==================== ADD SAMPLE DIALOG ==================== -->
+        @if (showSampleDialog) {
+          <div class="dialog-backdrop" (click)="closeSampleDialog()"></div>
+          <div class="dialog-panel dialog-sample">
+            <div class="dialog-header dh-sample">
+              <div class="dialog-title-group">
+                <div class="dialog-icon-ring sample-icon-ring"><mat-icon>science</mat-icon></div>
+                <div>
+                  <h2 class="dialog-title">Add New Sample</h2>
+                  <p class="dialog-subtitle">Record a condom sample submission</p>
+                </div>
+              </div>
+              <button class="dialog-close" (click)="closeSampleDialog()"><mat-icon>close</mat-icon></button>
+            </div>
+            <div class="dialog-body">
+              @if (sampleSuccess) {
+                <div class="capture-success">
+                  <div class="success-icon-wrap"><mat-icon>check_circle</mat-icon></div>
+                  <h3>Sample Recorded!</h3>
+                  <p>{{ sampleSuccessMsg }}</p>
+                  <div class="success-actions">
+                    <button mat-flat-button class="btn-add-another" (click)="resetSampleForm()"><mat-icon>add</mat-icon> Add Another</button>
+                    <button mat-stroked-button (click)="closeSampleDialog()"><mat-icon>close</mat-icon> Close</button>
+                  </div>
+                </div>
+              } @else {
+                @if (sampleError) {
+                  <div class="capture-error"><mat-icon>error_outline</mat-icon><span>{{ sampleError }}</span></div>
+                }
+                <div class="capture-form">
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Scent <span class="required">*</span></label>
+                      <select class="form-select" [(ngModel)]="sampleForm.scent">
+                        <option value="">Select Scent</option>
+                        <option value="Vanilla">🍦 Vanilla</option>
+                        <option value="Strawberry">🍓 Strawberry</option>
+                        <option value="Banana">🍌 Banana</option>
+                        <option value="Grape">🍇 Grape</option>
+                        <option value="Plain">📦 Plain</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Type <span class="required">*</span></label>
+                      <select class="form-select" [(ngModel)]="sampleForm.type">
+                        <option value="">Select Type</option>
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Batch Code <span class="required">*</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="sampleForm.batchCode" placeholder="e.g. F1K 2501">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Quantity <span class="required">*</span></label>
+                      <input type="number" class="form-input" [(ngModel)]="sampleForm.quantity" placeholder="0" min="1">
+                    </div>
+                  </div>
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Date Sent <span class="required">*</span></label>
+                      <input type="date" class="form-input" [(ngModel)]="sampleForm.dateSent">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Status</label>
+                      <select class="form-select" [(ngModel)]="sampleForm.status">
+                        <option value="Pending">Pending</option>
+                        <option value="In Testing">In Testing</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Rejected">Rejected</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Recipient <span class="optional">(optional)</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="sampleForm.recipient" placeholder="e.g. QA Lab, Client Name">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Notes <span class="optional">(optional)</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="sampleForm.notes" placeholder="Additional details">
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button mat-stroked-button (click)="closeSampleDialog()" [disabled]="sampleSaving">Cancel</button>
+                    <button mat-flat-button class="btn-submit btn-submit-sample" (click)="submitSample()" [disabled]="sampleSaving || !isSampleFormValid()">
+                      @if (sampleSaving) { <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Saving... } @else { <mat-icon>save</mat-icon> Save Sample }
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- ==================== ADD ARTWORK DIALOG ==================== -->
+        @if (showArtworkDialog) {
+          <div class="dialog-backdrop" (click)="closeArtworkDialog()"></div>
+          <div class="dialog-panel dialog-artwork">
+            <div class="dialog-header dh-artwork">
+              <div class="dialog-title-group">
+                <div class="dialog-icon-ring artwork-icon-ring"><mat-icon>palette</mat-icon></div>
+                <div>
+                  <h2 class="dialog-title">Add New Artwork</h2>
+                  <p class="dialog-subtitle">Track packaging design & artwork</p>
+                </div>
+              </div>
+              <button class="dialog-close" (click)="closeArtworkDialog()"><mat-icon>close</mat-icon></button>
+            </div>
+            <div class="dialog-body">
+              @if (artworkSuccess) {
+                <div class="capture-success">
+                  <div class="success-icon-wrap"><mat-icon>check_circle</mat-icon></div>
+                  <h3>Artwork Created!</h3>
+                  <p>{{ artworkSuccessMsg }}</p>
+                  <div class="success-actions">
+                    <button mat-flat-button class="btn-add-another" (click)="resetArtworkForm()"><mat-icon>add</mat-icon> Add Another</button>
+                    <button mat-stroked-button (click)="closeArtworkDialog()"><mat-icon>close</mat-icon> Close</button>
+                  </div>
+                </div>
+              } @else {
+                @if (artworkError) {
+                  <div class="capture-error"><mat-icon>error_outline</mat-icon><span>{{ artworkError }}</span></div>
+                }
+                <div class="capture-form">
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Scent <span class="required">*</span></label>
+                      <select class="form-select" [(ngModel)]="artworkForm.scent">
+                        <option value="">Select Scent</option>
+                        <option value="Vanilla">🍦 Vanilla</option>
+                        <option value="Strawberry">🍓 Strawberry</option>
+                        <option value="Banana">🍌 Banana</option>
+                        <option value="Grape">🍇 Grape</option>
+                        <option value="Plain">📦 Plain</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Type <span class="required">*</span></label>
+                      <select class="form-select" [(ngModel)]="artworkForm.type">
+                        <option value="">Select Type</option>
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Title <span class="required">*</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="artworkForm.title" placeholder="e.g. Vanilla FC Inner Box">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Version</label>
+                      <input type="text" class="form-input" [(ngModel)]="artworkForm.version" placeholder="e.g. v1.0">
+                    </div>
+                  </div>
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Designer <span class="optional">(optional)</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="artworkForm.designer" placeholder="Designer name">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Status</label>
+                      <select class="form-select" [(ngModel)]="artworkForm.status">
+                        <option value="Draft">Draft</option>
+                        <option value="In Review">In Review</option>
+                        <option value="Revision">Revision</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Printing">Printing</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Notes <span class="optional">(optional)</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="artworkForm.notes" placeholder="Additional details">
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button mat-stroked-button (click)="closeArtworkDialog()" [disabled]="artworkSaving">Cancel</button>
+                    <button mat-flat-button class="btn-submit btn-submit-artwork" (click)="submitArtwork()" [disabled]="artworkSaving || !isArtworkFormValid()">
+                      @if (artworkSaving) { <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Saving... } @else { <mat-icon>save</mat-icon> Save Artwork }
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
       }
     </div>
   `,
@@ -1535,6 +1924,173 @@ interface DashboardData {
       flex-shrink: 0;
     }
 
+    /* ── Samples & Artwork Sections ── */
+    .samples-section, .artwork-section {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow-md);
+      margin-top: 24px;
+    }
+
+    .section-loading {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--text-muted);
+    }
+    .empty-state mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.4; }
+    .empty-state p { margin: 8px 0 0; font-size: 14px; }
+
+    .add-btn {
+      border-radius: 12px !important;
+      font-weight: 700 !important;
+      padding: 6px 18px !important;
+      display: flex; align-items: center; gap: 6px;
+      border: 1px solid rgba(255,255,255,0.2) !important;
+      transition: all 0.2s !important;
+    }
+    .samples-add-btn {
+      background: linear-gradient(135deg, #ff9800, #e65100) !important;
+      color: white !important;
+    }
+    .samples-add-btn:hover { box-shadow: 0 4px 12px rgba(255,152,0,0.4) !important; transform: translateY(-1px); }
+    .artwork-add-btn {
+      background: linear-gradient(135deg, #9c27b0, #6a1b9a) !important;
+      color: white !important;
+    }
+    .artwork-add-btn:hover { box-shadow: 0 4px 12px rgba(156,39,176,0.4) !important; transform: translateY(-1px); }
+
+    .samples-kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .mini-kpi {
+      padding: 12px 16px;
+      border-radius: 12px;
+      text-align: center;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .mkpi-val { font-size: 20px; font-weight: 800; color: var(--text-primary); }
+    .mkpi-lbl { font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; }
+    .mkpi-orange { background: var(--orange-soft); }
+    .mkpi-orange .mkpi-lbl { color: var(--orange); }
+    .mkpi-blue { background: var(--blue-soft); }
+    .mkpi-blue .mkpi-lbl { color: var(--blue); }
+    .mkpi-green { background: var(--green-soft); }
+    .mkpi-green .mkpi-lbl { color: var(--green); }
+    .mkpi-pink { background: var(--pink-soft); }
+    .mkpi-pink .mkpi-lbl { color: var(--pink); }
+    .mkpi-purple { background: var(--purple-soft); }
+    .mkpi-purple .mkpi-lbl { color: var(--purple); }
+
+    /* Status Chips */
+    .status-chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .sc-pending { background: #fff3e0; color: #e65100; }
+    .sc-in-testing { background: #e3f2fd; color: #1565c0; }
+    .sc-approved { background: #e8f5e9; color: #2e7d32; }
+    .sc-rejected { background: #fce4ec; color: #c62828; }
+    .sc-draft { background: #f5f5f5; color: #616161; }
+    .sc-in-review { background: #e3f2fd; color: #1565c0; }
+    .sc-revision { background: #fff3e0; color: #e65100; }
+    .sc-printing { background: #f3e5f5; color: #7b1fa2; }
+
+    .status-select {
+      padding: 4px 8px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      background: var(--surface);
+      cursor: pointer;
+      outline: none;
+    }
+    .status-select:focus { border-color: var(--blue); }
+
+    .icon-btn {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; border-radius: 8px;
+      cursor: pointer; transition: all 0.15s; background: transparent;
+    }
+    .icon-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .delete-btn { color: var(--text-muted); }
+    .delete-btn:hover { background: #fef2f2; color: #ef4444; }
+
+    .notes-cell { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary); }
+    .actions-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+    .samples-table td, .samples-table th { padding: 8px 12px !important; }
+
+    /* Artwork Cards Grid */
+    .artwork-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    .artwork-card {
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      border-left: 4px solid;
+      padding: 18px 20px;
+      transition: all 0.2s;
+    }
+    .artwork-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+    .ac-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px;
+    }
+    .ac-title-group { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .ac-emoji { font-size: 1.4rem; }
+    .ac-title-info { display: flex; flex-direction: column; min-width: 0; }
+    .ac-title { font-weight: 700; font-size: 14px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ac-subtitle { font-size: 11px; color: var(--text-secondary); }
+    .ac-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+    .ac-body { display: flex; flex-direction: column; gap: 8px; }
+    .ac-meta-row { display: flex; gap: 14px; flex-wrap: wrap; }
+    .ac-meta {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .ac-meta mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .ac-approved-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 700; color: #2e7d32;
+      background: #e8f5e9; padding: 3px 10px; border-radius: 20px; width: fit-content;
+    }
+    .ac-approved-tag mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .ac-notes { font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.4; }
+
+    /* Sample / Artwork Dialog styles */
+    .dh-sample { background: linear-gradient(135deg, var(--orange-soft), var(--orange-mid)); }
+    .sample-icon-ring { background: var(--orange) !important; color: white !important; }
+    .dh-artwork { background: linear-gradient(135deg, var(--purple-soft), var(--purple-mid)); }
+    .artwork-icon-ring { background: var(--purple) !important; color: white !important; }
+    .btn-submit-sample { background: linear-gradient(135deg, #ff9800, #e65100) !important; color: white !important; }
+    .btn-submit-artwork { background: linear-gradient(135deg, #9c27b0, #6a1b9a) !important; color: white !important; }
+
     /* ── Responsive ── */
     @media (max-width: 1100px) {
       .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -1591,6 +2147,26 @@ export class CondomsDashboardComponent implements OnInit {
     quantityNote: ''
   };
 
+  // Samples
+  samples: CondomSample[] = [];
+  samplesLoading = false;
+  showSampleDialog = false;
+  sampleSaving = false;
+  sampleError = '';
+  sampleSuccess = false;
+  sampleSuccessMsg = '';
+  sampleForm = { scent: '', type: '', batchCode: '', quantity: 0, dateSent: '', status: 'Pending', recipient: '', notes: '' };
+
+  // Artwork
+  artworkList: CondomArtwork[] = [];
+  artworkLoading = false;
+  showArtworkDialog = false;
+  artworkSaving = false;
+  artworkError = '';
+  artworkSuccess = false;
+  artworkSuccessMsg = '';
+  artworkForm = { scent: '', type: '', title: '', status: 'Draft', version: '', designer: '', notes: '' };
+
   private maxDailyTotal = 0;
 
   ngOnInit(): void {
@@ -1631,6 +2207,25 @@ export class CondomsDashboardComponent implements OnInit {
         this.error = 'Could not load stock schedule';
         this.loading = false;
       }
+    });
+
+    this.loadSamples();
+    this.loadArtwork();
+  }
+
+  loadSamples(): void {
+    this.samplesLoading = true;
+    this.http.get<CondomSample[]>(`${environment.apiUrl}/condomproject/samples`).subscribe({
+      next: (data) => { this.samples = data; this.samplesLoading = false; },
+      error: () => { this.samplesLoading = false; }
+    });
+  }
+
+  loadArtwork(): void {
+    this.artworkLoading = true;
+    this.http.get<CondomArtwork[]>(`${environment.apiUrl}/condomproject/artwork`).subscribe({
+      next: (data) => { this.artworkList = data; this.artworkLoading = false; },
+      error: () => { this.artworkLoading = false; }
     });
   }
 
@@ -1829,5 +2424,152 @@ export class CondomsDashboardComponent implements OnInit {
   getScentPercent(units: number): number {
     const maxUnits = Math.max(...(this.dashboard?.scentBreakdown || []).map(s => s.totalUnits), 1);
     return (units / maxUnits) * 100;
+  }
+
+  // ── Sample Methods ──
+
+  getSamplesByStatus(status: string): CondomSample[] {
+    return this.samples.filter(s => s.status === status);
+  }
+
+  openSampleDialog(): void {
+    this.resetSampleForm();
+    this.showSampleDialog = true;
+  }
+
+  closeSampleDialog(): void {
+    this.showSampleDialog = false;
+    this.sampleError = '';
+    this.sampleSuccess = false;
+  }
+
+  resetSampleForm(): void {
+    this.sampleForm = { scent: '', type: '', batchCode: '', quantity: 0, dateSent: '', status: 'Pending', recipient: '', notes: '' };
+    this.sampleError = '';
+    this.sampleSuccess = false;
+    this.sampleSuccessMsg = '';
+    this.sampleSaving = false;
+  }
+
+  isSampleFormValid(): boolean {
+    return !!(this.sampleForm.scent && this.sampleForm.type && this.sampleForm.batchCode.trim() && this.sampleForm.quantity > 0 && this.sampleForm.dateSent);
+  }
+
+  submitSample(): void {
+    if (!this.isSampleFormValid()) return;
+    this.sampleSaving = true;
+    this.sampleError = '';
+
+    const payload = {
+      scent: this.sampleForm.scent,
+      type: this.sampleForm.type,
+      batchCode: this.sampleForm.batchCode.trim(),
+      quantity: this.sampleForm.quantity,
+      dateSent: this.sampleForm.dateSent,
+      status: this.sampleForm.status || 'Pending',
+      recipient: this.sampleForm.recipient?.trim() || null,
+      notes: this.sampleForm.notes?.trim() || null
+    };
+
+    this.http.post<{ success: boolean; message: string }>(`${environment.apiUrl}/condomproject/samples`, payload).subscribe({
+      next: (res) => {
+        this.sampleSaving = false;
+        this.sampleSuccess = true;
+        this.sampleSuccessMsg = res.message || 'Sample recorded successfully';
+        this.loadSamples();
+      },
+      error: (err) => {
+        this.sampleSaving = false;
+        this.sampleError = err.error?.error || 'Failed to create sample';
+      }
+    });
+  }
+
+  updateSampleStatus(id: number, status: string): void {
+    this.http.put<{ success: boolean }>(`${environment.apiUrl}/condomproject/samples/${id}/status`, { status }).subscribe({
+      next: () => this.loadSamples(),
+      error: () => {}
+    });
+  }
+
+  deleteSample(id: number): void {
+    if (!confirm('Delete this sample?')) return;
+    this.http.delete<{ success: boolean }>(`${environment.apiUrl}/condomproject/samples/${id}`).subscribe({
+      next: () => this.loadSamples(),
+      error: () => {}
+    });
+  }
+
+  // ── Artwork Methods ──
+
+  getArtworkByStatus(status: string): CondomArtwork[] {
+    return this.artworkList.filter(a => a.status === status);
+  }
+
+  openArtworkDialog(): void {
+    this.resetArtworkForm();
+    this.showArtworkDialog = true;
+  }
+
+  closeArtworkDialog(): void {
+    this.showArtworkDialog = false;
+    this.artworkError = '';
+    this.artworkSuccess = false;
+  }
+
+  resetArtworkForm(): void {
+    this.artworkForm = { scent: '', type: '', title: '', status: 'Draft', version: '', designer: '', notes: '' };
+    this.artworkError = '';
+    this.artworkSuccess = false;
+    this.artworkSuccessMsg = '';
+    this.artworkSaving = false;
+  }
+
+  isArtworkFormValid(): boolean {
+    return !!(this.artworkForm.scent && this.artworkForm.type && this.artworkForm.title.trim());
+  }
+
+  submitArtwork(): void {
+    if (!this.isArtworkFormValid()) return;
+    this.artworkSaving = true;
+    this.artworkError = '';
+
+    const payload = {
+      scent: this.artworkForm.scent,
+      type: this.artworkForm.type,
+      title: this.artworkForm.title.trim(),
+      status: this.artworkForm.status || 'Draft',
+      version: this.artworkForm.version?.trim() || null,
+      designer: this.artworkForm.designer?.trim() || null,
+      notes: this.artworkForm.notes?.trim() || null
+    };
+
+    this.http.post<{ success: boolean; message: string }>(`${environment.apiUrl}/condomproject/artwork`, payload).subscribe({
+      next: (res) => {
+        this.artworkSaving = false;
+        this.artworkSuccess = true;
+        this.artworkSuccessMsg = res.message || 'Artwork created successfully';
+        this.loadArtwork();
+      },
+      error: (err) => {
+        this.artworkSaving = false;
+        this.artworkError = err.error?.error || 'Failed to create artwork';
+      }
+    });
+  }
+
+  updateArtworkStatus(id: number, status: string): void {
+    this.http.put<{ success: boolean }>(`${environment.apiUrl}/condomproject/artwork/${id}/status`, { status }).subscribe({
+      next: () => this.loadArtwork(),
+      error: () => {}
+    });
+  }
+
+  deleteArtwork(id: number): void {
+    if (!confirm('Delete this artwork?')) return;
+    this.http.delete<{ success: boolean }>(`${environment.apiUrl}/condomproject/artwork/${id}`).subscribe({
+      next: () => this.loadArtwork(),
+      error: () => {}
+    });
   }
 }
