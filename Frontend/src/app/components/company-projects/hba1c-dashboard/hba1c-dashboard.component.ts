@@ -23,7 +23,8 @@ import {
   HBA1CProvincialSalesData,
   HBA1CTopProduct,
   HBA1CProvinceBreakdown,
-  HBA1CEquipmentDistribution
+  HBA1CEquipmentDistribution,
+  HBA1CTrainer
 } from '../../../services/hba1c.service';
 
 @Component({
@@ -96,7 +97,7 @@ import {
     } @else {
       <!-- KPI Cards -->
       <div class="kpi-grid">
-        <div class="kpi-card kpi-blue">
+        <div class="kpi-card kpi-blue clickable" (click)="openKpiDialog('training')">
           <div class="kpi-icon-wrap"><mat-icon>school</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.trainingStats?.totalSessions || 0 | number }}</span>
@@ -104,7 +105,7 @@ import {
           </div>
           <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card kpi-green">
+        <div class="kpi-card kpi-green clickable" (click)="openKpiDialog('participants')">
           <div class="kpi-icon-wrap"><mat-icon>groups</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
@@ -112,7 +113,7 @@ import {
           </div>
           <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card kpi-orange">
+        <div class="kpi-card kpi-orange clickable" (click)="openKpiDialog('trainers')">
           <div class="kpi-icon-wrap"><mat-icon>person</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.nationalTotals?.totalTrainers || 0 | number }}</span>
@@ -120,7 +121,7 @@ import {
           </div>
           <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card kpi-purple">
+        <div class="kpi-card kpi-purple clickable" (click)="openKpiDialog('deliveries')">
           <div class="kpi-icon-wrap"><mat-icon>local_shipping</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
@@ -128,7 +129,7 @@ import {
           </div>
           <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card kpi-teal">
+        <div class="kpi-card kpi-teal clickable" (click)="openKpiDialog('revenue')">
           <div class="kpi-icon-wrap"><mat-icon>point_of_sale</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
@@ -136,7 +137,7 @@ import {
           </div>
           <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card kpi-red">
+        <div class="kpi-card kpi-red clickable" (click)="openKpiDialog('inventory')">
           <div class="kpi-icon-wrap"><mat-icon>inventory_2</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.inventoryStats?.totalItems || 0 | number }}</span>
@@ -145,6 +146,322 @@ import {
           <div class="kpi-accent"></div>
         </div>
       </div>
+
+      <!-- ==================== KPI DETAIL DIALOG ==================== -->
+      @if (activeDialog) {
+        <div class="dialog-backdrop" (click)="closeDialog()"></div>
+        <div class="dialog-panel" [class]="'dialog-' + activeDialog">
+          <div class="dialog-header" [class]="'dh-' + activeDialog">
+            <div class="dialog-title-group">
+              <div class="dialog-icon-ring">
+                @switch (activeDialog) {
+                  @case ('training') { <mat-icon>school</mat-icon> }
+                  @case ('participants') { <mat-icon>groups</mat-icon> }
+                  @case ('trainers') { <mat-icon>person</mat-icon> }
+                  @case ('deliveries') { <mat-icon>local_shipping</mat-icon> }
+                  @case ('revenue') { <mat-icon>point_of_sale</mat-icon> }
+                  @case ('inventory') { <mat-icon>inventory_2</mat-icon> }
+                }
+              </div>
+              <div>
+                <h2 class="dialog-title">
+                  @switch (activeDialog) {
+                    @case ('training') { Training Sessions }
+                    @case ('participants') { Participants }
+                    @case ('trainers') { Trainers }
+                    @case ('deliveries') { Deliveries }
+                    @case ('revenue') { Revenue Breakdown }
+                    @case ('inventory') { Inventory Items }
+                  }
+                </h2>
+                <p class="dialog-subtitle">
+                  @switch (activeDialog) {
+                    @case ('training') { Breakdown by province and status }
+                    @case ('participants') { Participants across all provinces }
+                    @case ('trainers') { Active trainers and their assignments }
+                    @case ('deliveries') { Equipment delivery overview }
+                    @case ('revenue') { Sales revenue analysis }
+                    @case ('inventory') { Stock levels and categories }
+                  }
+                </p>
+              </div>
+            </div>
+            <button class="dialog-close" (click)="closeDialog()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
+          <div class="dialog-body">
+            @if (dialogLoading) {
+              <div class="dialog-loading">
+                <mat-spinner diameter="36" strokeWidth="3"></mat-spinner>
+                <p>Loading data...</p>
+              </div>
+            } @else {
+
+              <!-- ── Training Sessions Dialog ── -->
+              @if (activeDialog === 'training') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat blue">
+                    <span class="ds-val">{{ dashboard?.trainingStats?.totalSessions || 0 }}</span>
+                    <span class="ds-lbl">Total Sessions</span>
+                  </div>
+                  <div class="dialog-stat green">
+                    <span class="ds-val">{{ dashboard?.trainingStats?.completedSessions || 0 }}</span>
+                    <span class="ds-lbl">Completed</span>
+                  </div>
+                  <div class="dialog-stat orange">
+                    <span class="ds-val">{{ dashboard?.trainingStats?.inProgressSessions || 0 }}</span>
+                    <span class="ds-lbl">In Progress</span>
+                  </div>
+                  <div class="dialog-stat purple">
+                    <span class="ds-val">{{ dashboard?.trainingStats?.completionRate || 0 | number:'1.1-1' }}%</span>
+                    <span class="ds-lbl">Completion Rate</span>
+                  </div>
+                </div>
+                <h4 class="dialog-section-title"><mat-icon>map</mat-icon> By Province</h4>
+                <div class="dialog-table-wrap">
+                  <table class="dialog-table">
+                    <thead><tr><th>Province</th><th class="right">Sessions</th><th class="right">Participants</th><th class="right">Trainers</th></tr></thead>
+                    <tbody>
+                      @for (p of dashboard?.provinceStats || []; track p.province) {
+                        <tr>
+                          <td class="primary-cell">{{ p.province }}</td>
+                          <td class="right mono-text">{{ p.sessions }}</td>
+                          <td class="right mono-text">{{ p.participants | number }}</td>
+                          <td class="right mono-text">{{ p.trainers }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                    <tfoot>
+                      <tr class="total-row">
+                        <td><strong>Total</strong></td>
+                        <td class="right mono-text"><strong>{{ getTotalSessions() }}</strong></td>
+                        <td class="right mono-text"><strong>{{ getTotalParticipants() | number }}</strong></td>
+                        <td class="right mono-text"><strong>{{ dashboard?.nationalTotals?.totalTrainers || 0 }}</strong></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              }
+
+              <!-- ── Participants Dialog ── -->
+              @if (activeDialog === 'participants') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat green">
+                    <span class="ds-val">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
+                    <span class="ds-lbl">Total Participants</span>
+                  </div>
+                  <div class="dialog-stat blue">
+                    <span class="ds-val">{{ dashboard?.trainingStats?.totalSessions || 0 }}</span>
+                    <span class="ds-lbl">Sessions</span>
+                  </div>
+                  <div class="dialog-stat purple">
+                    <span class="ds-val">{{ getAvgParticipants() | number:'1.0-0' }}</span>
+                    <span class="ds-lbl">Avg per Session</span>
+                  </div>
+                </div>
+                <h4 class="dialog-section-title"><mat-icon>bar_chart</mat-icon> By Province</h4>
+                <div class="dialog-province-bars">
+                  @for (p of dashboard?.provinceStats || []; track p.province) {
+                    <div class="bar-row">
+                      <span class="bar-label">{{ p.province }}</span>
+                      <div class="bar-track">
+                        <div class="bar-fill green-fill" [style.width.%]="getParticipantPercent(p.participants)"></div>
+                      </div>
+                      <span class="bar-value">{{ p.participants | number }}</span>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- ── Trainers Dialog ── -->
+              @if (activeDialog === 'trainers') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat orange">
+                    <span class="ds-val">{{ dialogTrainers.length || dashboard?.nationalTotals?.totalTrainers || 0 }}</span>
+                    <span class="ds-lbl">Total Trainers</span>
+                  </div>
+                  <div class="dialog-stat blue">
+                    <span class="ds-val">{{ dashboard?.trainingStats?.totalSessions || 0 }}</span>
+                    <span class="ds-lbl">Total Sessions</span>
+                  </div>
+                  <div class="dialog-stat green">
+                    <span class="ds-val">{{ getAvgSessionsPerTrainer() | number:'1.0-0' }}</span>
+                    <span class="ds-lbl">Avg Sessions / Trainer</span>
+                  </div>
+                </div>
+                @if (dialogTrainers.length) {
+                  <h4 class="dialog-section-title"><mat-icon>badge</mat-icon> Trainer Directory</h4>
+                  <div class="trainer-cards-grid">
+                    @for (t of dialogTrainers; track t.id; let i = $index) {
+                      <div class="trainer-card">
+                        <div class="trainer-avatar" [class]="'ta-' + (i % 5)">
+                          {{ (t.firstName || '?')[0] }}{{ (t.lastName || '?')[0] }}
+                        </div>
+                        <div class="trainer-info">
+                          <span class="trainer-name">{{ t.firstName }} {{ t.lastName }}</span>
+                          <span class="trainer-detail">{{ t.specialization || 'HBA1C Trainer' }}</span>
+                          @if (t.email) { <span class="trainer-detail">{{ t.email }}</span> }
+                          @if (t.phone) { <span class="trainer-detail">{{ t.phone }}</span> }
+                        </div>
+                        <div class="trainer-badge" [class.active]="t.isActive" [class.inactive]="!t.isActive">
+                          {{ t.isActive ? 'Active' : 'Inactive' }}
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              }
+
+              <!-- ── Deliveries Dialog ── -->
+              @if (activeDialog === 'deliveries') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat purple">
+                    <span class="ds-val">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
+                    <span class="ds-lbl">Total Deliveries</span>
+                  </div>
+                  <div class="dialog-stat blue">
+                    <span class="ds-val">{{ dashboard?.nationalTotals?.totalSales || 0 | number }}</span>
+                    <span class="ds-lbl">Total Orders</span>
+                  </div>
+                </div>
+                @if (dashboard?.equipmentStats?.length) {
+                  <h4 class="dialog-section-title"><mat-icon>precision_manufacturing</mat-icon> Equipment Delivery Rates</h4>
+                  <div class="dialog-table-wrap">
+                    <table class="dialog-table">
+                      <thead><tr><th>Equipment</th><th class="right">Ordered</th><th class="right">Delivered</th><th class="right">Rate</th></tr></thead>
+                      <tbody>
+                        @for (e of dashboard?.equipmentStats || []; track e.equipmentType) {
+                          <tr>
+                            <td class="primary-cell">{{ e.equipmentType }}</td>
+                            <td class="right mono-text">{{ e.totalOrdered | number }}</td>
+                            <td class="right mono-text">{{ e.totalDelivered | number }}</td>
+                            <td class="right">
+                              <span class="rate-pill" [class.good]="e.deliveryRate >= 80" [class.mid]="e.deliveryRate >= 50 && e.deliveryRate < 80" [class.low]="e.deliveryRate < 50">
+                                {{ e.deliveryRate | number:'1.1-1' }}%
+                              </span>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <div class="dialog-empty"><mat-icon>local_shipping</mat-icon><p>No delivery data available</p></div>
+                }
+              }
+
+              <!-- ── Revenue Dialog ── -->
+              @if (activeDialog === 'revenue') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat teal">
+                    <span class="ds-val">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
+                    <span class="ds-lbl">Total Revenue</span>
+                  </div>
+                  <div class="dialog-stat blue">
+                    <span class="ds-val">{{ dashboard?.salesStats?.totalSales || 0 | number }}</span>
+                    <span class="ds-lbl">Total Sales</span>
+                  </div>
+                  <div class="dialog-stat green">
+                    <span class="ds-val">R{{ dashboard?.salesStats?.averageOrderValue || 0 | number:'1.0-0' }}</span>
+                    <span class="ds-lbl">Avg Order Value</span>
+                  </div>
+                  <div class="dialog-stat orange">
+                    <span class="ds-val">R{{ dashboard?.salesStats?.monthlyRevenue || 0 | number:'1.0-0' }}</span>
+                    <span class="ds-lbl">Monthly Revenue</span>
+                  </div>
+                </div>
+                <div class="dialog-split">
+                  <div class="dialog-split-half">
+                    <h4 class="dialog-section-title"><mat-icon>emoji_events</mat-icon> Top Products</h4>
+                    @for (tp of dashboard?.topProducts || []; track tp.productId; let i = $index) {
+                      <div class="top-product-row">
+                        <span class="tp-rank" [class]="'rank-' + (i < 3 ? i : 'rest')">{{ i + 1 }}</span>
+                        <div class="tp-info">
+                          <span class="tp-name">{{ tp.productName }}</span>
+                          <span class="tp-sub">{{ tp.quantitySold | number }} units · {{ tp.orderCount }} orders</span>
+                        </div>
+                        <span class="tp-rev">R{{ tp.revenue | number:'1.0-0' }}</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="dialog-split-half">
+                    <h4 class="dialog-section-title"><mat-icon>pie_chart</mat-icon> Order Status</h4>
+                    <div class="status-donut-row">
+                      <div class="donut-stat">
+                        <div class="donut-circle green-ring">{{ dashboard?.salesStats?.completedOrders || 0 }}</div>
+                        <span>Completed</span>
+                      </div>
+                      <div class="donut-stat">
+                        <div class="donut-circle orange-ring">{{ dashboard?.salesStats?.pendingOrders || 0 }}</div>
+                        <span>Pending</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              <!-- ── Inventory Dialog ── -->
+              @if (activeDialog === 'inventory') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat red">
+                    <span class="ds-val">{{ dashboard?.inventoryStats?.totalItems || 0 }}</span>
+                    <span class="ds-lbl">Total Items</span>
+                  </div>
+                  <div class="dialog-stat green">
+                    <span class="ds-val">{{ dashboard?.inventoryStats?.inStockItems || 0 }}</span>
+                    <span class="ds-lbl">In Stock</span>
+                  </div>
+                  <div class="dialog-stat orange">
+                    <span class="ds-val">{{ dashboard?.inventoryStats?.lowStockItems || 0 }}</span>
+                    <span class="ds-lbl">Low Stock</span>
+                  </div>
+                  <div class="dialog-stat purple">
+                    <span class="ds-val">R{{ dashboard?.inventoryStats?.totalValue || 0 | number:'1.0-0' }}</span>
+                    <span class="ds-lbl">Total Value</span>
+                  </div>
+                </div>
+                @if (dashboard?.inventoryStats?.categoryStats?.length) {
+                  <h4 class="dialog-section-title"><mat-icon>category</mat-icon> By Category</h4>
+                  <div class="dialog-table-wrap">
+                    <table class="dialog-table">
+                      <thead><tr><th>Category</th><th class="right">Items</th><th class="right">Value</th></tr></thead>
+                      <tbody>
+                        @for (c of dashboard?.inventoryStats?.categoryStats || []; track c.category) {
+                          <tr>
+                            <td class="primary-cell">{{ c.categoryName || 'Category ' + c.category }}</td>
+                            <td class="right mono-text">{{ c.itemCount }}</td>
+                            <td class="right mono-text">R{{ c.totalValue | number:'1.0-0' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+                @if (dashboard?.lowStockItems?.length) {
+                  <h4 class="dialog-section-title warn-title"><mat-icon>warning</mat-icon> Low Stock Alerts</h4>
+                  <div class="dialog-table-wrap">
+                    <table class="dialog-table">
+                      <thead><tr><th>Item</th><th>SKU</th><th class="right">Available</th><th class="right">Reorder Level</th></tr></thead>
+                      <tbody>
+                        @for (item of dashboard?.lowStockItems || []; track item.id) {
+                          <tr class="low-stock-row">
+                            <td class="primary-cell">{{ item.name }}</td>
+                            <td class="mono-text">{{ item.sku }}</td>
+                            <td class="right mono-text danger-val">{{ item.stockAvailable }}</td>
+                            <td class="right mono-text">{{ item.reorderLevel }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              }
+            }
+          </div>
+        </div>
+      }
 
       <!-- Tabs -->
       <div class="tabs-wrapper">
@@ -1227,6 +1544,215 @@ import {
     .empty-placeholder p { margin: 0; font-size: 14px; }
 
     /* ============================== */
+    /*  KPI DIALOG OVERLAY            */
+    /* ============================== */
+    .kpi-card.clickable { cursor: pointer; }
+
+    .dialog-backdrop {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px); z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+    .dialog-panel {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 94vw; max-width: 720px; max-height: 85vh;
+      background: var(--surface); border-radius: 20px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1);
+      z-index: 1001; display: flex; flex-direction: column;
+      animation: dialogSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes dialogSlideIn {
+      from { opacity: 0; transform: translate(-50%, -45%) scale(0.96); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    .dialog-header {
+      padding: 24px 28px 20px; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .dh-training { background: linear-gradient(135deg, var(--blue-soft), var(--blue-mid)); }
+    .dh-participants { background: linear-gradient(135deg, var(--green-soft), var(--green-mid)); }
+    .dh-trainers { background: linear-gradient(135deg, var(--orange-soft), var(--orange-mid)); }
+    .dh-deliveries { background: linear-gradient(135deg, var(--purple-soft), var(--purple-mid)); }
+    .dh-revenue { background: linear-gradient(135deg, var(--teal-soft), var(--teal-mid)); }
+    .dh-inventory { background: linear-gradient(135deg, var(--red-soft), var(--red-mid)); }
+
+    .dialog-title-group { display: flex; align-items: center; gap: 14px; }
+    .dialog-icon-ring {
+      width: 46px; height: 46px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .dialog-training .dialog-icon-ring { background: var(--blue); color: white; }
+    .dialog-participants .dialog-icon-ring { background: var(--green); color: white; }
+    .dialog-trainers .dialog-icon-ring { background: var(--orange); color: white; }
+    .dialog-deliveries .dialog-icon-ring { background: var(--purple); color: white; }
+    .dialog-revenue .dialog-icon-ring { background: var(--teal); color: white; }
+    .dialog-inventory .dialog-icon-ring { background: var(--red); color: white; }
+    .dialog-icon-ring mat-icon { font-size: 24px; width: 24px; height: 24px; }
+
+    .dialog-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
+    .dialog-subtitle { font-size: 12px; color: var(--text-secondary); margin: 3px 0 0; }
+
+    .dialog-close {
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--surface); display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s; color: var(--text-secondary); flex-shrink: 0;
+    }
+    .dialog-close:hover { background: var(--red-soft); color: var(--red); border-color: var(--red-mid); }
+    .dialog-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
+
+    .dialog-body {
+      padding: 24px 28px 28px; overflow-y: auto; flex: 1;
+    }
+
+    .dialog-loading {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 48px 20px; gap: 12px; color: var(--text-muted);
+    }
+    .dialog-loading p { margin: 0; font-size: 13px; }
+
+    .dialog-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 40px 20px; color: var(--text-muted);
+    }
+    .dialog-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.4; margin-bottom: 8px; }
+    .dialog-empty p { margin: 0; font-size: 14px; }
+
+    /* Dialog Stats Row */
+    .dialog-stats-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .dialog-stat {
+      padding: 16px 18px; border-radius: 14px; text-align: center;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .dialog-stat.blue { background: var(--blue-soft); }
+    .dialog-stat.green { background: var(--green-soft); }
+    .dialog-stat.orange { background: var(--orange-soft); }
+    .dialog-stat.purple { background: var(--purple-soft); }
+    .dialog-stat.teal { background: var(--teal-soft); }
+    .dialog-stat.red { background: var(--red-soft); }
+    .ds-val { font-size: 22px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+    .ds-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+
+    .dialog-section-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 700; color: var(--text-primary);
+      margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .dialog-section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--text-secondary); }
+    .dialog-section-title.warn-title { color: var(--orange); margin-top: 24px; }
+    .dialog-section-title.warn-title mat-icon { color: var(--orange); }
+
+    /* Dialog Table */
+    .dialog-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+    .dialog-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .dialog-table thead { background: #f8fafc; }
+    .dialog-table th {
+      padding: 10px 16px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    .dialog-table td {
+      padding: 10px 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-primary);
+    }
+    .dialog-table tbody tr:last-child td { border-bottom: none; }
+    .dialog-table tbody tr:hover { background: #f8fafc; }
+    .dialog-table .right { text-align: right; }
+    .dialog-table .mono-text { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .dialog-table .primary-cell { font-weight: 600; }
+    .dialog-table .danger-val { color: var(--red); font-weight: 600; }
+    .dialog-table tfoot td { border-top: 2px solid var(--border); background: #f8fafc; }
+    .total-row td { font-size: 13px; }
+    .low-stock-row { background: var(--red-soft) !important; }
+
+    .rate-pill {
+      display: inline-block; padding: 3px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 700;
+    }
+    .rate-pill.good { background: var(--green-soft); color: var(--green); }
+    .rate-pill.mid { background: var(--orange-soft); color: var(--orange); }
+    .rate-pill.low { background: var(--red-soft); color: var(--red); }
+
+    /* Participant Bars */
+    .dialog-province-bars { display: flex; flex-direction: column; gap: 10px; }
+    .bar-row { display: flex; align-items: center; gap: 12px; }
+    .bar-label { width: 120px; font-size: 13px; font-weight: 600; color: var(--text-primary); text-align: right; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 26px; background: #f1f5f9; border-radius: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-width: 4px; }
+    .bar-fill.green-fill { background: linear-gradient(90deg, var(--green), #4ade80); }
+    .bar-value { width: 60px; font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: 'SF Mono', monospace; }
+
+    /* Trainer Cards */
+    .trainer-cards-grid { display: flex; flex-direction: column; gap: 10px; }
+    .trainer-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 18px; border-radius: 14px;
+      border: 1px solid var(--border); background: var(--surface);
+      transition: all 0.15s;
+    }
+    .trainer-card:hover { background: var(--surface-hover); box-shadow: var(--shadow-sm); }
+    .trainer-avatar {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 800; color: white; flex-shrink: 0;
+      letter-spacing: 0.5px;
+    }
+    .ta-0 { background: linear-gradient(135deg, var(--blue), #60a5fa); }
+    .ta-1 { background: linear-gradient(135deg, var(--green), #4ade80); }
+    .ta-2 { background: linear-gradient(135deg, var(--orange), #fbbf24); }
+    .ta-3 { background: linear-gradient(135deg, var(--purple), #a78bfa); }
+    .ta-4 { background: linear-gradient(135deg, var(--teal), #2dd4bf); }
+    .trainer-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+    .trainer-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+    .trainer-detail { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .trainer-badge {
+      padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .trainer-badge.active { background: var(--green-soft); color: var(--green); }
+    .trainer-badge.inactive { background: var(--red-soft); color: var(--red); }
+
+    /* Revenue Split Layout */
+    .dialog-split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .top-product-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid #f1f5f9;
+    }
+    .top-product-row:last-child { border-bottom: none; }
+    .tp-rank {
+      width: 28px; height: 28px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; flex-shrink: 0;
+    }
+    .tp-rank.rank-0 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; }
+    .tp-rank.rank-1 { background: linear-gradient(135deg, #cbd5e1, #94a3b8); color: white; }
+    .tp-rank.rank-2 { background: linear-gradient(135deg, #d97706, #b45309); color: white; }
+    .tp-rank.rank-rest { background: #f1f5f9; color: var(--text-secondary); }
+    .tp-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .tp-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tp-sub { font-size: 11px; color: var(--text-muted); }
+    .tp-rev { font-size: 13px; font-weight: 700; color: var(--teal); font-family: 'SF Mono', monospace; white-space: nowrap; }
+
+    /* Order Status Donuts */
+    .status-donut-row { display: flex; gap: 24px; justify-content: center; padding: 16px 0; }
+    .donut-stat { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .donut-stat span { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .donut-circle {
+      width: 64px; height: 64px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: var(--text-primary);
+      border: 4px solid var(--border);
+    }
+    .donut-circle.green-ring { border-color: var(--green); background: var(--green-soft); }
+    .donut-circle.orange-ring { border-color: var(--orange); background: var(--orange-soft); }
+
+    /* ============================== */
     /*  RESPONSIVE                    */
     /* ============================== */
     @media (max-width: 900px) {
@@ -1237,6 +1763,8 @@ import {
       .prov-metrics { grid-template-columns: repeat(2, 1fr); }
       .stat-bar { gap: 10px; }
       .stat-chip { min-width: 130px; padding: 12px 14px; }
+      .dialog-split { grid-template-columns: 1fr; }
+      .dialog-panel { max-width: 95vw; }
     }
     @media (max-width: 600px) {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1245,6 +1773,13 @@ import {
       .stat-bar { flex-direction: column; }
       .alert-grid { grid-template-columns: 1fr; }
       .province-grid { grid-template-columns: 1fr; }
+      .dialog-panel { width: 100vw; max-height: 95vh; border-radius: 16px 16px 0 0;
+        top: auto; bottom: 0; left: 0; transform: none; }
+      .dialog-body { padding: 20px; }
+      .dialog-header { padding: 18px 20px 16px; }
+      .dialog-stats-row { grid-template-columns: repeat(2, 1fr); }
+      .bar-label { width: 80px; font-size: 11px; }
+      .dialog-split { grid-template-columns: 1fr; }
     }
   `]
 })
@@ -1269,6 +1804,11 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
 
   creditNotes: HBA1CCreditNote[] = [];
   creditNotesLoading = false;
+
+  // Dialog state
+  activeDialog: string | null = null;
+  dialogLoading = false;
+  dialogTrainers: HBA1CTrainer[] = [];
 
   constructor(private hba1cService: HBA1CService) {}
 
@@ -1370,5 +1910,52 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
       return `${session.trainer.firstName || ''} ${session.trainer.lastName || ''}`.trim();
     }
     return 'N/A';
+  }
+
+  // ── KPI Dialog Methods ──
+
+  openKpiDialog(type: string): void {
+    this.activeDialog = type;
+    this.dialogLoading = false;
+
+    // Load extra data for trainers dialog
+    if (type === 'trainers' && !this.dialogTrainers.length) {
+      this.dialogLoading = true;
+      this.hba1cService.getTrainers()
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (data) => { this.dialogTrainers = data || []; this.dialogLoading = false; },
+          error: () => { this.dialogLoading = false; }
+        });
+    }
+  }
+
+  closeDialog(): void {
+    this.activeDialog = null;
+  }
+
+  getTotalSessions(): number {
+    return (this.dashboard?.provinceStats || []).reduce((sum, p) => sum + p.sessions, 0);
+  }
+
+  getTotalParticipants(): number {
+    return this.dashboard?.trainingStats?.totalParticipants || 0;
+  }
+
+  getAvgParticipants(): number {
+    const total = this.dashboard?.trainingStats?.totalParticipants || 0;
+    const sessions = this.dashboard?.trainingStats?.totalSessions || 1;
+    return total / sessions;
+  }
+
+  getParticipantPercent(participants: number): number {
+    const max = Math.max(...(this.dashboard?.provinceStats || []).map(p => p.participants), 1);
+    return (participants / max) * 100;
+  }
+
+  getAvgSessionsPerTrainer(): number {
+    const sessions = this.dashboard?.trainingStats?.totalSessions || 0;
+    const trainers = this.dashboard?.nationalTotals?.totalTrainers || 1;
+    return sessions / trainers;
   }
 }
