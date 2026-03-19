@@ -548,130 +548,116 @@ import {
                   </div>
                 }
 
-                <div class="equip-list">
-                  @for (eq of dashboard?.equipmentStats || []; track eq.equipmentType) {
-                    <div class="equip-block">
-                      <!-- Equipment Header Row -->
-                      <div class="equip-top-row" (click)="toggleEquipment(eq.equipmentType)">
-                        <div class="equip-type-badge">
-                          <mat-icon>precision_manufacturing</mat-icon>
-                          <div class="equip-type-info">
-                            <span class="equip-type-name">{{ eq.equipmentType }}</span>
-                            @if (eq.category && eq.category !== eq.equipmentType) {
-                              <span class="equip-category-tag">{{ eq.category }}</span>
-                            }
-                          </div>
+                <div class="equip-grid">
+                  @for (eq of dashboard?.equipmentStats || []; track eq.equipmentType; let i = $index) {
+                    <div class="equip-card" [class.active]="expandedEquipment === eq.equipmentType" (click)="toggleEquipment(eq.equipmentType)">
+                      <div class="ec-rank">{{ i + 1 }}</div>
+                      <div class="ec-body">
+                        <span class="ec-name" [title]="eq.equipmentType">{{ eq.equipmentType }}</span>
+                        <div class="ec-metrics">
+                          <span class="ec-metric"><mat-icon>shopping_cart</mat-icon> {{ eq.totalOrdered | number }}</span>
+                          <span class="ec-metric ec-qty"><mat-icon>inventory_2</mat-icon> {{ getItemBreakdownTotal(eq, 'qty') | number }}</span>
+                          <span class="ec-metric ec-val"><mat-icon>payments</mat-icon> R{{ eq.totalOrderValue | number:'1.0-0' }}</span>
                         </div>
-                        <div class="equip-summary-chips">
-                          <span class="eq-chip ordered-chip">
-                            <mat-icon>shopping_cart</mat-icon>
-                            {{ eq.totalOrdered | number }} orders
-                          </span>
-                          @if (eq.totalOrderValue > 0) {
-                            <span class="eq-chip value-chip">
-                              <mat-icon>payments</mat-icon>
-                              R{{ eq.totalOrderValue | number:'1.0-0' }}
-                            </span>
-                          }
-                          @if (getItemBreakdownTotal(eq, 'qty') > 0) {
-                            <span class="eq-chip qty-chip">
-                              <mat-icon>inventory_2</mat-icon>
-                              {{ getItemBreakdownTotal(eq, 'qty') | number }} units
-                            </span>
-                          }
-                        </div>
-                        <mat-icon class="equip-expand-icon" [class.expanded]="expandedEquipment === eq.equipmentType">expand_more</mat-icon>
                       </div>
-
-                      <!-- Delivery Rate Bar (shown when delivery data exists) -->
-                      @if (eq.totalDelivered > 0 || getEquipRate(eq) > 0) {
-                        <div class="equip-rate-bar">
-                          <div class="erb-track">
-                            <div class="erb-fill" [class.good]="getEquipRate(eq) >= 80" [class.mid]="getEquipRate(eq) >= 50 && getEquipRate(eq) < 80" [class.low]="getEquipRate(eq) < 50" [style.width.%]="getEquipRate(eq)"></div>
-                          </div>
-                        </div>
-                      }
-
-                      <!-- Expandable Detail -->
-                      @if (expandedEquipment === eq.equipmentType) {
-                        <div class="equip-detail">
-                          <!-- Item Breakdown -->
-                          @if (eq.itemBreakdown?.length) {
-                            <div class="equip-detail-section">
-                              <h5 class="eds-title"><mat-icon>category</mat-icon> Item Breakdown</h5>
-                              <div class="item-breakdown-grid">
-                                @for (item of eq.itemBreakdown; track item.itemType) {
-                                  <div class="ib-card">
-                                    <div class="ib-icon"><mat-icon>widgets</mat-icon></div>
-                                    <div class="ib-info">
-                                      <span class="ib-name">{{ item.itemType }}</span>
-                                      <span class="ib-meta">{{ item.quantity | number }} units</span>
-                                    </div>
-                                    <span class="ib-value">R{{ item.value | number:'1.0-0' }}</span>
-                                  </div>
-                                }
-                              </div>
-                              <!-- Total Row -->
-                              <div class="ib-total-row">
-                                <span>Total</span>
-                                <span class="ib-total-qty">{{ getItemBreakdownTotal(eq, 'qty') | number }} units</span>
-                                <span class="ib-total-val">R{{ getItemBreakdownTotal(eq, 'val') | number:'1.0-0' }}</span>
-                              </div>
-                            </div>
-                          }
-
-                          <!-- Province Distribution -->
-                          @if (eq.provinceDistribution?.length) {
-                            <div class="equip-detail-section">
-                              <h5 class="eds-title"><mat-icon>map</mat-icon> Province Distribution</h5>
-                              <div class="prov-dist-table-wrap">
-                                <table class="dialog-table">
-                                  <thead>
-                                    <tr>
-                                      <th>Province</th>
-                                      <th class="right">Ordered</th>
-                                      <th class="right">Delivered</th>
-                                      <th class="right">Value</th>
-                                      <th class="right">Rate</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    @for (pd of eq.provinceDistribution; track pd.province) {
-                                      <tr>
-                                        <td class="primary-cell">{{ pd.province }}</td>
-                                        <td class="right mono-text">{{ pd.ordered | number }}</td>
-                                        <td class="right mono-text">{{ pd.delivered | number }}</td>
-                                        <td class="right mono-text">{{ pd.orderValue > 0 ? 'R' + (pd.orderValue | number:'1.0-0') : '—' }}</td>
-                                        <td class="right">
-                                          <span class="rate-pill" [class.good]="pd.percentage >= 80" [class.mid]="pd.percentage >= 50 && pd.percentage < 80" [class.low]="pd.percentage < 50">
-                                            {{ pd.percentage | number:'1.1-1' }}%
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    }
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          }
-
-                          @if (!eq.itemBreakdown?.length && !eq.provinceDistribution?.length) {
-                            <div class="equip-detail-empty">
-                              <mat-icon>info</mat-icon>
-                              <span>No detailed breakdown available for this equipment type</span>
-                            </div>
-                          }
-                        </div>
+                      @if (eq.category) {
+                        <span class="ec-cat-dot" [title]="eq.category" [class.hemoglobin]="eq.category === 'HemoglobinTesting'" [class.glucose]="eq.category === 'GlucoseTesting'"></span>
                       }
                     </div>
                   }
+                </div>
+
+                <!-- Expanded Detail Panel (below grid) -->
+                @if (expandedEquipment) {
+                  @for (eq of dashboard?.equipmentStats || []; track eq.equipmentType) {
+                    @if (expandedEquipment === eq.equipmentType) {
+                      <div class="equip-detail-panel">
+                        <div class="edp-header">
+                          <mat-icon>precision_manufacturing</mat-icon>
+                          <h4>{{ eq.equipmentType }}</h4>
+                          @if (eq.category) {
+                            <span class="equip-category-tag">{{ eq.category }}</span>
+                          }
+                          <button class="edp-close" (click)="expandedEquipment = null; $event.stopPropagation()"><mat-icon>close</mat-icon></button>
+                        </div>
+                        <div class="edp-stats">
+                          <div class="edp-stat">
+                            <span class="edp-stat-val">{{ eq.totalOrdered | number }}</span>
+                            <span class="edp-stat-lbl">Orders</span>
+                          </div>
+                          <div class="edp-stat">
+                            <span class="edp-stat-val">{{ getItemBreakdownTotal(eq, 'qty') | number }}</span>
+                            <span class="edp-stat-lbl">Units</span>
+                          </div>
+                          <div class="edp-stat">
+                            <span class="edp-stat-val">R{{ eq.totalOrderValue | number:'1.0-0' }}</span>
+                            <span class="edp-stat-lbl">Value</span>
+                          </div>
+                        </div>
+
+                        <!-- Item Breakdown -->
+                        @if (eq.itemBreakdown?.length) {
+                          <div class="equip-detail-section">
+                            <h5 class="eds-title"><mat-icon>category</mat-icon> Item Breakdown</h5>
+                            <div class="item-breakdown-grid">
+                              @for (item of eq.itemBreakdown; track item.itemType) {
+                                <div class="ib-card">
+                                  <div class="ib-icon"><mat-icon>widgets</mat-icon></div>
+                                  <div class="ib-info">
+                                    <span class="ib-name">{{ item.itemType }}</span>
+                                    <span class="ib-meta">{{ item.quantity | number }} units</span>
+                                  </div>
+                                  <span class="ib-value">R{{ item.value | number:'1.0-0' }}</span>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+
+                        <!-- Province Distribution -->
+                        @if (eq.provinceDistribution?.length) {
+                          <div class="equip-detail-section">
+                            <h5 class="eds-title"><mat-icon>map</mat-icon> Province Distribution</h5>
+                            <div class="prov-dist-table-wrap">
+                              <table class="dialog-table">
+                                <thead>
+                                  <tr>
+                                    <th>Province</th>
+                                    <th class="right">Ordered</th>
+                                    <th class="right">Delivered</th>
+                                    <th class="right">Value</th>
+                                    <th class="right">Rate</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  @for (pd of eq.provinceDistribution; track pd.province) {
+                                    <tr>
+                                      <td class="primary-cell">{{ pd.province }}</td>
+                                      <td class="right mono-text">{{ pd.ordered | number }}</td>
+                                      <td class="right mono-text">{{ pd.delivered | number }}</td>
+                                      <td class="right mono-text">{{ pd.orderValue > 0 ? 'R' + (pd.orderValue | number:'1.0-0') : '—' }}</td>
+                                      <td class="right">
+                                        <span class="rate-pill" [class.good]="pd.percentage >= 80" [class.mid]="pd.percentage >= 50 && pd.percentage < 80" [class.low]="pd.percentage < 50">
+                                          {{ pd.percentage | number:'1.1-1' }}%
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  }
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+                  }
+                }
                   @if (!dashboard?.equipmentStats?.length) {
                     <div class="empty-placeholder">
                       <mat-icon>precision_manufacturing</mat-icon>
                       <p>No equipment data available</p>
                     </div>
                   }
-                </div>
               </section>
 
               <!-- National Summary -->
@@ -1457,11 +1443,52 @@ import {
     /* ============================== */
     /*  EQUIPMENT DISTRIBUTION        */
     /* ============================== */
-    .equip-list { display: flex; flex-direction: column; }
-    .equip-block {
-      border-bottom: 1px solid var(--border);
+    .equip-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px; padding: 20px;
     }
-    .equip-block:last-child { border-bottom: none; }
+    .equip-card {
+      display: flex; align-items: stretch; gap: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; cursor: pointer; overflow: hidden;
+      transition: all 0.15s ease; position: relative;
+    }
+    .equip-card:hover { border-color: var(--purple-mid); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transform: translateY(-1px); }
+    .equip-card.active { border-color: var(--purple); box-shadow: 0 0 0 2px var(--purple-soft); }
+
+    .ec-rank {
+      display: flex; align-items: center; justify-content: center;
+      min-width: 36px; background: var(--purple-soft); color: var(--purple);
+      font-size: 13px; font-weight: 800; flex-shrink: 0;
+      font-family: 'SF Mono', 'Cascadia Code', monospace;
+    }
+    .ec-body {
+      flex: 1; padding: 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 6px;
+    }
+    .ec-name {
+      font-size: 12px; font-weight: 700; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.2;
+    }
+    .ec-metrics {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .ec-metric {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    }
+    .ec-metric mat-icon { font-size: 13px; width: 13px; height: 13px; color: var(--blue); }
+    .ec-qty mat-icon { color: var(--purple); }
+    .ec-val { color: var(--teal); font-family: 'SF Mono', 'Cascadia Code', monospace; }
+    .ec-val mat-icon { color: var(--teal); }
+
+    .ec-cat-dot {
+      position: absolute; top: 6px; right: 6px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .ec-cat-dot.hemoglobin { background: var(--purple); }
+    .ec-cat-dot.glucose { background: var(--blue); }
 
     /* Equipment Summary Strip */
     .equip-summary-strip {
@@ -1483,23 +1510,40 @@ import {
     .ess-value.low { color: var(--red); }
     .ess-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
 
-    .equip-top-row {
-      display: flex; align-items: center; gap: 16px;
-      padding: 18px 24px; cursor: pointer;
-      transition: background 0.15s;
+    /* Expanded Detail Panel (below grid) */
+    .equip-detail-panel {
+      margin: 0 20px 20px; padding: 20px;
+      background: #f8fafc; border-radius: 14px; border: 1px solid var(--border);
+      animation: slideDown 0.25s ease;
     }
-    .equip-top-row:hover { background: var(--surface-hover); }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .edp-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    }
+    .edp-header mat-icon { font-size: 22px; width: 22px; height: 22px; color: var(--purple); }
+    .edp-header h4 { font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0; flex: 1; }
+    .edp-close {
+      background: none; border: none; cursor: pointer; padding: 4px;
+      border-radius: 8px; color: var(--text-muted); display: flex;
+      transition: all 0.15s;
+    }
+    .edp-close:hover { background: var(--border); color: var(--text-primary); }
+    .edp-stats {
+      display: flex; gap: 0; border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border); margin-bottom: 16px;
+    }
+    .edp-stat {
+      flex: 1; padding: 12px 16px; text-align: center;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .edp-stat:last-child { border-right: none; }
+    .edp-stat-val { font-size: 18px; font-weight: 800; color: var(--text-primary); font-family: 'SF Mono', 'Cascadia Code', monospace; }
+    .edp-stat-lbl { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
 
-    .equip-type-badge {
-      display: flex; align-items: center; gap: 10px; min-width: 180px;
-    }
-    .equip-type-badge mat-icon {
-      font-size: 20px; width: 20px; height: 20px; color: var(--purple);
-    }
-    .equip-type-info { display: flex; flex-direction: column; gap: 2px; }
-    .equip-type-name {
-      font-size: 15px; font-weight: 700; color: var(--text-primary);
-    }
     .equip-category-tag {
       display: inline-block; font-size: 10px; font-weight: 600;
       color: var(--purple); background: var(--purple-soft);
@@ -1507,68 +1551,9 @@ import {
       text-transform: uppercase; letter-spacing: 0.3px; width: fit-content;
     }
 
-    .equip-summary-chips {
-      display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap;
-    }
-    .eq-chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 5px 12px; border-radius: 20px;
-      font-size: 12px; font-weight: 600; white-space: nowrap;
-    }
-    .eq-chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .ordered-chip { background: var(--blue-soft); color: var(--blue); }
-    .delivered-chip { background: var(--green-soft); color: var(--green); }
-    .pending-chip { background: var(--orange-soft); color: var(--orange); }
-    .value-chip { background: var(--teal-soft); color: var(--teal); font-family: 'SF Mono', 'Cascadia Code', monospace; }
-    .qty-chip { background: var(--purple-soft); color: var(--purple); }
-    .rate-chip { font-weight: 800; }
-    .rate-chip.good { background: var(--green-soft); color: var(--green); }
-    .rate-chip.mid { background: var(--orange-soft); color: var(--orange); }
-    .rate-chip.low { background: var(--red-soft); color: var(--red); }
-
-    .equip-expand-icon {
-      color: var(--text-muted); transition: transform 0.25s ease; flex-shrink: 0;
-    }
-    .equip-expand-icon.expanded { transform: rotate(180deg); }
-
-    .equip-rate-bar { padding: 0 24px 14px; }
-    .erb-track {
-      height: 6px; background: #f1f5f9; border-radius: 6px; overflow: hidden;
-    }
-    .erb-fill {
-      height: 100%; border-radius: 6px;
-      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-width: 2px;
-    }
-    .erb-fill.good { background: linear-gradient(90deg, var(--green), #4ade80); }
-    .erb-fill.mid { background: linear-gradient(90deg, var(--orange), #fbbf24); }
-    .erb-fill.low { background: linear-gradient(90deg, var(--red), #f87171); }
-
-    /* Equipment Value Row */
-    .equip-value-row {
-      display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
-      padding: 0 24px 14px;
-    }
-    .evr-item {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 12px; color: var(--text-secondary);
-    }
-    .evr-item mat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--teal); }
-    .evr-item strong {
-      color: var(--text-primary); font-family: 'SF Mono', 'Cascadia Code', monospace;
-    }
-
-    .equip-detail {
-      padding: 0 24px 24px;
-      animation: slideDown 0.25s ease;
-    }
-    @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
     .equip-detail-section {
-      background: #f8fafc; border-radius: 14px; padding: 18px 20px;
-      margin-bottom: 14px; border: 1px solid var(--border);
+      background: var(--surface); border-radius: 12px; padding: 16px 18px;
+      margin-bottom: 12px; border: 1px solid var(--border);
     }
     .equip-detail-section:last-child { margin-bottom: 0; }
 
@@ -2020,12 +2005,11 @@ import {
       .tab-body { padding: 20px; }
       .province-grid { grid-template-columns: repeat(2, 1fr); }
       .prov-sales-grid, .national-grid { grid-template-columns: 1fr; }
-      .equip-top-row { flex-wrap: wrap; }
-      .equip-type-badge { min-width: unset; }
+      .equip-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; padding: 14px; }
       .equip-summary-strip { gap: 0; }
       .ess-item { min-width: 100px; padding: 12px 14px; }
       .ess-value { font-size: 16px; }
-      .equip-value-row { padding: 0 18px 12px; gap: 14px; }
+      .edp-stats { flex-wrap: wrap; }
       .prov-metrics { grid-template-columns: repeat(2, 1fr); }
       .stat-bar { gap: 10px; }
       .stat-chip { min-width: 130px; padding: 12px 14px; }
