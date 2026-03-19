@@ -334,7 +334,7 @@ import {
                             <span class="attendee-count">{{ session.numberOfParticipants }}</span>
                           </td>
                           <td>
-                            <mat-chip [class]="'status-' + (session.statusText || 'unknown').toLowerCase()" size="small">
+                            <mat-chip [class]="'status-' + ('' + (session.statusText || 'unknown')).toLowerCase()" size="small">
                               {{ session.statusText || 'Unknown' }}
                             </mat-chip>
                           </td>
@@ -665,7 +665,7 @@ import {
                           <td>{{ cn.reason }}</td>
                           <td>{{ cn.createdDate | date:'dd MMM yyyy' }}</td>
                           <td>
-                            <mat-chip [class]="'status-' + (cn.status || 'unknown').toLowerCase()" size="small">
+                            <mat-chip [class]="'status-' + ('' + (cn.status || 'unknown')).toLowerCase()" size="small">
                               {{ cn.status }}
                             </mat-chip>
                           </td>
