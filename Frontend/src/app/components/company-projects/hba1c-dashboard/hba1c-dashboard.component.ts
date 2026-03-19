@@ -45,758 +45,1204 @@ import {
     MatDividerModule
   ],
   template: `
-    <!-- Back button -->
-    <div class="detail-header">
-      <button mat-raised-button class="back-btn" (click)="goBack.emit()">
+    <!-- Header Bar -->
+    <div class="dash-header">
+      <button mat-icon-button class="back-btn" (click)="goBack.emit()" matTooltip="Back to Projects">
         <mat-icon>arrow_back</mat-icon>
-        Back to Projects
       </button>
-      <h2>
-        <mat-icon class="header-icon">biotech</mat-icon>
-        HBA1C Medical Management
-      </h2>
-      <div class="connection-status" [class.connected]="isConnected" [class.disconnected]="!isConnected && !loading">
-        <mat-icon>{{ loading ? 'sync' : isConnected ? 'cloud_done' : 'cloud_off' }}</mat-icon>
-        <span>{{ loading ? 'Connecting...' : isConnected ? 'Live Data' : 'Disconnected' }}</span>
+      <div class="header-title-block">
+        <div class="header-icon-wrap">
+          <mat-icon>biotech</mat-icon>
+        </div>
+        <div>
+          <h1>HBA1C Medical Management</h1>
+          <p class="header-subtitle">National training, inventory & sales dashboard</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="connection-pill" [class.connected]="isConnected" [class.error]="!isConnected && !loading">
+          <span class="conn-dot"></span>
+          <span>{{ loading ? 'Connecting...' : isConnected ? 'Live' : 'Offline' }}</span>
+        </div>
+        @if (!loading && isConnected) {
+          <button mat-icon-button class="header-refresh" (click)="loadDashboard()" matTooltip="Refresh all data">
+            <mat-icon>refresh</mat-icon>
+          </button>
+        }
       </div>
     </div>
 
     @if (loading) {
-      <div class="loading-overlay">
-        <mat-spinner diameter="48"></mat-spinner>
-        <p>Loading HBA1C dashboard data...</p>
+      <div class="loading-state">
+        <div class="loading-card">
+          <mat-spinner diameter="44" strokeWidth="4"></mat-spinner>
+          <h3>Connecting to HBA1C API</h3>
+          <p>Fetching live data from the medical management system...</p>
+        </div>
       </div>
     } @else if (error) {
-      <div class="error-banner">
-        <mat-icon>error_outline</mat-icon>
-        <div>
-          <h3>Unable to connect to HBA1C API</h3>
+      <div class="error-state">
+        <div class="error-card">
+          <div class="error-icon-wrap">
+            <mat-icon>cloud_off</mat-icon>
+          </div>
+          <h3>Unable to connect</h3>
           <p>{{ error }}</p>
-          <button mat-raised-button color="primary" (click)="loadDashboard()">
-            <mat-icon>refresh</mat-icon> Retry
+          <button mat-flat-button color="primary" (click)="loadDashboard()">
+            <mat-icon>refresh</mat-icon> Try Again
           </button>
         </div>
       </div>
     } @else {
-      <!-- KPI Stats Row -->
-      <div class="kpi-row">
-        <div class="kpi-card">
-          <div class="kpi-icon" style="background: rgba(33,150,243,0.15); color: #2196f3;">
-            <mat-icon>school</mat-icon>
-          </div>
-          <div class="kpi-info">
-            <span class="kpi-value">{{ dashboard?.trainingStats?.totalSessions || 0 }}</span>
+      <!-- KPI Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-blue">
+          <div class="kpi-icon-wrap"><mat-icon>school</mat-icon></div>
+          <div class="kpi-body">
+            <span class="kpi-number">{{ dashboard?.trainingStats?.totalSessions || 0 | number }}</span>
             <span class="kpi-label">Training Sessions</span>
           </div>
+          <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-icon" style="background: rgba(76,175,80,0.15); color: #4caf50;">
-            <mat-icon>groups</mat-icon>
+        <div class="kpi-card kpi-green">
+          <div class="kpi-icon-wrap"><mat-icon>groups</mat-icon></div>
+          <div class="kpi-body">
+            <span class="kpi-number">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
+            <span class="kpi-label">Participants</span>
           </div>
-          <div class="kpi-info">
-            <span class="kpi-value">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
-            <span class="kpi-label">Total Participants</span>
-          </div>
+          <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-icon" style="background: rgba(255,152,0,0.15); color: #ff9800;">
-            <mat-icon>person</mat-icon>
-          </div>
-          <div class="kpi-info">
-            <span class="kpi-value">{{ dashboard?.nationalTotals?.totalTrainers || 0 | number }}</span>
+        <div class="kpi-card kpi-orange">
+          <div class="kpi-icon-wrap"><mat-icon>person</mat-icon></div>
+          <div class="kpi-body">
+            <span class="kpi-number">{{ dashboard?.nationalTotals?.totalTrainers || 0 | number }}</span>
             <span class="kpi-label">Trainers</span>
           </div>
+          <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-icon" style="background: rgba(156,39,176,0.15); color: #9c27b0;">
-            <mat-icon>local_shipping</mat-icon>
+        <div class="kpi-card kpi-purple">
+          <div class="kpi-icon-wrap"><mat-icon>local_shipping</mat-icon></div>
+          <div class="kpi-body">
+            <span class="kpi-number">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
+            <span class="kpi-label">Deliveries</span>
           </div>
-          <div class="kpi-info">
-            <span class="kpi-value">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
-            <span class="kpi-label">Total Deliveries</span>
-          </div>
+          <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-icon" style="background: rgba(0,150,136,0.15); color: #009688;">
-            <mat-icon>point_of_sale</mat-icon>
-          </div>
-          <div class="kpi-info">
-            <span class="kpi-value">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
+        <div class="kpi-card kpi-teal">
+          <div class="kpi-icon-wrap"><mat-icon>point_of_sale</mat-icon></div>
+          <div class="kpi-body">
+            <span class="kpi-number">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
             <span class="kpi-label">Total Revenue</span>
           </div>
+          <div class="kpi-accent"></div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-icon" style="background: rgba(244,67,54,0.15); color: #f44336;">
-            <mat-icon>inventory_2</mat-icon>
-          </div>
-          <div class="kpi-info">
-            <span class="kpi-value">{{ dashboard?.inventoryStats?.totalItems || 0 | number }}</span>
+        <div class="kpi-card kpi-red">
+          <div class="kpi-icon-wrap"><mat-icon>inventory_2</mat-icon></div>
+          <div class="kpi-body">
+            <span class="kpi-number">{{ dashboard?.inventoryStats?.totalItems || 0 | number }}</span>
             <span class="kpi-label">Inventory Items</span>
           </div>
+          <div class="kpi-accent"></div>
         </div>
       </div>
 
       <!-- Tabs -->
-      <mat-tab-group class="dashboard-tabs" animationDuration="200ms" (selectedIndexChange)="onTabChange($event)">
+      <div class="tabs-wrapper">
+        <mat-tab-group class="dashboard-tabs" animationDuration="200ms" (selectedIndexChange)="onTabChange($event)">
 
-        <!-- Overview Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>dashboard</mat-icon>
-            <span>Overview</span>
-          </ng-template>
+          <!-- ==================== OVERVIEW TAB ==================== -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>dashboard</mat-icon>
+              <span>Overview</span>
+            </ng-template>
 
-          <div class="tab-content">
-            <!-- Provincial Breakdown -->
-            <div class="section">
-              <h3 class="section-title">
-                <mat-icon>map</mat-icon> Provincial Breakdown
-              </h3>
-              <div class="province-grid">
-                @for (prov of dashboard?.provinceStats || []; track prov.province) {
-                  <div class="province-card">
-                    <div class="province-name">{{ prov.province }}</div>
-                    <div class="province-stats">
-                      <div class="prov-stat">
-                        <span class="prov-val">{{ prov.sessions }}</span>
-                        <span class="prov-lbl">Sessions</span>
-                      </div>
-                      <div class="prov-stat">
-                        <span class="prov-val">{{ prov.participants | number }}</span>
-                        <span class="prov-lbl">Participants</span>
-                      </div>
-                      <div class="prov-stat">
-                        <span class="prov-val">{{ prov.trainers }}</span>
-                        <span class="prov-lbl">Trainers</span>
-                      </div>
-                      <div class="prov-stat">
-                        <span class="prov-val">R{{ prov.revenue | number:'1.0-0' }}</span>
-                        <span class="prov-lbl">Revenue</span>
-                      </div>
+            <div class="tab-body">
+              <!-- Provincial Breakdown -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon blue"><mat-icon>map</mat-icon></div>
+                    <div>
+                      <h3>Provincial Breakdown</h3>
+                      <p>Training activity across all 9 provinces</p>
                     </div>
                   </div>
-                }
-                @if (!dashboard?.provinceStats?.length) {
-                  <div class="empty-state">
-                    <mat-icon>map</mat-icon>
-                    <p>No provincial data available</p>
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Equipment Stats -->
-            <div class="section">
-              <h3 class="section-title">
-                <mat-icon>precision_manufacturing</mat-icon> Equipment Distribution
-              </h3>
-              <div class="equipment-grid">
-                @for (eq of dashboard?.equipmentStats || []; track eq.equipmentType) {
-                  <div class="equipment-card">
-                    <div class="equip-type">{{ eq.equipmentType }}</div>
-                    <div class="equip-stats">
-                      <div class="equip-stat delivered">
-                        <span class="equip-val">{{ eq.totalDelivered }}</span>
-                        <span class="equip-lbl">Delivered</span>
+                </div>
+                <div class="province-grid">
+                  @for (prov of dashboard?.provinceStats || []; track prov.province) {
+                    <div class="province-card">
+                      <div class="prov-header">
+                        <mat-icon class="prov-map-icon">location_on</mat-icon>
+                        <span class="province-name">{{ prov.province }}</span>
                       </div>
-                      <div class="equip-stat ordered">
-                        <span class="equip-val">{{ eq.totalOrdered }}</span>
-                        <span class="equip-lbl">Ordered</span>
+                      <div class="prov-metrics">
+                        <div class="prov-metric">
+                          <span class="prov-metric-val">{{ prov.sessions }}</span>
+                          <span class="prov-metric-lbl">Sessions</span>
+                        </div>
+                        <div class="prov-metric">
+                          <span class="prov-metric-val">{{ prov.participants | number }}</span>
+                          <span class="prov-metric-lbl">Participants</span>
+                        </div>
+                        <div class="prov-metric">
+                          <span class="prov-metric-val">{{ prov.trainers }}</span>
+                          <span class="prov-metric-lbl">Trainers</span>
+                        </div>
+                        <div class="prov-metric">
+                          <span class="prov-metric-val revenue">R{{ prov.revenue | number:'1.0-0' }}</span>
+                          <span class="prov-metric-lbl">Revenue</span>
+                        </div>
                       </div>
                     </div>
-                    <mat-progress-bar
-                      mode="determinate"
-                      [value]="eq.deliveryRate"
-                      [color]="eq.deliveryRate > 80 ? 'primary' : 'warn'"
-                    ></mat-progress-bar>
-                    <span class="equip-usage">{{ eq.deliveryRate | number:'1.0-0' }}% delivery rate</span>
-                  </div>
-                }
-                @if (!dashboard?.equipmentStats?.length) {
-                  <div class="empty-state">
-                    <mat-icon>precision_manufacturing</mat-icon>
-                    <p>No equipment data available</p>
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- National Totals -->
-            <div class="section">
-              <h3 class="section-title">
-                <mat-icon>analytics</mat-icon> National Summary
-              </h3>
-              <div class="national-grid">
-                <div class="national-card">
-                  <mat-icon style="color: #2196f3;">school</mat-icon>
-                  <span class="nat-val">{{ dashboard?.nationalTotals?.totalTrainingSessions || 0 | number }}</span>
-                  <span class="nat-lbl">Training Sessions</span>
-                </div>
-                <div class="national-card">
-                  <mat-icon style="color: #4caf50;">person</mat-icon>
-                  <span class="nat-val">{{ dashboard?.nationalTotals?.totalTrainers || 0 | number }}</span>
-                  <span class="nat-lbl">Trainers</span>
-                </div>
-                <div class="national-card">
-                  <mat-icon style="color: #ff9800;">groups</mat-icon>
-                  <span class="nat-val">{{ dashboard?.nationalTotals?.totalParticipants || 0 | number }}</span>
-                  <span class="nat-lbl">Participants</span>
-                </div>
-                <div class="national-card">
-                  <mat-icon style="color: #9c27b0;">shopping_cart</mat-icon>
-                  <span class="nat-val">{{ dashboard?.nationalTotals?.totalSales || 0 | number }}</span>
-                  <span class="nat-lbl">Total Sales</span>
-                </div>
-                <div class="national-card">
-                  <mat-icon style="color: #009688;">attach_money</mat-icon>
-                  <span class="nat-val">R{{ dashboard?.nationalTotals?.totalRevenue || 0 | number:'1.0-0' }}</span>
-                  <span class="nat-lbl">Total Revenue</span>
-                </div>
-                <div class="national-card">
-                  <mat-icon style="color: #ff5722;">local_shipping</mat-icon>
-                  <span class="nat-val">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
-                  <span class="nat-lbl">Total Deliveries</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Training Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>school</mat-icon>
-            <span>Training</span>
-            @if (dashboard?.trainingStats?.totalSessions) {
-              <span class="tab-badge">{{ dashboard?.trainingStats?.totalSessions }}</span>
-            }
-          </ng-template>
-
-          <div class="tab-content">
-            <!-- Training KPIs -->
-            <div class="mini-kpi-row">
-              <div class="mini-kpi">
-                <span class="mkpi-val">{{ dashboard?.trainingStats?.completedSessions || 0 }}</span>
-                <span class="mkpi-lbl">Completed</span>
-              </div>
-              <div class="mini-kpi">
-                <span class="mkpi-val">{{ dashboard?.trainingStats?.inProgressSessions || 0 }}</span>
-                <span class="mkpi-lbl">In Progress</span>
-              </div>
-              <div class="mini-kpi">
-                <span class="mkpi-val">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
-                <span class="mkpi-lbl">Total Participants</span>
-              </div>
-              <div class="mini-kpi">
-                <span class="mkpi-val">{{ dashboard?.trainingStats?.completionRate || 0 | number:'1.0-0' }}%</span>
-                <span class="mkpi-lbl">Completion Rate</span>
-              </div>
-            </div>
-
-            <!-- Training Sessions Table -->
-            <div class="section">
-              <div class="section-header">
-                <h3 class="section-title">
-                  <mat-icon>list</mat-icon> Training Sessions
-                </h3>
-                <button mat-stroked-button class="refresh-btn" (click)="loadTraining()">
-                  <mat-icon>refresh</mat-icon> Refresh
-                </button>
-              </div>
-
-              @if (trainingLoading) {
-                <div class="section-loading">
-                  <mat-spinner diameter="32"></mat-spinner>
-                </div>
-              } @else {
-                <div class="table-container">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Training Name</th>
-                        <th>Province</th>
-                        <th>Venue</th>
-                        <th>Trainer</th>
-                        <th>Date</th>
-                        <th>Participants</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (session of trainingSessions; track session.id) {
-                        <tr>
-                          <td class="title-cell">{{ session.trainingName }}</td>
-                          <td>{{ session.provinceName }}</td>
-                          <td>{{ session.venue }}</td>
-                          <td>{{ getTrainerName(session) }}</td>
-                          <td>{{ session.startDate | date:'dd MMM yyyy' }}</td>
-                          <td>
-                            <span class="attendee-count">{{ session.numberOfParticipants }}</span>
-                          </td>
-                          <td>
-                            <mat-chip [class]="'status-' + ('' + (session.statusText || 'unknown')).toLowerCase()" size="small">
-                              {{ session.statusText || 'Unknown' }}
-                            </mat-chip>
-                          </td>
-                        </tr>
-                      }
-                      @if (!trainingSessions.length) {
-                        <tr>
-                          <td colspan="7" class="empty-row">No training sessions found</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              }
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Inventory Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>inventory_2</mat-icon>
-            <span>Inventory</span>
-            @if (dashboard?.inventoryStats?.lowStockItems) {
-              <span class="tab-badge warn">{{ dashboard?.inventoryStats?.lowStockItems }}</span>
-            }
-          </ng-template>
-
-          <div class="tab-content">
-            <!-- Inventory KPIs -->
-            <div class="mini-kpi-row">
-              <div class="mini-kpi">
-                <span class="mkpi-val">{{ dashboard?.inventoryStats?.totalItems || 0 | number }}</span>
-                <span class="mkpi-lbl">Total Items</span>
-              </div>
-              <div class="mini-kpi">
-                <span class="mkpi-val">R{{ dashboard?.inventoryStats?.totalValue || 0 | number:'1.0-0' }}</span>
-                <span class="mkpi-lbl">Total Value</span>
-              </div>
-              <div class="mini-kpi warn">
-                <span class="mkpi-val">{{ dashboard?.inventoryStats?.lowStockItems || 0 }}</span>
-                <span class="mkpi-lbl">Low Stock</span>
-              </div>
-              <div class="mini-kpi danger">
-                <span class="mkpi-val">{{ dashboard?.inventoryStats?.outOfStockItems || 0 }}</span>
-                <span class="mkpi-lbl">Out of Stock</span>
-              </div>
-            </div>
-
-            <!-- Low Stock Alerts -->
-            @if (dashboard?.lowStockItems?.length) {
-              <div class="section">
-                <h3 class="section-title warn-title">
-                  <mat-icon>warning</mat-icon> Low Stock Alerts
-                </h3>
-                <div class="low-stock-grid">
-                  @for (item of dashboard?.lowStockItems || []; track item.id) {
-                    <div class="low-stock-card">
-                      <div class="ls-header">
-                        <span class="ls-name">{{ item.name }}</span>
-                        <mat-chip class="status-warning" size="small">Low Stock</mat-chip>
-                      </div>
-                      <div class="ls-details">
-                        <span>SKU: {{ item.sku }}</span>
-                        <span>Qty: <strong class="danger-text">{{ item.stockAvailable }}</strong> / Reorder: {{ item.reorderLevel }}</span>
-                      </div>
-                      <mat-progress-bar
-                        mode="determinate"
-                        [value]="item.reorderLevel > 0 ? (item.stockAvailable / item.reorderLevel) * 100 : 0"
-                        color="warn"
-                      ></mat-progress-bar>
+                  }
+                  @if (!dashboard?.provinceStats?.length) {
+                    <div class="empty-placeholder">
+                      <mat-icon>map</mat-icon>
+                      <p>No provincial data available</p>
                     </div>
                   }
                 </div>
-              </div>
-            }
+              </section>
 
-            <!-- Full Inventory Table -->
-            <div class="section">
-              <div class="section-header">
-                <h3 class="section-title">
-                  <mat-icon>list</mat-icon> All Inventory Items
-                </h3>
-                <button mat-stroked-button class="refresh-btn" (click)="loadInventory()">
-                  <mat-icon>refresh</mat-icon> Refresh
-                </button>
-              </div>
-
-              @if (inventoryLoading) {
-                <div class="section-loading">
-                  <mat-spinner diameter="32"></mat-spinner>
-                </div>
-              } @else {
-                <div class="table-container">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>SKU</th>
-                        <th>Category</th>
-                        <th>Stock</th>
-                        <th>Reorder Level</th>
-                        <th>Unit Price</th>
-                        <th>Supplier</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (item of inventoryItems; track item.id) {
-                        <tr [class.low-stock-row]="item.stockAvailable <= item.reorderLevel">
-                          <td class="title-cell">{{ item.name }}</td>
-                          <td class="mono">{{ item.sku }}</td>
-                          <td>{{ item.categoryText }}</td>
-                          <td [class.danger-text]="item.stockAvailable <= item.reorderLevel">{{ item.stockAvailable | number }}</td>
-                          <td>{{ item.reorderLevel | number }}</td>
-                          <td>R{{ item.unitPrice | number:'1.2-2' }}</td>
-                          <td>{{ item.supplier }}</td>
-                          <td>
-                            <mat-chip [class]="item.stockAvailable <= item.reorderLevel ? 'status-warning' : 'status-ok'" size="small">
-                              {{ item.statusText || (item.stockAvailable <= item.reorderLevel ? 'Low Stock' : 'In Stock') }}
-                            </mat-chip>
-                          </td>
-                        </tr>
-                      }
-                      @if (!inventoryItems.length) {
-                        <tr>
-                          <td colspan="8" class="empty-row">No inventory items found</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              }
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Sales Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>point_of_sale</mat-icon>
-            <span>Sales</span>
-          </ng-template>
-
-          <div class="tab-content">
-            <!-- Sales KPIs -->
-            <div class="mini-kpi-row">
-              <div class="mini-kpi">
-                <span class="mkpi-val">{{ dashboard?.salesStats?.totalSales || 0 | number }}</span>
-                <span class="mkpi-lbl">Total Sales</span>
-              </div>
-              <div class="mini-kpi">
-                <span class="mkpi-val">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
-                <span class="mkpi-lbl">Total Revenue</span>
-              </div>
-              <div class="mini-kpi">
-                <span class="mkpi-val">R{{ dashboard?.salesStats?.averageOrderValue || 0 | number:'1.0-0' }}</span>
-                <span class="mkpi-lbl">Avg Order Value</span>
-              </div>
-              <div class="mini-kpi">
-                <span class="mkpi-val">{{ dashboard?.salesStats?.pendingOrders || 0 }}</span>
-                <span class="mkpi-lbl">Pending Orders</span>
-              </div>
-            </div>
-
-            <!-- Provincial Sales -->
-            <div class="section">
-              <h3 class="section-title">
-                <mat-icon>map</mat-icon> Sales by Province
-              </h3>
-              <div class="provincial-sales-grid">
-                @for (prov of dashboard?.provincialData || []; track prov.province) {
-                  <div class="prov-sales-card">
-                    <div class="ps-header">
-                      <span class="ps-province">{{ prov.province }}</span>
-                      <span class="ps-revenue">R{{ prov.revenue | number:'1.0-0' }}</span>
+              <!-- Equipment Distribution -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon purple"><mat-icon>precision_manufacturing</mat-icon></div>
+                    <div>
+                      <h3>Equipment Distribution</h3>
+                      <p>Delivery status by equipment type</p>
                     </div>
-                    <div class="ps-details">
-                      <span>{{ prov.orderCount }} orders</span>
-                      <span>{{ prov.totalDelivered }}/{{ prov.totalOrdered }} delivered</span>
+                  </div>
+                </div>
+                <div class="equipment-grid">
+                  @for (eq of dashboard?.equipmentStats || []; track eq.equipmentType) {
+                    <div class="equip-card">
+                      <div class="equip-name">{{ eq.equipmentType }}</div>
+                      <div class="equip-numbers">
+                        <div class="equip-num">
+                          <span class="en-val delivered">{{ eq.totalDelivered | number }}</span>
+                          <span class="en-lbl">Delivered</span>
+                        </div>
+                        <div class="equip-num">
+                          <span class="en-val ordered">{{ eq.totalOrdered | number }}</span>
+                          <span class="en-lbl">Ordered</span>
+                        </div>
+                      </div>
+                      <div class="equip-bar-wrap">
+                        <mat-progress-bar
+                          mode="determinate"
+                          [value]="eq.deliveryRate"
+                          [color]="eq.deliveryRate >= 80 ? 'primary' : 'warn'"
+                        ></mat-progress-bar>
+                        <span class="equip-rate">{{ eq.deliveryRate | number:'1.0-0' }}%</span>
+                      </div>
                     </div>
-                    <mat-progress-bar
-                      mode="determinate"
-                      [value]="prov.deliveryRate"
-                    ></mat-progress-bar>
-                    <span class="delivery-rate">{{ prov.deliveryRate | number:'1.0-0' }}% delivery rate</span>
-                  </div>
-                }
-                @if (!dashboard?.provincialData?.length) {
-                  <div class="empty-state">
-                    <mat-icon>point_of_sale</mat-icon>
-                    <p>No provincial sales data available</p>
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Top Products -->
-            <div class="section">
-              <h3 class="section-title">
-                <mat-icon>star</mat-icon> Top Products
-              </h3>
-              <div class="top-products-grid">
-                @for (prod of dashboard?.topProducts || []; track prod.productName; let i = $index) {
-                  <div class="top-product-card">
-                    <span class="tp-rank">#{{ i + 1 }}</span>
-                    <div class="tp-info">
-                      <span class="tp-name">{{ prod.productName }}</span>
-                      <span class="tp-details">{{ prod.quantitySold | number }} units &middot; {{ prod.orderCount }} orders</span>
+                  }
+                  @if (!dashboard?.equipmentStats?.length) {
+                    <div class="empty-placeholder">
+                      <mat-icon>precision_manufacturing</mat-icon>
+                      <p>No equipment data available</p>
                     </div>
-                    <span class="tp-revenue">R{{ prod.revenue | number:'1.0-0' }}</span>
+                  }
+                </div>
+              </section>
+
+              <!-- National Summary -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon teal"><mat-icon>analytics</mat-icon></div>
+                    <div>
+                      <h3>National Summary</h3>
+                      <p>Aggregate totals across the programme</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="national-grid">
+                  <div class="natl-card">
+                    <div class="natl-icon blue"><mat-icon>school</mat-icon></div>
+                    <span class="natl-val">{{ dashboard?.nationalTotals?.totalTrainingSessions || 0 | number }}</span>
+                    <span class="natl-lbl">Training Sessions</span>
+                  </div>
+                  <div class="natl-card">
+                    <div class="natl-icon green"><mat-icon>person</mat-icon></div>
+                    <span class="natl-val">{{ dashboard?.nationalTotals?.totalTrainers || 0 | number }}</span>
+                    <span class="natl-lbl">Trainers</span>
+                  </div>
+                  <div class="natl-card">
+                    <div class="natl-icon orange"><mat-icon>groups</mat-icon></div>
+                    <span class="natl-val">{{ dashboard?.nationalTotals?.totalParticipants || 0 | number }}</span>
+                    <span class="natl-lbl">Participants</span>
+                  </div>
+                  <div class="natl-card">
+                    <div class="natl-icon purple"><mat-icon>shopping_cart</mat-icon></div>
+                    <span class="natl-val">{{ dashboard?.nationalTotals?.totalSales || 0 | number }}</span>
+                    <span class="natl-lbl">Total Sales</span>
+                  </div>
+                  <div class="natl-card">
+                    <div class="natl-icon teal"><mat-icon>attach_money</mat-icon></div>
+                    <span class="natl-val">R{{ dashboard?.nationalTotals?.totalRevenue || 0 | number:'1.0-0' }}</span>
+                    <span class="natl-lbl">Total Revenue</span>
+                  </div>
+                  <div class="natl-card">
+                    <div class="natl-icon red"><mat-icon>local_shipping</mat-icon></div>
+                    <span class="natl-val">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
+                    <span class="natl-lbl">Deliveries</span>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </mat-tab>
+
+          <!-- ==================== TRAINING TAB ==================== -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>school</mat-icon>
+              <span>Training</span>
+              @if (dashboard?.trainingStats?.totalSessions) {
+                <span class="tab-count">{{ dashboard?.trainingStats?.totalSessions }}</span>
+              }
+            </ng-template>
+
+            <div class="tab-body">
+              <!-- Training Mini KPIs -->
+              <div class="stat-bar">
+                <div class="stat-chip blue">
+                  <mat-icon>check_circle</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.trainingStats?.completedSessions || 0 }}</span>
+                    <span class="sc-lbl">Completed</span>
+                  </div>
+                </div>
+                <div class="stat-chip orange">
+                  <mat-icon>pending</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.trainingStats?.inProgressSessions || 0 }}</span>
+                    <span class="sc-lbl">In Progress</span>
+                  </div>
+                </div>
+                <div class="stat-chip green">
+                  <mat-icon>groups</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
+                    <span class="sc-lbl">Total Participants</span>
+                  </div>
+                </div>
+                <div class="stat-chip purple">
+                  <mat-icon>speed</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.trainingStats?.completionRate || 0 | number:'1.0-0' }}%</span>
+                    <span class="sc-lbl">Completion Rate</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Training Sessions Table -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon blue"><mat-icon>list_alt</mat-icon></div>
+                    <div>
+                      <h3>Training Sessions</h3>
+                      <p>{{ trainingSessions.length }} sessions loaded</p>
+                    </div>
+                  </div>
+                  <button mat-stroked-button class="panel-action" (click)="loadTraining()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                </div>
+
+                @if (trainingLoading) {
+                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                } @else {
+                  <div class="table-wrap">
+                    <table class="modern-table">
+                      <thead>
+                        <tr>
+                          <th>Training Name</th>
+                          <th>Province</th>
+                          <th>Venue</th>
+                          <th>Trainer</th>
+                          <th>Date</th>
+                          <th class="center">Participants</th>
+                          <th class="center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (session of trainingSessions; track session.id) {
+                          <tr>
+                            <td class="primary-cell">{{ session.trainingName }}</td>
+                            <td>
+                              <span class="province-tag">{{ session.provinceName }}</span>
+                            </td>
+                            <td class="secondary-text">{{ session.venue }}</td>
+                            <td class="secondary-text">{{ getTrainerName(session) }}</td>
+                            <td class="mono-text">{{ session.startDate | date:'dd MMM yyyy' }}</td>
+                            <td class="center">
+                              <span class="num-badge blue">{{ session.numberOfParticipants }}</span>
+                            </td>
+                            <td class="center">
+                              <span class="status-tag" [class]="'st-' + ('' + (session.statusText || 'unknown')).toLowerCase()">
+                                {{ session.statusText || 'Unknown' }}
+                              </span>
+                            </td>
+                          </tr>
+                        }
+                        @if (!trainingSessions.length) {
+                          <tr><td colspan="7" class="empty-row">No training sessions found</td></tr>
+                        }
+                      </tbody>
+                    </table>
                   </div>
                 }
-                @if (!dashboard?.topProducts?.length) {
-                  <div class="empty-state">
-                    <mat-icon>star</mat-icon>
-                    <p>No product data available</p>
+              </section>
+            </div>
+          </mat-tab>
+
+          <!-- ==================== INVENTORY TAB ==================== -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>inventory_2</mat-icon>
+              <span>Inventory</span>
+              @if (dashboard?.inventoryStats?.lowStockItems) {
+                <span class="tab-count warn">{{ dashboard?.inventoryStats?.lowStockItems }}</span>
+              }
+            </ng-template>
+
+            <div class="tab-body">
+              <!-- Inventory Stats -->
+              <div class="stat-bar">
+                <div class="stat-chip blue">
+                  <mat-icon>category</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.inventoryStats?.totalItems || 0 | number }}</span>
+                    <span class="sc-lbl">Total Items</span>
+                  </div>
+                </div>
+                <div class="stat-chip green">
+                  <mat-icon>payments</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">R{{ dashboard?.inventoryStats?.totalValue || 0 | number:'1.0-0' }}</span>
+                    <span class="sc-lbl">Total Value</span>
+                  </div>
+                </div>
+                <div class="stat-chip orange">
+                  <mat-icon>warning</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.inventoryStats?.lowStockItems || 0 }}</span>
+                    <span class="sc-lbl">Low Stock</span>
+                  </div>
+                </div>
+                <div class="stat-chip red">
+                  <mat-icon>error</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.inventoryStats?.outOfStockItems || 0 }}</span>
+                    <span class="sc-lbl">Out of Stock</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Low Stock Alerts -->
+              @if (dashboard?.lowStockItems?.length) {
+                <section class="panel alert-panel">
+                  <div class="panel-header">
+                    <div class="panel-title-group">
+                      <div class="panel-icon orange"><mat-icon>warning</mat-icon></div>
+                      <div>
+                        <h3>Low Stock Alerts</h3>
+                        <p>{{ dashboard?.lowStockItems?.length }} items need attention</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="alert-grid">
+                    @for (item of dashboard?.lowStockItems || []; track item.id) {
+                      <div class="alert-card">
+                        <div class="alert-top">
+                          <span class="alert-name">{{ item.name }}</span>
+                          <span class="status-tag st-warning">Low Stock</span>
+                        </div>
+                        <div class="alert-meta">
+                          <span>SKU: <strong>{{ item.sku }}</strong></span>
+                          <span>Stock: <strong class="danger-val">{{ item.stockAvailable }}</strong> / Reorder: {{ item.reorderLevel }}</span>
+                        </div>
+                        <mat-progress-bar
+                          mode="determinate"
+                          [value]="item.reorderLevel > 0 ? (item.stockAvailable / item.reorderLevel) * 100 : 0"
+                          color="warn"
+                        ></mat-progress-bar>
+                      </div>
+                    }
+                  </div>
+                </section>
+              }
+
+              <!-- All Inventory -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon purple"><mat-icon>list_alt</mat-icon></div>
+                    <div>
+                      <h3>All Inventory Items</h3>
+                      <p>{{ inventoryItems.length }} items loaded</p>
+                    </div>
+                  </div>
+                  <button mat-stroked-button class="panel-action" (click)="loadInventory()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                </div>
+
+                @if (inventoryLoading) {
+                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                } @else {
+                  <div class="table-wrap">
+                    <table class="modern-table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>SKU</th>
+                          <th>Category</th>
+                          <th class="right">Stock</th>
+                          <th class="right">Reorder</th>
+                          <th class="right">Unit Price</th>
+                          <th>Supplier</th>
+                          <th class="center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (item of inventoryItems; track item.id) {
+                          <tr [class.alert-row]="item.stockAvailable <= item.reorderLevel">
+                            <td class="primary-cell">{{ item.name }}</td>
+                            <td class="mono-text">{{ item.sku }}</td>
+                            <td><span class="category-tag">{{ item.categoryText }}</span></td>
+                            <td class="right" [class.danger-val]="item.stockAvailable <= item.reorderLevel">
+                              {{ item.stockAvailable | number }}
+                            </td>
+                            <td class="right secondary-text">{{ item.reorderLevel | number }}</td>
+                            <td class="right money-val">R{{ item.unitPrice | number:'1.2-2' }}</td>
+                            <td class="secondary-text">{{ item.supplier }}</td>
+                            <td class="center">
+                              <span class="status-tag" [class]="item.stockAvailable <= item.reorderLevel ? 'st-warning' : 'st-ok'">
+                                {{ item.statusText || (item.stockAvailable <= item.reorderLevel ? 'Low Stock' : 'In Stock') }}
+                              </span>
+                            </td>
+                          </tr>
+                        }
+                        @if (!inventoryItems.length) {
+                          <tr><td colspan="8" class="empty-row">No inventory items found</td></tr>
+                        }
+                      </tbody>
+                    </table>
                   </div>
                 }
-              </div>
+              </section>
             </div>
+          </mat-tab>
 
-            <!-- Recent Sales Table -->
-            <div class="section">
-              <div class="section-header">
-                <h3 class="section-title">
-                  <mat-icon>receipt_long</mat-icon> Recent Sales
-                </h3>
-                <button mat-stroked-button class="refresh-btn" (click)="loadSales()">
-                  <mat-icon>refresh</mat-icon> Refresh
-                </button>
-              </div>
+          <!-- ==================== SALES TAB ==================== -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>point_of_sale</mat-icon>
+              <span>Sales</span>
+            </ng-template>
 
-              @if (salesLoading) {
-                <div class="section-loading">
-                  <mat-spinner diameter="32"></mat-spinner>
+            <div class="tab-body">
+              <!-- Sales Stats -->
+              <div class="stat-bar">
+                <div class="stat-chip blue">
+                  <mat-icon>receipt_long</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.salesStats?.totalSales || 0 | number }}</span>
+                    <span class="sc-lbl">Total Sales</span>
+                  </div>
                 </div>
-              } @else {
-                <div class="table-container">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Sale #</th>
-                        <th>Customer</th>
-                        <th>Date</th>
-                        <th>Items</th>
-                        <th>Total</th>
-                        <th>Credit Note</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (sale of salesList; track sale.id) {
-                        <tr>
-                          <td class="mono">{{ sale.saleNumber }}</td>
-                          <td class="title-cell">{{ sale.customerName }}</td>
-                          <td>{{ sale.saleDate | date:'dd MMM yyyy' }}</td>
-                          <td>{{ sale.saleItems?.length || 0 }} items</td>
-                          <td class="amount-cell">R{{ sale.total | number:'1.2-2' }}</td>
-                          <td>
-                            @if (sale.hasCreditNote) {
-                              <mat-chip class="status-warning" size="small">
-                                Credited R{{ sale.creditedAmount || 0 | number:'1.2-2' }}
-                              </mat-chip>
-                            } @else {
-                              <mat-chip class="status-ok" size="small">OK</mat-chip>
-                            }
-                          </td>
-                        </tr>
-                      }
-                      @if (!salesList.length) {
-                        <tr>
-                          <td colspan="6" class="empty-row">No sales found</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+                <div class="stat-chip green">
+                  <mat-icon>trending_up</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
+                    <span class="sc-lbl">Revenue</span>
+                  </div>
                 </div>
-              }
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Credit Notes Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>receipt</mat-icon>
-            <span>Credit Notes</span>
-          </ng-template>
-
-          <div class="tab-content">
-            <div class="section">
-              <div class="section-header">
-                <h3 class="section-title">
-                  <mat-icon>receipt</mat-icon> Credit Notes
-                </h3>
-                <button mat-stroked-button class="refresh-btn" (click)="loadCreditNotes()">
-                  <mat-icon>refresh</mat-icon> Refresh
-                </button>
+                <div class="stat-chip teal">
+                  <mat-icon>shopping_bag</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">R{{ dashboard?.salesStats?.averageOrderValue || 0 | number:'1.0-0' }}</span>
+                    <span class="sc-lbl">Avg Order</span>
+                  </div>
+                </div>
+                <div class="stat-chip orange">
+                  <mat-icon>hourglass_empty</mat-icon>
+                  <div class="sc-text">
+                    <span class="sc-val">{{ dashboard?.salesStats?.pendingOrders || 0 }}</span>
+                    <span class="sc-lbl">Pending</span>
+                  </div>
+                </div>
               </div>
 
-              @if (creditNotesLoading) {
-                <div class="section-loading">
-                  <mat-spinner diameter="32"></mat-spinner>
+              <!-- Provincial Sales -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon blue"><mat-icon>map</mat-icon></div>
+                    <div>
+                      <h3>Sales by Province</h3>
+                      <p>Revenue & delivery performance per province</p>
+                    </div>
+                  </div>
                 </div>
-              } @else {
-                <div class="table-container">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Credit Note #</th>
-                        <th>Invoice #</th>
-                        <th>Customer</th>
-                        <th>Original Amt</th>
-                        <th>Credit Amt</th>
-                        <th>Reason</th>
-                        <th>Created</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (cn of creditNotes; track cn.id) {
-                        <tr>
-                          <td class="mono">{{ cn.creditNoteNumber }}</td>
-                          <td class="mono">{{ cn.invoiceNumber }}</td>
-                          <td class="title-cell">{{ cn.customerName }}</td>
-                          <td class="amount-cell">R{{ cn.originalAmount | number:'1.2-2' }}</td>
-                          <td class="amount-cell danger-text">R{{ cn.creditAmount | number:'1.2-2' }}</td>
-                          <td>{{ cn.reason }}</td>
-                          <td>{{ cn.createdDate | date:'dd MMM yyyy' }}</td>
-                          <td>
-                            <mat-chip [class]="'status-' + ('' + (cn.status || 'unknown')).toLowerCase()" size="small">
-                              {{ cn.status }}
-                            </mat-chip>
-                          </td>
-                        </tr>
-                      }
-                      @if (!creditNotes.length) {
-                        <tr>
-                          <td colspan="8" class="empty-row">No credit notes found</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+                <div class="prov-sales-grid">
+                  @for (prov of dashboard?.provincialData || []; track prov.province) {
+                    <div class="prov-sale-card">
+                      <div class="psc-top">
+                        <span class="psc-province">{{ prov.province }}</span>
+                        <span class="psc-revenue">R{{ prov.revenue | number:'1.0-0' }}</span>
+                      </div>
+                      <div class="psc-meta">
+                        <span>{{ prov.orderCount | number }} orders</span>
+                        <span>{{ prov.totalDelivered }}/{{ prov.totalOrdered }} delivered</span>
+                      </div>
+                      <div class="psc-bar-wrap">
+                        <mat-progress-bar mode="determinate" [value]="prov.deliveryRate"></mat-progress-bar>
+                        <span class="psc-rate">{{ prov.deliveryRate | number:'1.0-0' }}%</span>
+                      </div>
+                    </div>
+                  }
+                  @if (!dashboard?.provincialData?.length) {
+                    <div class="empty-placeholder">
+                      <mat-icon>point_of_sale</mat-icon>
+                      <p>No provincial sales data</p>
+                    </div>
+                  }
                 </div>
-              }
+              </section>
+
+              <!-- Top Products -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon orange"><mat-icon>star</mat-icon></div>
+                    <div>
+                      <h3>Top Products</h3>
+                      <p>Best selling products by revenue</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="top-products">
+                  @for (prod of dashboard?.topProducts || []; track prod.productName; let i = $index) {
+                    <div class="tp-row">
+                      <span class="tp-rank" [class]="'rank-' + (i < 3 ? i + 1 : 'other')">#{{ i + 1 }}</span>
+                      <div class="tp-info">
+                        <span class="tp-name">{{ prod.productName }}</span>
+                        <span class="tp-meta">{{ prod.quantitySold | number }} units &middot; {{ prod.orderCount }} orders</span>
+                      </div>
+                      <span class="tp-revenue">R{{ prod.revenue | number:'1.0-0' }}</span>
+                    </div>
+                  }
+                  @if (!dashboard?.topProducts?.length) {
+                    <div class="empty-placeholder compact">
+                      <mat-icon>star</mat-icon>
+                      <p>No product data</p>
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <!-- Recent Sales Table -->
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon green"><mat-icon>receipt_long</mat-icon></div>
+                    <div>
+                      <h3>Recent Sales</h3>
+                      <p>{{ salesList.length }} sales loaded</p>
+                    </div>
+                  </div>
+                  <button mat-stroked-button class="panel-action" (click)="loadSales()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                </div>
+
+                @if (salesLoading) {
+                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                } @else {
+                  <div class="table-wrap">
+                    <table class="modern-table">
+                      <thead>
+                        <tr>
+                          <th>Sale #</th>
+                          <th>Customer</th>
+                          <th>Date</th>
+                          <th class="center">Items</th>
+                          <th class="right">Total</th>
+                          <th class="center">Credit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (sale of salesList; track sale.id) {
+                          <tr>
+                            <td class="mono-text">{{ sale.saleNumber }}</td>
+                            <td class="primary-cell">{{ sale.customerName }}</td>
+                            <td class="mono-text">{{ sale.saleDate | date:'dd MMM yyyy' }}</td>
+                            <td class="center">
+                              <span class="num-badge subtle">{{ sale.saleItems?.length || 0 }}</span>
+                            </td>
+                            <td class="right money-val">R{{ sale.total | number:'1.2-2' }}</td>
+                            <td class="center">
+                              @if (sale.hasCreditNote) {
+                                <span class="status-tag st-warning">R{{ sale.creditedAmount || 0 | number:'1.2-2' }}</span>
+                              } @else {
+                                <span class="status-tag st-ok">OK</span>
+                              }
+                            </td>
+                          </tr>
+                        }
+                        @if (!salesList.length) {
+                          <tr><td colspan="6" class="empty-row">No sales found</td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
             </div>
-          </div>
-        </mat-tab>
-      </mat-tab-group>
+          </mat-tab>
+
+          <!-- ==================== CREDIT NOTES TAB ==================== -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>receipt</mat-icon>
+              <span>Credit Notes</span>
+            </ng-template>
+
+            <div class="tab-body">
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon red"><mat-icon>receipt</mat-icon></div>
+                    <div>
+                      <h3>Credit Notes</h3>
+                      <p>{{ creditNotes.length }} notes loaded</p>
+                    </div>
+                  </div>
+                  <button mat-stroked-button class="panel-action" (click)="loadCreditNotes()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                </div>
+
+                @if (creditNotesLoading) {
+                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                } @else {
+                  <div class="table-wrap">
+                    <table class="modern-table">
+                      <thead>
+                        <tr>
+                          <th>Credit Note #</th>
+                          <th>Invoice #</th>
+                          <th>Customer</th>
+                          <th class="right">Original</th>
+                          <th class="right">Credit</th>
+                          <th>Reason</th>
+                          <th>Created</th>
+                          <th class="center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (cn of creditNotes; track cn.id) {
+                          <tr>
+                            <td class="mono-text">{{ cn.creditNoteNumber }}</td>
+                            <td class="mono-text">{{ cn.invoiceNumber }}</td>
+                            <td class="primary-cell">{{ cn.customerName }}</td>
+                            <td class="right money-val">R{{ cn.originalAmount | number:'1.2-2' }}</td>
+                            <td class="right danger-val">-R{{ cn.creditAmount | number:'1.2-2' }}</td>
+                            <td class="secondary-text reason-cell">{{ cn.reason }}</td>
+                            <td class="mono-text">{{ cn.createdDate | date:'dd MMM yyyy' }}</td>
+                            <td class="center">
+                              <span class="status-tag" [class]="'st-' + ('' + (cn.status || 'unknown')).toLowerCase()">
+                                {{ cn.status }}
+                              </span>
+                            </td>
+                          </tr>
+                        }
+                        @if (!creditNotes.length) {
+                          <tr><td colspan="8" class="empty-row">No credit notes found</td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
+            </div>
+          </mat-tab>
+        </mat-tab-group>
+      </div>
     }
   `,
   styles: [`
-    :host { display: block; }
-    .detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .detail-header h2 { font-size: 24px; font-weight: 700; color: white; margin: 0; flex: 1; display: flex; align-items: center; gap: 10px; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
-    .header-icon { font-size: 28px; width: 28px; height: 28px; }
-    .back-btn { background: rgba(255,255,255,0.2) !important; color: white !important; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3) !important; }
-    .connection-status { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; backdrop-filter: blur(10px); }
-    .connection-status.connected { background: rgba(76,175,80,0.25); color: #a5d6a7; border: 1px solid rgba(76,175,80,0.4); }
-    .connection-status.disconnected { background: rgba(244,67,54,0.25); color: #ef9a9a; border: 1px solid rgba(244,67,54,0.4); }
-    .connection-status mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .loading-overlay { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; gap: 16px; }
-    .loading-overlay p { color: rgba(255,255,255,0.9); font-size: 16px; }
-    .error-banner { display: flex; align-items: flex-start; gap: 16px; background: rgba(244,67,54,0.15); border: 1px solid rgba(244,67,54,0.4); border-radius: 16px; padding: 24px; backdrop-filter: blur(10px); }
-    .error-banner mat-icon { font-size: 40px; width: 40px; height: 40px; color: #ef9a9a; }
-    .error-banner h3 { color: white; margin: 0 0 8px 0; font-size: 16px; }
-    .error-banner p { color: rgba(255,255,255,0.8); margin: 0 0 12px 0; font-size: 14px; }
-    .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .kpi-card { background: rgba(255,255,255,0.95); border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); transition: transform 0.2s; }
-    .kpi-card:hover { transform: translateY(-2px); }
-    .kpi-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .kpi-icon mat-icon { font-size: 26px; width: 26px; height: 26px; }
-    .kpi-info { display: flex; flex-direction: column; }
-    .kpi-value { font-size: 22px; font-weight: 700; color: #1a1a2e; line-height: 1.2; }
-    .kpi-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; }
-    .dashboard-tabs { background: rgba(255,255,255,0.95); border-radius: 20px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
-    .dashboard-tabs ::ng-deep .mat-mdc-tab-labels { background: #f8f9fa; }
-    .dashboard-tabs ::ng-deep .mat-mdc-tab { min-width: 130px; }
-    .dashboard-tabs ::ng-deep .mat-mdc-tab .mdc-tab__text-label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-    .tab-badge { background: #2196f3; color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-left: 4px; font-weight: 700; }
-    .tab-badge.warn { background: #ff9800; }
-    .tab-content { padding: 24px; }
-    .section { margin-bottom: 28px; }
-    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .section-title { font-size: 16px; font-weight: 700; color: #1a1a2e; margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px; }
-    .section-header .section-title { margin-bottom: 0; }
-    .section-title mat-icon { font-size: 20px; width: 20px; height: 20px; color: #5c6bc0; }
-    .warn-title mat-icon { color: #ff9800 !important; }
-    .refresh-btn { border-color: rgba(0,0,0,0.12) !important; font-size: 12px; }
-    .section-loading { display: flex; justify-content: center; padding: 40px; }
-    .mini-kpi-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .mini-kpi { flex: 1; min-width: 140px; background: #f8f9ff; border-radius: 12px; padding: 16px; text-align: center; border: 1px solid #e8eaf6; }
-    .mini-kpi.warn { background: #fff8e1; border-color: #ffecb3; }
-    .mini-kpi.danger { background: #fce4ec; border-color: #f8bbd0; }
-    .mkpi-val { display: block; font-size: 24px; font-weight: 700; color: #1a1a2e; }
-    .mkpi-lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-    .province-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .province-card { background: #f8f9ff; border-radius: 12px; padding: 16px; border: 1px solid #e8eaf6; transition: transform 0.2s; }
-    .province-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-    .province-name { font-size: 15px; font-weight: 700; color: #1a1a2e; margin-bottom: 12px; }
-    .province-stats { display: flex; gap: 16px; flex-wrap: wrap; }
-    .prov-stat { display: flex; flex-direction: column; }
-    .prov-val { font-size: 18px; font-weight: 700; color: #5c6bc0; }
-    .prov-lbl { font-size: 10px; color: #999; text-transform: uppercase; }
-    .equipment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .equipment-card { background: #f8f9ff; border-radius: 12px; padding: 16px; border: 1px solid #e8eaf6; }
-    .equip-type { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 12px; }
-    .equip-stats { display: flex; gap: 16px; margin-bottom: 12px; }
-    .equip-stat { display: flex; flex-direction: column; }
-    .equip-val { font-size: 18px; font-weight: 700; }
-    .equip-stat.delivered .equip-val { color: #2196f3; }
-    .equip-stat.ordered .equip-val { color: #4caf50; }
-    .equip-lbl { font-size: 10px; color: #999; text-transform: uppercase; }
-    .equip-usage, .delivery-rate { display: block; text-align: right; font-size: 11px; color: #888; margin-top: 4px; }
-    .national-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
-    .national-card { background: #f8f9ff; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e8eaf6; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .national-card mat-icon { font-size: 32px; width: 32px; height: 32px; }
-    .nat-val { font-size: 28px; font-weight: 700; color: #1a1a2e; }
-    .nat-lbl { font-size: 12px; color: #888; text-transform: uppercase; }
-    .provincial-sales-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .prov-sales-card { background: #f8f9ff; border-radius: 12px; padding: 16px; border: 1px solid #e8eaf6; }
-    .ps-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .ps-province { font-weight: 700; color: #1a1a2e; }
-    .ps-revenue { font-weight: 700; color: #4caf50; font-size: 16px; }
-    .ps-details { display: flex; gap: 16px; font-size: 12px; color: #888; margin-bottom: 10px; }
-    .top-products-grid { display: flex; flex-direction: column; gap: 8px; }
-    .top-product-card { display: flex; align-items: center; gap: 14px; background: #f8f9ff; border-radius: 10px; padding: 12px 16px; border: 1px solid #e8eaf6; }
-    .tp-rank { font-size: 16px; font-weight: 800; color: #5c6bc0; min-width: 30px; }
-    .tp-info { flex: 1; display: flex; flex-direction: column; }
-    .tp-name { font-weight: 600; color: #1a1a2e; font-size: 14px; }
-    .tp-details { font-size: 12px; color: #888; }
-    .tp-revenue { font-weight: 700; color: #4caf50; font-size: 16px; }
-    .low-stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-    .low-stock-card { background: #fff8e1; border-radius: 10px; padding: 14px; border: 1px solid #ffecb3; }
-    .ls-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .ls-name { font-weight: 700; color: #1a1a2e; font-size: 14px; }
-    .ls-details { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #666; margin-bottom: 8px; }
-    .danger-text { color: #f44336 !important; font-weight: 700; }
-    .table-container { overflow-x: auto; border-radius: 12px; border: 1px solid #e8eaf6; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .data-table th { background: #f5f6fa; padding: 12px 14px; text-align: left; font-weight: 700; color: #555; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 2px solid #e8eaf6; white-space: nowrap; }
-    .data-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #333; }
-    .data-table tbody tr:hover { background: #f8f9ff; }
-    .data-table tbody tr:last-child td { border-bottom: none; }
-    .title-cell { font-weight: 600; color: #1a1a2e; }
-    .mono { font-family: 'Roboto Mono', monospace; font-size: 12px; }
-    .amount-cell { font-weight: 600; color: #2e7d32; }
-    .attendee-count { font-weight: 600; color: #5c6bc0; }
-    .low-stock-row { background: #fff8e1 !important; }
-    .empty-row { text-align: center; color: #999; padding: 32px !important; font-style: italic; }
-    .status-completed, .status-paid, .status-approved, .status-ok, .status-active { background: #e8f5e9 !important; color: #2e7d32 !important; }
-    .status-pending, .status-scheduled, .status-processing { background: #e3f2fd !important; color: #1565c0 !important; }
-    .status-warning, .status-cancelled, .status-overdue { background: #fff3e0 !important; color: #ef6c00 !important; }
-    .status-rejected, .status-failed { background: #fce4ec !important; color: #c62828 !important; }
-    .status-draft, .status-unknown { background: #f5f5f5 !important; color: #757575 !important; }
-    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #bbb; grid-column: 1 / -1; }
-    .empty-state mat-icon { font-size: 48px; width: 48px; height: 48px; margin-bottom: 8px; }
-    @media (max-width: 768px) {
-      .kpi-row { grid-template-columns: repeat(2, 1fr); }
-      .mini-kpi-row { flex-direction: column; }
-      .province-grid, .equipment-grid, .provincial-sales-grid, .low-stock-grid { grid-template-columns: 1fr; }
-      .detail-header { flex-direction: column; align-items: flex-start; }
+    /* ============================== */
+    /*  VARIABLES & HOST              */
+    /* ============================== */
+    :host {
+      display: block;
+      --blue: #3b82f6; --blue-soft: #eff6ff; --blue-mid: #dbeafe;
+      --green: #22c55e; --green-soft: #f0fdf4; --green-mid: #dcfce7;
+      --orange: #f59e0b; --orange-soft: #fffbeb; --orange-mid: #fef3c7;
+      --purple: #8b5cf6; --purple-soft: #f5f3ff; --purple-mid: #ede9fe;
+      --teal: #14b8a6; --teal-soft: #f0fdfa; --teal-mid: #ccfbf1;
+      --red: #ef4444; --red-soft: #fef2f2; --red-mid: #fee2e2;
+      --text-primary: #0f172a;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --surface: #ffffff;
+      --surface-hover: #f8fafc;
+      --border: #e2e8f0;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 30px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.04);
+    }
+
+    /* ============================== */
+    /*  HEADER                        */
+    /* ============================== */
+    .dash-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 28px; flex-wrap: wrap;
+    }
+    .back-btn {
+      background: rgba(255,255,255,0.15) !important;
+      color: white !important;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.25) !important;
+      transition: all 0.2s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.25) !important; }
+
+    .header-title-block {
+      display: flex; align-items: center; gap: 14px; flex: 1;
+    }
+    .header-icon-wrap {
+      width: 44px; height: 44px; border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+    .header-icon-wrap mat-icon { color: white; font-size: 24px; width: 24px; height: 24px; }
+    .header-title-block h1 {
+      font-size: 22px; font-weight: 700; color: white; margin: 0;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.15); line-height: 1.2;
+    }
+    .header-subtitle {
+      font-size: 13px; color: rgba(255,255,255,0.75); margin: 2px 0 0 0;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .header-refresh {
+      background: rgba(255,255,255,0.15) !important; color: white !important;
+      backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2) !important;
+    }
+
+    .connection-pill {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8);
+      backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);
+    }
+    .conn-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.5); animation: pulse 2s infinite;
+    }
+    .connection-pill.connected { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.4); color: #bbf7d0; }
+    .connection-pill.connected .conn-dot { background: #4ade80; }
+    .connection-pill.error { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+    .connection-pill.error .conn-dot { background: #f87171; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ============================== */
+    /*  LOADING / ERROR STATES        */
+    /* ============================== */
+    .loading-state, .error-state {
+      display: flex; justify-content: center; padding: 60px 20px;
+    }
+    .loading-card, .error-card {
+      background: var(--surface); border-radius: var(--radius-xl);
+      padding: 48px 56px; text-align: center; box-shadow: var(--shadow-lg);
+      max-width: 440px; width: 100%;
+    }
+    .loading-card h3, .error-card h3 { color: var(--text-primary); margin: 20px 0 8px; font-size: 18px; }
+    .loading-card p, .error-card p { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+    .error-icon-wrap {
+      width: 64px; height: 64px; border-radius: 50%; margin: 0 auto;
+      background: var(--red-soft); display: flex; align-items: center; justify-content: center;
+    }
+    .error-icon-wrap mat-icon { font-size: 32px; width: 32px; height: 32px; color: var(--red); }
+
+    /* ============================== */
+    /*  KPI CARDS                     */
+    /* ============================== */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px; margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: var(--surface); border-radius: var(--radius-lg);
+      padding: 22px 20px; display: flex; align-items: center; gap: 16px;
+      box-shadow: var(--shadow-sm); transition: all 0.25s ease;
+      position: relative; overflow: hidden; border: 1px solid var(--border);
+    }
+    .kpi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+    .kpi-accent {
+      position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+      border-radius: 4px 0 0 4px;
+    }
+    .kpi-blue .kpi-accent { background: var(--blue); }
+    .kpi-green .kpi-accent { background: var(--green); }
+    .kpi-orange .kpi-accent { background: var(--orange); }
+    .kpi-purple .kpi-accent { background: var(--purple); }
+    .kpi-teal .kpi-accent { background: var(--teal); }
+    .kpi-red .kpi-accent { background: var(--red); }
+
+    .kpi-icon-wrap {
+      width: 50px; height: 50px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .kpi-blue .kpi-icon-wrap { background: var(--blue-soft); color: var(--blue); }
+    .kpi-green .kpi-icon-wrap { background: var(--green-soft); color: var(--green); }
+    .kpi-orange .kpi-icon-wrap { background: var(--orange-soft); color: var(--orange); }
+    .kpi-purple .kpi-icon-wrap { background: var(--purple-soft); color: var(--purple); }
+    .kpi-teal .kpi-icon-wrap { background: var(--teal-soft); color: var(--teal); }
+    .kpi-red .kpi-icon-wrap { background: var(--red-soft); color: var(--red); }
+    .kpi-icon-wrap mat-icon { font-size: 26px; width: 26px; height: 26px; }
+
+    .kpi-body { display: flex; flex-direction: column; min-width: 0; }
+    .kpi-number { font-size: 22px; font-weight: 800; color: var(--text-primary); line-height: 1.2; white-space: nowrap; }
+    .kpi-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 500; margin-top: 2px; }
+
+    /* ============================== */
+    /*  TABS                          */
+    /* ============================== */
+    .tabs-wrapper {
+      background: var(--surface); border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-lg); overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .dashboard-tabs ::ng-deep .mat-mdc-tab-header { background: #f8fafc; border-bottom: 1px solid var(--border); }
+    .dashboard-tabs ::ng-deep .mat-mdc-tab { min-width: 140px; }
+    .dashboard-tabs ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
+      display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;
+    }
+    .tab-count {
+      background: var(--blue); color: white; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 10px; margin-left: 2px; line-height: 16px;
+    }
+    .tab-count.warn { background: var(--orange); }
+    .tab-body { padding: 28px; }
+
+    /* ============================== */
+    /*  STAT BAR (mini KPIs in tabs)  */
+    /* ============================== */
+    .stat-bar {
+      display: flex; gap: 14px; margin-bottom: 28px; flex-wrap: wrap;
+    }
+    .stat-chip {
+      flex: 1; min-width: 160px; display: flex; align-items: center; gap: 12px;
+      padding: 16px 18px; border-radius: var(--radius-md); border: 1px solid;
+      transition: transform 0.2s;
+    }
+    .stat-chip:hover { transform: translateY(-2px); }
+    .stat-chip mat-icon { font-size: 22px; width: 22px; height: 22px; }
+    .stat-chip.blue { background: var(--blue-soft); border-color: var(--blue-mid); color: var(--blue); }
+    .stat-chip.green { background: var(--green-soft); border-color: var(--green-mid); color: var(--green); }
+    .stat-chip.orange { background: var(--orange-soft); border-color: var(--orange-mid); color: var(--orange); }
+    .stat-chip.purple { background: var(--purple-soft); border-color: var(--purple-mid); color: var(--purple); }
+    .stat-chip.teal { background: var(--teal-soft); border-color: var(--teal-mid); color: var(--teal); }
+    .stat-chip.red { background: var(--red-soft); border-color: var(--red-mid); color: var(--red); }
+    .sc-text { display: flex; flex-direction: column; }
+    .sc-val { font-size: 20px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+    .sc-lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 500; }
+
+    /* ============================== */
+    /*  PANEL (section wrapper)       */
+    /* ============================== */
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .alert-panel { border-color: var(--orange-mid); background: var(--orange-soft); }
+
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 20px 24px; border-bottom: 1px solid var(--border);
+    }
+    .alert-panel .panel-header { border-bottom-color: var(--orange-mid); }
+
+    .panel-title-group { display: flex; align-items: center; gap: 14px; }
+    .panel-icon {
+      width: 40px; height: 40px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .panel-icon mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .panel-icon.blue { background: var(--blue-soft); color: var(--blue); }
+    .panel-icon.green { background: var(--green-soft); color: var(--green); }
+    .panel-icon.orange { background: var(--orange-soft); color: var(--orange); }
+    .panel-icon.purple { background: var(--purple-soft); color: var(--purple); }
+    .panel-icon.teal { background: var(--teal-soft); color: var(--teal); }
+    .panel-icon.red { background: var(--red-soft); color: var(--red); }
+    .alert-panel .panel-icon.orange { background: rgba(245,158,11,0.2); }
+
+    .panel-title-group h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
+    .panel-title-group p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; }
+    .panel-action {
+      font-size: 12px !important; border-color: var(--border) !important;
+      color: var(--text-secondary) !important; border-radius: var(--radius-sm) !important;
+    }
+    .panel-action mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
+    .panel-loading { display: flex; justify-content: center; padding: 48px; }
+
+    /* ============================== */
+    /*  PROVINCE GRID (Overview)      */
+    /* ============================== */
+    .province-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1px; background: var(--border);
+    }
+    .province-card {
+      background: var(--surface); padding: 20px 24px;
+      transition: background 0.15s;
+    }
+    .province-card:hover { background: var(--surface-hover); }
+    .prov-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .prov-map-icon { font-size: 18px; width: 18px; height: 18px; color: var(--blue); }
+    .province-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+    .prov-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .prov-metric { display: flex; flex-direction: column; }
+    .prov-metric-val { font-size: 18px; font-weight: 700; color: var(--blue); }
+    .prov-metric-val.revenue { color: var(--green); }
+    .prov-metric-lbl { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; }
+
+    /* ============================== */
+    /*  EQUIPMENT GRID                */
+    /* ============================== */
+    .equipment-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1px; background: var(--border);
+    }
+    .equip-card {
+      background: var(--surface); padding: 20px 24px;
+    }
+    .equip-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 14px; }
+    .equip-numbers { display: flex; gap: 24px; margin-bottom: 14px; }
+    .equip-num { display: flex; flex-direction: column; }
+    .en-val { font-size: 20px; font-weight: 700; }
+    .en-val.delivered { color: var(--blue); }
+    .en-val.ordered { color: var(--green); }
+    .en-lbl { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; }
+    .equip-bar-wrap { display: flex; align-items: center; gap: 10px; }
+    .equip-bar-wrap mat-progress-bar { flex: 1; }
+    .equip-rate { font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 36px; text-align: right; }
+
+    /* ============================== */
+    /*  NATIONAL GRID                 */
+    /* ============================== */
+    .national-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1px; background: var(--border);
+    }
+    .natl-card {
+      background: var(--surface); padding: 24px 20px;
+      text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .natl-icon {
+      width: 44px; height: 44px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; margin-bottom: 4px;
+    }
+    .natl-icon mat-icon { font-size: 22px; width: 22px; height: 22px; }
+    .natl-icon.blue { background: var(--blue-soft); color: var(--blue); }
+    .natl-icon.green { background: var(--green-soft); color: var(--green); }
+    .natl-icon.orange { background: var(--orange-soft); color: var(--orange); }
+    .natl-icon.purple { background: var(--purple-soft); color: var(--purple); }
+    .natl-icon.teal { background: var(--teal-soft); color: var(--teal); }
+    .natl-icon.red { background: var(--red-soft); color: var(--red); }
+    .natl-val { font-size: 24px; font-weight: 800; color: var(--text-primary); line-height: 1.1; }
+    .natl-lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; }
+
+    /* ============================== */
+    /*  PROVINCIAL SALES GRID         */
+    /* ============================== */
+    .prov-sales-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1px; background: var(--border);
+    }
+    .prov-sale-card {
+      background: var(--surface); padding: 20px 24px;
+    }
+    .psc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .psc-province { font-weight: 700; color: var(--text-primary); font-size: 14px; }
+    .psc-revenue { font-weight: 800; color: var(--green); font-size: 16px; }
+    .psc-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+    .psc-bar-wrap { display: flex; align-items: center; gap: 10px; }
+    .psc-bar-wrap mat-progress-bar { flex: 1; }
+    .psc-rate { font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 36px; text-align: right; }
+
+    /* ============================== */
+    /*  TOP PRODUCTS                  */
+    /* ============================== */
+    .top-products { display: flex; flex-direction: column; }
+    .tp-row {
+      display: flex; align-items: center; gap: 16px;
+      padding: 14px 24px; border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .tp-row:last-child { border-bottom: none; }
+    .tp-row:hover { background: var(--surface-hover); }
+    .tp-rank {
+      font-size: 14px; font-weight: 800; min-width: 32px; text-align: center;
+      padding: 4px 0; border-radius: var(--radius-sm); color: var(--text-muted);
+    }
+    .rank-1 { color: #d97706; background: #fef3c7; }
+    .rank-2 { color: #6b7280; background: #f3f4f6; }
+    .rank-3 { color: #92400e; background: #fde68a33; }
+    .tp-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .tp-name { font-weight: 600; color: var(--text-primary); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tp-meta { font-size: 12px; color: var(--text-muted); }
+    .tp-revenue { font-weight: 800; color: var(--green); font-size: 15px; white-space: nowrap; }
+
+    /* ============================== */
+    /*  LOW STOCK ALERTS              */
+    /* ============================== */
+    .alert-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 12px; padding: 20px 24px;
+    }
+    .alert-card {
+      background: white; border-radius: var(--radius-md); padding: 16px;
+      border: 1px solid var(--orange-mid); box-shadow: var(--shadow-sm);
+    }
+    .alert-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .alert-name { font-weight: 700; color: var(--text-primary); font-size: 14px; }
+    .alert-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+
+    /* ============================== */
+    /*  MODERN TABLE                  */
+    /* ============================== */
+    .table-wrap { overflow-x: auto; }
+    .modern-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+      min-width: 700px;
+    }
+    .modern-table thead { background: #f8fafc; }
+    .modern-table th {
+      padding: 12px 18px; text-align: left; font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; font-size: 11px;
+      letter-spacing: 0.5px; border-bottom: 2px solid var(--border);
+      white-space: nowrap; position: sticky; top: 0; background: #f8fafc;
+    }
+    .modern-table th.center { text-align: center; }
+    .modern-table th.right { text-align: right; }
+    .modern-table td {
+      padding: 13px 18px; border-bottom: 1px solid #f1f5f9;
+      color: var(--text-secondary); vertical-align: middle;
+    }
+    .modern-table tbody tr { transition: background 0.12s; }
+    .modern-table tbody tr:hover { background: #f8fafc; }
+    .modern-table tbody tr:last-child td { border-bottom: none; }
+
+    .primary-cell { font-weight: 600; color: var(--text-primary) !important; }
+    .secondary-text { color: var(--text-secondary); }
+    .mono-text { font-family: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', monospace; font-size: 12px; color: var(--text-secondary); }
+    .money-val { font-weight: 700; color: var(--green) !important; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    .danger-val { color: var(--red) !important; font-weight: 700; }
+    .center { text-align: center !important; }
+    .right { text-align: right !important; }
+    .reason-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .num-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 28px; height: 24px; padding: 0 8px;
+      border-radius: 12px; font-weight: 700; font-size: 12px;
+    }
+    .num-badge.blue { background: var(--blue-soft); color: var(--blue); }
+    .num-badge.subtle { background: #f1f5f9; color: var(--text-secondary); }
+
+    .province-tag {
+      display: inline-block; padding: 3px 10px; border-radius: 6px;
+      background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 600;
+    }
+    .category-tag {
+      display: inline-block; padding: 3px 10px; border-radius: 6px;
+      background: var(--purple-soft); color: var(--purple); font-size: 12px; font-weight: 600;
+    }
+
+    .alert-row { background: var(--orange-soft) !important; }
+    .alert-row:hover { background: #fef3c7 !important; }
+
+    .empty-row {
+      text-align: center !important; color: var(--text-muted) !important;
+      padding: 40px 18px !important; font-style: italic;
+    }
+
+    /* ============================== */
+    /*  STATUS TAGS                   */
+    /* ============================== */
+    .status-tag {
+      display: inline-block; padding: 4px 12px; border-radius: 20px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+      text-transform: capitalize; white-space: nowrap;
+    }
+    .st-completed, .st-paid, .st-approved, .st-ok, .st-active {
+      background: var(--green-soft); color: #16a34a; border: 1px solid var(--green-mid);
+    }
+    .st-pending, .st-scheduled, .st-processing, .st-in.progress, .st-inprogress {
+      background: var(--blue-soft); color: #2563eb; border: 1px solid var(--blue-mid);
+    }
+    .st-warning, .st-cancelled, .st-overdue, .st-low.stock {
+      background: var(--orange-soft); color: #d97706; border: 1px solid var(--orange-mid);
+    }
+    .st-rejected, .st-failed {
+      background: var(--red-soft); color: #dc2626; border: 1px solid var(--red-mid);
+    }
+    .st-draft, .st-unknown, .st-0, .st-1, .st-2, .st-3 {
+      background: #f1f5f9; color: var(--text-secondary); border: 1px solid var(--border);
+    }
+
+    /* ============================== */
+    /*  EMPTY STATES                  */
+    /* ============================== */
+    .empty-placeholder {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 48px 20px; color: var(--text-muted); grid-column: 1 / -1;
+      background: var(--surface);
+    }
+    .empty-placeholder.compact { padding: 32px 20px; }
+    .empty-placeholder mat-icon { font-size: 40px; width: 40px; height: 40px; margin-bottom: 8px; opacity: 0.5; }
+    .empty-placeholder p { margin: 0; font-size: 14px; }
+
+    /* ============================== */
+    /*  RESPONSIVE                    */
+    /* ============================== */
+    @media (max-width: 900px) {
+      .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+      .tab-body { padding: 20px; }
+      .province-grid, .equipment-grid, .prov-sales-grid, .national-grid { grid-template-columns: 1fr; }
+      .prov-metrics { grid-template-columns: repeat(2, 1fr); }
+      .stat-bar { gap: 10px; }
+      .stat-chip { min-width: 130px; padding: 12px 14px; }
+    }
+    @media (max-width: 600px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .dash-header { gap: 10px; }
+      .header-title-block h1 { font-size: 18px; }
+      .stat-bar { flex-direction: column; }
+      .alert-grid { grid-template-columns: 1fr; }
     }
   `]
 })
