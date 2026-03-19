@@ -13,6 +13,20 @@ namespace ProjectTracker.API.Controllers.HBA1C
         private readonly IHBA1CApiService _api;
         private readonly ILogger<HBA1CProxyController> _logger;
 
+        // Province ID → Name mapping (matches the external HBA1C system)
+        private static readonly Dictionary<int, string> ProvinceNames = new()
+        {
+            { 1, "Eastern Cape" },
+            { 2, "Free State" },
+            { 3, "Gauteng" },
+            { 4, "KwaZulu-Natal" },
+            { 5, "Limpopo" },
+            { 6, "Mpumalanga" },
+            { 7, "North West" },
+            { 8, "Northern Cape" },
+            { 9, "Western Cape" }
+        };
+
         public HBA1CProxyController(IHBA1CApiService api, ILogger<HBA1CProxyController> logger)
         {
             _api = api;
@@ -75,11 +89,39 @@ namespace ProjectTracker.API.Controllers.HBA1C
                 }
             }
 
+            // The API returns all-zero province breakdowns — compute from actual training sessions
+            var apiProvinceStats = (await provinceStatsTask)?.ProvinceBreakdowns;
+            var allZeroProvinces = apiProvinceStats == null
+                || !apiProvinceStats.Any()
+                || apiProvinceStats.All(p => p.Sessions == 0 && p.Participants == 0 && p.Trainers == 0);
+
+            List<HBA1CProvinceBreakdown> computedProvinceStats;
+            if (allZeroProvinces && allTrainings.Count > 0)
+            {
+                computedProvinceStats = allTrainings
+                    .GroupBy(t => t.ProvinceId)
+                    .Select(g => new HBA1CProvinceBreakdown
+                    {
+                        Province = ProvinceNames.TryGetValue(g.Key, out var name) ? name : $"Province {g.Key}",
+                        Sessions = g.Count(),
+                        Participants = g.Sum(t => t.NumberOfParticipants),
+                        Trainers = g.Select(t => t.TrainerId).Where(id => id > 0).Distinct().Count(),
+                        Revenue = 0,
+                        Deliveries = 0
+                    })
+                    .OrderByDescending(p => p.Sessions)
+                    .ToList();
+            }
+            else
+            {
+                computedProvinceStats = apiProvinceStats ?? new List<HBA1CProvinceBreakdown>();
+            }
+
             var dashboard = new HBA1CProjectDashboard
             {
                 TrainingStats = trainingStats,
                 NationalTotals = nationalTotals,
-                ProvinceStats = (await provinceStatsTask)?.ProvinceBreakdowns,
+                ProvinceStats = computedProvinceStats,
                 EquipmentStats = (await equipmentStatsTask)?.Distributions,
                 SalesStats = await salesStatsTask,
                 RecentSales = await recentSalesTask,
