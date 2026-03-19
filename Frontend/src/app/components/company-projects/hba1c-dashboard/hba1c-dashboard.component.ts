@@ -1012,7 +1012,7 @@ import {
     /*  PROVINCE GRID (Overview)      */
     /* ============================== */
     .province-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      display: grid; grid-template-columns: repeat(3, 1fr);
       gap: 1px; background: var(--border);
     }
     .province-card {
@@ -1232,7 +1232,8 @@ import {
     @media (max-width: 900px) {
       .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
       .tab-body { padding: 20px; }
-      .province-grid, .equipment-grid, .prov-sales-grid, .national-grid { grid-template-columns: 1fr; }
+      .province-grid { grid-template-columns: repeat(2, 1fr); }
+      .equipment-grid, .prov-sales-grid, .national-grid { grid-template-columns: 1fr; }
       .prov-metrics { grid-template-columns: repeat(2, 1fr); }
       .stat-bar { gap: 10px; }
       .stat-chip { min-width: 130px; padding: 12px 14px; }
@@ -1243,6 +1244,7 @@ import {
       .header-title-block h1 { font-size: 18px; }
       .stat-bar { flex-direction: column; }
       .alert-grid { grid-template-columns: 1fr; }
+      .province-grid { grid-template-columns: 1fr; }
     }
   `]
 })
