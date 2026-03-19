@@ -47,10 +47,24 @@ namespace ProjectTracker.API.Controllers.HBA1C
                 lowStockTask, recentTrainingsTask
             );
 
+            var allTrainings = await recentTrainingsTask ?? new List<HBA1CTrainingSession>();
+            var trainingStats = await trainingStatsTask ?? new HBA1CTrainingStats();
+            var nationalTotals = await nationalTotalsTask ?? new HBA1CNationalTotals();
+
+            // The external API returns totalParticipants=0 in stats — compute from actual sessions
+            if (trainingStats.TotalParticipants == 0 && allTrainings.Count > 0)
+            {
+                trainingStats.TotalParticipants = allTrainings.Sum(t => t.NumberOfParticipants);
+            }
+            if (nationalTotals.TotalParticipants == 0 && allTrainings.Count > 0)
+            {
+                nationalTotals.TotalParticipants = allTrainings.Sum(t => t.NumberOfParticipants);
+            }
+
             var dashboard = new HBA1CProjectDashboard
             {
-                TrainingStats = await trainingStatsTask,
-                NationalTotals = await nationalTotalsTask,
+                TrainingStats = trainingStats,
+                NationalTotals = nationalTotals,
                 ProvinceStats = (await provinceStatsTask)?.ProvinceBreakdowns,
                 EquipmentStats = (await equipmentStatsTask)?.Distributions,
                 SalesStats = await salesStatsTask,
@@ -59,7 +73,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
                 TopProducts = await topProductsTask,
                 InventoryStats = await inventoryStatsTask,
                 LowStockItems = await lowStockTask,
-                RecentTrainings = (await recentTrainingsTask)?.OrderByDescending(t => t.StartDate).Take(10).ToList()
+                RecentTrainings = allTrainings.OrderByDescending(t => t.StartDate).Take(10).ToList()
             };
 
             return Ok(dashboard);
