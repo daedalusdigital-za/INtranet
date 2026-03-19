@@ -140,6 +140,9 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Tenders.TenderKnowledgeBase> TenderKnowledgeBase { get; set; }
         public DbSet<Models.Tenders.TenderReminder> TenderReminders { get; set; }
 
+        // Company Projects — Condom Production
+        public DbSet<Models.Projects.CondomProductionSchedule> CondomProductionSchedules { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

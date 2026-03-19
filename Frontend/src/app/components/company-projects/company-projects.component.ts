@@ -15,6 +15,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { HBA1CDashboardComponent } from './hba1c-dashboard/hba1c-dashboard.component';
+import { CondomsDashboardComponent } from './condoms-dashboard/condoms-dashboard.component';
 import { environment } from '../../../environments/environment';
 
 interface CompanyProject {
@@ -49,7 +50,8 @@ interface CompanyProject {
     MatProgressSpinnerModule,
     MatMenuModule,
     NavbarComponent,
-    HBA1CDashboardComponent
+    HBA1CDashboardComponent,
+    CondomsDashboardComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -82,7 +84,10 @@ interface CompanyProject {
       </div>
 
       @if (selectedProject) {
-        @if (selectedProject.id === 'hba1c') {
+        @if (selectedProject.id === 'condoms') {
+          <!-- Condoms Production Dashboard -->
+          <app-condoms-dashboard (goBack)="clearSelection()"></app-condoms-dashboard>
+        } @else if (selectedProject.id === 'hba1c') {
           <!-- HBA1C Live Dashboard -->
           <app-hba1c-dashboard (goBack)="clearSelection()"></app-hba1c-dashboard>
         } @else {
@@ -654,21 +659,21 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'condoms',
         name: 'Condoms Project',
-        description: 'National condom distribution and awareness initiative. Managing supply chain, distribution logistics, and community outreach programs across all provinces.',
+        description: 'National condom production and distribution initiative. Tracking daily production schedules across all scent variants, batch codes, and product types.',
         icon: 'health_and_safety',
         color: '#e91e63',
         gradient: 'linear-gradient(135deg, #e91e63 0%, #ad1457 100%)',
         status: 'active',
-        progress: 0,
-        category: 'Healthcare Distribution',
-        lead: 'TBD',
+        progress: 45,
+        category: 'Healthcare Production',
+        lead: 'Production Team',
         startDate: 'March 2026',
         targetDate: 'Ongoing',
         stats: [
-          { label: 'Provinces', value: '9' },
-          { label: 'Distribution Points', value: 'TBD' },
-          { label: 'Monthly Target', value: 'TBD' },
-          { label: 'Compliance', value: 'TBD' }
+          { label: 'Batches', value: '90' },
+          { label: 'Scent Variants', value: '5' },
+          { label: 'Schedule Days', value: '7' },
+          { label: 'Total Units', value: '165K+' }
         ]
       },
       {
