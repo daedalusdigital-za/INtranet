@@ -83,73 +83,313 @@ interface DashboardData {
           Back to Projects
         </button>
         <h2 class="dashboard-title">
-          <mat-icon class="title-icon">health_and_safety</mat-icon>
+          <div class="title-icon-wrap">
+            <mat-icon>health_and_safety</mat-icon>
+          </div>
           Condoms Production Schedule
         </h2>
         <div class="title-actions">
-          <mat-chip class="date-chip">
+          <div class="date-pill">
             <mat-icon>date_range</mat-icon>
             March 2026
-          </mat-chip>
+          </div>
         </div>
       </div>
 
       @if (loading) {
         <div class="loading-container">
           <div class="loading-card">
-            <mat-spinner diameter="48"></mat-spinner>
+            <mat-spinner diameter="44" strokeWidth="3"></mat-spinner>
             <h3>Loading Production Schedule...</h3>
             <p>Fetching batch data and daily quantities</p>
           </div>
         </div>
       } @else if (error) {
         <div class="error-container">
-          <mat-icon>error_outline</mat-icon>
+          <div class="error-icon-wrap"><mat-icon>error_outline</mat-icon></div>
           <h3>Failed to load production data</h3>
           <p>{{ error }}</p>
-          <button mat-raised-button color="primary" (click)="loadData()">
+          <button mat-flat-button color="primary" (click)="loadData()">
             <mat-icon>refresh</mat-icon> Retry
           </button>
         </div>
       } @else {
         <!-- KPI Cards -->
-        <div class="kpi-row">
-          <div class="kpi-card kpi-pink">
-            <div class="kpi-icon"><mat-icon>inventory_2</mat-icon></div>
-            <div class="kpi-info">
-              <span class="kpi-value">{{ dashboard?.summary?.totalBatches || 0 }}</span>
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-pink clickable" (click)="openKpiDialog('batches')">
+            <div class="kpi-icon-wrap"><mat-icon>inventory_2</mat-icon></div>
+            <div class="kpi-body">
+              <span class="kpi-number">{{ dashboard?.summary?.totalBatches || 0 }}</span>
               <span class="kpi-label">Total Batches</span>
             </div>
+            <div class="kpi-accent"></div>
           </div>
-          <div class="kpi-card kpi-purple">
-            <div class="kpi-icon"><mat-icon>female</mat-icon></div>
-            <div class="kpi-info">
-              <span class="kpi-value">{{ scheduleSummary?.femaleBatches || 0 }}</span>
+          <div class="kpi-card kpi-purple clickable" (click)="openKpiDialog('female')">
+            <div class="kpi-icon-wrap"><mat-icon>female</mat-icon></div>
+            <div class="kpi-body">
+              <span class="kpi-number">{{ scheduleSummary?.femaleBatches || 0 }}</span>
               <span class="kpi-label">Female Batches</span>
             </div>
+            <div class="kpi-accent"></div>
           </div>
-          <div class="kpi-card kpi-blue">
-            <div class="kpi-icon"><mat-icon>male</mat-icon></div>
-            <div class="kpi-info">
-              <span class="kpi-value">{{ scheduleSummary?.maleBatches || 0 }}</span>
+          <div class="kpi-card kpi-blue clickable" (click)="openKpiDialog('male')">
+            <div class="kpi-icon-wrap"><mat-icon>male</mat-icon></div>
+            <div class="kpi-body">
+              <span class="kpi-number">{{ scheduleSummary?.maleBatches || 0 }}</span>
               <span class="kpi-label">Male Batches</span>
             </div>
+            <div class="kpi-accent"></div>
           </div>
-          <div class="kpi-card kpi-orange">
-            <div class="kpi-icon"><mat-icon>palette</mat-icon></div>
-            <div class="kpi-info">
-              <span class="kpi-value">{{ dashboard?.summary?.totalScents || 0 }}</span>
+          <div class="kpi-card kpi-orange clickable" (click)="openKpiDialog('scents')">
+            <div class="kpi-icon-wrap"><mat-icon>palette</mat-icon></div>
+            <div class="kpi-body">
+              <span class="kpi-number">{{ dashboard?.summary?.totalScents || 0 }}</span>
               <span class="kpi-label">Scent Variants</span>
             </div>
+            <div class="kpi-accent"></div>
           </div>
           <div class="kpi-card kpi-green">
-            <div class="kpi-icon"><mat-icon>assessment</mat-icon></div>
-            <div class="kpi-info">
-              <span class="kpi-value">{{ (dashboard?.summary?.grandTotal || 0) | number }}</span>
-              <span class="kpi-label">Total Units (All Days)</span>
+            <div class="kpi-icon-wrap"><mat-icon>assessment</mat-icon></div>
+            <div class="kpi-body">
+              <span class="kpi-number">{{ (dashboard?.summary?.grandTotal || 0) | number }}</span>
+              <span class="kpi-label">Total Units</span>
             </div>
+            <div class="kpi-accent"></div>
           </div>
         </div>
+
+        <!-- ==================== KPI DETAIL DIALOGS ==================== -->
+        @if (activeDialog) {
+          <div class="dialog-backdrop" (click)="closeDialog()"></div>
+          <div class="dialog-panel" [class]="'dialog-' + activeDialog">
+            <div class="dialog-header" [class]="'dh-' + activeDialog">
+              <div class="dialog-title-group">
+                <div class="dialog-icon-ring">
+                  @switch (activeDialog) {
+                    @case ('batches') { <mat-icon>inventory_2</mat-icon> }
+                    @case ('female') { <mat-icon>female</mat-icon> }
+                    @case ('male') { <mat-icon>male</mat-icon> }
+                    @case ('scents') { <mat-icon>palette</mat-icon> }
+                  }
+                </div>
+                <div>
+                  <h2 class="dialog-title">
+                    @switch (activeDialog) {
+                      @case ('batches') { All Production Batches }
+                      @case ('female') { Female Batches }
+                      @case ('male') { Male Batches }
+                      @case ('scents') { Scent Variants }
+                    }
+                  </h2>
+                  <p class="dialog-subtitle">
+                    @switch (activeDialog) {
+                      @case ('batches') { Complete batch overview by scent and type }
+                      @case ('female') { Female condom production batches }
+                      @case ('male') { Male condom production batches }
+                      @case ('scents') { Production breakdown by scent variant }
+                    }
+                  </p>
+                </div>
+              </div>
+              <button class="dialog-close" (click)="closeDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            <div class="dialog-body">
+              <!-- ── Total Batches Dialog ── -->
+              @if (activeDialog === 'batches') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat pink">
+                    <span class="ds-val">{{ dashboard?.summary?.totalBatches || 0 }}</span>
+                    <span class="ds-lbl">Total Batches</span>
+                  </div>
+                  <div class="dialog-stat purple">
+                    <span class="ds-val">{{ scheduleSummary?.femaleBatches || 0 }}</span>
+                    <span class="ds-lbl">Female</span>
+                  </div>
+                  <div class="dialog-stat blue">
+                    <span class="ds-val">{{ scheduleSummary?.maleBatches || 0 }}</span>
+                    <span class="ds-lbl">Male</span>
+                  </div>
+                  <div class="dialog-stat green">
+                    <span class="ds-val">{{ (dashboard?.summary?.grandTotal || 0) | number }}</span>
+                    <span class="ds-lbl">Total Units</span>
+                  </div>
+                </div>
+                <h4 class="dialog-section-title"><mat-icon>table_chart</mat-icon> Batches by Scent & Type</h4>
+                <div class="dialog-table-wrap">
+                  <table class="dialog-table">
+                    <thead><tr><th>Scent</th><th>Type</th><th class="right">Batches</th><th class="right">Total Units</th><th class="right">Avg/Batch</th></tr></thead>
+                    <tbody>
+                      @for (group of scheduleGroups; track group.scentGroup) {
+                        <tr>
+                          <td class="primary-cell">
+                            <span class="scent-dot" [style.background]="getScentColor(group.scent)"></span>
+                            {{ getScentEmoji(group.scent) }} {{ group.scent }}
+                          </td>
+                          <td>
+                            <span class="type-pill" [class.type-pill-f]="group.type === 'Female'" [class.type-pill-m]="group.type === 'Male'">
+                              {{ group.type }}
+                            </span>
+                          </td>
+                          <td class="right mono-text">{{ group.batches.length }}</td>
+                          <td class="right mono-text">{{ getGroupTotal(group) | number }}</td>
+                          <td class="right mono-text">{{ getGroupAvg(group) | number:'1.0-0' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                    <tfoot>
+                      <tr class="total-row">
+                        <td colspan="2"><strong>Grand Total</strong></td>
+                        <td class="right mono-text"><strong>{{ dashboard?.summary?.totalBatches || 0 }}</strong></td>
+                        <td class="right mono-text"><strong>{{ (dashboard?.summary?.grandTotal || 0) | number }}</strong></td>
+                        <td class="right mono-text"><strong>—</strong></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              }
+
+              <!-- ── Female Batches Dialog ── -->
+              @if (activeDialog === 'female') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat purple">
+                    <span class="ds-val">{{ scheduleSummary?.femaleBatches || 0 }}</span>
+                    <span class="ds-lbl">Female Batches</span>
+                  </div>
+                  <div class="dialog-stat pink">
+                    <span class="ds-val">{{ getFemaleTotalUnits() | number }}</span>
+                    <span class="ds-lbl">Total Units</span>
+                  </div>
+                  <div class="dialog-stat orange">
+                    <span class="ds-val">{{ getFemaleScents().length }}</span>
+                    <span class="ds-lbl">Scent Types</span>
+                  </div>
+                </div>
+                <h4 class="dialog-section-title"><mat-icon>bar_chart</mat-icon> Female Batches by Scent</h4>
+                <div class="dialog-province-bars">
+                  @for (group of getFemaleGroups(); track group.scentGroup) {
+                    <div class="bar-row">
+                      <span class="bar-row-label">{{ getScentEmoji(group.scent) }} {{ group.scent }}</span>
+                      <div class="bar-track">
+                        <div class="bar-fill" [style.width.%]="getGroupBarPercent(group, 'Female')" [style.background]="'linear-gradient(90deg, ' + getScentColor(group.scent) + ', ' + getScentColorLight(group.scent) + ')'"></div>
+                      </div>
+                      <span class="bar-row-value">{{ group.batches.length }} batches</span>
+                    </div>
+                  }
+                </div>
+                <h4 class="dialog-section-title" style="margin-top: 20px"><mat-icon>list_alt</mat-icon> Batch Detail</h4>
+                <div class="dialog-table-wrap">
+                  <table class="dialog-table">
+                    <thead><tr><th>Batch Code</th><th>Scent</th><th>UOM</th><th class="right">Total Qty</th></tr></thead>
+                    <tbody>
+                      @for (group of getFemaleGroups(); track group.scentGroup) {
+                        @for (batch of group.batches; track batch.batchCode) {
+                          <tr>
+                            <td class="primary-cell mono-text">{{ batch.batchCode }}</td>
+                            <td>{{ getScentEmoji(group.scent) }} {{ group.scent }}</td>
+                            <td>{{ batch.uom }}</td>
+                            <td class="right mono-text">{{ getBatchTotal(batch) | number }}</td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+
+              <!-- ── Male Batches Dialog ── -->
+              @if (activeDialog === 'male') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat blue">
+                    <span class="ds-val">{{ scheduleSummary?.maleBatches || 0 }}</span>
+                    <span class="ds-lbl">Male Batches</span>
+                  </div>
+                  <div class="dialog-stat green">
+                    <span class="ds-val">{{ getMaleTotalUnits() | number }}</span>
+                    <span class="ds-lbl">Total Units</span>
+                  </div>
+                  <div class="dialog-stat orange">
+                    <span class="ds-val">{{ getMaleScents().length }}</span>
+                    <span class="ds-lbl">Scent Types</span>
+                  </div>
+                </div>
+                <h4 class="dialog-section-title"><mat-icon>bar_chart</mat-icon> Male Batches by Scent</h4>
+                <div class="dialog-province-bars">
+                  @for (group of getMaleGroups(); track group.scentGroup) {
+                    <div class="bar-row">
+                      <span class="bar-row-label">{{ getScentEmoji(group.scent) }} {{ group.scent }}</span>
+                      <div class="bar-track">
+                        <div class="bar-fill" [style.width.%]="getGroupBarPercent(group, 'Male')" [style.background]="'linear-gradient(90deg, ' + getScentColor(group.scent) + ', ' + getScentColorLight(group.scent) + ')'"></div>
+                      </div>
+                      <span class="bar-row-value">{{ group.batches.length }} batches</span>
+                    </div>
+                  }
+                </div>
+                <h4 class="dialog-section-title" style="margin-top: 20px"><mat-icon>list_alt</mat-icon> Batch Detail</h4>
+                <div class="dialog-table-wrap">
+                  <table class="dialog-table">
+                    <thead><tr><th>Batch Code</th><th>Scent</th><th>UOM</th><th class="right">Total Qty</th></tr></thead>
+                    <tbody>
+                      @for (group of getMaleGroups(); track group.scentGroup) {
+                        @for (batch of group.batches; track batch.batchCode) {
+                          <tr>
+                            <td class="primary-cell mono-text">{{ batch.batchCode }}</td>
+                            <td>{{ getScentEmoji(group.scent) }} {{ group.scent }}</td>
+                            <td>{{ batch.uom }}</td>
+                            <td class="right mono-text">{{ getBatchTotal(batch) | number }}</td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+
+              <!-- ── Scent Variants Dialog ── -->
+              @if (activeDialog === 'scents') {
+                <div class="dialog-stats-row">
+                  <div class="dialog-stat orange">
+                    <span class="ds-val">{{ dashboard?.summary?.totalScents || 0 }}</span>
+                    <span class="ds-lbl">Scent Variants</span>
+                  </div>
+                  <div class="dialog-stat pink">
+                    <span class="ds-val">{{ dashboard?.summary?.totalBatches || 0 }}</span>
+                    <span class="ds-lbl">Total Batches</span>
+                  </div>
+                  <div class="dialog-stat green">
+                    <span class="ds-val">{{ (dashboard?.summary?.grandTotal || 0) | number }}</span>
+                    <span class="ds-lbl">Grand Total Units</span>
+                  </div>
+                </div>
+                <h4 class="dialog-section-title"><mat-icon>donut_large</mat-icon> Scent Breakdown</h4>
+                <div class="scent-detail-cards">
+                  @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
+                    <div class="scent-detail-card" [style.border-left-color]="getScentColor(sb.scent)">
+                      <div class="sdc-header">
+                        <span class="sdc-emoji">{{ getScentEmoji(sb.scent) }}</span>
+                        <div class="sdc-info">
+                          <span class="sdc-name">{{ sb.scent }}</span>
+                          <span class="sdc-types">{{ sb.types.join(' & ') }}</span>
+                        </div>
+                        <div class="sdc-badge" [style.background]="getScentColor(sb.scent) + '20'" [style.color]="getScentColor(sb.scent)">
+                          {{ sb.batchCount }} batches
+                        </div>
+                      </div>
+                      <div class="sdc-bar-wrapper">
+                        <div class="sdc-bar">
+                          <div class="sdc-bar-fill" [style.width.%]="getScentPercent(sb.totalUnits)" [style.background]="'linear-gradient(90deg, ' + getScentColor(sb.scent) + ', ' + getScentColorLight(sb.scent) + ')'"></div>
+                        </div>
+                        <span class="sdc-units">{{ sb.totalUnits | number }} units</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
 
         <!-- Scent Breakdown Cards -->
         <div class="scent-cards-row">
@@ -180,7 +420,13 @@ interface DashboardData {
         <!-- Daily Total Bar Chart -->
         @if (dashboard?.dailyTotals && dashboard!.dailyTotals.length > 0) {
           <div class="chart-section">
-            <h3><mat-icon>bar_chart</mat-icon> Daily Production Totals</h3>
+            <div class="section-header">
+              <h3><mat-icon>bar_chart</mat-icon> Daily Production Totals</h3>
+              <div class="chart-legend">
+                <span class="legend-dot week1"></span> Week 1
+                <span class="legend-dot week2"></span> Week 2
+              </div>
+            </div>
             <div class="bar-chart">
               @for (dt of dashboard!.dailyTotals; track dt.date) {
                 <div class="bar-col">
@@ -296,38 +542,91 @@ interface DashboardData {
     </div>
   `,
   styles: [`
+    :host {
+      --surface: #ffffff;
+      --surface-hover: #f8fafc;
+      --border: #e2e8f0;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+      --radius: 16px;
+      --radius-sm: 12px;
+      --pink: #e91e63;
+      --pink-soft: #fce4ec;
+      --pink-mid: #f8bbd0;
+      --pink-light: #f48fb1;
+      --purple: #9c27b0;
+      --purple-soft: #f3e5f5;
+      --purple-mid: #e1bee7;
+      --purple-light: #ce93d8;
+      --blue: #2196f3;
+      --blue-soft: #e3f2fd;
+      --blue-mid: #bbdefb;
+      --blue-light: #64b5f6;
+      --orange: #ff9800;
+      --orange-soft: #fff3e0;
+      --orange-mid: #ffe0b2;
+      --orange-light: #ffb74d;
+      --green: #4caf50;
+      --green-soft: #e8f5e9;
+      --green-mid: #c8e6c9;
+      --green-light: #81c784;
+    }
+
     .dashboard-container {
       padding: 0 24px 40px;
     }
 
+    /* ── Back Row ── */
     .back-row {
       display: flex;
       align-items: center;
       gap: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       flex-wrap: wrap;
     }
 
     .back-btn {
-      background: rgba(255, 255, 255, 0.15) !important;
+      background: rgba(255, 255, 255, 0.12) !important;
       color: white !important;
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      border-radius: 12px !important;
+      transition: all 0.2s !important;
+    }
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.22) !important;
     }
 
     .dashboard-title {
       color: white;
       margin: 0;
-      font-size: 1.8rem;
+      font-size: 1.7rem;
+      font-weight: 800;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       flex: 1;
+      letter-spacing: -0.3px;
     }
 
-    .title-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+    .title-icon-wrap {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+    }
+    .title-icon-wrap mat-icon {
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
     }
 
     .title-actions {
@@ -335,12 +634,26 @@ interface DashboardData {
       gap: 8px;
     }
 
-    .date-chip {
-      background: rgba(255, 255, 255, 0.2) !important;
-      color: white !important;
+    .date-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .date-pill mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
     }
 
-    /* Loading */
+    /* ── Loading ── */
     .loading-container {
       display: flex;
       justify-content: center;
@@ -348,123 +661,330 @@ interface DashboardData {
     }
 
     .loading-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
+      background: var(--surface);
+      border-radius: var(--radius);
       padding: 48px;
       text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-lg);
     }
-
-    .loading-card h3 { margin: 16px 0 8px; color: #333; }
-    .loading-card p { color: #666; margin: 0; }
+    .loading-card h3 { margin: 16px 0 6px; color: var(--text-primary); font-weight: 700; font-size: 16px; }
+    .loading-card p { color: var(--text-secondary); margin: 0; font-size: 13px; }
 
     .error-container {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
+      background: var(--surface);
+      border-radius: var(--radius);
       padding: 48px;
       text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-lg);
     }
+    .error-icon-wrap {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: #fef2f2; display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .error-icon-wrap mat-icon { font-size: 32px; width: 32px; height: 32px; color: #ef4444; }
+    .error-container h3 { color: var(--text-primary); margin: 0 0 8px; }
+    .error-container p { color: var(--text-secondary); margin: 0 0 20px; }
 
-    .error-container mat-icon { font-size: 48px; width: 48px; height: 48px; color: #f44336; }
-    .error-container h3 { color: #333; }
-    .error-container p { color: #666; }
-
-    /* KPI Cards */
-    .kpi-row {
+    /* ── KPI Cards (Modern) ── */
+    .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(5, 1fr);
       gap: 16px;
       margin-bottom: 24px;
     }
 
     .kpi-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 14px;
-      padding: 20px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 22px 20px;
       display: flex;
       align-items: center;
-      gap: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-      transition: transform 0.2s;
+      gap: 14px;
+      box-shadow: var(--shadow-md);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid transparent;
     }
 
-    .kpi-card:hover { transform: translateY(-2px); }
+    .kpi-card.clickable { cursor: pointer; }
 
-    .kpi-icon {
-      width: 50px;
-      height: 50px;
-      border-radius: 12px;
+    .kpi-card.clickable:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .kpi-card.kpi-pink.clickable:hover { border-color: var(--pink-mid); }
+    .kpi-card.kpi-purple.clickable:hover { border-color: var(--purple-mid); }
+    .kpi-card.kpi-blue.clickable:hover { border-color: var(--blue-mid); }
+    .kpi-card.kpi-orange.clickable:hover { border-color: var(--orange-mid); }
+
+    .kpi-accent {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .kpi-pink .kpi-accent { background: linear-gradient(90deg, var(--pink), var(--pink-light)); }
+    .kpi-purple .kpi-accent { background: linear-gradient(90deg, var(--purple), var(--purple-light)); }
+    .kpi-blue .kpi-accent { background: linear-gradient(90deg, var(--blue), var(--blue-light)); }
+    .kpi-orange .kpi-accent { background: linear-gradient(90deg, var(--orange), var(--orange-light)); }
+    .kpi-green .kpi-accent { background: linear-gradient(90deg, var(--green), var(--green-light)); }
+
+    .kpi-icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
+    }
+    .kpi-icon-wrap mat-icon { font-size: 24px; width: 24px; height: 24px; color: white; }
+
+    .kpi-pink .kpi-icon-wrap { background: linear-gradient(135deg, var(--pink), #c2185b); }
+    .kpi-purple .kpi-icon-wrap { background: linear-gradient(135deg, var(--purple), #7b1fa2); }
+    .kpi-blue .kpi-icon-wrap { background: linear-gradient(135deg, var(--blue), #1565c0); }
+    .kpi-orange .kpi-icon-wrap { background: linear-gradient(135deg, var(--orange), #e65100); }
+    .kpi-green .kpi-icon-wrap { background: linear-gradient(135deg, var(--green), #2e7d32); }
+
+    .kpi-body { display: flex; flex-direction: column; }
+    .kpi-number { font-size: 1.65rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; letter-spacing: -0.5px; }
+    .kpi-label { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+
+    /* ============================== */
+    /*  KPI DIALOG OVERLAY            */
+    /* ============================== */
+    .dialog-backdrop {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px); z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+    .dialog-panel {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 94vw; max-width: 720px; max-height: 85vh;
+      background: var(--surface); border-radius: 20px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1);
+      z-index: 1001; display: flex; flex-direction: column;
+      animation: dialogSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes dialogSlideIn {
+      from { opacity: 0; transform: translate(-50%, -45%) scale(0.96); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     }
 
-    .kpi-icon mat-icon { font-size: 26px; width: 26px; height: 26px; color: white; }
+    .dialog-header {
+      padding: 24px 28px 20px; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .dh-batches { background: linear-gradient(135deg, var(--pink-soft), var(--pink-mid)); }
+    .dh-female { background: linear-gradient(135deg, var(--purple-soft), var(--purple-mid)); }
+    .dh-male { background: linear-gradient(135deg, var(--blue-soft), var(--blue-mid)); }
+    .dh-scents { background: linear-gradient(135deg, var(--orange-soft), var(--orange-mid)); }
 
-    .kpi-pink .kpi-icon { background: linear-gradient(135deg, #e91e63, #c2185b); }
-    .kpi-purple .kpi-icon { background: linear-gradient(135deg, #9c27b0, #7b1fa2); }
-    .kpi-blue .kpi-icon { background: linear-gradient(135deg, #2196f3, #1565c0); }
-    .kpi-orange .kpi-icon { background: linear-gradient(135deg, #ff9800, #e65100); }
-    .kpi-green .kpi-icon { background: linear-gradient(135deg, #4caf50, #2e7d32); }
+    .dialog-title-group { display: flex; align-items: center; gap: 14px; }
+    .dialog-icon-ring {
+      width: 46px; height: 46px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .dialog-batches .dialog-icon-ring { background: var(--pink); color: white; }
+    .dialog-female .dialog-icon-ring { background: var(--purple); color: white; }
+    .dialog-male .dialog-icon-ring { background: var(--blue); color: white; }
+    .dialog-scents .dialog-icon-ring { background: var(--orange); color: white; }
+    .dialog-icon-ring mat-icon { font-size: 24px; width: 24px; height: 24px; }
 
-    .kpi-info { display: flex; flex-direction: column; }
-    .kpi-value { font-size: 1.6rem; font-weight: 700; color: #333; }
-    .kpi-label { font-size: 0.8rem; color: #888; font-weight: 500; }
+    .dialog-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
+    .dialog-subtitle { font-size: 12px; color: var(--text-secondary); margin: 3px 0 0; }
 
-    /* Scent Cards */
+    .dialog-close {
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--surface); display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s; color: var(--text-secondary); flex-shrink: 0;
+    }
+    .dialog-close:hover { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+    .dialog-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
+
+    .dialog-body {
+      padding: 24px 28px 28px; overflow-y: auto; flex: 1;
+    }
+
+    /* Dialog Stats Row */
+    .dialog-stats-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .dialog-stat {
+      padding: 16px 18px; border-radius: 14px; text-align: center;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .dialog-stat.pink { background: var(--pink-soft); }
+    .dialog-stat.purple { background: var(--purple-soft); }
+    .dialog-stat.blue { background: var(--blue-soft); }
+    .dialog-stat.orange { background: var(--orange-soft); }
+    .dialog-stat.green { background: var(--green-soft); }
+    .ds-val { font-size: 22px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+    .ds-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+
+    .dialog-section-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 700; color: var(--text-primary);
+      margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .dialog-section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--text-secondary); }
+
+    /* Dialog Table */
+    .dialog-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+    .dialog-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .dialog-table thead { background: #f8fafc; }
+    .dialog-table th {
+      padding: 10px 16px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    .dialog-table td {
+      padding: 10px 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-primary);
+    }
+    .dialog-table tbody tr:last-child td { border-bottom: none; }
+    .dialog-table tbody tr:hover { background: #f8fafc; }
+    .dialog-table .right { text-align: right; }
+    .dialog-table .mono-text { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .dialog-table .primary-cell { font-weight: 600; }
+    .dialog-table tfoot td { border-top: 2px solid var(--border); background: #f8fafc; }
+    .total-row td { font-size: 13px; }
+
+    .scent-dot {
+      display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
+    }
+
+    .type-pill {
+      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    }
+    .type-pill-f { background: var(--pink-soft); color: var(--pink); }
+    .type-pill-m { background: var(--blue-soft); color: var(--blue); }
+
+    /* Dialog Bar Chart rows */
+    .dialog-province-bars { display: flex; flex-direction: column; gap: 10px; }
+    .bar-row { display: flex; align-items: center; gap: 12px; }
+    .bar-row-label { width: 120px; font-size: 13px; font-weight: 600; color: var(--text-primary); text-align: right; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 26px; background: #f1f5f9; border-radius: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-width: 4px; }
+    .bar-row-value { width: 90px; font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: 'SF Mono', monospace; }
+
+    /* Scent Detail Cards (for scent dialog) */
+    .scent-detail-cards { display: flex; flex-direction: column; gap: 12px; }
+    .scent-detail-card {
+      padding: 16px 20px; border-radius: 14px;
+      border: 1px solid var(--border); border-left: 4px solid;
+      background: var(--surface); transition: all 0.15s;
+    }
+    .scent-detail-card:hover { background: var(--surface-hover); box-shadow: var(--shadow-sm); }
+    .sdc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .sdc-emoji { font-size: 1.5rem; }
+    .sdc-info { display: flex; flex-direction: column; flex: 1; }
+    .sdc-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .sdc-types { font-size: 12px; color: var(--text-secondary); }
+    .sdc-badge {
+      padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    }
+    .sdc-bar-wrapper { display: flex; align-items: center; gap: 12px; }
+    .sdc-bar { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+    .sdc-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .sdc-units { font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; font-family: 'SF Mono', monospace; }
+
+    /* ── Scent Breakdown Cards ── */
     .scent-cards-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 14px;
       margin-bottom: 24px;
     }
 
     .scent-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 12px;
-      padding: 16px;
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      padding: 18px 20px;
       border-left: 4px solid #ccc;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+    }
+    .scent-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
     }
 
     .scent-card-header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 10px;
+      margin-bottom: 14px;
     }
 
-    .scent-emoji { font-size: 1.4rem; }
-    .scent-name { font-weight: 600; font-size: 1.1rem; color: #333; }
+    .scent-emoji { font-size: 1.5rem; }
+    .scent-name { font-weight: 700; font-size: 1.05rem; color: var(--text-primary); }
 
-    .scent-card-stats { display: flex; gap: 16px; }
+    .scent-card-stats { display: flex; gap: 20px; }
     .scs-item { display: flex; flex-direction: column; }
-    .scs-val { font-weight: 700; font-size: 1rem; color: #333; }
-    .scs-lbl { font-size: 0.7rem; color: #999; text-transform: uppercase; }
+    .scs-val { font-weight: 800; font-size: 1rem; color: var(--text-primary); }
+    .scs-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
 
-    /* Bar Chart */
+    /* ── Bar Chart ── */
     .chart-section {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 14px;
+      background: var(--surface);
+      border-radius: var(--radius);
       padding: 24px;
       margin-bottom: 24px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-md);
     }
 
-    .chart-section h3 {
-      margin: 0 0 20px;
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .section-header h3 {
+      margin: 0;
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #333;
+      color: var(--text-primary);
+      font-weight: 700;
+      font-size: 1rem;
     }
+    .section-header h3 mat-icon { color: var(--text-secondary); }
+
+    .chart-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .legend-dot.week1 { background: var(--pink); }
+    .legend-dot.week2 { background: var(--blue); }
 
     .bar-chart {
       display: flex;
       align-items: flex-end;
       gap: 12px;
-      height: 200px;
+      height: 220px;
       padding: 0 8px;
     }
 
@@ -473,39 +993,41 @@ interface DashboardData {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       height: 100%;
       justify-content: flex-end;
     }
 
     .bar-value {
       font-size: 0.7rem;
-      font-weight: 600;
-      color: #555;
+      font-weight: 700;
+      color: var(--text-secondary);
+      font-family: 'SF Mono', monospace;
     }
 
     .bar {
       width: 100%;
-      max-width: 60px;
-      border-radius: 6px 6px 0 0;
-      transition: height 0.5s ease;
+      max-width: 56px;
+      border-radius: 8px 8px 0 0;
+      transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       min-height: 4px;
     }
 
     .bar-label {
       font-size: 0.65rem;
-      color: #777;
+      color: var(--text-muted);
       text-align: center;
       line-height: 1.3;
       margin-top: 4px;
+      font-weight: 500;
     }
 
-    /* Schedule Table */
+    /* ── Schedule Table ── */
     .schedule-section {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 14px;
+      background: var(--surface);
+      border-radius: var(--radius);
       padding: 24px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-md);
     }
 
     .schedule-header {
@@ -522,8 +1044,11 @@ interface DashboardData {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #333;
+      color: var(--text-primary);
+      font-weight: 700;
+      font-size: 1rem;
     }
+    .schedule-header h3 mat-icon { color: var(--text-secondary); }
 
     .schedule-filters {
       display: flex;
@@ -540,8 +1065,8 @@ interface DashboardData {
 
     .schedule-table-wrapper {
       overflow-x: auto;
-      border-radius: 10px;
-      border: 1px solid #e0e0e0;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
     }
 
     .schedule-table {
@@ -552,20 +1077,21 @@ interface DashboardData {
     }
 
     .schedule-table thead th {
-      background: #2c3e50;
+      background: #1e293b;
       color: white;
-      padding: 8px 6px;
+      padding: 10px 6px;
       text-align: center;
-      font-weight: 600;
-      font-size: 0.75rem;
+      font-weight: 700;
+      font-size: 0.72rem;
       position: sticky;
       top: 0;
       z-index: 2;
       white-space: nowrap;
+      letter-spacing: 0.2px;
     }
 
     .schedule-table thead th.weekend {
-      background: #34495e;
+      background: #334155;
     }
 
     .col-scent { min-width: 80px; text-align: left !important; padding-left: 12px !important; }
@@ -582,15 +1108,15 @@ interface DashboardData {
       line-height: 1.2;
     }
 
-    .day-name { font-size: 0.65rem; opacity: 0.8; }
-    .day-num { font-size: 0.9rem; font-weight: 700; }
-    .day-month { font-size: 0.6rem; opacity: 0.7; }
+    .day-name { font-size: 0.62rem; opacity: 0.7; }
+    .day-num { font-size: 0.9rem; font-weight: 800; }
+    .day-month { font-size: 0.58rem; opacity: 0.6; }
 
     /* Group header */
     .group-header-row td {
       padding: 8px 12px;
       font-size: 0.85rem;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--border);
     }
 
     .group-header-cell {
@@ -612,77 +1138,89 @@ interface DashboardData {
     .group-count {
       margin-left: auto;
       font-size: 0.75rem;
-      color: #888;
+      color: var(--text-muted);
+      font-weight: 600;
     }
 
     /* Batch rows */
     .batch-row td {
       padding: 5px 6px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid #f1f5f9;
       text-align: center;
     }
 
-    .batch-row.even-row { background: #fafafa; }
+    .batch-row.even-row { background: #fafbfc; }
+    .batch-row:hover { background: #f1f5f9; }
 
     .batch-row code {
-      background: #f5f5f5;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #555;
+      background: #f1f5f9;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-family: 'SF Mono', 'Cascadia Code', monospace;
     }
 
     .zero-qty {
-      color: #ccc;
+      color: #cbd5e1;
     }
 
     .has-note {
-      color: #e65100;
+      color: #ea580c;
       cursor: help;
-      text-decoration: underline dotted #e65100;
+      text-decoration: underline dotted #ea580c;
     }
 
     .type-badge {
       padding: 2px 8px;
       border-radius: 8px;
       font-size: 0.7rem;
-      font-weight: 600;
+      font-weight: 700;
       color: white;
     }
 
-    .type-female { background: #e91e63; }
-    .type-male { background: #2196f3; }
+    .type-female { background: var(--pink); }
+    .type-male { background: var(--blue); }
 
     /* Subtotal row */
     .subtotal-row td {
       padding: 6px 6px;
-      font-weight: 600;
+      font-weight: 700;
       font-size: 0.78rem;
-      border-bottom: 2px solid #ddd;
+      border-bottom: 2px solid var(--border);
       text-align: center;
     }
 
     .subtotal-label {
       text-align: right !important;
       padding-right: 12px !important;
-      color: #555;
+      color: var(--text-secondary);
       font-style: italic;
     }
 
     .subtotal-val {
-      color: #333;
+      color: var(--text-primary);
     }
 
-    /* Responsive */
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    }
     @media (max-width: 768px) {
       .dashboard-container { padding: 0 12px 24px; }
       .back-row { flex-direction: column; align-items: flex-start; }
       .dashboard-title { font-size: 1.3rem; }
-      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
       .scent-cards-row { grid-template-columns: 1fr 1fr; }
       .schedule-filters { flex-direction: column; }
       .filter-field { width: 100%; }
+      .dialog-panel { max-width: 95vw; }
+    }
+    @media (max-width: 600px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .dialog-panel { width: 100vw; max-height: 95vh; border-radius: 16px 16px 0 0; }
+      .dialog-header { padding: 18px 20px 16px; }
     }
   `]
 })
@@ -702,6 +1240,9 @@ export class CondomsDashboardComponent implements OnInit {
   filterScent = 'all';
   filterType = 'all';
 
+  // Dialog
+  activeDialog: string | null = null;
+
   private maxDailyTotal = 0;
 
   ngOnInit(): void {
@@ -714,7 +1255,6 @@ export class CondomsDashboardComponent implements OnInit {
     this.loading = true;
     this.error = '';
 
-    // Load dashboard + schedule in parallel
     this.http.get<DashboardData>(`${environment.apiUrl}/condomproject/dashboard`).subscribe({
       next: (data) => {
         this.dashboard = data;
@@ -722,7 +1262,7 @@ export class CondomsDashboardComponent implements OnInit {
           this.maxDailyTotal = Math.max(...data.dailyTotals.map(d => d.total), 1);
         }
       },
-      error: (err) => {
+      error: () => {
         this.error = 'Could not load dashboard data';
         this.loading = false;
       }
@@ -739,12 +1279,24 @@ export class CondomsDashboardComponent implements OnInit {
         this.allScents = [...new Set(data.groups.map(g => g.scent))];
         this.loading = false;
       },
-      error: (err) => {
+      error: () => {
         this.error = 'Could not load production schedule';
         this.loading = false;
       }
     });
   }
+
+  // ── Dialog Methods ──
+
+  openKpiDialog(type: string): void {
+    this.activeDialog = type;
+  }
+
+  closeDialog(): void {
+    this.activeDialog = null;
+  }
+
+  // ── Filter ──
 
   applyFilter(): void {
     this.filteredGroups = this.scheduleGroups.filter(g => {
@@ -754,6 +1306,8 @@ export class CondomsDashboardComponent implements OnInit {
     });
   }
 
+  // ── Helpers ──
+
   getScentColor(scent: string): string {
     const colors: Record<string, string> = {
       'Vanilla': '#f9a825',
@@ -762,6 +1316,16 @@ export class CondomsDashboardComponent implements OnInit {
       'Grape': '#7b1fa2'
     };
     return colors[scent] || '#607d8b';
+  }
+
+  getScentColorLight(scent: string): string {
+    const colors: Record<string, string> = {
+      'Vanilla': '#ffee58',
+      'Strawberry': '#f48fb1',
+      'Banana': '#ffe082',
+      'Grape': '#ce93d8'
+    };
+    return colors[scent] || '#90a4ae';
   }
 
   getScentEmoji(scent: string): string {
@@ -805,5 +1369,47 @@ export class CondomsDashboardComponent implements OnInit {
 
   getGroupTotal(group: ScentGroup): number {
     return group.batches.reduce((sum, b) => sum + this.getBatchTotal(b), 0);
+  }
+
+  getGroupAvg(group: ScentGroup): number {
+    if (group.batches.length === 0) return 0;
+    return this.getGroupTotal(group) / group.batches.length;
+  }
+
+  // ── Dialog Data Helpers ──
+
+  getFemaleGroups(): ScentGroup[] {
+    return this.scheduleGroups.filter(g => g.type === 'Female');
+  }
+
+  getMaleGroups(): ScentGroup[] {
+    return this.scheduleGroups.filter(g => g.type === 'Male');
+  }
+
+  getFemaleScents(): string[] {
+    return [...new Set(this.getFemaleGroups().map(g => g.scent))];
+  }
+
+  getMaleScents(): string[] {
+    return [...new Set(this.getMaleGroups().map(g => g.scent))];
+  }
+
+  getFemaleTotalUnits(): number {
+    return this.getFemaleGroups().reduce((sum, g) => sum + this.getGroupTotal(g), 0);
+  }
+
+  getMaleTotalUnits(): number {
+    return this.getMaleGroups().reduce((sum, g) => sum + this.getGroupTotal(g), 0);
+  }
+
+  getGroupBarPercent(group: ScentGroup, type: string): number {
+    const groups = type === 'Female' ? this.getFemaleGroups() : this.getMaleGroups();
+    const maxBatches = Math.max(...groups.map(g => g.batches.length), 1);
+    return (group.batches.length / maxBatches) * 100;
+  }
+
+  getScentPercent(units: number): number {
+    const maxUnits = Math.max(...(this.dashboard?.scentBreakdown || []).map(s => s.totalUnits), 1);
+    return (units / maxUnits) * 100;
   }
 }
