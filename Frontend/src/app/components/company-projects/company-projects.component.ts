@@ -659,14 +659,14 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'condoms',
         name: 'Condoms Project',
-        description: 'National condom production and distribution initiative. Tracking daily production schedules across all scent variants, batch codes, and product types.',
+        description: 'National condom stock and distribution initiative. Tracking daily stock schedules across all scent variants, batch codes, and product types.',
         icon: 'health_and_safety',
         color: '#e91e63',
         gradient: 'linear-gradient(135deg, #e91e63 0%, #ad1457 100%)',
         status: 'active',
         progress: 45,
-        category: 'Healthcare Production',
-        lead: 'Production Team',
+        category: 'Healthcare Stock',
+        lead: 'Stock Team',
         startDate: 'March 2026',
         targetDate: 'Ongoing',
         stats: [

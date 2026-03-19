@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
+using ProjectTracker.API.DTOs;
+using ProjectTracker.API.Models.Projects;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -168,6 +170,90 @@ namespace ProjectTracker.API.Controllers
             {
                 _logger.LogError(ex, "Error fetching condom project dashboard");
                 return StatusCode(500, new { error = "Failed to load dashboard" });
+            }
+        }
+
+        /// <summary>
+        /// Create a new condom stock entry
+        /// </summary>
+        [HttpPost("stock")]
+        public async Task<IActionResult> CreateStock([FromBody] CreateCondomStockDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                // Validate scent
+                var validScents = new[] { "Vanilla", "Strawberry", "Banana", "Grape", "Plain" };
+                if (!validScents.Contains(dto.Scent, StringComparer.OrdinalIgnoreCase))
+                    return BadRequest(new { error = $"Invalid scent. Must be one of: {string.Join(", ", validScents)}" });
+
+                // Validate type
+                var validTypes = new[] { "Female", "Male" };
+                if (!validTypes.Contains(dto.Type, StringComparer.OrdinalIgnoreCase))
+                    return BadRequest(new { error = "Invalid type. Must be Female or Male" });
+
+                // Determine ScentGroup based on scent
+                var scentGroupMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "Vanilla", "Flavoured" },
+                    { "Strawberry", "Flavoured" },
+                    { "Banana", "Flavoured" },
+                    { "Grape", "Flavoured" },
+                    { "Plain", "Plain" }
+                };
+
+                // Determine SortOrder based on scent + type
+                var sortOrderMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "Vanilla-Female", 1 },
+                    { "Vanilla-Male", 2 },
+                    { "Strawberry-Female", 3 },
+                    { "Strawberry-Male", 4 },
+                    { "Banana-Female", 5 },
+                    { "Banana-Male", 6 },
+                    { "Grape-Female", 7 },
+                    { "Grape-Male", 8 },
+                    { "Plain-Female", 9 },
+                    { "Plain-Male", 10 }
+                };
+
+                var sortKey = $"{dto.Scent}-{dto.Type}";
+                var sortOrder = sortOrderMap.GetValueOrDefault(sortKey, 99);
+                var scentGroup = scentGroupMap.GetValueOrDefault(dto.Scent, "Other");
+
+                var entry = new CondomProductionSchedule
+                {
+                    Scent = dto.Scent,
+                    Type = dto.Type,
+                    BatchCode = dto.BatchCode,
+                    UOM = string.IsNullOrWhiteSpace(dto.UOM) ? "CASES" : dto.UOM.ToUpper(),
+                    ScheduleDate = dto.ScheduleDate.Date,
+                    Quantity = dto.Quantity,
+                    QuantityNote = dto.QuantityNote,
+                    ScentGroup = scentGroup,
+                    SortOrder = sortOrder,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.CondomProductionSchedules.Add(entry);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Created condom stock entry: {BatchCode} - {Scent} {Type} - {Quantity} on {Date}",
+                    entry.BatchCode, entry.Scent, entry.Type, entry.Quantity, entry.ScheduleDate.ToString("yyyy-MM-dd"));
+
+                return Ok(new
+                {
+                    success = true,
+                    id = entry.Id,
+                    message = $"Stock entry created: {entry.BatchCode} - {entry.Quantity} {entry.UOM}"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating condom stock entry");
+                return StatusCode(500, new { error = "Failed to create stock entry" });
             }
         }
     }

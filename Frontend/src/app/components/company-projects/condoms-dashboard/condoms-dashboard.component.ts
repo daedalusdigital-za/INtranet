@@ -86,9 +86,13 @@ interface DashboardData {
           <div class="title-icon-wrap">
             <mat-icon>health_and_safety</mat-icon>
           </div>
-          Condoms Production Schedule
+          Condoms Stock Schedule
         </h2>
         <div class="title-actions">
+          <button mat-raised-button class="capture-btn" (click)="openCaptureDialog()">
+            <mat-icon>add_circle</mat-icon>
+            Capture Stock
+          </button>
           <div class="date-pill">
             <mat-icon>date_range</mat-icon>
             March 2026
@@ -100,14 +104,14 @@ interface DashboardData {
         <div class="loading-container">
           <div class="loading-card">
             <mat-spinner diameter="44" strokeWidth="3"></mat-spinner>
-            <h3>Loading Production Schedule...</h3>
+            <h3>Loading Stock Schedule...</h3>
             <p>Fetching batch data and daily quantities</p>
           </div>
         </div>
       } @else if (error) {
         <div class="error-container">
           <div class="error-icon-wrap"><mat-icon>error_outline</mat-icon></div>
-          <h3>Failed to load production data</h3>
+          <h3>Failed to load stock data</h3>
           <p>{{ error }}</p>
           <button mat-flat-button color="primary" (click)="loadData()">
             <mat-icon>refresh</mat-icon> Retry
@@ -175,7 +179,7 @@ interface DashboardData {
                 <div>
                   <h2 class="dialog-title">
                     @switch (activeDialog) {
-                      @case ('batches') { All Production Batches }
+                      @case ('batches') { All Stock Batches }
                       @case ('female') { Female Batches }
                       @case ('male') { Male Batches }
                       @case ('scents') { Scent Variants }
@@ -184,9 +188,9 @@ interface DashboardData {
                   <p class="dialog-subtitle">
                     @switch (activeDialog) {
                       @case ('batches') { Complete batch overview by scent and type }
-                      @case ('female') { Female condom production batches }
-                      @case ('male') { Male condom production batches }
-                      @case ('scents') { Production breakdown by scent variant }
+                      @case ('female') { Female condom stock batches }
+                      @case ('male') { Male condom stock batches }
+                      @case ('scents') { Stock breakdown by scent variant }
                     }
                   </p>
                 </div>
@@ -391,6 +395,131 @@ interface DashboardData {
           </div>
         }
 
+        <!-- ==================== CAPTURE STOCK DIALOG ==================== -->
+        @if (showCaptureDialog) {
+          <div class="dialog-backdrop" (click)="closeCaptureDialog()"></div>
+          <div class="dialog-panel dialog-capture">
+            <div class="dialog-header dh-capture">
+              <div class="dialog-title-group">
+                <div class="dialog-icon-ring capture-icon-ring">
+                  <mat-icon>add_circle</mat-icon>
+                </div>
+                <div>
+                  <h2 class="dialog-title">Capture New Stock</h2>
+                  <p class="dialog-subtitle">Add a new stock entry to the condoms project</p>
+                </div>
+              </div>
+              <button class="dialog-close" (click)="closeCaptureDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            <div class="dialog-body">
+              @if (captureSuccess) {
+                <div class="capture-success">
+                  <div class="success-icon-wrap"><mat-icon>check_circle</mat-icon></div>
+                  <h3>Stock Entry Created!</h3>
+                  <p>{{ captureSuccessMsg }}</p>
+                  <div class="success-actions">
+                    <button mat-flat-button class="btn-add-another" (click)="resetCaptureForm()">
+                      <mat-icon>add</mat-icon> Add Another
+                    </button>
+                    <button mat-stroked-button (click)="closeCaptureDialog()">
+                      <mat-icon>close</mat-icon> Close
+                    </button>
+                  </div>
+                </div>
+              } @else {
+                @if (captureError) {
+                  <div class="capture-error">
+                    <mat-icon>error_outline</mat-icon>
+                    <span>{{ captureError }}</span>
+                  </div>
+                }
+
+                <div class="capture-form">
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Scent <span class="required">*</span></label>
+                      <select class="form-select" [(ngModel)]="captureForm.scent">
+                        <option value="">Select Scent</option>
+                        <option value="Vanilla">🍦 Vanilla</option>
+                        <option value="Strawberry">🍓 Strawberry</option>
+                        <option value="Banana">🍌 Banana</option>
+                        <option value="Grape">🍇 Grape</option>
+                        <option value="Plain">📦 Plain</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Type <span class="required">*</span></label>
+                      <select class="form-select" [(ngModel)]="captureForm.type">
+                        <option value="">Select Type</option>
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Batch Code <span class="required">*</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="captureForm.batchCode" placeholder="e.g. F1K 2501">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">UOM</label>
+                      <select class="form-select" [(ngModel)]="captureForm.uom">
+                        <option value="CASES">CASES</option>
+                        <option value="BOXES">BOXES</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Schedule Date <span class="required">*</span></label>
+                      <input type="date" class="form-input" [(ngModel)]="captureForm.scheduleDate">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Quantity <span class="required">*</span></label>
+                      <input type="number" class="form-input" [(ngModel)]="captureForm.quantity" placeholder="0" min="1">
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Note <span class="optional">(optional)</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="captureForm.quantityNote" placeholder="e.g. 24+20 BOX">
+                    </div>
+                  </div>
+
+                  <div class="form-preview" *ngIf="captureForm.scent && captureForm.type && captureForm.batchCode && captureForm.quantity">
+                    <mat-icon>preview</mat-icon>
+                    <span>
+                      {{ getScentEmoji(captureForm.scent) }} <strong>{{ captureForm.batchCode }}</strong> —
+                      {{ captureForm.scent }} {{ captureForm.type }} —
+                      {{ captureForm.quantity }} {{ captureForm.uom }}
+                      @if (captureForm.scheduleDate) { on {{ captureForm.scheduleDate }} }
+                    </span>
+                  </div>
+
+                  <div class="form-actions">
+                    <button mat-stroked-button (click)="closeCaptureDialog()" [disabled]="captureSaving">Cancel</button>
+                    <button mat-flat-button class="btn-submit" (click)="submitStock()" [disabled]="captureSaving || !isCaptureFormValid()">
+                      @if (captureSaving) {
+                        <mat-spinner diameter="18" strokeWidth="2"></mat-spinner>
+                        Saving...
+                      } @else {
+                        <mat-icon>save</mat-icon>
+                        Save Stock Entry
+                      }
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         <!-- Scent Breakdown Cards -->
         <div class="scent-cards-row">
           @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
@@ -421,7 +550,7 @@ interface DashboardData {
         @if (dashboard?.dailyTotals && dashboard!.dailyTotals.length > 0) {
           <div class="chart-section">
             <div class="section-header">
-              <h3><mat-icon>bar_chart</mat-icon> Daily Production Totals</h3>
+              <h3><mat-icon>bar_chart</mat-icon> Daily Stock Totals</h3>
               <div class="chart-legend">
                 <span class="legend-dot week1"></span> Week 1
                 <span class="legend-dot week2"></span> Week 2
@@ -439,10 +568,10 @@ interface DashboardData {
           </div>
         }
 
-        <!-- Production Schedule Grid -->
+        <!-- Stock Schedule Grid -->
         <div class="schedule-section">
           <div class="schedule-header">
-            <h3><mat-icon>table_chart</mat-icon> Production Schedule Detail</h3>
+            <h3><mat-icon>table_chart</mat-icon> Stock Schedule Detail</h3>
             <div class="schedule-filters">
               <mat-form-field appearance="outline" class="filter-field">
                 <mat-label>Filter by Scent</mat-label>
@@ -1203,6 +1332,209 @@ interface DashboardData {
       color: var(--text-primary);
     }
 
+    /* ── Capture Stock Button ── */
+    .capture-btn {
+      background: linear-gradient(135deg, #4caf50, #2e7d32) !important;
+      color: white !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 12px !important;
+      font-weight: 700 !important;
+      padding: 6px 18px !important;
+      transition: all 0.2s !important;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .capture-btn:hover {
+      background: linear-gradient(135deg, #66bb6a, #388e3c) !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4) !important;
+    }
+
+    /* ── Capture Dialog Styles ── */
+    .dh-capture {
+      background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    }
+    .capture-icon-ring {
+      background: var(--green) !important;
+      color: white !important;
+    }
+
+    .capture-form {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 16px;
+    }
+
+    .form-row.two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .form-label .required {
+      color: #ef4444;
+    }
+
+    .form-label .optional {
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: none;
+      font-size: 11px;
+    }
+
+    .form-input, .form-select {
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      color: var(--text-primary);
+      background: var(--surface);
+      transition: all 0.15s;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.12);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .form-select {
+      cursor: pointer;
+      appearance: auto;
+    }
+
+    .form-preview {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .form-preview mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: var(--green);
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn-submit {
+      background: linear-gradient(135deg, #4caf50, #2e7d32) !important;
+      color: white !important;
+      border-radius: 10px !important;
+      font-weight: 700 !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 8px 20px !important;
+    }
+    .btn-submit:disabled {
+      opacity: 0.5 !important;
+    }
+
+    .capture-success {
+      text-align: center;
+      padding: 24px 0;
+    }
+
+    .success-icon-wrap {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #e8f5e9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .success-icon-wrap mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: #4caf50;
+    }
+
+    .capture-success h3 {
+      color: var(--text-primary);
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+
+    .capture-success p {
+      color: var(--text-secondary);
+      margin: 0 0 20px;
+      font-size: 14px;
+    }
+
+    .success-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .btn-add-another {
+      background: var(--green) !important;
+      color: white !important;
+      border-radius: 10px !important;
+      font-weight: 700 !important;
+    }
+
+    .capture-error {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      color: #dc2626;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .capture-error mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
     /* ── Responsive ── */
     @media (max-width: 1100px) {
       .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -1243,6 +1575,22 @@ export class CondomsDashboardComponent implements OnInit {
   // Dialog
   activeDialog: string | null = null;
 
+  // Capture Stock
+  showCaptureDialog = false;
+  captureSaving = false;
+  captureError = '';
+  captureSuccess = false;
+  captureSuccessMsg = '';
+  captureForm = {
+    scent: '',
+    type: '',
+    batchCode: '',
+    uom: 'CASES',
+    scheduleDate: '',
+    quantity: 0,
+    quantityNote: ''
+  };
+
   private maxDailyTotal = 0;
 
   ngOnInit(): void {
@@ -1280,7 +1628,7 @@ export class CondomsDashboardComponent implements OnInit {
         this.loading = false;
       },
       error: () => {
-        this.error = 'Could not load production schedule';
+        this.error = 'Could not load stock schedule';
         this.loading = false;
       }
     });
@@ -1294,6 +1642,76 @@ export class CondomsDashboardComponent implements OnInit {
 
   closeDialog(): void {
     this.activeDialog = null;
+  }
+
+  // ── Capture Stock Methods ──
+
+  openCaptureDialog(): void {
+    this.resetCaptureForm();
+    this.showCaptureDialog = true;
+  }
+
+  closeCaptureDialog(): void {
+    this.showCaptureDialog = false;
+    this.captureError = '';
+    this.captureSuccess = false;
+  }
+
+  resetCaptureForm(): void {
+    this.captureForm = {
+      scent: '',
+      type: '',
+      batchCode: '',
+      uom: 'CASES',
+      scheduleDate: '',
+      quantity: 0,
+      quantityNote: ''
+    };
+    this.captureError = '';
+    this.captureSuccess = false;
+    this.captureSuccessMsg = '';
+    this.captureSaving = false;
+  }
+
+  isCaptureFormValid(): boolean {
+    return !!(
+      this.captureForm.scent &&
+      this.captureForm.type &&
+      this.captureForm.batchCode.trim() &&
+      this.captureForm.scheduleDate &&
+      this.captureForm.quantity > 0
+    );
+  }
+
+  submitStock(): void {
+    if (!this.isCaptureFormValid()) return;
+
+    this.captureSaving = true;
+    this.captureError = '';
+
+    const payload = {
+      scent: this.captureForm.scent,
+      type: this.captureForm.type,
+      batchCode: this.captureForm.batchCode.trim(),
+      uom: this.captureForm.uom || 'CASES',
+      scheduleDate: this.captureForm.scheduleDate,
+      quantity: this.captureForm.quantity,
+      quantityNote: this.captureForm.quantityNote?.trim() || null
+    };
+
+    this.http.post<{ success: boolean; message: string }>(`${environment.apiUrl}/condomproject/stock`, payload).subscribe({
+      next: (res) => {
+        this.captureSaving = false;
+        this.captureSuccess = true;
+        this.captureSuccessMsg = res.message || 'Stock entry created successfully';
+        // Refresh data
+        this.loadData();
+      },
+      error: (err) => {
+        this.captureSaving = false;
+        this.captureError = err.error?.error || err.error?.message || 'Failed to create stock entry. Please try again.';
+      }
+    });
   }
 
   // ── Filter ──
