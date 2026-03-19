@@ -661,6 +661,36 @@ interface Company {
                     }
                   </button>
                 }
+
+                @if (analyzingDocument) {
+                  <div class="analyzer-progress">
+                    <div class="analyzer-progress-header">
+                      <mat-icon class="analyzer-pulse-icon">auto_awesome</mat-icon>
+                      <span class="analyzer-progress-title">Welly is analyzing your document...</span>
+                      <span class="analyzer-progress-timer">{{ analyzerElapsedTime }}</span>
+                    </div>
+                    <div class="analyzer-progress-track">
+                      <div class="analyzer-progress-fill" [style.width.%]="analyzerProgressPercent"></div>
+                    </div>
+                    <div class="analyzer-progress-steps">
+                      @for (step of analyzerProgressSteps; track step.label; let i = $index) {
+                        <div class="analyzer-step" [class.active]="i === analyzerCurrentStep" [class.done]="i < analyzerCurrentStep">
+                          <div class="analyzer-step-icon">
+                            @if (i < analyzerCurrentStep) {
+                              <mat-icon>check_circle</mat-icon>
+                            } @else if (i === analyzerCurrentStep) {
+                              <mat-spinner diameter="16"></mat-spinner>
+                            } @else {
+                              <mat-icon>radio_button_unchecked</mat-icon>
+                            }
+                          </div>
+                          <span>{{ step.label }}</span>
+                        </div>
+                      }
+                    </div>
+                    <p class="analyzer-progress-msg">{{ analyzerProgressMessage }}</p>
+                  </div>
+                }
               </div>
 
               <!-- Chat Section -->
@@ -1648,6 +1678,133 @@ interface Company {
       margin-right: 8px;
     }
 
+    /* ── Analyzer Progress Bar ── */
+    .analyzer-progress {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      border: 1px solid #e2e8f0;
+    }
+
+    .analyzer-progress-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .analyzer-pulse-icon {
+      color: #ffd700;
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
+      animation: analyzerPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes analyzerPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.15); }
+    }
+
+    .analyzer-progress-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      flex: 1;
+    }
+
+    .analyzer-progress-timer {
+      font-family: 'SF Mono', 'Cascadia Code', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #64748b;
+      background: #f1f5f9;
+      padding: 3px 10px;
+      border-radius: 8px;
+    }
+
+    .analyzer-progress-track {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .analyzer-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
+      border-radius: 4px;
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+
+    .analyzer-progress-fill::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      animation: analyzerShimmer 1.5s infinite;
+    }
+
+    @keyframes analyzerShimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .analyzer-progress-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .analyzer-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #94a3b8;
+      transition: all 0.3s;
+    }
+
+    .analyzer-step.active {
+      color: #6366f1;
+      font-weight: 600;
+    }
+
+    .analyzer-step.done {
+      color: #22c55e;
+    }
+
+    .analyzer-step-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .analyzer-step-icon mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .analyzer-step.done .analyzer-step-icon mat-icon { color: #22c55e; }
+    .analyzer-step:not(.done):not(.active) .analyzer-step-icon mat-icon { color: #cbd5e1; }
+
+    .analyzer-progress-msg {
+      text-align: center;
+      color: #64748b;
+      font-size: 13px;
+      margin: 8px 0 0;
+      font-style: italic;
+    }
+
     /* Chat Section */
     .chat-section {
       background: white;
@@ -2126,6 +2283,21 @@ export class TendersComponent implements OnInit, OnDestroy {
   aiThinking = false;
   analyzerQuestion = '';
 
+  // Analyzer progress tracking
+  analyzerProgressPercent = 0;
+  analyzerCurrentStep = 0;
+  analyzerElapsedTime = '0:00';
+  analyzerProgressMessage = 'Uploading document...';
+  analyzerProgressSteps = [
+    { label: 'Uploading document to server' },
+    { label: 'Extracting text from PDF' },
+    { label: 'Analyzing content with AI' },
+    { label: 'Generating summary' }
+  ];
+  private analyzerTimerInterval: any = null;
+  private analyzerProgressTimeouts: any[] = [];
+  private analyzerStartTime = 0;
+
   // Tender Reminders
   reminders: TenderReminder[] = [];
   showReminderDialog = false;
@@ -2552,6 +2724,7 @@ export class TendersComponent implements OnInit, OnDestroy {
     if (!this.analyzerDocument) return;
 
     this.analyzingDocument = true;
+    this.startAnalyzerProgress();
     console.log('Starting document analysis...', this.analyzerDocument.name, this.analyzerDocument.size);
     
     // Create FormData and send to AI service
@@ -2563,6 +2736,9 @@ export class TendersComponent implements OnInit, OnDestroy {
     this.http.post<{ response: string }>('/api/aichat/analyze-document', formData).subscribe({
       next: (result) => {
         console.log('Analysis complete:', result);
+        this.stopAnalyzerProgress();
+        this.analyzerProgressPercent = 100;
+        this.analyzerCurrentStep = this.analyzerProgressSteps.length;
         this.analyzingDocument = false;
         this.documentAnalyzed = true;
         this.analyzerMessages = [{
@@ -2574,10 +2750,65 @@ export class TendersComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Analysis error:', err);
+        this.stopAnalyzerProgress();
         this.analyzingDocument = false;
         this.snackBar.open('Error analyzing document: ' + (err.error?.error || err.message || 'Unknown error'), 'Close', { duration: 5000 });
       }
     });
+  }
+
+  private startAnalyzerProgress(): void {
+    this.analyzerStartTime = Date.now();
+    this.analyzerProgressPercent = 0;
+    this.analyzerCurrentStep = 0;
+    this.analyzerElapsedTime = '0:00';
+    this.analyzerProgressMessage = 'Uploading document...';
+
+    this.analyzerTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - this.analyzerStartTime) / 1000);
+      const min = Math.floor(elapsed / 60);
+      const sec = elapsed % 60;
+      this.analyzerElapsedTime = `${min}:${sec.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    const stepTimings = [
+      { delay: 0, step: 0, percent: 5, msg: 'Uploading document to server...' },
+      { delay: 3000, step: 0, percent: 12, msg: 'Uploading document to server...' },
+      { delay: 6000, step: 1, percent: 20, msg: 'Extracting text from your PDF...' },
+      { delay: 12000, step: 1, percent: 28, msg: 'Text extraction in progress...' },
+      { delay: 18000, step: 2, percent: 35, msg: 'Welly is reading the document...' },
+      { delay: 30000, step: 2, percent: 42, msg: 'Analyzing requirements and dates...' },
+      { delay: 50000, step: 2, percent: 50, msg: 'Reviewing compliance requirements...' },
+      { delay: 75000, step: 2, percent: 58, msg: 'Evaluating pricing and criteria...' },
+      { delay: 100000, step: 2, percent: 65, msg: 'Still thinking — complex document...' },
+      { delay: 130000, step: 2, percent: 72, msg: 'Welly is thorough — almost done with analysis...' },
+      { delay: 160000, step: 3, percent: 80, msg: 'Generating summary and insights...' },
+      { delay: 200000, step: 3, percent: 85, msg: 'Polishing the final report...' },
+      { delay: 240000, step: 3, percent: 88, msg: 'Wrapping up — just a moment...' },
+      { delay: 280000, step: 3, percent: 91, msg: 'Finalizing analysis...' },
+      { delay: 320000, step: 3, percent: 93, msg: 'Almost there...' },
+    ];
+
+    this.analyzerProgressTimeouts = stepTimings.map(t =>
+      setTimeout(() => {
+        if (this.analyzingDocument) {
+          this.analyzerProgressPercent = t.percent;
+          this.analyzerCurrentStep = t.step;
+          this.analyzerProgressMessage = t.msg;
+        }
+      }, t.delay)
+    );
+  }
+
+  private stopAnalyzerProgress(): void {
+    if (this.analyzerTimerInterval) {
+      clearInterval(this.analyzerTimerInterval);
+      this.analyzerTimerInterval = null;
+    }
+    if (this.analyzerProgressTimeouts) {
+      this.analyzerProgressTimeouts.forEach(t => clearTimeout(t));
+      this.analyzerProgressTimeouts = [];
+    }
   }
 
   sendAnalyzerQuestion(): void {

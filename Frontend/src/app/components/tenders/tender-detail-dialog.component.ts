@@ -585,8 +585,33 @@ interface DialogData {
             <div class="welly-panel-body">
               @if (wellyLoading) {
                 <div class="welly-loading">
-                  <mat-spinner diameter="36"></mat-spinner>
-                  <p>{{ wellyLoadingMessage }}</p>
+                  <div class="progress-container">
+                    <div class="progress-header">
+                      <mat-icon class="progress-icon pulse-icon">auto_awesome</mat-icon>
+                      <span class="progress-title">Welly is analyzing...</span>
+                      <span class="progress-timer">{{ wellyElapsedTime }}</span>
+                    </div>
+                    <div class="progress-bar-track">
+                      <div class="progress-bar-fill" [style.width.%]="wellyProgressPercent"></div>
+                    </div>
+                    <div class="progress-steps">
+                      @for (step of wellyProgressSteps; track step.label; let i = $index) {
+                        <div class="progress-step" [class.active]="i === wellyCurrentStep" [class.done]="i < wellyCurrentStep">
+                          <div class="step-icon">
+                            @if (i < wellyCurrentStep) {
+                              <mat-icon>check_circle</mat-icon>
+                            } @else if (i === wellyCurrentStep) {
+                              <mat-spinner diameter="18"></mat-spinner>
+                            } @else {
+                              <mat-icon>radio_button_unchecked</mat-icon>
+                            }
+                          </div>
+                          <span class="step-label">{{ step.label }}</span>
+                        </div>
+                      }
+                    </div>
+                    <p class="progress-message">{{ wellyLoadingMessage }}</p>
+                  </div>
                 </div>
               } @else if (wellyResult) {
                 <div class="welly-result">
@@ -1129,6 +1154,137 @@ interface DialogData {
       font-size: 14px;
     }
 
+    .progress-container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .progress-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .progress-icon {
+      color: #ffd700;
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
+    }
+
+    .pulse-icon {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.15); }
+    }
+
+    .progress-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      flex: 1;
+    }
+
+    .progress-timer {
+      font-family: 'SF Mono', 'Cascadia Code', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #64748b;
+      background: #f1f5f9;
+      padding: 3px 10px;
+      border-radius: 8px;
+    }
+
+    .progress-bar-track {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
+      border-radius: 4px;
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+
+    .progress-bar-fill::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .progress-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 8px 0;
+    }
+
+    .progress-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #94a3b8;
+      transition: all 0.3s;
+    }
+
+    .progress-step.active {
+      color: #6366f1;
+      font-weight: 600;
+    }
+
+    .progress-step.done {
+      color: #22c55e;
+    }
+
+    .step-icon {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-icon mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .progress-step.done .step-icon mat-icon {
+      color: #22c55e;
+    }
+
+    .progress-step:not(.done):not(.active) .step-icon mat-icon {
+      color: #cbd5e1;
+    }
+
+    .progress-message {
+      text-align: center;
+      color: #64748b;
+      font-size: 13px;
+      margin: 4px 0 0;
+      font-style: italic;
+    }
+
     .welly-result-text {
       background: #f8f9fa;
       border: 1px solid #e0e0e0;
@@ -1562,6 +1718,20 @@ export class TenderDetailDialogComponent {
   wellyAnalysisInfo: { icon: string; label: string } | null = null;
   wellyExtractedItems: { lineNumber: number; itemCode: string; description: string; unit: string; quantity: number; unitCost: number; unitPrice: number; marginPercent: number }[] = [];
 
+  // Progress tracking
+  wellyProgressPercent = 0;
+  wellyCurrentStep = 0;
+  wellyElapsedTime = '0:00';
+  wellyProgressSteps = [
+    { label: 'Reading tender details & documents' },
+    { label: 'Extracting text from files' },
+    { label: 'Analyzing content with AI' },
+    { label: 'Generating insights' }
+  ];
+  private wellyTimerInterval: any = null;
+  private wellyProgressInterval: any = null;
+  private wellyStartTime = 0;
+
   wellyDocumentAnalyze(analysisType: 'analyze' | 'pricing-review' | 'extract-boq'): void {
     if (!this.data.tender) return;
     this.showWellyPanel = true;
@@ -1580,6 +1750,9 @@ export class TenderDetailDialogComponent {
     this.wellyAnalysisInfo = { icon: info.icon, label: info.label };
     this.wellyLoadingMessage = info.loadMsg;
 
+    // Start progress tracking
+    this.startWellyProgress();
+
     this.http.post<{ result: string; analysisType: string; documentsAnalyzed: number; boqItemCount: number }>(
       `${environment.apiUrl}/aichat/tender-document-analyze`, {
         tenderId: this.data.tender.id,
@@ -1587,6 +1760,9 @@ export class TenderDetailDialogComponent {
       }
     ).subscribe({
       next: (res) => {
+        this.stopWellyProgress();
+        this.wellyProgressPercent = 100;
+        this.wellyCurrentStep = this.wellyProgressSteps.length;
         this.wellyResult = res.result;
         this.wellyDocsAnalyzed = res.documentsAnalyzed;
         this.wellyLoading = false;
@@ -1597,11 +1773,78 @@ export class TenderDetailDialogComponent {
         }
       },
       error: () => {
+        this.stopWellyProgress();
         this.snackBar.open('Welly could not analyze tender documents. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
         this.showWellyPanel = false;
       }
     });
+  }
+
+  private startWellyProgress(): void {
+    this.wellyStartTime = Date.now();
+    this.wellyProgressPercent = 0;
+    this.wellyCurrentStep = 0;
+    this.wellyElapsedTime = '0:00';
+
+    // Update elapsed time every second
+    this.wellyTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - this.wellyStartTime) / 1000);
+      const min = Math.floor(elapsed / 60);
+      const sec = elapsed % 60;
+      this.wellyElapsedTime = `${min}:${sec.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    // Simulate progress steps (AI takes ~2-5 min on CPU)
+    // Step 0: Reading tender (0-15%) — fast, ~5s
+    // Step 1: Extracting text (15-30%) — moderate, ~10s
+    // Step 2: AI analyzing (30-85%) — slow, bulk of time
+    // Step 3: Generating insights (85-95%) — tail end
+    const stepTimings = [
+      { delay: 0, step: 0, percent: 5 },
+      { delay: 3000, step: 0, percent: 12 },
+      { delay: 6000, step: 1, percent: 20 },
+      { delay: 12000, step: 1, percent: 28 },
+      { delay: 18000, step: 2, percent: 35 },
+      { delay: 30000, step: 2, percent: 42 },
+      { delay: 50000, step: 2, percent: 50 },
+      { delay: 75000, step: 2, percent: 58 },
+      { delay: 100000, step: 2, percent: 65 },
+      { delay: 130000, step: 2, percent: 72 },
+      { delay: 160000, step: 3, percent: 80 },
+      { delay: 200000, step: 3, percent: 85 },
+      { delay: 240000, step: 3, percent: 88 },
+      { delay: 280000, step: 3, percent: 91 },
+      { delay: 320000, step: 3, percent: 93 },
+    ];
+
+    const loadingMessages = [
+      'Loading tender metadata and documents...',
+      'Extracting text from uploaded files...',
+      'Welly is thinking deeply about your tender...',
+      'Almost there — generating final insights...'
+    ];
+
+    this.wellyProgressInterval = stepTimings.map(t =>
+      setTimeout(() => {
+        if (this.wellyLoading) {
+          this.wellyProgressPercent = t.percent;
+          this.wellyCurrentStep = t.step;
+          this.wellyLoadingMessage = loadingMessages[t.step];
+        }
+      }, t.delay)
+    );
+  }
+
+  private stopWellyProgress(): void {
+    if (this.wellyTimerInterval) {
+      clearInterval(this.wellyTimerInterval);
+      this.wellyTimerInterval = null;
+    }
+    if (this.wellyProgressInterval) {
+      this.wellyProgressInterval.forEach((t: any) => clearTimeout(t));
+      this.wellyProgressInterval = null;
+    }
   }
 
   parseExtractedBOQItems(result: string): void {
