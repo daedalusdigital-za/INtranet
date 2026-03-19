@@ -52,6 +52,7 @@ export interface HBA1CProvinceDistribution {
   ordered: number;
   delivered: number;
   percentage: number;
+  orderValue: number;
 }
 
 export interface HBA1CItemBreakdown {
@@ -62,9 +63,13 @@ export interface HBA1CItemBreakdown {
 
 export interface HBA1CEquipmentDistribution {
   equipmentType: string;
+  category: string | null;
   totalOrdered: number;
   totalDelivered: number;
+  pendingDelivery: number;
   deliveryRate: number;
+  totalOrderValue: number;
+  deliveredValue: number;
   provinceDistribution: HBA1CProvinceDistribution[] | null;
   itemBreakdown: HBA1CItemBreakdown[] | null;
 }
@@ -237,6 +242,11 @@ export interface HBA1CProjectDashboard {
   nationalTotals: HBA1CNationalTotals | null;
   provinceStats: HBA1CProvinceBreakdown[] | null;
   equipmentStats: HBA1CEquipmentDistribution[] | null;
+  equipmentTypesCount: number;
+  totalItemsOrdered: number;
+  totalItemsDelivered: number;
+  overallDeliveryRate: number;
+  totalEquipmentOrderValue: number;
   salesStats: HBA1CSalesStats | null;
   recentSales: HBA1CSale[] | null;
   provincialData: HBA1CProvincialSalesData[] | null;

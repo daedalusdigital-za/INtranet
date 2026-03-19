@@ -89,6 +89,7 @@ namespace ProjectTracker.API.DTOs.HBA1C
         public int Ordered { get; set; }
         public int Delivered { get; set; }
         public double Percentage { get; set; }
+        public decimal OrderValue { get; set; }
     }
 
     public class HBA1CItemBreakdown
@@ -101,9 +102,13 @@ namespace ProjectTracker.API.DTOs.HBA1C
     public class HBA1CEquipmentDistribution
     {
         public string? EquipmentType { get; set; }
+        public string? Category { get; set; }
         public int TotalOrdered { get; set; }
         public int TotalDelivered { get; set; }
+        public int PendingDelivery { get; set; }
         public double DeliveryRate { get; set; }
+        public decimal TotalOrderValue { get; set; }
+        public decimal DeliveredValue { get; set; }
         public List<HBA1CProvinceDistribution>? ProvinceDistribution { get; set; }
         public List<HBA1CItemBreakdown>? ItemBreakdown { get; set; }
     }
@@ -111,6 +116,19 @@ namespace ProjectTracker.API.DTOs.HBA1C
     public class HBA1CEquipmentStatsWrapper
     {
         public List<HBA1CEquipmentDistribution>? Distributions { get; set; }
+    }
+
+    // ============================================================================
+    // Delivery - All Equipment Order Stats (richer endpoint)
+    // ============================================================================
+    public class HBA1CAllEquipmentOrderStats
+    {
+        public int TotalEquipmentTypes { get; set; }
+        public int TotalItemsOrdered { get; set; }
+        public int TotalItemsDelivered { get; set; }
+        public double OverallDeliveryRate { get; set; }
+        public decimal TotalOrderValue { get; set; }
+        public List<HBA1CEquipmentDistribution>? EquipmentBreakdown { get; set; }
     }
 
     // ============================================================================
@@ -327,6 +345,11 @@ namespace ProjectTracker.API.DTOs.HBA1C
         public HBA1CNationalTotals? NationalTotals { get; set; }
         public List<HBA1CProvinceBreakdown>? ProvinceStats { get; set; }
         public List<HBA1CEquipmentDistribution>? EquipmentStats { get; set; }
+        public int EquipmentTypesCount { get; set; }
+        public int TotalItemsOrdered { get; set; }
+        public int TotalItemsDelivered { get; set; }
+        public double OverallDeliveryRate { get; set; }
+        public decimal TotalEquipmentOrderValue { get; set; }
         public HBA1CSalesStats? SalesStats { get; set; }
         public List<HBA1CSale>? RecentSales { get; set; }
         public List<HBA1CProvincialSalesData>? ProvincialData { get; set; }

@@ -45,7 +45,8 @@ namespace ProjectTracker.API.Controllers.HBA1C
             var trainingStatsTask = _api.GetAsync<HBA1CTrainingStats>("api/Dashboard/GetTrainingStats");
             var nationalTotalsTask = _api.GetAsync<HBA1CNationalTotals>("api/Dashboard/GetNationalTotals");
             var provinceStatsTask = _api.GetAsync<HBA1CProvinceStatsWrapper>("api/Dashboard/GetProvinceStats");
-            var equipmentStatsTask = _api.GetAsync<HBA1CEquipmentStatsWrapper>("api/Dashboard/GetEquipmentStats");
+            var equipmentOrderStatsTask = _api.GetAsync<HBA1CAllEquipmentOrderStats>("api/Delivery/GetAllEquipmentOrderStats");
+            var equipmentStatsFallbackTask = _api.GetAsync<HBA1CEquipmentStatsWrapper>("api/Dashboard/GetEquipmentStats");
             var salesStatsTask = _api.GetAsync<HBA1CSalesStats>("api/Sales/GetDashboardStats");
             var recentSalesTask = _api.GetAsync<List<HBA1CSale>>("api/Sales/GetRecentSales", new() { { "limit", "10" } });
             var provincialDataTask = _api.GetAsync<List<HBA1CProvincialSalesData>>("api/Sales/GetProvincialData");
@@ -56,7 +57,8 @@ namespace ProjectTracker.API.Controllers.HBA1C
 
             await Task.WhenAll(
                 trainingStatsTask, nationalTotalsTask, provinceStatsTask,
-                equipmentStatsTask, salesStatsTask, recentSalesTask,
+                equipmentOrderStatsTask, equipmentStatsFallbackTask,
+                salesStatsTask, recentSalesTask,
                 provincialDataTask, topProductsTask, inventoryStatsTask,
                 lowStockTask, recentTrainingsTask
             );
@@ -117,12 +119,73 @@ namespace ProjectTracker.API.Controllers.HBA1C
                 computedProvinceStats = apiProvinceStats ?? new List<HBA1CProvinceBreakdown>();
             }
 
+            // ── Equipment: prefer richer Delivery endpoint, fall back to Dashboard ──
+            var equipmentOrderStats = await equipmentOrderStatsTask;
+            List<HBA1CEquipmentDistribution>? equipmentList = null;
+            int equipmentTypesCount = 0;
+            int totalItemsOrdered = 0;
+            int totalItemsDelivered = 0;
+            double overallDeliveryRate = 0;
+            decimal totalEquipmentOrderValue = 0;
+
+            if (equipmentOrderStats?.EquipmentBreakdown != null && equipmentOrderStats.EquipmentBreakdown.Count > 0)
+            {
+                // New endpoint succeeded — use its richer data
+                equipmentList = equipmentOrderStats.EquipmentBreakdown;
+                equipmentTypesCount = equipmentOrderStats.TotalEquipmentTypes;
+                totalItemsOrdered = equipmentOrderStats.TotalItemsOrdered;
+                totalItemsDelivered = equipmentOrderStats.TotalItemsDelivered;
+                overallDeliveryRate = equipmentOrderStats.OverallDeliveryRate;
+                totalEquipmentOrderValue = equipmentOrderStats.TotalOrderValue;
+                _logger.LogInformation("Using Delivery/GetAllEquipmentOrderStats: {Types} types, {Ordered} ordered",
+                    equipmentTypesCount, totalItemsOrdered);
+            }
+            else
+            {
+                // Fallback to old Dashboard endpoint and compute summary
+                var fallbackWrapper = await equipmentStatsFallbackTask;
+                equipmentList = fallbackWrapper?.Distributions;
+                if (equipmentList != null && equipmentList.Count > 0)
+                {
+                    equipmentTypesCount = equipmentList.Count;
+                    totalItemsOrdered = equipmentList.Sum(e => e.TotalOrdered > 0 ? e.TotalOrdered
+                        : (e.ItemBreakdown?.Sum(ib => ib.Quantity) ?? 0));
+                    totalItemsDelivered = equipmentList.Sum(e => e.TotalDelivered);
+                    overallDeliveryRate = totalItemsOrdered > 0
+                        ? Math.Round((double)totalItemsDelivered / totalItemsOrdered * 100, 1)
+                        : 0;
+                    totalEquipmentOrderValue = equipmentList.Sum(e => e.TotalOrderValue > 0 ? e.TotalOrderValue
+                        : (e.ItemBreakdown?.Sum(ib => ib.Value) ?? 0));
+
+                    // Enrich each distribution with computed fields if missing
+                    foreach (var eq in equipmentList)
+                    {
+                        if (eq.TotalOrdered == 0 && eq.ItemBreakdown != null)
+                            eq.TotalOrdered = eq.ItemBreakdown.Sum(ib => ib.Quantity);
+                        if (eq.PendingDelivery == 0 && eq.TotalOrdered > 0)
+                            eq.PendingDelivery = eq.TotalOrdered - eq.TotalDelivered;
+                        if (eq.DeliveryRate == 0 && eq.TotalOrdered > 0)
+                            eq.DeliveryRate = Math.Round((double)eq.TotalDelivered / eq.TotalOrdered * 100, 1);
+                        if (eq.TotalOrderValue == 0 && eq.ItemBreakdown != null)
+                            eq.TotalOrderValue = eq.ItemBreakdown.Sum(ib => ib.Value);
+                        if (string.IsNullOrEmpty(eq.Category))
+                            eq.Category = eq.EquipmentType;
+                    }
+                }
+                _logger.LogInformation("Fallback to Dashboard/GetEquipmentStats: {Types} types", equipmentTypesCount);
+            }
+
             var dashboard = new HBA1CProjectDashboard
             {
                 TrainingStats = trainingStats,
                 NationalTotals = nationalTotals,
                 ProvinceStats = computedProvinceStats,
-                EquipmentStats = (await equipmentStatsTask)?.Distributions,
+                EquipmentStats = equipmentList,
+                EquipmentTypesCount = equipmentTypesCount,
+                TotalItemsOrdered = totalItemsOrdered,
+                TotalItemsDelivered = totalItemsDelivered,
+                OverallDeliveryRate = overallDeliveryRate,
+                TotalEquipmentOrderValue = totalEquipmentOrderValue,
                 SalesStats = await salesStatsTask,
                 RecentSales = await recentSalesTask,
                 ProvincialData = await provincialDataTask,

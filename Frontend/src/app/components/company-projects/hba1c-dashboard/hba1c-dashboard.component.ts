@@ -533,6 +533,35 @@ import {
                     </div>
                   </div>
                 </div>
+
+                <!-- Equipment Summary KPIs -->
+                @if (dashboard?.equipmentStats?.length) {
+                  <div class="equip-summary-strip">
+                    <div class="ess-item">
+                      <span class="ess-value">{{ dashboard!.equipmentTypesCount || dashboard!.equipmentStats!.length }}</span>
+                      <span class="ess-label">Equipment Types</span>
+                    </div>
+                    <div class="ess-item">
+                      <span class="ess-value">{{ (dashboard!.totalItemsOrdered || 0) | number }}</span>
+                      <span class="ess-label">Total Ordered</span>
+                    </div>
+                    <div class="ess-item">
+                      <span class="ess-value">{{ (dashboard!.totalItemsDelivered || 0) | number }}</span>
+                      <span class="ess-label">Total Delivered</span>
+                    </div>
+                    <div class="ess-item">
+                      <span class="ess-value" [class.good]="(dashboard!.overallDeliveryRate || 0) >= 80" [class.mid]="(dashboard!.overallDeliveryRate || 0) >= 50 && (dashboard!.overallDeliveryRate || 0) < 80" [class.low]="(dashboard!.overallDeliveryRate || 0) < 50">
+                        {{ (dashboard!.overallDeliveryRate || 0) | number:'1.1-1' }}%
+                      </span>
+                      <span class="ess-label">Delivery Rate</span>
+                    </div>
+                    <div class="ess-item">
+                      <span class="ess-value">R{{ (dashboard!.totalEquipmentOrderValue || 0) | number:'1.0-0' }}</span>
+                      <span class="ess-label">Order Value</span>
+                    </div>
+                  </div>
+                }
+
                 <div class="equip-list">
                   @for (eq of dashboard?.equipmentStats || []; track eq.equipmentType) {
                     <div class="equip-block">
@@ -540,7 +569,12 @@ import {
                       <div class="equip-top-row" (click)="toggleEquipment(eq.equipmentType)">
                         <div class="equip-type-badge">
                           <mat-icon>precision_manufacturing</mat-icon>
-                          <span class="equip-type-name">{{ eq.equipmentType }}</span>
+                          <div class="equip-type-info">
+                            <span class="equip-type-name">{{ eq.equipmentType }}</span>
+                            @if (eq.category && eq.category !== eq.equipmentType) {
+                              <span class="equip-category-tag">{{ eq.category }}</span>
+                            }
+                          </div>
                         </div>
                         <div class="equip-summary-chips">
                           <span class="eq-chip ordered-chip">
@@ -551,6 +585,12 @@ import {
                             <mat-icon>check_circle</mat-icon>
                             {{ eq.totalDelivered | number }} delivered
                           </span>
+                          @if (eq.pendingDelivery > 0) {
+                            <span class="eq-chip pending-chip">
+                              <mat-icon>pending_actions</mat-icon>
+                              {{ eq.pendingDelivery | number }} pending
+                            </span>
+                          }
                           <span class="eq-chip rate-chip" [class.good]="getEquipRate(eq) >= 80" [class.mid]="getEquipRate(eq) >= 50 && getEquipRate(eq) < 80" [class.low]="getEquipRate(eq) < 50">
                             {{ getEquipRate(eq) | number:'1.1-1' }}%
                           </span>
@@ -564,6 +604,18 @@ import {
                           <div class="erb-fill" [class.good]="getEquipRate(eq) >= 80" [class.mid]="getEquipRate(eq) >= 50 && getEquipRate(eq) < 80" [class.low]="getEquipRate(eq) < 50" [style.width.%]="getEquipRate(eq)"></div>
                         </div>
                       </div>
+
+                      <!-- Order Value Row -->
+                      @if (eq.totalOrderValue > 0 || eq.deliveredValue > 0) {
+                        <div class="equip-value-row">
+                          @if (eq.totalOrderValue > 0) {
+                            <span class="evr-item"><mat-icon>receipt_long</mat-icon> Order Value: <strong>R{{ eq.totalOrderValue | number:'1.0-0' }}</strong></span>
+                          }
+                          @if (eq.deliveredValue > 0) {
+                            <span class="evr-item"><mat-icon>paid</mat-icon> Delivered Value: <strong>R{{ eq.deliveredValue | number:'1.0-0' }}</strong></span>
+                          }
+                        </div>
+                      }
 
                       <!-- Expandable Detail -->
                       @if (expandedEquipment === eq.equipmentType) {
@@ -604,6 +656,7 @@ import {
                                       <th>Province</th>
                                       <th class="right">Ordered</th>
                                       <th class="right">Delivered</th>
+                                      <th class="right">Value</th>
                                       <th class="right">Rate</th>
                                     </tr>
                                   </thead>
@@ -613,6 +666,7 @@ import {
                                         <td class="primary-cell">{{ pd.province }}</td>
                                         <td class="right mono-text">{{ pd.ordered | number }}</td>
                                         <td class="right mono-text">{{ pd.delivered | number }}</td>
+                                        <td class="right mono-text">{{ pd.orderValue > 0 ? 'R' + (pd.orderValue | number:'1.0-0') : '—' }}</td>
                                         <td class="right">
                                           <span class="rate-pill" [class.good]="pd.percentage >= 80" [class.mid]="pd.percentage >= 50 && pd.percentage < 80" [class.low]="pd.percentage < 50">
                                             {{ pd.percentage | number:'1.1-1' }}%
@@ -1434,6 +1488,26 @@ import {
     }
     .equip-block:last-child { border-bottom: none; }
 
+    /* Equipment Summary Strip */
+    .equip-summary-strip {
+      display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+    .ess-item {
+      flex: 1; min-width: 120px; padding: 16px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      border-right: 1px solid var(--border); text-align: center;
+    }
+    .ess-item:last-child { border-right: none; }
+    .ess-value {
+      font-size: 20px; font-weight: 800; color: var(--text-primary);
+      font-family: 'SF Mono', 'Cascadia Code', monospace;
+    }
+    .ess-value.good { color: var(--green); }
+    .ess-value.mid { color: var(--orange); }
+    .ess-value.low { color: var(--red); }
+    .ess-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+
     .equip-top-row {
       display: flex; align-items: center; gap: 16px;
       padding: 18px 24px; cursor: pointer;
@@ -1447,8 +1521,15 @@ import {
     .equip-type-badge mat-icon {
       font-size: 20px; width: 20px; height: 20px; color: var(--purple);
     }
+    .equip-type-info { display: flex; flex-direction: column; gap: 2px; }
     .equip-type-name {
       font-size: 15px; font-weight: 700; color: var(--text-primary);
+    }
+    .equip-category-tag {
+      display: inline-block; font-size: 10px; font-weight: 600;
+      color: var(--purple); background: var(--purple-soft);
+      padding: 2px 8px; border-radius: 10px;
+      text-transform: uppercase; letter-spacing: 0.3px; width: fit-content;
     }
 
     .equip-summary-chips {
@@ -1462,6 +1543,7 @@ import {
     .eq-chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .ordered-chip { background: var(--blue-soft); color: var(--blue); }
     .delivered-chip { background: var(--green-soft); color: var(--green); }
+    .pending-chip { background: var(--orange-soft); color: var(--orange); }
     .rate-chip { font-weight: 800; }
     .rate-chip.good { background: var(--green-soft); color: var(--green); }
     .rate-chip.mid { background: var(--orange-soft); color: var(--orange); }
@@ -1483,6 +1565,20 @@ import {
     .erb-fill.good { background: linear-gradient(90deg, var(--green), #4ade80); }
     .erb-fill.mid { background: linear-gradient(90deg, var(--orange), #fbbf24); }
     .erb-fill.low { background: linear-gradient(90deg, var(--red), #f87171); }
+
+    /* Equipment Value Row */
+    .equip-value-row {
+      display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+      padding: 0 24px 14px;
+    }
+    .evr-item {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .evr-item mat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--teal); }
+    .evr-item strong {
+      color: var(--text-primary); font-family: 'SF Mono', 'Cascadia Code', monospace;
+    }
 
     .equip-detail {
       padding: 0 24px 24px;
@@ -1949,6 +2045,10 @@ import {
       .prov-sales-grid, .national-grid { grid-template-columns: 1fr; }
       .equip-top-row { flex-wrap: wrap; }
       .equip-type-badge { min-width: unset; }
+      .equip-summary-strip { gap: 0; }
+      .ess-item { min-width: 100px; padding: 12px 14px; }
+      .ess-value { font-size: 16px; }
+      .equip-value-row { padding: 0 18px 12px; gap: 14px; }
       .prov-metrics { grid-template-columns: repeat(2, 1fr); }
       .stat-bar { gap: 10px; }
       .stat-chip { min-width: 130px; padding: 12px 14px; }
