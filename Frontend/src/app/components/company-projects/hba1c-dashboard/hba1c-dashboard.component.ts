@@ -76,9 +76,38 @@ import {
     @if (loading) {
       <div class="loading-state">
         <div class="loading-card">
-          <mat-spinner diameter="44" strokeWidth="4"></mat-spinner>
+          <div class="lc-icon-wrap">
+            <mat-icon class="lc-icon pulse-icon">biotech</mat-icon>
+          </div>
           <h3>Connecting to HBA1C API</h3>
-          <p>Fetching live data from the medical management system...</p>
+          <p class="lc-subtitle">Fetching live data from the medical management system</p>
+
+          <!-- Progress bar -->
+          <div class="lc-progress-wrap">
+            <div class="lc-progress-track">
+              <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
+            </div>
+            <div class="lc-progress-info">
+              <span class="lc-progress-message">{{ loadingMessage }}</span>
+              <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
+            </div>
+          </div>
+
+          <!-- Step indicators -->
+          <div class="lc-steps">
+            @for (step of loadingSteps; track step.label; let i = $index) {
+              <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
+                <div class="lc-step-dot">
+                  @if (loadingStage > i) {
+                    <mat-icon>check</mat-icon>
+                  } @else {
+                    <mat-icon>{{ step.icon }}</mat-icon>
+                  }
+                </div>
+                <span class="lc-step-label">{{ step.label }}</span>
+              </div>
+            }
+          </div>
         </div>
       </div>
     } @else if (error) {
@@ -1285,10 +1314,90 @@ import {
     .loading-card, .error-card {
       background: var(--surface); border-radius: var(--radius-xl);
       padding: 48px 56px; text-align: center; box-shadow: var(--shadow-lg);
-      max-width: 440px; width: 100%;
+      max-width: 520px; width: 100%;
     }
-    .loading-card h3, .error-card h3 { color: var(--text-primary); margin: 20px 0 8px; font-size: 18px; }
+    .loading-card h3, .error-card h3 { color: var(--text-primary); margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
     .loading-card p, .error-card p { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+
+    /* Loading icon */
+    .lc-icon-wrap {
+      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
+      background: linear-gradient(135deg, var(--blue-soft), rgba(99, 102, 241, 0.12));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+    }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: var(--blue); }
+    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.08); }
+    }
+    .lc-subtitle { color: var(--text-tertiary) !important; font-size: 13px !important; }
+
+    /* Progress bar */
+    .lc-progress-wrap { margin: 8px 0 24px; }
+    .lc-progress-track {
+      height: 8px; border-radius: 4px; background: var(--bg-secondary);
+      overflow: hidden; position: relative;
+    }
+    .lc-progress-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, var(--blue), #818cf8, #6366f1);
+      background-size: 200% 100%;
+      animation: shimmer 2s ease-in-out infinite;
+      transition: width 0.15s ease-out;
+      position: relative;
+    }
+    .lc-progress-fill::after {
+      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
+      border-radius: 0 4px 4px 0;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .lc-progress-info {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 10px; font-size: 12px;
+    }
+    .lc-progress-message {
+      color: var(--text-secondary); font-weight: 500;
+      transition: opacity 0.3s ease;
+    }
+    .lc-progress-pct {
+      color: var(--blue); font-weight: 700; font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Step indicators */
+    .lc-steps {
+      display: flex; justify-content: space-between; gap: 4px;
+      padding-top: 4px; border-top: 1px solid var(--border-light);
+    }
+    .lc-step {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      flex: 1; padding-top: 16px; opacity: 0.35;
+      transition: opacity 0.4s ease, transform 0.3s ease;
+    }
+    .lc-step.active { opacity: 1; transform: translateY(-2px); }
+    .lc-step.done { opacity: 0.65; }
+    .lc-step-dot {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--bg-secondary); display: flex; align-items: center; justify-content: center;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--text-tertiary); transition: color 0.3s ease; }
+    .lc-step.active .lc-step-dot {
+      background: linear-gradient(135deg, var(--blue), #6366f1);
+      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+    }
+    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
+    .lc-step.done .lc-step-dot { background: var(--green-soft); }
+    .lc-step.done .lc-step-dot mat-icon { color: var(--green); }
+    .lc-step-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
+    .lc-step.active .lc-step-label { color: var(--blue); }
+    .lc-step.done .lc-step-label { color: var(--green); }
     .error-icon-wrap {
       width: 64px; height: 64px; border-radius: 50%; margin: 0 auto;
       background: var(--red-soft); display: flex; align-items: center; justify-content: center;
@@ -2060,6 +2169,18 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   dialogLoading = false;
   dialogTrainers: HBA1CTrainer[] = [];
 
+  // Loading progress state
+  loadingProgress = 0;
+  loadingStage = 0;
+  loadingMessage = 'Initializing connection...';
+  private progressInterval: any;
+  readonly loadingSteps = [
+    { icon: 'lock', label: 'Authenticating', detail: 'Securing API connection...' },
+    { icon: 'cloud_download', label: 'Fetching Data', detail: 'Retrieving training & sales records...' },
+    { icon: 'precision_manufacturing', label: 'Loading Equipment', detail: 'Processing inventory & orders...' },
+    { icon: 'dashboard', label: 'Building Dashboard', detail: 'Assembling analytics & KPIs...' }
+  ];
+
   // Equipment expand state
   expandedEquipment: string | null = null;
 
@@ -2072,33 +2193,81 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.stopLoadingProgress();
   }
 
   loadDashboard(): void {
     this.loading = true;
     this.error = null;
+    this.startLoadingProgress();
 
     this.hba1cService.getDashboard()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (data) => {
-          this.dashboard = data;
-          this.isConnected = true;
-          this.loading = false;
-          if (data.recentTrainings) {
-            this.trainingSessions = data.recentTrainings;
-          }
-          if (data.recentSales) {
-            this.salesList = data.recentSales;
-          }
+          this.finishLoadingProgress(() => {
+            this.dashboard = data;
+            this.isConnected = true;
+            this.loading = false;
+            if (data.recentTrainings) {
+              this.trainingSessions = data.recentTrainings;
+            }
+            if (data.recentSales) {
+              this.salesList = data.recentSales;
+            }
+          });
         },
         error: (err) => {
+          this.stopLoadingProgress();
           this.loading = false;
           this.isConnected = false;
           this.error = err.error?.message || err.message || 'Failed to connect to HBA1C API.';
           console.error('HBA1C Dashboard error:', err);
         }
       });
+  }
+
+  private startLoadingProgress(): void {
+    this.loadingProgress = 0;
+    this.loadingStage = 0;
+    this.loadingMessage = this.loadingSteps[0].detail;
+    let tick = 0;
+    this.progressInterval = setInterval(() => {
+      tick++;
+      // Slow down as we get higher — never exceeds 88% until real data arrives
+      const maxBeforeData = 88;
+      if (this.loadingProgress < maxBeforeData) {
+        const increment = Math.max(0.3, (maxBeforeData - this.loadingProgress) * 0.06);
+        this.loadingProgress = Math.min(maxBeforeData, this.loadingProgress + increment);
+      }
+      // Update stage based on progress
+      const newStage = this.loadingProgress < 20 ? 0 : this.loadingProgress < 45 ? 1 : this.loadingProgress < 70 ? 2 : 3;
+      if (newStage !== this.loadingStage) {
+        this.loadingStage = newStage;
+        this.loadingMessage = this.loadingSteps[newStage].detail;
+      }
+    }, 120);
+  }
+
+  private finishLoadingProgress(callback: () => void): void {
+    clearInterval(this.progressInterval);
+    this.loadingStage = 3;
+    this.loadingMessage = 'Almost there...';
+    // Animate quickly to 100%
+    const finish = setInterval(() => {
+      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
+      if (this.loadingProgress >= 100) {
+        clearInterval(finish);
+        this.loadingMessage = 'Complete!';
+        setTimeout(() => callback(), 300);
+      }
+    }, 30);
+  }
+
+  private stopLoadingProgress(): void {
+    clearInterval(this.progressInterval);
+    this.loadingProgress = 0;
+    this.loadingStage = 0;
   }
 
   onTabChange(index: number): void {
