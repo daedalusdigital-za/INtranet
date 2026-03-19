@@ -327,21 +327,17 @@ import {
                   </div>
                 </div>
                 @if (dashboard?.equipmentStats?.length) {
-                  <h4 class="dialog-section-title"><mat-icon>precision_manufacturing</mat-icon> Equipment Delivery Rates</h4>
+                  <h4 class="dialog-section-title"><mat-icon>precision_manufacturing</mat-icon> Equipment Order Summary</h4>
                   <div class="dialog-table-wrap">
                     <table class="dialog-table">
-                      <thead><tr><th>Equipment</th><th class="right">Ordered</th><th class="right">Delivered</th><th class="right">Rate</th></tr></thead>
+                      <thead><tr><th>Equipment</th><th class="right">Orders</th><th class="right">Qty</th><th class="right">Value</th></tr></thead>
                       <tbody>
                         @for (e of dashboard?.equipmentStats || []; track e.equipmentType) {
                           <tr>
                             <td class="primary-cell">{{ e.equipmentType }}</td>
                             <td class="right mono-text">{{ e.totalOrdered | number }}</td>
-                            <td class="right mono-text">{{ e.totalDelivered | number }}</td>
-                            <td class="right">
-                              <span class="rate-pill" [class.good]="e.deliveryRate >= 80" [class.mid]="e.deliveryRate >= 50 && e.deliveryRate < 80" [class.low]="e.deliveryRate < 50">
-                                {{ e.deliveryRate | number:'1.1-1' }}%
-                              </span>
-                            </td>
+                            <td class="right mono-text">{{ getItemBreakdownTotal(e, 'qty') | number }}</td>
+                            <td class="right mono-text">R{{ e.totalOrderValue | number:'1.0-0' }}</td>
                           </tr>
                         }
                       </tbody>
@@ -539,25 +535,15 @@ import {
                   <div class="equip-summary-strip">
                     <div class="ess-item">
                       <span class="ess-value">{{ dashboard!.equipmentTypesCount || dashboard!.equipmentStats!.length }}</span>
-                      <span class="ess-label">Equipment Types</span>
+                      <span class="ess-label">Products</span>
                     </div>
                     <div class="ess-item">
                       <span class="ess-value">{{ (dashboard!.totalItemsOrdered || 0) | number }}</span>
-                      <span class="ess-label">Total Ordered</span>
-                    </div>
-                    <div class="ess-item">
-                      <span class="ess-value">{{ (dashboard!.totalItemsDelivered || 0) | number }}</span>
-                      <span class="ess-label">Total Delivered</span>
-                    </div>
-                    <div class="ess-item">
-                      <span class="ess-value" [class.good]="(dashboard!.overallDeliveryRate || 0) >= 80" [class.mid]="(dashboard!.overallDeliveryRate || 0) >= 50 && (dashboard!.overallDeliveryRate || 0) < 80" [class.low]="(dashboard!.overallDeliveryRate || 0) < 50">
-                        {{ (dashboard!.overallDeliveryRate || 0) | number:'1.1-1' }}%
-                      </span>
-                      <span class="ess-label">Delivery Rate</span>
+                      <span class="ess-label">Total Orders</span>
                     </div>
                     <div class="ess-item">
                       <span class="ess-value">R{{ (dashboard!.totalEquipmentOrderValue || 0) | number:'1.0-0' }}</span>
-                      <span class="ess-label">Order Value</span>
+                      <span class="ess-label">Total Value</span>
                     </div>
                   </div>
                 }
@@ -579,41 +565,30 @@ import {
                         <div class="equip-summary-chips">
                           <span class="eq-chip ordered-chip">
                             <mat-icon>shopping_cart</mat-icon>
-                            {{ getEquipTotalOrdered(eq) | number }} ordered
+                            {{ eq.totalOrdered | number }} orders
                           </span>
-                          <span class="eq-chip delivered-chip">
-                            <mat-icon>check_circle</mat-icon>
-                            {{ eq.totalDelivered | number }} delivered
-                          </span>
-                          @if (eq.pendingDelivery > 0) {
-                            <span class="eq-chip pending-chip">
-                              <mat-icon>pending_actions</mat-icon>
-                              {{ eq.pendingDelivery | number }} pending
+                          @if (eq.totalOrderValue > 0) {
+                            <span class="eq-chip value-chip">
+                              <mat-icon>payments</mat-icon>
+                              R{{ eq.totalOrderValue | number:'1.0-0' }}
                             </span>
                           }
-                          <span class="eq-chip rate-chip" [class.good]="getEquipRate(eq) >= 80" [class.mid]="getEquipRate(eq) >= 50 && getEquipRate(eq) < 80" [class.low]="getEquipRate(eq) < 50">
-                            {{ getEquipRate(eq) | number:'1.1-1' }}%
-                          </span>
+                          @if (getItemBreakdownTotal(eq, 'qty') > 0) {
+                            <span class="eq-chip qty-chip">
+                              <mat-icon>inventory_2</mat-icon>
+                              {{ getItemBreakdownTotal(eq, 'qty') | number }} units
+                            </span>
+                          }
                         </div>
                         <mat-icon class="equip-expand-icon" [class.expanded]="expandedEquipment === eq.equipmentType">expand_more</mat-icon>
                       </div>
 
-                      <!-- Delivery Rate Bar -->
-                      <div class="equip-rate-bar">
-                        <div class="erb-track">
-                          <div class="erb-fill" [class.good]="getEquipRate(eq) >= 80" [class.mid]="getEquipRate(eq) >= 50 && getEquipRate(eq) < 80" [class.low]="getEquipRate(eq) < 50" [style.width.%]="getEquipRate(eq)"></div>
-                        </div>
-                      </div>
-
-                      <!-- Order Value Row -->
-                      @if (eq.totalOrderValue > 0 || eq.deliveredValue > 0) {
-                        <div class="equip-value-row">
-                          @if (eq.totalOrderValue > 0) {
-                            <span class="evr-item"><mat-icon>receipt_long</mat-icon> Order Value: <strong>R{{ eq.totalOrderValue | number:'1.0-0' }}</strong></span>
-                          }
-                          @if (eq.deliveredValue > 0) {
-                            <span class="evr-item"><mat-icon>paid</mat-icon> Delivered Value: <strong>R{{ eq.deliveredValue | number:'1.0-0' }}</strong></span>
-                          }
+                      <!-- Delivery Rate Bar (shown when delivery data exists) -->
+                      @if (eq.totalDelivered > 0 || getEquipRate(eq) > 0) {
+                        <div class="equip-rate-bar">
+                          <div class="erb-track">
+                            <div class="erb-fill" [class.good]="getEquipRate(eq) >= 80" [class.mid]="getEquipRate(eq) >= 50 && getEquipRate(eq) < 80" [class.low]="getEquipRate(eq) < 50" [style.width.%]="getEquipRate(eq)"></div>
+                          </div>
                         </div>
                       }
 
@@ -1544,6 +1519,8 @@ import {
     .ordered-chip { background: var(--blue-soft); color: var(--blue); }
     .delivered-chip { background: var(--green-soft); color: var(--green); }
     .pending-chip { background: var(--orange-soft); color: var(--orange); }
+    .value-chip { background: var(--teal-soft); color: var(--teal); font-family: 'SF Mono', 'Cascadia Code', monospace; }
+    .qty-chip { background: var(--purple-soft); color: var(--purple); }
     .rate-chip { font-weight: 800; }
     .rate-chip.good { background: var(--green-soft); color: var(--green); }
     .rate-chip.mid { background: var(--orange-soft); color: var(--orange); }

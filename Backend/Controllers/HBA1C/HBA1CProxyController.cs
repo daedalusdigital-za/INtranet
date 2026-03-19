@@ -46,9 +46,10 @@ namespace ProjectTracker.API.Controllers.HBA1C
             var nationalTotalsTask = _api.GetAsync<HBA1CNationalTotals>("api/Dashboard/GetNationalTotals");
             var provinceStatsTask = _api.GetAsync<HBA1CProvinceStatsWrapper>("api/Dashboard/GetProvinceStats");
             var equipmentOrderStatsTask = _api.GetAsync<HBA1CAllEquipmentOrderStats>("api/Delivery/GetAllEquipmentOrderStats");
-            var equipmentStatsFallbackTask = _api.GetAsync<HBA1CEquipmentStatsWrapper>("api/Dashboard/GetEquipmentStats");
             var salesStatsTask = _api.GetAsync<HBA1CSalesStats>("api/Sales/GetDashboardStats");
             var recentSalesTask = _api.GetAsync<List<HBA1CSale>>("api/Sales/GetRecentSales", new() { { "limit", "10" } });
+            var allSalesTask = _api.GetAsync<List<HBA1CSale>>("api/Sales/GetAll");
+            var allInventoryTask = _api.GetAsync<List<HBA1CInventoryItem>>("api/Inventory/GetAll");
             var provincialDataTask = _api.GetAsync<List<HBA1CProvincialSalesData>>("api/Sales/GetProvincialData");
             var topProductsTask = _api.GetAsync<List<HBA1CTopProduct>>("api/Sales/GetTopProducts", new() { { "limit", "10" } });
             var inventoryStatsTask = _api.GetAsync<HBA1CInventoryStats>("api/Inventory/GetStats");
@@ -57,8 +58,8 @@ namespace ProjectTracker.API.Controllers.HBA1C
 
             await Task.WhenAll(
                 trainingStatsTask, nationalTotalsTask, provinceStatsTask,
-                equipmentOrderStatsTask, equipmentStatsFallbackTask,
-                salesStatsTask, recentSalesTask,
+                equipmentOrderStatsTask,
+                salesStatsTask, recentSalesTask, allSalesTask, allInventoryTask,
                 provincialDataTask, topProductsTask, inventoryStatsTask,
                 lowStockTask, recentTrainingsTask
             );
@@ -119,7 +120,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
                 computedProvinceStats = apiProvinceStats ?? new List<HBA1CProvinceBreakdown>();
             }
 
-            // ── Equipment: prefer richer Delivery endpoint, fall back to Dashboard ──
+            // ── Equipment: compute from Sales × Inventory, or use Delivery endpoint if available ──
             var equipmentOrderStats = await equipmentOrderStatsTask;
             List<HBA1CEquipmentDistribution>? equipmentList = null;
             int equipmentTypesCount = 0;
@@ -130,49 +131,78 @@ namespace ProjectTracker.API.Controllers.HBA1C
 
             if (equipmentOrderStats?.EquipmentBreakdown != null && equipmentOrderStats.EquipmentBreakdown.Count > 0)
             {
-                // New endpoint succeeded — use its richer data
+                // Delivery endpoint succeeded — use its richer data
                 equipmentList = equipmentOrderStats.EquipmentBreakdown;
                 equipmentTypesCount = equipmentOrderStats.TotalEquipmentTypes;
                 totalItemsOrdered = equipmentOrderStats.TotalItemsOrdered;
                 totalItemsDelivered = equipmentOrderStats.TotalItemsDelivered;
                 overallDeliveryRate = equipmentOrderStats.OverallDeliveryRate;
                 totalEquipmentOrderValue = equipmentOrderStats.TotalOrderValue;
-                _logger.LogInformation("Using Delivery/GetAllEquipmentOrderStats: {Types} types, {Ordered} ordered",
-                    equipmentTypesCount, totalItemsOrdered);
+                _logger.LogInformation("Using Delivery/GetAllEquipmentOrderStats: {Types} types", equipmentTypesCount);
             }
             else
             {
-                // Fallback to old Dashboard endpoint and compute summary
-                var fallbackWrapper = await equipmentStatsFallbackTask;
-                equipmentList = fallbackWrapper?.Distributions;
-                if (equipmentList != null && equipmentList.Count > 0)
-                {
-                    equipmentTypesCount = equipmentList.Count;
-                    totalItemsOrdered = equipmentList.Sum(e => e.TotalOrdered > 0 ? e.TotalOrdered
-                        : (e.ItemBreakdown?.Sum(ib => ib.Quantity) ?? 0));
-                    totalItemsDelivered = equipmentList.Sum(e => e.TotalDelivered);
-                    overallDeliveryRate = totalItemsOrdered > 0
-                        ? Math.Round((double)totalItemsDelivered / totalItemsOrdered * 100, 1)
-                        : 0;
-                    totalEquipmentOrderValue = equipmentList.Sum(e => e.TotalOrderValue > 0 ? e.TotalOrderValue
-                        : (e.ItemBreakdown?.Sum(ib => ib.Value) ?? 0));
+                // Compute equipment stats from Sales × Inventory
+                var allSales = await allSalesTask ?? new List<HBA1CSale>();
+                var allInventory = await allInventoryTask ?? new List<HBA1CInventoryItem>();
+                var invMap = allInventory.ToDictionary(i => i.Id ?? 0, i => i);
 
-                    // Enrich each distribution with computed fields if missing
-                    foreach (var eq in equipmentList)
-                    {
-                        if (eq.TotalOrdered == 0 && eq.ItemBreakdown != null)
-                            eq.TotalOrdered = eq.ItemBreakdown.Sum(ib => ib.Quantity);
-                        if (eq.PendingDelivery == 0 && eq.TotalOrdered > 0)
-                            eq.PendingDelivery = eq.TotalOrdered - eq.TotalDelivered;
-                        if (eq.DeliveryRate == 0 && eq.TotalOrdered > 0)
-                            eq.DeliveryRate = Math.Round((double)eq.TotalDelivered / eq.TotalOrdered * 100, 1);
-                        if (eq.TotalOrderValue == 0 && eq.ItemBreakdown != null)
-                            eq.TotalOrderValue = eq.ItemBreakdown.Sum(ib => ib.Value);
-                        if (string.IsNullOrEmpty(eq.Category))
-                            eq.Category = eq.EquipmentType;
-                    }
+                // Flatten all sale items
+                var allSaleItems = allSales
+                    .Where(s => s.SaleItems != null)
+                    .SelectMany(s => s.SaleItems!)
+                    .ToList();
+
+                if (allSaleItems.Count > 0 && allInventory.Count > 0)
+                {
+                    equipmentList = allSaleItems
+                        .GroupBy(si => si.InventoryItemId)
+                        .Select(g =>
+                        {
+                            var invItem = invMap.GetValueOrDefault(g.Key);
+                            var orderCount = g.Count();
+                            var totalQty = g.Sum(si => si.Quantity);
+                            var totalValue = g.Sum(si => si.TotalPrice);
+
+                            return new HBA1CEquipmentDistribution
+                            {
+                                EquipmentType = invItem?.Name?.Trim() ?? $"Item #{g.Key}",
+                                Category = invItem?.CategoryText ?? "Unknown",
+                                TotalOrdered = orderCount,
+                                TotalDelivered = 0, // Delivery data unavailable
+                                PendingDelivery = orderCount,
+                                DeliveryRate = 0,
+                                TotalOrderValue = totalValue,
+                                DeliveredValue = 0,
+                                ProvinceDistribution = new List<HBA1CProvinceDistribution>(),
+                                ItemBreakdown = new List<HBA1CItemBreakdown>
+                                {
+                                    new()
+                                    {
+                                        ItemType = invItem?.Name?.Trim() ?? $"Item #{g.Key}",
+                                        Quantity = totalQty,
+                                        Value = totalValue
+                                    }
+                                }
+                            };
+                        })
+                        .OrderByDescending(e => e.TotalOrdered)
+                        .ToList();
+
+                    equipmentTypesCount = equipmentList.Count;
+                    totalItemsOrdered = equipmentList.Sum(e => e.TotalOrdered);
+                    totalItemsDelivered = 0;
+                    overallDeliveryRate = 0;
+                    totalEquipmentOrderValue = equipmentList.Sum(e => e.TotalOrderValue);
+
+                    _logger.LogInformation(
+                        "Computed equipment from Sales×Inventory: {Types} types, {Orders} orders, R{Value}",
+                        equipmentTypesCount, totalItemsOrdered, totalEquipmentOrderValue);
                 }
-                _logger.LogInformation("Fallback to Dashboard/GetEquipmentStats: {Types} types", equipmentTypesCount);
+                else
+                {
+                    _logger.LogWarning("No sales or inventory data to compute equipment stats");
+                }
             }
 
             var dashboard = new HBA1CProjectDashboard
