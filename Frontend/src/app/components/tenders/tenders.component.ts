@@ -271,16 +271,10 @@ interface Company {
                     <td mat-cell *matCellDef="let tender">{{ tender.province || '-' }}</td>
                   </ng-container>
 
-                  <!-- Value Column -->
-                  <ng-container matColumnDef="estimatedValue">
-                    <th mat-header-cell *matHeaderCellDef mat-sort-header>Est. Value</th>
-                    <td mat-cell *matCellDef="let tender">
-                      @if (tender.estimatedValue) {
-                        {{ tender.estimatedValue | currency:'ZAR':'symbol':'1.0-0' }}
-                      } @else {
-                        -
-                      }
-                    </td>
+                  <!-- Clerk Column -->
+                  <ng-container matColumnDef="clerk">
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>Clerk</th>
+                    <td mat-cell *matCellDef="let tender">{{ tender.contactPerson || '-' }}</td>
                   </ng-container>
 
                   <!-- Closing Date Column -->
@@ -301,26 +295,6 @@ interface Company {
                       <span class="status-chip" [style.background-color]="getStatusColor(tender.status)">
                         {{ tender.status }}
                       </span>
-                    </td>
-                  </ng-container>
-
-                  <!-- Workflow Column -->
-                  <ng-container matColumnDef="workflowStatus">
-                    <th mat-header-cell *matHeaderCellDef mat-sort-header>Workflow</th>
-                    <td mat-cell *matCellDef="let tender">
-                      <span class="workflow-badge" [class]="'workflow-' + tender.workflowStatus.toLowerCase().replace(' ', '-')">
-                        {{ tender.workflowStatus }}
-                      </span>
-                    </td>
-                  </ng-container>
-
-                  <!-- Priority Column -->
-                  <ng-container matColumnDef="priority">
-                    <th mat-header-cell *matHeaderCellDef mat-sort-header>Priority</th>
-                    <td mat-cell *matCellDef="let tender">
-                      <mat-icon [class]="'priority-' + tender.priority.toLowerCase()" [matTooltip]="tender.priority">
-                        {{ tender.priority === 'Critical' ? 'priority_high' : tender.priority === 'High' ? 'arrow_upward' : tender.priority === 'Medium' ? 'remove' : 'arrow_downward' }}
-                      </mat-icon>
                     </td>
                   </ng-container>
 
@@ -2233,7 +2207,7 @@ export class TendersComponent implements OnInit, OnDestroy {
   selectedDepartment = '';
 
   // Display columns
-  displayedColumns = ['companyCode', 'tenderNumber', 'title', 'province', 'estimatedValue', 'closingDate', 'status', 'workflowStatus', 'priority', 'actions'];
+  displayedColumns = ['companyCode', 'tenderNumber', 'title', 'province', 'clerk', 'closingDate', 'status', 'actions'];
 
   // Reference data
   companies: Company[] = [
@@ -2332,6 +2306,10 @@ export class TendersComponent implements OnInit, OnDestroy {
   ngAfterViewInit(): void {
     this.tendersDataSource.paginator = this.paginator;
     this.tendersDataSource.sort = this.sort;
+    this.tendersDataSource.sortingDataAccessor = (item: Tender, property: string) => {
+      if (property === 'clerk') return item.contactPerson || '';
+      return (item as any)[property];
+    };
   }
 
   ngOnDestroy(): void {
