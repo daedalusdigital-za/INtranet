@@ -51,7 +51,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
             var trainingStats = await trainingStatsTask ?? new HBA1CTrainingStats();
             var nationalTotals = await nationalTotalsTask ?? new HBA1CNationalTotals();
 
-            // The external API returns totalParticipants=0 in stats — compute from actual sessions
+            // The external API returns incorrect aggregate stats — compute from actual session data
             if (trainingStats.TotalParticipants == 0 && allTrainings.Count > 0)
             {
                 trainingStats.TotalParticipants = allTrainings.Sum(t => t.NumberOfParticipants);
@@ -59,6 +59,20 @@ namespace ProjectTracker.API.Controllers.HBA1C
             if (nationalTotals.TotalParticipants == 0 && allTrainings.Count > 0)
             {
                 nationalTotals.TotalParticipants = allTrainings.Sum(t => t.NumberOfParticipants);
+            }
+
+            // The API also reports inflated totalTrainers — compute unique trainers from sessions
+            if (allTrainings.Count > 0)
+            {
+                var uniqueTrainerCount = allTrainings
+                    .Where(t => t.TrainerId > 0)
+                    .Select(t => t.TrainerId)
+                    .Distinct()
+                    .Count();
+                if (uniqueTrainerCount > 0)
+                {
+                    nationalTotals.TotalTrainers = uniqueTrainerCount;
+                }
             }
 
             var dashboard = new HBA1CProjectDashboard
