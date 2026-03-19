@@ -2083,7 +2083,11 @@ export class TendersComponent implements OnInit, OnDestroy {
     { code: 'PMT', name: 'Promed Tech', color: '#1976D2' },
     { code: 'SBT', name: 'Sebenzani', color: '#4CAF50' },
     { code: 'ACM', name: 'Access Medical', color: '#9C27B0' },
-    { code: 'PHT', name: 'Pharatech', color: '#FF5722' }
+    { code: 'PHT', name: 'Pharatech', color: '#FF5722' },
+    { code: 'SEY', name: 'SharpEye', color: '#E91E63' },
+    { code: 'SAW', name: 'SA Wellness', color: '#00BCD4' },
+    { code: 'PHC', name: 'Pharmacare', color: '#FF9800' },
+    { code: 'JVT', name: 'Joint Venture', color: '#607D8B' }
   ];
 
   provinces = ['KZN', 'WC', 'EC', 'GP', 'FS', 'NC', 'NW', 'LP', 'MP'];
