@@ -298,6 +298,26 @@ interface Company {
                     </td>
                   </ng-container>
 
+                  <!-- Samples Column -->
+                  <ng-container matColumnDef="samples">
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>Samples</th>
+                    <td mat-cell *matCellDef="let tender">
+                      <span class="mini-status-chip" [class]="'msc-' + (tender.samplesStatus || 'Not Started').toLowerCase().replace(' ', '-')">
+                        {{ tender.samplesStatus || 'Not Started' }}
+                      </span>
+                    </td>
+                  </ng-container>
+
+                  <!-- Artwork Column -->
+                  <ng-container matColumnDef="artwork">
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>Artwork</th>
+                    <td mat-cell *matCellDef="let tender">
+                      <span class="mini-status-chip" [class]="'msc-' + (tender.artworkStatus || 'Not Started').toLowerCase().replace(' ', '-')">
+                        {{ tender.artworkStatus || 'Not Started' }}
+                      </span>
+                    </td>
+                  </ng-container>
+
                   <!-- Actions Column -->
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef>Actions</th>
@@ -1169,6 +1189,20 @@ interface Company {
       font-size: 12px;
       font-weight: 500;
     }
+
+    .mini-status-chip {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      display: inline-block;
+    }
+    .msc-not-started { background: #f5f5f5; color: #9e9e9e; }
+    .msc-in-progress { background: #e3f2fd; color: #1565c0; }
+    .msc-submitted { background: #fff3e0; color: #e65100; }
+    .msc-approved { background: #e8f5e9; color: #2e7d32; }
+    .msc-rejected { background: #fce4ec; color: #c62828; }
 
     .workflow-badge {
       padding: 4px 10px;
@@ -2207,7 +2241,7 @@ export class TendersComponent implements OnInit, OnDestroy {
   selectedDepartment = '';
 
   // Display columns
-  displayedColumns = ['companyCode', 'tenderNumber', 'title', 'province', 'clerk', 'closingDate', 'status', 'actions'];
+  displayedColumns = ['companyCode', 'tenderNumber', 'title', 'province', 'clerk', 'closingDate', 'status', 'samples', 'artwork', 'actions'];
 
   // Reference data
   companies: Company[] = [
@@ -2308,6 +2342,8 @@ export class TendersComponent implements OnInit, OnDestroy {
     this.tendersDataSource.sort = this.sort;
     this.tendersDataSource.sortingDataAccessor = (item: Tender, property: string) => {
       if (property === 'clerk') return item.contactPerson || '';
+      if (property === 'samples') return item.samplesStatus || 'Not Started';
+      if (property === 'artwork') return item.artworkStatus || 'Not Started';
       return (item as any)[property];
     };
   }

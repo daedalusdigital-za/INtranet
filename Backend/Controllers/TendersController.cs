@@ -242,6 +242,8 @@ namespace ProjectTracker.API.Controllers
                 Status = "Draft",
                 WorkflowStatus = "Draft",
                 Priority = request.Priority ?? "Medium",
+                SamplesStatus = request.SamplesStatus,
+                ArtworkStatus = request.ArtworkStatus,
                 CreatedByUserId = request.CreatedByUserId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -291,6 +293,8 @@ namespace ProjectTracker.API.Controllers
             tender.Priority = request.Priority ?? tender.Priority;
             tender.RiskScore = request.RiskScore ?? tender.RiskScore;
             tender.RiskNotes = request.RiskNotes ?? tender.RiskNotes;
+            tender.SamplesStatus = request.SamplesStatus ?? tender.SamplesStatus;
+            tender.ArtworkStatus = request.ArtworkStatus ?? tender.ArtworkStatus;
             tender.UpdatedAt = DateTime.UtcNow;
 
             // Add activity
@@ -999,6 +1003,8 @@ namespace ProjectTracker.API.Controllers
         public DateTime ClosingDate { get; set; }
         public DateTime? EvaluationDate { get; set; }
         public string? Priority { get; set; }
+        public string? SamplesStatus { get; set; }
+        public string? ArtworkStatus { get; set; }
         public int CreatedByUserId { get; set; }
         public string? CreatedByUserName { get; set; }
     }
@@ -1025,6 +1031,8 @@ namespace ProjectTracker.API.Controllers
         public string? Priority { get; set; }
         public int? RiskScore { get; set; }
         public string? RiskNotes { get; set; }
+        public string? SamplesStatus { get; set; }
+        public string? ArtworkStatus { get; set; }
         public int? UpdatedByUserId { get; set; }
         public string? UpdatedByUserName { get; set; }
     }

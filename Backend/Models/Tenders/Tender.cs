@@ -100,6 +100,13 @@ namespace ProjectTracker.API.Models.Tenders
         [MaxLength(500)]
         public string? LossReason { get; set; }
 
+        // Samples & Artwork Status
+        [MaxLength(30)]
+        public string? SamplesStatus { get; set; }  // Not Started, In Progress, Submitted, Approved, Rejected
+
+        [MaxLength(30)]
+        public string? ArtworkStatus { get; set; }  // Not Started, In Progress, Submitted, Approved, Rejected
+
         // Risk & Priority
         [MaxLength(20)]
         public string Priority { get; set; } = "Medium"; // Low, Medium, High, Critical

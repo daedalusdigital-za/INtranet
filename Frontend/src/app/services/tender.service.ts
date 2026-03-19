@@ -27,6 +27,8 @@ export interface Tender {
   status: string;
   workflowStatus: string;
   priority: string;
+  samplesStatus?: string;
+  artworkStatus?: string;
   riskScore?: number;
   riskNotes?: string;
   submittedAt?: Date;
