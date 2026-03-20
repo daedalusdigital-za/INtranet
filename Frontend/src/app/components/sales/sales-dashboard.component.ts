@@ -383,6 +383,49 @@ interface SalesReportResponse {
         </div>
       }
 
+      <!-- Email View PIN Dialog -->
+      @if (showEmailPinDialog) {
+        <div class="dialog-overlay" (click)="closeEmailPinDialog()">
+          <div class="import-password-dialog" (click)="$event.stopPropagation()">
+            <div class="password-dialog-header">
+              <div class="password-icon-circle" style="background: linear-gradient(135deg, #1a237e 0%, #3f51b5 100%); box-shadow: 0 8px 24px rgba(26, 35, 126, 0.3);">
+                <mat-icon>mail_lock</mat-icon>
+              </div>
+              <h2>Email Protected</h2>
+              <p>Enter PIN to view this email</p>
+            </div>
+            <div class="password-dialog-body">
+              <div class="pin-input-group">
+                @for (i of [0, 1, 2]; track i) {
+                  <input
+                    type="password"
+                    maxlength="1"
+                    class="pin-digit email-pin"
+                    [class.filled]="emailPinDigits()[i]"
+                    [class.error]="emailPinError()"
+                    [value]="emailPinDigits()[i] || ''"
+                    (input)="onEmailPinInput($event, i)"
+                    (keydown)="onEmailPinKeydown($event, i)"
+                    (paste)="onEmailPinPaste($event)"
+                    [attr.data-email-pin-index]="i"
+                  />
+                }
+              </div>
+              @if (emailPinError()) {
+                <div class="password-error">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>Incorrect PIN. Please try again.</span>
+                </div>
+              }
+            </div>
+            <div class="password-dialog-actions">
+              <button class="dialog-btn cancel" (click)="closeEmailPinDialog()">Cancel</button>
+              <button class="dialog-btn submit" style="background: linear-gradient(135deg, #1a237e 0%, #3f51b5 100%); box-shadow: 0 4px 12px rgba(26, 35, 126, 0.3);" (click)="verifyEmailPin()" [disabled]="emailPinDigits().join('').length < 3">Unlock</button>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- Hidden file inputs for import -->
       <input
         type="file"
@@ -5513,18 +5556,97 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   viewEmailDetail(email: IncomingOrderEmail): void {
-    const pin = prompt('Enter PIN to view email:');
-    if (pin !== '000') {
-      if (pin !== null) {
-        this.snackBar.open('Incorrect PIN', 'Close', { duration: 2000, panelClass: ['error-snackbar'] });
-      }
-      return;
+    this.pendingEmail = email;
+    this.showEmailPinDialog = true;
+    this.emailPinDigits.set(['', '', '']);
+    this.emailPinError.set(false);
+    setTimeout(() => {
+      const firstInput = document.querySelector('.email-pin') as HTMLInputElement;
+      firstInput?.focus();
+    }, 100);
+  }
+
+  // Email PIN dialog state
+  showEmailPinDialog = false;
+  emailPinDigits = signal<string[]>(['', '', '']);
+  emailPinError = signal(false);
+  private pendingEmail: IncomingOrderEmail | null = null;
+  private readonly EMAIL_PIN = '000';
+
+  closeEmailPinDialog(): void {
+    this.showEmailPinDialog = false;
+    this.emailPinDigits.set(['', '', '']);
+    this.emailPinError.set(false);
+    this.pendingEmail = null;
+  }
+
+  onEmailPinInput(event: Event, index: number): void {
+    const input = event.target as HTMLInputElement;
+    const value = input.value;
+    if (value && !/^\d$/.test(value)) { input.value = ''; return; }
+    const digits = [...this.emailPinDigits()];
+    digits[index] = value;
+    this.emailPinDigits.set(digits);
+    this.emailPinError.set(false);
+    if (value && index < 2) {
+      const next = document.querySelector(`[data-email-pin-index="${index + 1}"]`) as HTMLInputElement;
+      next?.focus();
     }
-    this.dialog.open(EmailDetailDialogComponent, {
-      width: '700px',
-      maxHeight: '80vh',
-      data: email
-    });
+    if (digits.every(d => d !== '')) {
+      setTimeout(() => this.verifyEmailPin(), 150);
+    }
+  }
+
+  onEmailPinKeydown(event: KeyboardEvent, index: number): void {
+    if (event.key === 'Backspace') {
+      const digits = [...this.emailPinDigits()];
+      if (!digits[index] && index > 0) {
+        const prev = document.querySelector(`[data-email-pin-index="${index - 1}"]`) as HTMLInputElement;
+        prev?.focus();
+        digits[index - 1] = '';
+        this.emailPinDigits.set(digits);
+      } else {
+        digits[index] = '';
+        this.emailPinDigits.set(digits);
+      }
+      this.emailPinError.set(false);
+    } else if (event.key === 'Enter') {
+      this.verifyEmailPin();
+    }
+  }
+
+  onEmailPinPaste(event: ClipboardEvent): void {
+    event.preventDefault();
+    const pasted = event.clipboardData?.getData('text') || '';
+    const digits = pasted.replace(/\D/g, '').split('').slice(0, 3);
+    while (digits.length < 3) digits.push('');
+    this.emailPinDigits.set(digits);
+    if (digits.every(d => d !== '')) {
+      setTimeout(() => this.verifyEmailPin(), 150);
+    }
+  }
+
+  verifyEmailPin(): void {
+    const entered = this.emailPinDigits().join('');
+    if (entered.length < 3) return;
+    if (entered === this.EMAIL_PIN) {
+      const email = this.pendingEmail;
+      this.closeEmailPinDialog();
+      if (email) {
+        this.dialog.open(EmailDetailDialogComponent, {
+          width: '700px',
+          maxHeight: '80vh',
+          data: email
+        });
+      }
+    } else {
+      this.emailPinError.set(true);
+      setTimeout(() => {
+        this.emailPinDigits.set(['', '', '']);
+        const first = document.querySelector('.email-pin') as HTMLInputElement;
+        first?.focus();
+      }, 600);
+    }
   }
 
   copyEmailSender(email: IncomingOrderEmail): void {
