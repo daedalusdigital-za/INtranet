@@ -675,7 +675,7 @@ interface SalesReportResponse {
                 </div>
                 <div class="email-list">
                   @for (email of filteredEmails(); track email.messageId) {
-                    <mat-card class="email-card" [class.email-unread]="!email.isRead" [class.email-high-priority]="email.priority === 'High'">
+                    <mat-card class="email-card" [class.email-unread]="!email.isRead" [class.email-high-priority]="email.priority === 'High'" (click)="viewEmailDetail(email)" style="cursor: pointer;">
                       <div class="email-row">
                         <div class="email-status-indicator">
                           @if (!email.isRead) {
@@ -715,10 +715,7 @@ interface SalesReportResponse {
                           }
                         </div>
                         <div class="email-actions">
-                          <button mat-icon-button matTooltip="View email" (click)="viewEmailDetail(email)">
-                            <mat-icon>visibility</mat-icon>
-                          </button>
-                          <button mat-icon-button [matMenuTriggerFor]="emailMenu" matTooltip="More actions">
+                          <button mat-icon-button [matMenuTriggerFor]="emailMenu" matTooltip="More actions" (click)="$event.stopPropagation()">
                             <mat-icon>more_vert</mat-icon>
                           </button>
                           <mat-menu #emailMenu="matMenu">
