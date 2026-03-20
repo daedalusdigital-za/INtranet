@@ -209,8 +209,36 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from 
         <!-- Loading State -->
         @if (isLoading) {
           <div class="loading-state">
-            <mat-spinner diameter="48"></mat-spinner>
-            <p>Loading files...</p>
+            <div class="loading-card">
+              <div class="lc-icon-wrap">
+                <mat-icon class="lc-icon pulse-icon">folder</mat-icon>
+              </div>
+              <h3>Loading {{ departmentName }} Files</h3>
+              <p class="lc-subtitle">Fetching documents and folder structure</p>
+              <div class="lc-progress-wrap">
+                <div class="lc-progress-track">
+                  <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
+                </div>
+                <div class="lc-progress-info">
+                  <span class="lc-progress-message">{{ loadingMessage }}</span>
+                  <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
+                </div>
+              </div>
+              <div class="lc-steps">
+                @for (step of loadingSteps; track step.label; let i = $index) {
+                  <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
+                    <div class="lc-step-dot">
+                      @if (loadingStage > i) {
+                        <mat-icon>check</mat-icon>
+                      } @else {
+                        <mat-icon>{{ step.icon }}</mat-icon>
+                      }
+                    </div>
+                    <span class="lc-step-label">{{ step.label }}</span>
+                  </div>
+                }
+              </div>
+            </div>
           </div>
         }
 
@@ -657,15 +685,61 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from 
     }
 
     .loading-state {
-      text-align: center;
-      padding: 80px;
-      color: white;
+      display: flex; justify-content: center; padding: 60px 20px;
     }
-
-    .loading-state p {
-      margin-top: 16px;
-      opacity: 0.8;
+    .loading-card {
+      background: rgba(255,255,255,0.97); border-radius: 20px;
+      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+      max-width: 520px; width: 100%;
     }
+    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
+    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+    .lc-icon-wrap {
+      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
+      background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(251,191,36,0.12));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 20px rgba(245,158,11,0.15);
+    }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #f59e0b; }
+    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
+    @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
+    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
+    .lc-progress-wrap { margin: 8px 0 24px; }
+    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
+    .lc-progress-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, #f59e0b, #fbbf24, #f97316);
+      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
+      transition: width 0.15s ease-out; position: relative;
+    }
+    .lc-progress-fill::after {
+      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
+    .lc-progress-message { color: #64748b; font-weight: 500; }
+    .lc-progress-pct { color: #f59e0b; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
+    .lc-step {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
+    }
+    .lc-step.active { opacity: 1; transform: translateY(-2px); }
+    .lc-step.done { opacity: 0.65; }
+    .lc-step-dot {
+      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
+    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #f59e0b, #f97316); box-shadow: 0 2px 10px rgba(245,158,11,0.3); }
+    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
+    .lc-step.done .lc-step-dot { background: #dcfce7; }
+    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
+    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+    .lc-step.active .lc-step-label { color: #f59e0b; }
+    .lc-step.done .lc-step-label { color: #16a34a; }
 
     .files-grid {
       display: grid;
@@ -933,6 +1007,18 @@ export class DepartmentHubComponent implements OnInit {
   isDraggingOver = false;
   permissions: DocumentPermissions | null = null;
 
+  // Loading progress
+  loadingProgress = 0;
+  loadingStage = 0;
+  loadingMessage = 'Initializing...';
+  private progressInterval: any;
+  readonly loadingSteps = [
+    { icon: 'lock', label: 'Authenticating', detail: 'Securing connection...' },
+    { icon: 'folder', label: 'Scanning', detail: 'Scanning folder structure...' },
+    { icon: 'file_copy', label: 'Loading Files', detail: 'Retrieving documents...' },
+    { icon: 'dashboard', label: 'Ready', detail: 'Organizing file view...' }
+  ];
+
   @ViewChild('fileInput') fileInput!: ElementRef;
 
   get selectedFiles(): DocumentFile[] {
@@ -979,19 +1065,61 @@ export class DepartmentHubComponent implements OnInit {
 
   loadFiles(): void {
     this.isLoading = true;
+    this.startLoadingProgress();
     const subfolder = this.breadcrumbs.length > 0 ? this.breadcrumbs.join('/') : undefined;
     
     this.documentsService.getFiles(this.departmentName, subfolder).subscribe({
       next: (files) => {
-        this.files = files.map(f => ({ ...f, selected: false }));
-        this.isLoading = false;
+        this.finishLoadingProgress(() => {
+          this.files = files.map(f => ({ ...f, selected: false }));
+          this.isLoading = false;
+        });
       },
       error: (error) => {
         console.error('Error loading files:', error);
+        this.stopLoadingProgress();
         this.snackBar.open('Failed to load files', 'Close', { duration: 3000 });
         this.isLoading = false;
       }
     });
+  }
+
+  private startLoadingProgress(): void {
+    this.loadingProgress = 0;
+    this.loadingStage = 0;
+    this.loadingMessage = this.loadingSteps[0].detail;
+    this.progressInterval = setInterval(() => {
+      const max = 88;
+      if (this.loadingProgress < max) {
+        const increment = Math.max(0.3, (max - this.loadingProgress) * 0.06);
+        this.loadingProgress = Math.min(max, this.loadingProgress + increment);
+      }
+      const newStage = this.loadingProgress < 20 ? 0 : this.loadingProgress < 45 ? 1 : this.loadingProgress < 70 ? 2 : 3;
+      if (newStage !== this.loadingStage) {
+        this.loadingStage = newStage;
+        this.loadingMessage = this.loadingSteps[newStage].detail;
+      }
+    }, 120);
+  }
+
+  private finishLoadingProgress(callback: () => void): void {
+    clearInterval(this.progressInterval);
+    this.loadingStage = 3;
+    this.loadingMessage = 'Almost there...';
+    const finish = setInterval(() => {
+      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
+      if (this.loadingProgress >= 100) {
+        clearInterval(finish);
+        this.loadingMessage = 'Complete!';
+        setTimeout(() => callback(), 300);
+      }
+    }, 30);
+  }
+
+  private stopLoadingProgress(): void {
+    clearInterval(this.progressInterval);
+    this.loadingProgress = 0;
+    this.loadingStage = 0;
   }
 
   onSearch(): void {

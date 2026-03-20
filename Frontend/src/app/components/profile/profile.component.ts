@@ -10,6 +10,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTableModule } from '@angular/material/table';
@@ -38,6 +39,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     MatDividerModule,
     MatChipsModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatSnackBarModule,
     MatTabsModule,
     MatTableModule,
@@ -184,9 +186,32 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
       </div>
 
       <!-- Loading State -->
-      <div class="loading" *ngIf="!user">
-        <mat-spinner diameter="50"></mat-spinner>
-        <p>Loading profile...</p>
+      <div class="loading-state" *ngIf="!user">
+        <div class="loading-card">
+          <div class="lc-icon-wrap">
+            <mat-icon class="lc-icon pulse-icon">person</mat-icon>
+          </div>
+          <h3>Loading Your Profile</h3>
+          <p class="lc-subtitle">Fetching account details and preferences</p>
+          <div class="lc-progress-wrap">
+            <div class="lc-progress-track">
+              <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
+            </div>
+            <div class="lc-progress-info">
+              <span class="lc-progress-message">{{ loadingMessage }}</span>
+              <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
+            </div>
+          </div>
+          <div class="lc-steps">
+            <div class="lc-step" *ngFor="let step of loadingSteps; let i = index" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
+              <div class="lc-step-dot">
+                <mat-icon *ngIf="loadingStage > i">check</mat-icon>
+                <mat-icon *ngIf="loadingStage <= i">{{ step.icon }}</mat-icon>
+              </div>
+              <span class="lc-step-label">{{ step.label }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   `,
@@ -356,19 +381,62 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
       border-color: #f44336;
     }
 
-    .loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 50vh;
-      color: white;
+    .loading-state {
+      display: flex; justify-content: center; padding: 60px 20px; min-height: 50vh; align-items: center;
     }
-
-    .loading p {
-      margin-top: 16px;
-      font-size: 16px;
+    .loading-card {
+      background: rgba(255,255,255,0.97); border-radius: 20px;
+      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+      max-width: 520px; width: 100%;
     }
+    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
+    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+    .lc-icon-wrap {
+      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
+      background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(118,75,162,0.12));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 20px rgba(102,126,234,0.15);
+    }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #667eea; }
+    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
+    @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
+    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
+    .lc-progress-wrap { margin: 8px 0 24px; }
+    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
+    .lc-progress-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, #667eea, #818cf8, #764ba2);
+      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
+      transition: width 0.15s ease-out; position: relative;
+    }
+    .lc-progress-fill::after {
+      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
+    .lc-progress-message { color: #64748b; font-weight: 500; }
+    .lc-progress-pct { color: #667eea; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
+    .lc-step {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
+    }
+    .lc-step.active { opacity: 1; transform: translateY(-2px); }
+    .lc-step.done { opacity: 0.65; }
+    .lc-step-dot {
+      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
+    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 2px 10px rgba(102,126,234,0.3); }
+    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
+    .lc-step.done .lc-step-dot { background: #dcfce7; }
+    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
+    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+    .lc-step.active .lc-step-label { color: #667eea; }
+    .lc-step.done .lc-step-label { color: #16a34a; }
 
     @media (max-width: 600px) {
       .info-row {
@@ -681,6 +749,18 @@ export class ProfileComponent implements OnInit, OnDestroy {
   // Extension
   myExtension: ExtensionStatus | null = null;
   loadingExtension = false;
+
+  // Loading progress
+  loadingProgress = 0;
+  loadingStage = 0;
+  loadingMessage = 'Initializing...';
+  private progressInterval: any;
+  readonly loadingSteps = [
+    { icon: 'lock', label: 'Authenticating', detail: 'Verifying credentials...' },
+    { icon: 'person', label: 'Profile', detail: 'Loading profile data...' },
+    { icon: 'badge', label: 'Details', detail: 'Fetching account details...' },
+    { icon: 'dashboard', label: 'Ready', detail: 'Preparing your profile...' }
+  ];
   
   private subscriptions = new Subscription();
 
@@ -692,11 +772,14 @@ export class ProfileComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.startLoadingProgress();
     this.user = this.authService.currentUserValue;
     if (!this.user) {
+      this.stopLoadingProgress();
       this.router.navigate(['/login']);
       return;
     }
+    this.finishLoadingProgress(() => {});
     
     this.loadCallHistory();
     this.loadExtension();
@@ -704,6 +787,45 @@ export class ProfileComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+    this.stopLoadingProgress();
+  }
+
+  private startLoadingProgress(): void {
+    this.loadingProgress = 0;
+    this.loadingStage = 0;
+    this.loadingMessage = this.loadingSteps[0].detail;
+    this.progressInterval = setInterval(() => {
+      const max = 88;
+      if (this.loadingProgress < max) {
+        const increment = Math.max(0.3, (max - this.loadingProgress) * 0.06);
+        this.loadingProgress = Math.min(max, this.loadingProgress + increment);
+      }
+      const newStage = this.loadingProgress < 20 ? 0 : this.loadingProgress < 45 ? 1 : this.loadingProgress < 70 ? 2 : 3;
+      if (newStage !== this.loadingStage) {
+        this.loadingStage = newStage;
+        this.loadingMessage = this.loadingSteps[newStage].detail;
+      }
+    }, 120);
+  }
+
+  private finishLoadingProgress(callback: () => void): void {
+    clearInterval(this.progressInterval);
+    this.loadingStage = 3;
+    this.loadingMessage = 'Almost there...';
+    const finish = setInterval(() => {
+      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
+      if (this.loadingProgress >= 100) {
+        clearInterval(finish);
+        this.loadingMessage = 'Complete!';
+        setTimeout(() => callback(), 300);
+      }
+    }, 30);
+  }
+
+  private stopLoadingProgress(): void {
+    clearInterval(this.progressInterval);
+    this.loadingProgress = 0;
+    this.loadingStage = 0;
   }
 
   loadCallHistory(): void {
