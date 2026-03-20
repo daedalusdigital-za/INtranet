@@ -395,6 +395,11 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       color: #333;
     }
 
+    .list-item-details {
+      min-width: 0;
+      flex: 1;
+    }
+
     .list-item-main p {
       margin: 4px 0 0 0;
       font-size: 0.85rem;
@@ -531,6 +536,22 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-weight: 600;
       color: #333;
       flex: 1;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .kanban-description {
+      font-size: 0.85rem;
+      color: #666;
+      margin: 0 0 8px 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      line-height: 1.4;
     }
 
     .kanban-type-badge {
@@ -666,12 +687,39 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin-bottom: 16px;
     }
 
+    .timeline-header {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
     .timeline-card-header h3 {
       margin: 0;
       font-size: 1.2rem;
       font-weight: 600;
       color: #333;
       flex: 1;
+    }
+
+    .timeline-header > div {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .timeline-header p {
+      margin: 4px 0 0 0;
+      font-size: 0.85rem;
+      color: #666;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.4;
     }
 
     .timeline-dates {
