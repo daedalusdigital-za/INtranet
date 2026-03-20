@@ -201,7 +201,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
                   <select matNativeControl [(ngModel)]="selectedUserToInvite">
                     <option value="">Choose a user</option>
                     @for (user of availableUsers; track user.userId) {
-                      <option [value]="user.userId">{{ user.name }} ({{ user.email }})</option>
+                      <option [value]="user.userId">{{ user.displayName }} ({{ user.email }})</option>
                     }
                   </select>
                 </mat-form-field>
@@ -1185,12 +1185,14 @@ export class BoardComponent implements OnInit, OnDestroy {
 
   // Board Members methods
   loadAvailableUsers(): void {
-    // Load users from the same department or all users if admin
-    this.apiService.getEmployees().subscribe({
+    // Load users from the Users table (has userId, name, surname, email)
+    this.apiService.getUsers().subscribe({
       next: (users) => {
-        // Filter out users who are already members
+        // Filter out users who are already members and only show active users
         const memberIds = this.board?.members?.map(m => m.userId) || [];
-        this.availableUsers = users.filter(u => !memberIds.includes(u.userId));
+        this.availableUsers = users
+          .filter(u => u.isActive && !memberIds.includes(u.userId))
+          .map(u => ({ ...u, displayName: `${u.name} ${u.surname}`.trim() }));
       },
       error: (error) => console.error('Error loading users:', error)
     });

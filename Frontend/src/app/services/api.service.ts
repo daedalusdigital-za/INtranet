@@ -121,6 +121,11 @@ export class ApiService {
     return this.http.get<any[]>(`${this.apiUrl}/attendance/employees`);
   }
 
+  // Users (from Users table - for board invites, etc.)
+  getUsers(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/users`);
+  }
+
   // PBX - Active Calls
   getActiveCalls(): Observable<ActiveCallsResponse> {
     return this.http.get<ActiveCallsResponse>(`${this.apiUrl}/pbx/active-calls`);
