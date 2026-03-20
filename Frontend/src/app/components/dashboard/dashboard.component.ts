@@ -71,7 +71,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
               <mat-option value="all">All Stages</mat-option>
               <mat-option value="Planning">Planning</mat-option>
               <mat-option value="In Progress">In Progress</mat-option>
-              <mat-option value="Stuck">Stuck</mat-option>
+              <mat-option value="Testing">Testing</mat-option>
               <mat-option value="Completed">Completed</mat-option>
             </mat-select>
           </mat-form-field>
@@ -925,7 +925,7 @@ export class DashboardComponent implements OnInit {
   selectedWorkflow: string = 'all';
   selectedStatus: string = 'all';
 
-  workflowStages = ['Planning', 'In Progress', 'Stuck', 'Completed'];
+  workflowStages = ['Planning', 'In Progress', 'Testing', 'Completed'];
 
   // Projects data
   projects: any[] = [];
@@ -1070,11 +1070,11 @@ export class DashboardComponent implements OnInit {
   }
 
   getWorkflowFromProgress(progress: number): string {
-    if (progress === 0) return 'planning';
-    if (progress < 50) return 'in-progress';
-    if (progress < 80) return 'testing';
-    if (progress < 100) return 'deployment';
-    return 'completed';
+    if (progress === 0) return 'Planning';
+    if (progress < 50) return 'In Progress';
+    if (progress < 80) return 'Testing';
+    if (progress < 100) return 'In Progress';
+    return 'Completed';
   }
 
   initializeProjects(): void {
@@ -1085,7 +1085,7 @@ export class DashboardComponent implements OnInit {
         name: 'E-Commerce Platform',
         description: 'Building new online shopping platform',
         type: 'software',
-        workflow: 'in-progress',
+        workflow: 'In Progress',
         status: 'on-track',
         progress: 65,
         teamSize: 8,
@@ -1103,7 +1103,7 @@ export class DashboardComponent implements OnInit {
         name: 'Network Upgrade',
         description: 'Modernizing IT infrastructure',
         type: 'infrastructure',
-        workflow: 'testing',
+        workflow: 'Testing',
         status: 'on-track',
         progress: 78,
         teamSize: 5,
@@ -1121,7 +1121,7 @@ export class DashboardComponent implements OnInit {
         name: 'Brand Refresh Campaign',
         description: 'Complete brand identity redesign',
         type: 'marketing',
-        workflow: 'planning',
+        workflow: 'Planning',
         status: 'on-track',
         progress: 25,
         teamSize: 6,
@@ -1139,7 +1139,7 @@ export class DashboardComponent implements OnInit {
         name: 'AI Research Project',
         description: 'Developing machine learning models',
         type: 'research',
-        workflow: 'in-progress',
+        workflow: 'In Progress',
         status: 'at-risk',
         progress: 42,
         teamSize: 10,
@@ -1157,7 +1157,7 @@ export class DashboardComponent implements OnInit {
         name: 'Supply Chain Optimization',
         description: 'Streamlining logistics operations',
         type: 'operations',
-        workflow: 'deployment',
+        workflow: 'Testing',
         status: 'on-track',
         progress: 92,
         teamSize: 7,
@@ -1175,7 +1175,7 @@ export class DashboardComponent implements OnInit {
         name: 'Mobile App Development',
         description: 'iOS and Android native apps',
         type: 'software',
-        workflow: 'in-progress',
+        workflow: 'In Progress',
         status: 'delayed',
         progress: 38,
         teamSize: 9,
@@ -1193,7 +1193,7 @@ export class DashboardComponent implements OnInit {
         name: 'Data Center Migration',
         description: 'Moving to cloud infrastructure',
         type: 'infrastructure',
-        workflow: 'planning',
+        workflow: 'Planning',
         status: 'on-track',
         progress: 18,
         teamSize: 12,
@@ -1211,7 +1211,7 @@ export class DashboardComponent implements OnInit {
         name: 'Customer Loyalty Program',
         description: 'Rewards and engagement platform',
         type: 'marketing',
-        workflow: 'completed',
+        workflow: 'Completed',
         status: 'on-track',
         progress: 100,
         teamSize: 4,
@@ -1270,9 +1270,9 @@ export class DashboardComponent implements OnInit {
 
   getWorkflowColor(workflow: string): string {
     const colors: any = {
-      'Planning': '#9E9E9E',
+      'Planning': '#7c3aed',
       'In Progress': '#2196F3',
-      'Stuck': '#F44336',
+      'Testing': '#059669',
       'Completed': '#4CAF50'
     };
     return colors[workflow] || '#cccccc';
