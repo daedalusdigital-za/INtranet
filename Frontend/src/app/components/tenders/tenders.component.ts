@@ -148,15 +148,6 @@ interface Company {
         <button mat-raised-button color="primary" (click)="openCreateTender()">
           <mat-icon>add</mat-icon> Create Tender
         </button>
-        <button mat-stroked-button (click)="selectedTab = 1">
-          <mat-icon>verified_user</mat-icon> Compliance Vault
-        </button>
-        <button mat-stroked-button (click)="selectedTab = 2">
-          <mat-icon>calendar_month</mat-icon> Calendar
-        </button>
-        <button mat-stroked-button (click)="selectedTab = 3">
-          <mat-icon>analytics</mat-icon> Analytics
-        </button>
       </div>
 
       <!-- Main Tabs -->
