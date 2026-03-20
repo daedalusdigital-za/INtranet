@@ -9,7 +9,7 @@ namespace ProjectTracker.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Super Admin,Admin")]
     public class EmailAccountsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
