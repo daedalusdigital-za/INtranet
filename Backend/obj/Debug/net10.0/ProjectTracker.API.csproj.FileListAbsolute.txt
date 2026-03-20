@@ -366,3 +366,6 @@ C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publi
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.deps.json
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.runtimeconfig.json
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\publish\publish\publish\publish\publish\publish\publish\publish\publish\publish\publish\ProjectTracker.API.staticwebassets.endpoints.json
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\BouncyCastle.Cryptography.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\MailKit.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\MimeKit.dll

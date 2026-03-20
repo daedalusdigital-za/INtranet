@@ -20,7 +20,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
-import { MatDialogModule, MatDialog } from '@angular/material/dialog';
+import { MatDialogModule, MatDialog, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -113,6 +113,22 @@ interface Order {
   items: number;
   notes?: string;
   companyCode?: string;
+}
+
+interface IncomingOrderEmail {
+  messageId: string;
+  subject: string;
+  from: string;
+  fromEmail: string;
+  date: Date;
+  accountEmail: string;
+  accountDisplayName: string;
+  hasAttachments: boolean;
+  preview: string;
+  isRead: boolean;
+  priority: string;
+  to: string[];
+  cc: string[];
 }
 
 interface SalesStats {
@@ -523,15 +539,15 @@ interface SalesReportResponse {
 
         <div class="modern-stat-card orders">
           <div class="stat-icon-wrapper">
-            <mat-icon>shopping_cart</mat-icon>
+            <mat-icon>email</mat-icon>
           </div>
           <div class="stat-content">
             <span class="stat-value">{{ stats().incomingOrders }}</span>
-            <span class="stat-label">Incoming Orders</span>
+            <span class="stat-label">Order Emails Today</span>
             <div class="order-breakdown">
               <span class="processing-badge">
-                <mat-icon>hourglass_empty</mat-icon>
-                {{ stats().processingOrders }} processing
+                <mat-icon>mark_email_unread</mat-icon>
+                {{ stats().processingOrders }} unread
               </span>
             </div>
           </div>
@@ -541,10 +557,10 @@ interface SalesReportResponse {
       <!-- Main Content Tabs -->
       <mat-card class="main-content">
         <mat-tab-group animationDuration="200ms" [(selectedIndex)]="selectedTab">
-          <!-- Incoming Orders Tab -->
+          <!-- Incoming Order Emails Tab -->
           <mat-tab>
             <ng-template mat-tab-label>
-              <mat-icon>inbox</mat-icon>
+              <mat-icon>email</mat-icon>
               <span>Incoming Orders</span>
               @if (stats().incomingOrders > 0) {
                 <span class="tab-badge">{{ stats().incomingOrders }}</span>
@@ -552,24 +568,33 @@ interface SalesReportResponse {
             </ng-template>
             <div class="tab-content">
               <div class="section-header">
-                <h3>Incoming Orders</h3>
+                <h3>
+                  <mat-icon style="vertical-align: middle; margin-right: 8px;">mark_email_unread</mat-icon>
+                  Incoming Order Emails — Today
+                </h3>
                 <div class="section-actions">
                   <mat-form-field appearance="outline" class="search-field">
-                    <mat-label>Search orders</mat-label>
-                    <input matInput [value]="orderSearch()" (input)="orderSearch.set($any($event.target).value)">
+                    <mat-label>Filter emails</mat-label>
+                    <input matInput [value]="emailFilterSearch()" (input)="emailFilterSearch.set($any($event.target).value)">
                     <mat-icon matSuffix>search</mat-icon>
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="filter-field">
-                    <mat-label>Status</mat-label>
-                    <mat-select [value]="orderStatusFilter()" (selectionChange)="orderStatusFilter.set($event.value)">
-                      <mat-option value="all">All Status</mat-option>
-                      <mat-option value="New">New</mat-option>
-                      <mat-option value="Processing">Processing</mat-option>
-                      <mat-option value="Ready">Ready</mat-option>
-                      <mat-option value="Shipped">Shipped</mat-option>
+                    <mat-label>Read Status</mat-label>
+                    <mat-select [value]="emailReadFilter()" (selectionChange)="emailReadFilter.set($event.value)">
+                      <mat-option value="all">All</mat-option>
+                      <mat-option value="unread">Unread</mat-option>
+                      <mat-option value="read">Read</mat-option>
                     </mat-select>
                   </mat-form-field>
-                  <button mat-icon-button (click)="loadOrders()" matTooltip="Refresh">
+                  <mat-form-field appearance="outline" class="filter-field" style="min-width: 200px;">
+                    <mat-label>Mailbox</mat-label>
+                    <mat-select [value]="selectedEmailAccounts()" (selectionChange)="selectedEmailAccounts.set($event.value); loadOrders()" multiple>
+                      @for (account of emailAccounts(); track account) {
+                        <mat-option [value]="account">{{ account }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <button mat-icon-button (click)="loadOrders()" matTooltip="Refresh emails from IMAP">
                     <mat-icon>refresh</mat-icon>
                   </button>
                 </div>
@@ -578,79 +603,105 @@ interface SalesReportResponse {
               @if (loadingOrders()) {
                 <div class="loading-container">
                   <mat-spinner diameter="40"></mat-spinner>
+                  <p style="margin-top: 12px; color: #666;">Connecting to mail server...</p>
                 </div>
-              } @else if (filteredOrders().length === 0) {
+              } @else if (filteredEmails().length === 0) {
                 <div class="empty-state">
-                  <mat-icon>inbox</mat-icon>
-                  <h3>No Orders Found</h3>
-                  <p>No incoming orders match your criteria</p>
+                  <mat-icon>mark_email_read</mat-icon>
+                  <h3>No Order Emails Today</h3>
+                  <p>No emails with "{{ emailSearchKeyword() }}" in the subject were found for today</p>
+                  <button mat-raised-button color="primary" (click)="loadOrders()" style="margin-top: 12px;">
+                    <mat-icon>refresh</mat-icon> Check Again
+                  </button>
                 </div>
               } @else {
-                <div class="orders-grid">
-                  @for (order of filteredOrders(); track order.id) {
-                    <mat-card class="order-card" [class]="'priority-' + order.priority.toLowerCase()">
-                      <mat-card-header>
-                        <div class="order-header">
-                          <div class="order-number">
-                            <strong>{{ order.orderNumber }}</strong>
-                            <span class="order-date">{{ order.orderDate | date:'dd MMM yyyy' }}</span>
+                <div class="email-summary-bar">
+                  <span class="email-count">
+                    <mat-icon>inbox</mat-icon>
+                    {{ filteredEmails().length }} email(s) found
+                  </span>
+                  <span class="unread-count">
+                    <mat-icon>mark_email_unread</mat-icon>
+                    {{ unreadEmailCount() }} unread
+                  </span>
+                  <span class="attachment-count">
+                    <mat-icon>attach_file</mat-icon>
+                    {{ attachmentEmailCount() }} with attachments
+                  </span>
+                </div>
+                <div class="email-list">
+                  @for (email of filteredEmails(); track email.messageId) {
+                    <mat-card class="email-card" [class.email-unread]="!email.isRead" [class.email-high-priority]="email.priority === 'High'">
+                      <div class="email-row">
+                        <div class="email-status-indicator">
+                          @if (!email.isRead) {
+                            <div class="unread-dot"></div>
+                          }
+                          @if (email.priority === 'High') {
+                            <mat-icon class="priority-flag" matTooltip="High Priority">flag</mat-icon>
+                          }
+                        </div>
+                        <div class="email-sender">
+                          <div class="sender-avatar">
+                            {{ email.from.charAt(0).toUpperCase() }}
                           </div>
-                          <mat-chip [class]="'status-' + order.status.toLowerCase()">
-                            {{ order.status }}
+                          <div class="sender-details">
+                            <span class="sender-name">{{ email.from }}</span>
+                            <span class="sender-email">{{ email.fromEmail }}</span>
+                          </div>
+                        </div>
+                        <div class="email-content">
+                          <div class="email-subject">
+                            {{ email.subject }}
+                            @if (email.hasAttachments) {
+                              <mat-icon class="attachment-icon" matTooltip="Has attachments">attach_file</mat-icon>
+                            }
+                          </div>
+                          @if (email.preview) {
+                            <div class="email-preview">{{ email.preview }}</div>
+                          }
+                        </div>
+                        <div class="email-meta">
+                          <span class="email-time">{{ email.date | date:'HH:mm' }}</span>
+                          <span class="email-date">{{ email.date | date:'dd MMM' }}</span>
+                          <mat-chip class="mailbox-chip" matTooltip="Received in mailbox">
+                            {{ getMailboxName(email.accountEmail) }}
                           </mat-chip>
                         </div>
-                      </mat-card-header>
-                      <mat-card-content>
-                        <div class="order-customer">
-                          <mat-icon>person</mat-icon>
-                          <span>{{ order.customerName }}</span>
+                        <div class="email-actions">
+                          <button mat-icon-button matTooltip="View email" (click)="viewEmailDetail(email)">
+                            <mat-icon>visibility</mat-icon>
+                          </button>
+                          <button mat-icon-button [matMenuTriggerFor]="emailMenu" matTooltip="More actions">
+                            <mat-icon>more_vert</mat-icon>
+                          </button>
+                          <mat-menu #emailMenu="matMenu">
+                            <button mat-menu-item (click)="viewEmailDetail(email)">
+                              <mat-icon>open_in_new</mat-icon> View Full Email
+                            </button>
+                            <button mat-menu-item (click)="copyEmailSender(email)">
+                              <mat-icon>content_copy</mat-icon> Copy Sender Email
+                            </button>
+                            <mat-divider></mat-divider>
+                            <button mat-menu-item (click)="createOrderFromEmail(email)">
+                              <mat-icon>add_shopping_cart</mat-icon> Create Order
+                            </button>
+                            <button mat-menu-item (click)="forwardToLogistics(email)">
+                              <mat-icon>local_shipping</mat-icon> Forward to Logistics
+                            </button>
+                          </mat-menu>
                         </div>
-                        <div class="order-details">
-                          <div class="detail-item">
-                            <span class="label">Items</span>
-                            <span class="value">{{ order.items }}</span>
-                          </div>
-                          <div class="detail-item">
-                            <span class="label">Total (incl. VAT)</span>
-                            <span class="value amount">R{{ order.totalAmount * 1.15 | number:'1.2-2' }}</span>
-                          </div>
-                          <div class="detail-item">
-                            <span class="label">Priority</span>
-                            <mat-chip [class]="'priority-chip-' + order.priority.toLowerCase()" size="small">
-                              {{ order.priority }}
-                            </mat-chip>
-                          </div>
+                      </div>
+                      @if (email.to.length > 0 || email.cc.length > 0) {
+                        <div class="email-recipients">
+                          @if (email.to.length > 0) {
+                            <span class="recipient-label">To: {{ email.to.join(', ') }}</span>
+                          }
+                          @if (email.cc.length > 0) {
+                            <span class="recipient-label">Cc: {{ email.cc.join(', ') }}</span>
+                          }
                         </div>
-                        @if (order.notes) {
-                          <div class="order-notes">
-                            <mat-icon>notes</mat-icon>
-                            <span>{{ order.notes }}</span>
-                          </div>
-                        }
-                      </mat-card-content>
-                      <mat-card-actions>
-                        <button mat-button color="primary" (click)="processOrder(order)">
-                          <mat-icon>play_arrow</mat-icon> Process
-                        </button>
-                        <button mat-button (click)="viewOrderDetails(order)">
-                          <mat-icon>visibility</mat-icon> View
-                        </button>
-                        <button mat-icon-button [matMenuTriggerFor]="orderMenu">
-                          <mat-icon>more_vert</mat-icon>
-                        </button>
-                        <mat-menu #orderMenu="matMenu">
-                          <button mat-menu-item (click)="createInvoiceFromOrder(order)">
-                            <mat-icon>receipt</mat-icon> Create Invoice
-                          </button>
-                          <button mat-menu-item (click)="assignToLogistics(order)">
-                            <mat-icon>local_shipping</mat-icon> Send to Logistics
-                          </button>
-                          <mat-divider></mat-divider>
-                          <button mat-menu-item class="cancel-btn" (click)="cancelOrder(order)">
-                            <mat-icon>cancel</mat-icon> Cancel Order
-                          </button>
-                        </mat-menu>
-                      </mat-card-actions>
+                      }
                     </mat-card>
                   }
                 </div>
@@ -2898,6 +2949,246 @@ interface SalesReportResponse {
       height: 16px;
     }
 
+    /* Email List Styles */
+    .email-summary-bar {
+      display: flex;
+      gap: 24px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #f8f9ff, #e8eaf6);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+
+    .email-summary-bar span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .email-summary-bar .email-count mat-icon { color: #1a237e; }
+    .email-summary-bar .unread-count mat-icon { color: #f44336; }
+    .email-summary-bar .attachment-count mat-icon { color: #ff9800; }
+
+    .email-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .email-card {
+      border-radius: 10px;
+      padding: 12px 16px;
+      transition: all 0.2s ease;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+    }
+
+    .email-card:hover {
+      background: #f5f7ff;
+      transform: translateX(2px);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .email-card.email-unread {
+      background: #f8f9ff;
+      border-left-color: #1a237e;
+      font-weight: 500;
+    }
+
+    .email-card.email-high-priority {
+      border-left-color: #f44336;
+    }
+
+    .email-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .email-status-indicator {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 20px;
+    }
+
+    .unread-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #1a237e;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    .priority-flag {
+      color: #f44336 !important;
+      font-size: 16px !important;
+      width: 16px !important;
+      height: 16px !important;
+    }
+
+    .email-sender {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 220px;
+      max-width: 220px;
+    }
+
+    .sender-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1a237e, #3f51b5);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .sender-details {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sender-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sender-email {
+      font-size: 11px;
+      color: #999;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .email-content {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .email-subject {
+      font-size: 14px;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .email-unread .email-subject {
+      font-weight: 600;
+      color: #1a237e;
+    }
+
+    .attachment-icon {
+      font-size: 16px !important;
+      width: 16px !important;
+      height: 16px !important;
+      color: #999;
+    }
+
+    .email-preview {
+      font-size: 12px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .email-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      min-width: 100px;
+    }
+
+    .email-time {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .email-date {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .mailbox-chip {
+      font-size: 10px !important;
+      min-height: 22px !important;
+      padding: 0 8px !important;
+      background: #e8eaf6 !important;
+      color: #1a237e !important;
+    }
+
+    .email-actions {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .email-actions button {
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .email-card:hover .email-actions button {
+      opacity: 1;
+    }
+
+    .email-recipients {
+      display: flex;
+      gap: 16px;
+      padding: 6px 0 0 42px;
+      font-size: 11px;
+      color: #999;
+    }
+
+    .recipient-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 400px;
+    }
+
+    .unread-chip {
+      background: #1a237e !important;
+      color: white !important;
+      font-size: 11px !important;
+    }
+
+    .priority-chip {
+      background: #f44336 !important;
+      color: white !important;
+      font-size: 11px !important;
+    }
+
     /* Cancellation Stats */
     .cancellation-stats {
       display: grid;
@@ -4501,6 +4792,10 @@ export class SalesDashboardComponent implements OnInit {
   customers = signal<Customer[]>([]);
   invoices = signal<Invoice[]>([]);
   orders = signal<Order[]>([]);
+  incomingEmails = signal<IncomingOrderEmail[]>([]);
+  emailAccounts = signal<string[]>([]);
+  selectedEmailAccounts = signal<string[]>([]);
+  emailSearchKeyword = signal('order');
   cancellations = signal<OrderCancellation[]>([]);
   cancellationStats = signal<CancellationStats>({
     totalCancellations: 0,
@@ -4552,6 +4847,8 @@ export class SalesDashboardComponent implements OnInit {
   invoiceStatusFilter = signal('all');
   orderSearch = signal('');
   orderStatusFilter = signal('all');
+  emailFilterSearch = signal('');
+  emailReadFilter = signal('all');
   cancellationSearch = signal('');
   cancellationStatusFilter = signal('all');
 
@@ -4699,6 +4996,33 @@ export class SalesDashboardComponent implements OnInit {
 
     return list;
   });
+
+  filteredEmails = computed(() => {
+    let list = this.incomingEmails();
+    const search = this.emailFilterSearch().toLowerCase();
+    const readFilter = this.emailReadFilter();
+
+    if (search) {
+      list = list.filter(e =>
+        e.subject?.toLowerCase().includes(search) ||
+        e.from?.toLowerCase().includes(search) ||
+        e.fromEmail?.toLowerCase().includes(search) ||
+        e.accountEmail?.toLowerCase().includes(search) ||
+        e.preview?.toLowerCase().includes(search)
+      );
+    }
+
+    if (readFilter === 'unread') {
+      list = list.filter(e => !e.isRead);
+    } else if (readFilter === 'read') {
+      list = list.filter(e => e.isRead);
+    }
+
+    return list;
+  });
+
+  unreadEmailCount = computed(() => this.filteredEmails().filter(e => !e.isRead).length);
+  attachmentEmailCount = computed(() => this.filteredEmails().filter(e => e.hasAttachments).length);
 
   filteredCancellations = computed(() => {
     let list = this.cancellations();
@@ -4923,6 +5247,7 @@ export class SalesDashboardComponent implements OnInit {
     this.loadInvoices();
     this.loadOrders();
     this.loadCancellations();
+    this.loadEmailAccounts();
     // Stats are now calculated reactively when data loads
   }
 
@@ -4967,20 +5292,43 @@ export class SalesDashboardComponent implements OnInit {
 
   loadOrders(): void {
     this.loadingOrders.set(true);
-    // Simulate orders data - in production, this would come from an API
-    const mockOrders: Order[] = [
-      { id: 1, orderNumber: 'ORD-2026-001', customerName: 'ABC Medical', customerId: 1, orderDate: new Date(), totalAmount: 15450.00, status: 'New', priority: 'High', items: 5, notes: 'Urgent delivery required' },
-      { id: 2, orderNumber: 'ORD-2026-002', customerName: 'XYZ Healthcare', customerId: 2, orderDate: new Date(), totalAmount: 8750.00, status: 'Processing', priority: 'Medium', items: 3 },
-      { id: 3, orderNumber: 'ORD-2026-003', customerName: 'City Hospital', customerId: 3, orderDate: new Date(), totalAmount: 32000.00, status: 'New', priority: 'High', items: 12 },
-      { id: 4, orderNumber: 'ORD-2026-004', customerName: 'Rural Clinic', customerId: 4, orderDate: new Date(), totalAmount: 5200.00, status: 'Ready', priority: 'Low', items: 2 },
-    ];
-    
-    setTimeout(() => {
-      this.orders.set(mockOrders);
-      this.loadingOrders.set(false);
-      this.updateStats();
-      this.checkInitialLoadComplete();
-    }, 500);
+    // Load incoming order emails from IMAP via backend
+    const accounts = this.selectedEmailAccounts().length > 0
+      ? this.selectedEmailAccounts().join(',')
+      : '';
+    const keyword = this.emailSearchKeyword() || 'order';
+    let url = `${this.apiUrl}/emailsearch/incoming-orders?keyword=${encodeURIComponent(keyword)}&maxResults=50`;
+    if (accounts) {
+      url += `&accounts=${encodeURIComponent(accounts)}`;
+    }
+
+    this.http.get<IncomingOrderEmail[]>(url).subscribe({
+      next: (emails) => {
+        this.incomingEmails.set(emails);
+        this.loadingOrders.set(false);
+        this.updateStats();
+        this.checkInitialLoadComplete();
+      },
+      error: (err) => {
+        console.error('Failed to load incoming order emails:', err);
+        this.incomingEmails.set([]);
+        this.loadingOrders.set(false);
+        this.updateStats();
+        this.checkInitialLoadComplete();
+        this.snackBar.open('Failed to load incoming emails. Check IMAP connection.', 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  loadEmailAccounts(): void {
+    this.http.get<string[]>(`${this.apiUrl}/emailsearch/accounts`).subscribe({
+      next: (accounts) => {
+        this.emailAccounts.set(accounts);
+      },
+      error: (err) => {
+        console.error('Failed to load email accounts:', err);
+      }
+    });
   }
 
   loadCancellations(): void {
@@ -5013,7 +5361,7 @@ export class SalesDashboardComponent implements OnInit {
     // Calculate stats from loaded data
     const customers = this.customers();
     const invoices = this.invoices();
-    const orders = this.orders();
+    const emails = this.incomingEmails();
 
     this.stats.set({
       // Use totalCustomerCount from API header for accurate total, fallback to loaded customers length
@@ -5025,8 +5373,8 @@ export class SalesDashboardComponent implements OnInit {
       monthlyRevenue: invoices
         .filter(i => new Date(i.transactionDate).getMonth() === new Date().getMonth())
         .reduce((sum, i) => sum + (i.salesAmount || 0), 0),
-      incomingOrders: orders.filter(o => o.status === 'New').length,
-      processingOrders: orders.filter(o => o.status === 'Processing').length
+      incomingOrders: emails.length,
+      processingOrders: emails.filter(e => !e.isRead).length
     });
   }
 
@@ -5164,6 +5512,33 @@ export class SalesDashboardComponent implements OnInit {
 
   assignToLogistics(order: Order): void {
     this.snackBar.open('Assigning to logistics...', 'Close', { duration: 2000 });
+  }
+
+  // Email action methods
+  getMailboxName(email: string): string {
+    return email.split('@')[0];
+  }
+
+  viewEmailDetail(email: IncomingOrderEmail): void {
+    this.dialog.open(EmailDetailDialogComponent, {
+      width: '700px',
+      maxHeight: '80vh',
+      data: email
+    });
+  }
+
+  copyEmailSender(email: IncomingOrderEmail): void {
+    navigator.clipboard.writeText(email.fromEmail).then(() => {
+      this.snackBar.open(`Copied: ${email.fromEmail}`, 'Close', { duration: 2000 });
+    });
+  }
+
+  createOrderFromEmail(email: IncomingOrderEmail): void {
+    this.snackBar.open('Create order from email: ' + email.subject, 'Close', { duration: 3000 });
+  }
+
+  forwardToLogistics(email: IncomingOrderEmail): void {
+    this.snackBar.open('Forwarding email to logistics...', 'Close', { duration: 3000 });
   }
 
   cancelOrder(order: Order): void {
@@ -6177,6 +6552,104 @@ export class SalesDashboardComponent implements OnInit {
       error: () => {
         this.snackBar.open('Failed to capture sale', 'Close', { duration: 3000 });
       }
+    });
+  }
+}
+
+// Email Detail Dialog Component
+@Component({
+  selector: 'app-email-detail-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatButtonModule,
+    MatIconModule,
+    MatChipsModule,
+    MatDividerModule,
+    MatDialogModule,
+    MatTooltipModule
+  ],
+  template: `
+    <h2 mat-dialog-title style="display: flex; align-items: center; gap: 8px;">
+      <mat-icon>email</mat-icon>
+      Email Detail
+      @if (!data.isRead) {
+        <mat-chip class="unread-chip">Unread</mat-chip>
+      }
+      @if (data.priority === 'High') {
+        <mat-chip class="priority-chip">High Priority</mat-chip>
+      }
+    </h2>
+    <mat-dialog-content style="min-width: 500px;">
+      <div style="margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #1a237e, #3f51b5); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600;">
+            {{ data.from.charAt(0).toUpperCase() }}
+          </div>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 16px;">{{ data.from }}</div>
+            <div style="color: #666; font-size: 13px;">{{ data.fromEmail }}</div>
+          </div>
+          <div style="text-align: right; color: #888; font-size: 13px;">
+            <div>{{ data.date | date:'dd MMM yyyy' }}</div>
+            <div>{{ data.date | date:'HH:mm:ss' }}</div>
+          </div>
+        </div>
+
+        <div style="background: #f5f5f5; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px;">
+          <div style="font-weight: 600; font-size: 18px; margin-bottom: 4px;">{{ data.subject }}</div>
+          @if (data.hasAttachments) {
+            <mat-chip style="margin-top: 4px;">
+              <mat-icon style="font-size: 16px; width: 16px; height: 16px;">attach_file</mat-icon>
+              Has Attachments
+            </mat-chip>
+          }
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <div style="margin-top: 12px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: #666; font-size: 13px;">
+            <strong style="min-width: 60px;">To:</strong>
+            <span>{{ data.to.join(', ') || 'N/A' }}</span>
+          </div>
+          @if (data.cc.length > 0) {
+            <div style="display: flex; gap: 8px; margin-bottom: 6px; color: #666; font-size: 13px;">
+              <strong style="min-width: 60px;">Cc:</strong>
+              <span>{{ data.cc.join(', ') }}</span>
+            </div>
+          }
+          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: #666; font-size: 13px;">
+            <strong style="min-width: 60px;">Mailbox:</strong>
+            <span>{{ data.accountEmail }}</span>
+          </div>
+        </div>
+
+        @if (data.preview) {
+          <mat-divider style="margin: 12px 0;"></mat-divider>
+          <div style="padding: 12px; background: #fafafa; border-radius: 8px; border-left: 3px solid #1a237e; font-size: 14px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
+            {{ data.preview }}
+          </div>
+        }
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="copyEmail()">
+        <mat-icon>content_copy</mat-icon> Copy Sender
+      </button>
+      <button mat-raised-button color="primary" mat-dialog-close>
+        <mat-icon>close</mat-icon> Close
+      </button>
+    </mat-dialog-actions>
+  `
+})
+export class EmailDetailDialogComponent {
+  data = inject<IncomingOrderEmail>(MAT_DIALOG_DATA);
+  private snackBar = inject(MatSnackBar);
+
+  copyEmail(): void {
+    navigator.clipboard.writeText(this.data.fromEmail).then(() => {
+      this.snackBar.open(`Copied: ${this.data.fromEmail}`, 'Close', { duration: 2000 });
     });
   }
 }

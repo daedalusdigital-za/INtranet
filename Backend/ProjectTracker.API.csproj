@@ -12,6 +12,7 @@
     <PackageReference Include="EPPlus" Version="7.0.0" />
     <PackageReference Include="itext7" Version="8.0.2" />
     <PackageReference Include="itext7.pdfhtml" Version="6.3.1" />
+    <PackageReference Include="MailKit" Version="4.9.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.1" />

@@ -204,6 +204,9 @@ builder.Services.AddScoped<TripSheetImportService>();
 // Email Service
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+// IMAP Email Search Service
+builder.Services.AddScoped<EmailSearchService>();
+
 // Add comprehensive AI Context Service for database access
 builder.Services.AddScoped<IAIContextService, AIContextService>();
 
