@@ -129,6 +129,7 @@ interface IncomingOrderEmail {
   priority: string;
   to: string[];
   cc: string[];
+  foundInAccounts: string[];
 }
 
 interface SalesStats {
@@ -664,9 +665,11 @@ interface SalesReportResponse {
                         <div class="email-meta">
                           <span class="email-time">{{ email.date | date:'HH:mm' }}</span>
                           <span class="email-date">{{ email.date | date:'dd MMM' }}</span>
-                          <mat-chip class="mailbox-chip" matTooltip="Received in mailbox">
-                            {{ getMailboxName(email.accountEmail) }}
-                          </mat-chip>
+                          @for (acct of email.foundInAccounts; track acct) {
+                            <mat-chip class="mailbox-chip" matTooltip="Received in {{ acct }}">
+                              {{ getMailboxName(acct) }}
+                            </mat-chip>
+                          }
                         </div>
                         <div class="email-actions">
                           <button mat-icon-button matTooltip="View email" (click)="viewEmailDetail(email)">
@@ -6621,7 +6624,7 @@ export class SalesDashboardComponent implements OnInit {
           }
           <div style="display: flex; gap: 8px; margin-bottom: 6px; color: #666; font-size: 13px;">
             <strong style="min-width: 60px;">Mailbox:</strong>
-            <span>{{ data.accountEmail }}</span>
+            <span>{{ data.foundInAccounts?.join(', ') || data.accountEmail }}</span>
           </div>
         </div>
 

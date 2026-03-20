@@ -21,6 +21,7 @@ namespace ProjectTracker.API.Services
         public string Priority { get; set; } = "Normal";
         public List<string> To { get; set; } = new();
         public List<string> Cc { get; set; } = new();
+        public List<string> FoundInAccounts { get; set; } = new();
     }
 
     public class EmailSearchRequest
@@ -109,8 +110,25 @@ namespace ProjectTracker.API.Services
             });
 
             var allResults = await Task.WhenAll(tasks);
-            results = allResults
-                .SelectMany(r => r)
+            
+            // Deduplicate by MessageId — same email CC'd to multiple mailboxes should only appear once
+            var deduped = new Dictionary<string, EmailSearchResult>(StringComparer.OrdinalIgnoreCase);
+            foreach (var email in allResults.SelectMany(r => r).OrderByDescending(r => r.Date))
+            {
+                if (deduped.TryGetValue(email.MessageId, out var existing))
+                {
+                    // Already seen this email — just track which additional mailbox had it
+                    if (!existing.FoundInAccounts.Contains(email.AccountEmail, StringComparer.OrdinalIgnoreCase))
+                        existing.FoundInAccounts.Add(email.AccountEmail);
+                }
+                else
+                {
+                    email.FoundInAccounts = new List<string> { email.AccountEmail };
+                    deduped[email.MessageId] = email;
+                }
+            }
+
+            results = deduped.Values
                 .OrderByDescending(r => r.Date)
                 .Take(request.MaxResults)
                 .ToList();
