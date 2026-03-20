@@ -396,6 +396,12 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       justify-content: space-between;
       align-items: flex-start;
       margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .board-info {
+      flex: 1;
+      min-width: 0;
     }
 
     .board-info h2 {
@@ -410,6 +416,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     .board-description {
       margin: 0 0 12px 0;
       color: #666;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
     }
 
     .board-meta {
