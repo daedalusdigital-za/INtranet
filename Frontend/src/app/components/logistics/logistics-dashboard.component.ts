@@ -5830,7 +5830,7 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
-  // Open Welly Suggests Dialog â€” AI-batched tripsheet suggestions by warehouse
+  // Open Welly Suggests Dialog — AI-batched tripsheet suggestions by warehouse
   openWellySuggestsDialog(): void {
     const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
     const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
@@ -6487,7 +6487,7 @@ Notes: ${record.notes || 'No notes'}
     });
 
     dialogRef.afterClosed().subscribe(() => {
-      // Always refresh count after dialog closes â€” Welly fixes may have been applied
+      // Always refresh count after dialog closes — Welly fixes may have been applied
       this.loadAddressIssuesCount();
       this.loadCustomers();
     });
@@ -8022,7 +8022,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
           const infoContent = `
             <div style="padding: 12px; min-width: 220px;">
               <h3 style="margin: 0 0 8px 0; color: #e65100; font-size: 16px;">
-                <span style="font-size: 20px;">ðŸ­</span> ${depot.name}
+                <span style="font-size: 20px;">🏭</span> ${depot.name}
               </h3>
               <p style="margin: 4px 0; font-size: 13px;"><strong>Code:</strong> ${depot.code || 'N/A'}</p>
               <p style="margin: 4px 0; font-size: 13px;"><strong>Distance:</strong> <span style="color: #1976d2; font-weight: bold;">${depot.distanceKm} km</span></p>
@@ -8165,7 +8165,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
               @if (selectedWarehouse) {
                 <div class="warehouse-info">
                   <mat-icon>warehouse</mat-icon>
-                  <span>{{ selectedWarehouse.address }}, {{ selectedWarehouse.city }} â€¢ Manager: {{ selectedWarehouse.managerName }}</span>
+                  <span>{{ selectedWarehouse.address }}, {{ selectedWarehouse.city }} • Manager: {{ selectedWarehouse.managerName }}</span>
                 </div>
               }
             </div>
@@ -10558,7 +10558,7 @@ export class SuggestedTripsDialog implements OnInit {
               <div class="card-vehicle">
                 <div class="vehicle-plate">
                   <mat-icon>directions_car</mat-icon>
-                  <span class="plate-text">{{ order.vehicleRegistration || order.vehicle?.registrationNumber || 'â€”' }}</span>
+                  <span class="plate-text">{{ order.vehicleRegistration || order.vehicle?.registrationNumber || '—' }}</span>
                 </div>
                 @if (order.virtualCardNumber) {
                   <span class="virtual-card">
@@ -10888,7 +10888,7 @@ export class TfnOrdersListDialog {
 
   getShortStatus(status: string): string {
     if (!status) return 'Pending';
-    if (status.length > 20) return status.substring(0, 18) + 'â€¦';
+    if (status.length > 20) return status.substring(0, 18) + '…';
     return status;
   }
 
@@ -12194,7 +12194,7 @@ interface CustomerAddressIssue {
               <mat-spinner diameter="16"></mat-spinner>
               <span>Welly is analyzing...</span>
             } @else {
-              <span>ðŸ¤–</span>
+              <span>🤖</span>
               <span>Ask Welly to Fix All</span>
             }
           </button>
@@ -12204,7 +12204,7 @@ interface CustomerAddressIssue {
         @if (showWellyReview) {
           <div class="welly-review-panel">
             <div class="welly-review-header">
-              <div class="welly-avatar">ðŸ¤–</div>
+              <div class="welly-avatar">🤖</div>
               <div>
                 <h3>Welly's Suggested Fixes</h3>
                 <p>Review each suggestion below. Toggle off any you don't want to apply.</p>
@@ -12249,7 +12249,7 @@ interface CustomerAddressIssue {
                           <span class="welly-chip postal">{{ fix.suggestedPostalCode }}</span>
                         }
                         @if (fix.suggestedLatitude && fix.suggestedLongitude) {
-                          <span class="welly-chip gps">ðŸ“ GPS</span>
+                          <span class="welly-chip gps">📍 GPS</span>
                         }
                       </div>
                     } @else {
@@ -12893,7 +12893,7 @@ export class AddressIssuesDialog {
         this.showWellyReview = false;
         this.wellyFixes = [];
         this.snackBar.open(
-          `âœ… Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
+          `✅ Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
           'Close', { duration: 4000 }
         );
         // Reload the customers list to reflect changes
@@ -14848,7 +14848,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                   <div class="review-card">
                     <h4><mat-icon>route</mat-icon> Route Info</h4>
                     <p class="main-value">{{ selectedStops.length }} stops</p>
-                    <p class="sub-value">{{ totalDistance | number:'1.0-0' }} km â€¢ {{ estimatedTime }}</p>
+                    <p class="sub-value">{{ totalDistance | number:'1.0-0' }} km • {{ estimatedTime }}</p>
                     <p class="sub-value">Total (incl. VAT): R {{ totalValue * 1.15 | number:'1.2-2' }}</p>
                   </div>
                 </div>
@@ -17038,7 +17038,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           this.fuelEstimate = Math.round((this.totalDistance / 100) * this.avgFuelConsumption);
           this.fuelCost = Math.round(this.fuelEstimate * this.fuelPricePerLiter);
           
-          this.optimizationMessage = `âœ“ Route optimized: ${this.totalDistance}km, ${this.estimatedTime}, ~R${this.fuelCost} fuel`;
+          this.optimizationMessage = `✓ Route optimized: ${this.totalDistance}km, ${this.estimatedTime}, ~R${this.fuelCost} fuel`;
           this.optimizationSuccess = true;
           
           // Update map
@@ -17110,7 +17110,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           );
           
           this.showDistanceMatrix = true;
-          this.optimizationMessage = `âœ“ Distance matrix calculated: ${locations.length}x${locations.length} (${locations.length * locations.length} routes)`;
+          this.optimizationMessage = `✓ Distance matrix calculated: ${locations.length}x${locations.length} (${locations.length * locations.length} routes)`;
           this.optimizationSuccess = true;
         } else {
           this.optimizationMessage = 'Matrix calculation failed: ' + (result.error || 'Unknown error');
@@ -17790,7 +17790,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     // Show snackbar notification
     this.snackBar.open(
-      `âœ“ Applied saved address for ${group.customerName}`,
+      `✓ Applied saved address for ${group.customerName}`,
       'OK',
       { duration: 2000, panelClass: ['info-snackbar'] }
     );
@@ -17840,7 +17840,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         
         // Show success snackbar notification
         this.snackBar.open(
-          `âœ“ Address saved for ${group.customerName}`,
+          `✓ Address saved for ${group.customerName}`,
           'OK',
           { duration: 3000, panelClass: ['success-snackbar'] }
         );
@@ -17848,7 +17848,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       error: (err) => {
         console.error('Failed to save address:', err);
         this.snackBar.open(
-          `âœ— Failed to save address: ${err.error?.message || 'Unknown error'}`,
+          `✗ Failed to save address: ${err.error?.message || 'Unknown error'}`,
           'Dismiss',
           { duration: 5000, panelClass: ['error-snackbar'] }
         );
@@ -17893,7 +17893,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         const errorCount = result.errors?.length || 0;
         if (savedCount > 0) {
           this.snackBar.open(
-            `âœ“ ${savedCount} address${savedCount > 1 ? 'es' : ''} saved for future use`,
+            `✓ ${savedCount} address${savedCount > 1 ? 'es' : ''} saved for future use`,
             'OK',
             { duration: 4000, panelClass: ['success-snackbar'] }
           );
@@ -18376,21 +18376,21 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       <body>
         <div class="header">
           <div class="header-left">
-            <span class="logo">ðŸš› TRIP SHEET</span>
+            <span class="logo">🚛 TRIP SHEET</span>
             <span class="trip-badge">LOAD-${Date.now().toString().slice(-6)}</span>
           </div>
           <div class="company">Rocket Freight<br/><span style="color: #666; font-size: 8px;">Logistics Division</span></div>
         </div>
         
         <div class="info-strip">
-          <div class="info-item"><span>ðŸ‘¤</span> <strong>${this.selectedDriver ? this.selectedDriver.firstName + ' ' + this.selectedDriver.lastName : 'UNASSIGNED'}</strong></div>
-          <div class="info-item"><span>ðŸš›</span> <strong>${this.selectedVehicle?.registrationNumber || 'N/A'}</strong> <span class="info-sub">${this.selectedVehicle?.type || ''}</span></div>
-          <div class="info-item"><span>ðŸ“…</span> <strong>${new Date().toLocaleDateString('en-ZA')}</strong></div>
-          <div class="info-item"><span>ðŸ“</span> <strong>${this.selectedWarehouse?.name || 'Warehouse'}</strong> <span class="info-sub">${this.selectedWarehouse?.city || ''}</span></div>
-          <div class="info-item"><span>ðŸšš</span> <strong>${this.selectedStops.length} Stops</strong> <span class="info-sub">(${uniqueCustomerCount} customers)</span></div>
-          <div class="info-item"><span>â±ï¸</span> <strong>${this.totalDistance}km</strong> <span class="info-sub">${this.estimatedTime} (incl. ${uniqueCustomerCount}h offload)</span></div>
-          <div class="info-item" style="background: #fff3e0; border-color: #ff9800;"><span>ðŸ”„</span> <strong>Return:</strong> <span class="info-sub">${returnDistKm}km â€¢ ${returnTimeStr}</span></div>
-          <div class="info-item"><span>ðŸ’°</span> <strong>R ${this.totalValue.toFixed(2)}</strong></div>
+          <div class="info-item"><span>👤</span> <strong>${this.selectedDriver ? this.selectedDriver.firstName + ' ' + this.selectedDriver.lastName : 'UNASSIGNED'}</strong></div>
+          <div class="info-item"><span>🚛</span> <strong>${this.selectedVehicle?.registrationNumber || 'N/A'}</strong> <span class="info-sub">${this.selectedVehicle?.type || ''}</span></div>
+          <div class="info-item"><span>📅</span> <strong>${new Date().toLocaleDateString('en-ZA')}</strong></div>
+          <div class="info-item"><span>📍</span> <strong>${this.selectedWarehouse?.name || 'Warehouse'}</strong> <span class="info-sub">${this.selectedWarehouse?.city || ''}</span></div>
+          <div class="info-item"><span>🚚</span> <strong>${this.selectedStops.length} Stops</strong> <span class="info-sub">(${uniqueCustomerCount} customers)</span></div>
+          <div class="info-item"><span>⏱️</span> <strong>${this.totalDistance}km</strong> <span class="info-sub">${this.estimatedTime} (incl. ${uniqueCustomerCount}h offload)</span></div>
+          <div class="info-item" style="background: #fff3e0; border-color: #ff9800;"><span>🔄</span> <strong>Return:</strong> <span class="info-sub">${returnDistKm}km • ${returnTimeStr}</span></div>
+          <div class="info-item"><span>💰</span> <strong>R ${this.totalValue.toFixed(2)}</strong></div>
         </div>
         
         <table>
@@ -18403,7 +18403,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
               <th style="width: 140px;">PRODUCT</th>
               <th class="center" style="width: 45px;">QTY</th>
               <th class="right" style="width: 70px;">VALUE</th>
-              <th class="center" style="width: 35px;">âœ“</th>
+              <th class="center" style="width: 35px;">✓</th>
             </tr>
           </thead>
           <tbody>
@@ -18419,14 +18419,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         
         <div class="bottom-section">
           <div class="section-box">
-            <h4>ðŸ“Š VEHICLE RECORD</h4>
+            <h4>📊 VEHICLE RECORD</h4>
             <div class="km-grid">
               <div class="km-field"><label>Opening KM:</label><div class="input-box"></div></div>
               <div class="km-field"><label>Closing KM:</label><div class="input-box"></div></div>
             </div>
           </div>
           <div class="section-box">
-            <h4>âœï¸ SIGNATURES</h4>
+            <h4>✍️ SIGNATURES</h4>
             <div class="sig-grid">
               <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Driver</div></div>
               <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Dispatch</div></div>
@@ -22849,12 +22849,12 @@ export class ViewRouteMapDialog implements OnInit {
                       <td class="center">{{ vehicle.no }}</td>
                       <td><span class="vehicle-type">{{ vehicle.vehicleType }}</span></td>
                       <td class="mono">{{ vehicle.registration }}</td>
-                      <td>{{ vehicle.driver || 'â€”' }}</td>
+                      <td>{{ vehicle.driver || '—' }}</td>
                       <td class="date-cell">{{ vehicle.dispatchDate }}</td>
                       <td class="currency">{{ vehicle.value | currency: 'R ' }}</td>
-                      <td class="route-cell" [title]="vehicle.route || ''">{{ vehicle.route || 'â€”' }}</td>
-                      <td class="center">{{ vehicle.stops || 'â€”' }}</td>
-                      <td class="notes-cell">{{ vehicle.comment || 'â€”' }}</td>
+                      <td class="route-cell" [title]="vehicle.route || ''">{{ vehicle.route || '—' }}</td>
+                      <td class="center">{{ vehicle.stops || '—' }}</td>
+                      <td class="notes-cell">{{ vehicle.comment || '—' }}</td>
                       <td class="currency mtd">{{ vehicle.monthlyValue | currency: 'R ' }}</td>
                     </tr>
                   }
@@ -24704,7 +24704,8 @@ export class VehicleStatusDialog {
     MatNativeDateModule,
     MatDividerModule,
     MatSlideToggleModule,
-    MatCheckboxModule
+    MatCheckboxModule,
+    MatAutocompleteModule
   ],
   template: `
     <div class="welly-wizard">
@@ -24750,8 +24751,8 @@ export class VehicleStatusDialog {
             <div class="welly-says">
               <mat-icon class="welly-icon">smart_toy</mat-icon>
               <div class="bubble">
-                Hi! Upload your Excel file and I'll analyze it â€” finding customers, matching invoices,
-                resolving addresses, and setting up an optimized tripsheet for you. ðŸš›
+                Hi! Upload your Excel file and I'll analyze it — finding customers, matching invoices,
+                resolving addresses, and setting up an optimized tripsheet for you. 🚛
               </div>
             </div>
             <div class="upload-zone" (click)="fileInput.click()"
@@ -24761,11 +24762,11 @@ export class VehicleStatusDialog {
               @if (!selectedFile) {
                 <mat-icon class="upload-icon">cloud_upload</mat-icon>
                 <h3>Drop your Excel file here</h3>
-                <p>or click to browse â€” .xlsx files up to 10MB</p>
+                <p>or click to browse — .xlsx files up to 10MB</p>
               } @else {
                 <mat-icon class="upload-icon done">description</mat-icon>
                 <h3>{{ selectedFile.name }}</h3>
-                <p>{{ (selectedFile.size / 1024).toFixed(1) }} KB â€” Ready to analyze</p>
+                <p>{{ (selectedFile.size / 1024).toFixed(1) }} KB — Ready to analyze</p>
               }
             </div>
             <div class="step-actions">
@@ -24798,7 +24799,7 @@ export class VehicleStatusDialog {
                 @if (analysisResult.errors > 0) {
                   <span class="badge err">{{ analysisResult.errors }} errors</span>
                 }
-                â€” Review below and I'll handle the rest!
+                — Review below and I'll handle the rest!
               </div>
             </div>
 
@@ -24824,10 +24825,10 @@ export class VehicleStatusDialog {
                         @else if (row.status === 'Unmatched') { <mat-icon class="s-warn">warning</mat-icon> }
                         @else { <mat-icon class="s-err">error</mat-icon> }
                       </td>
-                      <td>{{ row.data?.invoiceNumber || 'â€”' }}</td>
-                      <td>{{ row.data?.customerName || 'â€”' }}</td>
-                      <td class="addr-cell">{{ row.data?.deliveryAddress || 'â€”' }}</td>
-                      <td>{{ row.data?.city || 'â€”' }}</td>
+                      <td>{{ row.data?.invoiceNumber || '—' }}</td>
+                      <td>{{ row.data?.customerName || '—' }}</td>
+                      <td class="addr-cell">{{ row.data?.deliveryAddress || '—' }}</td>
+                      <td>{{ row.data?.city || '—' }}</td>
                       <td class="num">{{ row.data?.quantity || 0 }}</td>
                       <td class="num">R{{ (row.data?.salesAmount || 0) | number:'1.2-2' }}</td>
                     </tr>
@@ -24898,7 +24899,7 @@ export class VehicleStatusDialog {
               <mat-icon class="welly-icon">smart_toy</mat-icon>
               <div class="bubble">
                 @if (addressIssueRows.length === 0) {
-                  All addresses look good! âœ… No issues found.
+                  All addresses look good! ✅ No issues found.
                 } @else {
                   I found <strong>{{ addressIssueRows.length }}</strong> rows with missing or unclear addresses.
                   Please fill in the correct addresses below so I can include them in the route.
@@ -24913,12 +24914,23 @@ export class VehicleStatusDialog {
                     <div class="afc-header">
                       <mat-icon class="s-warn">location_off</mat-icon>
                       <strong>{{ row.data?.customerName || 'Unknown' }}</strong>
-                      <span class="inv-chip">{{ row.data?.invoiceNumber || 'â€”' }}</span>
+                      <span class="inv-chip">{{ row.data?.invoiceNumber || '—' }}</span>
                     </div>
                     <div class="afc-fields">
                       <mat-form-field appearance="outline" class="addr-field">
                         <mat-label>Delivery Address</mat-label>
-                        <input matInput [(ngModel)]="row.data.deliveryAddress" placeholder="e.g. 123 Main Rd, Industrial Park">
+                        <input matInput [(ngModel)]="row.data.deliveryAddress" 
+                               [matAutocomplete]="wizardAddrAuto"
+                               (input)="onWizardAddressInput(row, $event)"
+                               placeholder="Start typing address...">
+                        <mat-autocomplete #wizardAddrAuto="matAutocomplete" (optionSelected)="onWizardAddressSelected(row, $event)">
+                          @for (prediction of wizardAddressPredictions; track $index) {
+                            <mat-option [value]="prediction.description">
+                              <mat-icon>place</mat-icon>
+                              <span>{{ prediction.description }}</span>
+                            </mat-option>
+                          }
+                        </mat-autocomplete>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="city-field">
                         <mat-label>City</mat-label>
@@ -24975,10 +24987,10 @@ export class VehicleStatusDialog {
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Select Driver</mat-label>
                   <mat-select [(ngModel)]="selectedDriverId">
-                    <mat-option [value]="null">â€” Assign Later â€”</mat-option>
+                    <mat-option [value]="null">— Assign Later —</mat-option>
                     @for (d of analysisResult.drivers; track d.id) {
                       <mat-option [value]="d.id">
-                        {{ d.name }} ({{ d.licenseType }}) {{ d.activeLoads === 0 ? 'âœ…' : 'âš ï¸ ' + d.activeLoads + ' active' }}
+                        {{ d.name }} ({{ d.licenseType }}) {{ d.activeLoads === 0 ? '✅' : '⚠️ ' + d.activeLoads + ' active' }}
                       </mat-option>
                     }
                   </mat-select>
@@ -24990,10 +25002,10 @@ export class VehicleStatusDialog {
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Select Vehicle</mat-label>
                   <mat-select [(ngModel)]="selectedVehicleId">
-                    <mat-option [value]="null">â€” Assign Later â€”</mat-option>
+                    <mat-option [value]="null">— Assign Later —</mat-option>
                     @for (v of analysisResult.vehicles; track v.id) {
                       <mat-option [value]="v.id">
-                        {{ v.registrationNumber }} â€” {{ v.type }} ({{ v.make }} {{ v.model }}) {{ v.activeLoads === 0 ? 'âœ…' : 'âš ï¸' }}
+                        {{ v.registrationNumber }} — {{ v.type }} ({{ v.make }} {{ v.model }}) {{ v.activeLoads === 0 ? '✅' : '⚠️' }}
                       </mat-option>
                     }
                   </mat-select>
@@ -25037,7 +25049,7 @@ export class VehicleStatusDialog {
               <mat-icon class="welly-icon">smart_toy</mat-icon>
               <div class="bubble">
                 Here's your tripsheet summary. Review everything and hit <strong>Create Tripsheet</strong> when you're happy!
-                If I got something wrong, go back and fix it â€” I'll learn from your corrections. ðŸ§ 
+                If I got something wrong, go back and fix it — I'll learn from your corrections. 🧠
               </div>
             </div>
 
@@ -25090,7 +25102,7 @@ export class VehicleStatusDialog {
             <div class="done-icon">
               <mat-icon>check_circle</mat-icon>
             </div>
-            <h2>Tripsheet Created! ðŸŽ‰</h2>
+            <h2>Tripsheet Created! 🎉</h2>
             <p class="done-number">{{ createdTripsheetNumber }}</p>
             <p>{{ createdMessage }}</p>
 
@@ -25098,7 +25110,7 @@ export class VehicleStatusDialog {
               <mat-icon class="welly-icon">smart_toy</mat-icon>
               <div class="bubble">
                 Did I get everything right? If you made any corrections along the way, I've already noted them.
-                I'll use those to do even better next time! ðŸ’ª
+                I'll use those to do even better next time! 💪
               </div>
             </div>
 
@@ -25298,12 +25310,101 @@ export class WellyTripsheetWizardDialog {
   createdMessage = '';
   corrections: any[] = [];
 
+  // Google Places Autocomplete for address fields
+  wizardAddressPredictions: any[] = [];
+  private autocompleteService: any = null;
+  private ngZone = inject(NgZone);
+
   private http = inject(HttpClient);
 
   constructor(
     public dialogRef: MatDialogRef<WellyTripsheetWizardDialog>,
     @Inject(MAT_DIALOG_DATA) public data: any
-  ) {}
+  ) {
+    // Initialize Google Places autocomplete service
+    this.initPlacesService();
+  }
+
+  private initPlacesService(): void {
+    if (typeof google !== 'undefined' && google.maps && (google.maps as any).places) {
+      this.autocompleteService = new (google.maps as any).places.AutocompleteService();
+    }
+  }
+
+  // Google Places address input handler
+  onWizardAddressInput(row: any, event: any): void {
+    const query = event.target.value;
+    if (query && query.length > 2) {
+      this.searchWizardAddresses(query);
+    } else {
+      this.wizardAddressPredictions = [];
+    }
+  }
+
+  // Search addresses using Google Places Autocomplete
+  private searchWizardAddresses(query: string): void {
+    if (!this.autocompleteService) {
+      if (typeof google !== 'undefined' && google.maps && (google.maps as any).places) {
+        this.autocompleteService = new (google.maps as any).places.AutocompleteService();
+      } else {
+        return;
+      }
+    }
+
+    this.autocompleteService.getPlacePredictions({
+      input: query,
+      componentRestrictions: { country: 'za' }
+    }, (predictions: any, status: any) => {
+      this.ngZone.run(() => {
+        if (status === (google.maps as any).places.PlacesServiceStatus.OK && predictions) {
+          this.wizardAddressPredictions = predictions;
+        } else {
+          this.wizardAddressPredictions = [];
+        }
+      });
+    });
+  }
+
+  // Handle autocomplete selection - parse address into components
+  onWizardAddressSelected(row: any, event: any): void {
+    const selectedAddress = event.option.value;
+    row.data.deliveryAddress = selectedAddress;
+    this.wizardAddressPredictions = [];
+
+    // Try to extract city from the address
+    const parts = selectedAddress.split(',').map((p: string) => p.trim());
+    if (parts.length >= 2) {
+      // Usually: "Street, Suburb, City, Province, Country"
+      // Try to find the city (typically 2nd or 3rd from end before country)
+      const cityCandidate = parts.length >= 3 ? parts[parts.length - 3] : parts[parts.length - 2];
+      if (cityCandidate && !row.data.city) {
+        row.data.city = cityCandidate;
+      }
+    }
+
+    // Try to extract province
+    const provinceMap: Record<string, string> = {
+      'gauteng': 'Gauteng', 'gp': 'Gauteng',
+      'kwazulu-natal': 'KwaZulu-Natal', 'kzn': 'KwaZulu-Natal',
+      'western cape': 'Western Cape', 'wc': 'Western Cape',
+      'eastern cape': 'Eastern Cape', 'ec': 'Eastern Cape',
+      'free state': 'Free State', 'fs': 'Free State',
+      'limpopo': 'Limpopo', 'lp': 'Limpopo',
+      'mpumalanga': 'Mpumalanga', 'mp': 'Mpumalanga',
+      'north west': 'North West', 'nw': 'North West',
+      'northern cape': 'Northern Cape', 'nc': 'Northern Cape'
+    };
+
+    const addressLower = selectedAddress.toLowerCase();
+    for (const [key, value] of Object.entries(provinceMap)) {
+      if (addressLower.includes(key)) {
+        if (!row.data.province) {
+          row.data.province = value;
+        }
+        break;
+      }
+    }
+  }
 
   // --- Upload ---
   onFileSelected(event: any): void {
@@ -25511,7 +25612,7 @@ export class WellyTripsheetWizardDialog {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Welly Suggests Dialog â€” AI-batched tripsheet suggestions by warehouse
+// Welly Suggests Dialog — AI-batched tripsheet suggestions by warehouse
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 @Component({
   selector: 'welly-suggests-dialog',
@@ -25555,7 +25656,7 @@ export class WellyTripsheetWizardDialog {
       <!-- Welly Speech Bubble -->
       <div class="welly-speech" *ngIf="!loading && suggestions?.warehouses?.length">
         <div class="speech-bubble">
-          <strong>ðŸ§  Hey! I've analyzed all {{ suggestions.totalPending }} pending invoices</strong> and grouped them
+          <strong>🧠 Hey! I've analyzed all {{ suggestions.totalPending }} pending invoices</strong> and grouped them
           into <strong>{{ getTotalSuggestedTrips() }} optimized tripsheets</strong> across
           {{ suggestions.totalWarehouses }} warehouse(s). Each batch groups nearby customers
           by province and city for efficient routes. Review the suggestions below and hit
@@ -25585,7 +25686,7 @@ export class WellyTripsheetWizardDialog {
         <div class="empty-state">
           <mat-icon>check_circle</mat-icon>
           <h3>All caught up!</h3>
-          <p>No pending invoices need tripsheet assignment. Great work! ðŸŽ‰</p>
+          <p>No pending invoices need tripsheet assignment. Great work! 🎉</p>
         </div>
       </div>
 
@@ -25691,7 +25792,7 @@ export class WellyTripsheetWizardDialog {
                       <tr *ngFor="let cust of batch.customers">
                         <td class="customer-name">{{ cust.customerName }}</td>
                         <td class="customer-code">{{ cust.customerNumber }}</td>
-                        <td>{{ cust.city || 'â€”' }}</td>
+                        <td>{{ cust.city || '—' }}</td>
                         <td>{{ cust.invoiceCount }}</td>
                         <td class="right">R{{ formatMoney(cust.totalAmount) }}</td>
                       </tr>
