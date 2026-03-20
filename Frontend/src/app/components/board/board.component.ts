@@ -879,6 +879,24 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       border-image: linear-gradient(180deg, #1e90ff 0%, #4169e1 100%) 1;
       background: white;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .card :deep(.mat-mdc-card-header) {
+      overflow: hidden;
+    }
+
+    .card :deep(.mat-mdc-card-title) {
+      font-size: 15px;
+      white-space: normal;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      overflow: hidden;
+    }
+
+    .card :deep(.mdc-card__content),
+    .card :deep(mat-card-content) {
+      overflow: hidden;
     }
 
     .card:hover {
@@ -898,9 +916,17 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     }
 
     .card-description {
-      font-size: 14px;
+      font-size: 13px;
       color: #666;
       margin: 8px 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      line-height: 1.4;
     }
 
     .card-meta {
