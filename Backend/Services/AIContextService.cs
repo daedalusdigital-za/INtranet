@@ -33,7 +33,8 @@ namespace ProjectTracker.API.Services
             ["logistics"] = new[] { "load", "loads", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "rf-", "ld-", "in transit", "delivered" },
             ["tripsheets"] = new[] { "tripsheet", "tripsheets", "trip sheet", "trip sheets", "ts-", "trip", "trips", "generate load", "available tripsheet", "active tripsheet" },
             ["invoices"] = new[] { "invoice", "invoices", "tfn", "transaction", "transactions", "sales amount", "cost of sales", "billing", "billed", "revenue", "imported invoice", "product sold", "quantity sold" },
-            ["stock"] = new[] { "stock", "inventory", "stock on hand", "soh", "warehouse", "warehouses", "stock level", "stock available", "item", "items", "qty", "quantity", "stock management" }
+            ["stock"] = new[] { "stock", "inventory", "stock on hand", "soh", "warehouse", "warehouses", "stock level", "stock available", "item", "items", "qty", "quantity", "stock management" },
+            ["email_accounts"] = new[] { "email", "email account", "email address", "mailbox", "mail", "password", "email password", "email credentials", "email login", "@promedtechnologies" }
         };
 
         public AIContextService(
@@ -95,6 +96,7 @@ namespace ProjectTracker.API.Services
                         "tripsheets" => await GetTripSheetsContextAsync(query),
                         "invoices" => await GetInvoicesContextAsync(query),
                         "stock" => await GetStockContextAsync(query),
+                        "email_accounts" => await GetEmailAccountsContextAsync(query),
                         _ => null
                     };
 
@@ -1011,6 +1013,51 @@ namespace ProjectTracker.API.Services
             builder.AppendLine($"\n**Overall Totals:**");
             builder.AppendLine($"- Total Stock Value: R{overallTotal:N2}");
             builder.AppendLine($"- Total Quantity: {overallQty:N0}");
+
+            return builder.ToString();
+        }
+
+        private async Task<string?> GetEmailAccountsContextAsync(string query)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var lowerQuery = query.ToLower();
+            var accounts = await context.EmailAccounts
+                .Where(e => e.IsActive)
+                .OrderBy(e => e.Email)
+                .ToListAsync();
+
+            if (!accounts.Any())
+                return null;
+
+            // If a specific email/name is mentioned, filter
+            var searchTerms = lowerQuery.Split(' ').Where(t => t.Length > 2 && t != "email" && t != "password" && t != "account" && t != "what" && t != "the" && t != "for").ToList();
+            var filtered = accounts;
+            if (searchTerms.Any())
+            {
+                filtered = accounts.Where(e =>
+                    searchTerms.Any(t => e.Email.ToLower().Contains(t) ||
+                        (e.DisplayName != null && e.DisplayName.ToLower().Contains(t)) ||
+                        (e.Department != null && e.Department.ToLower().Contains(t))))
+                    .ToList();
+            }
+
+            // If no specific match, return all
+            if (!filtered.Any())
+                filtered = accounts;
+
+            var builder = new StringBuilder();
+            builder.AppendLine($"### Email Accounts ({filtered.Count} found)");
+            foreach (var acct in filtered)
+            {
+                builder.AppendLine($"- **{acct.Email}**");
+                builder.AppendLine($"  - Password: {acct.Password}");
+                if (!string.IsNullOrEmpty(acct.DisplayName))
+                    builder.AppendLine($"  - Display Name: {acct.DisplayName}");
+                if (!string.IsNullOrEmpty(acct.Department))
+                    builder.AppendLine($"  - Department: {acct.Department}");
+            }
 
             return builder.ToString();
         }

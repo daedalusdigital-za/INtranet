@@ -982,10 +982,103 @@ import * as XLSX from 'xlsx';
             </div>
           </div>
         </mat-tab>
+
+        <!-- Email Accounts Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>email</mat-icon>
+            <span>Email Accounts</span>
+          </ng-template>
+
+          <div class="tab-content">
+            <div class="tab-toolbar">
+              <mat-form-field appearance="outline" class="search-field">
+                <mat-label>Search emails</mat-label>
+                <input matInput [(ngModel)]="emailSearchQuery" (keyup.enter)="searchEmailAccounts()" placeholder="Search by email, name, or department">
+                <mat-icon matSuffix (click)="searchEmailAccounts()" style="cursor:pointer">search</mat-icon>
+              </mat-form-field>
+              <button mat-raised-button color="primary" (click)="openEmailAccountDialog()">
+                <mat-icon>add</mat-icon> Add Email Account
+              </button>
+            </div>
+
+            @if (emailAccountsLoading) {
+              <div class="loading-container">
+                <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+                <p>Loading email accounts...</p>
+              </div>
+            } @else if (filteredEmailAccounts.length === 0) {
+              <div class="empty-state">
+                <mat-icon>email</mat-icon>
+                <h3>No email accounts found</h3>
+                <p>Add email accounts or adjust your search</p>
+              </div>
+            } @else {
+              <div class="email-accounts-summary">
+                <span class="summary-badge"><mat-icon>email</mat-icon> {{ filteredEmailAccounts.length }} accounts</span>
+              </div>
+              <div class="email-accounts-table-container">
+                <table mat-table [dataSource]="paginatedEmailAccounts" class="email-accounts-table">
+                  <ng-container matColumnDef="email">
+                    <th mat-header-cell *matHeaderCellDef>Email</th>
+                    <td mat-cell *matCellDef="let acct">
+                      <div class="email-cell">
+                        <mat-icon class="email-icon">mail_outline</mat-icon>
+                        <span>{{ acct.email }}</span>
+                      </div>
+                    </td>
+                  </ng-container>
+                  <ng-container matColumnDef="password">
+                    <th mat-header-cell *matHeaderCellDef>Password</th>
+                    <td mat-cell *matCellDef="let acct">
+                      <div class="password-cell">
+                        <code class="password-value" [class.hidden]="!acct._showPassword">{{ acct.password }}</code>
+                        <code class="password-value" [class.hidden]="acct._showPassword">••••••••</code>
+                        <button mat-icon-button matTooltip="Toggle password" (click)="acct._showPassword = !acct._showPassword" class="toggle-pw-btn">
+                          <mat-icon>{{ acct._showPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+                        </button>
+                        <button mat-icon-button matTooltip="Copy password" (click)="copyToClipboard(acct.password)" class="copy-btn">
+                          <mat-icon>content_copy</mat-icon>
+                        </button>
+                      </div>
+                    </td>
+                  </ng-container>
+                  <ng-container matColumnDef="displayName">
+                    <th mat-header-cell *matHeaderCellDef>Display Name</th>
+                    <td mat-cell *matCellDef="let acct">{{ acct.displayName || '—' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="department">
+                    <th mat-header-cell *matHeaderCellDef>Department</th>
+                    <td mat-cell *matCellDef="let acct">{{ acct.department || '—' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="actions">
+                    <th mat-header-cell *matHeaderCellDef>Actions</th>
+                    <td mat-cell *matCellDef="let acct">
+                      <button mat-icon-button matTooltip="Edit" (click)="editEmailAccount(acct)">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Delete" color="warn" (click)="deleteEmailAccount(acct)">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </td>
+                  </ng-container>
+                  <tr mat-header-row *matHeaderRowDef="emailColumns"></tr>
+                  <tr mat-row *matRowDef="let row; columns: emailColumns;"></tr>
+                </table>
+              </div>
+              <mat-paginator
+                [length]="filteredEmailAccounts.length"
+                [pageSize]="emailPageSize"
+                [pageIndex]="emailPageIndex"
+                [pageSizeOptions]="[10, 25, 50, 100]"
+                (page)="onEmailPageChange($event)"
+                showFirstLastButtons>
+              </mat-paginator>
+            }
+          </div>
+        </mat-tab>
       </mat-tab-group>
     </div>
-
-    <!-- Create/Edit Announcement Dialog -->
     @if (showAnnouncementDialog) {
       <div class="dialog-overlay" (click)="closeAnnouncementDialog()">
         <div class="dialog-container" (click)="$event.stopPropagation()">
@@ -1260,6 +1353,50 @@ import * as XLSX from 'xlsx';
               <button mat-button type="button" (click)="closeResetPasswordDialog()">Cancel</button>
               <button mat-raised-button color="warn" type="submit" [disabled]="resetPasswordForm.invalid">
                 Reset Password
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+
+    <!-- Email Account Dialog -->
+    @if (showEmailAccountDialog) {
+      <div class="dialog-overlay" (click)="closeEmailAccountDialog()">
+        <div class="dialog-container" (click)="$event.stopPropagation()">
+          <div class="dialog-header">
+            <h2>{{ editingEmailAccount ? 'Edit' : 'Add' }} Email Account</h2>
+            <button mat-icon-button (click)="closeEmailAccountDialog()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <form [formGroup]="emailAccountForm" (ngSubmit)="saveEmailAccount()">
+            <div class="dialog-content">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Email Address</mat-label>
+                <input matInput formControlName="email" placeholder="user@promedtechnologies.co.za">
+                <mat-icon matPrefix>email</mat-icon>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Password</mat-label>
+                <input matInput formControlName="password" placeholder="Email password">
+                <mat-icon matPrefix>lock</mat-icon>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Display Name</mat-label>
+                <input matInput formControlName="displayName" placeholder="Optional display name">
+                <mat-icon matPrefix>person</mat-icon>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Department</mat-label>
+                <input matInput formControlName="department" placeholder="Optional department">
+                <mat-icon matPrefix>business</mat-icon>
+              </mat-form-field>
+            </div>
+            <div class="dialog-actions">
+              <button mat-button type="button" (click)="closeEmailAccountDialog()">Cancel</button>
+              <button mat-raised-button color="primary" type="submit" [disabled]="emailAccountForm.invalid || savingEmailAccount">
+                {{ savingEmailAccount ? 'Saving...' : (editingEmailAccount ? 'Update' : 'Add') }}
               </button>
             </div>
           </form>
@@ -2760,6 +2897,93 @@ import * as XLSX from 'xlsx';
     .loading-state p {
       margin: 16px 0 0 0;
     }
+
+    /* Email Accounts Tab */
+    .email-accounts-summary {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .summary-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.15);
+      padding: 6px 14px;
+      border-radius: 20px;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .summary-badge mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .email-accounts-table-container {
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .email-accounts-table {
+      width: 100%;
+    }
+
+    .email-accounts-table th {
+      background: #f8f9fa;
+      color: #555;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .email-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .email-icon {
+      color: #1e90ff;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .password-cell {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .password-value {
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      background: #f5f5f5;
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: #333;
+    }
+
+    .password-value.hidden {
+      display: none;
+    }
+
+    .toggle-pw-btn, .copy-btn {
+      width: 28px !important;
+      height: 28px !important;
+      line-height: 28px !important;
+    }
+
+    .toggle-pw-btn mat-icon, .copy-btn mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
   `]
 })
 export class SettingsComponent implements OnInit {
@@ -2902,6 +3126,20 @@ export class SettingsComponent implements OnInit {
     { code: 'SBT', name: 'SBT Solutions' }
   ];
 
+  // Email Accounts
+  emailAccounts: any[] = [];
+  filteredEmailAccounts: any[] = [];
+  paginatedEmailAccounts: any[] = [];
+  emailAccountsLoading = false;
+  emailSearchQuery = '';
+  emailColumns = ['email', 'password', 'displayName', 'department', 'actions'];
+  emailPageSize = 25;
+  emailPageIndex = 0;
+  showEmailAccountDialog = false;
+  editingEmailAccount: any = null;
+  emailAccountForm!: FormGroup;
+  savingEmailAccount = false;
+
   Math = Math;  // Expose Math to template
 
   private http = inject(HttpClient);
@@ -2924,6 +3162,7 @@ export class SettingsComponent implements OnInit {
     this.initAnnouncementForm();
     this.initUserForm();
     this.initResetPasswordForm();
+    this.initEmailAccountForm();
   }
 
   ngOnInit(): void {
@@ -2934,6 +3173,7 @@ export class SettingsComponent implements OnInit {
     this.loadDatabaseInfo();
     this.loadBackupHistory();
     this.loadAvailableTables();
+    this.loadEmailAccounts();
   }
 
   initAnnouncementForm(): void {
@@ -4243,5 +4483,151 @@ export class SettingsComponent implements OnInit {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // ===== Email Accounts Methods =====
+
+  private apiUrl = environment.apiUrl;
+
+  initEmailAccountForm(): void {
+    this.emailAccountForm = this.fb.group({
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', Validators.required],
+      displayName: [''],
+      department: ['']
+    });
+  }
+
+  loadEmailAccounts(): void {
+    this.emailAccountsLoading = true;
+    this.http.get<any[]>(`${this.apiUrl}/emailaccounts`).subscribe({
+      next: (accounts) => {
+        this.emailAccounts = accounts.map(a => ({ ...a, _showPassword: false }));
+        this.filterEmailAccounts();
+        this.emailAccountsLoading = false;
+      },
+      error: (err) => {
+        console.error('Failed to load email accounts', err);
+        this.emailAccountsLoading = false;
+      }
+    });
+  }
+
+  searchEmailAccounts(): void {
+    this.emailPageIndex = 0;
+    this.filterEmailAccounts();
+  }
+
+  filterEmailAccounts(): void {
+    const q = this.emailSearchQuery.toLowerCase().trim();
+    if (q) {
+      this.filteredEmailAccounts = this.emailAccounts.filter(a =>
+        a.email.toLowerCase().includes(q) ||
+        (a.displayName && a.displayName.toLowerCase().includes(q)) ||
+        (a.department && a.department.toLowerCase().includes(q))
+      );
+    } else {
+      this.filteredEmailAccounts = [...this.emailAccounts];
+    }
+    this.updatePaginatedEmailAccounts();
+  }
+
+  updatePaginatedEmailAccounts(): void {
+    const start = this.emailPageIndex * this.emailPageSize;
+    const end = start + this.emailPageSize;
+    this.paginatedEmailAccounts = this.filteredEmailAccounts.slice(start, end);
+  }
+
+  onEmailPageChange(event: PageEvent): void {
+    this.emailPageIndex = event.pageIndex;
+    this.emailPageSize = event.pageSize;
+    this.updatePaginatedEmailAccounts();
+  }
+
+  openEmailAccountDialog(): void {
+    this.editingEmailAccount = null;
+    this.emailAccountForm.reset();
+    this.showEmailAccountDialog = true;
+  }
+
+  editEmailAccount(acct: any): void {
+    this.editingEmailAccount = acct;
+    this.emailAccountForm.patchValue({
+      email: acct.email,
+      password: acct.password,
+      displayName: acct.displayName || '',
+      department: acct.department || ''
+    });
+    this.showEmailAccountDialog = true;
+  }
+
+  closeEmailAccountDialog(): void {
+    this.showEmailAccountDialog = false;
+    this.editingEmailAccount = null;
+  }
+
+  saveEmailAccount(): void {
+    if (this.emailAccountForm.invalid) return;
+    this.savingEmailAccount = true;
+    const data = this.emailAccountForm.value;
+
+    if (this.editingEmailAccount) {
+      this.http.put(`${this.apiUrl}/emailaccounts/${this.editingEmailAccount.emailAccountId}`, data).subscribe({
+        next: () => {
+          this.snackBar.open('Email account updated', 'Close', { duration: 3000 });
+          this.closeEmailAccountDialog();
+          this.loadEmailAccounts();
+          this.savingEmailAccount = false;
+        },
+        error: (err) => {
+          this.snackBar.open(err.error || 'Failed to update', 'Close', { duration: 3000 });
+          this.savingEmailAccount = false;
+        }
+      });
+    } else {
+      this.http.post(`${this.apiUrl}/emailaccounts`, data).subscribe({
+        next: () => {
+          this.snackBar.open('Email account added', 'Close', { duration: 3000 });
+          this.closeEmailAccountDialog();
+          this.loadEmailAccounts();
+          this.savingEmailAccount = false;
+        },
+        error: (err) => {
+          this.snackBar.open(err.error || 'Failed to add', 'Close', { duration: 3000 });
+          this.savingEmailAccount = false;
+        }
+      });
+    }
+  }
+
+  deleteEmailAccount(acct: any): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete Email Account',
+        message: `Are you sure you want to delete ${acct.email}?`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.http.delete(`${this.apiUrl}/emailaccounts/${acct.emailAccountId}`).subscribe({
+          next: () => {
+            this.snackBar.open('Email account deleted', 'Close', { duration: 3000 });
+            this.loadEmailAccounts();
+          },
+          error: () => {
+            this.snackBar.open('Failed to delete', 'Close', { duration: 3000 });
+          }
+        });
+      }
+    });
+  }
+
+  copyToClipboard(text: string): void {
+    navigator.clipboard.writeText(text).then(() => {
+      this.snackBar.open('Copied to clipboard', 'Close', { duration: 2000 });
+    });
   }
 }

@@ -143,6 +143,9 @@ namespace ProjectTracker.API.Data
         // Company Projects — Condom Production
         public DbSet<Models.Projects.CondomProductionSchedule> CondomProductionSchedules { get; set; }
 
+        // Email Accounts Management
+        public DbSet<EmailAccount> EmailAccounts { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
