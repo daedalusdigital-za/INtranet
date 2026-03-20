@@ -695,16 +695,6 @@ interface SalesReportResponse {
                           </mat-menu>
                         </div>
                       </div>
-                      @if (email.to.length > 0 || email.cc.length > 0) {
-                        <div class="email-recipients">
-                          @if (email.to.length > 0) {
-                            <span class="recipient-label">To: {{ email.to.join(', ') }}</span>
-                          }
-                          @if (email.cc.length > 0) {
-                            <span class="recipient-label">Cc: {{ email.cc.join(', ') }}</span>
-                          }
-                        </div>
-                      }
                     </mat-card>
                   }
                 </div>
@@ -5523,6 +5513,13 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   viewEmailDetail(email: IncomingOrderEmail): void {
+    const pin = prompt('Enter PIN to view email:');
+    if (pin !== '000') {
+      if (pin !== null) {
+        this.snackBar.open('Incorrect PIN', 'Close', { duration: 2000, panelClass: ['error-snackbar'] });
+      }
+      return;
+    }
     this.dialog.open(EmailDetailDialogComponent, {
       width: '700px',
       maxHeight: '80vh',
