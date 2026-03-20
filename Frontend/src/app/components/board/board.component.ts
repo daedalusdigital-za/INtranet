@@ -159,26 +159,71 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
             }
 
             <div class="checklist-items">
-              @for (item of board.checklistItems; track item.checklistItemId) {
-                <div class="checklist-item" [class.completed]="item.isCompleted">
-                  <mat-checkbox 
-                    [checked]="item.isCompleted" 
-                    (change)="toggleChecklistItem(item)"
-                    [disabled]="!canManage">
-                    <span [class.checked-text]="item.isCompleted">{{ item.title }}</span>
-                  </mat-checkbox>
-                  @if (item.isCompleted && item.completedByName) {
-                    <span class="completed-by">Completed by {{ item.completedByName }}</span>
-                  }
-                  @if (canManage) {
-                    <button mat-icon-button class="delete-checklist-btn" (click)="deleteChecklistItem(item)">
-                      <mat-icon>close</mat-icon>
-                    </button>
-                  }
-                </div>
-              }
               @if (board.checklistItems.length === 0) {
                 <p class="no-checklist">No checklist items yet.</p>
+              } @else {
+                <!-- Outstanding Items -->
+                @if (getOutstandingItems().length > 0) {
+                  <div class="checklist-group">
+                    <div class="checklist-group-header" (click)="checklistOutstandingCollapsed = !checklistOutstandingCollapsed">
+                      <mat-icon class="fold-icon" [class.collapsed]="checklistOutstandingCollapsed">expand_more</mat-icon>
+                      <span class="group-title outstanding-title">Outstanding</span>
+                      <span class="group-count outstanding-count">{{ getOutstandingItems().length }}</span>
+                    </div>
+                    @if (!checklistOutstandingCollapsed) {
+                      <div class="checklist-group-items">
+                        @for (item of getOutstandingItems(); track item.checklistItemId) {
+                          <div class="checklist-item">
+                            <mat-checkbox 
+                              [checked]="item.isCompleted" 
+                              (change)="toggleChecklistItem(item)"
+                              [disabled]="!canManage">
+                              <span>{{ item.title }}</span>
+                            </mat-checkbox>
+                            @if (canManage) {
+                              <button mat-icon-button class="delete-checklist-btn" (click)="deleteChecklistItem(item)">
+                                <mat-icon>close</mat-icon>
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+
+                <!-- Completed Items -->
+                @if (getCompletedItems().length > 0) {
+                  <div class="checklist-group">
+                    <div class="checklist-group-header" (click)="checklistCompletedCollapsed = !checklistCompletedCollapsed">
+                      <mat-icon class="fold-icon" [class.collapsed]="checklistCompletedCollapsed">expand_more</mat-icon>
+                      <span class="group-title completed-title">Completed</span>
+                      <span class="group-count completed-count">{{ getCompletedItems().length }}</span>
+                    </div>
+                    @if (!checklistCompletedCollapsed) {
+                      <div class="checklist-group-items">
+                        @for (item of getCompletedItems(); track item.checklistItemId) {
+                          <div class="checklist-item completed">
+                            <mat-checkbox 
+                              [checked]="item.isCompleted" 
+                              (change)="toggleChecklistItem(item)"
+                              [disabled]="!canManage">
+                              <span class="checked-text">{{ item.title }}</span>
+                            </mat-checkbox>
+                            @if (item.completedByName) {
+                              <span class="completed-by">{{ item.completedByName }}</span>
+                            }
+                            @if (canManage) {
+                              <button mat-icon-button class="delete-checklist-btn" (click)="deleteChecklistItem(item)">
+                                <mat-icon>close</mat-icon>
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
               }
             </div>
           </div>
@@ -553,6 +598,74 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       font-style: italic;
       text-align: center;
       padding: 16px;
+    }
+
+    .checklist-group {
+      margin-bottom: 8px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .checklist-group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #fff;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+
+    .checklist-group-header:hover {
+      background: #f0f0f0;
+    }
+
+    .fold-icon {
+      transition: transform 0.25s ease;
+      color: #666;
+      font-size: 20px;
+    }
+
+    .fold-icon.collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .group-title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .outstanding-title {
+      color: #e65100;
+    }
+
+    .completed-title {
+      color: #2e7d32;
+    }
+
+    .group-count {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 12px;
+      margin-left: auto;
+    }
+
+    .outstanding-count {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .completed-count {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .checklist-group-items {
+      border-top: 1px solid #e0e0e0;
+      padding: 4px 0;
     }
 
     /* Members Section Styles */
@@ -952,6 +1065,8 @@ export class BoardComponent implements OnInit, OnDestroy {
   canManage: boolean = false; // Creator, Admin, or Super Admin can manage
   showAddChecklist: boolean = false;
   newChecklistTitle: string = '';
+  checklistOutstandingCollapsed: boolean = false;
+  checklistCompletedCollapsed: boolean = true;
   showInviteMember: boolean = false;
   selectedUserToInvite: string = '';
   availableUsers: any[] = [];
@@ -1051,6 +1166,14 @@ export class BoardComponent implements OnInit, OnDestroy {
     if (!this.showAddChecklist) {
       this.newChecklistTitle = '';
     }
+  }
+
+  getOutstandingItems(): BoardChecklistItem[] {
+    return this.board?.checklistItems?.filter(i => !i.isCompleted) || [];
+  }
+
+  getCompletedItems(): BoardChecklistItem[] {
+    return this.board?.checklistItems?.filter(i => i.isCompleted) || [];
   }
 
   addChecklistItem(): void {
