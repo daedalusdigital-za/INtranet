@@ -128,60 +128,91 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] int limit = 50,
             [FromQuery] bool updateDatabase = false)
         {
+            // Only query customers missing province (not just city)
             var customers = await _context.LogisticsCustomers
-                .Where(c => c.Province == null || c.Province == "" || c.City == null || c.City == "")
+                .Where(c => c.Province == null || c.Province == "")
                 .Take(limit)
                 .ToListAsync();
 
             var results = new List<object>();
-            int updated = 0, failed = 0;
+            int updated = 0, failed = 0, skipped = 0;
+
+            // International country keywords
+            var internationalCountries = new[] { "NAMIBIA", "LESOTHO", "ESWATINI", "SWAZILAND", "BOTSWANA", "MOZAMBIQUE", "ZIMBABWE", "ZAMBIA", "MALAWI", "TANZANIA", "KENYA", "ANGOLA" };
 
             foreach (var customer in customers)
             {
-                // Build search query
-                var addressParts = new List<string>();
+                // Build a clean search query from address data
+                var physicalAddr = customer.PhysicalAddress?.Trim() ?? "";
+                var deliveryAddr = customer.DeliveryAddress?.Trim() ?? "";
                 
-                if (!string.IsNullOrEmpty(customer.AddressLinesJson))
+                // Detect international addresses
+                var allAddressText = $"{physicalAddr} {deliveryAddr} {customer.City}".ToUpperInvariant();
+                var detectedCountry = internationalCountries.FirstOrDefault(c => allAddressText.Contains(c));
+                
+                if (detectedCountry != null)
                 {
-                    try
+                    // Mark as international - set province to the country name
+                    if (updateDatabase)
                     {
-                        var lines = JsonSerializer.Deserialize<List<string>>(customer.AddressLinesJson);
-                        if (lines != null) addressParts.AddRange(lines);
+                        customer.Province = detectedCountry.Substring(0, 1) + detectedCountry.Substring(1).ToLowerInvariant();
+                        customer.DeliveryProvince = customer.Province;
+                        customer.UpdatedAt = DateTime.UtcNow;
                     }
-                    catch { }
+                    results.Add(new
+                    {
+                        customerId = customer.Id,
+                        customerCode = customer.CustomerCode,
+                        success = true,
+                        province = detectedCountry.Substring(0, 1) + detectedCountry.Substring(1).ToLowerInvariant(),
+                        city = customer.City,
+                        formattedAddress = $"International: {detectedCountry}",
+                        searchQuery = "(international - skipped geocoding)"
+                    });
+                    updated++;
+                    continue;
                 }
 
-                if (!string.IsNullOrEmpty(customer.PhysicalAddress))
-                    addressParts.Add(customer.PhysicalAddress);
-                
-                if (!string.IsNullOrEmpty(customer.Name))
-                    addressParts.Add(customer.Name);
-                    
-                addressParts.Add("South Africa");
+                // Skip if address is just "South Africa" or empty or looks like a customer code
+                var isJunkAddress = string.IsNullOrWhiteSpace(physicalAddr) 
+                    || physicalAddr.Equals("South Africa", StringComparison.OrdinalIgnoreCase)
+                    || (physicalAddr.Length <= 10 && !physicalAddr.Contains(" "));
 
-                var searchQuery = string.Join(", ", addressParts.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct());
-
-                if (string.IsNullOrWhiteSpace(searchQuery) || searchQuery == "South Africa")
+                if (isJunkAddress && (string.IsNullOrWhiteSpace(deliveryAddr) || deliveryAddr.Equals("South Africa", StringComparison.OrdinalIgnoreCase)))
                 {
-                    results.Add(new { customerId = customer.Id, success = false, error = "No address data" });
+                    results.Add(new { customerId = customer.Id, customerCode = customer.CustomerCode, success = false, error = "No usable address data", searchQuery = physicalAddr });
                     failed++;
                     continue;
                 }
 
+                // Use the best available address - prefer PhysicalAddress, fall back to DeliveryAddress
+                var bestAddress = isJunkAddress ? deliveryAddr : physicalAddr;
+                
+                // Clean up: remove duplicate "South Africa" if already in address, then append it
+                var searchQuery = bestAddress;
+                if (!searchQuery.Contains("South Africa", StringComparison.OrdinalIgnoreCase))
+                {
+                    searchQuery += ", South Africa";
+                }
+
                 var geocodeResult = await _geocodingService.GeocodeAddressAsync(searchQuery);
 
-                if (geocodeResult.Success)
+                if (geocodeResult.Success && !string.IsNullOrEmpty(geocodeResult.Province))
                 {
                     if (updateDatabase)
                     {
                         customer.Province = geocodeResult.Province;
                         customer.City = geocodeResult.City;
-                        customer.PostalCode = geocodeResult.PostalCode;
+                        if (!string.IsNullOrEmpty(geocodeResult.PostalCode))
+                            customer.PostalCode = geocodeResult.PostalCode;
                         customer.Latitude = geocodeResult.Latitude;
                         customer.Longitude = geocodeResult.Longitude;
-                        customer.DeliveryProvince = geocodeResult.Province;
-                        customer.DeliveryCity = geocodeResult.City;
-                        customer.DeliveryPostalCode = geocodeResult.PostalCode;
+                        if (string.IsNullOrEmpty(customer.DeliveryProvince))
+                            customer.DeliveryProvince = geocodeResult.Province;
+                        if (string.IsNullOrEmpty(customer.DeliveryCity))
+                            customer.DeliveryCity = geocodeResult.City;
+                        if (string.IsNullOrEmpty(customer.DeliveryPostalCode) && !string.IsNullOrEmpty(geocodeResult.PostalCode))
+                            customer.DeliveryPostalCode = geocodeResult.PostalCode;
                         customer.UpdatedAt = DateTime.UtcNow;
                     }
 
@@ -192,9 +223,61 @@ namespace ProjectTracker.API.Controllers.Logistics
                         success = true,
                         province = geocodeResult.Province,
                         city = geocodeResult.City,
-                        formattedAddress = geocodeResult.FormattedAddress
+                        formattedAddress = geocodeResult.FormattedAddress,
+                        searchQuery
                     });
                     updated++;
+                }
+                else if (geocodeResult.Success && string.IsNullOrEmpty(geocodeResult.Province))
+                {
+                    // Google resolved but no province found - try with postal code extraction
+                    var postalCodeMatch = System.Text.RegularExpressions.Regex.Match(bestAddress, @"\b(\d{4})\b");
+                    if (postalCodeMatch.Success)
+                    {
+                        var retryQuery = $"{postalCodeMatch.Value}, South Africa";
+                        var retryResult = await _geocodingService.GeocodeAddressAsync(retryQuery);
+                        if (retryResult.Success && !string.IsNullOrEmpty(retryResult.Province))
+                        {
+                            if (updateDatabase)
+                            {
+                                customer.Province = retryResult.Province;
+                                customer.City = retryResult.City;
+                                if (!string.IsNullOrEmpty(retryResult.PostalCode))
+                                    customer.PostalCode = retryResult.PostalCode;
+                                customer.Latitude = retryResult.Latitude;
+                                customer.Longitude = retryResult.Longitude;
+                                if (string.IsNullOrEmpty(customer.DeliveryProvince))
+                                    customer.DeliveryProvince = retryResult.Province;
+                                if (string.IsNullOrEmpty(customer.DeliveryCity))
+                                    customer.DeliveryCity = retryResult.City;
+                                customer.UpdatedAt = DateTime.UtcNow;
+                            }
+                            results.Add(new
+                            {
+                                customerId = customer.Id,
+                                customerCode = customer.CustomerCode,
+                                success = true,
+                                province = retryResult.Province,
+                                city = retryResult.City,
+                                formattedAddress = retryResult.FormattedAddress,
+                                searchQuery = retryQuery + " (postal code retry)"
+                            });
+                            updated++;
+                            await Task.Delay(100);
+                            continue;
+                        }
+                    }
+                    
+                    results.Add(new
+                    {
+                        customerId = customer.Id,
+                        customerCode = customer.CustomerCode,
+                        success = false,
+                        error = "Geocoded but no province resolved",
+                        formattedAddress = geocodeResult.FormattedAddress,
+                        searchQuery
+                    });
+                    skipped++;
                 }
                 else
                 {
@@ -203,13 +286,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                         customerId = customer.Id,
                         customerCode = customer.CustomerCode,
                         success = false,
-                        error = geocodeResult.Error
+                        error = geocodeResult.Error ?? "Geocoding failed",
+                        searchQuery
                     });
                     failed++;
                 }
 
                 // Rate limiting
-                await Task.Delay(100);
+                await Task.Delay(150);
             }
 
             if (updateDatabase)
@@ -222,6 +306,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 totalProcessed = customers.Count,
                 updated,
                 failed,
+                skipped,
                 databaseUpdated = updateDatabase,
                 results
             });
