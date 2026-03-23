@@ -1,6 +1,7 @@
 -- =====================================================
--- Condom Production Schedule — March 2026
--- Seeds daily batch quantities for all scents/types
+-- Condom Production Schedule — Rolling 7 weekdays
+-- Previous 5 weekdays (incl. today) + Next 2 weekdays
+-- Dates auto-calculated from today's date, skips weekends
 -- =====================================================
 
 USE ProjectTrackerDB;
@@ -36,18 +37,39 @@ GO
 
 -- =====================================================
 -- Helper: Insert batch across dates
--- Week 1: 02-Mar to 06-Mar (Mon-Fri)
--- Week 2: 09-Mar to 10-Mar (Mon-Tue)
+-- Previous 5 weekdays (including today) + Next 2 weekdays
+-- Dates auto-calculated from today's date, skips weekends
 -- =====================================================
 
--- Date variables
-DECLARE @d1 DATE = '2026-03-02';
-DECLARE @d2 DATE = '2026-03-03';
-DECLARE @d3 DATE = '2026-03-04';
-DECLARE @d4 DATE = '2026-03-05';
-DECLARE @d5 DATE = '2026-03-06';
-DECLARE @d6 DATE = '2026-03-09';
-DECLARE @d7 DATE = '2026-03-10';
+DECLARE @today DATE = CAST(GETDATE() AS DATE);
+
+-- If today is a weekend, adjust to Friday
+-- ISO day: (DATEPART(WEEKDAY, x) + @@DATEFIRST - 2) % 7 → 0=Mon,1=Tue,...,4=Fri,5=Sat,6=Sun
+DECLARE @isoDow INT = (DATEPART(WEEKDAY, @today) + @@DATEFIRST - 2) % 7;
+IF @isoDow = 5 SET @today = DATEADD(DAY, -1, @today);  -- Saturday → Friday
+IF @isoDow = 6 SET @today = DATEADD(DAY, -2, @today);  -- Sunday → Friday
+
+-- d5 = today (the pivot point)
+DECLARE @d5 DATE = @today;
+
+-- Previous 4 weekdays (skip weekends going backwards: Monday-3→Friday, else -1)
+DECLARE @d4 DATE = DATEADD(DAY, CASE WHEN (DATEPART(WEEKDAY, @d5) + @@DATEFIRST - 2) % 7 = 0 THEN -3 ELSE -1 END, @d5);
+DECLARE @d3 DATE = DATEADD(DAY, CASE WHEN (DATEPART(WEEKDAY, @d4) + @@DATEFIRST - 2) % 7 = 0 THEN -3 ELSE -1 END, @d4);
+DECLARE @d2 DATE = DATEADD(DAY, CASE WHEN (DATEPART(WEEKDAY, @d3) + @@DATEFIRST - 2) % 7 = 0 THEN -3 ELSE -1 END, @d3);
+DECLARE @d1 DATE = DATEADD(DAY, CASE WHEN (DATEPART(WEEKDAY, @d2) + @@DATEFIRST - 2) % 7 = 0 THEN -3 ELSE -1 END, @d2);
+
+-- Next 2 weekdays (skip weekends going forwards: Friday+3→Monday, else +1)
+DECLARE @d6 DATE = DATEADD(DAY, CASE WHEN (DATEPART(WEEKDAY, @d5) + @@DATEFIRST - 2) % 7 = 4 THEN 3 ELSE 1 END, @d5);
+DECLARE @d7 DATE = DATEADD(DAY, CASE WHEN (DATEPART(WEEKDAY, @d6) + @@DATEFIRST - 2) % 7 = 4 THEN 3 ELSE 1 END, @d6);
+
+PRINT 'Previous 5 + Next 2 weekday dates:';
+PRINT '  d1=' + CAST(@d1 AS VARCHAR) + ' (' + DATENAME(WEEKDAY, @d1) + ')';
+PRINT '  d2=' + CAST(@d2 AS VARCHAR) + ' (' + DATENAME(WEEKDAY, @d2) + ')';
+PRINT '  d3=' + CAST(@d3 AS VARCHAR) + ' (' + DATENAME(WEEKDAY, @d3) + ')';
+PRINT '  d4=' + CAST(@d4 AS VARCHAR) + ' (' + DATENAME(WEEKDAY, @d4) + ')';
+PRINT '  d5=' + CAST(@d5 AS VARCHAR) + ' (' + DATENAME(WEEKDAY, @d5) + ') ← TODAY';
+PRINT '  d6=' + CAST(@d6 AS VARCHAR) + ' (' + DATENAME(WEEKDAY, @d6) + ')';
+PRINT '  d7=' + CAST(@d7 AS VARCHAR) + ' (' + DATENAME(WEEKDAY, @d7) + ')';
 
 -- Sort order counter
 DECLARE @sort INT = 0;

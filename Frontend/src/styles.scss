@@ -231,3 +231,8 @@ mat-toolbar mat-icon {
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25) !important;
 }
+
+/* Hide Welly chatbot when artwork viewer is open */
+body.artwork-viewer-open app-chatbot {
+  display: none !important;
+}

@@ -1,5 +1,5 @@
-import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
-import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { Component, OnInit, OnDestroy, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
+import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe, TitleCasePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
@@ -24,9 +24,12 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
-import { Subject, forkJoin } from 'rxjs';
+import { MatSliderModule } from '@angular/material/slider';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { Subject, forkJoin, timeout } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TenderService, Tender, TenderStats, ComplianceDocument, ComplianceSummary, CalendarEvent, TenderBOQItem, TenderTeamMember, TenderDocument, TenderReminder } from '../../services/tender.service';
+import { ArtworkService, ArtworkFile as ArtworkFileApi, ArtworkAnnotation as ArtworkAnnotationApi } from '../../services/artwork.service';
 import { AuthService } from '../../services/auth.service';
 import { TenderDetailDialogComponent } from './tender-detail-dialog.component';
 import { ComplianceDialogComponent } from './compliance-dialog.component';
@@ -36,6 +39,36 @@ interface Company {
   code: string;
   name: string;
   color: string;
+}
+
+interface ArtworkAnnotation {
+  id: number;
+  type: 'note' | 'highlight' | 'arrow';
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  createdAt: Date;
+  createdBy?: string;
+}
+
+interface ArtworkFile {
+  id: number;
+  fileName: string;
+  fileType: 'pdf' | 'image';
+  fileSize: number;
+  companyCode: string;
+  category: string;
+  tenderNumber?: string;
+  tenderId?: number;
+  notes?: string;
+  uploadedAt: Date;
+  uploadedBy?: string;
+  annotations: ArtworkAnnotation[];
+  sentToMarketing: boolean;
+  sentToMarketingAt?: Date;
+  safeUrl?: SafeResourceUrl;
+  blobUrl?: string;
 }
 
 @Component({
@@ -67,9 +100,11 @@ interface Company {
     MatProgressBarModule,
     MatSnackBarModule,
     MatDividerModule,
+    MatSliderModule,
     CurrencyPipe,
     DatePipe,
     DecimalPipe,
+    TitleCasePipe,
     NavbarComponent
   ],
   template: `
@@ -774,8 +809,469 @@ interface Company {
             </div>
           </div>
         </mat-tab>
+
+        <!-- Artwork Vault Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">palette</mat-icon>
+            Artwork Vault
+          </ng-template>
+
+          <div class="tab-content">
+            <!-- Artwork Header & Controls -->
+            <div class="artwork-header">
+              <div class="artwork-header-left">
+                <h2><mat-icon>palette</mat-icon> Artwork Vault</h2>
+                <p class="artwork-subtitle">Manage artwork for samples & tenders — annotate PDFs and send change requests to the graphics team</p>
+              </div>
+              <div class="artwork-header-actions">
+                <mat-form-field appearance="outline" class="artwork-search">
+                  <mat-label>Search artwork...</mat-label>
+                  <input matInput [(ngModel)]="artworkSearchTerm" (ngModelChange)="filterArtwork()" placeholder="Search by name, tender, company...">
+                  <mat-icon matSuffix>search</mat-icon>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="artwork-filter-field">
+                  <mat-label>Company</mat-label>
+                  <mat-select [(ngModel)]="artworkCompanyFilter" (selectionChange)="filterArtwork()">
+                    <mat-option value="">All Companies</mat-option>
+                    @for (company of companies; track company.code) {
+                      <mat-option [value]="company.code">{{ company.name }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="artwork-filter-field">
+                  <mat-label>Category</mat-label>
+                  <mat-select [(ngModel)]="artworkCategoryFilter" (selectionChange)="filterArtwork()">
+                    <mat-option value="">All Categories</mat-option>
+                    @for (cat of artworkCategories; track cat.value) {
+                      <mat-option [value]="cat.value">{{ cat.label }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <button mat-raised-button class="upload-artwork-btn" (click)="showArtworkUploadDialog = true">
+                  <mat-icon>cloud_upload</mat-icon> Upload Artwork
+                </button>
+              </div>
+            </div>
+
+            <!-- Artwork Stats -->
+            <div class="artwork-stats-row">
+              <div class="artwork-stat-chip">
+                <mat-icon>folder</mat-icon>
+                <span>{{ artworkFiles.length }} Total Files</span>
+              </div>
+              <div class="artwork-stat-chip">
+                <mat-icon>picture_as_pdf</mat-icon>
+                <span>{{ getArtworkPdfCount() }} PDFs</span>
+              </div>
+              <div class="artwork-stat-chip">
+                <mat-icon>image</mat-icon>
+                <span>{{ getArtworkImageCount() }} Images</span>
+              </div>
+              <div class="artwork-stat-chip pending">
+                <mat-icon>rate_review</mat-icon>
+                <span>{{ getArtworkPendingReviewCount() }} Pending Review</span>
+              </div>
+              <div class="artwork-stat-chip sent">
+                <mat-icon>send</mat-icon>
+                <span>{{ getArtworkSentCount() }} Sent to Marketing</span>
+              </div>
+            </div>
+
+            <!-- Artwork Grid -->
+            @if (filteredArtworkFiles.length > 0) {
+              <div class="artwork-grid">
+                @for (artwork of filteredArtworkFiles; track artwork.id) {
+                  <mat-card class="artwork-card" [class.has-annotations]="artwork.annotations.length > 0" [class.sent-to-marketing]="artwork.sentToMarketing">
+                    <div class="artwork-card-preview" (click)="openArtworkViewer(artwork)">
+                      @if (artwork.fileType === 'pdf') {
+                        <div class="artwork-pdf-thumb">
+                          <mat-icon>picture_as_pdf</mat-icon>
+                          <span>PDF</span>
+                        </div>
+                      } @else {
+                        <div class="artwork-img-thumb">
+                          <mat-icon>image</mat-icon>
+                          <span>{{ artwork.fileName.split('.').pop()?.toUpperCase() }}</span>
+                        </div>
+                      }
+                      <div class="artwork-card-overlay">
+                        <mat-icon>open_in_full</mat-icon>
+                        <span>View & Annotate</span>
+                      </div>
+                      @if (artwork.annotations.length > 0) {
+                        <div class="annotation-badge">
+                          <mat-icon>rate_review</mat-icon>
+                          {{ artwork.annotations.length }}
+                        </div>
+                      }
+                      @if (artwork.sentToMarketing) {
+                        <div class="sent-badge">
+                          <mat-icon>check_circle</mat-icon>
+                          Sent
+                        </div>
+                      }
+                    </div>
+                    <mat-card-content class="artwork-card-info">
+                      <h4 class="artwork-card-title" [matTooltip]="artwork.fileName">{{ artwork.fileName }}</h4>
+                      <div class="artwork-card-meta">
+                        <span class="artwork-company-chip" [style.background]="getCompanyColor(artwork.companyCode) + '20'" [style.color]="getCompanyColor(artwork.companyCode)">{{ artwork.companyCode }}</span>
+                        <span class="artwork-category-chip">{{ artwork.category }}</span>
+                      </div>
+                      <div class="artwork-card-details">
+                        <span class="artwork-detail"><mat-icon>calendar_today</mat-icon> {{ artwork.uploadedAt | date:'dd MMM yyyy' }}</span>
+                        <span class="artwork-detail"><mat-icon>straighten</mat-icon> {{ formatFileSize(artwork.fileSize) }}</span>
+                      </div>
+                      @if (artwork.tenderNumber) {
+                        <div class="artwork-tender-link">
+                          <mat-icon>link</mat-icon> {{ artwork.tenderNumber }}
+                        </div>
+                      }
+                    </mat-card-content>
+                    <mat-card-actions class="artwork-card-actions">
+                      <button mat-icon-button matTooltip="View & Annotate" (click)="openArtworkViewer(artwork)">
+                        <mat-icon>edit_note</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Send to Marketing" (click)="openSendToMarketing(artwork)" [disabled]="artwork.annotations.length === 0">
+                        <mat-icon>send</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Download" (click)="downloadArtwork(artwork)">
+                        <mat-icon>download</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Delete" (click)="deleteArtwork(artwork)" class="delete-btn">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </mat-card-actions>
+                  </mat-card>
+                }
+              </div>
+            } @else {
+              <div class="artwork-empty">
+                <mat-icon>palette</mat-icon>
+                <h3>No Artwork Found</h3>
+                <p>Upload artwork files (PDFs, images) to get started. You can annotate PDFs and send change requests to the marketing team.</p>
+                <button mat-raised-button class="upload-artwork-btn" (click)="showArtworkUploadDialog = true">
+                  <mat-icon>cloud_upload</mat-icon> Upload Your First Artwork
+                </button>
+              </div>
+            }
+          </div>
+        </mat-tab>
       </mat-tab-group>
     </div>
+
+    <!-- Artwork Upload Dialog -->
+    @if (showArtworkUploadDialog) {
+      <div class="artwork-overlay" (click)="showArtworkUploadDialog = false">
+        <div class="artwork-upload-dialog" (click)="$event.stopPropagation()">
+          <div class="artwork-dialog-header">
+            <mat-icon>cloud_upload</mat-icon>
+            <h2>Upload Artwork</h2>
+            <button mat-icon-button (click)="showArtworkUploadDialog = false"><mat-icon>close</mat-icon></button>
+          </div>
+          <div class="artwork-dialog-body">
+            <div class="artwork-drop-zone"
+                 [class.dragover]="artworkDragOver"
+                 (dragover)="onArtworkDragOver($event)"
+                 (dragleave)="onArtworkDragLeave($event)"
+                 (drop)="onArtworkDrop($event)"
+                 (click)="artworkFileInput.click()">
+              @if (!artworkUploadFile) {
+                <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                <p class="drop-text">Drag & drop artwork here or click to browse</p>
+                <p class="drop-hint">Supports PDF, PNG, JPG, TIFF, AI, PSD files</p>
+              } @else {
+                <div class="file-info">
+                  <mat-icon class="pdf-icon">{{ artworkUploadFile.type.includes('pdf') ? 'picture_as_pdf' : 'image' }}</mat-icon>
+                  <div class="file-details">
+                    <span class="file-name">{{ artworkUploadFile.name }}</span>
+                    <span class="file-size">{{ formatFileSize(artworkUploadFile.size) }}</span>
+                  </div>
+                  <button mat-icon-button (click)="artworkUploadFile = null; $event.stopPropagation()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </div>
+              }
+            </div>
+            <input #artworkFileInput type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.tiff,.tif,.ai,.psd,.svg,.eps" (change)="onArtworkFileSelected($event)">
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Company</mat-label>
+              <mat-select [(ngModel)]="artworkUploadForm.companyCode" required>
+                @for (company of companies; track company.code) {
+                  <mat-option [value]="company.code">{{ company.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Category</mat-label>
+              <mat-select [(ngModel)]="artworkUploadForm.category" required>
+                @for (cat of artworkCategories; track cat.value) {
+                  <mat-option [value]="cat.value">{{ cat.label }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Link to Tender (optional)</mat-label>
+              <mat-select [(ngModel)]="artworkUploadForm.tenderId">
+                <mat-option [value]="0">None</mat-option>
+                @for (tender of tenders; track tender.id) {
+                  <mat-option [value]="tender.id">{{ tender.tenderNumber }} - {{ tender.title | slice:0:40 }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Notes</mat-label>
+              <textarea matInput [(ngModel)]="artworkUploadForm.notes" rows="3" placeholder="Describe the artwork or any special instructions..."></textarea>
+            </mat-form-field>
+          </div>
+          <div class="artwork-dialog-actions">
+            <button mat-stroked-button (click)="showArtworkUploadDialog = false">Cancel</button>
+            <button mat-raised-button color="primary" (click)="uploadArtwork()" [disabled]="!artworkUploadFile || !artworkUploadForm.companyCode || !artworkUploadForm.category || artworkUploading">
+              @if (artworkUploading) {
+                <mat-spinner diameter="20"></mat-spinner> Uploading...
+              } @else {
+                <mat-icon>cloud_upload</mat-icon> Upload
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Artwork PDF Viewer with Annotations -->
+    @if (showArtworkViewer && selectedArtwork) {
+      <div class="artwork-viewer-overlay">
+        <div class="artwork-viewer-container">
+          <!-- Viewer Header -->
+          <div class="artwork-viewer-header">
+            <div class="viewer-header-left">
+              <mat-icon>{{ selectedArtwork.fileType === 'pdf' ? 'picture_as_pdf' : 'image' }}</mat-icon>
+              <h3>{{ selectedArtwork.fileName }}</h3>
+              <span class="viewer-company-chip" [style.background]="getCompanyColor(selectedArtwork.companyCode) + '20'" [style.color]="getCompanyColor(selectedArtwork.companyCode)">{{ selectedArtwork.companyCode }}</span>
+            </div>
+            <div class="viewer-header-right">
+              <button mat-icon-button matTooltip="Send to Marketing" (click)="openSendToMarketing(selectedArtwork)" [disabled]="selectedArtwork.annotations.length === 0">
+                <mat-icon>send</mat-icon>
+              </button>
+              <button mat-icon-button matTooltip="Download" (click)="downloadArtwork(selectedArtwork)">
+                <mat-icon>download</mat-icon>
+              </button>
+              <button mat-icon-button matTooltip="Close" (click)="closeArtworkViewer()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="artwork-viewer-body">
+            <!-- Annotation Toolbar -->
+            <div class="annotation-toolbar">
+              <div class="tool-group">
+                <button mat-icon-button [class.active]="annotationMode === 'note'" (click)="setAnnotationMode('note')" matTooltip="Add Note">
+                  <mat-icon>sticky_note_2</mat-icon>
+                </button>
+                <button mat-icon-button [class.active]="annotationMode === 'highlight'" (click)="setAnnotationMode('highlight')" matTooltip="Highlight Area">
+                  <mat-icon>highlight</mat-icon>
+                </button>
+                <button mat-icon-button [class.active]="annotationMode === 'arrow'" (click)="setAnnotationMode('arrow')" matTooltip="Point Arrow">
+                  <mat-icon>arrow_right_alt</mat-icon>
+                </button>
+              </div>
+              <span class="toolbar-hint"><mat-icon>mouse</mat-icon> Right-click to place</span>
+              <mat-divider vertical></mat-divider>
+              <div class="tool-group">
+                <mat-form-field appearance="outline" class="color-picker-field">
+                  <mat-label>Color</mat-label>
+                  <mat-select [(ngModel)]="annotationColor">
+                    <mat-option value="#FF5722"><span class="color-dot" style="background:#FF5722"></span> Red</mat-option>
+                    <mat-option value="#FF9800"><span class="color-dot" style="background:#FF9800"></span> Orange</mat-option>
+                    <mat-option value="#4CAF50"><span class="color-dot" style="background:#4CAF50"></span> Green</mat-option>
+                    <mat-option value="#2196F3"><span class="color-dot" style="background:#2196F3"></span> Blue</mat-option>
+                    <mat-option value="#9C27B0"><span class="color-dot" style="background:#9C27B0"></span> Purple</mat-option>
+                  </mat-select>
+                </mat-form-field>
+              </div>
+              <mat-divider vertical></mat-divider>
+              <div class="tool-group">
+                <button mat-icon-button matTooltip="Undo Last" (click)="undoAnnotation()" [disabled]="selectedArtwork.annotations.length === 0">
+                  <mat-icon>undo</mat-icon>
+                </button>
+                <button mat-icon-button matTooltip="Clear All Annotations" (click)="clearAnnotations()" [disabled]="selectedArtwork.annotations.length === 0">
+                  <mat-icon>delete_sweep</mat-icon>
+                </button>
+              </div>
+              <div class="annotation-count">
+                <mat-icon>rate_review</mat-icon>
+                {{ selectedArtwork.annotations.length }} note{{ selectedArtwork.annotations.length !== 1 ? 's' : '' }}
+              </div>
+            </div>
+
+            <!-- PDF / Image Preview with Annotation Canvas -->
+            <div class="artwork-preview-area" (contextmenu)="onPreviewRightClick($event)">
+              <div class="artwork-scroll-content" #artworkScrollContent>
+                @if (selectedArtwork.fileType === 'pdf') {
+                  @for (page of pdfPages; track page.pageNum) {
+                    <canvas #pdfCanvas class="pdf-page-canvas" [attr.data-page]="page.pageNum"></canvas>
+                  }
+                } @else {
+                  <img [src]="selectedArtwork.safeUrl" class="artwork-image-preview" alt="Artwork preview">
+                }
+
+                <!-- Annotation Overlays - INSIDE scroll content so they scroll with pages -->
+                <div class="annotations-layer">
+                @for (annotation of selectedArtwork.annotations; track annotation.id) {
+                  <div class="annotation-pin"
+                       [style.left.%]="annotation.x"
+                       [style.top.%]="annotation.y"
+                       [style.borderColor]="annotation.color"
+                       [class.highlight]="annotation.type === 'highlight'"
+                       [class.arrow]="annotation.type === 'arrow'"
+                       [class.note]="annotation.type === 'note'"
+                       [class.selected]="editingAnnotation?.id === annotation.id"
+                       (click)="selectAnnotation(annotation, $event)">
+                    <div class="annotation-marker" [style.background]="annotation.color">
+                      <mat-icon>{{ annotation.type === 'note' ? 'comment' : annotation.type === 'highlight' ? 'highlight' : 'arrow_right_alt' }}</mat-icon>
+                      <span class="annotation-number">{{ annotation.id }}</span>
+                    </div>
+                    @if (editingAnnotation?.id === annotation.id || annotation.type === 'note') {
+                      <div class="annotation-popup" [style.borderColor]="annotation.color" (click)="$event.stopPropagation()">
+                        <div class="annotation-popup-header" [style.background]="annotation.color">
+                          <span>Note #{{ annotation.id }}</span>
+                          <button mat-icon-button (click)="removeAnnotation(annotation); $event.stopPropagation()">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        </div>
+                        <textarea class="annotation-text" [(ngModel)]="annotation.text" placeholder="Describe the change needed..." rows="3" (click)="$event.stopPropagation()" (blur)="saveAnnotationText(annotation)"></textarea>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+              </div>
+            </div>
+
+            <!-- Annotations List Panel -->
+            <div class="annotations-panel">
+              <div class="annotations-panel-header">
+                <h4><mat-icon>rate_review</mat-icon> Annotations</h4>
+              </div>
+              <div class="annotations-list">
+                @if (selectedArtwork.annotations.length === 0) {
+                  <div class="no-annotations">
+                    <mat-icon>touch_app</mat-icon>
+                    <p>Click on the document to add annotations. Use the toolbar to choose annotation type.</p>
+                  </div>
+                }
+                @for (annotation of selectedArtwork.annotations; track annotation.id) {
+                  <div class="annotation-list-item" [style.borderLeftColor]="annotation.color" (click)="selectAnnotation(annotation, $event)">
+                    <div class="annotation-item-header">
+                      <span class="annotation-item-number" [style.background]="annotation.color">#{{ annotation.id }}</span>
+                      <span class="annotation-item-type">{{ annotation.type | titlecase }}</span>
+                      <button mat-icon-button (click)="removeAnnotation(annotation); $event.stopPropagation()">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </div>
+                    <textarea class="annotation-item-text" [(ngModel)]="annotation.text" placeholder="Describe the change..." rows="2" (blur)="saveAnnotationText(annotation)"></textarea>
+                    <span class="annotation-item-time">{{ annotation.createdAt | date:'dd MMM HH:mm' }}</span>
+                  </div>
+                }
+              </div>
+              @if (selectedArtwork.annotations.length > 0) {
+                <div class="annotations-panel-footer">
+                  <button mat-raised-button color="primary" (click)="openSendToMarketing(selectedArtwork)" class="send-marketing-btn">
+                    <mat-icon>send</mat-icon> Send to Marketing
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Send to Marketing Dialog -->
+    @if (showSendToMarketingDialog && sendToMarketingArtwork) {
+      <div class="artwork-overlay" (click)="showSendToMarketingDialog = false">
+        <div class="send-marketing-dialog" (click)="$event.stopPropagation()">
+          <div class="artwork-dialog-header send-header">
+            <mat-icon>send</mat-icon>
+            <h2>Send to Marketing / Graphics</h2>
+            <button mat-icon-button (click)="showSendToMarketingDialog = false"><mat-icon>close</mat-icon></button>
+          </div>
+          <div class="artwork-dialog-body">
+            <div class="send-summary-card">
+              <div class="send-summary-info">
+                <mat-icon>{{ sendToMarketingArtwork.fileType === 'pdf' ? 'picture_as_pdf' : 'image' }}</mat-icon>
+                <div>
+                  <strong>{{ sendToMarketingArtwork.fileName }}</strong>
+                  <span>{{ sendToMarketingArtwork.annotations.length }} annotation{{ sendToMarketingArtwork.annotations.length !== 1 ? 's' : '' }} to review</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Annotations Summary -->
+            <div class="send-annotations-preview">
+              <h4>Change Requests:</h4>
+              @for (annotation of sendToMarketingArtwork.annotations; track annotation.id) {
+                <div class="send-annotation-item" [style.borderLeftColor]="annotation.color">
+                  <span class="send-ann-num" [style.background]="annotation.color">#{{ annotation.id }}</span>
+                  <span class="send-ann-text">{{ annotation.text || '(No description)' }}</span>
+                </div>
+              }
+            </div>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Recipient Email(s)</mat-label>
+              <input matInput [(ngModel)]="sendToMarketingForm.recipients" placeholder="graphics@promedtechnologies.co.za, marketing@promedtechnologies.co.za">
+              <mat-hint>Comma-separated email addresses</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Priority</mat-label>
+              <mat-select [(ngModel)]="sendToMarketingForm.priority">
+                <mat-option value="low">Low - No Rush</mat-option>
+                <mat-option value="normal">Normal</mat-option>
+                <mat-option value="high">High - Urgent</mat-option>
+                <mat-option value="critical">Critical - Tender Deadline</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Additional Message</mat-label>
+              <textarea matInput [(ngModel)]="sendToMarketingForm.message" rows="4" placeholder="Add any additional context or instructions for the graphics team..."></textarea>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Requested By Date</mat-label>
+              <input matInput [matDatepicker]="marketingDatePicker" [(ngModel)]="sendToMarketingForm.requestedByDate">
+              <mat-datepicker-toggle matSuffix [for]="marketingDatePicker"></mat-datepicker-toggle>
+              <mat-datepicker #marketingDatePicker></mat-datepicker>
+            </mat-form-field>
+          </div>
+          @if (sendingToMarketing) {
+            <div class="send-progress-section">
+              <div class="send-progress-bar">
+                <div class="send-progress-fill" [style.width.%]="sendToMarketingProgress"></div>
+              </div>
+              <div class="send-progress-info">
+                <span class="send-progress-status">{{ sendToMarketingStatus }}</span>
+                <span class="send-progress-percent">{{ sendToMarketingProgress }}%</span>
+              </div>
+            </div>
+          } @else {
+            <div class="artwork-dialog-actions">
+              <button mat-stroked-button (click)="showSendToMarketingDialog = false">Cancel</button>
+              <button mat-raised-button color="primary" (click)="sendToMarketing()" [disabled]="!sendToMarketingForm.recipients">
+                <mat-icon>send</mat-icon> Send Change Request
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    }
 
     <!-- Reminder Dialog Overlay -->
     @if (showReminderDialog) {
@@ -2284,9 +2780,651 @@ interface Company {
       padding: 16px 24px;
       border-top: 1px solid #eee;
     }
+
+    /* ========== ARTWORK VAULT STYLES ========== */
+    .artwork-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .artwork-header-left h2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    .artwork-header-left h2 mat-icon { font-size: 28px; width: 28px; height: 28px; color: #9C27B0; }
+    .artwork-subtitle { margin: 4px 0 0; color: #666; font-size: 14px; }
+    .artwork-header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .artwork-search { width: 220px; }
+    .artwork-filter-field { width: 160px; }
+    .artwork-search .mat-mdc-form-field-subscript-wrapper,
+    .artwork-filter-field .mat-mdc-form-field-subscript-wrapper { display: none; }
+    .upload-artwork-btn {
+      background: linear-gradient(135deg, #9C27B0, #7B1FA2) !important;
+      color: white !important;
+      border-radius: 12px !important;
+      padding: 8px 20px !important;
+      font-weight: 600;
+    }
+
+    .artwork-stats-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .artwork-stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.9);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      border: 1px solid #e0e0e0;
+    }
+    .artwork-stat-chip mat-icon { font-size: 18px; width: 18px; height: 18px; color: #9C27B0; }
+    .artwork-stat-chip.pending { border-color: #FF9800; }
+    .artwork-stat-chip.pending mat-icon { color: #FF9800; }
+    .artwork-stat-chip.sent { border-color: #4CAF50; }
+    .artwork-stat-chip.sent mat-icon { color: #4CAF50; }
+
+    .artwork-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .artwork-card {
+      border-radius: 16px !important;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+    }
+    .artwork-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
+    .artwork-card.has-annotations { border-color: #FF9800; }
+    .artwork-card.sent-to-marketing { border-color: #4CAF50; }
+
+    .artwork-card-preview {
+      position: relative;
+      height: 180px;
+      background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .artwork-pdf-thumb, .artwork-img-thumb {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: #999;
+    }
+    .artwork-pdf-thumb mat-icon { font-size: 56px; width: 56px; height: 56px; color: #F44336; }
+    .artwork-img-thumb mat-icon { font-size: 56px; width: 56px; height: 56px; color: #2196F3; }
+    .artwork-pdf-thumb span, .artwork-img-thumb span { font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+
+    .artwork-card-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      gap: 4px;
+    }
+    .artwork-card-preview:hover .artwork-card-overlay { opacity: 1; }
+    .artwork-card-overlay mat-icon { font-size: 32px; width: 32px; height: 32px; }
+    .artwork-card-overlay span { font-size: 13px; font-weight: 500; }
+
+    .annotation-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #FF9800;
+      color: white;
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .annotation-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .sent-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: #4CAF50;
+      color: white;
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .sent-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
+    .artwork-card-info { padding: 16px !important; }
+    .artwork-card-title {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a2e;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .artwork-card-meta {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .artwork-company-chip, .artwork-category-chip {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .artwork-category-chip { background: #f3e5f5; color: #9C27B0; }
+    .artwork-card-details {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: #888;
+    }
+    .artwork-detail { display: flex; align-items: center; gap: 4px; }
+    .artwork-detail mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .artwork-tender-link {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #1976D2;
+      font-weight: 500;
+    }
+    .artwork-tender-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .artwork-card-actions { display: flex; justify-content: flex-end; padding: 4px 8px !important; }
+    .artwork-card-actions .delete-btn { color: #F44336; }
+
+    .artwork-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
+      text-align: center;
+      color: #888;
+      background: rgba(255,255,255,0.6);
+      border-radius: 20px;
+      border: 2px dashed #ddd;
+    }
+    .artwork-empty mat-icon { font-size: 64px; width: 64px; height: 64px; color: #ccc; margin-bottom: 16px; }
+    .artwork-empty h3 { margin: 0 0 8px; color: #555; font-size: 20px; }
+    .artwork-empty p { max-width: 400px; font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+
+    /* Artwork Overlay Dialogs */
+    .artwork-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1002;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .artwork-upload-dialog, .send-marketing-dialog {
+      background: white;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 560px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.3);
+    }
+    .artwork-dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 24px;
+      border-bottom: 1px solid #eee;
+    }
+    .artwork-dialog-header mat-icon { font-size: 28px; width: 28px; height: 28px; color: #9C27B0; }
+    .artwork-dialog-header.send-header mat-icon { color: #4CAF50; }
+    .artwork-dialog-header h2 { margin: 0; flex: 1; font-size: 20px; font-weight: 700; }
+    .artwork-dialog-body { padding: 24px; }
+    .artwork-dialog-body .full-width { width: 100%; }
+    .artwork-dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #eee;
+    }
+    .artwork-drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 16px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 20px;
+      background: #fafafa;
+    }
+    .artwork-drop-zone:hover, .artwork-drop-zone.dragover {
+      border-color: #9C27B0;
+      background: #f3e5f5;
+    }
+
+    /* Send to Marketing */
+    .send-summary-card {
+      background: #f5f5f5;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .send-summary-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .send-summary-info mat-icon { font-size: 36px; width: 36px; height: 36px; color: #9C27B0; }
+    .send-summary-info div { display: flex; flex-direction: column; }
+    .send-summary-info strong { font-size: 15px; }
+    .send-summary-info span { font-size: 13px; color: #666; }
+
+    .send-annotations-preview {
+      margin-bottom: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .send-annotations-preview h4 { margin: 0 0 12px; font-size: 14px; color: #333; }
+    .send-annotation-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 12px;
+      border-left: 3px solid #ccc;
+      margin-bottom: 8px;
+      background: #fafafa;
+      border-radius: 0 8px 8px 0;
+    }
+    .send-ann-num {
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .send-ann-text { font-size: 13px; color: #555; line-height: 1.4; }
+
+    .send-progress-section {
+      padding: 16px 24px 20px;
+      border-top: 1px solid #eee;
+    }
+    .send-progress-bar {
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .send-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #9C27B0, #E040FB);
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+    .send-progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .send-progress-status {
+      font-size: 13px;
+      color: #666;
+      font-weight: 500;
+    }
+    .send-progress-percent {
+      font-size: 13px;
+      color: #9C27B0;
+      font-weight: 700;
+    }
+
+    /* Artwork Viewer */
+    .artwork-viewer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 1001;
+      display: flex;
+      flex-direction: column;
+    }
+    .artwork-viewer-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+    .artwork-viewer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.95);
+      border-bottom: 1px solid #eee;
+      z-index: 10;
+    }
+    .viewer-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .viewer-header-left mat-icon { font-size: 24px; width: 24px; height: 24px; color: #9C27B0; }
+    .viewer-header-left h3 { margin: 0; font-size: 16px; font-weight: 600; }
+    .viewer-company-chip {
+      font-size: 12px;
+      padding: 2px 10px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .viewer-header-right { display: flex; gap: 4px; }
+
+    .artwork-viewer-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .annotation-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: #f5f5f5;
+      border-bottom: 1px solid #e0e0e0;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 320px;
+      z-index: 5;
+    }
+    .tool-group { display: flex; gap: 4px; }
+    .tool-group button.active { background: #9C27B0; color: white; border-radius: 8px; }
+    .color-picker-field { width: 110px; }
+    .color-picker-field .mat-mdc-form-field-subscript-wrapper { display: none; }
+    .color-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .annotation-count {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #666;
+    }
+    .annotation-count mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+    .artwork-preview-area {
+      flex: 1;
+      overflow: auto;
+      background: #e0e0e0;
+      margin-top: 48px;
+    }
+    .artwork-scroll-content {
+      position: relative;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 8px;
+    }
+    .pdf-page-canvas {
+      display: block;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      max-width: 100%;
+    }
+    .artwork-image-preview {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+      margin: auto;
+    }
+
+    .toolbar-hint {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #9C27B0;
+      background: rgba(156, 39, 176, 0.08);
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .toolbar-hint mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .annotations-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .annotation-pin {
+      position: absolute;
+      pointer-events: all;
+      cursor: pointer;
+      z-index: 2;
+    }
+    .annotation-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      position: relative;
+      transition: transform 0.2s ease;
+    }
+    .annotation-marker:hover { transform: scale(1.15); }
+    .annotation-marker mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .annotation-number {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: white;
+      color: #333;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+
+    .annotation-popup {
+      position: absolute;
+      top: 36px;
+      left: -4px;
+      width: 240px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      border: 2px solid #ccc;
+      overflow: hidden;
+      z-index: 10;
+    }
+    .annotation-popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 12px;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .annotation-popup-header button { color: white; transform: scale(0.7); }
+    .annotation-text {
+      width: 100%;
+      border: none;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+    }
+
+    /* Annotations Side Panel */
+    .annotations-panel {
+      width: 320px;
+      background: white;
+      border-left: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .annotations-panel-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #eee;
+    }
+    .annotations-panel-header h4 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .annotations-panel-header h4 mat-icon { font-size: 20px; width: 20px; height: 20px; color: #9C27B0; }
+    .annotations-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+    .no-annotations {
+      text-align: center;
+      padding: 40px 20px;
+      color: #aaa;
+    }
+    .no-annotations mat-icon { font-size: 40px; width: 40px; height: 40px; color: #ddd; margin-bottom: 12px; }
+    .no-annotations p { font-size: 13px; line-height: 1.6; }
+
+    .annotation-list-item {
+      border-left: 3px solid #ccc;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 0 12px 12px 0;
+      background: #fafafa;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+    .annotation-list-item:hover { background: #f0f0f0; }
+    .annotation-item-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .annotation-item-number {
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .annotation-item-type { font-size: 12px; color: #888; flex: 1; }
+    .annotation-item-text {
+      width: 100%;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      background: white;
+    }
+    .annotation-item-text:focus { border-color: #9C27B0; }
+    .annotation-item-time { font-size: 11px; color: #aaa; margin-top: 6px; display: block; }
+
+    .annotations-panel-footer {
+      padding: 16px;
+      border-top: 1px solid #eee;
+    }
+    .send-marketing-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #4CAF50, #388E3C) !important;
+      color: white !important;
+      border-radius: 12px !important;
+      padding: 10px !important;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .artwork-header { flex-direction: column; }
+      .artwork-header-actions { width: 100%; }
+      .artwork-search { width: 100%; }
+      .artwork-grid { grid-template-columns: 1fr; }
+      .annotations-panel { width: 260px; }
+    }
   `]
 })
-export class TendersComponent implements OnInit, OnDestroy {
+export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
@@ -2408,16 +3546,71 @@ export class TendersComponent implements OnInit, OnDestroy {
     { value: 'Evaluation', label: 'Evaluation Date', icon: 'rate_review' }
   ];
 
+  // ==================== ARTWORK VAULT ====================
+  artworkFiles: ArtworkFile[] = [];
+  filteredArtworkFiles: ArtworkFile[] = [];
+  selectedArtwork: ArtworkFile | null = null;
+  showArtworkViewer = false;
+  showArtworkUploadDialog = false;
+  showSendToMarketingDialog = false;
+  sendToMarketingArtwork: ArtworkFile | null = null;
+  artworkSearchTerm = '';
+  artworkCompanyFilter = '';
+  artworkCategoryFilter = '';
+  artworkDragOver = false;
+  artworkUploadFile: File | null = null;
+  artworkUploading = false;
+  sendingToMarketing = false;
+  sendToMarketingProgress = 0;
+  sendToMarketingStatus = '';
+  private marketingProgressTimer: any;
+  annotationMode: 'note' | 'highlight' | 'arrow' = 'note';
+  annotationColor = '#FF5722';
+  editingAnnotation: ArtworkAnnotation | null = null;
+  pdfPages: { pageNum: number; width: number; height: number; rendered: boolean }[] = [];
+  private pdfPagesNeedRender = false;
+  @ViewChildren('pdfCanvas') pdfCanvases!: QueryList<ElementRef<HTMLCanvasElement>>;
+
+  artworkUploadForm = {
+    companyCode: '',
+    category: '',
+    tenderId: 0,
+    notes: ''
+  };
+
+  sendToMarketingForm = {
+    recipients: 'graphics@promedtechnologies.co.za, mpilo@promedtechnologies.co.za',
+    priority: 'normal',
+    message: '',
+    requestedByDate: null as Date | null
+  };
+
+  artworkCategories = [
+    { value: 'Label', label: 'Product Label' },
+    { value: 'Box', label: 'Box / Packaging' },
+    { value: 'Insert', label: 'Package Insert' },
+    { value: 'Brochure', label: 'Brochure' },
+    { value: 'TenderDoc', label: 'Tender Document' },
+    { value: 'SampleLabel', label: 'Sample Label' },
+    { value: 'Certificate', label: 'Certificate' },
+    { value: 'Marketing', label: 'Marketing Material' },
+    { value: 'Logo', label: 'Logo / Branding' },
+    { value: 'Other', label: 'Other' }
+  ];
+
   constructor(
     private tenderService: TenderService,
+    private artworkService: ArtworkService,
     private authService: AuthService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private http: HttpClient
+    private http: HttpClient,
+    private sanitizer: DomSanitizer
   ) {}
 
   ngOnInit(): void {
     this.loadData();
+    this.loadArtworkFiles();
   }
 
   ngAfterViewInit(): void {
@@ -2429,6 +3622,13 @@ export class TendersComponent implements OnInit, OnDestroy {
       if (property === 'artwork') return item.artworkStatus || 'Not Started';
       return (item as any)[property];
     };
+  }
+
+  ngAfterViewChecked(): void {
+    if (this.pdfPagesNeedRender && this.pdfCanvases && this.pdfCanvases.length > 0) {
+      this.pdfPagesNeedRender = false;
+      this.renderPdfCanvases();
+    }
   }
 
   ngOnDestroy(): void {
@@ -3131,6 +4331,436 @@ export class TendersComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.snackBar.open('Error checking reminders', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  // ==================== ARTWORK VAULT METHODS ====================
+
+  // Artwork stat helpers for template
+  getArtworkPdfCount(): number { return this.artworkFiles.filter(f => f.fileType === 'pdf').length; }
+  getArtworkImageCount(): number { return this.artworkFiles.filter(f => f.fileType === 'image').length; }
+  getArtworkPendingReviewCount(): number { return this.artworkFiles.filter(f => f.annotations.length > 0 && !f.sentToMarketing).length; }
+  getArtworkSentCount(): number { return this.artworkFiles.filter(f => f.sentToMarketing).length; }
+
+  loadArtworkFiles(): void {
+    this.artworkService.getArtworkFiles().subscribe({
+      next: (files) => {
+        this.artworkFiles = files.map(f => ({
+          ...f,
+          uploadedAt: new Date(f.uploadedAt),
+          sentToMarketingAt: f.sentToMarketingAt ? new Date(f.sentToMarketingAt) : undefined,
+          annotations: (f.annotations || []).map((a: any) => ({
+            ...a,
+            createdAt: new Date(a.createdAt),
+            createdBy: a.createdByUserName
+          }))
+        })) as any[];
+        this.filterArtwork();
+      },
+      error: () => {
+        this.artworkFiles = [];
+        this.filterArtwork();
+      }
+    });
+  }
+
+  filterArtwork(): void {
+    let filtered = [...this.artworkFiles];
+
+    if (this.artworkSearchTerm) {
+      const term = this.artworkSearchTerm.toLowerCase();
+      filtered = filtered.filter(f =>
+        f.fileName.toLowerCase().includes(term) ||
+        f.companyCode.toLowerCase().includes(term) ||
+        f.category.toLowerCase().includes(term) ||
+        (f.tenderNumber || '').toLowerCase().includes(term) ||
+        (f.notes || '').toLowerCase().includes(term)
+      );
+    }
+
+    if (this.artworkCompanyFilter) {
+      filtered = filtered.filter(f => f.companyCode === this.artworkCompanyFilter);
+    }
+
+    if (this.artworkCategoryFilter) {
+      filtered = filtered.filter(f => f.category === this.artworkCategoryFilter);
+    }
+
+    this.filteredArtworkFiles = filtered;
+  }
+
+  // Artwork Upload Methods
+  onArtworkDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.artworkDragOver = true;
+  }
+
+  onArtworkDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.artworkDragOver = false;
+  }
+
+  onArtworkDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.artworkDragOver = false;
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      this.artworkUploadFile = files[0];
+    }
+  }
+
+  onArtworkFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.artworkUploadFile = input.files[0];
+    }
+  }
+
+  uploadArtwork(): void {
+    if (!this.artworkUploadFile || !this.artworkUploadForm.companyCode || !this.artworkUploadForm.category) return;
+
+    this.artworkUploading = true;
+    const file = this.artworkUploadFile;
+    const tender = this.artworkUploadForm.tenderId ? this.tenders.find(t => t.id === this.artworkUploadForm.tenderId) : null;
+    const user = this.authService.currentUserValue;
+
+    this.artworkService.uploadArtwork(
+      file,
+      this.artworkUploadForm.companyCode,
+      this.artworkUploadForm.category,
+      this.artworkUploadForm.tenderId || undefined,
+      tender?.tenderNumber,
+      this.artworkUploadForm.notes || undefined,
+      user?.userId,
+      user ? `${user.name} ${user.surname || ''}`.trim() : 'Unknown'
+    ).subscribe({
+      next: (newArtwork) => {
+        const mapped: ArtworkFile = {
+          ...newArtwork,
+          uploadedAt: new Date(newArtwork.uploadedAt),
+          uploadedBy: newArtwork.uploadedByUserName,
+          annotations: [],
+          sentToMarketing: false
+        } as any;
+        this.artworkFiles.unshift(mapped);
+        this.filterArtwork();
+        this.artworkUploading = false;
+        this.showArtworkUploadDialog = false;
+        this.artworkUploadFile = null;
+        this.artworkUploadForm = { companyCode: '', category: '', tenderId: 0, notes: '' };
+        this.snackBar.open('✅ Artwork uploaded successfully', 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        this.artworkUploading = false;
+        this.snackBar.open('❌ Failed to upload artwork: ' + (err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  // Artwork Viewer Methods
+  openArtworkViewer(artwork: ArtworkFile): void {
+    this.selectedArtwork = artwork;
+    this.editingAnnotation = null;
+    this.annotationMode = 'note';
+    this.pdfPages = [];
+
+    // Download file blob from API for preview
+    this.artworkService.downloadArtwork(artwork.id).subscribe({
+      next: async (blob) => {
+        const url = URL.createObjectURL(blob);
+        artwork.blobUrl = url;
+        artwork.safeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+
+        if (artwork.fileType === 'pdf') {
+          // Use pdf.js to render pages as canvases
+          try {
+            const pdfjsLib = await import('pdfjs-dist');
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+            const pdf = await pdfjsLib.getDocument({ url, useSystemFonts: true }).promise;
+            (artwork as any)._pdfDoc = pdf;
+
+            const pages: { pageNum: number; width: number; height: number; rendered: boolean }[] = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const viewport = page.getViewport({ scale: 1.5 });
+              pages.push({ pageNum: i, width: viewport.width, height: viewport.height, rendered: false });
+            }
+            this.pdfPages = pages;
+            this.pdfPagesNeedRender = true;
+          } catch (err) {
+            console.error('PDF rendering failed:', err);
+          }
+        }
+
+        this.showArtworkViewer = true;
+        document.body.classList.add('artwork-viewer-open');
+      },
+      error: () => {
+        // Still show viewer even if file can't be loaded (for annotations)
+        this.showArtworkViewer = true;
+        document.body.classList.add('artwork-viewer-open');
+      }
+    });
+  }
+
+  private async renderPdfCanvases(): Promise<void> {
+    if (!this.selectedArtwork || !this.pdfCanvases) return;
+    const pdfDoc = (this.selectedArtwork as any)._pdfDoc;
+    if (!pdfDoc) return;
+
+    const canvases = this.pdfCanvases.toArray();
+    for (let i = 0; i < canvases.length; i++) {
+      const pageInfo = this.pdfPages[i];
+      if (pageInfo.rendered) continue;
+
+      const canvas = canvases[i].nativeElement;
+      const page = await pdfDoc.getPage(pageInfo.pageNum);
+      const viewport = page.getViewport({ scale: 1.5 });
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx!, viewport }).promise;
+      pageInfo.rendered = true;
+    }
+  }
+
+  closeArtworkViewer(): void {
+    if (this.selectedArtwork?.blobUrl) {
+      URL.revokeObjectURL(this.selectedArtwork.blobUrl);
+      this.selectedArtwork.blobUrl = undefined;
+      this.selectedArtwork.safeUrl = undefined;
+    }
+    const pdfDoc = (this.selectedArtwork as any)?._pdfDoc;
+    if (pdfDoc) pdfDoc.destroy();
+    this.pdfPages = [];
+    this.showArtworkViewer = false;
+    this.selectedArtwork = null;
+    this.editingAnnotation = null;
+    document.body.classList.remove('artwork-viewer-open');
+  }
+
+  setAnnotationMode(mode: 'note' | 'highlight' | 'arrow'): void {
+    this.annotationMode = mode;
+    this.editingAnnotation = null;
+  }
+
+  // Right-click to place annotation — position is relative to scroll content so it stays with pages
+  onPreviewRightClick(event: MouseEvent): void {
+    event.preventDefault();
+    if (!this.selectedArtwork) return;
+
+    // Find the scroll content container
+    const previewArea = event.currentTarget as HTMLElement;
+    const scrollContent = previewArea.querySelector('.artwork-scroll-content') as HTMLElement;
+    if (!scrollContent) return;
+
+    const contentRect = scrollContent.getBoundingClientRect();
+    // getBoundingClientRect() already accounts for scroll position, so no need to add scrollTop
+    const x = ((event.clientX - contentRect.left) / contentRect.width) * 100;
+    const y = ((event.clientY - contentRect.top) / contentRect.height) * 100;
+
+    const user = this.authService.currentUserValue;
+
+    this.artworkService.addAnnotation(this.selectedArtwork.id, {
+      type: this.annotationMode,
+      x,
+      y,
+      text: '',
+      color: this.annotationColor,
+      createdByUserId: user?.userId,
+      createdByUserName: user ? `${user.name}` : 'Unknown'
+    }).subscribe({
+      next: (savedAnnotation) => {
+        const annotation: ArtworkAnnotation = {
+          id: savedAnnotation.id,
+          type: savedAnnotation.type as 'note' | 'highlight' | 'arrow',
+          x: savedAnnotation.x,
+          y: savedAnnotation.y,
+          text: savedAnnotation.text || '',
+          color: savedAnnotation.color,
+          createdAt: new Date(savedAnnotation.createdAt),
+          createdBy: savedAnnotation.createdByUserName
+        };
+        this.selectedArtwork!.annotations.push(annotation);
+        this.editingAnnotation = annotation;
+        this.filterArtwork();
+      },
+      error: () => {
+        this.snackBar.open('❌ Failed to save annotation', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  selectAnnotation(annotation: ArtworkAnnotation, event: Event): void {
+    event.stopPropagation();
+    this.editingAnnotation = this.editingAnnotation?.id === annotation.id ? null : annotation;
+  }
+
+  saveAnnotationText(annotation: ArtworkAnnotation): void {
+    this.artworkService.updateAnnotation(annotation.id, { text: annotation.text }).subscribe({
+      error: () => {
+        this.snackBar.open('❌ Failed to save annotation text', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  removeAnnotation(annotation: ArtworkAnnotation): void {
+    if (!this.selectedArtwork) return;
+
+    this.artworkService.deleteAnnotation(annotation.id).subscribe({
+      next: () => {
+        this.selectedArtwork!.annotations = this.selectedArtwork!.annotations.filter(a => a.id !== annotation.id);
+        if (this.editingAnnotation?.id === annotation.id) {
+          this.editingAnnotation = null;
+        }
+        this.filterArtwork();
+      },
+      error: () => {
+        this.snackBar.open('❌ Failed to delete annotation', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  undoAnnotation(): void {
+    if (!this.selectedArtwork || this.selectedArtwork.annotations.length === 0) return;
+    const lastAnnotation = this.selectedArtwork.annotations[this.selectedArtwork.annotations.length - 1];
+    this.removeAnnotation(lastAnnotation);
+  }
+
+  clearAnnotations(): void {
+    if (!this.selectedArtwork) return;
+    if (confirm('Clear all annotations from this artwork?')) {
+      this.artworkService.clearAnnotations(this.selectedArtwork.id).subscribe({
+        next: () => {
+          this.selectedArtwork!.annotations = [];
+          this.editingAnnotation = null;
+          this.filterArtwork();
+        },
+        error: () => {
+          this.snackBar.open('❌ Failed to clear annotations', 'Close', { duration: 3000 });
+        }
+      });
+    }
+  }
+
+  // Send to Marketing Methods
+  openSendToMarketing(artwork: ArtworkFile): void {
+    this.sendToMarketingArtwork = artwork;
+    this.sendToMarketingForm = {
+      recipients: 'graphics@promedtechnologies.co.za, mpilo@promedtechnologies.co.za',
+      priority: 'normal',
+      message: '',
+      requestedByDate: null
+    };
+    this.showSendToMarketingDialog = true;
+  }
+
+  sendToMarketing(): void {
+    if (!this.sendToMarketingArtwork || !this.sendToMarketingForm.recipients) return;
+
+    this.sendingToMarketing = true;
+    this.sendToMarketingProgress = 0;
+    this.sendToMarketingStatus = '📋 Preparing change request...';
+    const artwork = this.sendToMarketingArtwork;
+    const user = this.authService.currentUserValue;
+
+    // Simulate progress stages while waiting for the HTTP response
+    const stages = [
+      { delay: 800, progress: 15, status: '📋 Compiling annotations...' },
+      { delay: 2000, progress: 30, status: '📧 Building email template...' },
+      { delay: 3500, progress: 50, status: '📤 Connecting to mail server...' },
+      { delay: 5500, progress: 65, status: '📤 Sending email to recipients...' },
+      { delay: 8000, progress: 78, status: '⏳ Waiting for confirmation...' },
+      { delay: 12000, progress: 85, status: '⏳ Still sending...' },
+      { delay: 18000, progress: 90, status: '⏳ Almost there...' },
+    ];
+    const timers: any[] = [];
+    stages.forEach(s => {
+      timers.push(setTimeout(() => {
+        if (this.sendingToMarketing) {
+          this.sendToMarketingProgress = s.progress;
+          this.sendToMarketingStatus = s.status;
+        }
+      }, s.delay));
+    });
+    this.marketingProgressTimer = timers;
+
+    this.artworkService.sendToMarketing(artwork.id, {
+      recipients: this.sendToMarketingForm.recipients,
+      priority: this.sendToMarketingForm.priority,
+      message: this.sendToMarketingForm.message,
+      requestedByDate: this.sendToMarketingForm.requestedByDate?.toISOString(),
+      requestedByUser: user ? `${user.name} ${user.surname || ''}`.trim() : 'Unknown'
+    }).pipe(
+      timeout(60000)
+    ).subscribe({
+      next: (result) => {
+        this.clearMarketingProgress();
+        this.sendToMarketingProgress = 100;
+        this.sendToMarketingStatus = '✅ Email sent successfully!';
+        artwork.sentToMarketing = true;
+        artwork.sentToMarketingAt = new Date();
+        this.filterArtwork();
+        setTimeout(() => {
+          this.sendingToMarketing = false;
+          this.sendToMarketingProgress = 0;
+          this.showSendToMarketingDialog = false;
+          this.sendToMarketingArtwork = null;
+          this.snackBar.open(`✅ ${(result as any).message}`, 'Close', { duration: 4000 });
+        }, 1200);
+      },
+      error: (err) => {
+        this.clearMarketingProgress();
+        this.sendingToMarketing = false;
+        this.sendToMarketingProgress = 0;
+        const msg = err.name === 'TimeoutError'
+          ? 'Request timed out — the email may still be sending in the background'
+          : (err.error?.message || err.message || 'Unknown error');
+        this.snackBar.open('❌ Failed to send change request: ' + msg, 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  private clearMarketingProgress(): void {
+    if (this.marketingProgressTimer) {
+      (this.marketingProgressTimer as any[]).forEach(t => clearTimeout(t));
+      this.marketingProgressTimer = null;
+    }
+  }
+
+  downloadArtwork(artwork: ArtworkFile): void {
+    this.artworkService.downloadArtwork(artwork.id).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = artwork.fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.snackBar.open('❌ Error downloading file', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  deleteArtwork(artwork: ArtworkFile): void {
+    if (!confirm(`Delete artwork "${artwork.fileName}"? This cannot be undone.`)) return;
+
+    this.artworkService.deleteArtwork(artwork.id).subscribe({
+      next: () => {
+        this.artworkFiles = this.artworkFiles.filter(a => a.id !== artwork.id);
+        this.filterArtwork();
+        this.snackBar.open('✅ Artwork deleted', 'Close', { duration: 3000 });
+      },
+      error: () => {
+        this.snackBar.open('❌ Failed to delete artwork', 'Close', { duration: 3000 });
       }
     });
   }

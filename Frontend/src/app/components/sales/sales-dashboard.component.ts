@@ -31,6 +31,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { environment } from '../../../environments/environment';
+import { PROMED_BACK_ORDERS, ACCESS_BACK_ORDERS, PHARMATECH_BACK_ORDERS, SEBENZANI_BACK_ORDERS, BackOrderItem } from './back-orders-data';
 import Chart from 'chart.js/auto';
 
 // Company definitions
@@ -55,6 +56,7 @@ interface CompanySales {
   todayOrders: number;
   yesterdayOrders: number;
   percentChange: number;
+  monthlyDailyAvg: number;
 }
 
 interface Customer {
@@ -141,43 +143,6 @@ interface SalesStats {
   monthlyRevenue: number;
   incomingOrders: number;
   processingOrders: number;
-}
-
-interface OrderCancellation {
-  id: number;
-  orderNumber: string;
-  importedInvoiceId?: number;
-  customerNumber: string;
-  customerName: string;
-  customerId?: number;
-  orderAmount: number;
-  itemCount: number;
-  originalOrderDate: Date;
-  cancellationReason: string;
-  cancellationNotes?: string;
-  cancelledAt: Date;
-  cancelledByUserId: number;
-  cancelledByUserName?: string;
-  approvalStatus: string;
-  approvedByUserId?: number;
-  approvedByUserName?: string;
-  approvedAt?: Date;
-  approvalNotes?: string;
-  refundAmount?: number;
-  refundProcessed: boolean;
-  refundProcessedAt?: Date;
-  companyCode?: string;
-}
-
-interface CancellationStats {
-  totalCancellations: number;
-  pendingApproval: number;
-  approvedToday: number;
-  rejectedToday: number;
-  totalRefundAmount: number;
-  pendingRefundAmount: number;
-  byReason: { [key: string]: number };
-  byCompany: { [key: string]: number };
 }
 
 interface SalesReportChartData {
@@ -329,10 +294,6 @@ interface SalesReportResponse {
             <mat-icon>group_add</mat-icon>
             <span>Import Customers</span>
           </button>
-          <button class="action-btn accent" (click)="openInvoiceDialog()">
-            <mat-icon>receipt</mat-icon>
-            <span>Capture Invoice</span>
-          </button>
           <button class="action-btn import" (click)="promptImportPassword('sales')">
             <mat-icon>upload_file</mat-icon>
             <span>Import Sales</span>
@@ -426,6 +387,101 @@ interface SalesReportResponse {
         </div>
       }
 
+      <!-- Edit Invoice Dialog -->
+      @if (showEditInvoiceDialog) {
+        <div class="dialog-overlay" (click)="closeEditInvoiceDialog()">
+          <div class="edit-invoice-dialog" (click)="$event.stopPropagation()">
+            <div class="edit-invoice-header">
+              <div class="edit-invoice-icon">
+                <mat-icon>edit_note</mat-icon>
+              </div>
+              <h2>Edit Invoice</h2>
+              <p>Update invoice details below</p>
+              <button mat-icon-button class="edit-invoice-close" (click)="closeEditInvoiceDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="edit-invoice-body">
+              <div class="edit-invoice-grid">
+                <div class="edit-field">
+                  <label>Transaction Number</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.transactionNumber" placeholder="Transaction #" />
+                </div>
+                <div class="edit-field">
+                  <label>Customer Name</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.customerName" placeholder="Customer name" />
+                </div>
+                <div class="edit-field">
+                  <label>Customer Number</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.customerNumber" placeholder="Customer #" />
+                </div>
+                <div class="edit-field">
+                  <label>Product Code</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.productCode" placeholder="Product code" />
+                </div>
+                <div class="edit-field full-width">
+                  <label>Product Description</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.productDescription" placeholder="Product description" />
+                </div>
+                <div class="edit-field">
+                  <label>Quantity</label>
+                  <input type="number" [(ngModel)]="editInvoiceForm.quantity" placeholder="0" />
+                </div>
+                <div class="edit-field">
+                  <label>Sales Amount</label>
+                  <input type="number" [(ngModel)]="editInvoiceForm.salesAmount" step="0.01" placeholder="0.00" />
+                </div>
+                <div class="edit-field">
+                  <label>Cost of Sales</label>
+                  <input type="number" [(ngModel)]="editInvoiceForm.costOfSales" step="0.01" placeholder="0.00" />
+                </div>
+                <div class="edit-field">
+                  <label>Transaction Date</label>
+                  <input type="date" [(ngModel)]="editInvoiceForm.transactionDate" />
+                </div>
+                <div class="edit-field">
+                  <label>Status</label>
+                  <select [(ngModel)]="editInvoiceForm.status">
+                    <option value="Pending">Pending</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="InProgress">In Progress</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div class="edit-field">
+                  <label>Delivery Province</label>
+                  <select [(ngModel)]="editInvoiceForm.deliveryProvince">
+                    <option value="">-- Select --</option>
+                    @for (p of provinces; track p) {
+                      <option [value]="p">{{ p }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="edit-field">
+                  <label>Source Company</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.sourceCompany" placeholder="Source company" />
+                </div>
+                <div class="edit-field full-width">
+                  <label>Delivery Address</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.deliveryAddress" placeholder="Delivery address" />
+                </div>
+              </div>
+            </div>
+            <div class="edit-invoice-actions">
+              <button class="dialog-btn cancel" (click)="closeEditInvoiceDialog()">Cancel</button>
+              <button class="dialog-btn submit" (click)="saveEditedInvoice()" [disabled]="editInvoiceSaving">
+                @if (editInvoiceSaving) {
+                  <mat-icon class="spin-icon">sync</mat-icon> Saving...
+                } @else {
+                  <mat-icon>save</mat-icon> Save Changes
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- Hidden file inputs for import -->
       <input
         type="file"
@@ -497,7 +553,7 @@ interface SalesReportResponse {
             <mat-icon>business</mat-icon>
             <h3>Company Performance</h3>
           </div>
-          <span class="comparison-label">{{ lastBusinessDayLabel() }} → {{ currentBusinessDayLabel() }}</span>
+          <span class="comparison-label">{{ lastBusinessDayLabel() }} → {{ currentBusinessDayLabel() }} · Trend vs MTD avg</span>
         </div>
         <div class="company-cards-grid">
           @for (cs of companySalesData(); track cs.company.code) {
@@ -510,7 +566,8 @@ interface SalesReportResponse {
                   <span class="company-name">{{ cs.company.shortName }}</span>
                   <span class="company-full">{{ cs.company.name }}</span>
                 </div>
-                <div class="trend-indicator" [class.up]="cs.percentChange >= 0" [class.down]="cs.percentChange < 0">
+                <div class="trend-indicator" [class.up]="cs.percentChange >= 0" [class.down]="cs.percentChange < 0"
+                     [matTooltip]="'vs month-to-date daily avg: R' + formatCurrency(cs.monthlyDailyAvg)">
                   <mat-icon>{{ cs.percentChange >= 0 ? 'trending_up' : 'trending_down' }}</mat-icon>
                   <span>{{ cs.percentChange >= 0 ? '+' : '' }}{{ cs.percentChange | number:'1.0-0' }}%</span>
                 </div>
@@ -911,9 +968,6 @@ interface SalesReportResponse {
                       <mat-option value="Delivered">Delivered</mat-option>
                     </mat-select>
                   </mat-form-field>
-                  <button mat-raised-button color="accent" (click)="openInvoiceDialog()">
-                    <mat-icon>add</mat-icon> Capture Invoice
-                  </button>
                   <button mat-stroked-button (click)="importInvoices()">
                     <mat-icon>upload</mat-icon> Import
                   </button>
@@ -1049,163 +1103,158 @@ interface SalesReportResponse {
             </div>
           </mat-tab>
 
-          <!-- Order Cancellations Tab -->
+          <!-- Back Orders Tab -->
           <mat-tab>
             <ng-template mat-tab-label>
-              <mat-icon>cancel</mat-icon>
-              <span>Cancellations</span>
-              @if (pendingCancellations().length > 0) {
-                <span class="tab-badge warning">{{ pendingCancellations().length }}</span>
+              <mat-icon>assignment_return</mat-icon>
+              <span>Back Orders</span>
+              @if (backOrderTotalCount() > 0) {
+                <span class="tab-badge warning">{{ backOrderTotalCount() }}</span>
               }
             </ng-template>
             <div class="tab-content">
               <div class="section-header">
-                <h3>Order Cancellations</h3>
+                <h3>Back Orders</h3>
                 <div class="section-actions">
                   <mat-form-field appearance="outline" class="search-field">
-                    <mat-label>Search cancellations</mat-label>
-                    <input matInput [value]="cancellationSearch()" (input)="cancellationSearch.set($any($event.target).value)">
+                    <mat-label>Search back orders</mat-label>
+                    <input matInput [value]="backOrderSearch()" (input)="backOrderSearch.set($any($event.target).value)">
                     <mat-icon matSuffix>search</mat-icon>
                   </mat-form-field>
-                  <mat-form-field appearance="outline" class="filter-field">
-                    <mat-label>Status</mat-label>
-                    <mat-select [value]="cancellationStatusFilter()" (selectionChange)="cancellationStatusFilter.set($event.value)">
-                      <mat-option value="all">All Status</mat-option>
-                      <mat-option value="Pending">Pending Approval</mat-option>
-                      <mat-option value="Approved">Approved</mat-option>
-                      <mat-option value="Rejected">Rejected</mat-option>
-                    </mat-select>
-                  </mat-form-field>
-                  <button mat-icon-button (click)="loadCancellations()" matTooltip="Refresh">
-                    <mat-icon>refresh</mat-icon>
-                  </button>
                 </div>
               </div>
 
-              <!-- Cancellation Stats -->
-              <div class="cancellation-stats">
-                <div class="cancel-stat pending">
-                  <mat-icon>hourglass_empty</mat-icon>
+              <!-- Back Order Stats -->
+              <div class="back-order-stats">
+                <div class="bo-stat total">
+                  <mat-icon>inventory</mat-icon>
                   <div class="stat-info">
-                    <span class="value">{{ cancellationStats().pendingApproval }}</span>
-                    <span class="label">Pending</span>
+                    <span class="value">{{ filteredBackOrders().length }}</span>
+                    <span class="label">Total Items</span>
                   </div>
                 </div>
-                <div class="cancel-stat approved">
-                  <mat-icon>check_circle</mat-icon>
+                <div class="bo-stat qty">
+                  <mat-icon>shopping_cart</mat-icon>
                   <div class="stat-info">
-                    <span class="value">{{ cancellationStats().approvedToday }}</span>
-                    <span class="label">Approved Today</span>
+                    <span class="value">{{ backOrderTotalQty() }}</span>
+                    <span class="label">Total Qty</span>
                   </div>
                 </div>
-                <div class="cancel-stat rejected">
-                  <mat-icon>cancel</mat-icon>
-                  <div class="stat-info">
-                    <span class="value">{{ cancellationStats().rejectedToday }}</span>
-                    <span class="label">Rejected Today</span>
-                  </div>
-                </div>
-                <div class="cancel-stat refund">
+                <div class="bo-stat value">
                   <mat-icon>payments</mat-icon>
                   <div class="stat-info">
-                    <span class="value">R{{ formatCurrency(cancellationStats().pendingRefundAmount) }}</span>
-                    <span class="label">Pending Refunds</span>
+                    <span class="value">R{{ formatCurrency(backOrderTotalValue()) }}</span>
+                    <span class="label">Total Value</span>
+                  </div>
+                </div>
+                <div class="bo-stat orders">
+                  <mat-icon>receipt_long</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">{{ backOrderUniqueOrders() }}</span>
+                    <span class="label">Unique Orders</span>
                   </div>
                 </div>
               </div>
 
-              @if (loadingCancellations()) {
-                <div class="loading-container">
-                  <mat-spinner diameter="40"></mat-spinner>
-                </div>
-              } @else if (filteredCancellations().length === 0) {
-                <div class="empty-state">
-                  <mat-icon>task_alt</mat-icon>
-                  <h3>No Cancellations Found</h3>
-                  <p>No order cancellations match your criteria</p>
-                </div>
-              } @else {
-                <div class="cancellations-grid">
-                  @for (cancel of filteredCancellations(); track cancel.id) {
-                    <mat-card class="cancellation-card" [class]="'status-' + cancel.approvalStatus.toLowerCase()">
-                      <mat-card-header>
-                        <div class="cancel-header">
-                          <div class="order-info">
-                            <strong>{{ cancel.orderNumber }}</strong>
-                            <span class="cancel-date">Cancelled {{ cancel.cancelledAt | date:'dd MMM yyyy HH:mm' }}</span>
-                          </div>
-                          <mat-chip [class]="'approval-' + cancel.approvalStatus.toLowerCase()">
-                            {{ cancel.approvalStatus }}
-                          </mat-chip>
-                        </div>
-                      </mat-card-header>
-                      <mat-card-content>
-                        <div class="cancel-customer">
-                          <mat-icon>person</mat-icon>
-                          <span>{{ cancel.customerName }}</span>
-                          <span class="customer-code">({{ cancel.customerNumber }})</span>
-                        </div>
-                        <div class="cancel-details">
-                          <div class="detail-row">
-                            <span class="label">Original Amount</span>
-                            <span class="value">R{{ cancel.orderAmount * 1.15 | number:'1.2-2' }}</span>
-                          </div>
-                          <div class="detail-row">
-                            <span class="label">Refund Amount</span>
-                            <span class="value refund">R{{ (cancel.refundAmount || cancel.orderAmount) * 1.15 | number:'1.2-2' }}</span>
-                          </div>
-                          <div class="detail-row">
-                            <span class="label">Reason</span>
-                            <mat-chip class="reason-chip" size="small">{{ cancel.cancellationReason | titlecase }}</mat-chip>
-                          </div>
-                          @if (cancel.cancellationNotes) {
-                            <div class="detail-row notes">
-                              <mat-icon>notes</mat-icon>
-                              <span>{{ cancel.cancellationNotes }}</span>
-                            </div>
-                          }
-                        </div>
-                        <div class="cancel-meta">
-                          <span class="cancelled-by">
-                            <mat-icon>person</mat-icon>
-                            {{ cancel.cancelledByUserName || 'Unknown' }}
-                          </span>
-                          @if (cancel.companyCode) {
-                            <mat-chip class="company-chip" [style.background-color]="getCompanyColor(cancel.companyCode)">
-                              {{ getCompanyShortName(cancel.companyCode) }}
-                            </mat-chip>
-                          }
-                        </div>
-                      </mat-card-content>
-                      <mat-card-actions>
-                        @if (cancel.approvalStatus === 'Pending') {
-                          <button mat-button color="primary" (click)="approveCancellation(cancel)">
-                            <mat-icon>check</mat-icon> Approve
-                          </button>
-                          <button mat-button color="warn" (click)="rejectCancellation(cancel)">
-                            <mat-icon>close</mat-icon> Reject
-                          </button>
-                        } @else if (cancel.approvalStatus === 'Approved' && !cancel.refundProcessed) {
-                          <button mat-button color="accent" (click)="processRefund(cancel)">
-                            <mat-icon>payments</mat-icon> Process Refund
-                          </button>
+              <!-- Company Sub-Tabs -->
+              <div class="back-order-company-tabs">
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'promed'" (click)="activeBackOrderTab.set('promed'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#1a237e"></span>
+                  Promed
+                  <span class="bo-tab-count">{{ promedBackOrders().length }}</span>
+                </button>
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'access'" (click)="activeBackOrderTab.set('access'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#00695c"></span>
+                  Access
+                  <span class="bo-tab-count">{{ accessBackOrders().length }}</span>
+                </button>
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'pharmatech'" (click)="activeBackOrderTab.set('pharmatech'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#c62828"></span>
+                  Pharmatech
+                  <span class="bo-tab-count">{{ pharmatechBackOrders().length }}</span>
+                </button>
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'sebenzani'" (click)="activeBackOrderTab.set('sebenzani'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#6a1b9a"></span>
+                  Sebenzani
+                  <span class="bo-tab-count">{{ sebenzaniBackOrders().length }}</span>
+                </button>
+              </div>
+
+              <!-- Back Orders Table -->
+              @if (activeBackOrderTab() === 'promed' || activeBackOrderTab() === 'access' || activeBackOrderTab() === 'pharmatech' || activeBackOrderTab() === 'sebenzani') {
+                @if (filteredBackOrders().length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>inventory_2</mat-icon>
+                    <h3>No Back Orders Found</h3>
+                    <p>No back orders match your search criteria</p>
+                  </div>
+                } @else {
+                  <div class="back-order-table-wrapper">
+                    <table class="back-order-table">
+                      <thead>
+                        <tr>
+                          <th class="bo-col-order">Order No</th>
+                          <th class="bo-col-date">Order Date</th>
+                          <th class="bo-col-custno">Cust No</th>
+                          <th class="bo-col-custname">Customer Name</th>
+                          <th class="bo-col-po">PO No</th>
+                          <th class="bo-col-item">Item Description</th>
+                          <th class="bo-col-loc">Location</th>
+                          <th class="bo-col-uom">UOM</th>
+                          <th class="bo-col-qty">Qty B/O</th>
+                          <th class="bo-col-price">Unit Price</th>
+                          <th class="bo-col-ext">Ext Price</th>
+                          <th class="bo-col-contract">Contract</th>
+                          <th class="bo-col-acct">Account Set</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (bo of paginatedBackOrders(); track bo.orderNumber + bo.itemDesc) {
+                          <tr>
+                            <td class="bo-col-order"><strong>{{ bo.orderNumber }}</strong></td>
+                            <td class="bo-col-date">{{ bo.orderDate }}</td>
+                            <td class="bo-col-custno">{{ bo.customerNo }}</td>
+                            <td class="bo-col-custname">{{ bo.customerName }}</td>
+                            <td class="bo-col-po">{{ bo.poNo }}</td>
+                            <td class="bo-col-item">{{ bo.itemDesc }}</td>
+                            <td class="bo-col-loc">{{ bo.location }}</td>
+                            <td class="bo-col-uom">{{ bo.uom }}</td>
+                            <td class="bo-col-qty">{{ bo.qtyBackOrder }}</td>
+                            <td class="bo-col-price">R{{ bo.unitPrice | number:'1.2-2' }}</td>
+                            <td class="bo-col-ext">R{{ bo.extPrice | number:'1.2-2' }}</td>
+                            <td class="bo-col-contract">{{ bo.contract }}</td>
+                            <td class="bo-col-acct">{{ bo.accountSet }}</td>
+                          </tr>
                         }
-                        <button mat-icon-button [matMenuTriggerFor]="cancelMenu">
-                          <mat-icon>more_vert</mat-icon>
-                        </button>
-                        <mat-menu #cancelMenu="matMenu">
-                          <button mat-menu-item (click)="viewCancellationDetails(cancel)">
-                            <mat-icon>visibility</mat-icon> View Details
-                          </button>
-                          @if (cancel.approvalStatus === 'Pending') {
-                            <button mat-menu-item class="delete-btn" (click)="deleteCancellation(cancel)">
-                              <mat-icon>delete</mat-icon> Delete
-                            </button>
-                          }
-                        </mat-menu>
-                      </mat-card-actions>
-                    </mat-card>
-                  }
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="back-order-pagination">
+                    <span class="bo-page-info">Showing {{ backOrderPageStart() + 1 }}-{{ backOrderPageEnd() }} of {{ filteredBackOrders().length }} items</span>
+                    <div class="bo-page-controls">
+                      <button mat-icon-button [disabled]="backOrderPage() === 0" (click)="backOrderPage.set(backOrderPage() - 1)">
+                        <mat-icon>chevron_left</mat-icon>
+                      </button>
+                      <span class="bo-page-number">Page {{ backOrderPage() + 1 }} of {{ backOrderTotalPages() }}</span>
+                      <button mat-icon-button [disabled]="backOrderPage() >= backOrderTotalPages() - 1" (click)="backOrderPage.set(backOrderPage() + 1)">
+                        <mat-icon>chevron_right</mat-icon>
+                      </button>
+                      <mat-form-field appearance="outline" class="bo-page-size-field">
+                        <mat-select [value]="backOrderPageSize()" (selectionChange)="onBackOrderPageSizeChange($event.value)">
+                          <mat-option [value]="25">25</mat-option>
+                          <mat-option [value]="50">50</mat-option>
+                          <mat-option [value]="100">100</mat-option>
+                          <mat-option [value]="250">250</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+                  </div>
+                }
+              } @else {
+                <div class="empty-state">
+                  <mat-icon>inventory_2</mat-icon>
+                  <h3>No Back Orders</h3>
+                  <p>No back order data available for {{ activeBackOrderTab() | titlecase }} yet</p>
                 </div>
               }
             </div>
@@ -1830,53 +1879,18 @@ interface SalesReportResponse {
               <div class="sales-table-section">
                 <div class="table-header">
                   <h3><mat-icon>receipt_long</mat-icon> Recent Sales</h3>
-                  <button mat-raised-button color="primary" (click)="toggleNewSaleForm()">
-                    <mat-icon>add</mat-icon> Capture Sale
-                  </button>
-                </div>
-
-                <!-- New Sale Form -->
-                @if (newSaleFormVisible) {
-                  <div class="new-sale-form">
-                    <h4>Capture New Sale for {{ selectedCompanyForDialog.shortName }}</h4>
-                    <div class="form-row">
-                      <mat-form-field>
-                        <mat-label>Transaction Number</mat-label>
-                        <input matInput [(ngModel)]="newSaleForm.transactionNumber" placeholder="INV-001">
-                      </mat-form-field>
-                      <mat-form-field>
-                        <mat-label>Customer Name</mat-label>
-                        <input matInput [(ngModel)]="newSaleForm.customerName" placeholder="Customer name">
-                      </mat-form-field>
-                      <mat-form-field>
-                        <mat-label>Date</mat-label>
-                        <input matInput [matDatepicker]="salePicker" [(ngModel)]="newSaleForm.transactionDate">
-                        <mat-datepicker-toggle matIconSuffix [for]="salePicker"></mat-datepicker-toggle>
-                        <mat-datepicker #salePicker></mat-datepicker>
-                      </mat-form-field>
-                    </div>
-                    <div class="form-row">
-                      <mat-form-field class="wide">
-                        <mat-label>Product/Description</mat-label>
-                        <input matInput [(ngModel)]="newSaleForm.productDescription" placeholder="Product description">
-                      </mat-form-field>
-                      <mat-form-field>
-                        <mat-label>Quantity</mat-label>
-                        <input matInput type="number" [(ngModel)]="newSaleForm.quantity" min="1">
-                      </mat-form-field>
-                      <mat-form-field>
-                        <mat-label>Sales Amount (R)</mat-label>
-                        <input matInput type="number" [(ngModel)]="newSaleForm.salesAmount" min="0" step="0.01">
-                      </mat-form-field>
-                    </div>
-                    <div class="form-actions">
-                      <button mat-button (click)="toggleNewSaleForm()">Cancel</button>
-                      <button mat-raised-button color="primary" (click)="saveSale()" [disabled]="!newSaleForm.customerName || !newSaleForm.salesAmount">
-                        <mat-icon>save</mat-icon> Save Sale
-                      </button>
-                    </div>
+                  <div class="table-header-actions">
+                    <button mat-stroked-button class="export-btn excel-btn" (click)="openExportDatePicker('excel')">
+                      <mat-icon>table_chart</mat-icon> Export Excel
+                    </button>
+                    <button mat-stroked-button class="export-btn pdf-btn" (click)="openExportDatePicker('pdf')">
+                      <mat-icon>picture_as_pdf</mat-icon> Generate PDF
+                    </button>
+                    <button mat-stroked-button class="export-btn compare-btn" (click)="openCompareDialog()">
+                      <mat-icon>compare_arrows</mat-icon> Compare
+                    </button>
                   </div>
-                }
+                </div>
 
                 <!-- Sales Data Table -->
                 <div class="table-container">
@@ -1921,6 +1935,200 @@ interface SalesReportResponse {
             </div>
           </div>
         </div>
+
+        <!-- Company Comparison Dialog -->
+        @if (showCompareDialog && selectedCompanyForDialog) {
+          <div class="export-date-overlay" (click)="closeCompareDialog()">
+            <div class="compare-dialog" (click)="$event.stopPropagation()">
+              <div class="compare-dialog-header">
+                <div class="compare-title">
+                  <mat-icon>compare_arrows</mat-icon>
+                  <h3>Company Comparison</h3>
+                </div>
+                <button mat-icon-button (click)="closeCompareDialog()">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+
+              <!-- Config Row -->
+              <div class="compare-config">
+                <div class="compare-companies">
+                  <div class="compare-company-badge" [style.background]="selectedCompanyForDialog.color">
+                    {{ selectedCompanyForDialog.shortName }}
+                  </div>
+                  <mat-icon>vs</mat-icon>
+                  <mat-form-field appearance="outline" class="compare-select">
+                    <mat-label>Compare with</mat-label>
+                    <mat-select [(ngModel)]="compareCompanyCode" (ngModelChange)="loadComparisonData()">
+                      @for (c of getCompareOptions(); track c.code) {
+                        <mat-option [value]="c.code">{{ c.shortName }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+                <div class="compare-date-range">
+                  <mat-form-field appearance="outline" class="compare-date-field">
+                    <mat-label>From</mat-label>
+                    <input matInput [matDatepicker]="cmpFrom" [(ngModel)]="compareFromDate" (dateChange)="loadComparisonData()">
+                    <mat-datepicker-toggle matIconSuffix [for]="cmpFrom"></mat-datepicker-toggle>
+                    <mat-datepicker #cmpFrom></mat-datepicker>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="compare-date-field">
+                    <mat-label>To</mat-label>
+                    <input matInput [matDatepicker]="cmpTo" [(ngModel)]="compareToDate" (dateChange)="loadComparisonData()">
+                    <mat-datepicker-toggle matIconSuffix [for]="cmpTo"></mat-datepicker-toggle>
+                    <mat-datepicker #cmpTo></mat-datepicker>
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <!-- Quick Range Buttons -->
+              <div class="compare-quick-ranges">
+                <button mat-stroked-button (click)="setCompareRange('week')">Past 7 Days</button>
+                <button mat-stroked-button (click)="setCompareRange('month')">This Month</button>
+                <button mat-stroked-button (click)="setCompareRange('quarter')">This Quarter</button>
+                <button mat-stroked-button (click)="setCompareRange('year')">This Year</button>
+              </div>
+
+              @if (compareCompanyCode) {
+                <!-- Side-by-Side Summary -->
+                <div class="compare-summary">
+                  <div class="compare-col">
+                    <div class="compare-col-header" [style.background]="selectedCompanyForDialog.color">
+                      {{ selectedCompanyForDialog.shortName }}
+                    </div>
+                    <div class="compare-stat"><span class="label">Invoices</span><span class="val">{{ compareDataA.count }}</span></div>
+                    <div class="compare-stat"><span class="label">Revenue</span><span class="val">R{{ formatCurrencyFull(compareDataA.revenue) }}</span></div>
+                    <div class="compare-stat"><span class="label">Incl. VAT</span><span class="val">R{{ formatCurrencyFull(compareDataA.revenue * 1.15) }}</span></div>
+                    <div class="compare-stat"><span class="label">Avg/Invoice</span><span class="val">R{{ formatCurrencyFull(compareDataA.count > 0 ? compareDataA.revenue / compareDataA.count : 0) }}</span></div>
+                    <div class="compare-stat"><span class="label">Cost</span><span class="val">R{{ formatCurrencyFull(compareDataA.cost) }}</span></div>
+                    <div class="compare-stat"><span class="label">Margin</span><span class="val">{{ compareDataA.revenue > 0 ? ((compareDataA.revenue - compareDataA.cost) / compareDataA.revenue * 100).toFixed(1) : '0.0' }}%</span></div>
+                  </div>
+                  <div class="compare-vs">VS</div>
+                  <div class="compare-col">
+                    <div class="compare-col-header" [style.background]="getCompareCompany()?.color">
+                      {{ getCompareCompany()?.shortName }}
+                    </div>
+                    <div class="compare-stat"><span class="label">Invoices</span><span class="val">{{ compareDataB.count }}</span></div>
+                    <div class="compare-stat"><span class="label">Revenue</span><span class="val">R{{ formatCurrencyFull(compareDataB.revenue) }}</span></div>
+                    <div class="compare-stat"><span class="label">Incl. VAT</span><span class="val">R{{ formatCurrencyFull(compareDataB.revenue * 1.15) }}</span></div>
+                    <div class="compare-stat"><span class="label">Avg/Invoice</span><span class="val">R{{ formatCurrencyFull(compareDataB.count > 0 ? compareDataB.revenue / compareDataB.count : 0) }}</span></div>
+                    <div class="compare-stat"><span class="label">Cost</span><span class="val">R{{ formatCurrencyFull(compareDataB.cost) }}</span></div>
+                    <div class="compare-stat"><span class="label">Margin</span><span class="val">{{ compareDataB.revenue > 0 ? ((compareDataB.revenue - compareDataB.cost) / compareDataB.revenue * 100).toFixed(1) : '0.0' }}%</span></div>
+                  </div>
+                </div>
+
+                <!-- Comparison Bar Chart -->
+                <div class="compare-chart-section">
+                  <h4><mat-icon>bar_chart</mat-icon> Daily Revenue Comparison</h4>
+                  <div class="compare-chart">
+                    @for (day of compareDailyData; track day.date) {
+                      <div class="compare-chart-day">
+                        <div class="compare-bars">
+                          <div class="compare-bar bar-a" [style.height.%]="getCompareBarHeight(day.totalA)" [style.background]="selectedCompanyForDialog.color"
+                               [matTooltip]="selectedCompanyForDialog.shortName + ': R' + formatCurrencyFull(day.totalA)"></div>
+                          <div class="compare-bar bar-b" [style.height.%]="getCompareBarHeight(day.totalB)" [style.background]="getCompareCompany()?.color"
+                               [matTooltip]="getCompareCompany()?.shortName + ': R' + formatCurrencyFull(day.totalB)"></div>
+                        </div>
+                        <span class="compare-chart-label">{{ day.label }}</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="compare-legend">
+                    <span class="legend-item"><span class="legend-dot" [style.background]="selectedCompanyForDialog.color"></span> {{ selectedCompanyForDialog.shortName }}</span>
+                    <span class="legend-item"><span class="legend-dot" [style.background]="getCompareCompany()?.color"></span> {{ getCompareCompany()?.shortName }}</span>
+                  </div>
+                </div>
+
+                <!-- Difference Highlights -->
+                <div class="compare-highlights">
+                  <div class="highlight-card" [class.positive]="compareDataA.revenue >= compareDataB.revenue" [class.negative]="compareDataA.revenue < compareDataB.revenue">
+                    <mat-icon>{{ compareDataA.revenue >= compareDataB.revenue ? 'trending_up' : 'trending_down' }}</mat-icon>
+                    <div class="highlight-text">
+                      <span class="highlight-label">Revenue Difference</span>
+                      <span class="highlight-value">R{{ formatCurrencyFull(Math.abs(compareDataA.revenue - compareDataB.revenue)) }}</span>
+                      <span class="highlight-sub">{{ selectedCompanyForDialog.shortName }} is {{ compareDataA.revenue >= compareDataB.revenue ? 'ahead' : 'behind' }}</span>
+                    </div>
+                  </div>
+                  <div class="highlight-card" [class.positive]="compareDataA.count >= compareDataB.count" [class.negative]="compareDataA.count < compareDataB.count">
+                    <mat-icon>{{ compareDataA.count >= compareDataB.count ? 'trending_up' : 'trending_down' }}</mat-icon>
+                    <div class="highlight-text">
+                      <span class="highlight-label">Invoice Volume</span>
+                      <span class="highlight-value">{{ Math.abs(compareDataA.count - compareDataB.count) }} invoices</span>
+                      <span class="highlight-sub">{{ selectedCompanyForDialog.shortName }} has {{ compareDataA.count >= compareDataB.count ? 'more' : 'fewer' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Export Button -->
+                <div class="compare-actions">
+                  <button mat-raised-button color="primary" (click)="exportComparisonExcel()" [disabled]="compareExporting">
+                    @if (compareExporting) {
+                      <mat-icon class="spin-icon">hourglass_empty</mat-icon> Exporting...
+                    } @else {
+                      <mat-icon>table_chart</mat-icon> Export Comparison to Excel
+                    }
+                  </button>
+                </div>
+              } @else {
+                <div class="compare-placeholder">
+                  <mat-icon>compare_arrows</mat-icon>
+                  <p>Select a company above to start comparing</p>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Export Date Range Picker Popup -->
+        @if (showExportDatePicker) {
+          <div class="export-date-overlay" (click)="closeExportDatePicker()">
+            <div class="export-date-popup" (click)="$event.stopPropagation()">
+              <div class="export-popup-header">
+                <mat-icon>{{ exportType === 'excel' ? 'table_chart' : 'picture_as_pdf' }}</mat-icon>
+                <h3>{{ exportType === 'excel' ? 'Export to Excel' : 'Generate PDF Report' }}</h3>
+                <button mat-icon-button (click)="closeExportDatePicker()">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+              <p class="export-popup-desc">
+                {{ exportType === 'excel' ? 'Select a date range to export all invoices to an Excel spreadsheet.' : 'Select a date range to generate a PDF report with charts and invoice details.' }}
+              </p>
+              <div class="export-date-fields">
+                <mat-form-field appearance="outline">
+                  <mat-label>From Date</mat-label>
+                  <input matInput [matDatepicker]="exportFromPicker" [(ngModel)]="exportFromDate">
+                  <mat-datepicker-toggle matIconSuffix [for]="exportFromPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #exportFromPicker></mat-datepicker>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>To Date</mat-label>
+                  <input matInput [matDatepicker]="exportToPicker" [(ngModel)]="exportToDate">
+                  <mat-datepicker-toggle matIconSuffix [for]="exportToPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #exportToPicker></mat-datepicker>
+                </mat-form-field>
+              </div>
+              <div class="export-quick-ranges">
+                <button mat-stroked-button (click)="setExportRange('week')">Past 7 Days</button>
+                <button mat-stroked-button (click)="setExportRange('month')">This Month</button>
+                <button mat-stroked-button (click)="setExportRange('quarter')">This Quarter</button>
+                <button mat-stroked-button (click)="setExportRange('year')">This Year</button>
+              </div>
+              <div class="export-popup-actions">
+                <button mat-button (click)="closeExportDatePicker()">Cancel</button>
+                <button mat-raised-button [color]="exportType === 'excel' ? 'primary' : 'warn'"
+                        (click)="executeExport()" [disabled]="exportGenerating">
+                  @if (exportGenerating) {
+                    <mat-icon class="spin-icon">hourglass_empty</mat-icon> Generating...
+                  } @else {
+                    <mat-icon>{{ exportType === 'excel' ? 'download' : 'picture_as_pdf' }}</mat-icon>
+                    {{ exportType === 'excel' ? 'Export Excel' : 'Generate PDF' }}
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        }
       }
       }
     </div>
@@ -2297,6 +2505,142 @@ interface SalesReportResponse {
     .dialog-btn.submit:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+
+    /* Edit Invoice Dialog */
+    .edit-invoice-dialog {
+      background: white;
+      border-radius: 20px;
+      padding: 0;
+      width: 640px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+      animation: dialogSlideIn 0.3s ease;
+    }
+
+    .edit-invoice-header {
+      text-align: center;
+      padding: 32px 32px 16px;
+      position: relative;
+    }
+
+    .edit-invoice-header h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .edit-invoice-header p {
+      margin: 6px 0 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .edit-invoice-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+      box-shadow: 0 8px 24px rgba(21, 101, 192, 0.3);
+    }
+
+    .edit-invoice-icon mat-icon {
+      color: white;
+      font-size: 30px;
+      width: 30px;
+      height: 30px;
+    }
+
+    .edit-invoice-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+    }
+
+    .edit-invoice-body {
+      padding: 0 32px;
+    }
+
+    .edit-invoice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .edit-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .edit-field.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .edit-field label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .edit-field input,
+    .edit-field select {
+      padding: 10px 14px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #1a1a2e;
+      background: #fafafa;
+      outline: none;
+      transition: all 0.2s ease;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .edit-field input:focus,
+    .edit-field select:focus {
+      border-color: #1e88e5;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.12);
+    }
+
+    .edit-invoice-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding: 24px 32px 28px;
+    }
+
+    .edit-invoice-actions .dialog-btn.submit {
+      background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+      box-shadow: 0 4px 12px rgba(21, 101, 192, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .edit-invoice-actions .dialog-btn.submit mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .spin-icon {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
 
     /* Customer Import Result Dialog */
@@ -3222,15 +3566,15 @@ interface SalesReportResponse {
       font-size: 11px !important;
     }
 
-    /* Cancellation Stats */
-    .cancellation-stats {
+    /* Back Order Stats */
+    .back-order-stats {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
       margin-bottom: 24px;
     }
 
-    .cancel-stat {
+    .bo-stat {
       display: flex;
       align-items: center;
       gap: 12px;
@@ -3241,192 +3585,207 @@ interface SalesReportResponse {
       transition: all 0.25s cubic-bezier(.4,0,.2,1);
     }
 
-    .cancel-stat:hover {
+    .bo-stat:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
       border-color: #d0d0d0;
     }
 
-    .cancel-stat mat-icon {
+    .bo-stat mat-icon {
       font-size: 32px;
       width: 32px;
       height: 32px;
     }
 
-    .cancel-stat.pending mat-icon { color: #ff9800; }
-    .cancel-stat.approved mat-icon { color: #4caf50; }
-    .cancel-stat.rejected mat-icon { color: #f44336; }
-    .cancel-stat.refund mat-icon { color: #2196f3; }
+    .bo-stat.total mat-icon { color: #1a237e; }
+    .bo-stat.qty mat-icon { color: #ff9800; }
+    .bo-stat.value mat-icon { color: #4caf50; }
+    .bo-stat.orders mat-icon { color: #2196f3; }
 
-    .cancel-stat .stat-info {
+    .bo-stat .stat-info {
       display: flex;
       flex-direction: column;
     }
 
-    .cancel-stat .value {
+    .bo-stat .value {
       font-size: 20px;
       font-weight: 600;
       color: #1a237e;
     }
 
-    .cancel-stat .label {
+    .bo-stat .label {
       font-size: 12px;
       color: #666;
     }
 
-    /* Cancellations Grid */
-    .cancellations-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-      gap: 16px;
+    /* Back Order Company Tabs */
+    .back-order-company-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
     }
 
-    .cancellation-card {
-      border-radius: 14px;
+    .bo-company-tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border: 2px solid #e0e0e0;
+      border-radius: 25px;
+      background: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #555;
       transition: all 0.25s cubic-bezier(.4,0,.2,1);
-      border-left: 4px solid #ccc;
     }
 
-    .cancellation-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+    .bo-company-tab:hover {
+      border-color: #90a4ae;
+      background: #fafafa;
     }
 
-    .cancellation-card.status-pending { border-left-color: #ff9800; }
-    .cancellation-card.status-approved { border-left-color: #4caf50; }
-    .cancellation-card.status-rejected { border-left-color: #f44336; }
+    .bo-company-tab.active {
+      border-color: #1a237e;
+      background: #e8eaf6;
+      color: #1a237e;
+      font-weight: 600;
+    }
 
-    .cancel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+    .bo-tab-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .bo-tab-count {
+      background: #e0e0e0;
+      color: #555;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .bo-company-tab.active .bo-tab-count {
+      background: #1a237e;
+      color: white;
+    }
+
+    /* Back Order Table */
+    .back-order-table-wrapper {
+      overflow-x: auto;
+      border-radius: 14px;
+      border: 1px solid #e8eaf6;
+      background: white;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    .back-order-table {
       width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
     }
 
-    .cancel-header .order-info {
-      display: flex;
-      flex-direction: column;
+    .back-order-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
 
-    .cancel-header .order-info strong {
-      font-size: 16px;
+    .back-order-table thead tr {
+      background: linear-gradient(135deg, #1a237e, #283593);
+    }
+
+    .back-order-table th {
+      padding: 12px 10px;
+      text-align: left;
+      color: white;
+      font-weight: 600;
+      font-size: 12px;
+      white-space: nowrap;
+      border-bottom: 2px solid #0d1642;
+    }
+
+    .back-order-table tbody tr {
+      border-bottom: 1px solid #f0f0f0;
+      transition: background 0.15s ease;
+    }
+
+    .back-order-table tbody tr:hover {
+      background: #e8eaf6;
+    }
+
+    .back-order-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    .back-order-table tbody tr:nth-child(even):hover {
+      background: #e8eaf6;
+    }
+
+    .back-order-table td {
+      padding: 10px 10px;
+      color: #333;
+      white-space: nowrap;
+    }
+
+    .back-order-table td strong {
       color: #1a237e;
     }
 
-    .cancel-header .cancel-date {
-      font-size: 12px;
-      color: #999;
-    }
+    .bo-col-order { min-width: 100px; }
+    .bo-col-date { min-width: 90px; }
+    .bo-col-custno { min-width: 80px; }
+    .bo-col-custname { min-width: 200px; white-space: normal !important; }
+    .bo-col-po { min-width: 120px; }
+    .bo-col-item { min-width: 250px; white-space: normal !important; }
+    .bo-col-loc { min-width: 80px; }
+    .bo-col-uom { min-width: 60px; }
+    .bo-col-qty { min-width: 70px; text-align: right; }
+    .bo-col-price { min-width: 90px; text-align: right; }
+    .bo-col-ext { min-width: 100px; text-align: right; font-weight: 600; }
+    .bo-col-contract { min-width: 100px; }
+    .bo-col-acct { min-width: 100px; }
 
-    .approval-pending {
-      background: #fff3e0 !important;
-      color: #e65100 !important;
-    }
-
-    .approval-approved {
-      background: #e8f5e9 !important;
-      color: #2e7d32 !important;
-    }
-
-    .approval-rejected {
-      background: #ffebee !important;
-      color: #c62828 !important;
-    }
-
-    .cancel-customer {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      color: #333;
-    }
-
-    .cancel-customer mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-      color: #666;
-    }
-
-    .cancel-customer .customer-code {
-      font-size: 12px;
-      color: #999;
-    }
-
-    .cancel-details {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .cancel-details .detail-row {
+    /* Back Order Pagination */
+    .back-order-pagination {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      padding: 12px 16px;
+      background: white;
+      border: 1px solid #e8eaf6;
+      border-top: none;
+      border-radius: 0 0 14px 14px;
     }
 
-    .cancel-details .label {
-      font-size: 12px;
+    .bo-page-info {
+      font-size: 13px;
       color: #666;
     }
 
-    .cancel-details .value {
-      font-size: 14px;
+    .bo-page-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .bo-page-number {
+      font-size: 13px;
       font-weight: 500;
       color: #333;
     }
 
-    .cancel-details .value.refund {
-      color: #f44336;
-      font-weight: 600;
+    .bo-page-size-field {
+      width: 80px;
     }
 
-    .cancel-details .notes {
-      background: #f5f5f5;
-      padding: 8px;
-      border-radius: 8px;
-      gap: 6px;
-    }
-
-    .cancel-details .notes mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-      color: #999;
-    }
-
-    .cancel-details .notes span {
-      font-size: 12px;
-      color: #666;
-    }
-
-    .reason-chip {
-      background: #e8eaf6 !important;
-      color: #3f51b5 !important;
-      font-size: 11px !important;
-    }
-
-    .cancel-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 8px;
-      border-top: 1px solid #e0e0e0;
-    }
-
-    .cancelled-by {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      color: #666;
-    }
-
-    .cancelled-by mat-icon {
-      font-size: 14px;
-      width: 14px;
-      height: 14px;
+    .bo-page-size-field .mat-mdc-form-field-subscript-wrapper {
+      display: none;
     }
 
     .tab-badge.warning {
@@ -3557,21 +3916,22 @@ interface SalesReportResponse {
     /* Reports Grid */
     .reports-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
     }
 
     .report-card {
-      border-radius: 14px;
+      border-radius: 16px;
       cursor: pointer;
-      transition: all 0.25s cubic-bezier(.4,0,.2,1);
-      border: 1px solid rgba(0, 0, 0, 0.05);
+      transition: all 0.3s cubic-bezier(.4,0,.2,1);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
     }
 
     .report-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 28px rgba(26, 35, 126, 0.10);
-      border-color: rgba(26, 35, 126, 0.15);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 36px rgba(26, 35, 126, 0.14);
+      border-color: rgba(26, 35, 126, 0.2);
     }
 
     .report-card mat-card-content {
@@ -3579,40 +3939,53 @@ interface SalesReportResponse {
       flex-direction: column;
       align-items: center;
       text-align: center;
-      padding: 28px 24px;
+      padding: 36px 28px 32px;
     }
 
     .report-card mat-icon {
-      font-size: 44px;
-      width: 44px;
-      height: 44px;
+      font-size: 56px;
+      width: 56px;
+      height: 56px;
       color: #1a237e;
-      margin-bottom: 14px;
-      transition: transform 0.25s ease;
+      margin-bottom: 18px;
+      transition: transform 0.3s ease;
+      background: linear-gradient(135deg, rgba(26,35,126,0.08), rgba(26,35,126,0.04));
+      border-radius: 16px;
+      padding: 14px;
+      box-sizing: content-box;
     }
 
     .report-card:hover mat-icon {
-      transform: scale(1.08);
+      transform: scale(1.1);
+      background: linear-gradient(135deg, rgba(26,35,126,0.14), rgba(26,35,126,0.06));
     }
 
     .report-card h4 {
-      margin: 0 0 6px 0;
+      margin: 0 0 8px 0;
       color: #1a237e;
-      font-size: 15px;
-      letter-spacing: -0.1px;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
     }
 
     .report-card p {
       margin: 0;
-      font-size: 12px;
+      font-size: 13.5px;
       color: #78909c;
-      line-height: 1.4;
+      line-height: 1.5;
     }
 
     .report-card.active {
       border: 2px solid #1a237e;
-      box-shadow: 0 6px 20px rgba(26, 35, 126, 0.18);
-      background: linear-gradient(180deg, #f8f9ff 0%, #ffffff 100%);
+      box-shadow: 0 8px 28px rgba(26, 35, 126, 0.22);
+      background: linear-gradient(180deg, #f0f1ff 0%, #ffffff 100%);
+    }
+
+    @media (max-width: 1200px) {
+      .reports-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .reports-grid { grid-template-columns: 1fr; }
     }
 
     /* Welly Report Panel */
@@ -4752,27 +5125,521 @@ interface SalesReportResponse {
       gap: 12px;
     }
 
-    .table-container {
+    .sales-table-section .table-container {
       overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid #e0e0e0;
+      background: white;
     }
 
     .sales-table {
       width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
     }
 
     .sales-table th {
       background: #f5f5f5;
       font-weight: 600;
       color: #333;
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 2px solid #e0e0e0;
+      white-space: nowrap;
     }
 
     .sales-table td {
       padding: 12px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sales-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .sales-table tr:hover td {
+      background: #fafafa;
+    }
+
+    /* Column widths for dialog sales table */
+    .sales-table .mat-column-date {
+      width: 120px;
+    }
+
+    .sales-table .mat-column-transaction {
+      width: 140px;
+    }
+
+    .sales-table .mat-column-customer {
+      width: auto;
+    }
+
+    .sales-table .mat-column-product {
+      width: auto;
+    }
+
+    .sales-table .mat-column-quantity {
+      width: 70px;
+      text-align: right;
+    }
+
+    .sales-table .mat-column-amount {
+      width: 150px;
+      text-align: right;
     }
 
     .amount-cell {
       font-weight: 600;
       color: #1a237e;
+    }
+
+    /* Table header actions */
+    .table-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .export-btn {
+      font-size: 12px !important;
+      height: 36px !important;
+      line-height: 36px !important;
+      border-radius: 8px !important;
+    }
+
+    .excel-btn {
+      color: #2e7d32 !important;
+      border-color: #2e7d32 !important;
+    }
+
+    .excel-btn:hover {
+      background: rgba(46, 125, 50, 0.08) !important;
+    }
+
+    .pdf-btn {
+      color: #c62828 !important;
+      border-color: #c62828 !important;
+    }
+
+    .pdf-btn:hover {
+      background: rgba(198, 40, 40, 0.08) !important;
+    }
+
+    /* Export Date Range Popup */
+    .export-date-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1100;
+      backdrop-filter: blur(3px);
+    }
+
+    .export-date-popup {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      width: 420px;
+      max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: popupSlideIn 0.2s ease-out;
+    }
+
+    @keyframes popupSlideIn {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .export-popup-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .export-popup-header mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: #1a237e;
+    }
+
+    .export-popup-header h3 {
+      flex: 1;
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a237e;
+    }
+
+    .export-popup-desc {
+      color: #666;
+      font-size: 13px;
+      margin: 0 0 20px 0;
+    }
+
+    .export-date-fields {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .export-date-fields mat-form-field {
+      flex: 1;
+    }
+
+    .export-quick-ranges {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .export-quick-ranges button {
+      font-size: 11px !important;
+      height: 30px !important;
+      line-height: 30px !important;
+      border-radius: 15px !important;
+      padding: 0 14px !important;
+    }
+
+    .export-popup-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #eee;
+    }
+
+    .spin-icon {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .compare-btn {
+      color: #1565c0 !important;
+      border-color: #1565c0 !important;
+    }
+
+    .compare-btn:hover {
+      background: rgba(21, 101, 192, 0.08) !important;
+    }
+
+    /* Comparison Dialog */
+    .compare-dialog {
+      background: white;
+      border-radius: 16px;
+      padding: 0;
+      width: 780px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: popupSlideIn 0.2s ease-out;
+    }
+
+    .compare-dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .compare-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .compare-title mat-icon {
+      color: #1a237e;
+      font-size: 26px;
+      width: 26px;
+      height: 26px;
+    }
+
+    .compare-title h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a237e;
+    }
+
+    .compare-config {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 24px 0;
+      flex-wrap: wrap;
+    }
+
+    .compare-companies {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .compare-company-badge {
+      padding: 6px 14px;
+      border-radius: 20px;
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .compare-select {
+      width: 180px;
+    }
+
+    .compare-date-range {
+      display: flex;
+      gap: 10px;
+      margin-left: auto;
+    }
+
+    .compare-date-field {
+      width: 140px;
+    }
+
+    .compare-quick-ranges {
+      display: flex;
+      gap: 8px;
+      padding: 0 24px 12px;
+      flex-wrap: wrap;
+    }
+
+    .compare-quick-ranges button {
+      font-size: 11px !important;
+      height: 28px !important;
+      line-height: 28px !important;
+      border-radius: 14px !important;
+      padding: 0 12px !important;
+    }
+
+    /* Side-by-Side Summary */
+    .compare-summary {
+      display: flex;
+      gap: 0;
+      margin: 0 24px 16px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #e0e0e0;
+    }
+
+    .compare-col {
+      flex: 1;
+    }
+
+    .compare-col-header {
+      color: white;
+      font-weight: 600;
+      text-align: center;
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    .compare-stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+    }
+
+    .compare-stat .label {
+      color: #777;
+    }
+
+    .compare-stat .val {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .compare-vs {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f5f5f5;
+      padding: 0 12px;
+      font-weight: 800;
+      font-size: 16px;
+      color: #999;
+      border-left: 1px solid #e0e0e0;
+      border-right: 1px solid #e0e0e0;
+    }
+
+    /* Comparison Chart */
+    .compare-chart-section {
+      margin: 0 24px 16px;
+    }
+
+    .compare-chart-section h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #333;
+      font-size: 14px;
+      margin: 0 0 10px 0;
+    }
+
+    .compare-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 120px;
+      background: #fafafa;
+      border-radius: 10px;
+      padding: 12px 8px 24px;
+      overflow-x: auto;
+    }
+
+    .compare-chart-day {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      min-width: 28px;
+    }
+
+    .compare-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 80px;
+      width: 100%;
+    }
+
+    .compare-bar {
+      flex: 1;
+      min-height: 3px;
+      border-radius: 3px 3px 0 0;
+      transition: height 0.3s ease;
+      cursor: pointer;
+    }
+
+    .compare-chart-label {
+      font-size: 8px;
+      color: #999;
+      margin-top: 4px;
+      white-space: nowrap;
+    }
+
+    .compare-legend {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Highlights */
+    .compare-highlights {
+      display: flex;
+      gap: 12px;
+      margin: 0 24px 16px;
+    }
+
+    .highlight-card {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .highlight-card.positive {
+      background: #e8f5e9;
+      border-color: #a5d6a7;
+    }
+
+    .highlight-card.positive mat-icon {
+      color: #2e7d32;
+    }
+
+    .highlight-card.negative {
+      background: #fce4ec;
+      border-color: #ef9a9a;
+    }
+
+    .highlight-card.negative mat-icon {
+      color: #c62828;
+    }
+
+    .highlight-card mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .highlight-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .highlight-label {
+      font-size: 11px;
+      color: #666;
+    }
+
+    .highlight-value {
+      font-weight: 700;
+      font-size: 15px;
+      color: #333;
+    }
+
+    .highlight-sub {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .compare-actions {
+      display: flex;
+      justify-content: center;
+      padding: 16px 24px 20px;
+      border-top: 1px solid #eee;
+    }
+
+    .compare-placeholder {
+      text-align: center;
+      padding: 48px 24px;
+      color: #999;
+    }
+
+    .compare-placeholder mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
     }
 
     .no-data {
@@ -4829,17 +5696,11 @@ export class SalesDashboardComponent implements OnInit {
   emailAccounts = signal<string[]>([]);
   selectedEmailAccounts = signal<string[]>([]);
   emailSearchKeyword = signal('order');
-  cancellations = signal<OrderCancellation[]>([]);
-  cancellationStats = signal<CancellationStats>({
-    totalCancellations: 0,
-    pendingApproval: 0,
-    approvedToday: 0,
-    rejectedToday: 0,
-    totalRefundAmount: 0,
-    pendingRefundAmount: 0,
-    byReason: {},
-    byCompany: {}
-  });
+  // Back Orders
+  activeBackOrderTab = signal<string>('promed');
+  backOrderSearch = signal('');
+  backOrderPage = signal(0);
+  backOrderPageSize = signal(50);
   stats = signal<SalesStats>({
     totalCustomers: 0,
     activeCustomers: 0,
@@ -4882,11 +5743,8 @@ export class SalesDashboardComponent implements OnInit {
   orderStatusFilter = signal('all');
   emailFilterSearch = signal('');
   emailReadFilter = signal('all');
-  cancellationSearch = signal('');
-  cancellationStatusFilter = signal('all');
-
-  // Loading states for cancellations
-  loadingCancellations = signal(false);
+  // Loading states for back orders (unused, kept for structure)
+  loadingBackOrders = signal(false);
 
   // Selected items
   selectedCustomer = signal<Customer | null>(null);
@@ -4917,6 +5775,24 @@ export class SalesDashboardComponent implements OnInit {
   companySalesLoading = false;
   companySalesDateRange: 'week' | 'month' | 'quarter' = 'week';
   newSaleFormVisible = false;
+
+  // Export Date Range Picker
+  showExportDatePicker = false;
+  exportType: 'excel' | 'pdf' = 'excel';
+  exportFromDate: Date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  exportToDate: Date = new Date();
+  exportGenerating = false;
+
+  // Company Comparison Dialog
+  showCompareDialog = false;
+  compareCompanyCode = '';
+  compareFromDate: Date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  compareToDate: Date = new Date();
+  compareDataA = { count: 0, revenue: 0, cost: 0 };
+  compareDataB = { count: 0, revenue: 0, cost: 0 };
+  compareDailyData: { date: string; label: string; totalA: number; totalB: number }[] = [];
+  compareExporting = false;
+  Math = Math;
   newSaleForm = {
     transactionNumber: '',
     customerName: '',
@@ -4925,6 +5801,26 @@ export class SalesDashboardComponent implements OnInit {
     salesAmount: 0,
     transactionDate: new Date()
   };
+
+  // Edit Invoice Dialog
+  showEditInvoiceDialog = false;
+  editingInvoiceId: number | null = null;
+  editInvoiceForm: any = {
+    transactionNumber: '',
+    customerNumber: '',
+    customerName: '',
+    productCode: '',
+    productDescription: '',
+    quantity: 0,
+    salesAmount: 0,
+    costOfSales: 0,
+    transactionDate: '',
+    status: '',
+    deliveryProvince: '',
+    deliveryAddress: '',
+    sourceCompany: ''
+  };
+  editInvoiceSaving = false;
 
   // Report dates
   reportFromDate: Date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -5057,29 +5953,55 @@ export class SalesDashboardComponent implements OnInit {
   unreadEmailCount = computed(() => this.filteredEmails().filter(e => !e.isRead).length);
   attachmentEmailCount = computed(() => this.filteredEmails().filter(e => e.hasAttachments).length);
 
-  filteredCancellations = computed(() => {
-    let list = this.cancellations();
-    const search = this.cancellationSearch().toLowerCase();
-    const status = this.cancellationStatusFilter();
+  // Back Order computed signals
+  promedBackOrders = computed(() => PROMED_BACK_ORDERS);
+  accessBackOrders = computed(() => ACCESS_BACK_ORDERS);
+  pharmatechBackOrders = computed(() => PHARMATECH_BACK_ORDERS);
+  sebenzaniBackOrders = computed(() => SEBENZANI_BACK_ORDERS);
 
-    if (search) {
-      list = list.filter(c =>
-        c.orderNumber?.toLowerCase().includes(search) ||
-        c.customerName?.toLowerCase().includes(search) ||
-        c.customerNumber?.toLowerCase().includes(search)
-      );
+  filteredBackOrders = computed(() => {
+    const tab = this.activeBackOrderTab();
+    let list: BackOrderItem[] = [];
+
+    if (tab === 'promed') {
+      list = this.promedBackOrders();
+    } else if (tab === 'access') {
+      list = this.accessBackOrders();
+    } else if (tab === 'pharmatech') {
+      list = this.pharmatechBackOrders();
+    } else if (tab === 'sebenzani') {
+      list = this.sebenzaniBackOrders();
     }
 
-    if (status !== 'all') {
-      list = list.filter(c => c.approvalStatus === status);
+    const search = this.backOrderSearch().toLowerCase();
+
+    if (search) {
+      list = list.filter(bo =>
+        bo.orderNumber?.toLowerCase().includes(search) ||
+        bo.customerName?.toLowerCase().includes(search) ||
+        bo.customerNo?.toLowerCase().includes(search) ||
+        bo.itemDesc?.toLowerCase().includes(search) ||
+        bo.poNo?.toLowerCase().includes(search)
+      );
     }
 
     return list;
   });
 
-  pendingCancellations = computed(() => {
-    return this.cancellations().filter(c => c.approvalStatus === 'Pending');
+  backOrderTotalCount = computed(() => this.promedBackOrders().length + this.accessBackOrders().length + this.pharmatechBackOrders().length + this.sebenzaniBackOrders().length);
+  backOrderTotalQty = computed(() => this.filteredBackOrders().reduce((sum, bo) => sum + bo.qtyBackOrder, 0));
+  backOrderTotalValue = computed(() => this.filteredBackOrders().reduce((sum, bo) => sum + bo.extPrice, 0));
+  backOrderUniqueOrders = computed(() => new Set(this.filteredBackOrders().map(bo => bo.orderNumber)).size);
+
+  paginatedBackOrders = computed(() => {
+    const list = this.filteredBackOrders();
+    const start = this.backOrderPage() * this.backOrderPageSize();
+    return list.slice(start, start + this.backOrderPageSize());
   });
+
+  backOrderPageStart = computed(() => this.backOrderPage() * this.backOrderPageSize());
+  backOrderPageEnd = computed(() => Math.min((this.backOrderPage() + 1) * this.backOrderPageSize(), this.filteredBackOrders().length));
+  backOrderTotalPages = computed(() => Math.ceil(this.filteredBackOrders().length / this.backOrderPageSize()));
 
   // Attention computed values
   customersWithoutLocation = computed(() => {
@@ -5128,6 +6050,22 @@ export class SalesDashboardComponent implements OnInit {
     return result;
   }
 
+  // Get past N business days (Mon-Fri) going backwards from fromDate (exclusive)
+  private getPastBusinessDays(fromDate: Date, count: number): Date[] {
+    const days: Date[] = [];
+    const d = new Date(fromDate);
+    while (days.length < count) {
+      d.setDate(d.getDate() - 1);
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) { // skip weekends
+        const day = new Date(d);
+        day.setHours(0, 0, 0, 0);
+        days.push(day);
+      }
+    }
+    return days;
+  }
+
   // Get the current business day (if weekend, show Friday)
   private getCurrentBusinessDay(date: Date): Date {
     const result = new Date(date);
@@ -5163,6 +6101,7 @@ export class SalesDashboardComponent implements OnInit {
   });
 
   // Company sales comparison - Last Business Day vs Current Business Day
+  // Trend % compares the most recent day with data against the current month's daily average
   companySalesData = computed(() => {
     const invoices = this.invoices();
     const today = new Date();
@@ -5175,6 +6114,10 @@ export class SalesDashboardComponent implements OnInit {
     // Get last business day (previous weekday)
     const lastBizDay = this.getLastBusinessDay(currentBizDay);
     lastBizDay.setHours(0, 0, 0, 0);
+
+    // First day of the current month
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
 
     return this.companies.map(company => {
       const companyInvoices = invoices.filter(i => 
@@ -5197,9 +6140,39 @@ export class SalesDashboardComponent implements OnInit {
       const todaySales = currentDayInvoices.reduce((sum, i) => sum + (i.salesAmount || 0), 0);
       const yesterdaySales = lastDayInvoices.reduce((sum, i) => sum + (i.salesAmount || 0), 0);
 
-      const percentChange = yesterdaySales > 0 
-        ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 
-        : todaySales > 0 ? 100 : 0;
+      // Gather all invoices for the current month (weekdays only)
+      const monthInvoices = companyInvoices.filter(i => {
+        const d = new Date(i.transactionDate);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() >= monthStart.getTime() && d.getTime() <= currentBizDay.getTime();
+      });
+
+      // Group month invoices by date to get daily totals
+      const dailyMap = new Map<number, number>();
+      for (const inv of monthInvoices) {
+        const d = new Date(inv.transactionDate);
+        d.setHours(0, 0, 0, 0);
+        const key = d.getTime();
+        dailyMap.set(key, (dailyMap.get(key) || 0) + (inv.salesAmount || 0));
+      }
+
+      // Only count weekdays that have data for the average
+      const dailyTotals = Array.from(dailyMap.values()).filter(v => v > 0);
+      const monthlyDailyAvg = dailyTotals.length > 0
+        ? dailyTotals.reduce((a, b) => a + b, 0) / dailyTotals.length
+        : 0;
+
+      // Find the most recent day's sales for trend comparison
+      // Use today if it has data, otherwise use the latest day with data this month
+      let trendSales = todaySales;
+      if (trendSales === 0 && dailyMap.size > 0) {
+        const sortedDays = Array.from(dailyMap.entries()).sort((a, b) => b[0] - a[0]);
+        trendSales = sortedDays[0][1];
+      }
+
+      const percentChange = monthlyDailyAvg > 0
+        ? ((trendSales - monthlyDailyAvg) / monthlyDailyAvg) * 100
+        : trendSales > 0 ? 100 : 0;
 
       return {
         company,
@@ -5207,7 +6180,8 @@ export class SalesDashboardComponent implements OnInit {
         yesterdaySales,
         todayOrders: currentDayInvoices.length,
         yesterdayOrders: lastDayInvoices.length,
-        percentChange
+        percentChange,
+        monthlyDailyAvg
       } as CompanySales;
     });
   });
@@ -5279,7 +6253,6 @@ export class SalesDashboardComponent implements OnInit {
     this.loadCustomers();
     this.loadInvoices();
     this.loadOrders();
-    this.loadCancellations();
     this.loadEmailAccounts();
     // Stats are now calculated reactively when data loads
   }
@@ -5364,30 +6337,10 @@ export class SalesDashboardComponent implements OnInit {
     });
   }
 
-  loadCancellations(): void {
-    this.loadingCancellations.set(true);
-    this.http.get<OrderCancellation[]>(`${this.apiUrl}/ordercancellations`).subscribe({
-      next: (cancellations) => {
-        this.cancellations.set(cancellations);
-        this.loadingCancellations.set(false);
-        this.loadCancellationStats();
-      },
-      error: (err) => {
-        console.error('Failed to load cancellations:', err);
-        this.loadingCancellations.set(false);
-      }
-    });
-  }
-
-  loadCancellationStats(): void {
-    this.http.get<CancellationStats>(`${this.apiUrl}/ordercancellations/stats`).subscribe({
-      next: (stats) => {
-        this.cancellationStats.set(stats);
-      },
-      error: (err) => {
-        console.error('Failed to load cancellation stats:', err);
-      }
-    });
+  // Back order pagination helper
+  onBackOrderPageSizeChange(size: number): void {
+    this.backOrderPageSize.set(size);
+    this.backOrderPage.set(0);
   }
 
   updateStats(): void {
@@ -5493,7 +6446,63 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   editInvoice(invoice: Invoice): void {
-    this.snackBar.open('Edit invoice: ' + invoice.transactionNumber, 'Close', { duration: 2000 });
+    this.editingInvoiceId = invoice.id;
+    const txDate = invoice.transactionDate ? new Date(invoice.transactionDate) : new Date();
+    const dateStr = txDate.getFullYear() + '-' + String(txDate.getMonth() + 1).padStart(2, '0') + '-' + String(txDate.getDate()).padStart(2, '0');
+    this.editInvoiceForm = {
+      transactionNumber: invoice.transactionNumber || '',
+      customerNumber: invoice.customerNumber || '',
+      customerName: invoice.customerName || '',
+      productCode: invoice.productCode || '',
+      productDescription: invoice.productDescription || '',
+      quantity: invoice.quantity || 0,
+      salesAmount: invoice.salesAmount || 0,
+      costOfSales: invoice.costOfSales || 0,
+      transactionDate: dateStr,
+      status: invoice.status || 'Pending',
+      deliveryProvince: invoice.deliveryProvince || '',
+      deliveryAddress: invoice.deliveryAddress || '',
+      sourceCompany: invoice.sourceCompany || ''
+    };
+    this.showEditInvoiceDialog = true;
+  }
+
+  closeEditInvoiceDialog(): void {
+    this.showEditInvoiceDialog = false;
+    this.editingInvoiceId = null;
+    this.editInvoiceSaving = false;
+  }
+
+  saveEditedInvoice(): void {
+    if (!this.editingInvoiceId) return;
+    this.editInvoiceSaving = true;
+    const payload: any = {
+      transactionNumber: this.editInvoiceForm.transactionNumber,
+      customerNumber: this.editInvoiceForm.customerNumber,
+      customerName: this.editInvoiceForm.customerName,
+      productCode: this.editInvoiceForm.productCode,
+      productDescription: this.editInvoiceForm.productDescription,
+      quantity: Number(this.editInvoiceForm.quantity),
+      salesAmount: Number(this.editInvoiceForm.salesAmount),
+      costOfSales: Number(this.editInvoiceForm.costOfSales),
+      transactionDate: this.editInvoiceForm.transactionDate ? new Date(this.editInvoiceForm.transactionDate).toISOString() : null,
+      status: this.editInvoiceForm.status,
+      deliveryProvince: this.editInvoiceForm.deliveryProvince,
+      deliveryAddress: this.editInvoiceForm.deliveryAddress,
+      sourceCompany: this.editInvoiceForm.sourceCompany
+    };
+    this.http.put(`${this.apiUrl}/logistics/importedinvoices/${this.editingInvoiceId}`, payload).subscribe({
+      next: () => {
+        this.snackBar.open('Invoice updated successfully', 'Close', { duration: 3000 });
+        this.closeEditInvoiceDialog();
+        this.loadInvoices();
+      },
+      error: (err) => {
+        console.error('Failed to update invoice:', err);
+        this.snackBar.open('Failed to update invoice', 'Close', { duration: 3000 });
+        this.editInvoiceSaving = false;
+      }
+    });
   }
 
   sendToLogistics(invoice: Invoice): void {
@@ -5664,107 +6673,7 @@ export class SalesDashboardComponent implements OnInit {
     const reason = prompt('Please enter cancellation reason:', 'CustomerRequest');
     if (!reason) return;
 
-    const notes = prompt('Additional notes (optional):');
-
-    this.http.post<OrderCancellation>(`${this.apiUrl}/ordercancellations`, {
-      orderNumber: order.orderNumber,
-      customerName: order.customerName,
-      customerId: order.customerId,
-      orderAmount: order.totalAmount,
-      itemCount: order.items,
-      originalOrderDate: order.orderDate,
-      cancellationReason: reason,
-      cancellationNotes: notes,
-      cancelledByUserId: 1, // TODO: Get from auth service
-      cancelledByUserName: 'Admin',
-      companyCode: order.companyCode
-    }).subscribe({
-      next: () => {
-        this.snackBar.open('Order cancellation submitted for approval', 'Close', { duration: 3000 });
-        this.loadOrders();
-        this.loadCancellations();
-      },
-      error: (err) => {
-        console.error('Failed to cancel order:', err);
-        this.snackBar.open('Failed to cancel order', 'Close', { duration: 3000 });
-      }
-    });
-  }
-
-  // Cancellation methods
-  approveCancellation(cancel: OrderCancellation): void {
-    if (!confirm(`Approve cancellation for order ${cancel.orderNumber}?`)) return;
-
-    this.http.put(`${this.apiUrl}/ordercancellations/${cancel.id}/approve`, {
-      userId: 1, // TODO: Get from auth service
-      userName: 'Admin',
-      notes: ''
-    }).subscribe({
-      next: () => {
-        this.snackBar.open('Cancellation approved', 'Close', { duration: 3000 });
-        this.loadCancellations();
-      },
-      error: () => {
-        this.snackBar.open('Failed to approve cancellation', 'Close', { duration: 3000 });
-      }
-    });
-  }
-
-  rejectCancellation(cancel: OrderCancellation): void {
-    const reason = prompt('Please enter rejection reason:');
-    if (!reason) return;
-
-    this.http.put(`${this.apiUrl}/ordercancellations/${cancel.id}/reject`, {
-      userId: 1, // TODO: Get from auth service
-      userName: 'Admin',
-      notes: reason
-    }).subscribe({
-      next: () => {
-        this.snackBar.open('Cancellation rejected', 'Close', { duration: 3000 });
-        this.loadCancellations();
-        this.loadOrders();
-      },
-      error: () => {
-        this.snackBar.open('Failed to reject cancellation', 'Close', { duration: 3000 });
-      }
-    });
-  }
-
-  processRefund(cancel: OrderCancellation): void {
-    const amount = prompt('Enter refund amount:', ((cancel.refundAmount || cancel.orderAmount) * 1.15).toFixed(2));
-    if (!amount) return;
-
-    this.http.put(`${this.apiUrl}/ordercancellations/${cancel.id}/process-refund`, {
-      amount: parseFloat(amount)
-    }).subscribe({
-      next: () => {
-        this.snackBar.open('Refund processed', 'Close', { duration: 3000 });
-        this.loadCancellations();
-      },
-      error: () => {
-        this.snackBar.open('Failed to process refund', 'Close', { duration: 3000 });
-      }
-    });
-  }
-
-  viewCancellationDetails(cancel: OrderCancellation): void {
-    // For now, show in a snackbar. Could open a dialog with full details
-    this.snackBar.open(`Order: ${cancel.orderNumber} - ${cancel.cancellationReason}`, 'Close', { duration: 5000 });
-  }
-
-  deleteCancellation(cancel: OrderCancellation): void {
-    if (!confirm(`Delete cancellation for order ${cancel.orderNumber}? This will restore the order.`)) return;
-
-    this.http.delete(`${this.apiUrl}/ordercancellations/${cancel.id}`).subscribe({
-      next: () => {
-        this.snackBar.open('Cancellation deleted', 'Close', { duration: 3000 });
-        this.loadCancellations();
-        this.loadOrders();
-      },
-      error: () => {
-        this.snackBar.open('Failed to delete cancellation', 'Close', { duration: 3000 });
-      }
-    });
+    this.snackBar.open('Order cancellation is no longer available. Use Back Orders tab instead.', 'Close', { duration: 3000 });
   }
 
   // ═══════════════════════════════════════════
@@ -6672,6 +7581,648 @@ export class SalesDashboardComponent implements OnInit {
         this.snackBar.open('Failed to capture sale', 'Close', { duration: 3000 });
       }
     });
+  }
+
+  // Export Date Picker Methods
+  openExportDatePicker(type: 'excel' | 'pdf'): void {
+    this.exportType = type;
+    this.exportFromDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    this.exportToDate = new Date();
+    this.showExportDatePicker = true;
+    this.exportGenerating = false;
+  }
+
+  closeExportDatePicker(): void {
+    this.showExportDatePicker = false;
+    this.exportGenerating = false;
+  }
+
+  setExportRange(range: 'week' | 'month' | 'quarter' | 'year'): void {
+    const today = new Date();
+    this.exportToDate = new Date(today);
+    switch (range) {
+      case 'week':
+        this.exportFromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+        break;
+      case 'month':
+        this.exportFromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        break;
+      case 'quarter':
+        this.exportFromDate = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
+        break;
+      case 'year':
+        this.exportFromDate = new Date(today.getFullYear(), 0, 1);
+        break;
+    }
+  }
+
+  executeExport(): void {
+    if (this.exportType === 'excel') {
+      this.exportCompanySalesExcel();
+    } else {
+      this.exportCompanySalesPdf();
+    }
+  }
+
+  private getExportInvoices(): Invoice[] {
+    if (!this.selectedCompanyForDialog) return [];
+    const from = new Date(this.exportFromDate);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(this.exportToDate);
+    to.setHours(23, 59, 59, 999);
+
+    return this.invoices()
+      .filter(inv => inv.sourceCompany === this.selectedCompanyForDialog!.code)
+      .filter(inv => {
+        const d = new Date(inv.transactionDate);
+        return d >= from && d <= to;
+      })
+      .sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
+  }
+
+  async exportCompanySalesExcel(): Promise<void> {
+    if (!this.selectedCompanyForDialog) return;
+    this.exportGenerating = true;
+
+    try {
+      const XLSX = await import('xlsx');
+      const invoices = this.getExportInvoices();
+      const companyName = this.selectedCompanyForDialog.name;
+      const fromStr = this.exportFromDate.toLocaleDateString('en-ZA');
+      const toStr = this.exportToDate.toLocaleDateString('en-ZA');
+
+      // Build rows
+      const rows: any[][] = [
+        [`${companyName} — Sales Report`],
+        [`Period: ${fromStr} to ${toStr}`],
+        [`Generated: ${new Date().toLocaleString('en-ZA')}`],
+        [],
+        ['Date', 'Transaction #', 'Customer #', 'Customer Name', 'Product Code', 'Product Description', 'Qty', 'Sales Amount (excl VAT)', 'VAT (15%)', 'Total (incl VAT)', 'Cost of Sales', 'Margin']
+      ];
+
+      let totalSales = 0;
+      let totalVAT = 0;
+      let totalInclVAT = 0;
+      let totalCost = 0;
+
+      for (const inv of invoices) {
+        const salesAmt = inv.salesAmount || 0;
+        const vat = salesAmt * 0.15;
+        const inclVAT = salesAmt + vat;
+        const cost = inv.costOfSales || 0;
+        const margin = salesAmt > 0 ? ((salesAmt - cost) / salesAmt * 100) : 0;
+
+        totalSales += salesAmt;
+        totalVAT += vat;
+        totalInclVAT += inclVAT;
+        totalCost += cost;
+
+        rows.push([
+          new Date(inv.transactionDate).toLocaleDateString('en-ZA'),
+          inv.transactionNumber || '',
+          inv.customerNumber || '',
+          inv.customerName || '',
+          inv.productCode || '',
+          inv.productDescription || '',
+          inv.quantity || 0,
+          salesAmt,
+          vat,
+          inclVAT,
+          cost,
+          Math.round(margin * 100) / 100
+        ]);
+      }
+
+      // Totals row
+      const totalMargin = totalSales > 0 ? ((totalSales - totalCost) / totalSales * 100) : 0;
+      rows.push([]);
+      rows.push([
+        '', '', '', '', '', 'TOTALS:', invoices.reduce((s, i) => s + (i.quantity || 0), 0),
+        totalSales, totalVAT, totalInclVAT, totalCost, Math.round(totalMargin * 100) / 100
+      ]);
+      rows.push([
+        '', '', '', '', '', `Total Invoices: ${invoices.length}`
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+
+      // Column widths
+      ws['!cols'] = [
+        { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 28 }, { wch: 14 },
+        { wch: 32 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 18 },
+        { wch: 16 }, { wch: 10 }
+      ];
+
+      // Format number cells
+      const numFmt = '#,##0.00';
+      for (let r = 5; r < rows.length; r++) {
+        for (let c = 7; c <= 11; c++) {
+          const cell = XLSX.utils.encode_cell({ r, c });
+          if (ws[cell] && typeof ws[cell].v === 'number') {
+            ws[cell].z = numFmt;
+          }
+        }
+      }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sales Report');
+      const filename = `${this.selectedCompanyForDialog.shortName}_Sales_${this.exportFromDate.toISOString().split('T')[0]}_to_${this.exportToDate.toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      this.snackBar.open(`Excel exported: ${invoices.length} invoices ✓`, 'Close', { duration: 3000 });
+      this.closeExportDatePicker();
+    } catch (err) {
+      console.error('Excel export error:', err);
+      this.snackBar.open('Failed to export Excel', 'Close', { duration: 3000 });
+      this.exportGenerating = false;
+    }
+  }
+
+  async exportCompanySalesPdf(): Promise<void> {
+    if (!this.selectedCompanyForDialog) return;
+    this.exportGenerating = true;
+
+    try {
+      const { jsPDF } = await import('jspdf');
+      const invoices = this.getExportInvoices();
+      const company = this.selectedCompanyForDialog;
+      const fromStr = this.exportFromDate.toLocaleDateString('en-ZA');
+      const toStr = this.exportToDate.toLocaleDateString('en-ZA');
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 14;
+      let y = margin;
+
+      // --- Header ---
+      pdf.setFillColor(26, 35, 126);
+      pdf.rect(0, 0, pageWidth, 32, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(18);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`${company.name}`, margin, 14);
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Sales Report — ${fromStr} to ${toStr}`, margin, 22);
+      pdf.setFontSize(8);
+      pdf.text(`Generated: ${new Date().toLocaleString('en-ZA')}`, margin, 28);
+      y = 40;
+
+      // --- Summary Cards ---
+      const totalSales = invoices.reduce((s, i) => s + (i.salesAmount || 0), 0);
+      const totalCost = invoices.reduce((s, i) => s + (i.costOfSales || 0), 0);
+      const totalVAT = totalSales * 0.15;
+      const totalInclVAT = totalSales + totalVAT;
+      const avgPerInvoice = invoices.length > 0 ? totalSales / invoices.length : 0;
+      const margin_pct = totalSales > 0 ? ((totalSales - totalCost) / totalSales * 100) : 0;
+
+      const cardData = [
+        { label: 'Total Invoices', value: invoices.length.toString() },
+        { label: 'Sales (excl VAT)', value: `R ${this.formatCurrencyFull(totalSales)}` },
+        { label: 'Total (incl VAT)', value: `R ${this.formatCurrencyFull(totalInclVAT)}` },
+        { label: 'Avg per Invoice', value: `R ${this.formatCurrencyFull(avgPerInvoice)}` },
+        { label: 'Cost of Sales', value: `R ${this.formatCurrencyFull(totalCost)}` },
+        { label: 'Margin', value: `${margin_pct.toFixed(1)}%` }
+      ];
+
+      const cardWidth = (pageWidth - margin * 2 - 10) / 3;
+      const cardHeight = 18;
+      pdf.setFontSize(9);
+      for (let i = 0; i < cardData.length; i++) {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        const cx = margin + col * (cardWidth + 5);
+        const cy = y + row * (cardHeight + 4);
+
+        pdf.setFillColor(245, 245, 250);
+        pdf.roundedRect(cx, cy, cardWidth, cardHeight, 2, 2, 'F');
+        pdf.setDrawColor(200, 200, 220);
+        pdf.roundedRect(cx, cy, cardWidth, cardHeight, 2, 2, 'S');
+
+        pdf.setTextColor(100, 100, 100);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7);
+        pdf.text(cardData[i].label, cx + 4, cy + 6);
+        pdf.setTextColor(26, 35, 126);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11);
+        pdf.text(cardData[i].value, cx + 4, cy + 14);
+      }
+      y += Math.ceil(cardData.length / 3) * (cardHeight + 4) + 6;
+
+      // --- Daily Sales Chart ---
+      pdf.setTextColor(50, 50, 50);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text('Daily Sales Trend', margin, y);
+      y += 6;
+
+      // Calculate daily totals
+      const dailyMap = new Map<string, number>();
+      for (const inv of invoices) {
+        const d = new Date(inv.transactionDate);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        dailyMap.set(key, (dailyMap.get(key) || 0) + (inv.salesAmount || 0));
+      }
+      const dailyEntries = Array.from(dailyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+      if (dailyEntries.length > 0) {
+        const chartWidth = pageWidth - margin * 2;
+        const chartHeight = 40;
+        const maxVal = Math.max(...dailyEntries.map(e => e[1]), 1);
+        const barWidth = Math.min(12, (chartWidth - 20) / dailyEntries.length - 2);
+        const startX = margin + 10;
+
+        // Y-axis
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.3);
+        pdf.line(startX, y, startX, y + chartHeight);
+        pdf.line(startX, y + chartHeight, margin + chartWidth, y + chartHeight);
+
+        // Bars
+        for (let i = 0; i < dailyEntries.length; i++) {
+          const [dateStr, val] = dailyEntries[i];
+          const barHeight = (val / maxVal) * (chartHeight - 4);
+          const bx = startX + 4 + i * (barWidth + 2);
+          const by = y + chartHeight - barHeight;
+
+          // Bar color from company
+          const hex = company.color.replace('#', '');
+          const r = parseInt(hex.substring(0, 2), 16);
+          const g = parseInt(hex.substring(2, 4), 16);
+          const b = parseInt(hex.substring(4, 6), 16);
+          pdf.setFillColor(r, g, b);
+          pdf.rect(bx, by, barWidth, barHeight, 'F');
+
+          // Date label (rotated effect - just put at bottom)
+          if (dailyEntries.length <= 31) {
+            pdf.setFontSize(5);
+            pdf.setTextColor(120, 120, 120);
+            pdf.setFont('helvetica', 'normal');
+            const label = dateStr.substring(5);
+            pdf.text(label, bx, y + chartHeight + 4);
+          }
+        }
+        y += chartHeight + 10;
+      }
+
+      // --- Invoice Table ---
+      if (y > pageHeight - 60) { pdf.addPage(); y = margin; }
+      pdf.setTextColor(50, 50, 50);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text('Invoice Details', margin, y);
+      y += 6;
+
+      // Table header
+      const colWidths = [22, 24, 42, 42, 12, 24, 16];
+      const headers = ['Date', 'Trans #', 'Customer', 'Product', 'Qty', 'Amount', 'VAT Incl'];
+      pdf.setFillColor(26, 35, 126);
+      pdf.rect(margin, y, pageWidth - margin * 2, 7, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(7);
+      pdf.setFont('helvetica', 'bold');
+      let hx = margin + 2;
+      for (let i = 0; i < headers.length; i++) {
+        pdf.text(headers[i], hx, y + 5);
+        hx += colWidths[i];
+      }
+      y += 7;
+
+      // Table rows
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6.5);
+      let rowIdx = 0;
+      for (const inv of invoices) {
+        if (y > pageHeight - 20) {
+          pdf.addPage();
+          y = margin;
+          // Re-draw header on new page
+          pdf.setFillColor(26, 35, 126);
+          pdf.rect(margin, y, pageWidth - margin * 2, 7, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(7);
+          pdf.setFont('helvetica', 'bold');
+          hx = margin + 2;
+          for (let i = 0; i < headers.length; i++) {
+            pdf.text(headers[i], hx, y + 5);
+            hx += colWidths[i];
+          }
+          y += 7;
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(6.5);
+        }
+
+        if (rowIdx % 2 === 0) {
+          pdf.setFillColor(248, 248, 252);
+          pdf.rect(margin, y, pageWidth - margin * 2, 6, 'F');
+        }
+
+        pdf.setTextColor(60, 60, 60);
+        hx = margin + 2;
+        const rowData = [
+          new Date(inv.transactionDate).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' }),
+          (inv.transactionNumber || '').substring(0, 14),
+          (inv.customerName || '').substring(0, 26),
+          (inv.productDescription || '').substring(0, 26),
+          (inv.quantity || 0).toString(),
+          `R${this.formatCurrencyFull(inv.salesAmount || 0)}`,
+          `R${this.formatCurrencyFull((inv.salesAmount || 0) * 1.15)}`
+        ];
+        for (let i = 0; i < rowData.length; i++) {
+          pdf.text(rowData[i], hx, y + 4);
+          hx += colWidths[i];
+        }
+        y += 6;
+        rowIdx++;
+      }
+
+      // Totals row
+      y += 2;
+      pdf.setFillColor(26, 35, 126);
+      pdf.rect(margin, y, pageWidth - margin * 2, 8, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      hx = margin + 2;
+      pdf.text(`TOTALS — ${invoices.length} invoices`, hx, y + 5.5);
+      hx = margin + 2 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4];
+      pdf.text(`R${this.formatCurrencyFull(totalSales)}`, hx, y + 5.5);
+      hx += colWidths[5];
+      pdf.text(`R${this.formatCurrencyFull(totalInclVAT)}`, hx, y + 5.5);
+
+      // Footer
+      y += 14;
+      if (y > pageHeight - 10) { pdf.addPage(); y = margin; }
+      pdf.setTextColor(150, 150, 150);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(7);
+      pdf.text('ProMed Technologies — Confidential', margin, y);
+      pdf.text(`Page 1 of ${pdf.getNumberOfPages()}`, pageWidth - margin - 25, y);
+
+      const filename = `${company.shortName}_Sales_Report_${this.exportFromDate.toISOString().split('T')[0]}_to_${this.exportToDate.toISOString().split('T')[0]}.pdf`;
+      pdf.save(filename);
+
+      this.snackBar.open(`PDF generated: ${invoices.length} invoices ✓`, 'Close', { duration: 3000 });
+      this.closeExportDatePicker();
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      this.snackBar.open('Failed to generate PDF', 'Close', { duration: 3000 });
+      this.exportGenerating = false;
+    }
+  }
+
+  // === Company Comparison Methods ===
+  openCompareDialog(): void {
+    this.showCompareDialog = true;
+    this.compareCompanyCode = '';
+    this.compareFromDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    this.compareToDate = new Date();
+    this.compareDataA = { count: 0, revenue: 0, cost: 0 };
+    this.compareDataB = { count: 0, revenue: 0, cost: 0 };
+    this.compareDailyData = [];
+    this.compareExporting = false;
+  }
+
+  closeCompareDialog(): void {
+    this.showCompareDialog = false;
+  }
+
+  getCompareOptions(): Company[] {
+    if (!this.selectedCompanyForDialog) return COMPANIES;
+    return COMPANIES.filter(c => c.code !== this.selectedCompanyForDialog!.code);
+  }
+
+  getCompareCompany(): Company | null {
+    return COMPANIES.find(c => c.code === this.compareCompanyCode) || null;
+  }
+
+  setCompareRange(range: 'week' | 'month' | 'quarter' | 'year'): void {
+    const today = new Date();
+    this.compareToDate = new Date(today);
+    switch (range) {
+      case 'week':
+        this.compareFromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+        break;
+      case 'month':
+        this.compareFromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        break;
+      case 'quarter':
+        this.compareFromDate = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
+        break;
+      case 'year':
+        this.compareFromDate = new Date(today.getFullYear(), 0, 1);
+        break;
+    }
+    this.loadComparisonData();
+  }
+
+  loadComparisonData(): void {
+    if (!this.selectedCompanyForDialog || !this.compareCompanyCode) return;
+
+    const from = new Date(this.compareFromDate);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(this.compareToDate);
+    to.setHours(23, 59, 59, 999);
+
+    const allInvoices = this.invoices();
+    const invoicesA = allInvoices.filter(inv =>
+      inv.sourceCompany === this.selectedCompanyForDialog!.code &&
+      new Date(inv.transactionDate) >= from && new Date(inv.transactionDate) <= to
+    );
+    const invoicesB = allInvoices.filter(inv =>
+      inv.sourceCompany === this.compareCompanyCode &&
+      new Date(inv.transactionDate) >= from && new Date(inv.transactionDate) <= to
+    );
+
+    this.compareDataA = {
+      count: invoicesA.length,
+      revenue: invoicesA.reduce((s, i) => s + (i.salesAmount || 0), 0),
+      cost: invoicesA.reduce((s, i) => s + (i.costOfSales || 0), 0)
+    };
+    this.compareDataB = {
+      count: invoicesB.length,
+      revenue: invoicesB.reduce((s, i) => s + (i.salesAmount || 0), 0),
+      cost: invoicesB.reduce((s, i) => s + (i.costOfSales || 0), 0)
+    };
+
+    // Build daily comparison data
+    const dailyMap = new Map<string, { totalA: number; totalB: number }>();
+    const msPerDay = 86400000;
+    for (let d = new Date(from); d <= to; d = new Date(d.getTime() + msPerDay)) {
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      dailyMap.set(key, { totalA: 0, totalB: 0 });
+    }
+
+    for (const inv of invoicesA) {
+      const d = new Date(inv.transactionDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (dailyMap.has(key)) {
+        dailyMap.get(key)!.totalA += inv.salesAmount || 0;
+      }
+    }
+    for (const inv of invoicesB) {
+      const d = new Date(inv.transactionDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (dailyMap.has(key)) {
+        dailyMap.get(key)!.totalB += inv.salesAmount || 0;
+      }
+    }
+
+    this.compareDailyData = Array.from(dailyMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([dateStr, vals]) => {
+        const d = new Date(dateStr);
+        return {
+          date: dateStr,
+          label: d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }),
+          totalA: vals.totalA,
+          totalB: vals.totalB
+        };
+      });
+  }
+
+  getCompareBarHeight(value: number): number {
+    if (!this.compareDailyData.length) return 0;
+    const max = Math.max(...this.compareDailyData.map(d => Math.max(d.totalA, d.totalB)), 1);
+    return Math.max(3, (value / max) * 100);
+  }
+
+  async exportComparisonExcel(): Promise<void> {
+    if (!this.selectedCompanyForDialog || !this.compareCompanyCode) return;
+    this.compareExporting = true;
+
+    try {
+      const XLSX = await import('xlsx');
+      const companyA = this.selectedCompanyForDialog;
+      const companyB = this.getCompareCompany();
+      if (!companyB) return;
+
+      const fromStr = this.compareFromDate.toLocaleDateString('en-ZA');
+      const toStr = this.compareToDate.toLocaleDateString('en-ZA');
+
+      // Summary sheet rows
+      const summaryRows: any[][] = [
+        [`Company Comparison Report`],
+        [`${companyA.name} vs ${companyB.name}`],
+        [`Period: ${fromStr} to ${toStr}`],
+        [`Generated: ${new Date().toLocaleString('en-ZA')}`],
+        [],
+        ['Metric', companyA.shortName, companyB.shortName, 'Difference', 'Leader'],
+        ['Total Invoices', this.compareDataA.count, this.compareDataB.count,
+          Math.abs(this.compareDataA.count - this.compareDataB.count),
+          this.compareDataA.count >= this.compareDataB.count ? companyA.shortName : companyB.shortName],
+        ['Revenue (excl VAT)', this.compareDataA.revenue, this.compareDataB.revenue,
+          Math.abs(this.compareDataA.revenue - this.compareDataB.revenue),
+          this.compareDataA.revenue >= this.compareDataB.revenue ? companyA.shortName : companyB.shortName],
+        ['Revenue (incl VAT)', this.compareDataA.revenue * 1.15, this.compareDataB.revenue * 1.15,
+          Math.abs(this.compareDataA.revenue - this.compareDataB.revenue) * 1.15,
+          this.compareDataA.revenue >= this.compareDataB.revenue ? companyA.shortName : companyB.shortName],
+        ['Cost of Sales', this.compareDataA.cost, this.compareDataB.cost,
+          Math.abs(this.compareDataA.cost - this.compareDataB.cost),
+          this.compareDataA.cost <= this.compareDataB.cost ? companyA.shortName : companyB.shortName],
+        ['Avg per Invoice',
+          this.compareDataA.count > 0 ? this.compareDataA.revenue / this.compareDataA.count : 0,
+          this.compareDataB.count > 0 ? this.compareDataB.revenue / this.compareDataB.count : 0,
+          '', ''],
+        ['Margin %',
+          this.compareDataA.revenue > 0 ? ((this.compareDataA.revenue - this.compareDataA.cost) / this.compareDataA.revenue * 100) : 0,
+          this.compareDataB.revenue > 0 ? ((this.compareDataB.revenue - this.compareDataB.cost) / this.compareDataB.revenue * 100) : 0,
+          '', '']
+      ];
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      wsSummary['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 16 }];
+
+      // Daily breakdown sheet
+      const dailyRows: any[][] = [
+        ['Daily Revenue Comparison'],
+        [`${companyA.shortName} vs ${companyB.shortName} — ${fromStr} to ${toStr}`],
+        [],
+        ['Date', `${companyA.shortName} Revenue`, `${companyB.shortName} Revenue`, 'Difference', 'Leader']
+      ];
+
+      for (const day of this.compareDailyData) {
+        const diff = day.totalA - day.totalB;
+        dailyRows.push([
+          day.date,
+          day.totalA,
+          day.totalB,
+          Math.abs(diff),
+          diff >= 0 ? companyA.shortName : companyB.shortName
+        ]);
+      }
+
+      dailyRows.push([]);
+      dailyRows.push([
+        'TOTALS',
+        this.compareDataA.revenue,
+        this.compareDataB.revenue,
+        Math.abs(this.compareDataA.revenue - this.compareDataB.revenue),
+        this.compareDataA.revenue >= this.compareDataB.revenue ? companyA.shortName : companyB.shortName
+      ]);
+
+      const wsDaily = XLSX.utils.aoa_to_sheet(dailyRows);
+      wsDaily['!cols'] = [{ wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 16 }];
+
+      // Invoices sheets for each company
+      const buildInvoiceSheet = (companyCode: string, companyName: string) => {
+        const from = new Date(this.compareFromDate); from.setHours(0, 0, 0, 0);
+        const to = new Date(this.compareToDate); to.setHours(23, 59, 59, 999);
+        const invoices = this.invoices()
+          .filter(inv => inv.sourceCompany === companyCode && new Date(inv.transactionDate) >= from && new Date(inv.transactionDate) <= to)
+          .sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
+
+        const rows: any[][] = [
+          [`${companyName} — Invoice Details`],
+          [`Period: ${fromStr} to ${toStr}`],
+          [],
+          ['Date', 'Transaction #', 'Customer', 'Product', 'Qty', 'Amount (excl VAT)', 'VAT', 'Total (incl VAT)']
+        ];
+
+        let totalSales = 0;
+        for (const inv of invoices) {
+          const amt = inv.salesAmount || 0;
+          totalSales += amt;
+          rows.push([
+            new Date(inv.transactionDate).toLocaleDateString('en-ZA'),
+            inv.transactionNumber || '',
+            inv.customerName || '',
+            inv.productDescription || '',
+            inv.quantity || 0,
+            amt,
+            amt * 0.15,
+            amt * 1.15
+          ]);
+        }
+        rows.push([]);
+        rows.push(['', '', '', 'TOTALS', invoices.reduce((s, i) => s + (i.quantity || 0), 0), totalSales, totalSales * 0.15, totalSales * 1.15]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 28 }, { wch: 30 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 18 }];
+        return ws;
+      };
+
+      const wsInvA = buildInvoiceSheet(companyA.code, companyA.name);
+      const wsInvB = buildInvoiceSheet(companyB.code, companyB.name);
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+      XLSX.utils.book_append_sheet(wb, wsDaily, 'Daily Breakdown');
+      XLSX.utils.book_append_sheet(wb, wsInvA, `${companyA.shortName} Invoices`);
+      XLSX.utils.book_append_sheet(wb, wsInvB, `${companyB.shortName} Invoices`);
+
+      const filename = `${companyA.shortName}_vs_${companyB.shortName}_${this.compareFromDate.toISOString().split('T')[0]}_to_${this.compareToDate.toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      this.snackBar.open('Comparison Excel exported ✓', 'Close', { duration: 3000 });
+      this.compareExporting = false;
+    } catch (err) {
+      console.error('Comparison export error:', err);
+      this.snackBar.open('Failed to export comparison', 'Close', { duration: 3000 });
+      this.compareExporting = false;
+    }
   }
 }
 

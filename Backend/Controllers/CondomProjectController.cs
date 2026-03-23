@@ -29,6 +29,8 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
+                await AutoShiftScheduleDates();
+
                 var query = _context.CondomProductionSchedules.AsQueryable();
 
                 if (fromDate.HasValue)
@@ -40,6 +42,7 @@ namespace ProjectTracker.API.Controllers
 
                 // Get all unique dates
                 var dates = schedules.Select(s => s.ScheduleDate).Distinct().OrderBy(d => d).ToList();
+                var today = DateTime.Today;
 
                 // Group by scent group → type → batch
                 var groups = schedules
@@ -56,11 +59,12 @@ namespace ProjectTracker.API.Controllers
                             dailyQuantities = dates.Select(d =>
                             {
                                 var entry = bg.FirstOrDefault(x => x.ScheduleDate == d);
+                                var isFuture = d.Date > today;
                                 return new
                                 {
                                     date = d,
-                                    quantity = entry?.Quantity ?? 0,
-                                    note = entry?.QuantityNote
+                                    quantity = isFuture ? 0 : (entry?.Quantity ?? 0),
+                                    note = isFuture ? (string?)null : entry?.QuantityNote
                                 };
                             }).ToList()
                         }).ToList()
@@ -73,11 +77,9 @@ namespace ProjectTracker.API.Controllers
                 var totalMale = schedules.Where(s => s.Type == "Male").Select(s => s.BatchCode).Distinct().Count();
                 var scents = schedules.Select(s => s.Scent).Distinct().Count();
 
-                // Calculate total units for week 1 (first working week)
-                var week1Dates = dates.Take(7).ToList();
-                var week1Total = schedules.Where(s => week1Dates.Contains(s.ScheduleDate)).Sum(s => s.Quantity);
-                var week2Dates = dates.Skip(7).Take(7).ToList();
-                var week2Total = schedules.Where(s => week2Dates.Contains(s.ScheduleDate)).Sum(s => s.Quantity);
+                // Calculate totals: past (up to today) vs upcoming (future)
+                var pastTotal = schedules.Where(s => s.ScheduleDate.Date <= today).Sum(s => s.Quantity);
+                var upcomingTotal = schedules.Where(s => s.ScheduleDate.Date > today).Sum(s => s.Quantity);
 
                 return Ok(new
                 {
@@ -89,8 +91,8 @@ namespace ProjectTracker.API.Controllers
                         femaleBatches = totalFemale,
                         maleBatches = totalMale,
                         scentVariants = scents,
-                        week1Total,
-                        week2Total,
+                        pastTotal,
+                        upcomingTotal,
                         scheduleDays = dates.Count
                     }
                 });
@@ -110,6 +112,8 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
+                await AutoShiftScheduleDates();
+
                 var schedules = await _context.CondomProductionSchedules.ToListAsync();
                 
                 if (!schedules.Any())
@@ -143,11 +147,14 @@ namespace ProjectTracker.API.Controllers
                     })
                     .ToList();
 
-                // Daily totals
+                // Daily totals with male/female breakdown (future dates show 0)
+                var today = DateTime.Today;
                 var dailyTotals = dates.Select(d => new
                 {
                     date = d,
-                    total = schedules.Where(s => s.ScheduleDate == d).Sum(s => s.Quantity)
+                    total = d.Date > today ? 0 : schedules.Where(s => s.ScheduleDate == d).Sum(s => s.Quantity),
+                    femaleTotal = d.Date > today ? 0 : schedules.Where(s => s.ScheduleDate == d && s.Type == "Female").Sum(s => s.Quantity),
+                    maleTotal = d.Date > today ? 0 : schedules.Where(s => s.ScheduleDate == d && s.Type == "Male").Sum(s => s.Quantity)
                 }).ToList();
 
                 return Ok(new
@@ -254,6 +261,76 @@ namespace ProjectTracker.API.Controllers
             {
                 _logger.LogError(ex, "Error creating condom stock entry");
                 return StatusCode(500, new { error = "Failed to create stock entry" });
+            }
+        }
+
+        /// <summary>
+        /// Auto-shifts schedule dates so they always represent:
+        /// Previous 5 weekdays (including today) + Next 2 weekdays.
+        /// Remaps dates by position, skipping weekends.
+        /// </summary>
+        private async Task AutoShiftScheduleDates()
+        {
+            try
+            {
+                var existingDates = await _context.CondomProductionSchedules
+                    .Select(s => s.ScheduleDate.Date)
+                    .Distinct()
+                    .OrderBy(d => d)
+                    .ToListAsync();
+
+                if (existingDates.Count != 7) return;
+
+                // Calculate the 7 target dates: 5 previous weekdays (incl today) + 2 next weekdays
+                var today = DateTime.Today;
+                // Adjust if weekend
+                if (today.DayOfWeek == DayOfWeek.Saturday) today = today.AddDays(-1);
+                if (today.DayOfWeek == DayOfWeek.Sunday) today = today.AddDays(-2);
+
+                var targetDates = new DateTime[7];
+                targetDates[4] = today; // d5 = today (pivot)
+
+                // Go back 4 weekdays
+                var d = today;
+                for (int i = 3; i >= 0; i--)
+                {
+                    d = d.AddDays(-1);
+                    while (d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday)
+                        d = d.AddDays(-1);
+                    targetDates[i] = d;
+                }
+
+                // Go forward 2 weekdays
+                d = today;
+                for (int i = 5; i <= 6; i++)
+                {
+                    d = d.AddDays(1);
+                    while (d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday)
+                        d = d.AddDays(1);
+                    targetDates[i] = d;
+                }
+
+                // Check if dates already match
+                if (existingDates.Select(x => x.Date).SequenceEqual(targetDates.Select(t => t.Date)))
+                    return;
+
+                _logger.LogInformation("Auto-shifting condom schedule dates to {D1}..{D5}(today)..{D7}",
+                    targetDates[0].ToString("yyyy-MM-dd"), targetDates[4].ToString("yyyy-MM-dd"), targetDates[6].ToString("yyyy-MM-dd"));
+
+                // Remap old dates to new dates by position
+                for (int i = 0; i < 7; i++)
+                {
+                    if (existingDates[i].Date != targetDates[i].Date)
+                    {
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "UPDATE CondomProductionSchedules SET ScheduleDate = {0} WHERE CAST(ScheduleDate AS DATE) = {1}",
+                            targetDates[i], existingDates[i]);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to auto-shift schedule dates");
             }
         }
     }

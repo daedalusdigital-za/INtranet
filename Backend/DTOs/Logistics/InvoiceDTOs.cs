@@ -291,6 +291,26 @@ namespace ProjectTracker.API.DTOs.Logistics
     }
 
     /// <summary>
+    /// DTO for updating an imported invoice's core and delivery fields
+    /// </summary>
+    public class UpdateImportedInvoiceDto
+    {
+        public string? TransactionNumber { get; set; }
+        public string? CustomerNumber { get; set; }
+        public string? CustomerName { get; set; }
+        public string? ProductCode { get; set; }
+        public string? ProductDescription { get; set; }
+        public decimal? Quantity { get; set; }
+        public decimal? SalesAmount { get; set; }
+        public decimal? CostOfSales { get; set; }
+        public DateTime? TransactionDate { get; set; }
+        public string? Status { get; set; }
+        public string? DeliveryProvince { get; set; }
+        public string? DeliveryAddress { get; set; }
+        public string? SourceCompany { get; set; }
+    }
+
+    /// <summary>
     /// DTO for creating a trip sheet from selected imported invoices
     /// </summary>
     public class CreateTripSheetFromInvoicesDto

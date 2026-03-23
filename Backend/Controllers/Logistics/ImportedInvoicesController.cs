@@ -327,6 +327,36 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Update core fields of an imported invoice
+        /// </summary>
+        [HttpPut("{id}")]
+        public async Task<ActionResult<ImportedInvoiceDto>> UpdateInvoice(int id, [FromBody] UpdateImportedInvoiceDto dto)
+        {
+            var invoice = await _context.ImportedInvoices.FindAsync(id);
+            if (invoice == null)
+                return NotFound(new { error = "Imported invoice not found" });
+
+            if (dto.TransactionNumber != null) invoice.TransactionNumber = dto.TransactionNumber;
+            if (dto.CustomerNumber != null) invoice.CustomerNumber = dto.CustomerNumber;
+            if (dto.CustomerName != null) invoice.CustomerName = dto.CustomerName;
+            if (dto.ProductCode != null) invoice.ProductCode = dto.ProductCode;
+            if (dto.ProductDescription != null) invoice.ProductDescription = dto.ProductDescription;
+            if (dto.Quantity.HasValue) invoice.Quantity = dto.Quantity.Value;
+            if (dto.SalesAmount.HasValue) invoice.SalesAmount = dto.SalesAmount.Value;
+            if (dto.CostOfSales.HasValue) invoice.CostOfSales = dto.CostOfSales.Value;
+            if (dto.TransactionDate.HasValue) invoice.TransactionDate = dto.TransactionDate.Value;
+            if (dto.Status != null) invoice.Status = dto.Status;
+            if (dto.DeliveryProvince != null) invoice.DeliveryProvince = dto.DeliveryProvince;
+            if (dto.DeliveryAddress != null) invoice.DeliveryAddress = dto.DeliveryAddress;
+            if (dto.SourceCompany != null) invoice.SourceCompany = dto.SourceCompany;
+            invoice.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(await GetImportedInvoiceDto(id));
+        }
+
+        /// <summary>
         /// Update delivery information for an imported invoice
         /// </summary>
         [HttpPut("{id}/delivery")]

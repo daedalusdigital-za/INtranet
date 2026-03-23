@@ -16,6 +16,7 @@ import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { HBA1CDashboardComponent } from './hba1c-dashboard/hba1c-dashboard.component';
 import { CondomsDashboardComponent } from './condoms-dashboard/condoms-dashboard.component';
+import { HBA1CService } from '../../services/hba1c.service';
 import { environment } from '../../../environments/environment';
 
 interface CompanyProject {
@@ -646,11 +647,46 @@ export class CompanyProjectsComponent implements OnInit {
     private http: HttpClient,
     private authService: AuthService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private hba1cService: HBA1CService
   ) {}
 
   ngOnInit(): void {
     this.loadProjects();
+    this.loadHba1cStats();
+  }
+
+  private loadHba1cStats(): void {
+    this.hba1cService.getDashboard().subscribe({
+      next: (data) => {
+        const hba1c = this.projects.find(p => p.id === 'hba1c');
+        if (!hba1c) return;
+
+        const sessions = data.trainingStats?.totalSessions || 0;
+        const participants = data.trainingStats?.totalParticipants || 0;
+        const provinces = data.provinceStats?.length || 0;
+        const revenue = data.nationalTotals?.totalRevenue || 0;
+        const completionRate = data.trainingStats?.completionRate || 0;
+        const totalSales = data.salesStats?.totalSales || 0;
+        const equipTypes = data.equipmentTypesCount || 0;
+        const inventoryItems = data.inventoryStats?.totalItems || 0;
+
+        const fmtRevenue = revenue >= 1_000_000
+          ? 'R' + (revenue / 1_000_000).toFixed(1) + 'M'
+          : revenue >= 1_000
+          ? 'R' + (revenue / 1_000).toFixed(0) + 'K'
+          : 'R' + revenue.toFixed(0);
+
+        hba1c.progress = Math.round(completionRate);
+        hba1c.stats = [
+          { label: 'Training Sessions', value: sessions.toLocaleString() },
+          { label: 'Participants', value: participants.toLocaleString() },
+          { label: 'Provinces', value: provinces.toString() },
+          { label: 'Revenue', value: fmtRevenue }
+        ];
+      },
+      error: () => { /* keep static defaults */ }
+    });
   }
 
   loadProjects(): void {
@@ -679,21 +715,21 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'hba1c',
         name: 'HBA1C Project',
-        description: 'Glycated haemoglobin (HbA1c) testing and diabetes management project. Providing screening services and monitoring supplies to healthcare facilities nationwide.',
+        description: 'Glycated haemoglobin (HbA1c) testing and diabetes management project. National training, equipment distribution, inventory management and sales tracking across 9 provinces.',
         icon: 'biotech',
         color: '#2196f3',
         gradient: 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)',
         status: 'active',
-        progress: 0,
+        progress: 41,
         category: 'Medical Diagnostics',
-        lead: 'TBD',
+        lead: 'National Team',
         startDate: 'March 2026',
         targetDate: 'Ongoing',
         stats: [
-          { label: 'Facilities', value: 'TBD' },
-          { label: 'Tests Supplied', value: 'TBD' },
-          { label: 'Regions', value: 'TBD' },
-          { label: 'Compliance', value: 'TBD' }
+          { label: 'Training Sessions', value: '276' },
+          { label: 'Participants', value: '5,146' },
+          { label: 'Provinces', value: '9' },
+          { label: 'Revenue', value: 'R109.9M' }
         ]
       },
       {

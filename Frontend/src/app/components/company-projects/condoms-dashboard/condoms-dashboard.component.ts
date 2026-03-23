@@ -38,8 +38,8 @@ interface ScheduleSummary {
   femaleBatches: number;
   maleBatches: number;
   scentVariants: number;
-  week1Total: number;
-  week2Total: number;
+  week1Total: number;  // pastTotal from API
+  week2Total: number;  // upcomingTotal from API
   scheduleDays: number;
 }
 
@@ -54,7 +54,7 @@ interface DashboardData {
   };
   scentBreakdown: { scent: string; batchCount: number; totalUnits: number; types: string[] }[];
   typeBreakdown: { type: string; batchCount: number; totalUnits: number; uom: string }[];
-  dailyTotals: { date: string; total: number }[];
+  dailyTotals: { date: string; total: number; femaleTotal: number; maleTotal: number }[];
 }
 
 @Component({
@@ -579,15 +579,18 @@ interface DashboardData {
             <div class="section-header">
               <h3><mat-icon>bar_chart</mat-icon> Daily Stock Totals</h3>
               <div class="chart-legend">
-                <span class="legend-dot week1"></span> Week 1
-                <span class="legend-dot week2"></span> Week 2
+                <span class="legend-dot female"></span> Female
+                <span class="legend-dot male"></span> Male
               </div>
             </div>
             <div class="bar-chart">
               @for (dt of dashboard!.dailyTotals; track dt.date) {
                 <div class="bar-col">
                   <span class="bar-value">{{ dt.total | number }}</span>
-                  <div class="bar" [style.height.%]="getBarHeight(dt.total)" [style.background]="getBarColor(dt.date)"></div>
+                  <div class="stacked-bar" [style.height.%]="getBarHeight(dt.total)">
+                    <div class="bar-segment female" [style.flex]="dt.femaleTotal" matTooltip="Female: {{ dt.femaleTotal | number }}"></div>
+                    <div class="bar-segment male" [style.flex]="dt.maleTotal" matTooltip="Male: {{ dt.maleTotal | number }}"></div>
+                  </div>
                   <span class="bar-label">{{ dt.date | date:'EEE' }}<br>{{ dt.date | date:'d MMM' }}</span>
                 </div>
               }
@@ -600,6 +603,10 @@ interface DashboardData {
           <div class="schedule-header">
             <h3><mat-icon>table_chart</mat-icon> Stock Schedule Detail</h3>
             <div class="schedule-filters">
+              <button class="collapse-all-btn" (click)="toggleAllGroups()" matTooltip="{{ collapsedGroups.size === filteredGroups.length ? 'Expand' : 'Collapse' }} all scent groups">
+                <mat-icon>{{ collapsedGroups.size === filteredGroups.length ? 'unfold_more' : 'unfold_less' }}</mat-icon>
+                {{ collapsedGroups.size === filteredGroups.length ? 'Expand All' : 'Collapse All' }}
+              </button>
               <mat-form-field appearance="outline" class="filter-field">
                 <mat-label>Filter by Scent</mat-label>
                 <mat-select [(value)]="filterScent" (selectionChange)="applyFilter()">
@@ -643,52 +650,55 @@ interface DashboardData {
               <tbody>
                 @for (group of filteredGroups; track group.scentGroup) {
                   <!-- Scent group header -->
-                  <tr class="group-header-row" [style.background]="getScentColor(group.scent) + '18'">
+                  <tr class="group-header-row" [style.background]="getScentColor(group.scent) + '18'" (click)="toggleGroupCollapse(group.scentGroup)" style="cursor: pointer;">
                     <td [attr.colspan]="4 + scheduleDates.length + 1" class="group-header-cell">
+                      <mat-icon class="group-chevron" [class.chevron-collapsed]="collapsedGroups.has(group.scentGroup)">expand_more</mat-icon>
                       <span class="group-emoji">{{ getScentEmoji(group.scent) }}</span>
                       <strong>{{ group.scent }}</strong>
                       <span class="group-type-badge" [style.background]="group.type === 'Female' ? '#e91e63' : '#2196f3'">
                         {{ group.type }}
                       </span>
-                      <span class="group-count">{{ group.batches.length }} batches</span>
+                      <span class="group-count">{{ group.batches.length }} batches &bull; {{ getGroupTotal(group) | number }} units</span>
                     </td>
                   </tr>
-                  @for (batch of group.batches; track batch.batchCode; let i = $index) {
-                    <tr class="batch-row" [class.even-row]="i % 2 === 0">
-                      <td class="col-scent">
-                        @if (i === 0) {
-                          {{ group.scent }}
-                        }
-                      </td>
-                      <td class="col-type">
-                        @if (i === 0) {
-                          <span class="type-badge" [class.type-female]="group.type === 'Female'" [class.type-male]="group.type === 'Male'">
-                            {{ group.type }}
-                          </span>
-                        }
-                      </td>
-                      <td class="col-batch"><code>{{ batch.batchCode }}</code></td>
-                      <td class="col-uom">{{ batch.uom }}</td>
-                      @for (dq of batch.dailyQuantities; track dq.date) {
-                        <td class="col-day" [class.zero-qty]="dq.quantity === 0" [class.has-note]="dq.note">
-                          @if (dq.note) {
-                            <span [matTooltip]="dq.note">{{ dq.quantity }}</span>
-                          } @else {
-                            {{ dq.quantity | number }}
+                  @if (!collapsedGroups.has(group.scentGroup)) {
+                    @for (batch of group.batches; track batch.batchCode; let i = $index) {
+                      <tr class="batch-row" [class.even-row]="i % 2 === 0">
+                        <td class="col-scent">
+                          @if (i === 0) {
+                            {{ group.scent }}
                           }
                         </td>
+                        <td class="col-type">
+                          @if (i === 0) {
+                            <span class="type-badge" [class.type-female]="group.type === 'Female'" [class.type-male]="group.type === 'Male'">
+                              {{ group.type }}
+                            </span>
+                          }
+                        </td>
+                        <td class="col-batch"><code>{{ batch.batchCode }}</code></td>
+                        <td class="col-uom">{{ batch.uom }}</td>
+                        @for (dq of batch.dailyQuantities; track dq.date) {
+                          <td class="col-day" [class.zero-qty]="dq.quantity === 0" [class.has-note]="dq.note">
+                            @if (dq.note) {
+                              <span [matTooltip]="dq.note">{{ dq.quantity }}</span>
+                            } @else {
+                              {{ dq.quantity | number }}
+                            }
+                          </td>
+                        }
+                        <td class="col-total"><strong>{{ getBatchTotal(batch) | number }}</strong></td>
+                      </tr>
+                    }
+                    <!-- Group subtotal -->
+                    <tr class="subtotal-row" [style.background]="getScentColor(group.scent) + '10'">
+                      <td colspan="4" class="subtotal-label">{{ group.scent }} {{ group.type }} Subtotal</td>
+                      @for (d of scheduleDates; track d) {
+                        <td class="col-day subtotal-val">{{ getGroupDayTotal(group, d) | number }}</td>
                       }
-                      <td class="col-total"><strong>{{ getBatchTotal(batch) | number }}</strong></td>
+                      <td class="col-total subtotal-val"><strong>{{ getGroupTotal(group) | number }}</strong></td>
                     </tr>
                   }
-                  <!-- Group subtotal -->
-                  <tr class="subtotal-row" [style.background]="getScentColor(group.scent) + '10'">
-                    <td colspan="4" class="subtotal-label">{{ group.scent }} {{ group.type }} Subtotal</td>
-                    @for (d of scheduleDates; track d) {
-                      <td class="col-day subtotal-val">{{ getGroupDayTotal(group, d) | number }}</td>
-                    }
-                    <td class="col-total subtotal-val"><strong>{{ getGroupTotal(group) | number }}</strong></td>
-                  </tr>
                 }
               </tbody>
             </table>
@@ -1174,8 +1184,8 @@ interface DashboardData {
       display: inline-block;
       margin-right: 4px;
     }
-    .legend-dot.week1 { background: var(--pink); }
-    .legend-dot.week2 { background: var(--blue); }
+    .legend-dot.female { background: #e91e63; }
+    .legend-dot.male { background: #2196f3; }
 
     .bar-chart {
       display: flex;
@@ -1200,6 +1210,31 @@ interface DashboardData {
       font-weight: 700;
       color: var(--text-secondary);
       font-family: 'SF Mono', monospace;
+    }
+
+    .stacked-bar {
+      width: 100%;
+      max-width: 56px;
+      border-radius: 8px 8px 0 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      min-height: 4px;
+    }
+
+    .bar-segment {
+      width: 100%;
+      transition: flex 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      min-height: 0;
+    }
+
+    .bar-segment.female {
+      background: linear-gradient(180deg, #ec407a, #c2185b);
+    }
+
+    .bar-segment.male {
+      background: linear-gradient(180deg, #42a5f5, #1565c0);
     }
 
     .bar {
@@ -1337,6 +1372,52 @@ interface DashboardData {
       font-size: 0.75rem;
       color: var(--text-muted);
       font-weight: 600;
+    }
+
+    .group-chevron {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: var(--text-secondary);
+      transition: transform 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .group-chevron.chevron-collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .group-header-row:hover td {
+      filter: brightness(0.96);
+    }
+
+    .collapse-all-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      height: 40px;
+    }
+
+    .collapse-all-btn:hover {
+      background: var(--surface-hover);
+      border-color: var(--text-muted);
+      color: var(--text-primary);
+    }
+
+    .collapse-all-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
 
     /* Batch rows */
@@ -1651,6 +1732,7 @@ export class CondomsDashboardComponent implements OnInit {
 
   filterScent = 'all';
   filterType = 'all';
+  collapsedGroups = new Set<string>();
 
   // Dialog
   activeDialog: string | null = null;
@@ -1845,6 +1927,30 @@ export class CondomsDashboardComponent implements OnInit {
       const typeMatch = this.filterType === 'all' || g.type === this.filterType;
       return scentMatch && typeMatch;
     });
+    // Clear collapsed state for groups no longer visible
+    this.collapsedGroups.forEach(key => {
+      if (!this.filteredGroups.some(g => g.scentGroup === key)) {
+        this.collapsedGroups.delete(key);
+      }
+    });
+  }
+
+  toggleGroupCollapse(scentGroup: string): void {
+    if (this.collapsedGroups.has(scentGroup)) {
+      this.collapsedGroups.delete(scentGroup);
+    } else {
+      this.collapsedGroups.add(scentGroup);
+    }
+  }
+
+  toggleAllGroups(): void {
+    if (this.collapsedGroups.size === this.filteredGroups.length) {
+      // All collapsed → expand all
+      this.collapsedGroups.clear();
+    } else {
+      // Collapse all
+      this.filteredGroups.forEach(g => this.collapsedGroups.add(g.scentGroup));
+    }
   }
 
   // ── Helpers ──
@@ -1882,14 +1988,6 @@ export class CondomsDashboardComponent implements OnInit {
   getBarHeight(total: number): number {
     if (this.maxDailyTotal === 0) return 0;
     return (total / this.maxDailyTotal) * 85;
-  }
-
-  getBarColor(date: string): string {
-    const d = new Date(date);
-    const day = d.getDay();
-    if (day === 0 || day === 6) return '#90a4ae';
-    const week = d.getDate() <= 7 ? 0 : 1;
-    return week === 0 ? 'linear-gradient(180deg, #e91e63, #c2185b)' : 'linear-gradient(180deg, #2196f3, #1565c0)';
   }
 
   isWeekend(date: string): boolean {

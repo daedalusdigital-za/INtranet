@@ -139,6 +139,8 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Tenders.ComplianceAlert> ComplianceAlerts { get; set; }
         public DbSet<Models.Tenders.TenderKnowledgeBase> TenderKnowledgeBase { get; set; }
         public DbSet<Models.Tenders.TenderReminder> TenderReminders { get; set; }
+        public DbSet<Models.Tenders.ArtworkFile> ArtworkFiles { get; set; }
+        public DbSet<Models.Tenders.ArtworkAnnotation> ArtworkAnnotations { get; set; }
 
         // Company Projects — Condom Production
         public DbSet<Models.Projects.CondomProductionSchedule> CondomProductionSchedules { get; set; }
