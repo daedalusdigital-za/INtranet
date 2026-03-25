@@ -41,4 +41,70 @@ namespace ProjectTracker.API.Models.Projects
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Delivery request for condom stock to be fulfilled by logistics
+    /// </summary>
+    public class CondomDeliveryRequest
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(50)]
+        public string ReferenceNumber { get; set; } = string.Empty; // Auto-generated DR-YYYYMMDD-NNN
+
+        [Required]
+        [MaxLength(50)]
+        public string Department { get; set; } = "Condoms"; // Condoms, Sanitary Pads, etc.
+
+        [MaxLength(50)]
+        public string? Scent { get; set; }
+
+        [MaxLength(20)]
+        public string? Type { get; set; }
+
+        [MaxLength(30)]
+        public string? BatchCode { get; set; }
+
+        [MaxLength(100)]
+        public string? InvoiceNumber { get; set; }
+
+        [Required]
+        [MaxLength(200)]
+        public string Description { get; set; } = string.Empty; // What is being requested
+
+        public int Quantity { get; set; }
+
+        [MaxLength(20)]
+        public string UOM { get; set; } = "CASES";
+
+        [MaxLength(200)]
+        public string? DeliveryAddress { get; set; }
+
+        [MaxLength(500)]
+        public string? Notes { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public string Priority { get; set; } = "Normal"; // Normal, Urgent
+
+        [Required]
+        [MaxLength(20)]
+        public string Status { get; set; } = "Pending"; // Pending, Approved, In Transit, Delivered, Cancelled
+
+        public DateTime RequestedDate { get; set; } = DateTime.UtcNow;
+
+        [MaxLength(100)]
+        public string? RequestedBy { get; set; }
+
+        public DateTime? ApprovedDate { get; set; }
+
+        public DateTime? DeliveredDate { get; set; }
+
+        [MaxLength(100)]
+        public string? HandledBy { get; set; }  // Logistics person
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    }
 }

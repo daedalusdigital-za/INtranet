@@ -362,6 +362,38 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
 
                 await _context.SaveChangesAsync();
+
+                // Auto-fulfill any delivery requests matching these invoices
+                try
+                {
+                    var invoiceNumbers = invoices.Select(i => i.TransactionNumber).Where(n => !string.IsNullOrEmpty(n)).ToList();
+                    if (invoiceNumbers.Any())
+                    {
+                        var matchingRequests = await _context.CondomDeliveryRequests
+                            .Where(r => invoiceNumbers.Contains(r.InvoiceNumber!)
+                                && (r.Status == "Pending" || r.Status == "Approved" || r.Status == "In Transit"))
+                            .ToListAsync();
+
+                        foreach (var req in matchingRequests)
+                        {
+                            req.Status = "Delivered";
+                            req.DeliveredDate = DateTime.UtcNow;
+                            req.HandledBy = $"Tripsheet {tripSheetNumber}";
+                        }
+
+                        if (matchingRequests.Any())
+                        {
+                            await _context.SaveChangesAsync();
+                            _logger.LogInformation("Auto-fulfilled {Count} delivery requests via tripsheet {TripSheet}",
+                                matchingRequests.Count, tripSheetNumber);
+                        }
+                    }
+                }
+                catch (Exception fulfillEx)
+                {
+                    _logger.LogWarning(fulfillEx, "Failed to auto-fulfill delivery requests (non-critical)");
+                }
+
                 await transaction.CommitAsync();
 
                 _logger.LogInformation("Created TripSheet {TripSheetNumber} from {InvoiceCount} invoices with total value {TotalValue}", 

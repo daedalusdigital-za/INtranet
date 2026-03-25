@@ -16,7 +16,9 @@ import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { HBA1CDashboardComponent } from './hba1c-dashboard/hba1c-dashboard.component';
 import { CondomsDashboardComponent } from './condoms-dashboard/condoms-dashboard.component';
+import { SanitaryPadsDashboardComponent } from './sanitary-pads-dashboard/sanitary-pads-dashboard.component';
 import { HBA1CService } from '../../services/hba1c.service';
+import { SanitaryPadsService } from '../../services/sanitary-pads.service';
 import { environment } from '../../../environments/environment';
 
 interface CompanyProject {
@@ -52,7 +54,8 @@ interface CompanyProject {
     MatMenuModule,
     NavbarComponent,
     HBA1CDashboardComponent,
-    CondomsDashboardComponent
+    CondomsDashboardComponent,
+    SanitaryPadsDashboardComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -91,6 +94,9 @@ interface CompanyProject {
         } @else if (selectedProject.id === 'hba1c') {
           <!-- HBA1C Live Dashboard -->
           <app-hba1c-dashboard (goBack)="clearSelection()"></app-hba1c-dashboard>
+        } @else if (selectedProject.id === 'sanitary-pads') {
+          <!-- Sanitary Pads Dashboard -->
+          <app-sanitary-pads-dashboard (goBack)="clearSelection()"></app-sanitary-pads-dashboard>
         } @else {
           <!-- Generic Project Detail View -->
           <div class="project-detail">
@@ -648,12 +654,14 @@ export class CompanyProjectsComponent implements OnInit {
     private authService: AuthService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private hba1cService: HBA1CService
+    private hba1cService: HBA1CService,
+    private padsService: SanitaryPadsService
   ) {}
 
   ngOnInit(): void {
     this.loadProjects();
     this.loadHba1cStats();
+    this.loadPadsStats();
   }
 
   private loadHba1cStats(): void {
@@ -735,24 +743,48 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'sanitary-pads',
         name: 'Sanitary Pads Project',
-        description: 'Sanitary pad distribution programme supporting dignity and school attendance for girls. Partnering with schools and community organisations for equitable distribution.',
+        description: 'National Department of Health sanitary pad stock management. Tracking GRN receipts, quarterly deliveries, and warehouse stock across CPT and KZN.',
         icon: 'volunteer_activism',
-        color: '#9c27b0',
-        gradient: 'linear-gradient(135deg, #9c27b0 0%, #6a1b9a 100%)',
+        color: '#e91e63',
+        gradient: 'linear-gradient(135deg, #e91e63 0%, #c2185b 100%)',
         status: 'active',
-        progress: 0,
+        progress: 65,
         category: 'Social Impact',
-        lead: 'TBD',
-        startDate: 'March 2026',
+        lead: 'Stock Team',
+        startDate: 'June 2025',
         targetDate: 'Ongoing',
         stats: [
-          { label: 'Schools', value: 'TBD' },
-          { label: 'Beneficiaries', value: 'TBD' },
-          { label: 'Provinces', value: 'TBD' },
-          { label: 'Partners', value: 'TBD' }
+          { label: 'Total Received', value: '—' },
+          { label: 'Total Delivered', value: '—' },
+          { label: 'Balance', value: '—' },
+          { label: 'Total Value', value: '—' }
         ]
       }
     ];
+  }
+
+  private loadPadsStats(): void {
+    this.padsService.getDashboard().subscribe({
+      next: (data) => {
+        const pads = this.projects.find(p => p.id === 'sanitary-pads');
+        if (!pads) return;
+
+        const fmtValue = data.totalValue >= 1_000_000
+          ? 'R' + (data.totalValue / 1_000_000).toFixed(1) + 'M'
+          : data.totalValue >= 1_000
+          ? 'R' + (data.totalValue / 1_000).toFixed(0) + 'K'
+          : 'R' + data.totalValue.toFixed(0);
+
+        pads.progress = data.totalReceived > 0 ? Math.round((data.totalDelivered / data.totalReceived) * 100) : 0;
+        pads.stats = [
+          { label: 'Total Received', value: data.totalReceived.toLocaleString() + ' boxes' },
+          { label: 'Total Delivered', value: data.totalDelivered.toLocaleString() + ' boxes' },
+          { label: 'Balance', value: data.currentBalance.toLocaleString() + ' boxes' },
+          { label: 'Total Value', value: fmtValue }
+        ];
+      },
+      error: () => { /* keep defaults */ }
+    });
   }
 
   selectProject(project: CompanyProject): void {

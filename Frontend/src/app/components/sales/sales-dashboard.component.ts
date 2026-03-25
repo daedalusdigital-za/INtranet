@@ -298,6 +298,10 @@ interface SalesReportResponse {
             <mat-icon>upload_file</mat-icon>
             <span>Import Sales</span>
           </button>
+          <button class="action-btn delivery" (click)="openDeliveryRequestDialog()">
+            <mat-icon>local_shipping</mat-icon>
+            <span>Request Delivery</span>
+          </button>
         </div>
       </div>
 
@@ -478,6 +482,161 @@ interface SalesReportResponse {
                 }
               </button>
             </div>
+          </div>
+        </div>
+      }
+
+      <!-- ==================== REQUEST DELIVERY DIALOG ==================== -->
+      @if (showDeliveryDialog) {
+        <div class="dialog-overlay" (click)="closeDeliveryDialog()">
+          <div class="delivery-request-dialog" (click)="$event.stopPropagation()">
+            <div class="delivery-header">
+              <div class="delivery-icon-circle">
+                <mat-icon>local_shipping</mat-icon>
+              </div>
+              <h2>Request Urgent Delivery</h2>
+              <p>Select invoices that require logistics to deliver urgently</p>
+              <button mat-icon-button class="delivery-close-btn" (click)="closeDeliveryDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            @if (deliverySuccess) {
+              <div class="delivery-success-state">
+                <div class="delivery-success-icon"><mat-icon>check_circle</mat-icon></div>
+                <h3>Delivery Request Submitted!</h3>
+                <p>{{ deliverySuccessMsg }}</p>
+                <div class="delivery-success-ref">{{ deliverySuccessRef }}</div>
+                <div class="delivery-success-actions">
+                  <button class="dialog-btn submit delivery-submit" (click)="resetDeliveryForm()">
+                    <mat-icon>add</mat-icon> Submit Another
+                  </button>
+                  <button class="dialog-btn cancel" (click)="closeDeliveryDialog()">
+                    <mat-icon>close</mat-icon> Close
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <div class="delivery-body">
+                @if (deliveryError) {
+                  <div class="delivery-error-bar">
+                    <mat-icon>error_outline</mat-icon>
+                    <span>{{ deliveryError }}</span>
+                  </div>
+                }
+
+                <!-- Invoice Search & Selection -->
+                <div class="delivery-section">
+                  <label class="delivery-section-label">Search & Select Invoices <span class="req-star">*</span></label>
+                  <div class="delivery-invoice-search">
+                    <mat-icon>search</mat-icon>
+                    <input type="text" placeholder="Search by invoice #, customer name, product..." [(ngModel)]="deliveryInvoiceSearch" (input)="filterDeliveryInvoices()">
+                    @if (deliveryInvoiceSearch) {
+                      <button mat-icon-button class="clear-search" (click)="deliveryInvoiceSearch = ''; filterDeliveryInvoices()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    }
+                  </div>
+
+                  @if (deliverySelectedInvoices.length > 0) {
+                    <div class="delivery-selected-chips">
+                      <span class="selected-label">Selected ({{ deliverySelectedInvoices.length }}):</span>
+                      @for (inv of deliverySelectedInvoices; track inv.id) {
+                        <div class="delivery-chip">
+                          <span>{{ inv.transactionNumber }}</span>
+                          <span class="chip-customer">{{ inv.customerName }}</span>
+                          <button mat-icon-button class="chip-remove" (click)="removeDeliveryInvoice(inv)">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  <div class="delivery-invoice-list">
+                    @if (deliveryFilteredInvoices.length === 0) {
+                      <div class="delivery-no-results">
+                        <mat-icon>search_off</mat-icon>
+                        <span>{{ deliveryInvoiceSearch ? 'No invoices match your search' : 'Type to search invoices' }}</span>
+                      </div>
+                    } @else {
+                      @for (inv of deliveryFilteredInvoices; track inv.id) {
+                        <div class="delivery-invoice-row" [class.selected]="isInvoiceSelected(inv)" (click)="toggleDeliveryInvoice(inv)">
+                          <div class="inv-checkbox">
+                            <mat-icon>{{ isInvoiceSelected(inv) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+                          </div>
+                          <div class="inv-details">
+                            <div class="inv-top-row">
+                              <strong>{{ inv.transactionNumber }}</strong>
+                              <span class="inv-amount">R{{ inv.salesAmount * 1.15 | number:'1.2-2' }}</span>
+                            </div>
+                            <div class="inv-bottom-row">
+                              <span class="inv-customer">{{ inv.customerName }}</span>
+                              <span class="inv-product">{{ inv.productDescription }}</span>
+                              @if (inv.deliveryProvince) {
+                                <span class="inv-province">{{ inv.deliveryProvince }}</span>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    }
+                  </div>
+                </div>
+
+                <!-- Priority & Details -->
+                <div class="delivery-form-grid">
+                  <div class="delivery-field">
+                    <label>Priority <span class="req-star">*</span></label>
+                    <select [(ngModel)]="deliveryForm.priority">
+                      <option value="Normal">Normal</option>
+                      <option value="Urgent">🔴 Urgent</option>
+                    </select>
+                  </div>
+                  <div class="delivery-field">
+                    <label>Quantity</label>
+                    <input type="number" [(ngModel)]="deliveryForm.quantity" min="1" placeholder="Auto from invoices">
+                  </div>
+                  <div class="delivery-field full-w">
+                    <label>Description <span class="req-star">*</span></label>
+                    <input type="text" [(ngModel)]="deliveryForm.description" placeholder="e.g. Urgent delivery required for customer order">
+                  </div>
+                  <div class="delivery-field full-w">
+                    <label>Delivery Address</label>
+                    <input type="text" [(ngModel)]="deliveryForm.deliveryAddress" placeholder="Delivery address (optional)">
+                  </div>
+                  <div class="delivery-field full-w">
+                    <label>Notes</label>
+                    <input type="text" [(ngModel)]="deliveryForm.notes" placeholder="Additional notes for logistics (optional)">
+                  </div>
+                </div>
+
+                <!-- Summary preview -->
+                @if (deliverySelectedInvoices.length > 0) {
+                  <div class="delivery-preview">
+                    <mat-icon>summarize</mat-icon>
+                    <div class="preview-content">
+                      <strong>{{ deliverySelectedInvoices.length }} invoice(s)</strong> selected •
+                      Total value: <strong>R{{ getDeliveryTotalValue() | number:'1.2-2' }}</strong>
+                      @if (deliveryForm.priority === 'Urgent') {
+                        • <span class="urgent-tag">🔴 URGENT</span>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <div class="delivery-actions">
+                <button class="dialog-btn cancel" (click)="closeDeliveryDialog()">Cancel</button>
+                <button class="dialog-btn submit delivery-submit" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || deliverySelectedInvoices.length === 0 || !deliveryForm.description">
+                  @if (deliverySaving) {
+                    <mat-icon class="spin-icon">sync</mat-icon> Submitting...
+                  } @else {
+                    <mat-icon>send</mat-icon> Submit Request ({{ deliverySelectedInvoices.length }})
+                  }
+                </button>
+              </div>
+            }
           </div>
         </div>
       }
@@ -971,6 +1130,9 @@ interface SalesReportResponse {
                   <button mat-stroked-button (click)="importInvoices()">
                     <mat-icon>upload</mat-icon> Import
                   </button>
+                  <button mat-flat-button class="request-delivery-tab-btn" (click)="openDeliveryRequestDialog()">
+                    <mat-icon>local_shipping</mat-icon> Request Delivery
+                  </button>
                 </div>
               </div>
 
@@ -1064,7 +1226,7 @@ interface SalesReportResponse {
                         <button mat-icon-button matTooltip="Edit" (click)="editInvoice(inv)">
                           <mat-icon>edit</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="Send to Logistics" (click)="sendToLogistics(inv)">
+                        <button mat-icon-button matTooltip="Request Delivery" (click)="sendToLogistics(inv)" class="req-delivery-icon">
                           <mat-icon>local_shipping</mat-icon>
                         </button>
                         <button mat-icon-button [matMenuTriggerFor]="invoiceMenu">
@@ -1100,6 +1262,310 @@ interface SalesReportResponse {
                                showFirstLastButtons>
                 </mat-paginator>
               }
+            </div>
+          </mat-tab>
+
+          <!-- POD Documents Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>verified</mat-icon>
+              <span>POD Documents</span>
+              @if (podTotalCount > 0) {
+                <span class="tab-badge">{{ podTotalCount }}</span>
+              }
+            </ng-template>
+            <div class="tab-content">
+              <div class="pod-section">
+                <!-- POD Toolbar -->
+                <div class="pod-toolbar">
+                  <div class="pod-filters">
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Region</mat-label>
+                      <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Regions</mat-option>
+                        <mat-option value="GP">Gauteng (GP)</mat-option>
+                        <mat-option value="KZN">KwaZulu-Natal (KZN)</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Month</mat-label>
+                      <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Months</mat-option>
+                        <mat-option value="1-2026">January 2026</mat-option>
+                        <mat-option value="2-2026">February 2026</mat-option>
+                        <mat-option value="3-2026">March 2026</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field pod-driver-field">
+                      <mat-label>Driver</mat-label>
+                      <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Drivers</mat-option>
+                        @for (driver of podDriverList; track driver) {
+                          <mat-option [value]="driver">{{ driver }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Link Status</mat-label>
+                      <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All</mat-option>
+                        <mat-option value="linked">Linked</mat-option>
+                        <mat-option value="not-linked">Not Linked</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+
+                  <div class="pod-actions">
+                    <button mat-stroked-button class="pod-upload-btn" (click)="openSalesPodUploadDialog()">
+                      <mat-icon>upload_file</mat-icon> Upload POD
+                    </button>
+                    <div class="pod-view-toggle">
+                      <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
+                        <mat-icon>grid_view</mat-icon>
+                      </button>
+                      <button mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
+                        <mat-icon>view_list</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- POD Summary Stats -->
+                @if (podSummary) {
+                  <div class="pod-stats-row">
+                    <div class="pod-stat-chip">
+                      <mat-icon>folder</mat-icon>
+                      <span class="stat-num">{{ podSummary.total }}</span>
+                      <span class="stat-lbl">Total PODs</span>
+                    </div>
+                    <div class="pod-stat-chip linked-chip">
+                      <mat-icon>link</mat-icon>
+                      <span class="stat-num">{{ podSummary.linked || 0 }}</span>
+                      <span class="stat-lbl">Linked</span>
+                    </div>
+                    <div class="pod-stat-chip tripsheet-chip">
+                      <mat-icon>description</mat-icon>
+                      <span class="stat-num">{{ podSummary.linkedToTripsheet || 0 }}</span>
+                      <span class="stat-lbl">Tripsheets</span>
+                    </div>
+                    <div class="pod-stat-chip invoice-chip">
+                      <mat-icon>receipt</mat-icon>
+                      <span class="stat-num">{{ podSummary.linkedToInvoice || 0 }}</span>
+                      <span class="stat-lbl">Invoices</span>
+                    </div>
+                    <div class="pod-stat-chip unlinked-chip">
+                      <mat-icon>link_off</mat-icon>
+                      <span class="stat-num">{{ podSummary.unlinked || 0 }}</span>
+                      <span class="stat-lbl">Not Linked</span>
+                    </div>
+                    @for (r of podSummary.byRegion; track r.region) {
+                      <div class="pod-stat-chip region-chip">
+                        <mat-icon>location_on</mat-icon>
+                        <span class="stat-num">{{ r.count }}</span>
+                        <span class="stat-lbl">{{ r.region }}</span>
+                      </div>
+                    }
+                    <div class="pod-stat-chip drivers-chip">
+                      <mat-icon>people</mat-icon>
+                      <span class="stat-num">{{ podSummary.drivers?.length || 0 }}</span>
+                      <span class="stat-lbl">Drivers</span>
+                    </div>
+                  </div>
+                }
+
+                <!-- Loading State -->
+                @if (podLoading) {
+                  <div class="loading-state">
+                    <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+                    <p>Loading POD documents...</p>
+                  </div>
+                } @else if (podDocuments.length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>verified</mat-icon>
+                    <h3>No POD Documents Found</h3>
+                    <p>Adjust your filters or upload new POD documents</p>
+                  </div>
+                } @else {
+                  <!-- Grid View -->
+                  @if (podViewMode === 'grid') {
+                    <div class="pod-grid">
+                      @for (pod of podDocuments; track pod.id) {
+                        <mat-card class="pod-card" (click)="viewPodDocument(pod)">
+                          <div class="pod-card-header">
+                            <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
+                            <div class="pod-card-info">
+                              <span class="pod-driver">{{ pod.driverName }}</span>
+                              <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
+                            </div>
+                            <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId) ? 'linked' : 'not-linked'">
+                              <mat-icon>{{ (pod.loadId || pod.invoiceId) ? 'link' : 'link_off' }}</mat-icon>
+                              {{ pod.loadId ? 'Tripsheet' : pod.invoiceId ? 'Invoice' : 'Not Linked' }}
+                            </span>
+                            <span class="pod-region-badge" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                          </div>
+                          @if (pod.loadNumber) {
+                            <div class="pod-tripsheet-ref">
+                              <mat-icon>description</mat-icon>
+                              <span>{{ pod.loadNumber }}</span>
+                            </div>
+                          }
+                          @if (pod.invoiceNumber) {
+                            <div class="pod-tripsheet-ref invoice-ref">
+                              <mat-icon>receipt</mat-icon>
+                              <span>{{ pod.invoiceNumber }}</span>
+                            </div>
+                          }
+                          <div class="pod-card-meta">
+                            <span class="pod-filename" matTooltip="{{ pod.originalFileName }}">{{ pod.originalFileName || pod.fileName }}</span>
+                            <span class="pod-size">{{ formatPodFileSize(pod.fileSize) }}</span>
+                          </div>
+                          <div class="pod-card-actions">
+                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                              <mat-icon>download</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #podActionMenu="matMenu" class="modern-menu">
+                              @if (!pod.loadId) {
+                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
+                                  <mat-icon>link</mat-icon> Link to Tripsheet
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkPod(pod)">
+                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                </button>
+                              }
+                              @if (!pod.invoiceId) {
+                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
+                                  <mat-icon>receipt</mat-icon> Link to Invoice
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkInvoice(pod)">
+                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                </button>
+                              }
+                              <button mat-menu-item (click)="openEditPodDialog(pod)">
+                                <mat-icon>edit</mat-icon> Edit Details
+                              </button>
+                            </mat-menu>
+                          </div>
+                        </mat-card>
+                      }
+                    </div>
+                  } @else {
+                    <!-- List View -->
+                    <div class="pod-list-container">
+                      <table mat-table [dataSource]="podDocuments" class="pod-table modern-table">
+                        <ng-container matColumnDef="driverName">
+                          <th mat-header-cell *matHeaderCellDef>Driver</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.driverName }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="deliveryDate">
+                          <th mat-header-cell *matHeaderCellDef>Date</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="region">
+                          <th mat-header-cell *matHeaderCellDef>Region</th>
+                          <td mat-cell *matCellDef="let pod">
+                            <span class="pod-region-badge small" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="linkStatus">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let pod">
+                            @if (pod.loadId) {
+                              <span class="pod-link-badge small linked">
+                                <mat-icon>link</mat-icon>
+                                {{ pod.loadNumber || 'Tripsheet' }}
+                              </span>
+                            } @else if (pod.invoiceId) {
+                              <span class="pod-link-badge small linked invoice">
+                                <mat-icon>receipt</mat-icon>
+                                {{ pod.invoiceNumber || 'Invoice' }}
+                              </span>
+                            } @else {
+                              <span class="pod-link-badge small not-linked">
+                                <mat-icon>link_off</mat-icon>
+                                Not Linked
+                              </span>
+                            }
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="fileName">
+                          <th mat-header-cell *matHeaderCellDef>File</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.originalFileName || pod.fileName }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="fileSize">
+                          <th mat-header-cell *matHeaderCellDef>Size</th>
+                          <td mat-cell *matCellDef="let pod">{{ formatPodFileSize(pod.fileSize) }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="actions">
+                          <th mat-header-cell *matHeaderCellDef>Actions</th>
+                          <td mat-cell *matCellDef="let pod">
+                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                              <mat-icon>download</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #podListMenu="matMenu" class="modern-menu">
+                              @if (!pod.loadId) {
+                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
+                                  <mat-icon>link</mat-icon> Link to Tripsheet
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkPod(pod)">
+                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                </button>
+                              }
+                              @if (!pod.invoiceId) {
+                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
+                                  <mat-icon>receipt</mat-icon> Link to Invoice
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkInvoice(pod)">
+                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                </button>
+                              }
+                              <button mat-menu-item (click)="openEditPodDialog(pod)">
+                                <mat-icon>edit</mat-icon> Edit Details
+                              </button>
+                            </mat-menu>
+                          </td>
+                        </ng-container>
+                        <tr mat-header-row *matHeaderRowDef="podTableColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: podTableColumns;" class="clickable-row" (click)="viewPodDocument(row)"></tr>
+                      </table>
+                    </div>
+                  }
+
+                  <!-- Pagination -->
+                  @if (podTotalCount > podPageSize) {
+                    <div class="pod-pagination">
+                      <span class="pod-page-info">Showing {{ (podCurrentPage - 1) * podPageSize + 1 }} - {{ Math.min(podCurrentPage * podPageSize, podTotalCount) }} of {{ podTotalCount }}</span>
+                      <div class="pod-page-btns">
+                        <button mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
+                          <mat-icon>chevron_left</mat-icon>
+                        </button>
+                        <span class="page-num">Page {{ podCurrentPage }}</span>
+                        <button mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
+                          <mat-icon>chevron_right</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+              </div>
             </div>
           </mat-tab>
 
@@ -2131,6 +2597,32 @@ interface SalesReportResponse {
         }
       }
       }
+
+      <!-- POD Upload Password Dialog -->
+      @if (showPodPasswordDialog) {
+        <div class="pod-password-overlay" (click)="cancelPodPasswordDialog()">
+          <div class="pod-password-card" (click)="$event.stopPropagation()">
+            <mat-icon class="lock-icon">lock</mat-icon>
+            <h3>Upload Password Required</h3>
+            <p>Enter the password to upload POD documents</p>
+            @if (podPasswordError) {
+              <div class="pod-password-error">{{ podPasswordError }}</div>
+            }
+            <mat-form-field appearance="outline" class="password-input">
+              <mat-label>Password</mat-label>
+              <input matInput type="password" [(ngModel)]="podPasswordInput"
+                     (keydown.enter)="verifyPodUploadPassword()"
+                     placeholder="Enter password" autofocus>
+            </mat-form-field>
+            <div class="password-actions">
+              <button mat-stroked-button (click)="cancelPodPasswordDialog()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="verifyPodUploadPassword()">
+                <mat-icon>lock_open</mat-icon> Verify
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -2641,6 +3133,445 @@ interface SalesReportResponse {
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
+    }
+
+    /* Request Delivery Button & Dialog */
+    .action-btn.delivery {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%) !important;
+      color: white !important;
+      border: none !important;
+    }
+    .action-btn.delivery:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(238, 90, 36, 0.4);
+    }
+
+    .request-delivery-tab-btn {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%) !important;
+      color: white !important;
+      border: none !important;
+      border-radius: 10px !important;
+      font-weight: 600 !important;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px !important;
+      height: 40px;
+    }
+    .request-delivery-tab-btn:hover {
+      box-shadow: 0 4px 16px rgba(238, 90, 36, 0.4);
+    }
+
+    .req-delivery-icon {
+      color: #ee5a24 !important;
+    }
+
+    .delivery-request-dialog {
+      background: white;
+      border-radius: 20px;
+      padding: 0;
+      width: 720px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+      animation: dialogSlideIn 0.3s ease;
+    }
+
+    .delivery-header {
+      text-align: center;
+      padding: 32px 32px 16px;
+      position: relative;
+    }
+
+    .delivery-header h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .delivery-header p {
+      margin: 6px 0 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .delivery-icon-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+      box-shadow: 0 8px 24px rgba(238, 90, 36, 0.3);
+    }
+
+    .delivery-icon-circle mat-icon {
+      color: white;
+      font-size: 30px;
+      width: 30px;
+      height: 30px;
+    }
+
+    .delivery-close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+    }
+
+    .delivery-body {
+      padding: 0 32px;
+    }
+
+    .delivery-error-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      background: #fff5f5;
+      border: 1px solid #fed7d7;
+      color: #c53030;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .delivery-section-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .req-star { color: #e53e3e; }
+
+    .delivery-invoice-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      background: #fafafa;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .delivery-invoice-search:focus-within {
+      border-color: #ee5a24;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(238, 90, 36, 0.12);
+    }
+
+    .delivery-invoice-search mat-icon {
+      color: #aaa;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .delivery-invoice-search input {
+      border: none;
+      outline: none;
+      background: transparent;
+      flex: 1;
+      font-size: 14px;
+      color: #1a1a2e;
+    }
+
+    .clear-search { width: 28px !important; height: 28px !important; }
+    .clear-search mat-icon { font-size: 16px !important; width: 16px !important; height: 16px !important; }
+
+    .delivery-selected-chips {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      margin-bottom: 8px;
+    }
+
+    .selected-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+    }
+
+    .delivery-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px 4px 12px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #fff5f0, #ffe8e0);
+      border: 1px solid #fed7c7;
+      font-size: 12px;
+      font-weight: 600;
+      color: #c05621;
+    }
+
+    .chip-customer {
+      font-weight: 400;
+      color: #888;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chip-remove { width: 20px !important; height: 20px !important; }
+    .chip-remove mat-icon { font-size: 14px !important; width: 14px !important; height: 14px !important; color: #e53e3e; }
+
+    .delivery-invoice-list {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 2px solid #eee;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .delivery-invoice-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      transition: all 0.15s ease;
+    }
+
+    .delivery-invoice-row:last-child { border-bottom: none; }
+
+    .delivery-invoice-row:hover {
+      background: #fff9f5;
+    }
+
+    .delivery-invoice-row.selected {
+      background: linear-gradient(135deg, #fff5f0, #ffe8e0);
+      border-left: 3px solid #ee5a24;
+    }
+
+    .inv-checkbox mat-icon {
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
+      color: #ccc;
+    }
+
+    .delivery-invoice-row.selected .inv-checkbox mat-icon {
+      color: #ee5a24;
+    }
+
+    .inv-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .inv-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .inv-top-row strong {
+      font-size: 13px;
+      color: #1a1a2e;
+    }
+
+    .inv-amount {
+      font-size: 12px;
+      font-weight: 700;
+      color: #2e7d32;
+    }
+
+    .inv-bottom-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 2px;
+      font-size: 11px;
+      color: #888;
+      flex-wrap: wrap;
+    }
+
+    .inv-customer {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .inv-province {
+      padding: 1px 6px;
+      background: #e3f2fd;
+      border-radius: 4px;
+      color: #1565c0;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .delivery-no-results {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 32px;
+      color: #aaa;
+    }
+
+    .delivery-no-results mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+    }
+
+    .delivery-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .delivery-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .delivery-field.full-w {
+      grid-column: 1 / -1;
+    }
+
+    .delivery-field label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .delivery-field input,
+    .delivery-field select {
+      padding: 10px 14px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #1a1a2e;
+      background: #fafafa;
+      outline: none;
+      transition: all 0.2s ease;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .delivery-field input:focus,
+    .delivery-field select:focus {
+      border-color: #ee5a24;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(238, 90, 36, 0.12);
+    }
+
+    .delivery-preview {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: #fffbeb;
+      border: 1px solid #fef3c7;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .delivery-preview mat-icon {
+      color: #f59e0b;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .urgent-tag {
+      font-weight: 700;
+      color: #e53e3e;
+      font-size: 12px;
+    }
+
+    .delivery-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding: 20px 32px 28px;
+    }
+
+    .delivery-submit {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%) !important;
+      box-shadow: 0 4px 12px rgba(238, 90, 36, 0.3) !important;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .delivery-submit:disabled {
+      opacity: 0.5;
+    }
+
+    .delivery-success-state {
+      text-align: center;
+      padding: 40px 32px;
+    }
+
+    .delivery-success-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #43a047, #2e7d32);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+
+    .delivery-success-icon mat-icon {
+      color: white;
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+    }
+
+    .delivery-success-state h3 {
+      font-size: 20px;
+      color: #1a1a2e;
+      margin: 0 0 8px;
+    }
+
+    .delivery-success-state p {
+      color: #666;
+      font-size: 14px;
+      margin: 0 0 12px;
+    }
+
+    .delivery-success-ref {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 8px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 20px;
+    }
+
+    .delivery-success-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
     }
 
     /* Customer Import Result Dialog */
@@ -5674,6 +6605,386 @@ interface SalesReportResponse {
         border-radius: 0;
       }
     }
+
+    /* POD Documents Styles */
+    .pod-section {
+      padding: 0;
+    }
+
+    .pod-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .pod-filters {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .pod-filter-field {
+      width: 160px;
+      
+      ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+        display: none;
+      }
+    }
+
+    .pod-driver-field {
+      width: 200px;
+    }
+
+    .pod-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pod-upload-btn {
+      border-radius: 8px !important;
+      
+      mat-icon {
+        margin-right: 4px;
+      }
+    }
+
+    .pod-view-toggle {
+      display: flex;
+      background: #f0f0f0;
+      border-radius: 8px;
+      padding: 2px;
+
+      button {
+        border-radius: 6px !important;
+        
+        &.active {
+          background: #1e90ff;
+          color: white;
+        }
+      }
+    }
+
+    .pod-stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .pod-stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 8px 16px;
+
+      mat-icon {
+        color: #1e90ff;
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+
+      .stat-num {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1a1a2e;
+      }
+
+      .stat-lbl {
+        font-size: 12px;
+        color: #888;
+      }
+
+      &.region-chip mat-icon { color: #4caf50; }
+      &.drivers-chip mat-icon { color: #ff9800; }
+    }
+
+    .linked-chip mat-icon { color: #2e7d32; }
+    .unlinked-chip mat-icon { color: #e65100; }
+    .tripsheet-chip mat-icon { color: #1565c0; }
+    .invoice-chip mat-icon { color: #283593; }
+
+    .pod-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .pod-card {
+      background: #fff !important;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px !important;
+      padding: 16px !important;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        border-color: #1e90ff;
+        box-shadow: 0 4px 16px rgba(30, 144, 255, 0.15);
+      }
+    }
+
+    .pod-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .pdf-icon {
+      color: #e53935;
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .pod-card-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+
+      .pod-driver {
+        font-weight: 600;
+        font-size: 14px;
+        color: #1a1a2e;
+      }
+
+      .pod-date {
+        font-size: 12px;
+        color: #888;
+      }
+    }
+
+    .pod-region-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+
+      &.region-gp {
+        background: #e3f2fd;
+        color: #1565c0;
+      }
+
+      &.region-kzn {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      &.small {
+        padding: 2px 8px;
+        font-size: 10px;
+      }
+    }
+
+    .pod-card-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+
+      .pod-filename {
+        font-size: 12px;
+        color: #666;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
+      }
+
+      .pod-size {
+        font-size: 11px;
+        color: #999;
+      }
+    }
+
+    .pod-card-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+      margin-top: 4px;
+
+      button {
+        transform: scale(0.85);
+      }
+    }
+
+    .pod-link-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+      }
+
+      &.linked {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      &.not-linked {
+        background: #fff3e0;
+        color: #e65100;
+      }
+
+      &.invoice {
+        background: #e8eaf6;
+        color: #283593;
+      }
+
+      &.small {
+        padding: 2px 8px;
+        font-size: 10px;
+
+        mat-icon {
+          font-size: 12px;
+          width: 12px;
+          height: 12px;
+        }
+      }
+    }
+
+    .pod-tripsheet-ref {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #1976d2;
+      font-weight: 500;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        color: #1976d2;
+      }
+
+      &.invoice-ref {
+        color: #283593;
+        mat-icon { color: #283593; }
+      }
+    }
+
+    .pod-list-container {
+      overflow-x: auto;
+    }
+
+    .pod-table {
+      width: 100%;
+      background: #fff;
+      
+      .clickable-row {
+        cursor: pointer;
+        
+        &:hover {
+          background: #f5f8ff;
+        }
+      }
+    }
+
+    .pod-pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+
+      .pod-page-info {
+        font-size: 13px;
+        color: #666;
+      }
+
+      .pod-page-btns {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .page-num {
+          font-size: 13px;
+          font-weight: 500;
+          color: #333;
+        }
+      }
+    }
+
+    .pod-password-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .pod-password-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      width: 380px;
+      max-width: 90vw;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .pod-password-card mat-icon.lock-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #1e90ff;
+      margin-bottom: 12px;
+    }
+
+    .pod-password-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      color: #1a1a2e;
+    }
+
+    .pod-password-card p {
+      margin: 0 0 20px 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .pod-password-card .password-input {
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .pod-password-card .password-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .pod-password-error {
+      color: #e53935;
+      font-size: 13px;
+      margin: -8px 0 12px 0;
+    }
   `]
 })
 export class SalesDashboardComponent implements OnInit {
@@ -5745,6 +7056,26 @@ export class SalesDashboardComponent implements OnInit {
   emailReadFilter = signal('all');
   // Loading states for back orders (unused, kept for structure)
   loadingBackOrders = signal(false);
+
+  // POD Documents
+  podDocuments: any[] = [];
+  podSummary: any = null;
+  podLoading = false;
+  podRegionFilter = '';
+  podMonthFilter = '';
+  podDriverFilter = '';
+  podLinkFilter = '';
+  podDriverList: string[] = [];
+  podViewMode = 'grid';
+  podCurrentPage = 1;
+  podPageSize = 50;
+  podTotalCount = 0;
+  podTableColumns = ['driverName', 'deliveryDate', 'region', 'linkStatus', 'fileName', 'fileSize', 'actions'];
+  // POD Upload password gate
+  showPodPasswordDialog = false;
+  podPasswordInput = '';
+  podPasswordError = '';
+  private readonly POD_UPLOAD_PASSWORD = '1234';
 
   // Selected items
   selectedCustomer = signal<Customer | null>(null);
@@ -5821,6 +7152,24 @@ export class SalesDashboardComponent implements OnInit {
     sourceCompany: ''
   };
   editInvoiceSaving = false;
+
+  // Delivery Request Dialog
+  showDeliveryDialog = false;
+  deliverySaving = false;
+  deliveryError = '';
+  deliverySuccess = false;
+  deliverySuccessMsg = '';
+  deliverySuccessRef = '';
+  deliveryInvoiceSearch = '';
+  deliveryFilteredInvoices: Invoice[] = [];
+  deliverySelectedInvoices: Invoice[] = [];
+  deliveryForm = {
+    priority: 'Urgent',
+    quantity: 0,
+    description: '',
+    deliveryAddress: '',
+    notes: ''
+  };
 
   // Report dates
   reportFromDate: Date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -6254,6 +7603,8 @@ export class SalesDashboardComponent implements OnInit {
     this.loadInvoices();
     this.loadOrders();
     this.loadEmailAccounts();
+    this.loadPodDocuments();
+    this.loadPodSummary();
     // Stats are now calculated reactively when data loads
   }
 
@@ -6506,7 +7857,124 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   sendToLogistics(invoice: Invoice): void {
-    this.snackBar.open('Sending to logistics...', 'Close', { duration: 2000 });
+    // Open delivery dialog with this invoice pre-selected
+    this.openDeliveryRequestDialog();
+    this.toggleDeliveryInvoice(invoice);
+  }
+
+  // ── Delivery Request Dialog Methods ──
+
+  openDeliveryRequestDialog(): void {
+    this.resetDeliveryForm();
+    this.showDeliveryDialog = true;
+    // Pre-populate filtered list with all pending invoices
+    this.deliveryFilteredInvoices = this.invoices().filter(i => i.status !== 'Delivered').slice(0, 50);
+  }
+
+  closeDeliveryDialog(): void {
+    this.showDeliveryDialog = false;
+    this.deliveryError = '';
+    this.deliverySuccess = false;
+  }
+
+  resetDeliveryForm(): void {
+    this.deliveryInvoiceSearch = '';
+    this.deliverySelectedInvoices = [];
+    this.deliveryFilteredInvoices = [];
+    this.deliveryError = '';
+    this.deliverySuccess = false;
+    this.deliverySuccessMsg = '';
+    this.deliverySuccessRef = '';
+    this.deliverySaving = false;
+    this.deliveryForm = {
+      priority: 'Urgent',
+      quantity: 0,
+      description: '',
+      deliveryAddress: '',
+      notes: ''
+    };
+  }
+
+  filterDeliveryInvoices(): void {
+    const search = this.deliveryInvoiceSearch.toLowerCase().trim();
+    if (!search) {
+      this.deliveryFilteredInvoices = this.invoices().filter(i => i.status !== 'Delivered').slice(0, 50);
+      return;
+    }
+    this.deliveryFilteredInvoices = this.invoices().filter(inv =>
+      inv.status !== 'Delivered' && (
+        inv.transactionNumber?.toLowerCase().includes(search) ||
+        inv.customerName?.toLowerCase().includes(search) ||
+        inv.productDescription?.toLowerCase().includes(search) ||
+        inv.customerNumber?.toLowerCase().includes(search) ||
+        inv.deliveryProvince?.toLowerCase().includes(search)
+      )
+    ).slice(0, 50);
+  }
+
+  toggleDeliveryInvoice(inv: Invoice): void {
+    const idx = this.deliverySelectedInvoices.findIndex(i => i.id === inv.id);
+    if (idx >= 0) {
+      this.deliverySelectedInvoices = this.deliverySelectedInvoices.filter(i => i.id !== inv.id);
+    } else {
+      this.deliverySelectedInvoices = [...this.deliverySelectedInvoices, inv];
+    }
+    // Auto-fill quantity from selected invoices
+    this.deliveryForm.quantity = this.deliverySelectedInvoices.reduce((sum, i) => sum + i.quantity, 0);
+    // Auto-fill delivery address from first selected invoice's customer
+    if (this.deliverySelectedInvoices.length > 0 && !this.deliveryForm.deliveryAddress) {
+      const first = this.deliverySelectedInvoices[0];
+      if (first.deliveryAddress) this.deliveryForm.deliveryAddress = first.deliveryAddress;
+    }
+  }
+
+  removeDeliveryInvoice(inv: Invoice): void {
+    this.deliverySelectedInvoices = this.deliverySelectedInvoices.filter(i => i.id !== inv.id);
+    this.deliveryForm.quantity = this.deliverySelectedInvoices.reduce((sum, i) => sum + i.quantity, 0);
+  }
+
+  isInvoiceSelected(inv: Invoice): boolean {
+    return this.deliverySelectedInvoices.some(i => i.id === inv.id);
+  }
+
+  getDeliveryTotalValue(): number {
+    return this.deliverySelectedInvoices.reduce((sum, i) => sum + (i.salesAmount * 1.15), 0);
+  }
+
+  submitDeliveryRequest(): void {
+    if (this.deliverySelectedInvoices.length === 0 || !this.deliveryForm.description) return;
+
+    this.deliverySaving = true;
+    this.deliveryError = '';
+
+    const invoiceNumbers = this.deliverySelectedInvoices.map(i => i.transactionNumber).join(', ');
+    const customerNames = [...new Set(this.deliverySelectedInvoices.map(i => i.customerName))].join(', ');
+
+    const payload = {
+      department: 'Sales',
+      invoiceNumber: invoiceNumbers,
+      description: this.deliveryForm.description,
+      quantity: this.deliveryForm.quantity || this.deliverySelectedInvoices.length,
+      uom: 'INVOICES',
+      deliveryAddress: this.deliveryForm.deliveryAddress || '',
+      notes: this.deliveryForm.notes ? `${this.deliveryForm.notes} | Customers: ${customerNames}` : `Customers: ${customerNames}`,
+      priority: this.deliveryForm.priority,
+      requestedBy: 'Sales Department'
+    };
+
+    this.http.post<any>(`${this.apiUrl}/condomproject/delivery-requests`, payload).subscribe({
+      next: (res) => {
+        this.deliverySaving = false;
+        this.deliverySuccess = true;
+        this.deliverySuccessRef = res?.referenceNumber || 'Submitted';
+        this.deliverySuccessMsg = `${this.deliverySelectedInvoices.length} invoice(s) sent to logistics for ${this.deliveryForm.priority.toLowerCase()} delivery`;
+        this.snackBar.open('Delivery request submitted!', 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        this.deliverySaving = false;
+        this.deliveryError = err.error?.error || 'Failed to submit delivery request';
+      }
+    });
   }
 
   printInvoice(invoice: Invoice): void {
@@ -8223,6 +9691,266 @@ export class SalesDashboardComponent implements OnInit {
       this.snackBar.open('Failed to export comparison', 'Close', { duration: 3000 });
       this.compareExporting = false;
     }
+  }
+
+  // ─── POD Document Methods ────────────────────────────────────────────
+
+  loadPodDocuments(): void {
+    this.podLoading = true;
+    let params = `?page=${this.podCurrentPage}&pageSize=${this.podPageSize}`;
+
+    if (this.podRegionFilter) params += `&region=${this.podRegionFilter}`;
+    if (this.podDriverFilter) params += `&driverName=${encodeURIComponent(this.podDriverFilter)}`;
+    if (this.podLinkFilter) params += `&linkStatus=${this.podLinkFilter}`;
+
+    if (this.podMonthFilter) {
+      const [m, y] = this.podMonthFilter.split('-');
+      params += `&month=${m}&year=${y}`;
+    }
+
+    this.http.get<any>(`${this.apiUrl}/PodDocuments${params}`).subscribe({
+      next: (res) => {
+        this.podDocuments = res.data || [];
+        this.podTotalCount = res.total || 0;
+        this.podLoading = false;
+      },
+      error: (err) => {
+        console.error('Failed to load POD documents:', err);
+        this.podDocuments = [];
+        this.podLoading = false;
+      }
+    });
+  }
+
+  loadPodSummary(): void {
+    this.http.get<any>(`${this.apiUrl}/PodDocuments/summary`).subscribe({
+      next: (summary) => {
+        this.podSummary = summary;
+        this.podDriverList = (summary.drivers || []).map((d: any) => d.driverName).sort();
+      },
+      error: (err) => console.error('Failed to load POD summary:', err)
+    });
+  }
+
+  viewPodDocument(pod: any): void {
+    this.http.get(`${this.apiUrl}/PodDocuments/${pod.id}/view`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const contentType = pod.contentType || 'application/pdf';
+        const file = new Blob([blob], { type: contentType });
+        const url = window.URL.createObjectURL(file);
+        window.open(url, '_blank');
+      },
+      error: (err) => {
+        console.error('Failed to view POD:', err);
+        this.snackBar.open('Failed to open POD document', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  downloadPodDocument(pod: any): void {
+    this.http.get(`${this.apiUrl}/PodDocuments/${pod.id}/download`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = pod.originalFileName || pod.fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+      error: (err) => {
+        console.error('Failed to download POD:', err);
+        this.snackBar.open('Failed to download POD', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  formatPodFileSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  openSalesPodUploadDialog(): void {
+    // Password gate for sales POD uploads
+    this.showPodPasswordDialog = true;
+    this.podPasswordInput = '';
+    this.podPasswordError = '';
+  }
+
+  verifyPodUploadPassword(): void {
+    if (this.podPasswordInput === this.POD_UPLOAD_PASSWORD) {
+      this.showPodPasswordDialog = false;
+      this.podPasswordInput = '';
+      this.podPasswordError = '';
+      // Open the actual upload dialog
+      this.openPodUploadDialogAfterAuth();
+    } else {
+      this.podPasswordError = 'Incorrect password. Please try again.';
+      this.podPasswordInput = '';
+    }
+  }
+
+  cancelPodPasswordDialog(): void {
+    this.showPodPasswordDialog = false;
+    this.podPasswordInput = '';
+    this.podPasswordError = '';
+  }
+
+  private openPodUploadDialogAfterAuth(): void {
+    const formData = new FormData();
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.zip';
+    fileInput.onchange = (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const driverName = prompt('Enter driver name:');
+      if (!driverName) return;
+
+      const region = prompt('Enter region (GP or KZN):');
+      if (!region) return;
+
+      const dateStr = prompt('Enter delivery date (YYYY-MM-DD):');
+      if (!dateStr) return;
+
+      formData.append('file', file);
+      formData.append('driverName', driverName);
+      formData.append('region', region.toUpperCase());
+      formData.append('deliveryDate', dateStr);
+
+      this.http.post(`${this.apiUrl}/PodDocuments/upload`, formData).subscribe({
+        next: () => {
+          this.loadPodDocuments();
+          this.loadPodSummary();
+          this.snackBar.open('POD uploaded successfully!', 'Close', { duration: 3000 });
+        },
+        error: (err) => {
+          console.error('Failed to upload POD:', err);
+          this.snackBar.open('Failed to upload POD: ' + (err.error || 'Unknown error'), 'Close', { duration: 4000 });
+        }
+      });
+    };
+    fileInput.click();
+  }
+
+  openLinkTripsheetDialog(pod: any): void {
+    const search = prompt('Enter tripsheet/load number to search:');
+    if (!search) return;
+
+    this.http.get<any[]>(`${this.apiUrl}/PodDocuments/search-loads?search=${encodeURIComponent(search)}`).subscribe({
+      next: (loads) => {
+        if (loads.length === 0) {
+          this.snackBar.open('No matching tripsheets found', 'Close', { duration: 3000 });
+          return;
+        }
+        const options = loads.map((l, i) => `${i + 1}. ${l.loadNumber} - ${l.customerName || 'N/A'} (${l.status})`).join('\n');
+        const choice = prompt(`Select a tripsheet:\n${options}\n\nEnter number:`);
+        if (!choice) return;
+        const idx = parseInt(choice) - 1;
+        if (idx >= 0 && idx < loads.length) {
+          this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/link`, { loadId: loads[idx].id }).subscribe({
+            next: () => {
+              this.loadPodDocuments();
+              this.loadPodSummary();
+              this.snackBar.open(`POD linked to ${loads[idx].loadNumber}`, 'Close', { duration: 3000 });
+            },
+            error: () => this.snackBar.open('Failed to link POD', 'Close', { duration: 3000 })
+          });
+        }
+      },
+      error: () => this.snackBar.open('Failed to search tripsheets', 'Close', { duration: 3000 })
+    });
+  }
+
+  delinkPod(pod: any): void {
+    if (!confirm(`Delink this POD from tripsheet ${pod.loadNumber || ''}?`)) return;
+
+    this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink`, {}).subscribe({
+      next: () => {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open('POD delinked from tripsheet', 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        console.error('Failed to delink POD:', err);
+        this.snackBar.open('Failed to delink POD', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  openLinkInvoiceDialog(pod: any): void {
+    const search = prompt('Enter invoice number to search:');
+    if (!search) return;
+
+    this.http.get<any[]>(`${this.apiUrl}/PodDocuments/search-invoices?search=${encodeURIComponent(search)}`).subscribe({
+      next: (invoices) => {
+        if (invoices.length === 0) {
+          this.snackBar.open('No matching invoices found', 'Close', { duration: 3000 });
+          return;
+        }
+        const options = invoices.map((inv, i) => `${i + 1}. ${inv.transactionNumber} - ${inv.customerName} (${inv.status})`).join('\n');
+        const choice = prompt(`Select an invoice:\n${options}\n\nEnter number:`);
+        if (!choice) return;
+        const idx = parseInt(choice) - 1;
+        if (idx >= 0 && idx < invoices.length) {
+          this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/link-invoice`, { invoiceId: invoices[idx].id }).subscribe({
+            next: () => {
+              this.loadPodDocuments();
+              this.loadPodSummary();
+              this.snackBar.open(`POD linked to invoice ${invoices[idx].transactionNumber} → Status set to Delivered`, 'Close', { duration: 4000 });
+            },
+            error: () => this.snackBar.open('Failed to link POD to invoice', 'Close', { duration: 3000 })
+          });
+        }
+      },
+      error: () => this.snackBar.open('Failed to search invoices', 'Close', { duration: 3000 })
+    });
+  }
+
+  delinkInvoice(pod: any): void {
+    if (!confirm(`Delink this POD from invoice ${pod.invoiceNumber || ''}? The invoice status will revert to Pending.`)) return;
+
+    this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink-invoice`, {}).subscribe({
+      next: () => {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open('POD delinked from invoice → Status reverted to Pending', 'Close', { duration: 4000 });
+      },
+      error: (err) => {
+        console.error('Failed to delink invoice:', err);
+        this.snackBar.open('Failed to delink from invoice', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  openEditPodDialog(pod: any): void {
+    const driverName = prompt('Driver name:', pod.driverName);
+    if (driverName === null) return;
+
+    const region = prompt('Region (GP/KZN):', pod.region);
+    if (region === null) return;
+
+    const notes = prompt('Notes:', pod.notes || '');
+
+    this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}`, {
+      driverName: driverName || pod.driverName,
+      region: region || pod.region,
+      notes: notes
+    }).subscribe({
+      next: () => {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open('POD details updated', 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        console.error('Failed to update POD:', err);
+        this.snackBar.open('Failed to update POD details', 'Close', { duration: 3000 });
+      }
+    });
   }
 }
 

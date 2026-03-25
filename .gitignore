@@ -72,6 +72,23 @@ ai-data/models/*.gguf
 ai-data/models/*.bin
 
 # ===================
+# Uploads (POD documents, large files)
+# ===================
+uploads/
+docs/Pods/
+
+# ===================
+# Excel/Binary data files
+# ===================
+*.xlsx
+*.xls
+
+# ===================
+# HashGenerator (removed utility)
+# ===================
+HashGenerator/
+
+# ===================
 # Environment & Secrets
 # ===================
 *.env

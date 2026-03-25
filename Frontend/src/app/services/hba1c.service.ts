@@ -299,6 +299,18 @@ export class HBA1CService {
     return this.http.get<HBA1CTrainingSession[]>(`${this.baseUrl}/training/by-status`, { params });
   }
 
+  createTraining(training: Partial<HBA1CTrainingSession>): Observable<HBA1CTrainingSession> {
+    return this.http.post<HBA1CTrainingSession>(`${this.baseUrl}/training`, training);
+  }
+
+  updateTraining(id: number, training: Partial<HBA1CTrainingSession>): Observable<HBA1CTrainingSession> {
+    return this.http.put<HBA1CTrainingSession>(`${this.baseUrl}/training/${id}`, training);
+  }
+
+  deleteTraining(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/training/${id}`);
+  }
+
   // ── Inventory ──
   getAllInventory(): Observable<HBA1CInventoryItem[]> {
     return this.http.get<HBA1CInventoryItem[]>(`${this.baseUrl}/inventory`);
@@ -314,6 +326,18 @@ export class HBA1CService {
 
   getLowStock(): Observable<HBA1CInventoryItem[]> {
     return this.http.get<HBA1CInventoryItem[]>(`${this.baseUrl}/inventory/low-stock`);
+  }
+
+  createInventoryItem(item: Partial<HBA1CInventoryItem>): Observable<HBA1CInventoryItem> {
+    return this.http.post<HBA1CInventoryItem>(`${this.baseUrl}/inventory`, item);
+  }
+
+  updateInventoryItem(id: number, item: Partial<HBA1CInventoryItem>): Observable<HBA1CInventoryItem> {
+    return this.http.put<HBA1CInventoryItem>(`${this.baseUrl}/inventory/${id}`, item);
+  }
+
+  deleteInventoryItem(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/inventory/${id}`);
   }
 
   // ── Sales ──
@@ -348,6 +372,18 @@ export class HBA1CService {
     return this.http.get<HBA1CSale[]>(`${this.baseUrl}/sales/by-date-range`, { params });
   }
 
+  createSale(sale: Partial<HBA1CSale>): Observable<HBA1CSale> {
+    return this.http.post<HBA1CSale>(`${this.baseUrl}/sales`, sale);
+  }
+
+  updateSale(id: number, sale: Partial<HBA1CSale>): Observable<HBA1CSale> {
+    return this.http.put<HBA1CSale>(`${this.baseUrl}/sales/${id}`, sale);
+  }
+
+  deleteSale(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/sales/${id}`);
+  }
+
   // ── Credit Notes ──
   getCreditNotes(status?: string, dateFrom?: string, dateTo?: string): Observable<HBA1CCreditNote[]> {
     let params = new HttpParams();
@@ -359,6 +395,18 @@ export class HBA1CService {
 
   getCreditNote(id: number): Observable<HBA1CCreditNote> {
     return this.http.get<HBA1CCreditNote>(`${this.baseUrl}/credit-notes/${id}`);
+  }
+
+  createCreditNote(creditNote: Partial<HBA1CCreditNote>): Observable<HBA1CCreditNote> {
+    return this.http.post<HBA1CCreditNote>(`${this.baseUrl}/credit-notes`, creditNote);
+  }
+
+  updateCreditNote(id: number, creditNote: Partial<HBA1CCreditNote>): Observable<HBA1CCreditNote> {
+    return this.http.put<HBA1CCreditNote>(`${this.baseUrl}/credit-notes/${id}`, creditNote);
+  }
+
+  deleteCreditNote(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/credit-notes/${id}`);
   }
 
   // ── Locations ──

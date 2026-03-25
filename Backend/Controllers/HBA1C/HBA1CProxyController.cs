@@ -55,18 +55,23 @@ namespace ProjectTracker.API.Controllers.HBA1C
             var inventoryStatsTask = _api.GetAsync<HBA1CInventoryStats>("api/Inventory/GetStats");
             var lowStockTask = _api.GetAsync<List<HBA1CInventoryItem>>("api/Inventory/GetLowStock");
             var recentTrainingsTask = _api.GetAsync<List<HBA1CTrainingSession>>("api/Training/GetAll");
+            var trainersTask = _api.GetAsync<List<HBA1CTrainer>>("api/Trainer/GetAll");
 
             await Task.WhenAll(
                 trainingStatsTask, nationalTotalsTask, provinceStatsTask,
                 equipmentOrderStatsTask,
                 salesStatsTask, recentSalesTask, allSalesTask, allInventoryTask,
                 provincialDataTask, topProductsTask, inventoryStatsTask,
-                lowStockTask, recentTrainingsTask
+                lowStockTask, recentTrainingsTask, trainersTask
             );
 
             var allTrainings = await recentTrainingsTask ?? new List<HBA1CTrainingSession>();
+            var allTrainers = await trainersTask ?? new List<HBA1CTrainer>();
             var trainingStats = await trainingStatsTask ?? new HBA1CTrainingStats();
             var nationalTotals = await nationalTotalsTask ?? new HBA1CNationalTotals();
+
+            // Enrich training sessions with province names and trainer info
+            EnrichTrainingSessions(allTrainings, allTrainers);
 
             // The external API returns incorrect aggregate stats — compute from actual session data
             if (trainingStats.TotalParticipants == 0 && allTrainings.Count > 0)
@@ -234,8 +239,15 @@ namespace ProjectTracker.API.Controllers.HBA1C
         [HttpGet("training")]
         public async Task<ActionResult> GetAllTraining()
         {
-            var result = await _api.GetAsync<List<HBA1CTrainingSession>>("api/Training/GetAll");
-            return Ok(result ?? new List<HBA1CTrainingSession>());
+            var trainingsTask = _api.GetAsync<List<HBA1CTrainingSession>>("api/Training/GetAll");
+            var trainersTask = _api.GetAsync<List<HBA1CTrainer>>("api/Trainer/GetAll");
+            await Task.WhenAll(trainingsTask, trainersTask);
+
+            var trainings = await trainingsTask ?? new List<HBA1CTrainingSession>();
+            var trainers = await trainersTask ?? new List<HBA1CTrainer>();
+            EnrichTrainingSessions(trainings, trainers);
+
+            return Ok(trainings);
         }
 
         [HttpGet("training/{id}")]
@@ -264,6 +276,31 @@ namespace ProjectTracker.API.Controllers.HBA1C
         {
             var result = await _api.GetAsync<List<HBA1CTrainingSession>>("api/Training/GetByStatus", new() { { "status", status } });
             return Ok(result ?? new List<HBA1CTrainingSession>());
+        }
+
+        [HttpPost("training")]
+        public async Task<ActionResult> CreateTraining([FromBody] HBA1CTrainingSession training)
+        {
+            _logger.LogInformation("Creating HBA1C training session: {Name}", training.TrainingName);
+            var result = await _api.PostAsync<HBA1CTrainingSession>("api/Training/Create", training);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to create training session" });
+        }
+
+        [HttpPut("training/{id}")]
+        public async Task<ActionResult> UpdateTraining(int id, [FromBody] HBA1CTrainingSession training)
+        {
+            _logger.LogInformation("Updating HBA1C training session {Id}", id);
+            training.Id = id;
+            var result = await _api.PatchAsync<HBA1CTrainingSession>($"api/Training/Update/{id}", training);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to update training session" });
+        }
+
+        [HttpDelete("training/{id}")]
+        public async Task<ActionResult> DeleteTraining(int id)
+        {
+            _logger.LogInformation("Deleting HBA1C training session {Id}", id);
+            var success = await _api.DeleteAsync($"api/Training/Delete/{id}");
+            return success ? Ok(new { message = "Training session deleted" }) : StatusCode(500, new { message = "Failed to delete training session" });
         }
 
         // ====================================================================
@@ -295,6 +332,31 @@ namespace ProjectTracker.API.Controllers.HBA1C
         {
             var result = await _api.GetAsync<List<HBA1CInventoryItem>>("api/Inventory/GetLowStock");
             return Ok(result ?? new List<HBA1CInventoryItem>());
+        }
+
+        [HttpPost("inventory")]
+        public async Task<ActionResult> CreateInventoryItem([FromBody] HBA1CInventoryItem item)
+        {
+            _logger.LogInformation("Creating HBA1C inventory item: {Name}", item.Name);
+            var result = await _api.PostAsync<HBA1CInventoryItem>("api/Inventory/Create", item);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to create inventory item" });
+        }
+
+        [HttpPut("inventory/{id}")]
+        public async Task<ActionResult> UpdateInventoryItem(int id, [FromBody] HBA1CInventoryItem item)
+        {
+            _logger.LogInformation("Updating HBA1C inventory item {Id}", id);
+            item.Id = id;
+            var result = await _api.PatchAsync<HBA1CInventoryItem>($"api/Inventory/Update/{id}", item);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to update inventory item" });
+        }
+
+        [HttpDelete("inventory/{id}")]
+        public async Task<ActionResult> DeleteInventoryItem(int id)
+        {
+            _logger.LogInformation("Deleting HBA1C inventory item {Id}", id);
+            var success = await _api.DeleteAsync($"api/Inventory/Delete/{id}");
+            return success ? Ok(new { message = "Inventory item deleted" }) : StatusCode(500, new { message = "Failed to delete inventory item" });
         }
 
         // ====================================================================
@@ -353,6 +415,31 @@ namespace ProjectTracker.API.Controllers.HBA1C
             return Ok(result ?? new List<HBA1CSale>());
         }
 
+        [HttpPost("sales")]
+        public async Task<ActionResult> CreateSale([FromBody] HBA1CSale sale)
+        {
+            _logger.LogInformation("Creating HBA1C sale: {SaleNumber}", sale.SaleNumber);
+            var result = await _api.PostAsync<HBA1CSale>("api/Sales/Create", sale);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to create sale" });
+        }
+
+        [HttpPut("sales/{id}")]
+        public async Task<ActionResult> UpdateSale(int id, [FromBody] HBA1CSale sale)
+        {
+            _logger.LogInformation("Updating HBA1C sale {Id}", id);
+            sale.Id = id;
+            var result = await _api.PatchAsync<HBA1CSale>($"api/Sales/Update/{id}", sale);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to update sale" });
+        }
+
+        [HttpDelete("sales/{id}")]
+        public async Task<ActionResult> DeleteSale(int id)
+        {
+            _logger.LogInformation("Deleting HBA1C sale {Id}", id);
+            var success = await _api.DeleteAsync($"api/Sales/Delete/{id}");
+            return success ? Ok(new { message = "Sale deleted" }) : StatusCode(500, new { message = "Failed to delete sale" });
+        }
+
         // ====================================================================
         // Credit Notes Endpoints
         // ====================================================================
@@ -373,6 +460,31 @@ namespace ProjectTracker.API.Controllers.HBA1C
         {
             var result = await _api.GetAsync<HBA1CCreditNote>($"api/CreditNotes/{id}");
             return result != null ? Ok(result) : NotFound();
+        }
+
+        [HttpPost("credit-notes")]
+        public async Task<ActionResult> CreateCreditNote([FromBody] HBA1CCreditNote creditNote)
+        {
+            _logger.LogInformation("Creating HBA1C credit note for invoice {InvoiceId}", creditNote.InvoiceId);
+            var result = await _api.PostAsync<HBA1CCreditNote>("api/CreditNotes/Create", creditNote);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to create credit note" });
+        }
+
+        [HttpPut("credit-notes/{id}")]
+        public async Task<ActionResult> UpdateCreditNote(int id, [FromBody] HBA1CCreditNote creditNote)
+        {
+            _logger.LogInformation("Updating HBA1C credit note {Id}", id);
+            creditNote.Id = id;
+            var result = await _api.PatchAsync<HBA1CCreditNote>($"api/CreditNotes/Update/{id}", creditNote);
+            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to update credit note" });
+        }
+
+        [HttpDelete("credit-notes/{id}")]
+        public async Task<ActionResult> DeleteCreditNote(int id)
+        {
+            _logger.LogInformation("Deleting HBA1C credit note {Id}", id);
+            var success = await _api.DeleteAsync($"api/CreditNotes/Delete/{id}");
+            return success ? Ok(new { message = "Credit note deleted" }) : StatusCode(500, new { message = "Failed to delete credit note" });
         }
 
         // ====================================================================
@@ -408,6 +520,29 @@ namespace ProjectTracker.API.Controllers.HBA1C
         {
             var result = await _api.GetAsync<List<HBA1CTrainer>>("api/Trainer/GetAll");
             return Ok(result ?? new List<HBA1CTrainer>());
+        }
+
+        // ====================================================================
+        // Helper: enrich training sessions with province names & trainer info
+        // ====================================================================
+        private static void EnrichTrainingSessions(List<HBA1CTrainingSession> sessions, List<HBA1CTrainer> trainers)
+        {
+            var trainerMap = trainers.Where(t => t.Id > 0).ToDictionary(t => t.Id, t => t);
+
+            foreach (var s in sessions)
+            {
+                // Fill ProvinceName from the static dictionary if missing
+                if (string.IsNullOrEmpty(s.ProvinceName) && s.ProvinceId > 0)
+                {
+                    s.ProvinceName = ProvinceNames.TryGetValue(s.ProvinceId, out var name) ? name : $"Province {s.ProvinceId}";
+                }
+
+                // Attach Trainer object if missing
+                if (s.Trainer == null && s.TrainerId > 0 && trainerMap.TryGetValue(s.TrainerId, out var trainer))
+                {
+                    s.Trainer = trainer;
+                }
+            }
         }
 
         // ====================================================================

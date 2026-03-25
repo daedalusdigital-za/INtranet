@@ -460,10 +460,18 @@ namespace ProjectTracker.API.Controllers.Logistics
                     var warehouse = warehouses.FirstOrDefault(w => w.Id == whGroup.Key);
                     if (warehouse == null) continue;
 
-                    // Infer province + city for every invoice using multiple strategies
+                    // Use pre-stored province/city — only infer for the few that are still missing
                     var enriched = whGroup.Select(i =>
                     {
-                        var (prov, city) = InferLocation(i);
+                        var prov = i.DeliveryProvince;
+                        var city = i.DeliveryCity;
+                        // Only run expensive inference if province is missing (should be rare after backfill)
+                        if (string.IsNullOrWhiteSpace(prov) || string.IsNullOrWhiteSpace(city))
+                        {
+                            var (inferredProv, inferredCity) = InferLocation(i);
+                            prov = string.IsNullOrWhiteSpace(prov) ? inferredProv : prov;
+                            city = string.IsNullOrWhiteSpace(city) ? inferredCity : city;
+                        }
                         return new { Invoice = i, Province = prov, City = city };
                     }).ToList();
 
@@ -1185,6 +1193,60 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Backfill province/city on all existing invoices that are missing them.
+        /// Run once after deploying the pre-compute logic to fix historical data.
+        /// </summary>
+        [HttpPost("backfill-provinces")]
+        public async Task<ActionResult> BackfillProvinces()
+        {
+            try
+            {
+                var invoicesNeedingProvince = await _context.ImportedInvoices
+                    .Include(i => i.Customer)
+                    .Where(i => i.DeliveryProvince == null || i.DeliveryProvince == "" ||
+                                i.DeliveryCity == null || i.DeliveryCity == "")
+                    .ToListAsync();
+
+                int updated = 0;
+                foreach (var invoice in invoicesNeedingProvince)
+                {
+                    var (prov, city) = InferLocation(invoice);
+                    bool changed = false;
+
+                    if (string.IsNullOrWhiteSpace(invoice.DeliveryProvince) && !string.IsNullOrWhiteSpace(prov))
+                    {
+                        invoice.DeliveryProvince = prov;
+                        changed = true;
+                    }
+                    if (string.IsNullOrWhiteSpace(invoice.DeliveryCity) && !string.IsNullOrWhiteSpace(city))
+                    {
+                        invoice.DeliveryCity = city;
+                        changed = true;
+                    }
+                    if (changed) updated++;
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Province backfill complete: {Updated}/{Total} invoices updated",
+                    updated, invoicesNeedingProvince.Count);
+
+                return Ok(new
+                {
+                    message = "Province backfill complete",
+                    totalProcessed = invoicesNeedingProvince.Count,
+                    updated,
+                    alreadyHadProvince = invoicesNeedingProvince.Count - updated
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error backfilling provinces");
+                return BadRequest(new { error = "Failed to backfill provinces", details = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Get delivery priority dashboard - overview of all invoice priorities and aging
         /// </summary>
         [HttpGet("priority-dashboard")]
@@ -1284,6 +1346,16 @@ namespace ProjectTracker.API.Controllers.Logistics
                 invoice.ContactPerson = invoice.ContactPerson ?? customer.ContactPerson;
                 invoice.ContactPhone = invoice.ContactPhone ?? customer.PhoneNumber;
                 invoice.ContactEmail = invoice.ContactEmail ?? customer.Email;
+            }
+
+            // Pre-compute province/city if still missing — avoids expensive re-inference at query time
+            if (string.IsNullOrWhiteSpace(invoice.DeliveryProvince) || string.IsNullOrWhiteSpace(invoice.DeliveryCity))
+            {
+                var (prov, city) = InferLocation(invoice);
+                if (string.IsNullOrWhiteSpace(invoice.DeliveryProvince))
+                    invoice.DeliveryProvince = prov;
+                if (string.IsNullOrWhiteSpace(invoice.DeliveryCity))
+                    invoice.DeliveryCity = city;
             }
         }
 

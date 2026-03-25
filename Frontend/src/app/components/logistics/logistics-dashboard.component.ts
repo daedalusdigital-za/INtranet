@@ -25,6 +25,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -150,22 +151,35 @@ interface MaintenanceRecord {
   proofOfPaymentPath?: string;
 }
 
-interface SleepOut {
+interface DeliveryRequest {
   id: number;
-  driverId: number;
-  driverName?: string;
-  driverEmployeeNumber?: string;
-  amount: number;
-  date: Date;
-  status: string; // Requested, Approved, Rejected, Paid
-  reason?: string;
+  referenceNumber: string;
+  department: string;
+  scent?: string;
+  type?: string;
+  batchCode?: string;
+  invoiceNumber?: string;
+  description?: string;
+  quantity: number;
+  unitOfMeasure: string;
+  deliveryAddress?: string;
   notes?: string;
-  loadId?: number;
-  loadNumber?: string;
-  approvedByUserId?: number;
-  approvedByUserName?: string;
-  approvedAt?: Date;
-  createdAt: Date;
+  priority: string;
+  status: string;
+  requestedDate: string;
+  requestedBy?: string;
+  approvedDate?: string;
+  deliveredDate?: string;
+  handledBy?: string;
+  createdAt: string;
+}
+
+interface DeliveryRequestSummary {
+  total: number;
+  pending: number;
+  approved: number;
+  inTransit: number;
+  delivered: number;
 }
 
 @Component({
@@ -193,6 +207,7 @@ interface SleepOut {
     MatSelectModule,
     MatDividerModule,
     MatPaginatorModule,
+    MatButtonToggleModule,
     FormsModule,
     NavbarComponent
   ],
@@ -291,15 +306,15 @@ interface SleepOut {
             </div>
           </div>
 
-          <div class="modern-stat-card clickable" (click)="openSleepOutsDialog()">
-            <div class="stat-icon-wrapper sleepouts">
-              <mat-icon>hotel</mat-icon>
+          <div class="modern-stat-card clickable" [class.warning]="deliveryRequestsCount() > 5" (click)="openIncomingRequestsDialog()">
+            <div class="stat-icon-wrapper incoming-requests">
+              <mat-icon>move_to_inbox</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ sleepOutsCount() }}</span>
-              <span class="stat-label">Sleep Outs</span>
-              <div class="stat-progress">
-                <div class="progress-bar" [style.width.%]="sleepOutsCount() > 0 ? Math.min(sleepOutsCount() * 20, 100) : 0"></div>
+              <span class="stat-value" [class.warning-text]="deliveryRequestsCount() > 5">{{ deliveryRequestsCount() }}</span>
+              <span class="stat-label">Incoming Requests</span>
+              <div class="stat-progress" [class.danger]="deliveryRequestsCount() > 5">
+                <div class="progress-bar" [style.width.%]="deliveryRequestsCount() > 0 ? Math.min(deliveryRequestsCount() * 10, 100) : 0"></div>
               </div>
             </div>
           </div>
@@ -1612,6 +1627,595 @@ interface SleepOut {
                 </div>
               </div>
             </mat-tab>
+
+            <!-- POD Documents Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>verified</mat-icon>
+                POD Documents
+              </ng-template>
+              <div class="tab-content">
+                <div class="pod-section">
+                  <!-- POD Toolbar -->
+                  <div class="pod-toolbar">
+                    <div class="pod-filters">
+                      <mat-form-field appearance="outline" class="pod-filter-field">
+                        <mat-label>Region</mat-label>
+                        <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All Regions</mat-option>
+                          <mat-option value="GP">Gauteng (GP)</mat-option>
+                          <mat-option value="KZN">KwaZulu-Natal (KZN)</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline" class="pod-filter-field">
+                        <mat-label>Month</mat-label>
+                        <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All Months</mat-option>
+                          <mat-option value="1-2026">January 2026</mat-option>
+                          <mat-option value="2-2026">February 2026</mat-option>
+                          <mat-option value="3-2026">March 2026</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline" class="pod-filter-field pod-driver-field">
+                        <mat-label>Driver</mat-label>
+                        <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All Drivers</mat-option>
+                          @for (driver of podDriverList; track driver) {
+                            <mat-option [value]="driver">{{ driver }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline" class="pod-filter-field">
+                        <mat-label>Link Status</mat-label>
+                        <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All</mat-option>
+                          <mat-option value="linked">Linked</mat-option>
+                          <mat-option value="not-linked">Not Linked</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+
+                    <div class="pod-actions">
+                      <button mat-stroked-button class="pod-upload-btn" (click)="openPodUploadDialog()">
+                        <mat-icon>upload_file</mat-icon> Upload POD
+                      </button>
+                      <div class="pod-view-toggle">
+                        <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
+                          <mat-icon>grid_view</mat-icon>
+                        </button>
+                        <button mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
+                          <mat-icon>view_list</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- POD Summary Stats -->
+                  @if (podSummary) {
+                    <div class="pod-stats-row">
+                      <div class="pod-stat-chip">
+                        <mat-icon>folder</mat-icon>
+                        <span class="stat-num">{{ podSummary.total }}</span>
+                        <span class="stat-lbl">Total PODs</span>
+                      </div>
+                      <div class="pod-stat-chip linked-chip">
+                        <mat-icon>link</mat-icon>
+                        <span class="stat-num">{{ podSummary.linked || 0 }}</span>
+                        <span class="stat-lbl">Linked</span>
+                      </div>
+                      <div class="pod-stat-chip tripsheet-chip">
+                        <mat-icon>description</mat-icon>
+                        <span class="stat-num">{{ podSummary.linkedToTripsheet || 0 }}</span>
+                        <span class="stat-lbl">Tripsheets</span>
+                      </div>
+                      <div class="pod-stat-chip invoice-chip">
+                        <mat-icon>receipt</mat-icon>
+                        <span class="stat-num">{{ podSummary.linkedToInvoice || 0 }}</span>
+                        <span class="stat-lbl">Invoices</span>
+                      </div>
+                      <div class="pod-stat-chip unlinked-chip">
+                        <mat-icon>link_off</mat-icon>
+                        <span class="stat-num">{{ podSummary.unlinked || 0 }}</span>
+                        <span class="stat-lbl">Not Linked</span>
+                      </div>
+                      @for (r of podSummary.byRegion; track r.region) {
+                        <div class="pod-stat-chip region-chip">
+                          <mat-icon>location_on</mat-icon>
+                          <span class="stat-num">{{ r.count }}</span>
+                          <span class="stat-lbl">{{ r.region }}</span>
+                        </div>
+                      }
+                      <div class="pod-stat-chip drivers-chip">
+                        <mat-icon>people</mat-icon>
+                        <span class="stat-num">{{ podSummary.drivers?.length || 0 }}</span>
+                        <span class="stat-lbl">Drivers</span>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Loading State -->
+                  @if (podLoading) {
+                    <div class="loading-state">
+                      <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+                      <p>Loading POD documents...</p>
+                    </div>
+                  } @else if (podDocuments.length === 0) {
+                    <div class="empty-state">
+                      <mat-icon>verified</mat-icon>
+                      <h3>No POD Documents Found</h3>
+                      <p>Adjust your filters or upload new POD documents</p>
+                    </div>
+                  } @else {
+                    <!-- Grid View -->
+                    @if (podViewMode === 'grid') {
+                      <div class="pod-grid">
+                        @for (pod of podDocuments; track pod.id) {
+                          <mat-card class="pod-card" (click)="viewPodDocument(pod)">
+                            <div class="pod-card-header">
+                              <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
+                              <div class="pod-card-info">
+                                <span class="pod-driver">{{ pod.driverName }}</span>
+                                <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
+                              </div>
+                              <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId) ? 'linked' : 'not-linked'">
+                                <mat-icon>{{ (pod.loadId || pod.invoiceId) ? 'link' : 'link_off' }}</mat-icon>
+                                {{ pod.loadId ? 'Tripsheet' : pod.invoiceId ? 'Invoice' : 'Not Linked' }}
+                              </span>
+                              <span class="pod-region-badge" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                            </div>
+                            @if (pod.loadNumber) {
+                              <div class="pod-tripsheet-ref">
+                                <mat-icon>description</mat-icon>
+                                <span>{{ pod.loadNumber }}</span>
+                              </div>
+                            }
+                            @if (pod.invoiceNumber) {
+                              <div class="pod-tripsheet-ref invoice-ref">
+                                <mat-icon>receipt</mat-icon>
+                                <span>{{ pod.invoiceNumber }}</span>
+                              </div>
+                            }
+                            <div class="pod-card-meta">
+                              <span class="pod-filename" matTooltip="{{ pod.originalFileName }}">{{ pod.originalFileName || pod.fileName }}</span>
+                              <span class="pod-size">{{ formatPodFileSize(pod.fileSize) }}</span>
+                            </div>
+                            <div class="pod-card-actions">
+                              <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                                <mat-icon>visibility</mat-icon>
+                              </button>
+                              <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                                <mat-icon>download</mat-icon>
+                              </button>
+                              <button mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                                <mat-icon>more_vert</mat-icon>
+                              </button>
+                              <mat-menu #podActionMenu="matMenu" class="modern-menu">
+                                @if (!pod.loadId) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkTripsheetDialog(pod)">
+                                    <mat-icon>link</mat-icon> Link to Tripsheet
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkPod(pod)">
+                                    <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                  </button>
+                                }
+                                @if (!pod.invoiceId) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkInvoice(pod)">
+                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                  </button>
+                                }
+                                <button mat-menu-item class="modern-menu-item" (click)="openEditPodDialog(pod)">
+                                  <mat-icon>edit</mat-icon> Edit Details
+                                </button>
+                              </mat-menu>
+                            </div>
+                          </mat-card>
+                        }
+                      </div>
+                    } @else {
+                      <!-- List View -->
+                      <div class="pod-list-container">
+                        <table mat-table [dataSource]="podDocuments" class="pod-table modern-table">
+                          <ng-container matColumnDef="driverName">
+                            <th mat-header-cell *matHeaderCellDef>Driver</th>
+                            <td mat-cell *matCellDef="let pod">{{ pod.driverName }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="deliveryDate">
+                            <th mat-header-cell *matHeaderCellDef>Date</th>
+                            <td mat-cell *matCellDef="let pod">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="region">
+                            <th mat-header-cell *matHeaderCellDef>Region</th>
+                            <td mat-cell *matCellDef="let pod">
+                              <span class="pod-region-badge small" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                            </td>
+                          </ng-container>
+                          <ng-container matColumnDef="linkStatus">
+                            <th mat-header-cell *matHeaderCellDef>Status</th>
+                            <td mat-cell *matCellDef="let pod">
+                              @if (pod.loadId) {
+                                <span class="pod-link-badge small linked">
+                                  <mat-icon>link</mat-icon>
+                                  {{ pod.loadNumber || 'Tripsheet' }}
+                                </span>
+                              } @else if (pod.invoiceId) {
+                                <span class="pod-link-badge small linked invoice">
+                                  <mat-icon>receipt</mat-icon>
+                                  {{ pod.invoiceNumber || 'Invoice' }}
+                                </span>
+                              } @else {
+                                <span class="pod-link-badge small not-linked">
+                                  <mat-icon>link_off</mat-icon>
+                                  Not Linked
+                                </span>
+                              }
+                            </td>
+                          </ng-container>
+                          <ng-container matColumnDef="fileName">
+                            <th mat-header-cell *matHeaderCellDef>File</th>
+                            <td mat-cell *matCellDef="let pod">{{ pod.originalFileName || pod.fileName }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="fileSize">
+                            <th mat-header-cell *matHeaderCellDef>Size</th>
+                            <td mat-cell *matCellDef="let pod">{{ formatPodFileSize(pod.fileSize) }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Actions</th>
+                            <td mat-cell *matCellDef="let pod">
+                              <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                                <mat-icon>visibility</mat-icon>
+                              </button>
+                              <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                                <mat-icon>download</mat-icon>
+                              </button>
+                              <button mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                                <mat-icon>more_vert</mat-icon>
+                              </button>
+                              <mat-menu #podListMenu="matMenu" class="modern-menu">
+                                @if (!pod.loadId) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkTripsheetDialog(pod)">
+                                    <mat-icon>link</mat-icon> Link to Tripsheet
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkPod(pod)">
+                                    <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                  </button>
+                                }
+                                @if (!pod.invoiceId) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkInvoice(pod)">
+                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                  </button>
+                                }
+                                <button mat-menu-item class="modern-menu-item" (click)="openEditPodDialog(pod)">
+                                  <mat-icon>edit</mat-icon> Edit Details
+                                </button>
+                              </mat-menu>
+                            </td>
+                          </ng-container>
+                          <tr mat-header-row *matHeaderRowDef="podTableColumns"></tr>
+                          <tr mat-row *matRowDef="let row; columns: podTableColumns;" class="clickable-row" (click)="viewPodDocument(row)"></tr>
+                        </table>
+                      </div>
+                    }
+
+                    <!-- Pagination -->
+                    @if (podTotalCount > podPageSize) {
+                      <div class="pod-pagination">
+                        <span class="pod-page-info">Showing {{ (podCurrentPage - 1) * podPageSize + 1 }} - {{ Math.min(podCurrentPage * podPageSize, podTotalCount) }} of {{ podTotalCount }}</span>
+                        <div class="pod-page-btns">
+                          <button mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
+                            <mat-icon>chevron_left</mat-icon>
+                          </button>
+                          <span class="page-num">Page {{ podCurrentPage }}</span>
+                          <button mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
+                            <mat-icon>chevron_right</mat-icon>
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
+            <!-- Fuel History Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>local_gas_station</mat-icon>
+                Fuel History
+              </ng-template>
+              <div class="tab-content">
+                <div class="fuel-history-section">
+                  <!-- Period Selector -->
+                  <div class="fuel-toolbar">
+                    <div class="fuel-period-selector">
+                      <mat-form-field appearance="outline" class="period-select">
+                        <mat-label>Period</mat-label>
+                        <mat-select [(ngModel)]="selectedFuelPeriod" (selectionChange)="loadFuelMonthlyReport()">
+                          @for (period of fuelPeriods(); track period) {
+                            <mat-option [value]="period">{{ period.monthName }} {{ period.reportYear }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+                    <div class="fuel-stats-bar">
+                      @if (fuelReport()) {
+                        <span class="fuel-stat">
+                          <mat-icon>local_shipping</mat-icon>
+                          <strong>{{ fuelReport()!.uniqueVehicles }}</strong> Vehicles
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>receipt</mat-icon>
+                          <strong>{{ fuelReport()!.totalTransactions }}</strong> Transactions
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>opacity</mat-icon>
+                          <strong>{{ fuelReport()!.totalLitresUsed | number:'1.0-0' }}</strong> Litres
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>payments</mat-icon>
+                          <strong>R {{ fuelReport()!.totalAmountSpent | number:'1.2-2' }}</strong>
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>speed</mat-icon>
+                          <strong>R {{ fuelReport()!.averageCostPerLitre | number:'1.2-2' }}</strong>/L
+                        </span>
+                      }
+                    </div>
+                    <div class="fuel-actions">
+                      <mat-button-toggle-group [(ngModel)]="fuelViewMode" class="fuel-view-toggle">
+                        <mat-button-toggle value="summary">
+                          <mat-icon>summarize</mat-icon> Summary
+                        </mat-button-toggle>
+                        <mat-button-toggle value="transactions">
+                          <mat-icon>list</mat-icon> Transactions
+                        </mat-button-toggle>
+                        <mat-button-toggle value="byGroup">
+                          <mat-icon>category</mat-icon> By Group
+                        </mat-button-toggle>
+                      </mat-button-toggle-group>
+                      <button mat-stroked-button class="fuel-export-btn" (click)="openFuelExportDialog()">
+                        <mat-icon>download</mat-icon> Export Excel
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Fuel Export Dialog Overlay -->
+                  @if (showFuelExportDialog) {
+                    <div class="fuel-export-overlay" (click)="closeFuelExportDialog()">
+                      <div class="fuel-export-dialog" (click)="$event.stopPropagation()">
+                        <div class="fuel-export-header">
+                          <mat-icon>table_chart</mat-icon>
+                          <h3>Export Fuel History to Excel</h3>
+                          <button mat-icon-button (click)="closeFuelExportDialog()" class="close-btn">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        </div>
+                        <p class="fuel-export-subtitle">Select a date range or choose from the available periods to export fuel transaction data.</p>
+
+                        <div class="fuel-export-quick-ranges">
+                          <span class="range-label">Quick select:</span>
+                          @for (period of fuelPeriods(); track period) {
+                            <button mat-stroked-button class="range-btn" 
+                                    [class.active]="fuelExportQuickSelect === period.reportMonth + '-' + period.reportYear"
+                                    (click)="setFuelExportPeriod(period)">
+                              {{ period.monthName }} {{ period.reportYear }}
+                            </button>
+                          }
+                          <button mat-stroked-button class="range-btn all-btn" 
+                                  [class.active]="fuelExportQuickSelect === 'all'"
+                                  (click)="setFuelExportAll()">
+                            <mat-icon>date_range</mat-icon> All Months
+                          </button>
+                        </div>
+
+                        <div class="fuel-export-date-row">
+                          <mat-form-field appearance="outline" class="fuel-export-date-field">
+                            <mat-label>From</mat-label>
+                            <input matInput [matDatepicker]="fuelFromPicker" [(ngModel)]="fuelExportFromDate">
+                            <mat-datepicker-toggle matSuffix [for]="fuelFromPicker"></mat-datepicker-toggle>
+                            <mat-datepicker #fuelFromPicker></mat-datepicker>
+                          </mat-form-field>
+                          <mat-form-field appearance="outline" class="fuel-export-date-field">
+                            <mat-label>To</mat-label>
+                            <input matInput [matDatepicker]="fuelToPicker" [(ngModel)]="fuelExportToDate">
+                            <mat-datepicker-toggle matSuffix [for]="fuelToPicker"></mat-datepicker-toggle>
+                            <mat-datepicker #fuelToPicker></mat-datepicker>
+                          </mat-form-field>
+                        </div>
+
+                        <div class="fuel-export-actions">
+                          <button mat-button (click)="closeFuelExportDialog()">Cancel</button>
+                          <button mat-raised-button color="primary" (click)="exportFuelExcel()" [disabled]="fuelExportGenerating">
+                            @if (fuelExportGenerating) {
+                              <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
+                              Generating...
+                            } @else {
+                              <mat-icon>download</mat-icon>
+                              Export Excel
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+
+                  @if (fuelLoading()) {
+                    <div class="loading-state">
+                      <mat-spinner diameter="40"></mat-spinner>
+                      <p>Loading fuel data...</p>
+                    </div>
+                  } @else if (!fuelReport() && !fuelLoading()) {
+                    <div class="empty-state">
+                      <mat-icon>local_gas_station</mat-icon>
+                      <h3>No Fuel Data</h3>
+                      <p>Select a period above to view fuel history</p>
+                    </div>
+                  } @else {
+                    <!-- Summary View -->
+                    @if (fuelViewMode === 'summary' && fuelReport()) {
+                      <div class="fuel-summary-grid">
+                        @for (summary of fuelReport()!.vehicleSummaries; track summary.vehicleId) {
+                          <mat-card class="fuel-vehicle-card" [ngClass]="getFuelCardClass(summary.depotAssignment)">
+                            <mat-card-header>
+                              <mat-icon mat-card-avatar class="vehicle-fuel-icon">local_shipping</mat-icon>
+                              <mat-card-title>{{ summary.registrationNumber }}</mat-card-title>
+                              <mat-card-subtitle>
+                                <mat-chip class="assignment-chip" [ngClass]="getAssignmentClass(summary.depotAssignment)">
+                                  {{ summary.depotAssignment || 'Unassigned' }}
+                                </mat-chip>
+                                @if (summary.vehicleTypeName) {
+                                  <span class="vehicle-type-label">{{ summary.vehicleTypeName }}</span>
+                                }
+                              </mat-card-subtitle>
+                            </mat-card-header>
+                            <mat-card-content>
+                              <div class="fuel-stats-grid">
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Fills</span>
+                                  <span class="stat-value">{{ summary.transactionCount }}</span>
+                                </div>
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Total Litres</span>
+                                  <span class="stat-value">{{ summary.totalLitresUsed | number:'1.0-0' }}L</span>
+                                </div>
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Total Cost</span>
+                                  <span class="stat-value">R {{ summary.totalAmountSpent | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Avg Per Fill</span>
+                                  <span class="stat-value">{{ summary.averageLitresPerFill | number:'1.0-0' }}L</span>
+                                </div>
+                              </div>
+                              <div class="allocation-bar">
+                                <div class="allocation-label">
+                                  <span>Allocation: {{ summary.allocationLitres }}L</span>
+                                  <span class="usage-percent" [ngClass]="{ 'over-allocation': summary.allocationUsagePercent > 100 }">
+                                    {{ summary.allocationUsagePercent | number:'1.1-1' }}% used
+                                  </span>
+                                </div>
+                                <mat-progress-bar 
+                                  [value]="summary.allocationUsagePercent > 100 ? 100 : summary.allocationUsagePercent" 
+                                  [color]="summary.allocationUsagePercent > 90 ? 'warn' : 'primary'"
+                                  mode="determinate">
+                                </mat-progress-bar>
+                              </div>
+                            </mat-card-content>
+                          </mat-card>
+                        }
+                      </div>
+                    }
+
+                    <!-- Transactions View -->
+                    @if (fuelViewMode === 'transactions' && fuelTransactions().length > 0) {
+                      <div class="fuel-filter-bar">
+                        <mat-form-field appearance="outline" class="fuel-search">
+                          <mat-label>Search by registration</mat-label>
+                          <input matInput [(ngModel)]="fuelSearchTerm" (input)="filterFuelTransactions()" placeholder="e.g. BB59KXZN">
+                          <mat-icon matSuffix>search</mat-icon>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline" class="assignment-filter">
+                          <mat-label>Filter by Group</mat-label>
+                          <mat-select [(ngModel)]="fuelAssignmentFilter" (selectionChange)="filterFuelTransactions()">
+                            <mat-option value="">All Groups</mat-option>
+                            @for (group of fuelAssignmentGroups(); track group) {
+                              <mat-option [value]="group">{{ group }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                      <div class="table-responsive">
+                        <table mat-table [dataSource]="filteredFuelTransactions()" class="fuel-table modern-table" matSort>
+                          <ng-container matColumnDef="registrationNumber">
+                            <th mat-header-cell *matHeaderCellDef>Vehicle</th>
+                            <td mat-cell *matCellDef="let t"><strong>{{ t.registrationNumber }}</strong></td>
+                          </ng-container>
+                          <ng-container matColumnDef="depotName">
+                            <th mat-header-cell *matHeaderCellDef>Depot</th>
+                            <td mat-cell *matCellDef="let t">{{ t.depotName }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="litresUsed">
+                            <th mat-header-cell *matHeaderCellDef>Litres</th>
+                            <td mat-cell *matCellDef="let t">{{ t.litresUsed | number:'1.2-2' }}L</td>
+                          </ng-container>
+                          <ng-container matColumnDef="amountSpent">
+                            <th mat-header-cell *matHeaderCellDef>Amount</th>
+                            <td mat-cell *matCellDef="let t">R {{ t.amountSpent | number:'1.2-2' }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="transactionDate">
+                            <th mat-header-cell *matHeaderCellDef>Date</th>
+                            <td mat-cell *matCellDef="let t">{{ t.transactionDate | date:'dd MMM yyyy HH:mm' }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="depotAssignment">
+                            <th mat-header-cell *matHeaderCellDef>Group</th>
+                            <td mat-cell *matCellDef="let t">
+                              <mat-chip class="assignment-chip" [ngClass]="getAssignmentClass(t.depotAssignment)">
+                                {{ t.depotAssignment }}
+                              </mat-chip>
+                            </td>
+                          </ng-container>
+                          <tr mat-header-row *matHeaderRowDef="fuelDisplayedColumns"></tr>
+                          <tr mat-row *matRowDef="let row; columns: fuelDisplayedColumns;"></tr>
+                        </table>
+                      </div>
+                    }
+
+                    <!-- By Group View -->
+                    @if (fuelViewMode === 'byGroup' && fuelGroupData().length > 0) {
+                      <div class="fuel-groups-grid">
+                        @for (group of fuelGroupData(); track group.depotAssignment) {
+                          <mat-card class="fuel-group-card" [ngClass]="getAssignmentClass(group.depotAssignment)">
+                            <mat-card-header>
+                              <mat-icon mat-card-avatar>category</mat-icon>
+                              <mat-card-title>{{ group.depotAssignment }}</mat-card-title>
+                              <mat-card-subtitle>{{ group.vehicleCount }} vehicles · {{ group.transactionCount }} transactions</mat-card-subtitle>
+                            </mat-card-header>
+                            <mat-card-content>
+                              <div class="group-stats">
+                                <div class="group-stat">
+                                  <mat-icon>opacity</mat-icon>
+                                  <div>
+                                    <span class="stat-value">{{ group.totalLitres | number:'1.0-0' }}L</span>
+                                    <span class="stat-label">Total Litres</span>
+                                  </div>
+                                </div>
+                                <div class="group-stat">
+                                  <mat-icon>payments</mat-icon>
+                                  <div>
+                                    <span class="stat-value">R {{ group.totalAmount | number:'1.2-2' }}</span>
+                                    <span class="stat-label">Total Cost</span>
+                                  </div>
+                                </div>
+                                <div class="group-stat">
+                                  <mat-icon>speed</mat-icon>
+                                  <div>
+                                    <span class="stat-value">{{ group.averageLitresPerVehicle | number:'1.0-0' }}L</span>
+                                    <span class="stat-label">Avg/Vehicle</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </mat-card-content>
+                          </mat-card>
+                        }
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
           </mat-tab-group>
         </mat-card>
       }
@@ -1787,7 +2391,7 @@ interface SleepOut {
 
     .stat-icon-wrapper.loads { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     .stat-icon-wrapper.address { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .stat-icon-wrapper.sleepouts { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stat-icon-wrapper.incoming-requests { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); }
     .stat-icon-wrapper.tfn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
 
     .stat-content {
@@ -2087,7 +2691,7 @@ interface SleepOut {
     .stat-icon.loads { background: linear-gradient(135deg, #667eea, #764ba2); }
     .stat-icon.transit { background: linear-gradient(135deg, #4facfe, #00f2fe); }
     .stat-icon.delivered { background: linear-gradient(135deg, #11998e, #38ef7d); }
-    .stat-icon.sleepouts { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .stat-icon.incoming-requests { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
     .stat-icon.pending { background: linear-gradient(135deg, #fa709a, #fee140); }
     .stat-icon.tfn-orders { background: linear-gradient(135deg, #f093fb, #f5576c); }
     .stat-icon.vehicles { background: linear-gradient(135deg, #667eea, #764ba2); }
@@ -4354,6 +4958,794 @@ interface SleepOut {
       }
     }
 
+    /* ========================================== */
+    /* Fuel History Styles                         */
+    /* ========================================== */
+    .fuel-history-section {
+      padding: 16px 0;
+    }
+
+    .fuel-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      border: 1px solid #e9ecef;
+    }
+
+    .fuel-period-selector .period-select {
+      min-width: 200px;
+    }
+
+    .fuel-stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .fuel-stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #555;
+      
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+        color: #1e90ff;
+      }
+      
+      strong {
+        color: #1a1a2e;
+        font-weight: 600;
+      }
+    }
+
+    .fuel-export-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-color: #4caf50 !important;
+      color: #2e7d32 !important;
+      font-weight: 500;
+      margin-left: 8px;
+      
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+      
+      &:hover {
+        background: rgba(76,175,80,0.08) !important;
+      }
+    }
+
+    /* Fuel Export Dialog Overlay */
+    .fuel-export-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .fuel-export-dialog {
+      background: white;
+      border-radius: 16px;
+      padding: 28px 32px;
+      max-width: 560px;
+      width: 95%;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+      animation: slideUp 0.25s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .fuel-export-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      
+      mat-icon {
+        font-size: 28px;
+        width: 28px;
+        height: 28px;
+        color: #2e7d32;
+      }
+      
+      h3 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a1a2e;
+        flex: 1;
+      }
+      
+      .close-btn {
+        color: #999;
+      }
+    }
+
+    .fuel-export-subtitle {
+      color: #666;
+      font-size: 13px;
+      margin: 0 0 20px 0;
+    }
+
+    .fuel-export-quick-ranges {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      
+      .range-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #555;
+      }
+      
+      .range-btn {
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        min-height: 32px;
+        
+        &.active {
+          background: #e8f5e9 !important;
+          border-color: #4caf50 !important;
+          color: #2e7d32 !important;
+          font-weight: 600;
+        }
+        
+        &.all-btn {
+          mat-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            margin-right: 4px;
+          }
+        }
+      }
+    }
+
+    .fuel-export-date-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      
+      .fuel-export-date-field {
+        flex: 1;
+      }
+    }
+
+    .fuel-export-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding-top: 8px;
+      
+      .inline-spinner {
+        display: inline-block;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+    }
+
+    .fuel-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      .fuel-view-toggle {
+        border-radius: 8px;
+        
+        mat-icon {
+          margin-right: 4px;
+          font-size: 16px;
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+
+    .fuel-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .fuel-vehicle-card {
+      background: #fff !important;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px !important;
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        border-color: #1e90ff;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      }
+
+      mat-card-header {
+        padding: 16px 16px 8px;
+      }
+
+      mat-card-title {
+        color: #1a1a2e !important;
+        font-size: 16px;
+        font-weight: 600;
+        font-family: monospace;
+      }
+
+      mat-card-subtitle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+      }
+
+      .vehicle-fuel-icon {
+        background: rgba(30,144,255,0.1);
+        color: #1e90ff;
+        border-radius: 8px;
+        padding: 8px;
+        width: 40px !important;
+        height: 40px !important;
+      }
+
+      .vehicle-type-label {
+        font-size: 11px;
+        color: #888;
+      }
+    }
+
+    .fuel-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      padding: 8px 16px 16px;
+    }
+
+    .fuel-stat-item {
+      display: flex;
+      flex-direction: column;
+      
+      .stat-label {
+        font-size: 11px;
+        color: #999;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      .stat-value {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1a1a2e;
+      }
+    }
+
+    .allocation-bar {
+      padding: 8px 16px 16px;
+      
+      .allocation-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 6px;
+      }
+      
+      .usage-percent {
+        font-weight: 600;
+        color: #4caf50;
+        
+        &.over-allocation {
+          color: #f44336;
+        }
+      }
+    }
+
+    /* Assignment color classes */
+    .assignment-chip {
+      font-size: 11px !important;
+      min-height: 24px !important;
+      padding: 2px 8px !important;
+    }
+
+    .assignment-14ton { 
+      background: rgba(244,67,54,0.12) !important; 
+      color: #c62828 !important;
+      border: 1px solid rgba(244,67,54,0.3) !important;
+    }
+    .assignment-10ton { 
+      background: rgba(255,152,0,0.12) !important; 
+      color: #e65100 !important;
+      border: 1px solid rgba(255,152,0,0.3) !important;
+    }
+    .assignment-8ton { 
+      background: rgba(33,150,243,0.12) !important; 
+      color: #1565c0 !important;
+      border: 1px solid rgba(33,150,243,0.3) !important;
+    }
+    .assignment-4ton { 
+      background: rgba(76,175,80,0.12) !important; 
+      color: #2e7d32 !important;
+      border: 1px solid rgba(76,175,80,0.3) !important;
+    }
+    .assignment-transit { 
+      background: rgba(156,39,176,0.12) !important; 
+      color: #7b1fa2 !important;
+      border: 1px solid rgba(156,39,176,0.3) !important;
+    }
+    .assignment-link { 
+      background: rgba(0,188,212,0.12) !important; 
+      color: #00838f !important;
+      border: 1px solid rgba(0,188,212,0.3) !important;
+    }
+    .assignment-gp { 
+      background: rgba(255,193,7,0.12) !important; 
+      color: #f57f17 !important;
+      border: 1px solid rgba(255,193,7,0.3) !important;
+    }
+    .assignment-cpt { 
+      background: rgba(139,195,74,0.12) !important; 
+      color: #558b2f !important;
+      border: 1px solid rgba(139,195,74,0.3) !important;
+    }
+    .assignment-default { 
+      background: rgba(158,158,158,0.12) !important; 
+      color: #616161 !important;
+    }
+
+    .fuel-14ton { border-left: 3px solid #f44336 !important; }
+    .fuel-10ton { border-left: 3px solid #ff9800 !important; }
+    .fuel-8ton { border-left: 3px solid #2196f3 !important; }
+    .fuel-4ton { border-left: 3px solid #4caf50 !important; }
+    .fuel-transit { border-left: 3px solid #9c27b0 !important; }
+    .fuel-link { border-left: 3px solid #00bcd4 !important; }
+
+    .fuel-filter-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      
+      .fuel-search {
+        flex: 1;
+        max-width: 300px;
+      }
+      
+      .assignment-filter {
+        min-width: 200px;
+      }
+    }
+
+    .fuel-table {
+      width: 100%;
+
+      th {
+        color: #1a1a2e !important;
+        font-weight: 600;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+        border-bottom: 1px solid #dee2e6 !important;
+      }
+      
+      td {
+        color: #333 !important;
+        border-bottom: 1px solid #f0f0f0 !important;
+      }
+      
+      tr:hover td {
+        background: rgba(30,144,255,0.04) !important;
+      }
+    }
+
+    .fuel-groups-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 16px;
+    }
+
+    .fuel-group-card {
+      background: #fff !important;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px !important;
+
+      mat-card-header {
+        padding: 16px;
+      }
+
+      mat-card-title {
+        color: #1a1a2e !important;
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      mat-card-subtitle {
+        color: #666 !important;
+      }
+    }
+
+    .group-stats {
+      display: flex;
+      gap: 24px;
+      padding: 8px 16px 16px;
+    }
+
+    .group-stat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      mat-icon {
+        color: #1e90ff;
+        font-size: 20px;
+      }
+      
+      .stat-value {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1a1a2e;
+        display: block;
+      }
+      
+      .stat-label {
+        font-size: 11px;
+        color: #999;
+        display: block;
+      }
+    }
+
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 48px;
+      color: #666;
+    }
+
+    /* ─── POD Documents Tab ─── */
+    .pod-section {
+      padding: 0;
+    }
+
+    .pod-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .pod-filters {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .pod-filter-field {
+      width: 160px;
+      
+      ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+        display: none;
+      }
+    }
+
+    .pod-driver-field {
+      width: 200px;
+    }
+
+    .pod-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pod-upload-btn {
+      border-radius: 8px !important;
+      
+      mat-icon {
+        margin-right: 4px;
+      }
+    }
+
+    .pod-view-toggle {
+      display: flex;
+      background: #f0f0f0;
+      border-radius: 8px;
+      padding: 2px;
+
+      button {
+        border-radius: 6px !important;
+        
+        &.active {
+          background: #1e90ff;
+          color: white;
+        }
+      }
+    }
+
+    .pod-stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .pod-stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 8px 16px;
+
+      mat-icon {
+        color: #1e90ff;
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+
+      .stat-num {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1a1a2e;
+      }
+
+      .stat-lbl {
+        font-size: 12px;
+        color: #888;
+      }
+
+      &.region-chip mat-icon { color: #4caf50; }
+      &.drivers-chip mat-icon { color: #ff9800; }
+    }
+
+    .pod-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .pod-card {
+      background: #fff !important;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px !important;
+      padding: 16px !important;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        border-color: #1e90ff;
+        box-shadow: 0 4px 16px rgba(30, 144, 255, 0.15);
+      }
+    }
+
+    .pod-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .pdf-icon {
+      color: #e53935;
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .pod-card-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+
+      .pod-driver {
+        font-weight: 600;
+        font-size: 14px;
+        color: #1a1a2e;
+      }
+
+      .pod-date {
+        font-size: 12px;
+        color: #888;
+      }
+    }
+
+    .pod-region-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+
+      &.region-gp {
+        background: #e3f2fd;
+        color: #1565c0;
+      }
+
+      &.region-kzn {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      &.small {
+        padding: 2px 8px;
+        font-size: 10px;
+      }
+    }
+
+    .pod-card-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+
+      .pod-filename {
+        font-size: 12px;
+        color: #666;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
+      }
+
+      .pod-size {
+        font-size: 11px;
+        color: #999;
+      }
+    }
+
+    .pod-card-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+      margin-top: 4px;
+
+      button {
+        transform: scale(0.85);
+      }
+    }
+
+    .pod-link-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+      }
+
+      &.linked {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      &.not-linked {
+        background: #fff3e0;
+        color: #e65100;
+      }
+
+      &.small {
+        padding: 2px 8px;
+        font-size: 10px;
+
+        mat-icon {
+          font-size: 12px;
+          width: 12px;
+          height: 12px;
+        }
+      }
+    }
+
+    .pod-tripsheet-ref {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #1976d2;
+      font-weight: 500;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        color: #1976d2;
+      }
+    }
+
+    .pod-link-badge.invoice {
+      background: #e8eaf6;
+      color: #283593;
+    }
+
+    .pod-tripsheet-ref.invoice-ref {
+      color: #283593;
+      mat-icon { color: #283593; }
+    }
+
+    .linked-chip mat-icon { color: #2e7d32; }
+    .unlinked-chip mat-icon { color: #e65100; }
+    .tripsheet-chip mat-icon { color: #1565c0; }
+    .invoice-chip mat-icon { color: #283593; }
+
+    .pod-list-container {
+      overflow-x: auto;
+    }
+
+    .pod-table {
+      width: 100%;
+      background: #fff;
+      
+      .clickable-row {
+        cursor: pointer;
+        
+        &:hover {
+          background: #f5f8ff;
+        }
+      }
+    }
+
+    .pod-pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+
+      .pod-page-info {
+        font-size: 13px;
+        color: #666;
+      }
+
+      .pod-page-btns {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .page-num {
+          font-size: 13px;
+          font-weight: 500;
+          color: #333;
+        }
+      }
+    }
+
   `]
 })
 export class LogisticsDashboardComponent implements OnInit {
@@ -4444,9 +5836,45 @@ export class LogisticsDashboardComponent implements OnInit {
   tfnDepotsCount = signal(0);
   tfnDepots = signal<any[]>([]);
 
-  // Sleep Outs (Driver Food Allowance)
-  sleepOuts = signal<SleepOut[]>([]);
-  sleepOutsCount = signal(0);
+  // Fuel History (Monthly Reports)
+  fuelPeriods = signal<any[]>([]);
+  fuelReport = signal<any>(null);
+  fuelTransactions = signal<any[]>([]);
+  filteredFuelTransactions = signal<any[]>([]);
+  fuelGroupData = signal<any[]>([]);
+  fuelAssignmentGroups = signal<string[]>([]);
+  fuelLoading = signal(false);
+  selectedFuelPeriod: any = null;
+  fuelViewMode = 'summary';
+  fuelSearchTerm = '';
+  fuelAssignmentFilter = '';
+  fuelDisplayedColumns = ['registrationNumber', 'depotName', 'litresUsed', 'amountSpent', 'transactionDate', 'depotAssignment'];
+
+  // Fuel Export Dialog
+  showFuelExportDialog = false;
+  fuelExportFromDate = new Date(2026, 0, 1);
+  fuelExportToDate = new Date();
+  fuelExportGenerating = false;
+  fuelExportQuickSelect = '';
+
+  // POD Documents
+  podDocuments: any[] = [];
+  podSummary: any = null;
+  podLoading = false;
+  podRegionFilter = '';
+  podMonthFilter = '';
+  podDriverFilter = '';
+  podLinkFilter = '';
+  podDriverList: string[] = [];
+  podViewMode = 'grid';
+  podCurrentPage = 1;
+  podPageSize = 50;
+  podTotalCount = 0;
+  podTableColumns = ['driverName', 'deliveryDate', 'region', 'linkStatus', 'fileName', 'fileSize', 'actions'];
+
+  // Incoming Delivery Requests
+  deliveryRequests = signal<DeliveryRequest[]>([]);
+  deliveryRequestsCount = signal(0);
 
   // Address Issues (Customers without addresses)
   addressIssuesCount = signal(0);
@@ -4469,8 +5897,11 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadCustomers();
     this.loadMaintenanceRecords();
     this.loadWarehouses();
-    this.loadSleepOuts();
+    this.loadDeliveryRequests();
     this.loadAddressIssuesCount();
+    this.loadFuelPeriods();
+    this.loadPodSummary();
+    this.loadPodDocuments();
   }
 
   private checkInitialLoadComplete(): void {
@@ -5453,7 +6884,13 @@ Notes: ${record.notes || 'No notes'}
   }
 
   viewFuelHistory(vehicle: Vehicle): void {
-    // TODO: Open fuel history dialog
+    this.dialog.open(FuelHistoryDialog, {
+      width: '95vw',
+      maxWidth: '1200px',
+      maxHeight: '90vh',
+      panelClass: 'fuel-history-dialog-panel',
+      data: { vehicle, apiUrl: environment.apiUrl }
+    });
   }
 
   viewVehicleMaintenanceHistory(vehicle: Vehicle): void {
@@ -6585,34 +8022,34 @@ Notes: ${record.notes || 'No notes'}
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  // Sleep Outs Methods (Driver Food Allowance)
-  loadSleepOuts(): void {
-    this.http.get<SleepOut[]>(`${environment.apiUrl}/logistics/sleepouts`).subscribe({
-      next: (sleepOuts) => {
-        this.sleepOuts.set(sleepOuts);
-        // Count only pending (requested) sleep outs for the badge
-        this.sleepOutsCount.set(sleepOuts.filter(s => s.status === 'Requested').length);
+  // Incoming Delivery Requests Methods
+  loadDeliveryRequests(): void {
+    this.http.get<DeliveryRequest[]>(`${environment.apiUrl}/logistics/delivery-requests`).subscribe({
+      next: (requests) => {
+        this.deliveryRequests.set(requests);
+        // Count pending + approved as active requests needing attention
+        this.deliveryRequestsCount.set(requests.filter(r => r.status === 'Pending' || r.status === 'Approved').length);
       },
       error: (err) => {
-        console.error('Failed to load sleep outs:', err);
-        this.sleepOuts.set([]);
-        this.sleepOutsCount.set(0);
+        console.error('Failed to load delivery requests:', err);
+        this.deliveryRequests.set([]);
+        this.deliveryRequestsCount.set(0);
       }
     });
   }
 
-  openSleepOutsDialog(): void {
-    const dialogRef = this.dialog.open(SleepOutsDialog, {
+  openIncomingRequestsDialog(): void {
+    const dialogRef = this.dialog.open(IncomingRequestsDialog, {
       width: '95vw',
       maxWidth: '1200px',
       maxHeight: '90vh',
-      panelClass: 'sleepouts-dialog-panel',
-      data: { sleepOuts: this.sleepOuts(), drivers: this.drivers(), apiUrl: environment.apiUrl }
+      panelClass: 'incoming-requests-dialog-panel',
+      data: { requests: this.deliveryRequests(), apiUrl: environment.apiUrl }
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result === 'refresh') {
-        this.loadSleepOuts();
+        this.loadDeliveryRequests();
       }
     });
   }
@@ -6643,6 +8080,508 @@ Notes: ${record.notes || 'No notes'}
       // Always refresh count after dialog closes — Welly fixes may have been applied
       this.loadAddressIssuesCount();
       this.loadCustomers();
+    });
+  }
+
+  // ==========================================
+  // Fuel History Methods
+  // ==========================================
+  loadFuelPeriods(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/fuelhistory/periods`).subscribe({
+      next: (periods) => {
+        this.fuelPeriods.set(periods);
+        // Auto-select latest period
+        if (periods.length > 0 && !this.selectedFuelPeriod) {
+          this.selectedFuelPeriod = periods[0];
+          this.loadFuelMonthlyReport();
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load fuel periods:', err);
+        this.fuelPeriods.set([]);
+      }
+    });
+  }
+
+  loadFuelMonthlyReport(): void {
+    if (!this.selectedFuelPeriod) return;
+    this.fuelLoading.set(true);
+
+    const { reportMonth, reportYear } = this.selectedFuelPeriod;
+
+    // Load report summary and transactions in parallel
+    this.http.get<any>(`${environment.apiUrl}/fuelhistory/monthly-report?month=${reportMonth}&year=${reportYear}`).subscribe({
+      next: (report) => {
+        this.fuelReport.set(report);
+        this.fuelLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load fuel report:', err);
+        this.fuelReport.set(null);
+        this.fuelLoading.set(false);
+      }
+    });
+
+    this.http.get<any[]>(`${environment.apiUrl}/fuelhistory/transactions?month=${reportMonth}&year=${reportYear}&pageSize=500`).subscribe({
+      next: (transactions) => {
+        this.fuelTransactions.set(transactions);
+        this.filteredFuelTransactions.set(transactions);
+        // Extract unique assignment groups
+        const groups = [...new Set(transactions.map(t => t.depotAssignment).filter(Boolean))].sort();
+        this.fuelAssignmentGroups.set(groups);
+      },
+      error: (err) => {
+        console.error('Failed to load fuel transactions:', err);
+        this.fuelTransactions.set([]);
+        this.filteredFuelTransactions.set([]);
+      }
+    });
+
+    this.http.get<any[]>(`${environment.apiUrl}/fuelhistory/by-assignment?month=${reportMonth}&year=${reportYear}`).subscribe({
+      next: (groups) => {
+        this.fuelGroupData.set(groups);
+      },
+      error: (err) => {
+        console.error('Failed to load fuel groups:', err);
+        this.fuelGroupData.set([]);
+      }
+    });
+  }
+
+  filterFuelTransactions(): void {
+    let filtered = this.fuelTransactions();
+    if (this.fuelSearchTerm) {
+      const term = this.fuelSearchTerm.toUpperCase();
+      filtered = filtered.filter(t => t.registrationNumber.toUpperCase().includes(term));
+    }
+    if (this.fuelAssignmentFilter) {
+      filtered = filtered.filter(t => t.depotAssignment === this.fuelAssignmentFilter);
+    }
+    this.filteredFuelTransactions.set(filtered);
+  }
+
+  // Fuel Export Dialog Methods
+  openFuelExportDialog(): void {
+    // Default to the currently selected period, or all
+    if (this.selectedFuelPeriod) {
+      const month = this.selectedFuelPeriod.reportMonth;
+      const year = this.selectedFuelPeriod.reportYear;
+      this.fuelExportFromDate = new Date(year, month - 1, 1);
+      this.fuelExportToDate = new Date(year, month, 0); // last day of month
+      this.fuelExportQuickSelect = month + '-' + year;
+    } else {
+      this.setFuelExportAll();
+    }
+    this.fuelExportGenerating = false;
+    this.showFuelExportDialog = true;
+  }
+
+  closeFuelExportDialog(): void {
+    this.showFuelExportDialog = false;
+    this.fuelExportGenerating = false;
+  }
+
+  setFuelExportPeriod(period: any): void {
+    const month = period.reportMonth;
+    const year = period.reportYear;
+    this.fuelExportFromDate = new Date(year, month - 1, 1);
+    this.fuelExportToDate = new Date(year, month, 0);
+    this.fuelExportQuickSelect = month + '-' + year;
+  }
+
+  setFuelExportAll(): void {
+    const periods = this.fuelPeriods();
+    if (periods.length > 0) {
+      const oldest = periods[periods.length - 1];
+      const newest = periods[0];
+      this.fuelExportFromDate = new Date(oldest.reportYear, oldest.reportMonth - 1, 1);
+      this.fuelExportToDate = new Date(newest.reportYear, newest.reportMonth, 0);
+    } else {
+      this.fuelExportFromDate = new Date(2026, 0, 1);
+      this.fuelExportToDate = new Date();
+    }
+    this.fuelExportQuickSelect = 'all';
+  }
+
+  async exportFuelExcel(): Promise<void> {
+    this.fuelExportGenerating = true;
+    try {
+      const XLSX = await import('xlsx');
+      const from = new Date(this.fuelExportFromDate);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(this.fuelExportToDate);
+      to.setHours(23, 59, 59, 999);
+      const fromStr = from.toLocaleDateString('en-ZA');
+      const toStr = to.toLocaleDateString('en-ZA');
+
+      // Fetch ALL transactions across the date range from the API (no pagination)
+      const url = `${environment.apiUrl}/fuelhistory/transactions?pageSize=10000`;
+      const allTxns = await this.http.get<any[]>(url).toPromise() || [];
+
+      // Filter by date range
+      const filtered = allTxns.filter(t => {
+        const d = new Date(t.transactionDate);
+        return d >= from && d <= to;
+      }).sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
+
+      if (filtered.length === 0) {
+        this.snackBar.open('No fuel transactions found for the selected date range', 'Close', { duration: 3000 });
+        this.fuelExportGenerating = false;
+        return;
+      }
+
+      // ---- Sheet 1: Transactions ----
+      const txnRows: any[][] = [
+        ['ProMed Technologies — Fuel History Report'],
+        [`Period: ${fromStr} to ${toStr}`],
+        [`Generated: ${new Date().toLocaleString('en-ZA')}`],
+        [`Total Transactions: ${filtered.length}`],
+        [],
+        ['Date', 'Time', 'Registration', 'Card Number', 'Depot/Station', 'Assignment', 'Allocation (L)', 'Litres Used', 'Amount (R)', 'Cost/Litre (R)']
+      ];
+
+      let totalLitres = 0;
+      let totalAmount = 0;
+
+      for (const t of filtered) {
+        const dt = new Date(t.transactionDate);
+        const dateStr = dt.toLocaleDateString('en-ZA');
+        const timeStr = dt.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+        const costPerLitre = t.litresUsed > 0 ? Math.round((t.amountSpent / t.litresUsed) * 100) / 100 : 0;
+        totalLitres += t.litresUsed;
+        totalAmount += t.amountSpent;
+
+        txnRows.push([
+          dateStr,
+          timeStr,
+          t.registrationNumber,
+          t.cardNumber || '',
+          t.depotName || '',
+          t.depotAssignment || '',
+          t.allocationLitres,
+          t.litresUsed,
+          t.amountSpent,
+          costPerLitre
+        ]);
+      }
+
+      txnRows.push([]);
+      txnRows.push(['', '', '', '', '', 'TOTALS:', '', totalLitres, totalAmount, totalLitres > 0 ? Math.round((totalAmount / totalLitres) * 100) / 100 : 0]);
+
+      const txnSheet = XLSX.utils.aoa_to_sheet(txnRows);
+      // Set column widths
+      txnSheet['!cols'] = [
+        { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 12 }, { wch: 40 }, { wch: 18 },
+        { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }
+      ];
+
+      // ---- Sheet 2: Summary by Vehicle ----
+      const vehicleMap = new Map<string, { reg: string; assignment: string; txns: number; litres: number; amount: number; allocation: number }>();
+      for (const t of filtered) {
+        const key = t.registrationNumber;
+        if (!vehicleMap.has(key)) {
+          vehicleMap.set(key, { reg: key, assignment: t.depotAssignment || '', txns: 0, litres: 0, amount: 0, allocation: t.allocationLitres || 0 });
+        }
+        const v = vehicleMap.get(key)!;
+        v.txns++;
+        v.litres += t.litresUsed;
+        v.amount += t.amountSpent;
+      }
+
+      const summaryRows: any[][] = [
+        ['ProMed Technologies — Fuel Summary by Vehicle'],
+        [`Period: ${fromStr} to ${toStr}`],
+        [],
+        ['Registration', 'Assignment', 'Transactions', 'Allocation (L)', 'Total Litres', 'Total Amount (R)', 'Avg Cost/Litre (R)', 'Avg Litres/Fill']
+      ];
+
+      const sortedVehicles = [...vehicleMap.values()].sort((a, b) => b.amount - a.amount);
+      let sumLitres = 0, sumAmount = 0, sumTxns = 0;
+      for (const v of sortedVehicles) {
+        sumLitres += v.litres;
+        sumAmount += v.amount;
+        sumTxns += v.txns;
+        summaryRows.push([
+          v.reg,
+          v.assignment,
+          v.txns,
+          v.allocation,
+          Math.round(v.litres * 100) / 100,
+          Math.round(v.amount * 100) / 100,
+          v.litres > 0 ? Math.round((v.amount / v.litres) * 100) / 100 : 0,
+          v.txns > 0 ? Math.round((v.litres / v.txns) * 100) / 100 : 0
+        ]);
+      }
+      summaryRows.push([]);
+      summaryRows.push(['TOTALS', '', sumTxns, '', Math.round(sumLitres * 100) / 100, Math.round(sumAmount * 100) / 100, sumLitres > 0 ? Math.round((sumAmount / sumLitres) * 100) / 100 : 0, '']);
+
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+      summarySheet['!cols'] = [
+        { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }
+      ];
+
+      // ---- Sheet 3: Summary by Group ----
+      const groupMap = new Map<string, { group: string; vehicles: Set<string>; txns: number; litres: number; amount: number }>();
+      for (const t of filtered) {
+        const grp = t.depotAssignment || 'Unassigned';
+        if (!groupMap.has(grp)) {
+          groupMap.set(grp, { group: grp, vehicles: new Set(), txns: 0, litres: 0, amount: 0 });
+        }
+        const g = groupMap.get(grp)!;
+        g.vehicles.add(t.registrationNumber);
+        g.txns++;
+        g.litres += t.litresUsed;
+        g.amount += t.amountSpent;
+      }
+
+      const groupRows: any[][] = [
+        ['ProMed Technologies — Fuel Summary by Group'],
+        [`Period: ${fromStr} to ${toStr}`],
+        [],
+        ['Group/Assignment', 'Vehicles', 'Transactions', 'Total Litres', 'Total Amount (R)', 'Avg Cost/Litre (R)', 'Avg per Vehicle (R)']
+      ];
+
+      const sortedGroups = [...groupMap.values()].sort((a, b) => b.amount - a.amount);
+      let gSumLitres = 0, gSumAmount = 0, gSumTxns = 0;
+      for (const g of sortedGroups) {
+        gSumLitres += g.litres;
+        gSumAmount += g.amount;
+        gSumTxns += g.txns;
+        groupRows.push([
+          g.group,
+          g.vehicles.size,
+          g.txns,
+          Math.round(g.litres * 100) / 100,
+          Math.round(g.amount * 100) / 100,
+          g.litres > 0 ? Math.round((g.amount / g.litres) * 100) / 100 : 0,
+          g.vehicles.size > 0 ? Math.round((g.amount / g.vehicles.size) * 100) / 100 : 0
+        ]);
+      }
+      groupRows.push([]);
+      groupRows.push(['TOTALS', '', gSumTxns, Math.round(gSumLitres * 100) / 100, Math.round(gSumAmount * 100) / 100, gSumLitres > 0 ? Math.round((gSumAmount / gSumLitres) * 100) / 100 : 0, '']);
+
+      const groupSheet = XLSX.utils.aoa_to_sheet(groupRows);
+      groupSheet['!cols'] = [
+        { wch: 20 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }
+      ];
+
+      // Create workbook with all sheets
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, txnSheet, 'Transactions');
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'By Vehicle');
+      XLSX.utils.book_append_sheet(workbook, groupSheet, 'By Group');
+
+      const filename = `Fuel_History_${fromStr.replace(/\//g, '-')}_to_${toStr.replace(/\//g, '-')}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+
+      this.snackBar.open(`Exported ${filtered.length} transactions to Excel`, 'Close', { duration: 3000 });
+      this.closeFuelExportDialog();
+    } catch (err) {
+      console.error('Fuel export failed:', err);
+      this.snackBar.open('Failed to export fuel data', 'Close', { duration: 3000 });
+    } finally {
+      this.fuelExportGenerating = false;
+    }
+  }
+
+  getFuelCardClass(assignment: string | null): string {
+    if (!assignment) return '';
+    if (assignment.includes('14 TON')) return 'fuel-14ton';
+    if (assignment.includes('10 TON')) return 'fuel-10ton';
+    if (assignment.includes('8 TON')) return 'fuel-8ton';
+    if (assignment.includes('4 TON')) return 'fuel-4ton';
+    if (assignment.includes('TRANSIT')) return 'fuel-transit';
+    if (assignment.includes('LINK')) return 'fuel-link';
+    return '';
+  }
+
+  getAssignmentClass(assignment: string | null): string {
+    if (!assignment) return 'assignment-default';
+    if (assignment.includes('14 TON')) return 'assignment-14ton';
+    if (assignment.includes('10 TON')) return 'assignment-10ton';
+    if (assignment.includes('8 TON')) return 'assignment-8ton';
+    if (assignment.includes('4 TON')) return 'assignment-4ton';
+    if (assignment.includes('TRANSIT')) return 'assignment-transit';
+    if (assignment.includes('LINK')) return 'assignment-link';
+    if (assignment.includes('GP')) return 'assignment-gp';
+    if (assignment.includes('CPT')) return 'assignment-cpt';
+    return 'assignment-default';
+  }
+
+  // ─── POD Documents Methods ───────────────────────────────────────
+
+  loadPodDocuments(): void {
+    this.podLoading = true;
+    let params = `?page=${this.podCurrentPage}&pageSize=${this.podPageSize}`;
+    
+    if (this.podRegionFilter) params += `&region=${this.podRegionFilter}`;
+    if (this.podDriverFilter) params += `&driverName=${encodeURIComponent(this.podDriverFilter)}`;
+    if (this.podLinkFilter) params += `&linkStatus=${this.podLinkFilter}`;
+    
+    if (this.podMonthFilter) {
+      const [m, y] = this.podMonthFilter.split('-');
+      params += `&month=${m}&year=${y}`;
+    }
+
+    this.http.get<any>(`${this.apiUrl}/PodDocuments${params}`).subscribe({
+      next: (res) => {
+        this.podDocuments = res.data || [];
+        this.podTotalCount = res.total || 0;
+        this.podLoading = false;
+      },
+      error: (err) => {
+        console.error('Failed to load POD documents:', err);
+        this.podDocuments = [];
+        this.podLoading = false;
+      }
+    });
+  }
+
+  loadPodSummary(): void {
+    this.http.get<any>(`${this.apiUrl}/PodDocuments/summary`).subscribe({
+      next: (summary) => {
+        this.podSummary = summary;
+        // Build driver list for filter
+        this.podDriverList = (summary.drivers || []).map((d: any) => d.driverName).sort();
+      },
+      error: (err) => console.error('Failed to load POD summary:', err)
+    });
+  }
+
+  viewPodDocument(pod: any): void {
+    this.http.get(`${this.apiUrl}/PodDocuments/${pod.id}/view`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const contentType = pod.contentType || 'application/pdf';
+        const file = new Blob([blob], { type: contentType });
+        const url = window.URL.createObjectURL(file);
+        window.open(url, '_blank');
+      },
+      error: (err) => {
+        console.error('Failed to view POD:', err);
+        this.snackBar.open('Failed to open POD document', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  downloadPodDocument(pod: any): void {
+    this.http.get(`${this.apiUrl}/PodDocuments/${pod.id}/download`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = pod.originalFileName || pod.fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+      error: (err) => {
+        console.error('Failed to download POD:', err);
+        this.snackBar.open('Failed to download POD', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  openPodUploadDialog(): void {
+    const dialogRef = this.dialog.open(UploadPodDocumentDialog, {
+      width: '600px',
+      maxWidth: '95vw',
+      data: { drivers: this.podDriverList }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.uploaded) {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open('POD uploaded successfully!', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  formatPodFileSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  openLinkTripsheetDialog(pod: any): void {
+    const dialogRef = this.dialog.open(LinkTripsheetDialog, {
+      width: '550px',
+      maxWidth: '95vw',
+      data: { pod }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.linked) {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open(`POD linked to ${result.loadNumber}`, 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  delinkPod(pod: any): void {
+    if (!confirm(`Delink this POD from tripsheet ${pod.loadNumber || ''}?`)) return;
+
+    this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink`, {}).subscribe({
+      next: () => {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open('POD delinked from tripsheet', 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        console.error('Failed to delink POD:', err);
+        this.snackBar.open('Failed to delink POD', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  openLinkInvoiceDialog(pod: any): void {
+    const dialogRef = this.dialog.open(LinkInvoiceDialog, {
+      width: '600px',
+      maxWidth: '95vw',
+      data: { pod }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.linked) {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open(`POD linked to invoice ${result.invoiceNumber} → Status set to Delivered`, 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  delinkInvoice(pod: any): void {
+    if (!confirm(`Delink this POD from invoice ${pod.invoiceNumber || ''}? The invoice status will revert to Pending.`)) return;
+
+    this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink-invoice`, {}).subscribe({
+      next: () => {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open('POD delinked from invoice → Status reverted to Pending', 'Close', { duration: 4000 });
+      },
+      error: (err) => {
+        console.error('Failed to delink invoice:', err);
+        this.snackBar.open('Failed to delink from invoice', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  openEditPodDialog(pod: any): void {
+    const dialogRef = this.dialog.open(EditPodDialog, {
+      width: '550px',
+      maxWidth: '95vw',
+      data: { pod, drivers: this.podDriverList }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.updated) {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.snackBar.open('POD details updated', 'Close', { duration: 3000 });
+      }
     });
   }
 
@@ -7171,6 +9110,754 @@ export class UploadPODDialog {
         this.uploading = false;
         this.errorMessage = err.error?.message || 'Failed to upload POD';
         console.error('POD upload failed:', err);
+      }
+    });
+  }
+}
+
+// Upload POD Document Dialog (for standalone POD documents tab)
+@Component({
+  selector: 'app-upload-pod-document-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatDatepickerModule,
+    MatProgressSpinnerModule,
+    FormsModule
+  ],
+  template: `
+    <div class="upload-pod-doc-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>upload_file</mat-icon> Upload POD Document</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+      
+      <div class="dialog-content">
+        <div class="form-row">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Driver Name</mat-label>
+            <mat-select [(ngModel)]="driverName">
+              @for (d of data.drivers; track d) {
+                <mat-option [value]="d">{{ d }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="form-row two-cols">
+          <mat-form-field appearance="outline">
+            <mat-label>Delivery Date</mat-label>
+            <input matInput [matDatepicker]="podDatePicker" [(ngModel)]="deliveryDate">
+            <mat-datepicker-toggle matSuffix [for]="podDatePicker"></mat-datepicker-toggle>
+            <mat-datepicker #podDatePicker></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Region</mat-label>
+            <mat-select [(ngModel)]="region">
+              <mat-option value="GP">GP - Gauteng</mat-option>
+              <mat-option value="KZN">KZN - KwaZulu-Natal</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="upload-area" 
+             [class.drag-over]="dragOver"
+             (drop)="onDrop($event)"
+             (dragover)="onDragOver($event)"
+             (dragleave)="onDragLeave($event)"
+             (click)="fileInput.click()">
+          <input #fileInput type="file" hidden 
+                 accept=".pdf,.jpg,.jpeg,.png,.xlsx"
+                 (change)="onFileSelected($event)">
+          
+          @if (!selectedFile) {
+            <mat-icon>cloud_upload</mat-icon>
+            <p>Click or drag file here</p>
+            <span class="file-types">PDF, JPG, PNG, XLSX</span>
+          } @else {
+            <mat-icon color="primary">description</mat-icon>
+            <p>{{ selectedFile.name }}</p>
+            <span class="file-size">{{ formatFileSize(selectedFile.size) }}</span>
+            <button mat-icon-button (click)="removeFile($event)"><mat-icon>close</mat-icon></button>
+          }
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Notes (optional)</mat-label>
+          <textarea matInput [(ngModel)]="notes" rows="2" placeholder="Additional notes..."></textarea>
+        </mat-form-field>
+
+        @if (uploading) {
+          <div class="upload-progress">
+            <mat-progress-spinner mode="indeterminate" diameter="36"></mat-progress-spinner>
+            <p>Uploading...</p>
+          </div>
+        }
+
+        @if (errorMessage) {
+          <div class="error-message">
+            <mat-icon>error</mat-icon>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" 
+                [disabled]="!selectedFile || !driverName || !deliveryDate || !region || uploading"
+                (click)="upload()">
+          <mat-icon>upload</mat-icon> Upload POD
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .upload-pod-doc-dialog {
+      .dialog-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
+          mat-icon { color: #1976d2; }
+        }
+      }
+      .dialog-content {
+        padding: 20px 24px;
+        .form-row { margin-bottom: 8px; }
+        .two-cols { display: flex; gap: 16px;
+          mat-form-field { flex: 1; }
+        }
+        .full-width { width: 100%; }
+        .upload-area {
+          border: 2px dashed #ccc; border-radius: 8px; padding: 32px; text-align: center;
+          cursor: pointer; margin-bottom: 16px; transition: all 0.2s;
+          &:hover, &.drag-over { border-color: #1976d2; background: #f5f5f5; }
+          mat-icon { font-size: 40px; width: 40px; height: 40px; margin-bottom: 8px; }
+          p { margin: 6px 0; font-size: 14px; color: #333; }
+          .file-types, .file-size { font-size: 12px; color: #999; }
+        }
+        .upload-progress { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; p { margin: 0; color: #666; } }
+        .error-message { display: flex; align-items: center; gap: 8px; padding: 10px; background: #ffebee; border-radius: 4px; color: #c62828; margin-top: 8px;
+          mat-icon { font-size: 18px; width: 18px; height: 18px; }
+        }
+      }
+      .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0; }
+    }
+  `]
+})
+export class UploadPodDocumentDialog {
+  selectedFile: File | null = null;
+  driverName = '';
+  deliveryDate: Date | null = null;
+  region = 'GP';
+  notes = '';
+  uploading = false;
+  dragOver = false;
+  errorMessage = '';
+
+  constructor(
+    public dialogRef: MatDialogRef<UploadPodDocumentDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private http: HttpClient
+  ) {}
+
+  onDragOver(e: DragEvent) { e.preventDefault(); e.stopPropagation(); this.dragOver = true; }
+  onDragLeave(e: DragEvent) { e.preventDefault(); e.stopPropagation(); this.dragOver = false; }
+  
+  onDrop(e: DragEvent) {
+    e.preventDefault(); e.stopPropagation(); this.dragOver = false;
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) this.processFile(files[0]);
+  }
+
+  onFileSelected(e: any) {
+    const file = e.target.files[0];
+    if (file) this.processFile(file);
+  }
+
+  processFile(file: File) {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (!allowed.includes(file.type)) { this.errorMessage = 'Invalid file type.'; return; }
+    if (file.size > 20 * 1024 * 1024) { this.errorMessage = 'File too large (max 20MB).'; return; }
+    this.selectedFile = file;
+    this.errorMessage = '';
+  }
+
+  removeFile(e: Event) { e.stopPropagation(); this.selectedFile = null; }
+
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  upload() {
+    if (!this.selectedFile || !this.driverName || !this.deliveryDate || !this.region) return;
+    this.uploading = true;
+    this.errorMessage = '';
+
+    const formData = new FormData();
+    formData.append('file', this.selectedFile);
+    formData.append('driverName', this.driverName);
+    formData.append('region', this.region);
+    formData.append('deliveryDate', this.deliveryDate.toISOString());
+    if (this.notes) formData.append('notes', this.notes);
+
+    const apiUrl = environment.apiUrl || 'http://localhost:5143/api';
+    this.http.post(`${apiUrl}/PodDocuments/upload`, formData).subscribe({
+      next: () => {
+        this.uploading = false;
+        this.dialogRef.close({ uploaded: true });
+      },
+      error: (err) => {
+        this.uploading = false;
+        this.errorMessage = err.error?.message || err.error || 'Upload failed';
+      }
+    });
+  }
+}
+
+// Link to Tripsheet Dialog
+@Component({
+  selector: 'app-link-tripsheet-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    FormsModule
+  ],
+  template: `
+    <div class="link-tripsheet-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>link</mat-icon> Link to Tripsheet</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="dialog-content">
+        <div class="pod-info">
+          <mat-icon>picture_as_pdf</mat-icon>
+          <div>
+            <strong>{{ data.pod.driverName }}</strong>
+            <span>{{ data.pod.deliveryDate | date:'dd MMM yyyy' }} · {{ data.pod.region }}</span>
+          </div>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Search Tripsheet</mat-label>
+          <input matInput [(ngModel)]="searchTerm" (ngModelChange)="searchLoads()" placeholder="Type load number or customer name...">
+          <mat-icon matPrefix>search</mat-icon>
+        </mat-form-field>
+
+        @if (searching) {
+          <div class="search-loading">
+            <mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner>
+            <span>Searching...</span>
+          </div>
+        }
+
+        @if (searchResults.length > 0) {
+          <div class="search-results">
+            @for (load of searchResults; track load.id) {
+              <div class="load-option" [class.selected]="selectedLoadId === load.id" (click)="selectLoad(load)">
+                <div class="load-option-main">
+                  <span class="load-number">{{ load.loadNumber }}</span>
+                  <span class="load-status" [ngClass]="'status-' + load.status?.toLowerCase()">{{ load.status }}</span>
+                </div>
+                <div class="load-option-detail">
+                  @if (load.customerName) { <span>{{ load.customerName }}</span> }
+                  @if (load.driverName) { <span>· {{ load.driverName }}</span> }
+                  @if (load.scheduledDeliveryDate) { <span>· {{ load.scheduledDeliveryDate | date:'dd MMM yyyy' }}</span> }
+                </div>
+              </div>
+            }
+          </div>
+        } @else if (searchTerm && !searching) {
+          <div class="no-results">
+            <mat-icon>search_off</mat-icon>
+            <span>No tripsheets found</span>
+          </div>
+        }
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" [disabled]="!selectedLoadId || linking" (click)="linkPod()">
+          @if (linking) {
+            <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+          } @else {
+            <mat-icon>link</mat-icon>
+          }
+          Link
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .link-tripsheet-dialog {
+      .dialog-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
+          mat-icon { color: #1976d2; }
+        }
+      }
+      .dialog-content {
+        padding: 20px 24px; max-height: 450px; overflow-y: auto;
+        .full-width { width: 100%; }
+      }
+      .pod-info {
+        display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f8ff;
+        border-radius: 8px; margin-bottom: 16px;
+        mat-icon { color: #e53935; font-size: 28px; width: 28px; height: 28px; }
+        div { display: flex; flex-direction: column; gap: 2px;
+          strong { font-size: 14px; color: #1a1a2e; }
+          span { font-size: 12px; color: #888; }
+        }
+      }
+      .search-loading {
+        display: flex; align-items: center; gap: 8px; padding: 12px; color: #666;
+      }
+      .search-results {
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      .load-option {
+        padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid #e0e0e0;
+        transition: all 0.2s;
+        &:hover { border-color: #1976d2; background: #f5f8ff; }
+        &.selected { border-color: #1976d2; background: #e3f2fd; }
+        .load-option-main {
+          display: flex; justify-content: space-between; align-items: center;
+          .load-number { font-weight: 600; font-size: 14px; color: #1a1a2e; }
+          .load-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
+            &.status-available { background: #e3f2fd; color: #1565c0; }
+            &.status-assigned { background: #fff3e0; color: #e65100; }
+            &.status-intransit { background: #f3e5f5; color: #7b1fa2; }
+            &.status-delivered { background: #e8f5e9; color: #2e7d32; }
+          }
+        }
+        .load-option-detail { font-size: 12px; color: #888; margin-top: 4px; }
+      }
+      .no-results {
+        display: flex; align-items: center; gap: 8px; padding: 16px; color: #999; justify-content: center;
+      }
+      .dialog-actions {
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+        button mat-progress-spinner { display: inline-block; }
+      }
+    }
+  `]
+})
+export class LinkTripsheetDialog {
+  searchTerm = '';
+  searchResults: any[] = [];
+  selectedLoadId: number | null = null;
+  selectedLoadNumber = '';
+  searching = false;
+  linking = false;
+  private searchTimeout: any;
+
+  constructor(
+    public dialogRef: MatDialogRef<LinkTripsheetDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private http: HttpClient
+  ) {
+    // Load recent tripsheets on open
+    this.searchLoads();
+  }
+
+  searchLoads(): void {
+    clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => {
+      this.searching = true;
+      const apiUrl = environment.apiUrl || 'http://localhost:5143/api';
+      const params = this.searchTerm ? `?search=${encodeURIComponent(this.searchTerm)}&limit=20` : '?limit=20';
+      this.http.get<any[]>(`${apiUrl}/PodDocuments/search-loads${params}`).subscribe({
+        next: (results) => {
+          this.searchResults = results;
+          this.searching = false;
+        },
+        error: () => {
+          this.searchResults = [];
+          this.searching = false;
+        }
+      });
+    }, 300);
+  }
+
+  selectLoad(load: any): void {
+    this.selectedLoadId = load.id;
+    this.selectedLoadNumber = load.loadNumber;
+  }
+
+  linkPod(): void {
+    if (!this.selectedLoadId) return;
+    this.linking = true;
+    const apiUrl = environment.apiUrl || 'http://localhost:5143/api';
+    this.http.put(`${apiUrl}/PodDocuments/${this.data.pod.id}/link`, { loadId: this.selectedLoadId }).subscribe({
+      next: () => {
+        this.linking = false;
+        this.dialogRef.close({ linked: true, loadNumber: this.selectedLoadNumber });
+      },
+      error: (err) => {
+        this.linking = false;
+        console.error('Failed to link POD:', err);
+      }
+    });
+  }
+}
+
+// Edit POD Details Dialog
+@Component({
+  selector: 'app-edit-pod-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatDatepickerModule,
+    MatProgressSpinnerModule,
+    FormsModule
+  ],
+  template: `
+    <div class="edit-pod-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>edit</mat-icon> Edit POD Details</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="dialog-content">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Driver Name</mat-label>
+          <mat-select [(ngModel)]="driverName">
+            @for (d of data.drivers; track d) {
+              <mat-option [value]="d">{{ d }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <div class="form-row two-cols">
+          <mat-form-field appearance="outline">
+            <mat-label>Delivery Date</mat-label>
+            <input matInput [matDatepicker]="editDatePicker" [(ngModel)]="deliveryDate">
+            <mat-datepicker-toggle matSuffix [for]="editDatePicker"></mat-datepicker-toggle>
+            <mat-datepicker #editDatePicker></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Region</mat-label>
+            <mat-select [(ngModel)]="region">
+              <mat-option value="GP">GP - Gauteng</mat-option>
+              <mat-option value="KZN">KZN - KwaZulu-Natal</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Notes</mat-label>
+          <textarea matInput [(ngModel)]="notes" rows="3" placeholder="Additional notes..."></textarea>
+        </mat-form-field>
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" [disabled]="saving" (click)="save()">
+          @if (saving) {
+            <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+          } @else {
+            <mat-icon>save</mat-icon>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .edit-pod-dialog {
+      .dialog-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
+          mat-icon { color: #1976d2; }
+        }
+      }
+      .dialog-content {
+        padding: 20px 24px;
+        .full-width { width: 100%; }
+        .form-row.two-cols { display: flex; gap: 16px;
+          mat-form-field { flex: 1; }
+        }
+      }
+      .dialog-actions {
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+        button mat-progress-spinner { display: inline-block; }
+      }
+    }
+  `]
+})
+export class EditPodDialog {
+  driverName: string;
+  deliveryDate: Date;
+  region: string;
+  notes: string;
+  saving = false;
+
+  constructor(
+    public dialogRef: MatDialogRef<EditPodDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private http: HttpClient
+  ) {
+    this.driverName = data.pod.driverName || '';
+    this.deliveryDate = data.pod.deliveryDate ? new Date(data.pod.deliveryDate) : new Date();
+    this.region = data.pod.region || 'GP';
+    this.notes = data.pod.notes || '';
+  }
+
+  save(): void {
+    this.saving = true;
+    const apiUrl = environment.apiUrl || 'http://localhost:5143/api';
+    this.http.put(`${apiUrl}/PodDocuments/${this.data.pod.id}`, {
+      driverName: this.driverName,
+      deliveryDate: this.deliveryDate,
+      region: this.region,
+      notes: this.notes
+    }).subscribe({
+      next: () => {
+        this.saving = false;
+        this.dialogRef.close({ updated: true });
+      },
+      error: (err) => {
+        this.saving = false;
+        console.error('Failed to update POD:', err);
+      }
+    });
+  }
+}
+
+// Link to Invoice Dialog
+@Component({
+  selector: 'app-link-invoice-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    FormsModule
+  ],
+  template: `
+    <div class="link-invoice-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>receipt</mat-icon> Link to Invoice</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="dialog-content">
+        <div class="pod-info">
+          <mat-icon>picture_as_pdf</mat-icon>
+          <div>
+            <strong>{{ data.pod.driverName }}</strong>
+            <span>{{ data.pod.deliveryDate | date:'dd MMM yyyy' }} · {{ data.pod.region }}</span>
+          </div>
+        </div>
+
+        <div class="link-note">
+          <mat-icon>info</mat-icon>
+          <span>Linking a POD to an invoice will automatically update the invoice status to <strong>Delivered</strong>.</span>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Search Invoice</mat-label>
+          <input matInput [(ngModel)]="searchTerm" (ngModelChange)="searchInvoices()" placeholder="Type invoice number or customer name...">
+          <mat-icon matPrefix>search</mat-icon>
+        </mat-form-field>
+
+        @if (searching) {
+          <div class="search-loading">
+            <mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner>
+            <span>Searching...</span>
+          </div>
+        }
+
+        @if (searchResults.length > 0) {
+          <div class="search-results">
+            @for (inv of searchResults; track inv.id) {
+              <div class="invoice-option" [class.selected]="selectedInvoiceId === inv.id" (click)="selectInvoice(inv)">
+                <div class="invoice-option-main">
+                  <span class="invoice-number">{{ inv.transactionNumber }}</span>
+                  <span class="invoice-status" [ngClass]="'status-' + inv.status?.toLowerCase()">{{ inv.status }}</span>
+                </div>
+                <div class="invoice-option-detail">
+                  <span class="invoice-customer">{{ inv.customerName }}</span>
+                  <span class="invoice-amount">R{{ inv.salesAmount | number:'1.2-2' }}</span>
+                </div>
+                <div class="invoice-option-sub">
+                  <span>{{ inv.productDescription }}</span>
+                  <span>Qty: {{ inv.quantity | number:'1.0-0' }}</span>
+                  @if (inv.transactionDate) { <span>{{ inv.transactionDate | date:'dd MMM yyyy' }}</span> }
+                </div>
+              </div>
+            }
+          </div>
+        } @else if (searchTerm && !searching) {
+          <div class="no-results">
+            <mat-icon>search_off</mat-icon>
+            <span>No invoices found</span>
+          </div>
+        }
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" [disabled]="!selectedInvoiceId || linking" (click)="linkInvoice()">
+          @if (linking) {
+            <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+          } @else {
+            <mat-icon>receipt</mat-icon>
+          }
+          Link &amp; Mark Delivered
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .link-invoice-dialog {
+      .dialog-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
+          mat-icon { color: #283593; }
+        }
+      }
+      .dialog-content {
+        padding: 20px 24px; max-height: 500px; overflow-y: auto;
+        .full-width { width: 100%; }
+      }
+      .pod-info {
+        display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f8ff;
+        border-radius: 8px; margin-bottom: 12px;
+        mat-icon { color: #e53935; font-size: 28px; width: 28px; height: 28px; }
+        div { display: flex; flex-direction: column; gap: 2px;
+          strong { font-size: 14px; color: #1a1a2e; }
+          span { font-size: 12px; color: #888; }
+        }
+      }
+      .link-note {
+        display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #e8eaf6;
+        border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #283593;
+        mat-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
+      }
+      .search-loading {
+        display: flex; align-items: center; gap: 8px; padding: 12px; color: #666;
+      }
+      .search-results {
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      .invoice-option {
+        padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid #e0e0e0;
+        transition: all 0.2s;
+        &:hover { border-color: #283593; background: #f5f6ff; }
+        &.selected { border-color: #283593; background: #e8eaf6; }
+        .invoice-option-main {
+          display: flex; justify-content: space-between; align-items: center;
+          .invoice-number { font-weight: 600; font-size: 14px; color: #1a1a2e; }
+          .invoice-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
+            &.status-pending { background: #fff3e0; color: #e65100; }
+            &.status-assigned { background: #e3f2fd; color: #1565c0; }
+            &.status-inprogress { background: #f3e5f5; color: #7b1fa2; }
+            &.status-delivered { background: #e8f5e9; color: #2e7d32; }
+          }
+        }
+        .invoice-option-detail {
+          display: flex; justify-content: space-between; align-items: center; margin-top: 4px;
+          .invoice-customer { font-size: 13px; color: #333; }
+          .invoice-amount { font-size: 13px; font-weight: 600; color: #2e7d32; }
+        }
+        .invoice-option-sub { font-size: 11px; color: #999; margin-top: 2px; display: flex; gap: 8px; }
+      }
+      .no-results {
+        display: flex; align-items: center; gap: 8px; padding: 16px; color: #999; justify-content: center;
+      }
+      .dialog-actions {
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+        button mat-progress-spinner { display: inline-block; }
+      }
+    }
+  `]
+})
+export class LinkInvoiceDialog {
+  searchTerm = '';
+  searchResults: any[] = [];
+  selectedInvoiceId: number | null = null;
+  selectedInvoiceNumber = '';
+  searching = false;
+  linking = false;
+  private searchTimeout: any;
+
+  constructor(
+    public dialogRef: MatDialogRef<LinkInvoiceDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private http: HttpClient
+  ) {
+    // Load recent invoices on open
+    this.searchInvoices();
+  }
+
+  searchInvoices(): void {
+    clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => {
+      this.searching = true;
+      const apiUrl = environment.apiUrl || 'http://localhost:5143/api';
+      const params = this.searchTerm ? `?search=${encodeURIComponent(this.searchTerm)}&limit=20` : '?limit=20';
+      this.http.get<any[]>(`${apiUrl}/PodDocuments/search-invoices${params}`).subscribe({
+        next: (results) => {
+          this.searchResults = results;
+          this.searching = false;
+        },
+        error: () => {
+          this.searchResults = [];
+          this.searching = false;
+        }
+      });
+    }, 300);
+  }
+
+  selectInvoice(inv: any): void {
+    this.selectedInvoiceId = inv.id;
+    this.selectedInvoiceNumber = inv.transactionNumber;
+  }
+
+  linkInvoice(): void {
+    if (!this.selectedInvoiceId) return;
+    this.linking = true;
+    const apiUrl = environment.apiUrl || 'http://localhost:5143/api';
+    this.http.put(`${apiUrl}/PodDocuments/${this.data.pod.id}/link-invoice`, { invoiceId: this.selectedInvoiceId }).subscribe({
+      next: () => {
+        this.linking = false;
+        this.dialogRef.close({ linked: true, invoiceNumber: this.selectedInvoiceNumber });
+      },
+      error: (err) => {
+        this.linking = false;
+        console.error('Failed to link invoice:', err);
       }
     });
   }
@@ -11686,9 +14373,9 @@ export class TfnOrderDetailsDialog {
   }
 }
 
-// Sleep Outs Dialog Component (Driver Food Allowance)
+// Incoming Delivery Requests Dialog Component
 @Component({
-  selector: 'app-sleepouts-dialog',
+  selector: 'app-incoming-requests-dialog',
   standalone: true,
   imports: [
     CommonModule,
@@ -11699,18 +14386,16 @@ export class TfnOrderDetailsDialog {
     MatInputModule,
     MatFormFieldModule,
     MatSelectModule,
-    MatDatepickerModule,
-    MatNativeDateModule,
     MatChipsModule,
     MatTooltipModule,
     FormsModule
   ],
   template: `
-    <div class="sleepouts-dialog">
+    <div class="requests-dialog">
       <div class="dialog-header">
         <h2>
-          <mat-icon>hotel</mat-icon>
-          Sleep Outs (Driver Food Allowance)
+          <mat-icon>move_to_inbox</mat-icon>
+          Incoming Delivery Requests
         </h2>
         <button mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
@@ -11718,169 +14403,174 @@ export class TfnOrderDetailsDialog {
       </div>
 
       <div class="dialog-content">
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+          <div class="summary-card pending">
+            <span class="count">{{ getSummaryCount('Pending') }}</span>
+            <span class="label">Pending</span>
+          </div>
+          <div class="summary-card approved">
+            <span class="count">{{ getSummaryCount('Approved') }}</span>
+            <span class="label">Approved</span>
+          </div>
+          <div class="summary-card in-transit">
+            <span class="count">{{ getSummaryCount('In Transit') }}</span>
+            <span class="label">In Transit</span>
+          </div>
+          <div class="summary-card delivered">
+            <span class="count">{{ getSummaryCount('Delivered') }}</span>
+            <span class="label">Delivered</span>
+          </div>
+        </div>
+
         <div class="toolbar">
           <mat-form-field appearance="outline" class="search-field">
             <mat-label>Search...</mat-label>
-            <input matInput [(ngModel)]="searchTerm" (input)="filterSleepOuts()" placeholder="Search by driver name or status">
+            <input matInput [(ngModel)]="searchTerm" (input)="filterRequests()" placeholder="Search by reference, invoice, department">
             <mat-icon matSuffix>search</mat-icon>
           </mat-form-field>
-          
+
           <mat-form-field appearance="outline" class="filter-field">
             <mat-label>Status</mat-label>
-            <mat-select [(ngModel)]="statusFilter" (selectionChange)="filterSleepOuts()">
-              <mat-option value="all">All</mat-option>
-              <mat-option value="Requested">Requested</mat-option>
+            <mat-select [(ngModel)]="statusFilter" (selectionChange)="filterRequests()">
+              <mat-option value="all">All Active</mat-option>
+              <mat-option value="Pending">Pending</mat-option>
               <mat-option value="Approved">Approved</mat-option>
-              <mat-option value="Rejected">Rejected</mat-option>
-              <mat-option value="Paid">Paid</mat-option>
+              <mat-option value="In Transit">In Transit</mat-option>
+              <mat-option value="Delivered">Delivered</mat-option>
+              <mat-option value="Cancelled">Cancelled</mat-option>
             </mat-select>
           </mat-form-field>
 
-          <button mat-raised-button color="primary" (click)="openAddSleepOutForm()">
-            <mat-icon>add</mat-icon>
-            Add Sleep Out
-          </button>
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Department</mat-label>
+            <mat-select [(ngModel)]="departmentFilter" (selectionChange)="filterRequests()">
+              <mat-option value="all">All Departments</mat-option>
+              @for (dept of departments; track dept) {
+                <mat-option [value]="dept">{{ dept }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Priority</mat-label>
+            <mat-select [(ngModel)]="priorityFilter" (selectionChange)="filterRequests()">
+              <mat-option value="all">All</mat-option>
+              <mat-option value="Urgent">Urgent</mat-option>
+              <mat-option value="Normal">Normal</mat-option>
+            </mat-select>
+          </mat-form-field>
         </div>
 
-        <!-- Add/Edit Form -->
-        @if (showForm) {
-          <div class="form-container">
-            <h3>{{ editingSleepOut ? 'Edit Sleep Out' : 'Add New Sleep Out' }}</h3>
-            <div class="form-row">
-              <mat-form-field appearance="outline">
-                <mat-label>Driver</mat-label>
-                <mat-select [(ngModel)]="formData.driverId" required>
-                  @for (driver of data.drivers; track driver.id) {
-                    <mat-option [value]="driver.id">
-                      {{ driver.firstName }} {{ driver.lastName }} ({{ driver.employeeNumber || 'N/A' }})
-                    </mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline">
-                <mat-label>Amount (R)</mat-label>
-                <input matInput type="number" [(ngModel)]="formData.amount" required min="0" step="50">
-              </mat-form-field>
-
-              <mat-form-field appearance="outline">
-                <mat-label>Date</mat-label>
-                <input matInput [matDatepicker]="picker" [(ngModel)]="formData.date" required>
-                <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
-                <mat-datepicker #picker></mat-datepicker>
-              </mat-form-field>
-            </div>
-            
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Reason</mat-label>
-              <input matInput [(ngModel)]="formData.reason" placeholder="e.g., Long distance delivery, overnight trip">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Notes</mat-label>
-              <textarea matInput [(ngModel)]="formData.notes" rows="2" placeholder="Additional notes..."></textarea>
-            </mat-form-field>
-
-            <div class="form-actions">
-              <button mat-button (click)="cancelForm()">Cancel</button>
-              <button mat-raised-button color="primary" (click)="saveSleepOut()" [disabled]="!formData.driverId || !formData.amount || !formData.date">
-                {{ editingSleepOut ? 'Update' : 'Submit Request' }}
-              </button>
-            </div>
-          </div>
-        }
-
-        <!-- Sleep Outs List -->
-        <div class="sleepouts-list">
-          @for (sleepOut of filteredSleepOuts; track sleepOut.id) {
-            <div class="sleepout-card" [class.status-requested]="sleepOut.status === 'Requested'"
-                 [class.status-approved]="sleepOut.status === 'Approved'"
-                 [class.status-rejected]="sleepOut.status === 'Rejected'"
-                 [class.status-paid]="sleepOut.status === 'Paid'">
-              <div class="sleepout-main">
-                <div class="driver-info">
-                  <mat-icon>person</mat-icon>
-                  <span class="driver-name">{{ sleepOut.driverName || 'Unknown Driver' }}</span>
-                  @if (sleepOut.driverEmployeeNumber) {
-                    <span class="emp-number">({{ sleepOut.driverEmployeeNumber }})</span>
+        <!-- Requests List -->
+        <div class="requests-list">
+          @for (req of filteredRequests; track req.id) {
+            <div class="request-card" [class.urgent]="req.priority === 'Urgent'"
+                 [class.status-pending]="req.status === 'Pending'"
+                 [class.status-approved]="req.status === 'Approved'"
+                 [class.status-in-transit]="req.status === 'In Transit'"
+                 [class.status-delivered]="req.status === 'Delivered'"
+                 [class.status-cancelled]="req.status === 'Cancelled'">
+              <div class="request-header">
+                <div class="request-ref">
+                  <span class="ref-number">{{ req.referenceNumber }}</span>
+                  @if (req.priority === 'Urgent') {
+                    <span class="priority-badge urgent">
+                      <mat-icon>priority_high</mat-icon> URGENT
+                    </span>
                   }
                 </div>
-                <div class="amount">
-                  <mat-icon>payments</mat-icon>
-                  <span class="amount-value">R {{ sleepOut.amount | number:'1.2-2' }}</span>
-                </div>
-              </div>
-              
-              <div class="sleepout-details">
-                <div class="detail">
-                  <mat-icon>calendar_today</mat-icon>
-                  <span>{{ formatDate(sleepOut.date) }}</span>
-                </div>
-                @if (sleepOut.reason) {
-                  <div class="detail">
-                    <mat-icon>info</mat-icon>
-                    <span>{{ sleepOut.reason }}</span>
-                  </div>
-                }
-                @if (sleepOut.loadNumber) {
-                  <div class="detail">
-                    <mat-icon>local_shipping</mat-icon>
-                    <span>Trip: {{ sleepOut.loadNumber }}</span>
-                  </div>
-                }
-              </div>
-
-              <div class="sleepout-actions">
-                <span class="status-badge" [class]="'status-' + sleepOut.status.toLowerCase()">
-                  {{ sleepOut.status }}
+                <span class="dept-badge" [class]="'dept-' + req.department.toLowerCase().replace(' ', '-')">
+                  {{ req.department }}
                 </span>
-                
-                @if (sleepOut.status === 'Requested') {
-                  <button mat-icon-button color="primary" (click)="approveSleepOut(sleepOut, true)" matTooltip="Approve">
+              </div>
+
+              <div class="request-body">
+                <div class="request-info">
+                  @if (req.description) {
+                    <div class="info-row">
+                      <mat-icon>description</mat-icon>
+                      <span>{{ req.description }}</span>
+                    </div>
+                  }
+                  @if (req.invoiceNumber) {
+                    <div class="info-row">
+                      <mat-icon>receipt</mat-icon>
+                      <span>Invoice: {{ req.invoiceNumber }}</span>
+                    </div>
+                  }
+                  <div class="info-row">
+                    <mat-icon>inventory_2</mat-icon>
+                    <span>{{ req.quantity }} {{ req.unitOfMeasure }}</span>
+                    @if (req.scent) { <span class="detail-chip">{{ req.scent }}</span> }
+                    @if (req.type) { <span class="detail-chip">{{ req.type }}</span> }
+                  </div>
+                  @if (req.deliveryAddress) {
+                    <div class="info-row">
+                      <mat-icon>location_on</mat-icon>
+                      <span>{{ req.deliveryAddress }}</span>
+                    </div>
+                  }
+                  @if (req.notes) {
+                    <div class="info-row notes">
+                      <mat-icon>notes</mat-icon>
+                      <span>{{ req.notes }}</span>
+                    </div>
+                  }
+                </div>
+
+                <div class="request-meta">
+                  <div class="meta-item">
+                    <mat-icon>schedule</mat-icon>
+                    <span>Requested: {{ formatDate(req.requestedDate) }}</span>
+                  </div>
+                  @if (req.requestedBy) {
+                    <div class="meta-item">
+                      <mat-icon>person</mat-icon>
+                      <span>By: {{ req.requestedBy }}</span>
+                    </div>
+                  }
+                  @if (req.handledBy) {
+                    <div class="meta-item">
+                      <mat-icon>local_shipping</mat-icon>
+                      <span>{{ req.handledBy }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <div class="request-actions">
+                <span class="status-badge" [class]="'status-' + req.status.toLowerCase().replace(' ', '-')">
+                  {{ req.status }}
+                </span>
+
+                @if (req.status === 'Pending') {
+                  <button mat-icon-button color="primary" (click)="updateStatus(req, 'Approved')" matTooltip="Approve">
                     <mat-icon>check_circle</mat-icon>
                   </button>
-                  <button mat-icon-button color="warn" (click)="approveSleepOut(sleepOut, false)" matTooltip="Reject">
+                  <button mat-icon-button color="warn" (click)="updateStatus(req, 'Cancelled')" matTooltip="Cancel Request">
                     <mat-icon>cancel</mat-icon>
                   </button>
-                  <button mat-icon-button (click)="editSleepOut(sleepOut)" matTooltip="Edit">
-                    <mat-icon>edit</mat-icon>
-                  </button>
-                  <button mat-icon-button color="warn" (click)="deleteSleepOut(sleepOut)" matTooltip="Delete">
-                    <mat-icon>delete</mat-icon>
+                }
+                @if (req.status === 'Approved') {
+                  <button mat-icon-button color="accent" (click)="updateStatus(req, 'In Transit')" matTooltip="Mark In Transit">
+                    <mat-icon>local_shipping</mat-icon>
                   </button>
                 }
-                @if (sleepOut.status === 'Approved') {
-                  <button mat-icon-button color="accent" (click)="markAsPaid(sleepOut)" matTooltip="Mark as Paid">
-                    <mat-icon>paid</mat-icon>
+                @if (req.status === 'In Transit') {
+                  <button mat-icon-button color="primary" (click)="updateStatus(req, 'Delivered')" matTooltip="Mark Delivered">
+                    <mat-icon>check_circle_outline</mat-icon>
                   </button>
                 }
               </div>
             </div>
           } @empty {
             <div class="no-data">
-              <mat-icon>hotel</mat-icon>
-              <p>No sleep outs found</p>
-              <button mat-raised-button color="primary" (click)="openAddSleepOutForm()">
-                <mat-icon>add</mat-icon> Add First Sleep Out
-              </button>
+              <mat-icon>move_to_inbox</mat-icon>
+              <p>No delivery requests found</p>
+              <span class="hint">Requests will appear here when departments submit delivery requests</span>
             </div>
           }
-        </div>
-
-        <!-- Summary -->
-        <div class="summary-bar">
-          <div class="summary-item">
-            <span class="label">Requested:</span>
-            <span class="value requested">{{ getSummary('Requested') }}</span>
-          </div>
-          <div class="summary-item">
-            <span class="label">Approved:</span>
-            <span class="value approved">{{ getSummary('Approved') }}</span>
-          </div>
-          <div class="summary-item">
-            <span class="label">Total Amount:</span>
-            <span class="value total">R {{ getTotalAmount() | number:'1.2-2' }}</span>
-          </div>
         </div>
       </div>
 
@@ -11891,13 +14581,13 @@ export class TfnOrderDetailsDialog {
   `,
   styles: [`
     :host { display: block; width: 100%; }
-    .sleepouts-dialog { width: 100%; overflow: hidden; }
+    .requests-dialog { width: 100%; overflow: hidden; }
     .dialog-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 20px 32px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #ff6b6b, #ee5a24);
       color: white;
       margin: -24px -24px 0 -24px;
     }
@@ -11914,6 +14604,30 @@ export class TfnOrderDetailsDialog {
       max-height: 65vh;
       overflow-y: auto;
     }
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .summary-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      border-radius: 12px;
+      background: #f5f5f5;
+    }
+    .summary-card .count { font-size: 28px; font-weight: 700; }
+    .summary-card .label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-card.pending { background: #fff3e0; }
+    .summary-card.pending .count { color: #e65100; }
+    .summary-card.approved { background: #e8f5e9; }
+    .summary-card.approved .count { color: #2e7d32; }
+    .summary-card.in-transit { background: #e3f2fd; }
+    .summary-card.in-transit .count { color: #1565c0; }
+    .summary-card.delivered { background: #f3e5f5; }
+    .summary-card.delivered .count { color: #7b1fa2; }
     .toolbar {
       display: flex;
       gap: 16px;
@@ -11923,89 +14637,119 @@ export class TfnOrderDetailsDialog {
     }
     .search-field { flex: 1; min-width: 200px; }
     .filter-field { width: 150px; }
-    .form-container {
-      background: #f5f5f5;
-      padding: 20px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-    }
-    .form-container h3 {
-      margin: 0 0 16px 0;
-      color: #667eea;
-    }
-    .form-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-    .full-width { width: 100%; }
-    .form-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      margin-top: 16px;
-    }
-    .sleepouts-list {
+    .requests-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
-    .sleepout-card {
-      display: grid;
-      grid-template-columns: 1fr 1fr auto;
-      gap: 20px;
-      align-items: center;
+    .request-card {
       padding: 16px 20px;
       background: #fafafa;
       border-radius: 12px;
       border-left: 4px solid #ccc;
       transition: all 0.2s;
     }
-    .sleepout-card:hover {
+    .request-card:hover {
       background: #f0f0f0;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-    .sleepout-card.status-requested { border-left-color: #ff9800; }
-    .sleepout-card.status-approved { border-left-color: #4caf50; }
-    .sleepout-card.status-rejected { border-left-color: #f44336; }
-    .sleepout-card.status-paid { border-left-color: #2196f3; }
-    .sleepout-main {
+    .request-card.urgent { border-left-width: 6px; }
+    .request-card.status-pending { border-left-color: #ff9800; }
+    .request-card.status-approved { border-left-color: #4caf50; }
+    .request-card.status-in-transit { border-left-color: #2196f3; }
+    .request-card.status-delivered { border-left-color: #9c27b0; }
+    .request-card.status-cancelled { border-left-color: #9e9e9e; opacity: 0.7; }
+    .request-header {
       display: flex;
-      flex-direction: column;
-      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
     }
-    .driver-info {
+    .request-ref {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
-    .driver-info mat-icon { color: #667eea; font-size: 20px; width: 20px; height: 20px; }
-    .driver-name { font-weight: 600; color: #333; }
-    .emp-number { color: #999; font-size: 12px; }
-    .amount {
-      display: flex;
+    .ref-number {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+      font-family: monospace;
+    }
+    .priority-badge {
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
     }
-    .amount mat-icon { color: #4caf50; font-size: 18px; width: 18px; height: 18px; }
-    .amount-value { font-size: 18px; font-weight: 600; color: #4caf50; }
-    .sleepout-details {
+    .priority-badge.urgent {
+      background: #ffebee;
+      color: #c62828;
+    }
+    .priority-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .dept-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #e8eaf6;
+      color: #283593;
+    }
+    .dept-badge.dept-condoms { background: #fce4ec; color: #880e4f; }
+    .dept-badge.dept-sanitary-pads { background: #f3e5f5; color: #6a1b9a; }
+    .dept-badge.dept-warehouse { background: #e8f5e9; color: #2e7d32; }
+    .dept-badge.dept-general { background: #e3f2fd; color: #1565c0; }
+    .request-body {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+    }
+    .request-info {
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
-    .detail {
+    .info-row {
       display: flex;
       align-items: center;
       gap: 8px;
       font-size: 13px;
+      color: #555;
+    }
+    .info-row mat-icon { font-size: 16px; width: 16px; height: 16px; color: #888; }
+    .info-row.notes { font-style: italic; color: #888; }
+    .detail-chip {
+      padding: 2px 8px;
+      background: #f0f0f0;
+      border-radius: 8px;
+      font-size: 11px;
       color: #666;
     }
-    .detail mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .sleepout-actions {
+    .request-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-end;
+    }
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #888;
+    }
+    .meta-item mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .request-actions {
       display: flex;
       align-items: center;
       gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed #e0e0e0;
     }
     .status-badge {
       padding: 6px 14px;
@@ -12014,10 +14758,11 @@ export class TfnOrderDetailsDialog {
       font-weight: 500;
       text-transform: uppercase;
     }
-    .status-requested { background: #fff3e0; color: #e65100; }
+    .status-pending { background: #fff3e0; color: #e65100; }
     .status-approved { background: #e8f5e9; color: #2e7d32; }
-    .status-rejected { background: #ffebee; color: #c62828; }
-    .status-paid { background: #e3f2fd; color: #1565c0; }
+    .status-in-transit { background: #e3f2fd; color: #1565c0; }
+    .status-delivered { background: #f3e5f5; color: #7b1fa2; }
+    .status-cancelled { background: #f5f5f5; color: #757575; }
     .no-data {
       text-align: center;
       padding: 60px;
@@ -12029,215 +14774,105 @@ export class TfnOrderDetailsDialog {
       height: 56px;
       margin-bottom: 16px;
     }
-    .summary-bar {
-      display: flex;
-      justify-content: flex-end;
-      gap: 24px;
-      padding: 16px;
-      background: #f5f5f5;
-      border-radius: 8px;
-      margin-top: 20px;
-    }
-    .summary-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .summary-item .label { color: #666; font-size: 14px; }
-    .summary-item .value { font-weight: 600; font-size: 16px; }
-    .summary-item .value.requested { color: #e65100; }
-    .summary-item .value.approved { color: #2e7d32; }
-    .summary-item .value.total { color: #667eea; }
+    .no-data .hint { font-size: 13px; color: #bbb; }
     mat-dialog-actions {
       padding: 16px 32px;
       border-top: 1px solid #e0e0e0;
     }
     @media (max-width: 768px) {
-      .form-row { grid-template-columns: 1fr; }
-      .sleepout-card { grid-template-columns: 1fr; }
+      .summary-cards { grid-template-columns: repeat(2, 1fr); }
+      .request-body { grid-template-columns: 1fr; }
       .toolbar { flex-direction: column; align-items: stretch; }
+      .request-meta { align-items: flex-start; }
     }
   `]
 })
-export class SleepOutsDialog {
+export class IncomingRequestsDialog {
   searchTerm = '';
   statusFilter = 'all';
-  filteredSleepOuts: SleepOut[] = [];
-  showForm = false;
-  editingSleepOut: SleepOut | null = null;
-  formData = {
-    driverId: null as number | null,
-    amount: 250,
-    date: new Date(),
-    reason: '',
-    notes: '',
-    loadId: null as number | null
-  };
+  departmentFilter = 'all';
+  priorityFilter = 'all';
+  filteredRequests: DeliveryRequest[] = [];
+  departments: string[] = [];
 
   private http = inject(HttpClient);
   private snackBar = inject(MatSnackBar);
 
   constructor(
-    @Inject(MAT_DIALOG_DATA) public data: { sleepOuts: SleepOut[], drivers: any[], apiUrl: string },
-    public dialogRef: MatDialogRef<SleepOutsDialog>
+    @Inject(MAT_DIALOG_DATA) public data: { requests: DeliveryRequest[], apiUrl: string },
+    public dialogRef: MatDialogRef<IncomingRequestsDialog>
   ) {
-    this.filteredSleepOuts = [...this.data.sleepOuts];
+    this.filteredRequests = [...this.data.requests];
+    this.departments = [...new Set(this.data.requests.map(r => r.department))];
   }
 
-  filterSleepOuts(): void {
-    let filtered = [...this.data.sleepOuts];
-    
+  filterRequests(): void {
+    let filtered = [...this.data.requests];
+
     if (this.statusFilter !== 'all') {
-      filtered = filtered.filter(s => s.status === this.statusFilter);
+      filtered = filtered.filter(r => r.status === this.statusFilter);
     }
-    
+
+    if (this.departmentFilter !== 'all') {
+      filtered = filtered.filter(r => r.department === this.departmentFilter);
+    }
+
+    if (this.priorityFilter !== 'all') {
+      filtered = filtered.filter(r => r.priority === this.priorityFilter);
+    }
+
     if (this.searchTerm) {
       const term = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(s =>
-        s.driverName?.toLowerCase().includes(term) ||
-        s.driverEmployeeNumber?.toLowerCase().includes(term) ||
-        s.reason?.toLowerCase().includes(term)
+      filtered = filtered.filter(r =>
+        r.referenceNumber?.toLowerCase().includes(term) ||
+        r.invoiceNumber?.toLowerCase().includes(term) ||
+        r.department?.toLowerCase().includes(term) ||
+        r.description?.toLowerCase().includes(term) ||
+        r.requestedBy?.toLowerCase().includes(term)
       );
     }
-    
-    this.filteredSleepOuts = filtered;
+
+    this.filteredRequests = filtered;
   }
 
-  openAddSleepOutForm(): void {
-    this.showForm = true;
-    this.editingSleepOut = null;
-    this.formData = {
-      driverId: null,
-      amount: 250,
-      date: new Date(),
-      reason: '',
-      notes: '',
-      loadId: null
-    };
-  }
-
-  editSleepOut(sleepOut: SleepOut): void {
-    this.showForm = true;
-    this.editingSleepOut = sleepOut;
-    this.formData = {
-      driverId: sleepOut.driverId,
-      amount: sleepOut.amount,
-      date: new Date(sleepOut.date),
-      reason: sleepOut.reason || '',
-      notes: sleepOut.notes || '',
-      loadId: sleepOut.loadId || null
-    };
-  }
-
-  cancelForm(): void {
-    this.showForm = false;
-    this.editingSleepOut = null;
-  }
-
-  saveSleepOut(): void {
-    if (this.editingSleepOut) {
-      // Update existing
-      this.http.put(`${this.data.apiUrl}/logistics/sleepouts/${this.editingSleepOut.id}`, {
-        amount: this.formData.amount,
-        date: this.formData.date,
-        reason: this.formData.reason,
-        notes: this.formData.notes
-      }).subscribe({
-        next: () => {
-          this.snackBar.open('Sleep out updated successfully', 'Close', { duration: 3000 });
-          this.refreshList();
-          this.cancelForm();
-        },
-        error: (err) => {
-          this.snackBar.open('Failed to update sleep out: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
-        }
-      });
-    } else {
-      // Create new
-      this.http.post(`${this.data.apiUrl}/logistics/sleepouts`, this.formData).subscribe({
-        next: () => {
-          this.snackBar.open('Sleep out request submitted', 'Close', { duration: 3000 });
-          this.refreshList();
-          this.cancelForm();
-        },
-        error: (err) => {
-          this.snackBar.open('Failed to create sleep out: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
-        }
-      });
-    }
-  }
-
-  approveSleepOut(sleepOut: SleepOut, approved: boolean): void {
-    if (!confirm(`Are you sure you want to ${approved ? 'approve' : 'reject'} this sleep out for ${sleepOut.driverName}?`)) {
+  updateStatus(req: DeliveryRequest, newStatus: string): void {
+    const action = newStatus === 'Cancelled' ? 'cancel' : 'update to ' + newStatus;
+    if (!confirm(`Are you sure you want to ${action} request ${req.referenceNumber}?`)) {
       return;
     }
-    
-    this.http.post(`${this.data.apiUrl}/logistics/sleepouts/${sleepOut.id}/approve`, { approved }).subscribe({
+
+    this.http.put(`${this.data.apiUrl}/logistics/delivery-requests/${req.id}/status`, {
+      status: newStatus,
+      handledBy: 'Logistics'
+    }).subscribe({
       next: () => {
-        this.snackBar.open(`Sleep out ${approved ? 'approved' : 'rejected'}`, 'Close', { duration: 3000 });
+        this.snackBar.open(`Request ${req.referenceNumber} updated to ${newStatus}`, 'Close', { duration: 3000 });
         this.refreshList();
       },
       error: (err) => {
-        this.snackBar.open('Failed to process: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
-      }
-    });
-  }
-
-  markAsPaid(sleepOut: SleepOut): void {
-    if (!confirm(`Mark R${sleepOut.amount} sleep out for ${sleepOut.driverName} as paid?`)) {
-      return;
-    }
-    
-    this.http.post(`${this.data.apiUrl}/logistics/sleepouts/${sleepOut.id}/mark-paid`, {}).subscribe({
-      next: () => {
-        this.snackBar.open('Sleep out marked as paid', 'Close', { duration: 3000 });
-        this.refreshList();
-      },
-      error: (err) => {
-        this.snackBar.open('Failed to mark as paid: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
-      }
-    });
-  }
-
-  deleteSleepOut(sleepOut: SleepOut): void {
-    if (!confirm(`Delete sleep out request for ${sleepOut.driverName}?`)) {
-      return;
-    }
-    
-    this.http.delete(`${this.data.apiUrl}/logistics/sleepouts/${sleepOut.id}`).subscribe({
-      next: () => {
-        this.snackBar.open('Sleep out deleted', 'Close', { duration: 3000 });
-        this.refreshList();
-      },
-      error: (err) => {
-        this.snackBar.open('Failed to delete: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+        this.snackBar.open('Failed to update: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
       }
     });
   }
 
   private refreshList(): void {
-    this.http.get<SleepOut[]>(`${this.data.apiUrl}/logistics/sleepouts`).subscribe({
-      next: (sleepOuts) => {
-        this.data.sleepOuts = sleepOuts;
-        this.filterSleepOuts();
+    this.http.get<DeliveryRequest[]>(`${this.data.apiUrl}/logistics/delivery-requests`).subscribe({
+      next: (requests) => {
+        this.data.requests = requests;
+        this.departments = [...new Set(requests.map(r => r.department))];
+        this.filterRequests();
       }
     });
   }
 
-  formatDate(date: Date | string): string {
-    if (!date) return '';
-    const d = new Date(date);
+  getSummaryCount(status: string): number {
+    return this.data.requests.filter(r => r.status === status).length;
+  }
+
+  formatDate(dateStr: string): string {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
     return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' });
-  }
-
-  getSummary(status: string): number {
-    return this.data.sleepOuts.filter(s => s.status === status).length;
-  }
-
-  getTotalAmount(): number {
-    return this.data.sleepOuts
-      .filter(s => s.status === 'Approved' || s.status === 'Requested')
-      .reduce((sum, s) => sum + s.amount, 0);
   }
 }
 
@@ -26248,5 +28883,348 @@ export class WellySuggestsDialog implements OnInit {
     if (created > 0) {
       this.dialogRef.close({ created: true });
     }
+  }
+}
+
+// ==========================================
+// Fuel History Dialog
+// ==========================================
+@Component({
+  selector: 'app-fuel-history-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatProgressSpinnerModule,
+    MatProgressBarModule,
+    MatChipsModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    FormsModule
+  ],
+  template: `
+    <div class="fuel-history-dialog">
+      <div class="dialog-header">
+        <div class="header-info">
+          <h2>
+            <mat-icon>local_gas_station</mat-icon>
+            Fuel History — {{ data.vehicle.registrationNumber }}
+          </h2>
+          <div class="vehicle-meta">
+            @if (data.vehicle.make) {
+              <span class="meta-tag">{{ data.vehicle.make }} {{ data.vehicle.model }}</span>
+            }
+            @if (data.vehicle.vehicleTypeName) {
+              <span class="meta-tag type">{{ data.vehicle.vehicleTypeName }}</span>
+            }
+            @if (data.vehicle.province) {
+              <span class="meta-tag province">{{ data.vehicle.province }}</span>
+            }
+          </div>
+        </div>
+        <button mat-icon-button (click)="close()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-body">
+        @if (loading) {
+          <div class="loading-center">
+            <mat-spinner diameter="40"></mat-spinner>
+            <p>Loading fuel history...</p>
+          </div>
+        } @else if (transactions.length === 0) {
+          <div class="empty-center">
+            <mat-icon>local_gas_station</mat-icon>
+            <h3>No Fuel History</h3>
+            <p>No fuel transactions found for this vehicle.</p>
+          </div>
+        } @else {
+          <!-- Summary Cards -->
+          <div class="summary-row">
+            <div class="summary-card">
+              <mat-icon>receipt</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">{{ transactions.length }}</span>
+                <span class="summary-label">Transactions</span>
+              </div>
+            </div>
+            <div class="summary-card">
+              <mat-icon>opacity</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">{{ totalLitres | number:'1.0-0' }}L</span>
+                <span class="summary-label">Total Litres</span>
+              </div>
+            </div>
+            <div class="summary-card">
+              <mat-icon>payments</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">R {{ totalAmount | number:'1.2-2' }}</span>
+                <span class="summary-label">Total Spent</span>
+              </div>
+            </div>
+            <div class="summary-card">
+              <mat-icon>speed</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">R {{ avgCostPerLitre | number:'1.2-2' }}/L</span>
+                <span class="summary-label">Avg Cost</span>
+              </div>
+            </div>
+            <div class="summary-card">
+              <mat-icon>ev_station</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">{{ avgLitresPerFill | number:'1.0-0' }}L</span>
+                <span class="summary-label">Avg Per Fill</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transactions Table -->
+          <div class="table-container">
+            <table mat-table [dataSource]="transactions" class="fuel-tx-table">
+              <ng-container matColumnDef="date">
+                <th mat-header-cell *matHeaderCellDef>Date & Time</th>
+                <td mat-cell *matCellDef="let t">{{ t.transactionDate | date:'dd MMM yyyy HH:mm' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="depot">
+                <th mat-header-cell *matHeaderCellDef>Depot</th>
+                <td mat-cell *matCellDef="let t">{{ t.depotName }}</td>
+              </ng-container>
+              <ng-container matColumnDef="allocation">
+                <th mat-header-cell *matHeaderCellDef>Allocation</th>
+                <td mat-cell *matCellDef="let t">{{ t.allocationLitres | number:'1.0-0' }}L</td>
+              </ng-container>
+              <ng-container matColumnDef="litres">
+                <th mat-header-cell *matHeaderCellDef>Litres Used</th>
+                <td mat-cell *matCellDef="let t">
+                  <strong>{{ t.litresUsed | number:'1.2-2' }}L</strong>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="amount">
+                <th mat-header-cell *matHeaderCellDef>Amount</th>
+                <td mat-cell *matCellDef="let t">
+                  <strong>R {{ t.amountSpent | number:'1.2-2' }}</strong>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="costPerLitre">
+                <th mat-header-cell *matHeaderCellDef>R/Litre</th>
+                <td mat-cell *matCellDef="let t">R {{ (t.litresUsed > 0 ? t.amountSpent / t.litresUsed : 0) | number:'1.2-2' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="assignment">
+                <th mat-header-cell *matHeaderCellDef>Group</th>
+                <td mat-cell *matCellDef="let t">
+                  <span class="assignment-badge">{{ t.depotAssignment }}</span>
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  `,
+  styles: [`
+    .fuel-history-dialog {
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .header-info h2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .header-info h2 mat-icon {
+      color: #ff9800;
+    }
+
+    .vehicle-meta {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .meta-tag {
+      font-size: 12px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      background: #f0f0f0;
+      color: #555;
+    }
+
+    .meta-tag.type {
+      background: rgba(33,150,243,0.1);
+      color: #1565c0;
+    }
+
+    .meta-tag.province {
+      background: rgba(76,175,80,0.1);
+      color: #2e7d32;
+    }
+
+    .dialog-body {
+      padding: 20px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .loading-center, .empty-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px;
+      color: #888;
+    }
+
+    .empty-center mat-icon {
+      font-size: 56px;
+      width: 56px;
+      height: 56px;
+      color: #ccc;
+      margin-bottom: 12px;
+    }
+
+    .empty-center h3 {
+      margin: 0 0 8px;
+      color: #555;
+    }
+
+    .summary-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .summary-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .summary-card mat-icon {
+      color: #1e90ff;
+      font-size: 24px;
+    }
+
+    .summary-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .table-container {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid #e9ecef;
+    }
+
+    .fuel-tx-table {
+      width: 100%;
+    }
+
+    .fuel-tx-table th {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      font-weight: 600;
+      color: #1a1a2e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .fuel-tx-table td {
+      color: #333;
+      font-size: 13px;
+    }
+
+    .fuel-tx-table tr:hover td {
+      background: rgba(30,144,255,0.04);
+    }
+
+    .assignment-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: rgba(33,150,243,0.1);
+      color: #1565c0;
+      white-space: nowrap;
+    }
+  `]
+})
+export class FuelHistoryDialog {
+  loading = true;
+  transactions: any[] = [];
+  totalLitres = 0;
+  totalAmount = 0;
+  avgCostPerLitre = 0;
+  avgLitresPerFill = 0;
+  displayedColumns = ['date', 'depot', 'allocation', 'litres', 'amount', 'costPerLitre', 'assignment'];
+
+  private http = inject(HttpClient);
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private dialogRef: MatDialogRef<FuelHistoryDialog>
+  ) {
+    this.loadFuelHistory();
+  }
+
+  loadFuelHistory(): void {
+    this.http.get<any[]>(`${this.data.apiUrl}/fuelhistory/vehicle/${this.data.vehicle.id}`).subscribe({
+      next: (txns) => {
+        this.transactions = txns;
+        this.totalLitres = txns.reduce((sum, t) => sum + t.litresUsed, 0);
+        this.totalAmount = txns.reduce((sum, t) => sum + t.amountSpent, 0);
+        this.avgCostPerLitre = this.totalLitres > 0 ? this.totalAmount / this.totalLitres : 0;
+        this.avgLitresPerFill = txns.length > 0 ? this.totalLitres / txns.length : 0;
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Failed to load fuel history:', err);
+        this.loading = false;
+      }
+    });
+  }
+
+  close(): void {
+    this.dialogRef.close();
   }
 }

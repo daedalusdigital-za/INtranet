@@ -123,5 +123,6 @@ namespace ProjectTracker.API.Models.Logistics
 
         public virtual ICollection<Load> Loads { get; set; } = new List<Load>();
         public virtual ICollection<VehicleMaintenance> MaintenanceRecords { get; set; } = new List<VehicleMaintenance>();
+        public virtual ICollection<FuelTransaction> FuelTransactions { get; set; } = new List<FuelTransaction>();
     }
 }

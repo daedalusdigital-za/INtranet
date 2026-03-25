@@ -20,6 +20,7 @@ import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
 import { RequestDialogComponent } from '../request-dialog/request-dialog.component';
 import { QuickPrintDialogComponent } from '../quick-print-dialog/quick-print-dialog.component';
 import { AnnouncementDialogComponent } from '../announcement-dialog/announcement-dialog.component';
+import { BooksDepartmentDialogComponent } from '../../books-department-dialog/books-department-dialog.component';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -281,6 +282,10 @@ import { Subscription } from 'rxjs';
         <button mat-menu-item class="pm-menu-item" (click)="openTodoDialog()">
           <mat-icon class="pm-icon-green">checklist</mat-icon>
           <span>ToDo</span>
+        </button>
+        <button mat-menu-item class="pm-menu-item" (click)="openBooksDialog()">
+          <mat-icon class="pm-icon-purple">menu_book</mat-icon>
+          <span>Books</span>
         </button>
         <button mat-menu-item class="pm-menu-item" (click)="openRequestDialog()">
           <mat-icon class="pm-icon-amber">assignment</mat-icon>
@@ -1290,6 +1295,14 @@ export class NavbarComponent implements OnInit, OnDestroy {
   openQuickPrintDialog(): void {
     this.dialog.open(QuickPrintDialogComponent, {
       width: '650px',
+      maxWidth: '95vw',
+      panelClass: 'centered-dialog'
+    });
+  }
+
+  openBooksDialog(): void {
+    this.dialog.open(BooksDepartmentDialogComponent, {
+      width: '500px',
       maxWidth: '95vw',
       panelClass: 'centered-dialog'
     });

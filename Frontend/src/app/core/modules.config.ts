@@ -370,6 +370,13 @@ export function getModuleRoutes(): Routes {
       data: { module: 'tenders' } 
     },
     
+    // Books - Paid Invoice Management (managers)
+    { 
+      path: 'books', 
+      loadComponent: () => import('../components/books/books.component').then(m => m.BooksComponent),
+      canActivate: [authGuard] 
+    },
+    
     // User Profile & Settings (available to all)
     { 
       path: 'profile', 

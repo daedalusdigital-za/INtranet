@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, Output, EventEmitter, ViewChild, ElementRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,7 +12,10 @@ import { MatTableModule } from '@angular/material/table';
 import { MatSortModule } from '@angular/material/sort';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatDividerModule } from '@angular/material/divider';
+import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import {
   HBA1CService,
   HBA1CProjectDashboard,
@@ -43,41 +46,48 @@ import {
     MatTableModule,
     MatSortModule,
     MatBadgeModule,
-    MatDividerModule
+    MatDividerModule,
+    FormsModule
   ],
   template: `
-    <!-- Header Bar -->
-    <div class="dash-header">
-      <button mat-icon-button class="back-btn" (click)="goBack.emit()" matTooltip="Back to Projects">
-        <mat-icon>arrow_back</mat-icon>
-      </button>
-      <div class="header-title-block">
-        <div class="header-icon-wrap">
-          <mat-icon>biotech</mat-icon>
+    <!-- Hero Header -->
+    <div class="hero-header">
+      <div class="hero-bg"></div>
+      <div class="hero-content">
+        <button mat-button (click)="goBack.emit()" class="back-btn">
+          <mat-icon>arrow_back</mat-icon> Back to Projects
+        </button>
+        <div class="hero-title-block">
+          <div class="hero-icon-ring">
+            <mat-icon>biotech</mat-icon>
+          </div>
+          <div class="hero-text">
+            <h1>HBA1C Medical Management</h1>
+            <p>National training, inventory & sales dashboard</p>
+          </div>
         </div>
-        <div>
-          <h1>HBA1C Medical Management</h1>
-          <p class="header-subtitle">National training, inventory & sales dashboard</p>
+        <div class="hero-actions">
+          <div class="connection-pill" [class.connected]="isConnected" [class.error]="!isConnected && !loading">
+            <span class="conn-dot"></span>
+            <span>{{ loading ? 'Connecting...' : isConnected ? 'Live' : 'Offline' }}</span>
+          </div>
+          @if (!loading && isConnected) {
+            <button mat-flat-button class="request-delivery-btn" (click)="openDeliveryDialog()">
+              <mat-icon>local_shipping</mat-icon> Request Delivery
+            </button>
+            <button mat-flat-button class="refresh-btn" (click)="loadDashboard()" matTooltip="Refresh all data">
+              <mat-icon>refresh</mat-icon> Refresh
+            </button>
+          }
         </div>
-      </div>
-      <div class="header-actions">
-        <div class="connection-pill" [class.connected]="isConnected" [class.error]="!isConnected && !loading">
-          <span class="conn-dot"></span>
-          <span>{{ loading ? 'Connecting...' : isConnected ? 'Live' : 'Offline' }}</span>
-        </div>
-        @if (!loading && isConnected) {
-          <button mat-icon-button class="header-refresh" (click)="loadDashboard()" matTooltip="Refresh all data">
-            <mat-icon>refresh</mat-icon>
-          </button>
-        }
       </div>
     </div>
 
     @if (loading) {
       <div class="loading-state">
         <div class="loading-card">
-          <div class="lc-icon-wrap">
-            <mat-icon class="lc-icon pulse-icon">biotech</mat-icon>
+          <div class="lc-icon-wrap pulse-ring">
+            <mat-icon class="lc-icon">biotech</mat-icon>
           </div>
           <h3>Connecting to HBA1C API</h3>
           <p class="lc-subtitle">Fetching live data from the medical management system</p>
@@ -127,52 +137,58 @@ import {
       <!-- KPI Cards -->
       <div class="kpi-grid">
         <div class="kpi-card kpi-blue clickable" (click)="openKpiDialog('training')">
+          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>school</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.trainingStats?.totalSessions || 0 | number }}</span>
             <span class="kpi-label">Training Sessions</span>
           </div>
-          <div class="kpi-accent"></div>
+          <span class="kpi-sub">{{ dashboard?.trainingStats?.completedSessions || 0 }} completed</span>
         </div>
         <div class="kpi-card kpi-green clickable" (click)="openKpiDialog('participants')">
+          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>groups</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
             <span class="kpi-label">Participants</span>
           </div>
-          <div class="kpi-accent"></div>
+          <span class="kpi-sub">Across all provinces</span>
         </div>
         <div class="kpi-card kpi-orange clickable" (click)="openKpiDialog('trainers')">
+          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>person</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.nationalTotals?.totalTrainers || 0 | number }}</span>
             <span class="kpi-label">Trainers</span>
           </div>
-          <div class="kpi-accent"></div>
+          <span class="kpi-sub">Active trainers</span>
         </div>
         <div class="kpi-card kpi-purple clickable" (click)="openKpiDialog('deliveries')">
+          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>local_shipping</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
             <span class="kpi-label">Deliveries</span>
           </div>
-          <div class="kpi-accent"></div>
+          <span class="kpi-sub">Equipment deliveries</span>
         </div>
         <div class="kpi-card kpi-teal clickable" (click)="openKpiDialog('revenue')">
+          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>point_of_sale</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
             <span class="kpi-label">Total Revenue</span>
           </div>
-          <div class="kpi-accent"></div>
+          <span class="kpi-sub">{{ dashboard?.salesStats?.totalSales || 0 }} sales</span>
         </div>
         <div class="kpi-card kpi-red clickable" (click)="openKpiDialog('inventory')">
+          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>inventory_2</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.inventoryStats?.totalItems || 0 | number }}</span>
             <span class="kpi-label">Inventory Items</span>
           </div>
-          <div class="kpi-accent"></div>
+          <span class="kpi-sub">{{ dashboard?.inventoryStats?.lowStockItems || 0 }} low stock</span>
         </div>
       </div>
 
@@ -488,8 +504,559 @@ import {
         </div>
       }
 
+      <!-- ==================== REQUEST DELIVERY DIALOG ==================== -->
+      @if (showDeliveryDialog) {
+        <div class="dlg-backdrop" (click)="closeDeliveryDialog()"></div>
+        <div class="dlg-panel">
+          <div class="dlg-header">
+            <div class="dlg-title-group">
+              <div class="dlg-icon-ring">
+                <mat-icon>local_shipping</mat-icon>
+              </div>
+              <div>
+                <h2 class="dlg-title">Request Delivery</h2>
+                <p class="dlg-subtitle">Submit a delivery request to logistics</p>
+              </div>
+            </div>
+            <button class="dlg-close" (click)="closeDeliveryDialog()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
+          <div class="dlg-body">
+            @if (deliverySuccess) {
+              <div class="dlg-success">
+                <div class="dlg-success-icon"><mat-icon>check_circle</mat-icon></div>
+                <h3>Delivery Request Submitted!</h3>
+                <p>{{ deliverySuccessMsg }}</p>
+                <div class="dlg-success-actions">
+                  <button mat-flat-button class="btn-another" (click)="resetDeliveryForm()">
+                    <mat-icon>add</mat-icon> Request Another
+                  </button>
+                  <button mat-stroked-button (click)="closeDeliveryDialog()">
+                    <mat-icon>close</mat-icon> Close
+                  </button>
+                </div>
+              </div>
+            } @else {
+              @if (deliveryError) {
+                <div class="dlg-error">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>{{ deliveryError }}</span>
+                </div>
+              }
+
+              <div class="dlg-form">
+                <div class="dlg-row two-col">
+                  <div class="dlg-field">
+                    <label class="dlg-label">Description <span class="req">*</span></label>
+                    <input type="text" class="dlg-input" [(ngModel)]="deliveryForm.description" placeholder="e.g. HBA1C testing kits for Gauteng clinics">
+                  </div>
+                  <div class="dlg-field">
+                    <label class="dlg-label">Priority</label>
+                    <select class="dlg-select" [(ngModel)]="deliveryForm.priority">
+                      <option value="Normal">Normal</option>
+                      <option value="Urgent">🔴 Urgent</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="dlg-row two-col">
+                  <div class="dlg-field">
+                    <label class="dlg-label">Quantity <span class="req">*</span></label>
+                    <input type="number" class="dlg-input" [(ngModel)]="deliveryForm.quantity" placeholder="0" min="1">
+                  </div>
+                  <div class="dlg-field">
+                    <label class="dlg-label">Unit of Measure</label>
+                    <select class="dlg-select" [(ngModel)]="deliveryForm.unitOfMeasure">
+                      <option value="BOXES">BOXES</option>
+                      <option value="CASES">CASES</option>
+                      <option value="UNITS">UNITS</option>
+                      <option value="KITS">KITS</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="dlg-row two-col">
+                  <div class="dlg-field">
+                    <label class="dlg-label">Invoice Number <span class="opt">(optional)</span></label>
+                    <input type="text" class="dlg-input" [(ngModel)]="deliveryForm.invoiceNumber" placeholder="e.g. INV-001234">
+                  </div>
+                  <div class="dlg-field">
+                    <label class="dlg-label">Reference <span class="opt">(optional)</span></label>
+                    <input type="text" class="dlg-input" [(ngModel)]="deliveryForm.reference" placeholder="e.g. PO-2026-001">
+                  </div>
+                </div>
+
+                <div class="dlg-row">
+                  <div class="dlg-field">
+                    <label class="dlg-label">Delivery Address <span class="opt">(optional)</span></label>
+                    <div class="address-input-wrap">
+                      <mat-icon class="address-loc-icon">location_on</mat-icon>
+                      <input #deliveryAddressInput type="text" class="dlg-input address-input"
+                             [(ngModel)]="deliveryForm.deliveryAddress"
+                             placeholder="Start typing an address..." autocomplete="off">
+                      @if (addressVerified) {
+                        <mat-icon class="address-verified">verified</mat-icon>
+                      }
+                    </div>
+                    @if (addressVerified) {
+                      <span class="address-confirmed-text">✓ Address verified via Google</span>
+                    }
+                  </div>
+                </div>
+
+                <div class="dlg-row">
+                  <div class="dlg-field">
+                    <label class="dlg-label">Notes <span class="opt">(optional)</span></label>
+                    <input type="text" class="dlg-input" [(ngModel)]="deliveryForm.notes" placeholder="Any additional instructions...">
+                  </div>
+                </div>
+
+                @if (deliveryForm.description && deliveryForm.quantity > 0) {
+                  <div class="dlg-preview">
+                    <mat-icon>local_shipping</mat-icon>
+                    <span>
+                      @if (deliveryForm.priority === 'Urgent') { 🔴 }
+                      <strong>{{ deliveryForm.quantity }} {{ deliveryForm.unitOfMeasure }}</strong> &mdash;
+                      {{ deliveryForm.description }}
+                      @if (deliveryForm.invoiceNumber) { ({{ deliveryForm.invoiceNumber }}) }
+                    </span>
+                  </div>
+                }
+
+                <div class="dlg-actions">
+                  <button mat-stroked-button (click)="closeDeliveryDialog()" [disabled]="deliverySaving">Cancel</button>
+                  <button mat-flat-button class="btn-submit-delivery" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
+                    @if (deliverySaving) {
+                      <mat-spinner diameter="18" strokeWidth="2"></mat-spinner>
+                      Submitting...
+                    } @else {
+                      <mat-icon>send</mat-icon>
+                      Submit Request
+                    }
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <!-- Tabs -->
       <div class="tabs-wrapper">
+
+      <!-- ==================== CRUD EDIT DIALOG ==================== -->
+      @if (showEditDialog) {
+        <div class="dlg-backdrop" (click)="closeEditDialog()"></div>
+        <div class="dlg-panel crud-panel">
+          <div class="dlg-header">
+            <div class="dlg-title-group">
+              <div class="dlg-icon-ring">
+                @switch (editEntity) {
+                  @case ('training') { <mat-icon>school</mat-icon> }
+                  @case ('inventory') { <mat-icon>inventory_2</mat-icon> }
+                  @case ('sale') { <mat-icon>point_of_sale</mat-icon> }
+                  @case ('creditNote') { <mat-icon>receipt</mat-icon> }
+                }
+              </div>
+              <div>
+                <h2 class="dlg-title">{{ editMode === 'create' ? 'Add' : 'Edit' }}
+                  @switch (editEntity) {
+                    @case ('training') { Training Session }
+                    @case ('inventory') { Inventory Item }
+                    @case ('sale') { Sale }
+                    @case ('creditNote') { Credit Note }
+                  }
+                </h2>
+                <p class="dlg-subtitle">{{ editMode === 'create' ? 'Create a new record' : 'Update existing record' }}</p>
+              </div>
+            </div>
+            <button class="dlg-close" (click)="closeEditDialog()"><mat-icon>close</mat-icon></button>
+          </div>
+
+          <div class="dlg-body">
+            @if (editError) {
+              <div class="dlg-error"><mat-icon>error_outline</mat-icon><span>{{ editError }}</span></div>
+            }
+
+            @if (editSuccess) {
+              <div class="dlg-success">
+                <div class="dlg-success-icon"><mat-icon>check_circle</mat-icon></div>
+                <h3>{{ editMode === 'create' ? 'Created' : 'Updated' }} Successfully!</h3>
+                <p>The record has been saved.</p>
+                <div class="dlg-success-actions">
+                  <button mat-flat-button class="btn-another" (click)="closeEditDialog()"><mat-icon>close</mat-icon> Close</button>
+                </div>
+              </div>
+            } @else {
+              <div class="dlg-form">
+
+                <!-- ── Training Form ── -->
+                @if (editEntity === 'training') {
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Training Name <span class="req">*</span></label>
+                      <input type="text" class="dlg-input" [(ngModel)]="trainingForm.trainingName" placeholder="e.g. HBA1C Level 1 Training">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Training Type <span class="req">*</span></label>
+                      <select class="dlg-select" [(ngModel)]="trainingForm.trainingType">
+                        <option value="">Select type...</option>
+                        <option value="Initial">Initial</option>
+                        <option value="Refresher">Refresher</option>
+                        <option value="Advanced">Advanced</option>
+                        <option value="Workshop">Workshop</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Province <span class="req">*</span></label>
+                      <select class="dlg-select" [(ngModel)]="trainingForm.provinceId">
+                        <option [ngValue]="0">Select province...</option>
+                        <option [ngValue]="1">Eastern Cape</option>
+                        <option [ngValue]="2">Free State</option>
+                        <option [ngValue]="3">Gauteng</option>
+                        <option [ngValue]="4">KwaZulu-Natal</option>
+                        <option [ngValue]="5">Limpopo</option>
+                        <option [ngValue]="6">Mpumalanga</option>
+                        <option [ngValue]="7">North West</option>
+                        <option [ngValue]="8">Northern Cape</option>
+                        <option [ngValue]="9">Western Cape</option>
+                      </select>
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Start Date <span class="req">*</span></label>
+                      <input type="date" class="dlg-input" [(ngModel)]="trainingForm.startDate">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Venue</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="trainingForm.venue" placeholder="Training venue">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Target Audience</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="trainingForm.targetAudience" placeholder="e.g. Healthcare Workers">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Participants <span class="req">*</span></label>
+                      <input type="number" class="dlg-input" [(ngModel)]="trainingForm.numberOfParticipants" min="1">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Status</label>
+                      <select class="dlg-select" [(ngModel)]="trainingForm.status">
+                        <option [ngValue]="0">Scheduled</option>
+                        <option [ngValue]="1">In Progress</option>
+                        <option [ngValue]="2">Completed</option>
+                        <option [ngValue]="3">Cancelled</option>
+                      </select>
+                    </div>
+                  </div>
+                }
+
+                <!-- ── Inventory Form ── -->
+                @if (editEntity === 'inventory') {
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Item Name <span class="req">*</span></label>
+                      <input type="text" class="dlg-input" [(ngModel)]="inventoryForm.name" placeholder="e.g. HBA1C Test Strips">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">SKU</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="inventoryForm.sku" placeholder="e.g. HBA-TS-001">
+                    </div>
+                  </div>
+                  <div class="dlg-row">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Description</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="inventoryForm.description" placeholder="Item description">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Category</label>
+                      <select class="dlg-select" [(ngModel)]="inventoryForm.category">
+                        <option [ngValue]="0">Select category...</option>
+                        <option [ngValue]="1">HemoglobinTesting</option>
+                        <option [ngValue]="2">GlucoseTesting</option>
+                        <option [ngValue]="3">General</option>
+                      </select>
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Unit of Measure</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="inventoryForm.unitOfMeasure" placeholder="e.g. BOX, UNIT">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Unit Price <span class="req">*</span></label>
+                      <input type="number" class="dlg-input" [(ngModel)]="inventoryForm.unitPrice" min="0" step="0.01">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Stock Available <span class="req">*</span></label>
+                      <input type="number" class="dlg-input" [(ngModel)]="inventoryForm.stockAvailable" min="0">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Reorder Level</label>
+                      <input type="number" class="dlg-input" [(ngModel)]="inventoryForm.reorderLevel" min="0">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Supplier</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="inventoryForm.supplier" placeholder="Supplier name">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Batch Number</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="inventoryForm.batchNumber" placeholder="Batch #">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Expiry Date</label>
+                      <input type="date" class="dlg-input" [(ngModel)]="inventoryForm.expiryDate">
+                    </div>
+                  </div>
+                }
+
+                <!-- ── Sale Form ── -->
+                @if (editEntity === 'sale') {
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Sale Number</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="saleForm.saleNumber" placeholder="e.g. SALE-001">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Sale Date <span class="req">*</span></label>
+                      <input type="date" class="dlg-input" [(ngModel)]="saleForm.saleDate">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Customer Name <span class="req">*</span></label>
+                      <input type="text" class="dlg-input" [(ngModel)]="saleForm.customerName" placeholder="Customer name">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Customer Phone</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="saleForm.customerPhone" placeholder="Phone number">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Total <span class="req">*</span></label>
+                      <input type="number" class="dlg-input" [(ngModel)]="saleForm.total" min="0" step="0.01">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Notes</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="saleForm.notes" placeholder="Any notes...">
+                    </div>
+                  </div>
+                }
+
+                <!-- ── Credit Note Form ── -->
+                @if (editEntity === 'creditNote') {
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Credit Note Number</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="creditNoteForm.creditNoteNumber" placeholder="e.g. CN-001">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Invoice Number <span class="req">*</span></label>
+                      <input type="text" class="dlg-input" [(ngModel)]="creditNoteForm.invoiceNumber" placeholder="Invoice #">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Customer Name</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="creditNoteForm.customerName" placeholder="Customer name">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Status</label>
+                      <select class="dlg-select" [(ngModel)]="creditNoteForm.status">
+                        <option value="Pending">Pending</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Rejected">Rejected</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Original Amount <span class="req">*</span></label>
+                      <input type="number" class="dlg-input" [(ngModel)]="creditNoteForm.originalAmount" min="0" step="0.01">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Credit Amount <span class="req">*</span></label>
+                      <input type="number" class="dlg-input" [(ngModel)]="creditNoteForm.creditAmount" min="0" step="0.01">
+                    </div>
+                  </div>
+                  <div class="dlg-row">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Reason <span class="req">*</span></label>
+                      <input type="text" class="dlg-input" [(ngModel)]="creditNoteForm.reason" placeholder="Reason for credit note">
+                    </div>
+                  </div>
+                  <div class="dlg-row">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Notes</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="creditNoteForm.notes" placeholder="Additional notes...">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label checkbox-label">
+                        <input type="checkbox" [(ngModel)]="creditNoteForm.reverseStock"> Reverse Stock
+                      </label>
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label checkbox-label">
+                        <input type="checkbox" [(ngModel)]="creditNoteForm.reverseSale"> Reverse Sale
+                      </label>
+                    </div>
+                  </div>
+                }
+
+                <div class="dlg-actions">
+                  <button mat-stroked-button (click)="closeEditDialog()" [disabled]="editSaving">Cancel</button>
+                  <button mat-flat-button class="btn-submit-delivery" (click)="saveEditForm()" [disabled]="editSaving">
+                    @if (editSaving) {
+                      <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Saving...
+                    } @else {
+                      <mat-icon>save</mat-icon> {{ editMode === 'create' ? 'Create' : 'Save Changes' }}
+                    }
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- ==================== UPDATE STOCK DIALOG ==================== -->
+      @if (showStockDialog) {
+        <div class="dlg-backdrop" (click)="closeStockDialog()"></div>
+        <div class="dlg-panel stock-panel">
+          <div class="dlg-header stock-header">
+            <div class="dlg-title-group">
+              <div class="dlg-icon-ring stock-icon-ring"><mat-icon>sync</mat-icon></div>
+              <div>
+                <h2 class="dlg-title">Update Stock Levels</h2>
+                <p class="dlg-subtitle">Adjust inventory quantities</p>
+              </div>
+            </div>
+            <button class="dlg-close" (click)="closeStockDialog()"><mat-icon>close</mat-icon></button>
+          </div>
+          <div class="dlg-body">
+            @if (stockSuccess) {
+              <div class="dlg-success">
+                <div class="dlg-success-icon"><mat-icon>check_circle</mat-icon></div>
+                <h3>Stock Updated!</h3>
+                <p>{{ stockSuccessMsg }}</p>
+                <div class="dlg-success-actions">
+                  <button mat-flat-button class="btn-another" (click)="resetStockForm()"><mat-icon>sync</mat-icon> Update Another</button>
+                  <button mat-stroked-button (click)="closeStockDialog()"><mat-icon>close</mat-icon> Close</button>
+                </div>
+              </div>
+            } @else {
+              @if (stockError) {
+                <div class="dlg-error"><mat-icon>error_outline</mat-icon><span>{{ stockError }}</span></div>
+              }
+              <div class="dlg-form">
+                <div class="dlg-field">
+                  <label class="dlg-label">Select Item <span class="req">*</span></label>
+                  <select class="dlg-select" [(ngModel)]="stockForm.itemId" (ngModelChange)="onStockItemChange()">
+                    <option [ngValue]="0">-- Select an inventory item --</option>
+                    @for (item of inventoryItems; track item.id) {
+                      <option [ngValue]="item.id">{{ item.name }} ({{ item.sku }}) — Current: {{ item.stockAvailable }}</option>
+                    }
+                  </select>
+                </div>
+                @if (stockForm.itemId > 0) {
+                  <div class="stock-current-info">
+                    <div class="sci-item"><span class="sci-label">Item</span><span class="sci-value">{{ stockForm.itemName }}</span></div>
+                    <div class="sci-item"><span class="sci-label">SKU</span><span class="sci-value mono-text">{{ stockForm.itemSku }}</span></div>
+                    <div class="sci-item"><span class="sci-label">Current Stock</span><span class="sci-value" [class.danger-val]="stockForm.currentStock <= stockForm.reorderLevel">{{ stockForm.currentStock }}</span></div>
+                    <div class="sci-item"><span class="sci-label">Reorder Level</span><span class="sci-value">{{ stockForm.reorderLevel }}</span></div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Adjustment Type</label>
+                      <select class="dlg-select" [(ngModel)]="stockForm.adjustType">
+                        <option value="set">Set to exact value</option>
+                        <option value="add">Add to current stock</option>
+                        <option value="subtract">Subtract from stock</option>
+                      </select>
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Quantity <span class="req">*</span></label>
+                      <input type="number" class="dlg-input" [(ngModel)]="stockForm.quantity" min="0" placeholder="0">
+                    </div>
+                  </div>
+                  @if (stockForm.quantity >= 0) {
+                    <div class="stock-preview">
+                      <mat-icon>inventory_2</mat-icon>
+                      <span>
+                        <strong>{{ stockForm.itemName }}</strong>: {{ stockForm.currentStock }}
+                        <mat-icon class="stock-arrow">arrow_forward</mat-icon>
+                        <strong [class.danger-val]="getNewStockValue() < stockForm.reorderLevel" [class.good-val]="getNewStockValue() >= stockForm.reorderLevel">
+                          {{ getNewStockValue() }}
+                        </strong>
+                        ({{ getStockDiff() }})
+                      </span>
+                    </div>
+                  }
+                }
+                <div class="dlg-actions">
+                  <button mat-stroked-button (click)="closeStockDialog()" [disabled]="stockSaving">Cancel</button>
+                  <button mat-flat-button class="btn-stock-save" (click)="saveStockUpdate()" [disabled]="stockSaving || stockForm.itemId === 0">
+                    @if (stockSaving) {
+                      <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Saving...
+                    } @else {
+                      <mat-icon>save</mat-icon> Update Stock
+                    }
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- ==================== DELETE CONFIRMATION DIALOG ==================== -->
+      @if (showDeleteDialog) {
+        <div class="dlg-backdrop" (click)="closeDeleteDialog()"></div>
+        <div class="dlg-panel delete-panel">
+          <div class="dlg-header delete-header">
+            <div class="dlg-title-group">
+              <div class="dlg-icon-ring delete-icon-ring"><mat-icon>warning</mat-icon></div>
+              <div>
+                <h2 class="dlg-title">Confirm Delete</h2>
+                <p class="dlg-subtitle">This action cannot be undone</p>
+              </div>
+            </div>
+            <button class="dlg-close" (click)="closeDeleteDialog()"><mat-icon>close</mat-icon></button>
+          </div>
+          <div class="dlg-body">
+            <p class="delete-message">Are you sure you want to delete <strong>{{ deleteItemName }}</strong>?</p>
+            @if (editError) {
+              <div class="dlg-error"><mat-icon>error_outline</mat-icon><span>{{ editError }}</span></div>
+            }
+            <div class="dlg-actions">
+              <button mat-stroked-button (click)="closeDeleteDialog()" [disabled]="editSaving">Cancel</button>
+              <button mat-flat-button class="btn-delete-confirm" (click)="confirmDelete()" [disabled]="editSaving">
+                @if (editSaving) {
+                  <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Deleting...
+                } @else {
+                  <mat-icon>delete</mat-icon> Delete
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
         <mat-tab-group class="dashboard-tabs" animationDuration="200ms" (selectedIndexChange)="onTabChange($event)">
 
           <!-- ==================== OVERVIEW TAB ==================== -->
@@ -792,6 +1359,9 @@ import {
                   <button mat-stroked-button class="panel-action" (click)="loadTraining()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
+                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('training')">
+                    <mat-icon>add</mat-icon> Add Training
+                  </button>
                 </div>
 
                 @if (trainingLoading) {
@@ -808,6 +1378,7 @@ import {
                           <th>Date</th>
                           <th class="center">Participants</th>
                           <th class="center">Status</th>
+                          <th class="center">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -828,10 +1399,18 @@ import {
                                 {{ session.statusText || 'Unknown' }}
                               </span>
                             </td>
+                            <td class="center actions-cell">
+                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('training', session)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('training', session.id!, session.trainingName)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </td>
                           </tr>
                         }
                         @if (!trainingSessions.length) {
-                          <tr><td colspan="7" class="empty-row">No training sessions found</td></tr>
+                          <tr><td colspan="8" class="empty-row">No training sessions found</td></tr>
                         }
                       </tbody>
                     </table>
@@ -931,6 +1510,12 @@ import {
                   <button mat-stroked-button class="panel-action" (click)="loadInventory()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
+                  <button mat-flat-button class="panel-action update-stock-btn" (click)="openStockUpdateDialog()">
+                    <mat-icon>sync</mat-icon> Update Stock
+                  </button>
+                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('inventory')">
+                    <mat-icon>add</mat-icon> Add Item
+                  </button>
                 </div>
 
                 @if (inventoryLoading) {
@@ -948,6 +1533,7 @@ import {
                           <th class="right">Unit Price</th>
                           <th>Supplier</th>
                           <th class="center">Status</th>
+                          <th class="center">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -967,10 +1553,18 @@ import {
                                 {{ item.statusText || (item.stockAvailable <= item.reorderLevel ? 'Low Stock' : 'In Stock') }}
                               </span>
                             </td>
+                            <td class="center actions-cell">
+                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('inventory', item)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('inventory', item.id!, item.name)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </td>
                           </tr>
                         }
                         @if (!inventoryItems.length) {
-                          <tr><td colspan="8" class="empty-row">No inventory items found</td></tr>
+                          <tr><td colspan="9" class="empty-row">No inventory items found</td></tr>
                         }
                       </tbody>
                     </table>
@@ -1101,6 +1695,9 @@ import {
                   <button mat-stroked-button class="panel-action" (click)="loadSales()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
+                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('sale')">
+                    <mat-icon>add</mat-icon> Add Sale
+                  </button>
                 </div>
 
                 @if (salesLoading) {
@@ -1116,6 +1713,7 @@ import {
                           <th class="center">Items</th>
                           <th class="right">Total</th>
                           <th class="center">Credit</th>
+                          <th class="center">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1135,10 +1733,18 @@ import {
                                 <span class="status-tag st-ok">OK</span>
                               }
                             </td>
+                            <td class="center actions-cell">
+                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('sale', sale)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('sale', sale.id!, sale.saleNumber)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </td>
                           </tr>
                         }
                         @if (!salesList.length) {
-                          <tr><td colspan="6" class="empty-row">No sales found</td></tr>
+                          <tr><td colspan="7" class="empty-row">No sales found</td></tr>
                         }
                       </tbody>
                     </table>
@@ -1168,6 +1774,9 @@ import {
                   <button mat-stroked-button class="panel-action" (click)="loadCreditNotes()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
+                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('creditNote')">
+                    <mat-icon>add</mat-icon> Add Credit Note
+                  </button>
                 </div>
 
                 @if (creditNotesLoading) {
@@ -1185,6 +1794,7 @@ import {
                           <th>Reason</th>
                           <th>Created</th>
                           <th class="center">Status</th>
+                          <th class="center">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1202,10 +1812,18 @@ import {
                                 {{ cn.status }}
                               </span>
                             </td>
+                            <td class="center actions-cell">
+                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('creditNote', cn)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('creditNote', cn.id, cn.creditNoteNumber)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </td>
                           </tr>
                         }
                         @if (!creditNotes.length) {
-                          <tr><td colspan="8" class="empty-row">No credit notes found</td></tr>
+                          <tr><td colspan="9" class="empty-row">No credit notes found</td></tr>
                         }
                       </tbody>
                     </table>
@@ -1246,44 +1864,90 @@ import {
     }
 
     /* ============================== */
-    /*  HEADER                        */
+    /*  HERO HEADER                   */
     /* ============================== */
-    .dash-header {
-      display: flex; align-items: center; gap: 12px;
-      margin-bottom: 28px; flex-wrap: wrap;
+    .hero-header {
+      position: relative;
+      margin: -24px -24px 32px;
+      padding: 32px 40px 36px;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, #0d9488 0%, #0891b2 40%, #3b82f6 100%);
+      z-index: 0;
+    }
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
     }
     .back-btn {
-      background: rgba(255,255,255,0.15) !important;
-      color: white !important;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.25) !important;
-      transition: all 0.2s;
+      color: rgba(255,255,255,0.9) !important;
+      border-radius: 12px !important;
+      font-weight: 500 !important;
     }
-    .back-btn:hover { background: rgba(255,255,255,0.25) !important; }
-
-    .header-title-block {
-      display: flex; align-items: center; gap: 14px; flex: 1;
+    .back-btn:hover { background: rgba(255,255,255,0.15) !important; }
+    .hero-title-block {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
-    .header-icon-wrap {
-      width: 44px; height: 44px; border-radius: var(--radius-md);
-      background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);
-      display: flex; align-items: center; justify-content: center;
+    .hero-icon-ring {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       border: 1px solid rgba(255,255,255,0.25);
+      flex-shrink: 0;
     }
-    .header-icon-wrap mat-icon { color: white; font-size: 24px; width: 24px; height: 24px; }
-    .header-title-block h1 {
-      font-size: 22px; font-weight: 700; color: white; margin: 0;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.15); line-height: 1.2;
+    .hero-icon-ring mat-icon {
+      font-size: 30px;
+      width: 30px;
+      height: 30px;
+      color: white;
     }
-    .header-subtitle {
-      font-size: 13px; color: rgba(255,255,255,0.75); margin: 2px 0 0 0;
+    .hero-text h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 800;
+      color: white;
+      letter-spacing: -0.3px;
     }
-
-    .header-actions { display: flex; align-items: center; gap: 8px; }
-    .header-refresh {
-      background: rgba(255,255,255,0.15) !important; color: white !important;
-      backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2) !important;
+    .hero-text p {
+      margin: 4px 0 0;
+      font-size: 14px;
+      color: rgba(255,255,255,0.75);
     }
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .refresh-btn {
+      background: rgba(255,255,255,0.2) !important;
+      color: white !important;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.2) !important;
+      border-radius: 12px !important;
+      font-weight: 600 !important;
+    }
+    .refresh-btn:hover { background: rgba(255,255,255,0.3) !important; }
 
     .connection-pill {
       display: flex; align-items: center; gap: 7px;
@@ -1295,9 +1959,9 @@ import {
       width: 8px; height: 8px; border-radius: 50%;
       background: rgba(255,255,255,0.5); animation: pulse 2s infinite;
     }
-    .connection-pill.connected { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.4); color: #bbf7d0; }
+    .connection-pill.connected { background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.5); color: #bbf7d0; }
     .connection-pill.connected .conn-dot { background: #4ade80; }
-    .connection-pill.error { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+    .connection-pill.error { background: rgba(239,68,68,0.25); border-color: rgba(239,68,68,0.5); color: #fca5a5; }
     .connection-pill.error .conn-dot { background: #f87171; animation: none; }
 
     @keyframes pulse {
@@ -1309,30 +1973,33 @@ import {
     /*  LOADING / ERROR STATES        */
     /* ============================== */
     .loading-state, .error-state {
-      display: flex; justify-content: center; padding: 60px 20px;
+      display: flex; justify-content: center; padding: 80px 20px;
     }
     .loading-card, .error-card {
-      background: var(--surface); border-radius: var(--radius-xl);
-      padding: 48px 56px; text-align: center; box-shadow: var(--shadow-lg);
+      background: var(--surface); border-radius: 24px;
+      padding: 48px 56px; text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      border: 1px solid #f0f0f0;
       max-width: 520px; width: 100%;
     }
-    .loading-card h3, .error-card h3 { color: var(--text-primary); margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
+    .loading-card h3, .error-card h3 { color: var(--text-primary); margin: 16px 0 6px; font-size: 20px; font-weight: 800; }
     .loading-card p, .error-card p { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
 
     /* Loading icon */
     .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, var(--blue-soft), rgba(99, 102, 241, 0.12));
+      width: 72px; height: 72px; border-radius: 22px; margin: 0 auto;
+      background: linear-gradient(135deg, #0d9488, #3b82f6);
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
     }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: var(--blue); }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.08); }
+    .lc-icon-wrap.pulse-ring {
+      animation: pulseRing 1.8s ease-in-out infinite;
     }
-    .lc-subtitle { color: var(--text-tertiary) !important; font-size: 13px !important; }
+    @keyframes pulseRing {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(13,148,136,0.4); }
+      50% { transform: scale(1.08); box-shadow: 0 0 0 16px rgba(13,148,136,0); }
+    }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: white; }
+    .lc-subtitle { color: var(--text-muted) !important; font-size: 13px !important; }
 
     /* Progress bar */
     .lc-progress-wrap { margin: 8px 0 24px; }
@@ -1342,7 +2009,7 @@ import {
     }
     .lc-progress-fill {
       height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, var(--blue), #818cf8, #6366f1);
+      background: linear-gradient(90deg, #0d9488, #0891b2, #3b82f6);
       background-size: 200% 100%;
       animation: shimmer 2s ease-in-out infinite;
       transition: width 0.15s ease-out;
@@ -1366,7 +2033,7 @@ import {
       transition: opacity 0.3s ease;
     }
     .lc-progress-pct {
-      color: var(--blue); font-weight: 700; font-size: 13px;
+      color: var(--teal); font-weight: 700; font-size: 13px;
       font-variant-numeric: tabular-nums;
     }
 
@@ -1389,14 +2056,14 @@ import {
     }
     .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--text-tertiary); transition: color 0.3s ease; }
     .lc-step.active .lc-step-dot {
-      background: linear-gradient(135deg, var(--blue), #6366f1);
-      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+      background: linear-gradient(135deg, #0d9488, #3b82f6);
+      box-shadow: 0 2px 10px rgba(13, 148, 136, 0.3);
     }
     .lc-step.active .lc-step-dot mat-icon { color: #fff; }
     .lc-step.done .lc-step-dot { background: var(--green-soft); }
     .lc-step.done .lc-step-dot mat-icon { color: var(--green); }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: var(--blue); }
+    .lc-step-label { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+    .lc-step.active .lc-step-label { color: var(--teal); }
     .lc-step.done .lc-step-label { color: var(--green); }
     .error-icon-wrap {
       width: 64px; height: 64px; border-radius: 50%; margin: 0 auto;
@@ -1409,52 +2076,58 @@ import {
     /* ============================== */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 16px; margin-bottom: 28px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px; margin-bottom: 28px;
     }
     .kpi-card {
-      background: var(--surface); border-radius: var(--radius-lg);
-      padding: 22px 20px; display: flex; align-items: center; gap: 16px;
-      box-shadow: var(--shadow-sm); transition: all 0.25s ease;
-      position: relative; overflow: hidden; border: 1px solid var(--border);
+      background: var(--surface); border-radius: 20px;
+      padding: 24px; display: flex; flex-direction: column; gap: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: all 0.25s cubic-bezier(.4,0,.2,1);
+      position: relative; overflow: hidden; border: 1px solid #f0f0f0;
     }
-    .kpi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-    .kpi-accent {
-      position: absolute; top: 0; left: 0; width: 4px; height: 100%;
-      border-radius: 4px 0 0 4px;
+    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.08); }
+    .kpi-glow {
+      position: absolute; top: -40px; right: -40px;
+      width: 100px; height: 100px; border-radius: 50%;
+      opacity: 0.12; transition: opacity 0.3s;
     }
-    .kpi-blue .kpi-accent { background: var(--blue); }
-    .kpi-green .kpi-accent { background: var(--green); }
-    .kpi-orange .kpi-accent { background: var(--orange); }
-    .kpi-purple .kpi-accent { background: var(--purple); }
-    .kpi-teal .kpi-accent { background: var(--teal); }
-    .kpi-red .kpi-accent { background: var(--red); }
+    .kpi-card:hover .kpi-glow { opacity: 0.2; }
+    .kpi-blue .kpi-glow { background: var(--blue); }
+    .kpi-green .kpi-glow { background: var(--green); }
+    .kpi-orange .kpi-glow { background: var(--orange); }
+    .kpi-purple .kpi-glow { background: var(--purple); }
+    .kpi-teal .kpi-glow { background: var(--teal); }
+    .kpi-red .kpi-glow { background: var(--red); }
 
     .kpi-icon-wrap {
-      width: 50px; height: 50px; border-radius: var(--radius-md);
+      width: 48px; height: 48px; border-radius: 16px;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .kpi-blue .kpi-icon-wrap { background: var(--blue-soft); color: var(--blue); }
-    .kpi-green .kpi-icon-wrap { background: var(--green-soft); color: var(--green); }
-    .kpi-orange .kpi-icon-wrap { background: var(--orange-soft); color: var(--orange); }
-    .kpi-purple .kpi-icon-wrap { background: var(--purple-soft); color: var(--purple); }
-    .kpi-teal .kpi-icon-wrap { background: var(--teal-soft); color: var(--teal); }
-    .kpi-red .kpi-icon-wrap { background: var(--red-soft); color: var(--red); }
-    .kpi-icon-wrap mat-icon { font-size: 26px; width: 26px; height: 26px; }
+    .kpi-blue .kpi-icon-wrap { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+    .kpi-green .kpi-icon-wrap { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
+    .kpi-orange .kpi-icon-wrap { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+    .kpi-purple .kpi-icon-wrap { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+    .kpi-teal .kpi-icon-wrap { background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; }
+    .kpi-red .kpi-icon-wrap { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+    .kpi-icon-wrap mat-icon { font-size: 24px; width: 24px; height: 24px; }
 
-    .kpi-body { display: flex; flex-direction: column; min-width: 0; }
-    .kpi-number { font-size: 22px; font-weight: 800; color: var(--text-primary); line-height: 1.2; white-space: nowrap; }
-    .kpi-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 500; margin-top: 2px; }
+    .kpi-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .kpi-number { font-size: 26px; font-weight: 800; color: var(--text-primary); line-height: 1.1; white-space: nowrap; letter-spacing: -0.5px; }
+    .kpi-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+    .kpi-sub {
+      font-size: 12px; color: #b0b8c4; padding-top: 4px;
+      border-top: 1px dashed #f0f0f0;
+    }
 
     /* ============================== */
     /*  TABS                          */
     /* ============================== */
     .tabs-wrapper {
-      background: var(--surface); border-radius: var(--radius-xl);
-      box-shadow: var(--shadow-lg); overflow: hidden;
-      border: 1px solid var(--border);
+      background: var(--surface); border-radius: 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.05); overflow: hidden;
+      border: 1px solid #f0f0f0;
     }
-    .dashboard-tabs ::ng-deep .mat-mdc-tab-header { background: #f8fafc; border-bottom: 1px solid var(--border); }
+    .dashboard-tabs ::ng-deep .mat-mdc-tab-header { background: linear-gradient(135deg, #f0fdfa 0%, #f8fafc 100%); border-bottom: 1px solid #e2e8f0; }
     .dashboard-tabs ::ng-deep .mat-mdc-tab { min-width: 140px; }
     .dashboard-tabs ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
       display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;
@@ -1493,9 +2166,9 @@ import {
     /*  PANEL (section wrapper)       */
     /* ============================== */
     .panel {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-lg); margin-bottom: 24px;
-      overflow: hidden;
+      background: var(--surface); border: 1px solid #f0f0f0;
+      border-radius: 20px; margin-bottom: 24px;
+      overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.03);
     }
     .alert-panel { border-color: var(--orange-mid); background: var(--orange-soft); }
 
@@ -1537,9 +2210,9 @@ import {
     }
     .province-card {
       background: var(--surface); padding: 20px 24px;
-      transition: background 0.15s;
+      transition: background 0.2s, transform 0.2s;
     }
-    .province-card:hover { background: var(--surface-hover); }
+    .province-card:hover { background: #f0fdfa; transform: translateY(-1px); }
     .prov-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
     .prov-map-icon { font-size: 18px; width: 18px; height: 18px; color: var(--blue); }
     .province-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
@@ -1562,8 +2235,8 @@ import {
       border-radius: 12px; cursor: pointer; overflow: hidden;
       transition: all 0.15s ease; position: relative;
     }
-    .equip-card:hover { border-color: var(--purple-mid); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transform: translateY(-1px); }
-    .equip-card.active { border-color: var(--purple); box-shadow: 0 0 0 2px var(--purple-soft); }
+    .equip-card:hover { border-color: var(--teal-mid); box-shadow: 0 4px 16px rgba(0,0,0,0.06); transform: translateY(-2px); }
+    .equip-card.active { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-soft); }
 
     .ec-rank {
       display: flex; align-items: center; justify-content: center;
@@ -1810,12 +2483,12 @@ import {
       width: 100%; border-collapse: collapse; font-size: 13px;
       min-width: 700px;
     }
-    .modern-table thead { background: #f8fafc; }
+    .modern-table thead { background: linear-gradient(135deg, #f0fdfa 0%, #f0f9ff 100%); }
     .modern-table th {
-      padding: 12px 18px; text-align: left; font-weight: 600;
-      color: var(--text-muted); text-transform: uppercase; font-size: 11px;
-      letter-spacing: 0.5px; border-bottom: 2px solid var(--border);
-      white-space: nowrap; position: sticky; top: 0; background: #f8fafc;
+      padding: 12px 18px; text-align: left; font-weight: 700;
+      color: #0d9488; text-transform: uppercase; font-size: 11px;
+      letter-spacing: 0.5px; border-bottom: 2px solid #ccfbf1;
+      white-space: nowrap; position: sticky; top: 0; background: linear-gradient(135deg, #f0fdfa 0%, #f0f9ff 100%);
     }
     .modern-table th.center { text-align: center; }
     .modern-table th.right { text-align: right; }
@@ -1823,8 +2496,8 @@ import {
       padding: 13px 18px; border-bottom: 1px solid #f1f5f9;
       color: var(--text-secondary); vertical-align: middle;
     }
-    .modern-table tbody tr { transition: background 0.12s; }
-    .modern-table tbody tr:hover { background: #f8fafc; }
+    .modern-table tbody tr { transition: background 0.15s; }
+    .modern-table tbody tr:hover { background: #f0fdfa; }
     .modern-table tbody tr:last-child td { border-bottom: none; }
 
     .primary-cell { font-weight: 600; color: var(--text-primary) !important; }
@@ -2017,7 +2690,7 @@ import {
       padding: 10px 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-primary);
     }
     .dialog-table tbody tr:last-child td { border-bottom: none; }
-    .dialog-table tbody tr:hover { background: #f8fafc; }
+    .dialog-table tbody tr:hover { background: #f0fdfa; }
     .dialog-table .right { text-align: right; }
     .dialog-table .mono-text { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
     .dialog-table .primary-cell { font-weight: 600; }
@@ -2109,8 +2782,274 @@ import {
     /* ============================== */
     /*  RESPONSIVE                    */
     /* ============================== */
+    /* ============================== */
+    /*  REQUEST DELIVERY BUTTON        */
+    /* ============================== */
+    .request-delivery-btn {
+      background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
+      color: white !important;
+      border: 1px solid rgba(255,255,255,0.2) !important;
+      border-radius: 12px !important;
+      font-weight: 700 !important;
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .request-delivery-btn:hover {
+      background: linear-gradient(135deg, #fbbf24, #f87171) !important;
+      box-shadow: 0 4px 16px rgba(245,158,11,0.35) !important;
+    }
+
+    /* ============================== */
+    /*  DELIVERY DIALOG                */
+    /* ============================== */
+    .dlg-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+    .dlg-panel {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 94vw; max-width: 580px; max-height: 85vh;
+      background: var(--surface); border-radius: 24px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+      z-index: 1001;
+      display: flex; flex-direction: column;
+      animation: dialogSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+    .dlg-header {
+      padding: 24px 28px 20px;
+      background: linear-gradient(135deg, #0d9488, #0891b2, #3b82f6);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .dlg-title-group { display: flex; align-items: center; gap: 14px; }
+    .dlg-icon-ring {
+      width: 46px; height: 46px; border-radius: 14px;
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.25);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .dlg-icon-ring mat-icon { color: white; font-size: 24px; width: 24px; height: 24px; }
+    .dlg-title { font-size: 18px; font-weight: 700; color: white; margin: 0; }
+    .dlg-subtitle { font-size: 12px; color: rgba(255,255,255,0.75); margin: 3px 0 0; }
+    .dlg-close {
+      width: 36px; height: 36px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.8);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .dlg-close:hover { background: rgba(255,255,255,0.2); color: white; }
+    .dlg-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
+
+    .dlg-body { padding: 28px; overflow-y: auto; flex: 1; }
+
+    .dlg-form { display: flex; flex-direction: column; gap: 18px; }
+    .dlg-row { display: flex; gap: 16px; }
+    .dlg-row.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .dlg-field { display: flex; flex-direction: column; gap: 6px; }
+    .dlg-label {
+      font-size: 12px; font-weight: 700; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .dlg-label .req { color: var(--red); }
+    .dlg-label .opt { color: var(--text-muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+    .dlg-input, .dlg-select {
+      padding: 10px 14px; border: 1.5px solid var(--border);
+      border-radius: 12px; font-size: 14px; color: var(--text-primary);
+      background: var(--surface); outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .dlg-input:focus, .dlg-select:focus {
+      border-color: #0d9488;
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+    }
+    .dlg-input::placeholder { color: var(--text-muted); }
+
+    /* Address Autocomplete */
+    .address-input-wrap {
+      position: relative; display: flex; align-items: center;
+    }
+    .address-loc-icon {
+      position: absolute; left: 12px;
+      font-size: 20px; width: 20px; height: 20px;
+      color: #ef5350; z-index: 1; pointer-events: none;
+    }
+    .address-input {
+      padding-left: 40px !important;
+      padding-right: 40px !important;
+    }
+    .address-verified {
+      position: absolute; right: 12px;
+      font-size: 20px; width: 20px; height: 20px;
+      color: #22c55e;
+      animation: addrPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes addrPopIn {
+      0% { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .address-confirmed-text {
+      display: block; font-size: 11px; color: #22c55e;
+      font-weight: 600; margin-top: 4px; padding-left: 2px;
+    }
+
+    /* Preview */
+    .dlg-preview {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 12px;
+      background: #f0fdfa; border: 1px solid #ccfbf1;
+      color: var(--text-secondary); font-size: 13px;
+    }
+    .dlg-preview mat-icon { color: var(--teal); font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+
+    /* Actions */
+    .dlg-actions {
+      display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px;
+    }
+    .btn-submit-delivery {
+      background: linear-gradient(135deg, #0d9488, #3b82f6) !important;
+      color: white !important; border-radius: 12px !important;
+      font-weight: 700 !important; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-submit-delivery:disabled { opacity: 0.5; }
+
+    /* Success */
+    .dlg-success {
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; padding: 20px 0;
+    }
+    .dlg-success-icon {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: #f0fdf4; display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+    .dlg-success-icon mat-icon { font-size: 36px; width: 36px; height: 36px; color: #22c55e; }
+    .dlg-success h3 { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
+    .dlg-success p { font-size: 14px; color: var(--text-secondary); margin: 0 0 20px; }
+    .dlg-success-actions { display: flex; gap: 12px; }
+    .btn-another {
+      background: linear-gradient(135deg, #0d9488, #3b82f6) !important;
+      color: white !important; border-radius: 12px !important; font-weight: 600 !important;
+    }
+
+    /* Error */
+    .dlg-error {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 10px;
+      background: #fef2f2; border: 1px solid #fecaca;
+      color: #dc2626; font-size: 13px; font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .dlg-error mat-icon { font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+
+    /* ============================== */
+    /*  CRUD EDIT DIALOG & ACTIONS    */
+    /* ============================== */
+    .add-btn {
+      background: linear-gradient(135deg, #0d9488, #3b82f6) !important;
+      color: white !important; border-radius: 12px !important;
+      font-weight: 600 !important; margin-left: 8px;
+    }
+    .actions-cell {
+      white-space: nowrap;
+    }
+    .action-edit {
+      color: var(--blue) !important;
+      width: 32px !important; height: 32px !important;
+    }
+    .action-edit mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .action-delete {
+      color: var(--red) !important;
+      width: 32px !important; height: 32px !important;
+    }
+    .action-delete mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .crud-panel {
+      max-width: 680px;
+    }
+    .delete-panel {
+      max-width: 480px;
+    }
+    .delete-header {
+      background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    }
+    .delete-icon-ring {
+      background: rgba(255,255,255,0.2) !important;
+    }
+    .delete-icon-ring mat-icon {
+      color: white !important;
+    }
+    .delete-message {
+      font-size: 15px; color: var(--text-secondary);
+      margin: 0 0 20px; line-height: 1.6;
+    }
+    .btn-delete-confirm {
+      background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+      color: white !important; border-radius: 12px !important;
+      font-weight: 700 !important; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-delete-confirm:disabled { opacity: 0.5; }
+    .checkbox-label {
+      display: flex !important; align-items: center; gap: 8px;
+      cursor: pointer; font-weight: 500 !important;
+    }
+    .checkbox-label input[type="checkbox"] {
+      width: 18px; height: 18px; accent-color: #0d9488;
+    }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
+
+    /* Update Stock button & dialog */
+    .update-stock-btn {
+      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+      color: white !important; border-radius: 12px !important;
+      font-weight: 600 !important; margin-left: 8px;
+    }
+    .stock-panel { max-width: 600px; }
+    .stock-header {
+      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    }
+    .stock-icon-ring {
+      background: rgba(255,255,255,0.2) !important;
+    }
+    .stock-icon-ring mat-icon { color: white !important; }
+    .stock-current-info {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      padding: 14px 16px; border-radius: 12px;
+      background: #fffbeb; border: 1px solid #fef3c7; margin-bottom: 16px;
+    }
+    .sci-item { display: flex; flex-direction: column; gap: 2px; }
+    .sci-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.3px; }
+    .sci-value { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .stock-preview {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 12px;
+      background: #f0fdfa; border: 1px solid #ccfbf1;
+      color: var(--text-secondary); font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .stock-preview mat-icon { color: var(--orange); font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    .stock-arrow { font-size: 16px !important; width: 16px !important; height: 16px !important; vertical-align: middle; color: var(--text-muted); margin: 0 4px; }
+    .good-val { color: var(--green) !important; }
+    .btn-stock-save {
+      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+      color: white !important; border-radius: 12px !important;
+      font-weight: 700 !important; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-stock-save:disabled { opacity: 0.5; }
+
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 900px) {
-      .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
       .tab-body { padding: 20px; }
       .province-grid { grid-template-columns: repeat(2, 1fr); }
       .prov-sales-grid, .national-grid { grid-template-columns: 1fr; }
@@ -2126,9 +3065,13 @@ import {
       .dialog-panel { max-width: 95vw; }
     }
     @media (max-width: 600px) {
-      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .dash-header { gap: 10px; }
-      .header-title-block h1 { font-size: 18px; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .hero-header { padding: 20px 24px; margin: -24px -24px 24px; }
+      .hero-text h1 { font-size: 20px; }
+      .dlg-panel { width: 100vw; max-height: 95vh; border-radius: 16px 16px 0 0;
+        top: auto; bottom: 0; left: 0; transform: none; }
+      .dlg-body { padding: 20px; }
+      .dlg-row.two-col { grid-template-columns: 1fr; }
       .stat-bar { flex-direction: column; }
       .alert-grid { grid-template-columns: 1fr; }
       .province-grid { grid-template-columns: 1fr; }
@@ -2144,6 +3087,7 @@ import {
 })
 export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   @Output() goBack = new EventEmitter<void>();
+  @ViewChild('deliveryAddressInput') deliveryAddressInputRef!: ElementRef<HTMLInputElement>;
 
   private destroy$ = new Subject<void>();
 
@@ -2151,6 +3095,25 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   loading = true;
   error: string | null = null;
   isConnected = false;
+
+  // Delivery Request
+  showDeliveryDialog = false;
+  deliverySaving = false;
+  deliveryError = '';
+  deliverySuccess = false;
+  deliverySuccessMsg = '';
+  addressVerified = false;
+  private autocomplete: google.maps.places.Autocomplete | null = null;
+  deliveryForm = {
+    description: '',
+    priority: 'Normal',
+    quantity: 0,
+    unitOfMeasure: 'BOXES',
+    invoiceNumber: '',
+    reference: '',
+    deliveryAddress: '',
+    notes: ''
+  };
 
   trainingSessions: HBA1CTrainingSession[] = [];
   trainingLoading = false;
@@ -2184,7 +3147,56 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   // Equipment expand state
   expandedEquipment: string | null = null;
 
-  constructor(private hba1cService: HBA1CService) {}
+  // CRUD state
+  showEditDialog = false;
+  showDeleteDialog = false;
+  editEntity: 'training' | 'inventory' | 'sale' | 'creditNote' = 'training';
+  editMode: 'create' | 'edit' = 'create';
+  editSaving = false;
+  editError = '';
+  editSuccess = false;
+  editItemId: number | null = null;
+  deleteItemName = '';
+
+  trainingForm = {
+    trainingName: '', trainingType: '', startDate: '', provinceId: 0,
+    venue: '', targetAudience: '', numberOfParticipants: 0, status: 0
+  };
+
+  inventoryForm = {
+    name: '', description: '', category: 0, sku: '', unitOfMeasure: '',
+    unitPrice: 0, stockAvailable: 0, reorderLevel: 0, supplier: '',
+    batchNumber: '', expiryDate: ''
+  };
+
+  saleForm = {
+    saleNumber: '', saleDate: '', customerName: '', customerPhone: '',
+    total: 0, notes: ''
+  };
+
+  creditNoteForm = {
+    creditNoteNumber: '', invoiceNumber: '', customerName: '',
+    originalAmount: 0, creditAmount: 0, reason: '', status: 'Pending',
+    notes: '', reverseStock: false, reverseSale: false
+  };
+
+  // Stock update state
+  showStockDialog = false;
+  stockSaving = false;
+  stockError = '';
+  stockSuccess = false;
+  stockSuccessMsg = '';
+  stockForm = {
+    itemId: 0, itemName: '', itemSku: '', currentStock: 0,
+    reorderLevel: 0, adjustType: 'set' as 'set' | 'add' | 'subtract',
+    quantity: 0
+  };
+
+  constructor(
+    private hba1cService: HBA1CService,
+    private http: HttpClient,
+    private ngZone: NgZone
+  ) {}
 
   ngOnInit(): void {
     this.loadDashboard();
@@ -2381,6 +3393,187 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     return sessions / trainers;
   }
 
+  // ── Delivery Request Methods ──
+
+  openDeliveryDialog(): void {
+    this.resetDeliveryForm();
+    this.showDeliveryDialog = true;
+    setTimeout(() => this.initAddressAutocomplete(), 150);
+  }
+
+  closeDeliveryDialog(): void {
+    this.showDeliveryDialog = false;
+    this.deliveryError = '';
+    this.deliverySuccess = false;
+    this.autocomplete = null;
+  }
+
+  resetDeliveryForm(): void {
+    this.deliveryForm = {
+      description: '',
+      priority: 'Normal',
+      quantity: 0,
+      unitOfMeasure: 'BOXES',
+      invoiceNumber: '',
+      reference: '',
+      deliveryAddress: '',
+      notes: ''
+    };
+    this.deliveryError = '';
+    this.deliverySuccess = false;
+    this.deliverySuccessMsg = '';
+    this.deliverySaving = false;
+    this.addressVerified = false;
+    setTimeout(() => this.initAddressAutocomplete(), 150);
+  }
+
+  isDeliveryFormValid(): boolean {
+    return !!(this.deliveryForm.description.trim() && this.deliveryForm.quantity > 0);
+  }
+
+  submitDeliveryRequest(): void {
+    if (!this.isDeliveryFormValid()) return;
+    this.deliverySaving = true;
+    this.deliveryError = '';
+
+    const payload = {
+      department: 'HBA1C',
+      description: this.deliveryForm.description.trim(),
+      quantity: this.deliveryForm.quantity,
+      uom: this.deliveryForm.unitOfMeasure || 'BOXES',
+      invoiceNumber: this.deliveryForm.invoiceNumber?.trim() || null,
+      batchCode: this.deliveryForm.reference?.trim() || null,
+      deliveryAddress: this.deliveryForm.deliveryAddress?.trim() || null,
+      notes: this.deliveryForm.notes?.trim() || null,
+      priority: this.deliveryForm.priority || 'Normal'
+    };
+
+    this.http.post<any>(`${environment.apiUrl}/condomproject/delivery-requests`, payload).subscribe({
+      next: (res) => {
+        this.deliverySaving = false;
+        this.deliverySuccess = true;
+        this.deliverySuccessMsg = `Delivery request ${res.referenceNumber || ''} submitted to logistics.`;
+      },
+      error: (err) => {
+        this.deliverySaving = false;
+        this.deliveryError = err.error?.error || err.error?.message || 'Failed to submit delivery request. Please try again.';
+      }
+    });
+  }
+
+  private initAddressAutocomplete(): void {
+    if (!this.deliveryAddressInputRef?.nativeElement) return;
+    if (typeof google === 'undefined' || !google.maps?.places) return;
+    this.autocomplete = new google.maps.places.Autocomplete(
+      this.deliveryAddressInputRef.nativeElement,
+      { types: ['address'], componentRestrictions: { country: 'za' } }
+    );
+    this.autocomplete.addListener('place_changed', () => {
+      this.ngZone.run(() => {
+        const place = this.autocomplete!.getPlace();
+        if (place?.formatted_address) {
+          this.deliveryForm.deliveryAddress = place.formatted_address;
+          this.addressVerified = true;
+        } else if (place?.name) {
+          this.deliveryForm.deliveryAddress = place.name;
+          this.addressVerified = true;
+        }
+      });
+    });
+  }
+
+  // ── Stock Update Methods ──
+
+  openStockUpdateDialog(): void {
+    this.resetStockForm();
+    this.showStockDialog = true;
+    // If inventory not loaded yet, load it
+    if (!this.inventoryItems.length) this.loadInventory();
+  }
+
+  closeStockDialog(): void {
+    this.showStockDialog = false;
+    this.stockError = '';
+    this.stockSuccess = false;
+    this.stockSaving = false;
+  }
+
+  resetStockForm(): void {
+    this.stockForm = {
+      itemId: 0, itemName: '', itemSku: '', currentStock: 0,
+      reorderLevel: 0, adjustType: 'set', quantity: 0
+    };
+    this.stockError = '';
+    this.stockSuccess = false;
+    this.stockSuccessMsg = '';
+    this.stockSaving = false;
+  }
+
+  onStockItemChange(): void {
+    const item = this.inventoryItems.find(i => i.id === this.stockForm.itemId);
+    if (item) {
+      this.stockForm.itemName = item.name;
+      this.stockForm.itemSku = item.sku;
+      this.stockForm.currentStock = item.stockAvailable;
+      this.stockForm.reorderLevel = item.reorderLevel;
+      this.stockForm.quantity = item.stockAvailable;
+    }
+  }
+
+  getNewStockValue(): number {
+    const { adjustType, quantity, currentStock } = this.stockForm;
+    if (adjustType === 'set') return quantity;
+    if (adjustType === 'add') return currentStock + quantity;
+    return Math.max(0, currentStock - quantity);
+  }
+
+  getStockDiff(): string {
+    const diff = this.getNewStockValue() - this.stockForm.currentStock;
+    if (diff === 0) return 'no change';
+    return diff > 0 ? `+${diff}` : `${diff}`;
+  }
+
+  saveStockUpdate(): void {
+    if (this.stockForm.itemId === 0) return;
+    this.stockSaving = true;
+    this.stockError = '';
+
+    const newStock = this.getNewStockValue();
+    const item = this.inventoryItems.find(i => i.id === this.stockForm.itemId);
+    if (!item) { this.stockSaving = false; this.stockError = 'Item not found'; return; }
+
+    const payload: any = {
+      name: item.name,
+      description: item.description,
+      category: item.category,
+      sku: item.sku,
+      unitOfMeasure: item.unitOfMeasure,
+      unitPrice: item.unitPrice,
+      stockAvailable: newStock,
+      reorderLevel: item.reorderLevel,
+      supplier: item.supplier,
+      batchNumber: item.batchNumber,
+      expiryDate: item.expiryDate
+    };
+
+    this.hba1cService.updateInventoryItem(this.stockForm.itemId, payload)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.stockSaving = false;
+          this.stockSuccess = true;
+          const diff = newStock - this.stockForm.currentStock;
+          const diffStr = diff >= 0 ? `+${diff}` : `${diff}`;
+          this.stockSuccessMsg = `${this.stockForm.itemName}: ${this.stockForm.currentStock} → ${newStock} (${diffStr})`;
+          this.loadInventory();
+        },
+        error: (err) => {
+          this.stockSaving = false;
+          this.stockError = err.error?.message || 'Failed to update stock level';
+        }
+      });
+  }
+
   // ── Equipment Methods ──
 
   toggleEquipment(equipmentType: string): void {
@@ -2389,7 +3582,6 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
 
   getEquipTotalOrdered(eq: HBA1CEquipmentDistribution): number {
     if (eq.totalOrdered > 0) return eq.totalOrdered;
-    // Fallback: sum from itemBreakdown
     return (eq.itemBreakdown || []).reduce((sum, item) => sum + item.quantity, 0);
   }
 
@@ -2404,5 +3596,215 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     return (eq.itemBreakdown || []).reduce(
       (sum, item) => sum + (type === 'qty' ? item.quantity : item.value), 0
     );
+  }
+
+  // ── CRUD Methods ──
+
+  openCreateDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote'): void {
+    this.editEntity = entity;
+    this.editMode = 'create';
+    this.editItemId = null;
+    this.editError = '';
+    this.editSuccess = false;
+    this.resetEditForms();
+    this.showEditDialog = true;
+  }
+
+  openEditDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote', item: any): void {
+    this.editEntity = entity;
+    this.editMode = 'edit';
+    this.editError = '';
+    this.editSuccess = false;
+
+    if (entity === 'training') {
+      this.editItemId = item.id;
+      this.trainingForm = {
+        trainingName: item.trainingName || '',
+        trainingType: item.trainingType || '',
+        startDate: item.startDate ? item.startDate.substring(0, 10) : '',
+        provinceId: item.provinceId || 0,
+        venue: item.venue || '',
+        targetAudience: item.targetAudience || '',
+        numberOfParticipants: item.numberOfParticipants || 0,
+        status: item.status ?? 0
+      };
+    } else if (entity === 'inventory') {
+      this.editItemId = item.id;
+      this.inventoryForm = {
+        name: item.name || '',
+        description: item.description || '',
+        category: item.category || 0,
+        sku: item.sku || '',
+        unitOfMeasure: item.unitOfMeasure || '',
+        unitPrice: item.unitPrice || 0,
+        stockAvailable: item.stockAvailable || 0,
+        reorderLevel: item.reorderLevel || 0,
+        supplier: item.supplier || '',
+        batchNumber: item.batchNumber || '',
+        expiryDate: item.expiryDate ? item.expiryDate.substring(0, 10) : ''
+      };
+    } else if (entity === 'sale') {
+      this.editItemId = item.id;
+      this.saleForm = {
+        saleNumber: item.saleNumber || '',
+        saleDate: item.saleDate ? item.saleDate.substring(0, 10) : '',
+        customerName: item.customerName || '',
+        customerPhone: item.customerPhone || '',
+        total: item.total || 0,
+        notes: item.notes || ''
+      };
+    } else if (entity === 'creditNote') {
+      this.editItemId = item.id;
+      this.creditNoteForm = {
+        creditNoteNumber: item.creditNoteNumber || '',
+        invoiceNumber: item.invoiceNumber || '',
+        customerName: item.customerName || '',
+        originalAmount: item.originalAmount || 0,
+        creditAmount: item.creditAmount || 0,
+        reason: item.reason || '',
+        status: item.status || 'Pending',
+        notes: item.notes || '',
+        reverseStock: item.reverseStock || false,
+        reverseSale: item.reverseSale || false
+      };
+    }
+
+    this.showEditDialog = true;
+  }
+
+  closeEditDialog(): void {
+    this.showEditDialog = false;
+    this.editError = '';
+    this.editSuccess = false;
+    this.editSaving = false;
+  }
+
+  openDeleteDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote', id: number, name: string): void {
+    this.editEntity = entity;
+    this.editItemId = id;
+    this.deleteItemName = name;
+    this.editError = '';
+    this.editSaving = false;
+    this.showDeleteDialog = true;
+  }
+
+  closeDeleteDialog(): void {
+    this.showDeleteDialog = false;
+    this.editError = '';
+    this.editSaving = false;
+  }
+
+  private resetEditForms(): void {
+    this.trainingForm = {
+      trainingName: '', trainingType: '', startDate: '', provinceId: 0,
+      venue: '', targetAudience: '', numberOfParticipants: 0, status: 0
+    };
+    this.inventoryForm = {
+      name: '', description: '', category: 0, sku: '', unitOfMeasure: '',
+      unitPrice: 0, stockAvailable: 0, reorderLevel: 0, supplier: '',
+      batchNumber: '', expiryDate: ''
+    };
+    this.saleForm = {
+      saleNumber: '', saleDate: '', customerName: '', customerPhone: '',
+      total: 0, notes: ''
+    };
+    this.creditNoteForm = {
+      creditNoteNumber: '', invoiceNumber: '', customerName: '',
+      originalAmount: 0, creditAmount: 0, reason: '', status: 'Pending',
+      notes: '', reverseStock: false, reverseSale: false
+    };
+  }
+
+  saveEditForm(): void {
+    this.editSaving = true;
+    this.editError = '';
+
+    if (this.editEntity === 'training') {
+      const payload: any = { ...this.trainingForm };
+      if (this.editMode === 'create') {
+        this.hba1cService.createTraining(payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadTraining(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to create training session'; }
+        });
+      } else {
+        this.hba1cService.updateTraining(this.editItemId!, payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadTraining(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to update training session'; }
+        });
+      }
+    } else if (this.editEntity === 'inventory') {
+      const payload: any = { ...this.inventoryForm };
+      if (payload.expiryDate === '') payload.expiryDate = null;
+      if (this.editMode === 'create') {
+        this.hba1cService.createInventoryItem(payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadInventory(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to create inventory item'; }
+        });
+      } else {
+        this.hba1cService.updateInventoryItem(this.editItemId!, payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadInventory(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to update inventory item'; }
+        });
+      }
+    } else if (this.editEntity === 'sale') {
+      const payload: any = { ...this.saleForm };
+      if (this.editMode === 'create') {
+        this.hba1cService.createSale(payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadSales(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to create sale'; }
+        });
+      } else {
+        this.hba1cService.updateSale(this.editItemId!, payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadSales(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to update sale'; }
+        });
+      }
+    } else if (this.editEntity === 'creditNote') {
+      const payload: any = { ...this.creditNoteForm };
+      if (this.editMode === 'create') {
+        this.hba1cService.createCreditNote(payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadCreditNotes(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to create credit note'; }
+        });
+      } else {
+        this.hba1cService.updateCreditNote(this.editItemId!, payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadCreditNotes(); },
+          error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to update credit note'; }
+        });
+      }
+    }
+  }
+
+  confirmDelete(): void {
+    if (!this.editItemId) return;
+    this.editSaving = true;
+    this.editError = '';
+
+    let obs;
+    if (this.editEntity === 'training') {
+      obs = this.hba1cService.deleteTraining(this.editItemId);
+    } else if (this.editEntity === 'inventory') {
+      obs = this.hba1cService.deleteInventoryItem(this.editItemId);
+    } else if (this.editEntity === 'sale') {
+      obs = this.hba1cService.deleteSale(this.editItemId);
+    } else {
+      obs = this.hba1cService.deleteCreditNote(this.editItemId);
+    }
+
+    obs.pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.editSaving = false;
+        this.closeDeleteDialog();
+        // Reload the relevant list
+        if (this.editEntity === 'training') this.loadTraining();
+        else if (this.editEntity === 'inventory') this.loadInventory();
+        else if (this.editEntity === 'sale') this.loadSales();
+        else this.loadCreditNotes();
+      },
+      error: (err) => {
+        this.editSaving = false;
+        this.editError = err.error?.message || 'Failed to delete record';
+      }
+    });
   }
 }

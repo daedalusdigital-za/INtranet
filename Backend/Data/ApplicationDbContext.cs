@@ -98,7 +98,9 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.ImportBatch> ImportBatches { get; set; }
         public DbSet<Models.Logistics.SleepOut> SleepOuts { get; set; }
         public DbSet<Models.Logistics.PartDeliveryHistory> PartDeliveryHistories { get; set; }
+        public DbSet<Models.Logistics.FuelTransaction> FuelTransactions { get; set; }
         public DbSet<Models.Logistics.OrderCancellation> OrderCancellations { get; set; }
+        public DbSet<Models.Logistics.PodDocument> PodDocuments { get; set; }
 
         // Sales Import System
         public DbSet<SalesImportBatch> SalesImportBatches { get; set; }
@@ -144,9 +146,21 @@ namespace ProjectTracker.API.Data
 
         // Company Projects — Condom Production
         public DbSet<Models.Projects.CondomProductionSchedule> CondomProductionSchedules { get; set; }
+        public DbSet<Models.Projects.CondomDeliveryRequest> CondomDeliveryRequests { get; set; }
+
+        // Company Projects — Sanitary Pads
+        public DbSet<Models.Projects.PadsStockReceived> PadsStockReceived { get; set; }
+        public DbSet<Models.Projects.PadsStockDelivered> PadsStockDelivered { get; set; }
+        public DbSet<Models.Projects.PadsWarehouseStock> PadsWarehouseStock { get; set; }
+        public DbSet<Models.Projects.PadsCreditNote> PadsCreditNotes { get; set; }
+        public DbSet<Models.Projects.PadsInvoiceProcessed> PadsInvoicesProcessed { get; set; }
 
         // Email Accounts Management
         public DbSet<EmailAccount> EmailAccounts { get; set; }
+
+        // Books - Paid Invoice Management
+        public DbSet<BookInvoice> BookInvoices { get; set; }
+        public DbSet<BookDepartmentAccess> BookDepartmentAccess { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -703,6 +717,15 @@ namespace ProjectTracker.API.Data
                 entity.HasIndex(e => e.CacheKey).IsUnique();
                 entity.HasIndex(e => e.ExpiresAt); // For cleanup queries
                 entity.HasIndex(e => new { e.ReportType, e.FromDate, e.ToDate }); // For browsing
+            });
+
+            // PodDocuments - standalone POD files by driver/date/region
+            modelBuilder.Entity<Models.Logistics.PodDocument>(entity =>
+            {
+                entity.HasIndex(e => e.DeliveryDate);
+                entity.HasIndex(e => e.Region);
+                entity.HasIndex(e => e.DriverId);
+                entity.HasIndex(e => new { e.DriverName, e.DeliveryDate, e.Region });
             });
         }
     }

@@ -1,4 +1,4 @@
-import { Component, OnInit, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, ViewChild, ElementRef, NgZone } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
@@ -8,6 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -38,8 +39,7 @@ interface ScheduleSummary {
   femaleBatches: number;
   maleBatches: number;
   scentVariants: number;
-  week1Total: number;  // pastTotal from API
-  week2Total: number;  // upcomingTotal from API
+  totalUnits: number;
   scheduleDays: number;
 }
 
@@ -94,6 +94,10 @@ interface DashboardData {
           <button mat-raised-button class="capture-btn" (click)="openCaptureDialog()">
             <mat-icon>add_circle</mat-icon>
             Capture Stock
+          </button>
+          <button mat-raised-button class="request-delivery-btn" (click)="openRequestDeliveryDialog()">
+            <mat-icon>local_shipping</mat-icon>
+            Request Delivery
           </button>
           <div class="date-pill">
             <mat-icon>date_range</mat-icon>
@@ -538,6 +542,160 @@ interface DashboardData {
                       } @else {
                         <mat-icon>save</mat-icon>
                         Save Stock Entry
+                      }
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- ==================== REQUEST DELIVERY DIALOG ==================== -->
+        @if (showDeliveryDialog) {
+          <div class="dialog-backdrop" (click)="closeDeliveryDialog()"></div>
+          <div class="dialog-panel dialog-delivery">
+            <div class="dialog-header dh-delivery">
+              <div class="dialog-title-group">
+                <div class="dialog-icon-ring delivery-icon-ring">
+                  <mat-icon>local_shipping</mat-icon>
+                </div>
+                <div>
+                  <h2 class="dialog-title">Request Delivery</h2>
+                  <p class="dialog-subtitle">Submit a delivery request to logistics</p>
+                </div>
+              </div>
+              <button class="dialog-close" (click)="closeDeliveryDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            <div class="dialog-body">
+              @if (deliverySuccess) {
+                <div class="capture-success">
+                  <div class="success-icon-wrap"><mat-icon>check_circle</mat-icon></div>
+                  <h3>Delivery Request Submitted!</h3>
+                  <p>{{ deliverySuccessMsg }}</p>
+                  <div class="success-actions">
+                    <button mat-flat-button class="btn-add-another" (click)="resetDeliveryForm()">
+                      <mat-icon>add</mat-icon> Request Another
+                    </button>
+                    <button mat-stroked-button (click)="closeDeliveryDialog()">
+                      <mat-icon>close</mat-icon> Close
+                    </button>
+                  </div>
+                </div>
+              } @else {
+                @if (deliveryError) {
+                  <div class="capture-error">
+                    <mat-icon>error_outline</mat-icon>
+                    <span>{{ deliveryError }}</span>
+                  </div>
+                }
+
+                <div class="capture-form">
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Invoice Number <span class="optional">(optional)</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="deliveryForm.invoiceNumber" placeholder="e.g. INV-001234">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Priority</label>
+                      <select class="form-select" [(ngModel)]="deliveryForm.priority">
+                        <option value="Normal">Normal</option>
+                        <option value="Urgent">🔴 Urgent</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Scent <span class="optional">(optional)</span></label>
+                      <select class="form-select" [(ngModel)]="deliveryForm.scent">
+                        <option value="">Any Scent</option>
+                        <option value="Vanilla">🍦 Vanilla</option>
+                        <option value="Strawberry">🍓 Strawberry</option>
+                        <option value="Banana">🍌 Banana</option>
+                        <option value="Grape">🍇 Grape</option>
+                        <option value="Plain">📦 Plain</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Type <span class="optional">(optional)</span></label>
+                      <select class="form-select" [(ngModel)]="deliveryForm.type">
+                        <option value="">Any Type</option>
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row two-col">
+                    <div class="form-group">
+                      <label class="form-label">Quantity <span class="required">*</span></label>
+                      <input type="number" class="form-input" [(ngModel)]="deliveryForm.quantity" placeholder="0" min="1">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">UOM</label>
+                      <select class="form-select" [(ngModel)]="deliveryForm.unitOfMeasure">
+                        <option value="CASES">CASES</option>
+                        <option value="BOXES">BOXES</option>
+                        <option value="UNITS">UNITS</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Description <span class="required">*</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="deliveryForm.description" placeholder="e.g. Deliver 50 cases of Vanilla Female condoms to warehouse">
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Delivery Address <span class="optional">(optional)</span></label>
+                      <div class="address-input-wrap">
+                        <mat-icon class="address-loc-icon">location_on</mat-icon>
+                        <input #deliveryAddressInput type="text" class="form-input address-input"
+                               [(ngModel)]="deliveryForm.deliveryAddress"
+                               placeholder="Start typing an address..." autocomplete="off">
+                        @if (addressVerified) {
+                          <mat-icon class="address-verified">verified</mat-icon>
+                        }
+                      </div>
+                      @if (addressVerified) {
+                        <span class="address-confirmed-text">✓ Address verified via Google</span>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Notes <span class="optional">(optional)</span></label>
+                      <input type="text" class="form-input" [(ngModel)]="deliveryForm.notes" placeholder="Any additional instructions...">
+                    </div>
+                  </div>
+
+                  <div class="form-preview" *ngIf="deliveryForm.description && deliveryForm.quantity > 0">
+                    <mat-icon>local_shipping</mat-icon>
+                    <span>
+                      @if (deliveryForm.priority === 'Urgent') { 🔴 }
+                      <strong>{{ deliveryForm.quantity }} {{ deliveryForm.unitOfMeasure }}</strong> —
+                      {{ deliveryForm.description }}
+                      @if (deliveryForm.invoiceNumber) { ({{ deliveryForm.invoiceNumber }}) }
+                    </span>
+                  </div>
+
+                  <div class="form-actions">
+                    <button mat-stroked-button (click)="closeDeliveryDialog()" [disabled]="deliverySaving">Cancel</button>
+                    <button mat-flat-button class="btn-submit delivery-submit" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
+                      @if (deliverySaving) {
+                        <mat-spinner diameter="18" strokeWidth="2"></mat-spinner>
+                        Submitting...
+                      } @else {
+                        <mat-icon>send</mat-icon>
+                        Submit Request
                       }
                     </button>
                   </div>
@@ -1500,12 +1658,44 @@ interface DashboardData {
       box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4) !important;
     }
 
+    /* ── Request Delivery Button ── */
+    .request-delivery-btn {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
+      color: white !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 12px !important;
+      font-weight: 700 !important;
+      padding: 6px 18px !important;
+      transition: all 0.2s !important;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .request-delivery-btn:hover {
+      background: linear-gradient(135deg, #ff8787, #f0631a) !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(238, 90, 36, 0.4) !important;
+    }
+
     /* ── Capture Dialog Styles ── */
     .dh-capture {
       background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
     }
     .capture-icon-ring {
       background: var(--green) !important;
+      color: white !important;
+    }
+
+    /* ── Delivery Dialog Styles ── */
+    .dh-delivery {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    }
+    .delivery-icon-ring {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
+      color: white !important;
+    }
+    .delivery-submit {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
       color: white !important;
     }
 
@@ -1684,6 +1874,48 @@ interface DashboardData {
       flex-shrink: 0;
     }
 
+    /* ── Address Autocomplete ── */
+    .address-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .address-loc-icon {
+      position: absolute;
+      left: 12px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #ef5350;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .address-input {
+      padding-left: 40px !important;
+      padding-right: 40px !important;
+    }
+    .address-verified {
+      position: absolute;
+      right: 12px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #22c55e;
+      animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .address-confirmed-text {
+      display: block;
+      font-size: 11px;
+      color: #22c55e;
+      font-weight: 600;
+      margin-top: 4px;
+      padding-left: 2px;
+    }
+
     /* ── Responsive ── */
     @media (max-width: 1100px) {
       .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -1707,6 +1939,7 @@ interface DashboardData {
 })
 export class CondomsDashboardComponent implements OnInit {
   @Output() goBack = new EventEmitter<void>();
+  @ViewChild('deliveryAddressInput') deliveryAddressInputRef!: ElementRef<HTMLInputElement>;
 
   loading = true;
   error = '';
@@ -1753,13 +1986,33 @@ export class CondomsDashboardComponent implements OnInit {
     quantityNote: ''
   };
 
+  // Request Delivery
+  showDeliveryDialog = false;
+  deliverySaving = false;
+  deliveryError = '';
+  deliverySuccess = false;
+  deliverySuccessMsg = '';
+  addressVerified = false;
+  private autocomplete: google.maps.places.Autocomplete | null = null;
+  deliveryForm = {
+    invoiceNumber: '',
+    scent: '',
+    type: '',
+    quantity: 0,
+    unitOfMeasure: 'CASES',
+    description: '',
+    deliveryAddress: '',
+    notes: '',
+    priority: 'Normal'
+  };
+
   private maxDailyTotal = 0;
 
   ngOnInit(): void {
     this.loadData();
   }
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private ngZone: NgZone) {}
 
   loadData(): void {
     this.loading = true;
@@ -1916,6 +2169,98 @@ export class CondomsDashboardComponent implements OnInit {
         this.captureSaving = false;
         this.captureError = err.error?.error || err.error?.message || 'Failed to create stock entry. Please try again.';
       }
+    });
+  }
+
+  // ── Request Delivery Methods ──
+
+  openRequestDeliveryDialog(): void {
+    this.resetDeliveryForm();
+    this.showDeliveryDialog = true;
+    setTimeout(() => this.initAddressAutocomplete(), 150);
+  }
+
+  closeDeliveryDialog(): void {
+    this.showDeliveryDialog = false;
+    this.deliveryError = '';
+    this.deliverySuccess = false;
+    this.autocomplete = null;
+  }
+
+  resetDeliveryForm(): void {
+    this.deliveryForm = {
+      invoiceNumber: '',
+      scent: '',
+      type: '',
+      quantity: 0,
+      unitOfMeasure: 'CASES',
+      description: '',
+      deliveryAddress: '',
+      notes: '',
+      priority: 'Normal'
+    };
+    this.deliveryError = '';
+    this.deliverySuccess = false;
+    this.deliverySuccessMsg = '';
+    this.deliverySaving = false;
+    this.addressVerified = false;
+    setTimeout(() => this.initAddressAutocomplete(), 150);
+  }
+
+  isDeliveryFormValid(): boolean {
+    return !!(this.deliveryForm.description.trim() && this.deliveryForm.quantity > 0);
+  }
+
+  submitDeliveryRequest(): void {
+    if (!this.isDeliveryFormValid()) return;
+
+    this.deliverySaving = true;
+    this.deliveryError = '';
+
+    const payload = {
+      department: 'Condoms',
+      invoiceNumber: this.deliveryForm.invoiceNumber?.trim() || null,
+      scent: this.deliveryForm.scent || null,
+      type: this.deliveryForm.type || null,
+      quantity: this.deliveryForm.quantity,
+      unitOfMeasure: this.deliveryForm.unitOfMeasure || 'CASES',
+      description: this.deliveryForm.description.trim(),
+      deliveryAddress: this.deliveryForm.deliveryAddress?.trim() || null,
+      notes: this.deliveryForm.notes?.trim() || null,
+      priority: this.deliveryForm.priority || 'Normal'
+    };
+
+    this.http.post<any>(`${environment.apiUrl}/condomproject/delivery-requests`, payload).subscribe({
+      next: (res) => {
+        this.deliverySaving = false;
+        this.deliverySuccess = true;
+        this.deliverySuccessMsg = `Delivery request ${res.referenceNumber || ''} submitted to logistics.`;
+      },
+      error: (err) => {
+        this.deliverySaving = false;
+        this.deliveryError = err.error?.error || err.error?.message || 'Failed to submit delivery request. Please try again.';
+      }
+    });
+  }
+
+  private initAddressAutocomplete(): void {
+    if (!this.deliveryAddressInputRef?.nativeElement) return;
+    if (typeof google === 'undefined' || !google.maps?.places) return;
+    this.autocomplete = new google.maps.places.Autocomplete(
+      this.deliveryAddressInputRef.nativeElement,
+      { types: ['address'], componentRestrictions: { country: 'za' } }
+    );
+    this.autocomplete.addListener('place_changed', () => {
+      this.ngZone.run(() => {
+        const place = this.autocomplete!.getPlace();
+        if (place?.formatted_address) {
+          this.deliveryForm.deliveryAddress = place.formatted_address;
+          this.addressVerified = true;
+        } else if (place?.name) {
+          this.deliveryForm.deliveryAddress = place.name;
+          this.addressVerified = true;
+        }
+      });
     });
   }
 

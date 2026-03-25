@@ -29,9 +29,10 @@ namespace ProjectTracker.API.Services
 
             var suggestedLoads = new List<SuggestedLoadDto>();
 
-            // Group by Province first (primary grouping)
+            // Group by Province first — province is pre-computed at import time
             var provinceGroups = pendingInvoices
-                .GroupBy(i => i.DeliveryProvince ?? i.Customer?.Province ?? "Unknown")
+                .GroupBy(i => !string.IsNullOrWhiteSpace(i.DeliveryProvince) ? i.DeliveryProvince 
+                             : i.Customer?.Province ?? "Unknown")
                 .OrderByDescending(g => g.Sum(i => i.SalesAmount - i.SalesReturns))
                 .ToList();
 

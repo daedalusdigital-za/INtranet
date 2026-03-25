@@ -1533,8 +1533,8 @@ export class StockManagementComponent implements OnInit {
 
   openStockTake(): void {
     this.dialog.open(StockTakeDialog, {
-      width: '900px',
-      maxWidth: '90vw',
+      width: '1200px',
+      maxWidth: '95vw',
       data: this.selectedWarehouse
     });
   }
@@ -5236,7 +5236,8 @@ export class ScrapDialog implements OnInit {
     MatTableModule,
     MatFormFieldModule,
     MatInputModule,
-    MatChipsModule
+    MatChipsModule,
+    MatProgressSpinnerModule
   ],
   template: `
     <div class="dialog-header stocktake-header">
@@ -5249,67 +5250,100 @@ export class ScrapDialog implements OnInit {
     <div class="dialog-content">
       <div class="info-banner stocktake-banner">
         <mat-icon>fact_check</mat-icon>
-        <span>Perform physical count and compare with system inventory</span>
+        <span>Perform physical count and compare with system inventory ({{ items.length }} items)</span>
       </div>
 
-      <div class="stocktake-table">
-        <table mat-table [dataSource]="items" class="full-width-table">
-          <ng-container matColumnDef="sku">
-            <th mat-header-cell *matHeaderCellDef>SKU</th>
-            <td mat-cell *matCellDef="let item">{{ item.sku }}</td>
-          </ng-container>
+      @if (loading) {
+        <div style="text-align: center; padding: 40px;">
+          <mat-progress-spinner mode="indeterminate" diameter="40" style="margin: 0 auto;"></mat-progress-spinner>
+          <p style="margin-top: 12px; color: #666;">Loading inventory items...</p>
+        </div>
+      } @else {
+        <!-- Search -->
+        <mat-form-field style="width: 100%; margin-bottom: 12px;">
+          <mat-label>Search items</mat-label>
+          <input matInput [(ngModel)]="searchQuery" (input)="filterItems()" placeholder="Search by SKU, name, or category...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
 
-          <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef>Item Name</th>
-            <td mat-cell *matCellDef="let item">{{ item.name }}</td>
-          </ng-container>
+        <div class="stocktake-table">
+          <table mat-table [dataSource]="filteredItems" class="full-width-table">
+            <ng-container matColumnDef="sku">
+              <th mat-header-cell *matHeaderCellDef>SKU</th>
+              <td mat-cell *matCellDef="let item">{{ item.sku }}</td>
+            </ng-container>
 
-          <ng-container matColumnDef="systemQty">
-            <th mat-header-cell *matHeaderCellDef>System Qty</th>
-            <td mat-cell *matCellDef="let item">{{ item.systemQty }}</td>
-          </ng-container>
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Item Name</th>
+              <td mat-cell *matCellDef="let item">{{ item.name }}</td>
+            </ng-container>
 
-          <ng-container matColumnDef="countedQty">
-            <th mat-header-cell *matHeaderCellDef>Counted Qty</th>
-            <td mat-cell *matCellDef="let item">
-              <mat-form-field class="qty-field">
-                <input matInput type="number" [(ngModel)]="item.countedQty" (input)="calculateVariance(item)" min="0">
-              </mat-form-field>
-            </td>
-          </ng-container>
+            <ng-container matColumnDef="category">
+              <th mat-header-cell *matHeaderCellDef>Location</th>
+              <td mat-cell *matCellDef="let item">
+                <span style="font-size: 12px; background: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 10px;">{{ item.category }}</span>
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="variance">
-            <th mat-header-cell *matHeaderCellDef>Variance</th>
-            <td mat-cell *matCellDef="let item">
-              <span [class]="getVarianceClass(item.variance)">
-                {{ item.variance > 0 ? '+' : '' }}{{ item.variance }}
-              </span>
-            </td>
-          </ng-container>
+            <ng-container matColumnDef="uom">
+              <th mat-header-cell *matHeaderCellDef>UOM</th>
+              <td mat-cell *matCellDef="let item">{{ item.uom }}</td>
+            </ng-container>
 
-          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-        </table>
-      </div>
+            <ng-container matColumnDef="systemQty">
+              <th mat-header-cell *matHeaderCellDef>System Qty</th>
+              <td mat-cell *matCellDef="let item">{{ item.systemQty }}</td>
+            </ng-container>
 
-      @if (hasVariances()) {
-        <div class="summary-section">
-          <h3>Stock Take Summary</h3>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-value">{{ getTotalItems() }}</div>
-              <div class="stat-label">Items Counted</div>
-            </div>
-            <div class="stat-card positive">
-              <div class="stat-value">{{ getPositiveVariances() }}</div>
-              <div class="stat-label">Overages</div>
-            </div>
-            <div class="stat-card negative">
-              <div class="stat-value">{{ getNegativeVariances() }}</div>
-              <div class="stat-label">Shortages</div>
+            <ng-container matColumnDef="countedQty">
+              <th mat-header-cell *matHeaderCellDef>Counted Qty</th>
+              <td mat-cell *matCellDef="let item">
+                <mat-form-field class="qty-field">
+                  <input matInput type="number" [(ngModel)]="item.countedQty" (input)="calculateVariance(item)" min="0">
+                </mat-form-field>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="variance">
+              <th mat-header-cell *matHeaderCellDef>Variance</th>
+              <td mat-cell *matCellDef="let item">
+                <span [class]="getVarianceClass(item.variance)">
+                  {{ item.variance > 0 ? '+' : '' }}{{ item.variance }}
+                </span>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        </div>
+
+        @if (filteredItems.length === 0 && !loading) {
+          <div style="text-align: center; padding: 32px; color: #999;">
+            <mat-icon style="font-size: 48px; width: 48px; height: 48px;">inventory_2</mat-icon>
+            <p>{{ searchQuery ? 'No items match your search' : 'No inventory items found for this warehouse' }}</p>
+          </div>
+        }
+
+        @if (hasVariances()) {
+          <div class="summary-section">
+            <h3>Stock Take Summary</h3>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-value">{{ getTotalItems() }}</div>
+                <div class="stat-label">Items with Variance</div>
+              </div>
+              <div class="stat-card positive">
+                <div class="stat-value">{{ getPositiveVariances() }}</div>
+                <div class="stat-label">Overages</div>
+              </div>
+              <div class="stat-card negative">
+                <div class="stat-value">{{ getNegativeVariances() }}</div>
+                <div class="stat-label">Shortages</div>
+              </div>
             </div>
           </div>
-        </div>
+        }
       }
     </div>
 
@@ -5456,8 +5490,12 @@ export class ScrapDialog implements OnInit {
   `]
 })
 export class StockTakeDialog implements OnInit {
-  displayedColumns = ['sku', 'name', 'systemQty', 'countedQty', 'variance'];
+  displayedColumns = ['sku', 'name', 'category', 'uom', 'systemQty', 'countedQty', 'variance'];
   items: any[] = [];
+  filteredItems: any[] = [];
+  loading = true;
+  searchQuery = '';
+  private http = inject(HttpClient);
 
   constructor(
     public dialogRef: MatDialogRef<StockTakeDialog>,
@@ -5466,12 +5504,76 @@ export class StockTakeDialog implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.items = [
-      { sku: 'ITM-001', name: 'Medical Gloves Box', systemQty: 150, countedQty: 150, variance: 0 },
-      { sku: 'ITM-002', name: 'Surgical Masks (50pk)', systemQty: 200, countedQty: 200, variance: 0 },
-      { sku: 'ITM-003', name: 'Hand Sanitizer 500ml', systemQty: 85, countedQty: 85, variance: 0 },
-      { sku: 'ITM-004', name: 'Disposable Gowns', systemQty: 120, countedQty: 120, variance: 0 },
-    ];
+    this.loadInventoryItems();
+  }
+
+  loadInventoryItems(): void {
+    this.loading = true;
+    // Load from live BuildingInventory API - same source as the inventory view
+    this.http.get<any>(`${environment.apiUrl}/warehouses/${this.data.id}/building-inventory`).subscribe({
+      next: (response) => {
+        if (response.items && response.items.length > 0) {
+          this.items = response.items.map((item: any) => ({
+            id: item.id,
+            sku: item.itemCode,
+            name: item.itemDescription || item.itemCode,
+            category: item.buildingName || 'Unknown',
+            uom: item.uom || 'Each',
+            systemQty: item.qtyOnHand || 0,
+            countedQty: item.qtyOnHand || 0,
+            variance: 0
+          }));
+        } else {
+          // Fallback to legacy inventory
+          this.loadLegacyInventory();
+          return;
+        }
+        this.filteredItems = [...this.items];
+        this.loading = false;
+      },
+      error: () => {
+        // Fallback to legacy inventory
+        this.loadLegacyInventory();
+      }
+    });
+  }
+
+  private loadLegacyInventory(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/warehouses/${this.data.id}/inventory`).subscribe({
+      next: (data) => {
+        this.items = data.map(item => ({
+          id: item.id,
+          sku: `COM-${item.commodityId?.toString().padStart(3, '0') || '000'}`,
+          name: item.commodityName,
+          category: 'General',
+          uom: 'Each',
+          systemQty: item.quantityOnHand || 0,
+          countedQty: item.quantityOnHand || 0,
+          variance: 0
+        }));
+        this.filteredItems = [...this.items];
+        this.loading = false;
+      },
+      error: () => {
+        this.items = [];
+        this.filteredItems = [];
+        this.loading = false;
+        this.snackBar.open('Failed to load inventory items', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  filterItems(): void {
+    const query = this.searchQuery.toLowerCase().trim();
+    if (!query) {
+      this.filteredItems = [...this.items];
+      return;
+    }
+    this.filteredItems = this.items.filter(item =>
+      item.sku.toLowerCase().includes(query) ||
+      item.name.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query)
+    );
   }
 
   calculateVariance(item: any): void {
@@ -5485,24 +5587,25 @@ export class StockTakeDialog implements OnInit {
   }
 
   hasVariances(): boolean {
-    return this.items.some(item => item.variance !== 0);
+    return this.filteredItems.some(item => item.variance !== 0);
   }
 
   getTotalItems(): number {
-    return this.items.filter(item => item.countedQty !== null && item.countedQty !== item.systemQty).length;
+    return this.filteredItems.filter(item => item.variance !== 0).length;
   }
 
   getPositiveVariances(): number {
-    return this.items.filter(item => item.variance > 0).length;
+    return this.filteredItems.filter(item => item.variance > 0).length;
   }
 
   getNegativeVariances(): number {
-    return this.items.filter(item => item.variance < 0).length;
+    return this.filteredItems.filter(item => item.variance < 0).length;
   }
 
   submitStockTake(): void {
-    this.snackBar.open(`Stock take completed. ${this.getTotalItems()} items adjusted.`, 'Close', { duration: 5000 });
-    this.dialogRef.close({ submitted: true });
+    const adjustedItems = this.items.filter(item => item.variance !== 0);
+    this.snackBar.open(`Stock take completed. ${adjustedItems.length} items with variances recorded.`, 'Close', { duration: 5000 });
+    this.dialogRef.close({ submitted: true, adjustedItems });
   }
 }
 
