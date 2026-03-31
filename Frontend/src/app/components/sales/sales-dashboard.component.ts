@@ -298,7 +298,7 @@ interface SalesReportResponse {
             <mat-icon>upload_file</mat-icon>
             <span>Import Sales</span>
           </button>
-          <button class="action-btn delivery" (click)="openDeliveryRequestDialog()">
+          <button class="action-btn delivery" (click)="showDeliveryPasswordPrompt()">
             <mat-icon>local_shipping</mat-icon>
             <span>Request Delivery</span>
           </button>
@@ -480,6 +480,32 @@ interface SalesReportResponse {
                 } @else {
                   <mat-icon>save</mat-icon> Save Changes
                 }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ==================== DELIVERY PASSWORD DIALOG ==================== -->
+      @if (showDeliveryPasswordDialog) {
+        <div class="dialog-overlay" (click)="cancelDeliveryPassword()">
+          <div class="pwd-dialog" (click)="$event.stopPropagation()">
+            <mat-icon class="pwd-lock-icon">lock</mat-icon>
+            <h3>Password Required</h3>
+            <p>Enter the delivery request password to continue</p>
+            @if (deliveryPasswordError) {
+              <div class="pwd-error">{{ deliveryPasswordError }}</div>
+            }
+            <mat-form-field appearance="outline" class="pwd-input">
+              <mat-label>Password</mat-label>
+              <input matInput type="password" [(ngModel)]="deliveryPasswordInput"
+                     (keydown.enter)="verifyDeliveryPassword()"
+                     placeholder="Enter password" autofocus>
+            </mat-form-field>
+            <div class="pwd-actions">
+              <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+                <mat-icon>lock_open</mat-icon> Verify
               </button>
             </div>
           </div>
@@ -1130,7 +1156,7 @@ interface SalesReportResponse {
                   <button mat-stroked-button (click)="importInvoices()">
                     <mat-icon>upload</mat-icon> Import
                   </button>
-                  <button mat-flat-button class="request-delivery-tab-btn" (click)="openDeliveryRequestDialog()">
+                  <button mat-flat-button class="request-delivery-tab-btn" (click)="showDeliveryPasswordPrompt()">
                     <mat-icon>local_shipping</mat-icon> Request Delivery
                   </button>
                 </div>
@@ -1226,7 +1252,7 @@ interface SalesReportResponse {
                         <button mat-icon-button matTooltip="Edit" (click)="editInvoice(inv)">
                           <mat-icon>edit</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="Request Delivery" (click)="sendToLogistics(inv)" class="req-delivery-icon">
+                        <button mat-icon-button matTooltip="Request Delivery" (click)="showDeliveryPasswordPrompt(inv)" class="req-delivery-icon">
                           <mat-icon>local_shipping</mat-icon>
                         </button>
                         <button mat-icon-button [matMenuTriggerFor]="invoiceMenu">
@@ -6985,6 +7011,18 @@ interface SalesReportResponse {
       font-size: 13px;
       margin: -8px 0 12px 0;
     }
+
+    /* Delivery Password Dialog */
+    .pwd-dialog {
+      background: white; border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
+      text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: #f57c00; margin-bottom: 12px; }
+    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: #1a1a2e; }
+    .pwd-dialog p { margin: 0 0 20px 0; color: #666; font-size: 14px; }
+    .pwd-input { width: 100%; margin-bottom: 16px; }
+    .pwd-actions { display: flex; gap: 12px; justify-content: center; }
+    .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
   `]
 })
 export class SalesDashboardComponent implements OnInit {
@@ -7066,7 +7104,7 @@ export class SalesDashboardComponent implements OnInit {
   podDriverFilter = '';
   podLinkFilter = '';
   podDriverList: string[] = [];
-  podViewMode = 'grid';
+  podViewMode = 'list';
   podCurrentPage = 1;
   podPageSize = 50;
   podTotalCount = 0;
@@ -7160,6 +7198,12 @@ export class SalesDashboardComponent implements OnInit {
   deliverySuccess = false;
   deliverySuccessMsg = '';
   deliverySuccessRef = '';
+  // Delivery password gate
+  showDeliveryPasswordDialog = false;
+  deliveryPasswordInput = '';
+  deliveryPasswordError = '';
+  private readonly DELIVERY_PASSWORD = '0000';
+  private pendingDeliveryInvoice: Invoice | null = null;
   deliveryInvoiceSearch = '';
   deliveryFilteredInvoices: Invoice[] = [];
   deliverySelectedInvoices: Invoice[] = [];
@@ -7860,6 +7904,37 @@ export class SalesDashboardComponent implements OnInit {
     // Open delivery dialog with this invoice pre-selected
     this.openDeliveryRequestDialog();
     this.toggleDeliveryInvoice(invoice);
+  }
+
+  showDeliveryPasswordPrompt(invoice?: Invoice): void {
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+    this.pendingDeliveryInvoice = invoice || null;
+    this.showDeliveryPasswordDialog = true;
+  }
+
+  verifyDeliveryPassword(): void {
+    if (this.deliveryPasswordInput === this.DELIVERY_PASSWORD) {
+      this.showDeliveryPasswordDialog = false;
+      this.deliveryPasswordInput = '';
+      this.deliveryPasswordError = '';
+      if (this.pendingDeliveryInvoice) {
+        this.sendToLogistics(this.pendingDeliveryInvoice);
+        this.pendingDeliveryInvoice = null;
+      } else {
+        this.openDeliveryRequestDialog();
+      }
+    } else {
+      this.deliveryPasswordError = 'Incorrect password. Please try again.';
+      this.deliveryPasswordInput = '';
+    }
+  }
+
+  cancelDeliveryPassword(): void {
+    this.showDeliveryPasswordDialog = false;
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+    this.pendingDeliveryInvoice = null;
   }
 
   // ── Delivery Request Dialog Methods ──

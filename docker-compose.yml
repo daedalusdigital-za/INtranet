@@ -63,6 +63,7 @@ services:
       - ./kb-docs:/app/kb-docs
       - ./ai-data:/app/ai-data
       - nas-documents:/app/documents
+      - ./uploads:/app/uploads
     depends_on:
       database:
         condition: service_healthy

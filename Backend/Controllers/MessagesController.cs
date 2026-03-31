@@ -509,6 +509,40 @@ namespace ProjectTracker.API.Controllers
             });
         }
 
+        // DELETE: api/messages/conversations/{id}
+        [HttpDelete("conversations/{id}")]
+        public async Task<IActionResult> DeleteConversation(int id, [FromQuery] int userId)
+        {
+            var conversation = await _context.Conversations
+                .Include(c => c.Participants)
+                .Include(c => c.Messages)
+                    .ThenInclude(m => m.ReadReceipts)
+                .Include(c => c.Messages)
+                    .ThenInclude(m => m.Attachments)
+                .FirstOrDefaultAsync(c => c.ConversationId == id);
+
+            if (conversation == null)
+                return NotFound();
+
+            if (!conversation.Participants.Any(p => p.UserId == userId))
+                return Forbid();
+
+            // Remove all read receipts, attachments, messages, participants, then conversation
+            foreach (var message in conversation.Messages)
+            {
+                _context.MessageReadReceipts.RemoveRange(message.ReadReceipts);
+                _context.MessageAttachments.RemoveRange(message.Attachments);
+            }
+            _context.Messages.RemoveRange(conversation.Messages);
+            _context.ConversationParticipants.RemoveRange(conversation.Participants);
+            _context.Conversations.Remove(conversation);
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Conversation {ConversationId} deleted by user {UserId}", id, userId);
+            return NoContent();
+        }
+
         // GET: api/messages/unread-count
         [HttpGet("unread-count")]
         public async Task<ActionResult<int>> GetUnreadCount([FromQuery] int userId)

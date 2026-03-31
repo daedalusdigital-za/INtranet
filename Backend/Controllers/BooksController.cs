@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
+using ProjectTracker.API.Services;
 using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -21,12 +22,14 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<BooksController> _logger;
+        private readonly IEmailService _emailService;
         private readonly string _storagePath;
 
-        public BooksController(ApplicationDbContext context, ILogger<BooksController> logger, IConfiguration configuration)
+        public BooksController(ApplicationDbContext context, ILogger<BooksController> logger, IConfiguration configuration, IEmailService emailService)
         {
             _context = context;
             _logger = logger;
+            _emailService = emailService;
             var basePath = configuration["DocumentsPath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
             _storagePath = Path.Combine(basePath, "Books");
             Directory.CreateDirectory(_storagePath);
@@ -997,6 +1000,138 @@ namespace ProjectTracker.API.Controllers
         }
 
         // ============================================================================
+        // GET: api/Books/invoice-search - Autocomplete search for invoices
+        // ============================================================================
+        [HttpGet("invoice-search")]
+        public async Task<IActionResult> InvoiceSearch([FromQuery] string query, [FromQuery] int? departmentId, [FromQuery] int limit = 10)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+                    return Ok(new List<object>());
+
+                var q = query.ToLower();
+                var invoiceQuery = _context.BookInvoices.AsQueryable();
+
+                if (departmentId.HasValue)
+                    invoiceQuery = invoiceQuery.Where(b => b.DepartmentId == departmentId.Value);
+
+                var results = await invoiceQuery
+                    .Where(b =>
+                        (b.InvoiceNumber != null && b.InvoiceNumber.ToLower().Contains(q)) ||
+                        b.SupplierName.ToLower().Contains(q) ||
+                        (b.CompanyName != null && b.CompanyName.ToLower().Contains(q)))
+                    .OrderByDescending(b => b.InvoiceDate)
+                    .Take(limit)
+                    .Select(b => new
+                    {
+                        b.Id,
+                        b.InvoiceNumber,
+                        b.SupplierName,
+                        b.CompanyName,
+                        b.InvoiceDate,
+                        b.Total,
+                        b.Currency,
+                        b.Status,
+                        b.PaymentDate,
+                        b.PaymentMethod,
+                        b.PaymentReference,
+                        b.DepartmentId
+                    })
+                    .ToListAsync();
+
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching invoices");
+                return StatusCode(500, new { error = "Failed to search invoices" });
+            }
+        }
+
+        // ============================================================================
+        // POST: api/Books/payment-inquiry - Send payment inquiry email to finance
+        // ============================================================================
+        [HttpPost("payment-inquiry")]
+        public async Task<IActionResult> SendPaymentInquiry([FromBody] PaymentInquiryRequest request)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                var user = await _context.Users.FindAsync(userId);
+                var userName = user != null ? $"{user.Name} {user.Surname}" : "Unknown User";
+                var userEmail = user?.Email ?? "unknown";
+
+                // Get invoice details if an ID is provided
+                string invoiceDetails = "";
+                if (request.InvoiceId.HasValue)
+                {
+                    var invoice = await _context.BookInvoices.FindAsync(request.InvoiceId.Value);
+                    if (invoice != null)
+                    {
+                        invoiceDetails = $@"
+                            <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Invoice Number</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.InvoiceNumber ?? "N/A"}</td></tr>
+                            <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Supplier</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.SupplierName}</td></tr>
+                            <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Company</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.CompanyName ?? "N/A"}</td></tr>
+                            <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Invoice Date</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.InvoiceDate:dd MMM yyyy}</td></tr>
+                            <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Amount</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.Currency} {invoice.Total:N2}</td></tr>
+                            <tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Current Status</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.Status}</td></tr>
+                            {(invoice.PaymentDate.HasValue ? $"<tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Payment Date</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.PaymentDate:dd MMM yyyy}</td></tr>" : "")}
+                            {(!string.IsNullOrEmpty(invoice.PaymentReference) ? $"<tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Payment Reference</td><td style='padding: 8px; border: 1px solid #ddd;'>{invoice.PaymentReference}</td></tr>" : "")}";
+                    }
+                }
+
+                var emailBody = $@"
+                    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+                        <div style='background: linear-gradient(135deg, #2196f3, #1976d2); color: white; padding: 20px; border-radius: 8px 8px 0 0;'>
+                            <h2 style='margin: 0;'>Invoice Payment Inquiry</h2>
+                        </div>
+                        <div style='background: #fff; padding: 24px; border: 1px solid #e0e0e0; border-radius: 0 0 8px 8px;'>
+                            <p>A payment inquiry has been submitted by <strong>{userName}</strong> ({userEmail}).</p>
+                            
+                            <h3 style='color: #1976d2; border-bottom: 2px solid #2196f3; padding-bottom: 8px;'>Invoice Details</h3>
+                            <table style='width: 100%; border-collapse: collapse; margin-bottom: 16px;'>
+                                {invoiceDetails}
+                                {(!string.IsNullOrEmpty(request.InvoiceNumber) && !request.InvoiceId.HasValue ? $"<tr><td style='padding: 8px; border: 1px solid #ddd; font-weight: 600;'>Invoice Number</td><td style='padding: 8px; border: 1px solid #ddd;'>{request.InvoiceNumber}</td></tr>" : "")}
+                            </table>
+
+                            {(!string.IsNullOrEmpty(request.Notes) ? $"<h3 style='color: #1976d2; border-bottom: 2px solid #2196f3; padding-bottom: 8px;'>Additional Notes</h3><p style='background: #f5f5f5; padding: 12px; border-radius: 6px;'>{request.Notes}</p>" : "")}
+
+                            <p style='color: #666; font-size: 0.9em; margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee;'>
+                                Please review and respond to this inquiry. You can reply directly to this email or contact {userName} at {userEmail}.
+                            </p>
+                        </div>
+                    </div>";
+
+                var recipients = !string.IsNullOrEmpty(request.FinanceEmail) 
+                    ? request.FinanceEmail 
+                    : "finance@promedtechnologies.co.za";
+
+                var success = await _emailService.SendEmailAsync(
+                    recipients,
+                    $"Invoice Payment Inquiry - {request.InvoiceNumber ?? "General"}",
+                    emailBody,
+                    isHtml: true
+                );
+
+                if (success)
+                {
+                    _logger.LogInformation("Payment inquiry sent by user {UserId} for invoice {InvoiceNumber}", userId, request.InvoiceNumber);
+                    return Ok(new { success = true, message = "Payment inquiry sent to finance successfully" });
+                }
+                else
+                {
+                    return StatusCode(500, new { success = false, message = "Failed to send email. Please try again." });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending payment inquiry");
+                return StatusCode(500, new { error = "Failed to send payment inquiry" });
+            }
+        }
+
+        // ============================================================================
         // DTOs
         // ============================================================================
         private class ParsedInvoiceData
@@ -1033,5 +1168,13 @@ namespace ProjectTracker.API.Controllers
     {
         public int DepartmentId { get; set; }
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class PaymentInquiryRequest
+    {
+        public int? InvoiceId { get; set; }
+        public string? InvoiceNumber { get; set; }
+        public string? Notes { get; set; }
+        public string? FinanceEmail { get; set; }
     }
 }

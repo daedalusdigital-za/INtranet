@@ -160,6 +160,21 @@ namespace ProjectTracker.API.Controllers
                 await file.CopyToAsync(stream);
             }
 
+            // Backup to NAS/documents storage for redundancy
+            try
+            {
+                var documentsPath = _configuration["DocumentsPath"] ?? "/app/documents";
+                var nasBackupPath = Path.Combine(documentsPath, "Artwork", companyCode);
+                Directory.CreateDirectory(nasBackupPath);
+                var nasFilePath = Path.Combine(nasBackupPath, fileName);
+                System.IO.File.Copy(filePath, nasFilePath, overwrite: true);
+                _logger.LogInformation("Artwork backed up to NAS: {NasPath}", nasFilePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to backup artwork to NAS storage - local copy saved successfully");
+            }
+
             // Determine file type
             var isPdf = file.ContentType == "application/pdf" ||
                         file.FileName.ToLower().EndsWith(".pdf");
@@ -241,6 +256,22 @@ namespace ProjectTracker.API.Controllers
             _context.ArtworkFiles.Remove(artwork); // Cascades to annotations
             await _context.SaveChangesAsync();
 
+            return NoContent();
+        }
+
+        // PUT: api/Artwork/5/link-tender
+        [HttpPut("{id}/link-tender")]
+        public async Task<IActionResult> LinkToTender(int id, [FromBody] LinkTenderRequest request)
+        {
+            var artwork = await _context.ArtworkFiles.FindAsync(id);
+            if (artwork == null)
+                return NotFound();
+
+            artwork.TenderId = request.TenderId;
+            artwork.TenderNumber = request.TenderNumber;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Artwork {Id} linked to tender {TenderNumber}", id, request.TenderNumber ?? "(unlinked)");
             return NoContent();
         }
 
@@ -496,5 +527,11 @@ namespace ProjectTracker.API.Controllers
         public string? Message { get; set; }
         public DateTime? RequestedByDate { get; set; }
         public string? RequestedByUser { get; set; }
+    }
+
+    public class LinkTenderRequest
+    {
+        public int? TenderId { get; set; }
+        public string? TenderNumber { get; set; }
     }
 }

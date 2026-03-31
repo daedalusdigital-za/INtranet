@@ -68,6 +68,13 @@ export interface Permission {
   category: string;
 }
 
+export interface ModulePermission {
+  key: string;
+  name: string;
+  icon: string;
+  description: string;
+}
+
 export interface OperatingCompany {
   operatingCompanyId: number;
   name: string;
@@ -192,6 +199,16 @@ export class UserManagementService {
     return this.http.get<Permission[]>(`${this.apiUrl}/permissions`, { headers: this.getHeaders() }).pipe(
       catchError(error => {
         console.error('Error fetching permissions:', error);
+        return of([]);
+      })
+    );
+  }
+
+  // Get available module permissions
+  getModulePermissions(): Observable<ModulePermission[]> {
+    return this.http.get<ModulePermission[]>(`${this.apiUrl}/module-permissions`, { headers: this.getHeaders() }).pipe(
+      catchError(error => {
+        console.error('Error fetching module permissions:', error);
         return of([]);
       })
     );

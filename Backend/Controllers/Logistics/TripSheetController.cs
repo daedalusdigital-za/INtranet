@@ -169,9 +169,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                 VatAmount = vatAmount,
                 TotalWithVat = totalWithVat,
 
+                // IDs for edit mode matching
+                DriverId = load.DriverId,
+                VehicleId = load.VehicleId,
+                WarehouseId = load.WarehouseId,
+
                 // Trip Header / Meta Fields
                 DriverName = load.Driver != null ? $"{load.Driver.FirstName} {load.Driver.LastName}".ToUpper() : "UNASSIGNED",
-                TripDate = load.ScheduledPickupDate ?? load.ActualPickupDate ?? DateTime.Today,
+                TripDate = load.ScheduledDeliveryDate ?? load.ScheduledPickupDate ?? load.ActualPickupDate ?? DateTime.Today,
                 VehicleRegNumber = load.Vehicle?.RegistrationNumber ?? "UNASSIGNED",
                 VehicleType = load.VehicleType?.Name ?? (load.Vehicle != null ? $"{load.Vehicle.Make} {load.Vehicle.Model}" : null),
 
@@ -1079,11 +1084,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
             if (fromDate.HasValue)
             {
-                query = query.Where(l => l.ScheduledPickupDate >= fromDate.Value);
+                query = query.Where(l => (l.ScheduledDeliveryDate ?? l.ScheduledPickupDate) >= fromDate.Value);
             }
             if (toDate.HasValue)
             {
-                query = query.Where(l => l.ScheduledPickupDate <= toDate.Value);
+                query = query.Where(l => (l.ScheduledDeliveryDate ?? l.ScheduledPickupDate) <= toDate.Value);
             }
             if (driverId.HasValue)
             {
@@ -1099,7 +1104,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             var tripSheets = await query
-                .OrderByDescending(l => l.ScheduledPickupDate ?? l.CreatedAt)
+                .OrderByDescending(l => l.ScheduledDeliveryDate ?? l.ScheduledPickupDate ?? l.CreatedAt)
                 .Select(l => new TripSheetSummaryDto
                 {
                     LoadId = l.Id,
@@ -1111,10 +1116,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                     VehicleReg = l.Vehicle != null ? l.Vehicle.RegistrationNumber : "Unassigned",
                     Origin = l.Warehouse != null ? l.Warehouse.City : l.PickupLocation,
                     Destination = l.DeliveryLocation,
+                    WarehouseCode = l.Warehouse != null && l.Warehouse.Code != null 
+                        ? l.Warehouse.Code.Replace("WH-", "") 
+                        : null,
+                    WarehouseName = l.Warehouse != null ? l.Warehouse.Name : null,
                     TotalStops = l.Stops.Count,
                     TotalDistance = l.EstimatedDistance ?? l.ActualDistance ?? 0,
                     EstimatedTime = FormatDuration(l.EstimatedTimeMinutes ?? l.ActualTimeMinutes ?? 0),
-                    Date = l.ScheduledPickupDate ?? l.CreatedAt,
+                    Date = l.ScheduledDeliveryDate ?? l.ScheduledPickupDate ?? l.CreatedAt,
                     Status = l.Status,
                     TotalValue = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0),
                     VatAmount = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0) * TripSheetDto.VatRate,
@@ -2118,6 +2127,11 @@ namespace ProjectTracker.API.Controllers.Logistics
         public decimal TotalWithVat { get; set; } // Total including VAT
         public const decimal VatRate = 0.15m;    // South African VAT rate (15%)
 
+        // IDs for edit mode matching
+        public int? DriverId { get; set; }
+        public int? VehicleId { get; set; }
+        public int? WarehouseId { get; set; }
+
         // Trip Header / Meta Fields
         public string? DriverName { get; set; }
         public DateTime? TripDate { get; set; }
@@ -2229,6 +2243,8 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string VehicleReg { get; set; } = string.Empty;
         public string? Origin { get; set; }
         public string? Destination { get; set; }
+        public string? WarehouseCode { get; set; }   // GP, CPT, DNB, EC etc.
+        public string? WarehouseName { get; set; }   // Full warehouse name
         public int TotalStops { get; set; }
         public decimal TotalDistance { get; set; }
         public string EstimatedTime { get; set; } = string.Empty;

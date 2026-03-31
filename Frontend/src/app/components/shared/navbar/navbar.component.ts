@@ -150,6 +150,9 @@ import { Subscription } from 'rxjs';
               <button class="dd-footer-btn dd-footer-secondary" (click)="viewAllMessages()">
                 View All Messages
               </button>
+              <button class="dd-footer-btn dd-footer-email" (click)="viewEmails()">
+                <mat-icon>email</mat-icon> View Emails
+              </button>
             </div>
           </div>
         }
@@ -271,6 +274,10 @@ import { Subscription } from 'rxjs';
           <mat-icon class="pm-icon-blue">person</mat-icon>
           <span>Profile</span>
         </button>
+        <button mat-menu-item class="pm-menu-item" routerLink="/emails">
+          <mat-icon class="pm-icon-teal">mail</mat-icon>
+          <span>Mailbox</span>
+        </button>
         @if (hasPermission('project_management')) {
           <button mat-menu-item class="pm-menu-item" routerLink="/departments">
             <mat-icon class="pm-icon-purple">business</mat-icon>
@@ -282,6 +289,10 @@ import { Subscription } from 'rxjs';
         <button mat-menu-item class="pm-menu-item" (click)="openTodoDialog()">
           <mat-icon class="pm-icon-green">checklist</mat-icon>
           <span>ToDo</span>
+        </button>
+        <button mat-menu-item class="pm-menu-item" routerLink="/docs">
+          <mat-icon class="pm-icon-blue">description</mat-icon>
+          <span>Docx</span>
         </button>
         <button mat-menu-item class="pm-menu-item" (click)="openBooksDialog()">
           <mat-icon class="pm-icon-purple">menu_book</mat-icon>
@@ -295,13 +306,9 @@ import { Subscription } from 'rxjs';
           <mat-icon class="pm-icon-teal">print</mat-icon>
           <span>Quick Print</span>
         </button>
-        @if (isAdmin() || isManager()) {
+        @if (isAdmin()) {
           <div class="pm-divider"></div>
           <div class="pm-section-label">Administration</div>
-          <button mat-menu-item class="pm-menu-item" routerLink="/call-center">
-            <mat-icon class="pm-icon-green">call</mat-icon>
-            <span>Call Center</span>
-          </button>
         }
         @if (isAdmin()) {
           <button mat-menu-item class="pm-menu-item" routerLink="/settings">
@@ -309,11 +316,6 @@ import { Subscription } from 'rxjs';
             <span>Admin Settings</span>
           </button>
         }
-        <div class="pm-divider"></div>
-        <button mat-menu-item class="pm-menu-item" routerLink="/docs">
-          <mat-icon class="pm-icon-blue">description</mat-icon>
-          <span>Docs</span>
-        </button>
         <div class="pm-divider"></div>
         <button mat-menu-item class="pm-menu-item pm-logout" (click)="logout()">
           <mat-icon class="pm-icon-red">logout</mat-icon>
@@ -406,6 +408,8 @@ import { Subscription } from 'rxjs';
       overflow: hidden;
       backdrop-filter: blur(24px);
       animation: ddSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
     }
 
     @keyframes ddSlideIn {
@@ -421,6 +425,7 @@ import { Subscription } from 'rxjs';
       padding: 14px 16px;
       background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.08) 100%);
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      flex-shrink: 0;
     }
 
     .dd-header-left {
@@ -499,7 +504,9 @@ import { Subscription } from 'rxjs';
 
     /* Scrollable content */
     .dd-content {
-      max-height: 380px;
+      flex: 1;
+      min-height: 0;
+      max-height: 340px;
       overflow-y: auto;
       scrollbar-width: thin;
       scrollbar-color: rgba(255,255,255,0.1) transparent;
@@ -808,6 +815,7 @@ import { Subscription } from 'rxjs';
       display: flex;
       flex-direction: column;
       gap: 6px;
+      flex-shrink: 0;
     }
 
     .dd-footer-btn {
@@ -847,6 +855,15 @@ import { Subscription } from 'rxjs';
       background: rgba(255, 255, 255, 0.1) !important;
       color: rgba(255, 255, 255, 0.85) !important;
       box-shadow: none !important;
+    }
+
+    .dd-footer-email {
+      background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%) !important;
+      color: white !important;
+    }
+
+    .dd-footer-email:hover {
+      box-shadow: 0 4px 16px rgba(0, 180, 216, 0.35) !important;
     }
 
     /* =========== Profile Trigger Button =========== */
@@ -1242,6 +1259,11 @@ export class NavbarComponent implements OnInit, OnDestroy {
   viewAllMessages(): void {
     this.showMessages = false;
     this.router.navigate(['/messages']);
+  }
+
+  viewEmails(): void {
+    this.showMessages = false;
+    this.router.navigate(['/emails']);
   }
 
   startNewConversation(): void {

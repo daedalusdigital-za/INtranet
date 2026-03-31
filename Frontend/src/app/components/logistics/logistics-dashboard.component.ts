@@ -1231,47 +1231,123 @@ interface DeliveryRequestSummary {
               </ng-template>
               <div class="tab-content">
                 <div class="tripsheets-section">
-                  <div class="tripsheets-header">
-                    <h3><mat-icon>description</mat-icon> Trip Sheets</h3>
-                    <div class="tripsheets-actions">
-                      <button mat-raised-button color="primary" (click)="openTripsheetTypeDialog()">
-                        <mat-icon>add</mat-icon>
-                        Create Trip Sheet
-                      </button>
-                      <mat-form-field appearance="outline" class="search-field">
-                        <mat-label>Search Tripsheets</mat-label>
-                        <input matInput [(ngModel)]="tripsheetSearch" placeholder="Load #, driver, date..." (ngModelChange)="onTripsheetFilterChange()">
-                        <mat-icon matSuffix>search</mat-icon>
-                      </mat-form-field>
-                      <mat-form-field appearance="outline" class="filter-field">
-                        <mat-label>Status</mat-label>
-                        <mat-select [(ngModel)]="tripsheetStatusFilter" (ngModelChange)="onTripsheetFilterChange()">
-                          <mat-option value="all">All</mat-option>
-                          <mat-option value="pending">Pending</mat-option>
-                          <mat-option value="assigned">Assigned</mat-option>
-                          <mat-option value="scheduled">Scheduled</mat-option>
-                          <mat-option value="active">Active</mat-option>
-                          <mat-option value="in-transit">In Transit</mat-option>
-                          <mat-option value="completed">Completed</mat-option>
-                          <mat-option value="cancelled">Cancelled</mat-option>
-                        </mat-select>
-                      </mat-form-field>
-                      <mat-form-field appearance="outline" class="date-filter-field">
-                        <mat-label>From Date</mat-label>
-                        <input matInput [matDatepicker]="tripFromPicker" [(ngModel)]="tripsheetFromDate" (dateChange)="onTripsheetDateFilterChange()">
-                        <mat-datepicker-toggle matIconSuffix [for]="tripFromPicker"></mat-datepicker-toggle>
-                        <mat-datepicker #tripFromPicker></mat-datepicker>
-                      </mat-form-field>
-                      <mat-form-field appearance="outline" class="date-filter-field">
-                        <mat-label>To Date</mat-label>
-                        <input matInput [matDatepicker]="tripToPicker" [(ngModel)]="tripsheetToDate" (dateChange)="onTripsheetDateFilterChange()">
-                        <mat-datepicker-toggle matIconSuffix [for]="tripToPicker"></mat-datepicker-toggle>
-                        <mat-datepicker #tripToPicker></mat-datepicker>
-                      </mat-form-field>
-                      @if (tripsheetFromDate || tripsheetToDate) {
-                        <button mat-icon-button color="warn" (click)="clearTripsheetDateFilter()" matTooltip="Clear date filter">
-                          <mat-icon>clear</mat-icon>
+                  <!-- Modern Header -->
+                  <div class="ts-filter-header">
+                    <div class="ts-filter-title-row">
+                      <h3><mat-icon>description</mat-icon> Trip Sheets</h3>
+                      <div class="ts-filter-title-actions">
+                        <span class="ts-results-count">{{ allFilteredTripsheets().length }} results</span>
+                        <button mat-raised-button color="primary" class="ts-create-btn" (click)="openTripsheetTypeDialog()">
+                          <mat-icon>add</mat-icon>
+                          Create Trip Sheet
                         </button>
+                      </div>
+                    </div>
+
+                    <!-- Modern Filter Bar -->
+                    <div class="ts-filter-bar">
+                      <!-- Search -->
+                      <div class="ts-search-wrapper">
+                        <mat-icon class="ts-search-icon">search</mat-icon>
+                        <input class="ts-search-input" [(ngModel)]="tripsheetSearch" placeholder="Search by load #, driver, vehicle..." (ngModelChange)="onTripsheetFilterChange()">
+                        @if (tripsheetSearch) {
+                          <button class="ts-search-clear" (click)="tripsheetSearch = ''; onTripsheetFilterChange()">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        }
+                      </div>
+
+                      <!-- Filter Pills Row -->
+                      <div class="ts-filter-pills">
+                        <!-- Warehouse Toggle Group -->
+                        <div class="ts-filter-group">
+                          <span class="ts-filter-label"><mat-icon>warehouse</mat-icon> Warehouse</span>
+                          <mat-button-toggle-group [(ngModel)]="tripsheetWarehouseFilter" (ngModelChange)="onTripsheetFilterChange()" class="ts-toggle-group warehouse-toggles" appearance="standard">
+                            <mat-button-toggle value="all" matTooltip="All Warehouses">ALL</mat-button-toggle>
+                            <mat-button-toggle value="GP" matTooltip="Gauteng - Johannesburg">GP</mat-button-toggle>
+                            <mat-button-toggle value="CPT" matTooltip="Cape Town">CPT</mat-button-toggle>
+                            <mat-button-toggle value="KZN" matTooltip="KwaZulu-Natal - Durban">KZN</mat-button-toggle>
+                            <mat-button-toggle value="PE" matTooltip="Eastern Cape - Gqeberha">PE</mat-button-toggle>
+                          </mat-button-toggle-group>
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="ts-filter-divider"></div>
+
+                        <!-- Status Filter -->
+                        <div class="ts-filter-group">
+                          <span class="ts-filter-label"><mat-icon>flag</mat-icon> Status</span>
+                          <mat-button-toggle-group [(ngModel)]="tripsheetStatusFilter" (ngModelChange)="onTripsheetFilterChange()" class="ts-toggle-group status-toggles" appearance="standard">
+                            <mat-button-toggle value="all">All</mat-button-toggle>
+                            <mat-button-toggle value="pending">Pending</mat-button-toggle>
+                            <mat-button-toggle value="assigned">Assigned</mat-button-toggle>
+                            <mat-button-toggle value="scheduled">Scheduled</mat-button-toggle>
+                            <mat-button-toggle value="active">Active</mat-button-toggle>
+                            <mat-button-toggle value="in-transit">In Transit</mat-button-toggle>
+                            <mat-button-toggle value="completed">Completed</mat-button-toggle>
+                            <mat-button-toggle value="cancelled">Cancelled</mat-button-toggle>
+                          </mat-button-toggle-group>
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="ts-filter-divider"></div>
+
+                        <!-- Date Range -->
+                        <div class="ts-filter-group">
+                          <span class="ts-filter-label"><mat-icon>date_range</mat-icon> Date Range</span>
+                          <div class="ts-date-range">
+                            <mat-form-field appearance="outline" class="ts-date-field">
+                              <mat-label>From</mat-label>
+                              <input matInput [matDatepicker]="tripFromPicker" [(ngModel)]="tripsheetFromDate" (dateChange)="onTripsheetDateFilterChange()">
+                              <mat-datepicker-toggle matIconSuffix [for]="tripFromPicker"></mat-datepicker-toggle>
+                              <mat-datepicker #tripFromPicker></mat-datepicker>
+                            </mat-form-field>
+                            <mat-icon class="ts-date-arrow">arrow_forward</mat-icon>
+                            <mat-form-field appearance="outline" class="ts-date-field">
+                              <mat-label>To</mat-label>
+                              <input matInput [matDatepicker]="tripToPicker" [(ngModel)]="tripsheetToDate" (dateChange)="onTripsheetDateFilterChange()">
+                              <mat-datepicker-toggle matIconSuffix [for]="tripToPicker"></mat-datepicker-toggle>
+                              <mat-datepicker #tripToPicker></mat-datepicker>
+                            </mat-form-field>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Active filters summary & clear -->
+                      @if (hasActiveTripsheetFilters) {
+                        <div class="ts-active-filters">
+                          <mat-icon>filter_list</mat-icon>
+                          <span>Active filters:</span>
+                          @if (tripsheetWarehouseFilter !== 'all') {
+                            <span class="ts-active-chip warehouse-chip">
+                              <mat-icon>warehouse</mat-icon> {{ tripsheetWarehouseFilter }}
+                              <button (click)="tripsheetWarehouseFilter = 'all'; onTripsheetFilterChange()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          @if (tripsheetStatusFilter !== 'all') {
+                            <span class="ts-active-chip status-chip">
+                              <mat-icon>flag</mat-icon> {{ tripsheetStatusFilter }}
+                              <button (click)="tripsheetStatusFilter = 'all'; onTripsheetFilterChange()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          @if (tripsheetFromDate || tripsheetToDate) {
+                            <span class="ts-active-chip date-chip">
+                              <mat-icon>date_range</mat-icon>
+                              {{ tripsheetFromDate ? (tripsheetFromDate | date:'dd MMM') : '...' }}
+                              → {{ tripsheetToDate ? (tripsheetToDate | date:'dd MMM') : '...' }}
+                              <button (click)="clearTripsheetDateFilter()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          @if (tripsheetSearch) {
+                            <span class="ts-active-chip search-chip">
+                              <mat-icon>search</mat-icon> "{{ tripsheetSearch }}"
+                              <button (click)="tripsheetSearch = ''; onTripsheetFilterChange()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          <button class="ts-clear-all" (click)="clearAllTripsheetFilters()">
+                            <mat-icon>clear_all</mat-icon> Clear all
+                          </button>
+                        </div>
                       }
                     </div>
                   </div>
@@ -1314,6 +1390,15 @@ interface DeliveryRequestSummary {
                             <mat-icon>arrow_forward</mat-icon>
                             <span>{{ trip.destination }}</span>
                           </div>
+                        </td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="warehouse">
+                        <th mat-header-cell *matHeaderCellDef>Warehouse</th>
+                        <td mat-cell *matCellDef="let trip">
+                          <span class="ts-warehouse-badge" [ngClass]="'wh-' + (trip.warehouseCode || 'unknown').toLowerCase()" [matTooltip]="trip.warehouseName || 'Unknown'">
+                            {{ trip.warehouseCode || '—' }}
+                          </span>
                         </td>
                       </ng-container>
 
@@ -4550,67 +4635,407 @@ interface DeliveryRequestSummary {
 
     /* Tripsheets Tab Styles */
     .tripsheets-section {
-      padding: 16px 0;
+      padding: 8px 0;
     }
 
-    .tripsheets-header {
+    /* Modern Filter Header */
+    .ts-filter-header {
+      background: #ffffff;
+      border-radius: 12px;
+      border: 1px solid #e8ecf0;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .ts-filter-title-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
-    .tripsheets-header h3 {
+    .ts-filter-title-row h3 {
       display: flex;
       align-items: center;
       gap: 8px;
       margin: 0;
-      color: #333;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a2e;
     }
 
-    .tripsheets-actions {
+    .ts-filter-title-row h3 mat-icon {
+      color: #5c6bc0;
+    }
+
+    .ts-filter-title-actions {
       display: flex;
-      gap: 12px;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .ts-results-count {
+      font-size: 13px;
+      color: #888;
+      font-weight: 500;
+      padding: 4px 12px;
+      background: #f5f5f5;
+      border-radius: 20px;
+    }
+
+    .ts-create-btn {
+      border-radius: 8px !important;
+      font-weight: 500 !important;
+      letter-spacing: 0.3px;
+    }
+
+    /* Search Wrapper */
+    .ts-search-wrapper {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .ts-search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #aaa;
+      font-size: 20px;
+      z-index: 1;
+    }
+
+    .ts-search-input {
+      width: 100%;
+      padding: 12px 42px 12px 44px;
+      border: 2px solid #e8ecf0;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #333;
+      background: #fafbfc;
+      transition: all 0.2s ease;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .ts-search-input:focus {
+      border-color: #5c6bc0;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.1);
+    }
+
+    .ts-search-input::placeholder {
+      color: #bbb;
+    }
+
+    .ts-search-clear {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #999;
+      padding: 4px;
+      border-radius: 50%;
+      display: flex;
       align-items: center;
     }
 
-    .search-field {
-      width: 280px;
+    .ts-search-clear:hover {
+      background: #f0f0f0;
+      color: #666;
     }
 
-    .filter-field {
-      width: 150px;
+    .ts-search-clear mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
 
-    .date-filter-field {
-      width: 160px;
+    /* Filter Pills Row */
+    .ts-filter-pills {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
     }
 
-    .date-filter-field .mat-mdc-form-field-infix {
-      min-height: 40px;
+    .ts-filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ts-filter-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .ts-filter-label mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      color: #aaa;
+    }
+
+    .ts-filter-divider {
+      width: 1px;
+      height: 48px;
+      background: #e8ecf0;
+      margin-top: 8px;
+    }
+
+    /* Toggle Group Styling */
+    .ts-toggle-group {
+      border-radius: 8px !important;
+      border: 1px solid #e0e0e0 !important;
+      overflow: hidden;
+    }
+
+    .ts-toggle-group .mat-button-toggle {
+      border: none !important;
+    }
+
+    .ts-toggle-group .mat-button-toggle-appearance-standard .mat-button-toggle-label-content {
+      padding: 0 12px !important;
+      line-height: 34px !important;
+      font-size: 12px !important;
+      font-weight: 500 !important;
+    }
+
+    .ts-toggle-group .mat-button-toggle-checked {
+      background: #5c6bc0 !important;
+      color: white !important;
+    }
+
+    .ts-toggle-group.warehouse-toggles .mat-button-toggle-checked {
+      background: #00897b !important;
+      color: white !important;
+    }
+
+    .ts-toggle-group.status-toggles .mat-button-toggle-checked {
+      background: #5c6bc0 !important;
+    }
+
+    /* Date Range */
+    .ts-date-range {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ts-date-field {
+      width: 140px;
+    }
+
+    .ts-date-field .mat-mdc-form-field-infix {
+      min-height: 36px !important;
+      padding-top: 6px !important;
+      padding-bottom: 6px !important;
+    }
+
+    .ts-date-arrow {
+      color: #ccc;
+      font-size: 18px;
+    }
+
+    /* Active Filters Bar */
+    .ts-active-filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px dashed #e0e0e0;
+      flex-wrap: wrap;
+    }
+
+    .ts-active-filters > mat-icon {
+      font-size: 16px;
+      color: #888;
+      width: 16px;
+      height: 16px;
+    }
+
+    .ts-active-filters > span {
+      font-size: 12px;
+      color: #888;
+      font-weight: 500;
+    }
+
+    .ts-active-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px 3px 6px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #f0f0f0;
+      color: #555;
+    }
+
+    .ts-active-chip mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .ts-active-chip button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 0 0 2px;
+      display: flex;
+      align-items: center;
+      color: #999;
+      border-radius: 50%;
+    }
+
+    .ts-active-chip button:hover {
+      color: #d32f2f;
+    }
+
+    .ts-active-chip button mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .ts-active-chip.warehouse-chip {
+      background: #e0f2f1;
+      color: #00695c;
+    }
+
+    .ts-active-chip.status-chip {
+      background: #e8eaf6;
+      color: #3949ab;
+    }
+
+    .ts-active-chip.date-chip {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .ts-active-chip.search-chip {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .ts-clear-all {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 500;
+      background: none;
+      border: 1px dashed #ccc;
+      color: #999;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ts-clear-all:hover {
+      border-color: #d32f2f;
+      color: #d32f2f;
+      background: #fff5f5;
+    }
+
+    .ts-clear-all mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Warehouse Badge in Table */
+    .ts-warehouse-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .ts-warehouse-badge.wh-gp {
+      background: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffcc80;
+    }
+
+    .ts-warehouse-badge.wh-cpt {
+      background: #e3f2fd;
+      color: #1565c0;
+      border: 1px solid #90caf9;
+    }
+
+    .ts-warehouse-badge.wh-kzn {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+    }
+
+    .ts-warehouse-badge.wh-pe {
+      background: #f3e5f5;
+      color: #7b1fa2;
+      border: 1px solid #ce93d8;
+    }
+
+    .ts-warehouse-badge.wh-pvt {
+      background: #fff8e1;
+      color: #f57f17;
+      border: 1px solid #ffe082;
+    }
+
+    .ts-warehouse-badge.wh-bond {
+      background: #efebe9;
+      color: #4e342e;
+      border: 1px solid #bcaaa4;
+    }
+
+    .ts-warehouse-badge.wh-unknown {
+      background: #f5f5f5;
+      color: #999;
+      border: 1px solid #e0e0e0;
     }
 
     .tripsheets-table {
       width: 100%;
-      border-radius: 8px;
+      border-radius: 12px;
       overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      border: 1px solid #e8ecf0;
     }
 
     .tripsheets-table th {
-      background: #f5f5f5;
+      background: #f8f9fb;
       font-weight: 600;
-      color: #333;
+      color: #555;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .tripsheets-table td, .tripsheets-table th {
-      padding: 12px 16px;
+      padding: 12px 14px;
     }
 
     .tripsheets-table tr:hover {
-      background: #fafafa;
+      background: #f8f9fb;
     }
 
     @media (max-width: 1200px) {
@@ -4639,6 +5064,24 @@ interface DeliveryRequestSummary {
 
       .tripsheets-actions {
         flex-wrap: wrap;
+        width: 100%;
+      }
+
+      .ts-filter-pills {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .ts-filter-divider {
+        width: 100%;
+        height: 1px;
+      }
+
+      .ts-date-range {
+        flex-wrap: wrap;
+      }
+
+      .ts-date-field {
         width: 100%;
       }
 
@@ -5797,9 +6240,10 @@ export class LogisticsDashboardComponent implements OnInit {
   tripsheets = signal<any[]>([]);
   tripsheetSearch = '';
   tripsheetStatusFilter = 'all';
+  tripsheetWarehouseFilter = 'all';
   tripsheetFromDate: Date | null = null;
   tripsheetToDate: Date | null = null;
-  tripsheetColumns = ['loadNumber', 'driver', 'vehicle', 'route', 'stops', 'distance', 'estTime', 'date', 'status', 'actions'];
+  tripsheetColumns = ['loadNumber', 'driver', 'vehicle', 'route', 'warehouse', 'stops', 'distance', 'date', 'status', 'actions'];
 
   // Imported Invoices
   importedInvoices = signal<ImportedInvoice[]>([]);
@@ -7205,6 +7649,13 @@ Notes: ${record.notes || 'No notes'}
     if (this.tripsheetStatusFilter !== 'all') {
       trips = trips.filter(t => t.status.toLowerCase().replace(' ', '-') === this.tripsheetStatusFilter);
     }
+
+    if (this.tripsheetWarehouseFilter !== 'all') {
+      trips = trips.filter(t => {
+        const code = (t.warehouseCode || '').toUpperCase();
+        return code === this.tripsheetWarehouseFilter.toUpperCase();
+      });
+    }
     
     if (this.tripsheetSearch) {
       const search = this.tripsheetSearch.toLowerCase();
@@ -7289,6 +7740,24 @@ Notes: ${record.notes || 'No notes'}
     this.tripsheetToDate = null;
     this.tripsheetPageIndex.set(0);
     this.tripsheets.update(trips => [...trips]);
+  }
+
+  clearAllTripsheetFilters(): void {
+    this.tripsheetSearch = '';
+    this.tripsheetStatusFilter = 'all';
+    this.tripsheetWarehouseFilter = 'all';
+    this.tripsheetFromDate = null;
+    this.tripsheetToDate = null;
+    this.tripsheetPageIndex.set(0);
+    this.tripsheets.update(trips => [...trips]);
+  }
+
+  get hasActiveTripsheetFilters(): boolean {
+    return this.tripsheetSearch !== '' || 
+           this.tripsheetStatusFilter !== 'all' || 
+           this.tripsheetWarehouseFilter !== 'all' || 
+           this.tripsheetFromDate !== null || 
+           this.tripsheetToDate !== null;
   }
 
   getTripStatusClass(status: string): string {
@@ -7615,20 +8084,21 @@ Notes: ${record.notes || 'No notes'}
           longitude: item.longitude
         }));
 
-        // Find matching warehouse, driver, vehicle
-        const matchedWarehouse = this.warehouses().find(w => 
-          w.id === tripsheetData.warehouseId || 
-          w.name?.toLowerCase() === tripsheetData.origin?.toLowerCase()
-        );
-        const matchedDriver = this.drivers().find(d => 
-          d.id === tripsheetData.driverId ||
-          `${d.firstName} ${d.lastName}`.toLowerCase() === tripsheetData.driverName?.toLowerCase()
-        );
-        const matchedVehicle = this.vehicles().find(v => 
-          v.id === tripsheetData.vehicleId ||
-          v.registrationNumber === tripsheetData.vehicleRegNumber ||
-          v.registrationNumber === tripsheetData.vehicleRegistration
-        );
+        // Find matching warehouse, driver, vehicle using IDs first, then name fallback
+        const matchedWarehouse = this.warehouses().find(w => w.id === tripsheetData.warehouseId)
+          || this.warehouses().find(w => w.name?.toLowerCase() === tripsheetData.warehouseName?.toLowerCase())
+          || this.warehouses().find(w => w.name?.toLowerCase() === tripsheetData.origin?.toLowerCase());
+        
+        const driverNameLower = tripsheetData.driverName?.toLowerCase()?.trim();
+        const matchedDriver = this.drivers().find(d => d.id === tripsheetData.driverId)
+          || (driverNameLower && driverNameLower !== 'unassigned'
+            ? this.drivers().find(d => `${d.firstName} ${d.lastName}`.toLowerCase().trim() === driverNameLower)
+              || this.drivers().find(d => d.firstName?.toLowerCase() === driverNameLower?.replace(/\s*-\s*$/, ''))
+            : undefined);
+        
+        const matchedVehicle = this.vehicles().find(v => v.id === tripsheetData.vehicleId)
+          || this.vehicles().find(v => v.registrationNumber === tripsheetData.vehicleRegNumber)
+          || this.vehicles().find(v => v.registrationNumber === tripsheetData.vehicleRegistration);
 
         // Filter out unavailable vehicles
         const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
@@ -17623,7 +18093,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                   
                   <div class="review-card">
                     <h4><mat-icon>person</mat-icon> Driver</h4>
-                    <p class="main-value">{{ selectedDriver ? selectedDriver.firstName + ' ' + selectedDriver.lastName : 'Unassigned' }}</p>
+                    <p class="main-value">{{ selectedDriver ? (selectedDriver.firstName || '') + ' ' + (selectedDriver.lastName || '') : 'Unassigned' }}</p>
                     <p class="sub-value">{{ selectedDriver?.phoneNumber || '' }}</p>
                   </div>
 
@@ -19039,12 +19509,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       }
     });
     
-    // Second pass: use Google Maps Geocoding for unmatched invoices
+    // Second pass: Skip geocoding - keyword matching is sufficient and instant
+    // Google Maps geocoding was causing severe lag on large invoice sets
+    // Unmatched invoices will show under "All Provinces" filter
     if (invoicesToGeocode.length > 0) {
-      this.geocodeInvoices(invoicesToGeocode);
-    } else {
-      this.loadingProvinces = false;
+      console.log(`Province detection: ${this.data.invoices.length - invoicesToGeocode.length} matched by keywords, ${invoicesToGeocode.length} unmatched (geocoding disabled for performance)`);
     }
+    this.loadingProvinces = false;
   }
   
   // Geocode invoices using Google Maps API
@@ -20761,11 +21232,15 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   }
 
   displayDriver(driver: any): string {
-    return driver ? `${driver.firstName} ${driver.lastName}` : '';
+    if (!driver) return '';
+    if (typeof driver === 'string') return driver;
+    return `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
   }
 
   displayVehicle(vehicle: any): string {
-    return vehicle ? `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}` : '';
+    if (!vehicle) return '';
+    if (typeof vehicle === 'string') return vehicle;
+    return `${vehicle.registrationNumber || ''} - ${vehicle.make || ''} ${vehicle.model || ''}`.trim();
   }
 
   onWarehouseAutocompleteSelected(event: any): void {
@@ -21171,7 +21646,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         </div>
         
         <div class="info-strip">
-          <div class="info-item"><span>👤</span> <strong>${this.selectedDriver ? this.selectedDriver.firstName + ' ' + this.selectedDriver.lastName : 'UNASSIGNED'}</strong></div>
+          <div class="info-item"><span>👤</span> <strong>${this.selectedDriver ? (this.selectedDriver.firstName || '') + ' ' + (this.selectedDriver.lastName || '') : 'UNASSIGNED'}</strong></div>
           <div class="info-item"><span>🚛</span> <strong>${this.selectedVehicle?.registrationNumber || 'N/A'}</strong> <span class="info-sub">${this.selectedVehicle?.type || ''}</span></div>
           <div class="info-item"><span>📅</span> <strong>${new Date().toLocaleDateString('en-ZA')}</strong></div>
           <div class="info-item"><span>📍</span> <strong>${this.selectedWarehouse?.name || 'Warehouse'}</strong> <span class="info-sub">${this.selectedWarehouse?.city || ''}</span></div>
@@ -21904,11 +22379,15 @@ export class ManualTripsheetDialog {
   }
 
   displayDriver(driver: any): string {
-    return driver ? `${driver.firstName} ${driver.lastName}` : '';
+    if (!driver) return '';
+    if (typeof driver === 'string') return driver;
+    return `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
   }
 
   displayVehicle(vehicle: any): string {
-    return vehicle ? `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}` : '';
+    if (!vehicle) return '';
+    if (typeof vehicle === 'string') return vehicle;
+    return `${vehicle.registrationNumber || ''} - ${vehicle.make || ''} ${vehicle.model || ''}`.trim();
   }
 
   onWarehouseAutocompleteSelected(event: any): void {
@@ -22516,11 +22995,15 @@ export class InternalTransferDialog {
   }
 
   displayDriver(driver: any): string {
-    return driver ? `${driver.firstName} ${driver.lastName}` : '';
+    if (!driver) return '';
+    if (typeof driver === 'string') return driver;
+    return `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
   }
 
   displayVehicle(vehicle: any): string {
-    return vehicle ? `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}` : '';
+    if (!vehicle) return '';
+    if (typeof vehicle === 'string') return vehicle;
+    return `${vehicle.registrationNumber || ''} - ${vehicle.make || ''} ${vehicle.model || ''}`.trim();
   }
 
   onFromWarehouseSelected(event: any): void {

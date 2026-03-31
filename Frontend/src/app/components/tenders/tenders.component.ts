@@ -822,7 +822,7 @@ interface ArtworkFile {
             <div class="artwork-header">
               <div class="artwork-header-left">
                 <h2><mat-icon>palette</mat-icon> Artwork Vault</h2>
-                <p class="artwork-subtitle">Manage artwork for samples & tenders — annotate PDFs and send change requests to the graphics team</p>
+                <p class="artwork-subtitle">Manage artwork for samples & tenders — upload files and link them to tenders</p>
               </div>
               <div class="artwork-header-actions">
                 <mat-form-field appearance="outline" class="artwork-search">
@@ -868,13 +868,9 @@ interface ArtworkFile {
                 <mat-icon>image</mat-icon>
                 <span>{{ getArtworkImageCount() }} Images</span>
               </div>
-              <div class="artwork-stat-chip pending">
-                <mat-icon>rate_review</mat-icon>
-                <span>{{ getArtworkPendingReviewCount() }} Pending Review</span>
-              </div>
-              <div class="artwork-stat-chip sent">
-                <mat-icon>send</mat-icon>
-                <span>{{ getArtworkSentCount() }} Sent to Marketing</span>
+              <div class="artwork-stat-chip linked">
+                <mat-icon>link</mat-icon>
+                <span>{{ getArtworkLinkedCount() }} Linked to Tenders</span>
               </div>
             </div>
 
@@ -882,7 +878,7 @@ interface ArtworkFile {
             @if (filteredArtworkFiles.length > 0) {
               <div class="artwork-grid">
                 @for (artwork of filteredArtworkFiles; track artwork.id) {
-                  <mat-card class="artwork-card" [class.has-annotations]="artwork.annotations.length > 0" [class.sent-to-marketing]="artwork.sentToMarketing">
+                  <mat-card class="artwork-card">
                     <div class="artwork-card-preview" (click)="openArtworkViewer(artwork)">
                       @if (artwork.fileType === 'pdf') {
                         <div class="artwork-pdf-thumb">
@@ -897,18 +893,12 @@ interface ArtworkFile {
                       }
                       <div class="artwork-card-overlay">
                         <mat-icon>open_in_full</mat-icon>
-                        <span>View & Annotate</span>
+                        <span>View</span>
                       </div>
-                      @if (artwork.annotations.length > 0) {
-                        <div class="annotation-badge">
-                          <mat-icon>rate_review</mat-icon>
-                          {{ artwork.annotations.length }}
-                        </div>
-                      }
-                      @if (artwork.sentToMarketing) {
-                        <div class="sent-badge">
-                          <mat-icon>check_circle</mat-icon>
-                          Sent
+                      @if (artwork.tenderNumber) {
+                        <div class="linked-badge">
+                          <mat-icon>link</mat-icon>
+                          Linked
                         </div>
                       }
                     </div>
@@ -929,11 +919,11 @@ interface ArtworkFile {
                       }
                     </mat-card-content>
                     <mat-card-actions class="artwork-card-actions">
-                      <button mat-icon-button matTooltip="View & Annotate" (click)="openArtworkViewer(artwork)">
-                        <mat-icon>edit_note</mat-icon>
+                      <button mat-icon-button matTooltip="View" (click)="openArtworkViewer(artwork)">
+                        <mat-icon>visibility</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Send to Marketing" (click)="openSendToMarketing(artwork)" [disabled]="artwork.annotations.length === 0">
-                        <mat-icon>send</mat-icon>
+                      <button mat-icon-button [matTooltip]="artwork.tenderNumber ? 'Linked to ' + artwork.tenderNumber : 'Link to Tender'" (click)="openLinkTenderDialog(artwork)">
+                        <mat-icon [style.color]="artwork.tenderNumber ? '#4caf50' : ''">link</mat-icon>
                       </button>
                       <button mat-icon-button matTooltip="Download" (click)="downloadArtwork(artwork)">
                         <mat-icon>download</mat-icon>
@@ -949,7 +939,7 @@ interface ArtworkFile {
               <div class="artwork-empty">
                 <mat-icon>palette</mat-icon>
                 <h3>No Artwork Found</h3>
-                <p>Upload artwork files (PDFs, images) to get started. You can annotate PDFs and send change requests to the marketing team.</p>
+                <p>Upload artwork files (PDFs, images) to get started. You can link artwork to tenders and download files.</p>
                 <button mat-raised-button class="upload-artwork-btn" (click)="showArtworkUploadDialog = true">
                   <mat-icon>cloud_upload</mat-icon> Upload Your First Artwork
                 </button>
@@ -1042,7 +1032,7 @@ interface ArtworkFile {
       </div>
     }
 
-    <!-- Artwork PDF Viewer with Annotations -->
+    <!-- Artwork Viewer (Simple) -->
     @if (showArtworkViewer && selectedArtwork) {
       <div class="artwork-viewer-overlay">
         <div class="artwork-viewer-container">
@@ -1052,10 +1042,13 @@ interface ArtworkFile {
               <mat-icon>{{ selectedArtwork.fileType === 'pdf' ? 'picture_as_pdf' : 'image' }}</mat-icon>
               <h3>{{ selectedArtwork.fileName }}</h3>
               <span class="viewer-company-chip" [style.background]="getCompanyColor(selectedArtwork.companyCode) + '20'" [style.color]="getCompanyColor(selectedArtwork.companyCode)">{{ selectedArtwork.companyCode }}</span>
+              @if (selectedArtwork.tenderNumber) {
+                <span class="viewer-tender-chip"><mat-icon>link</mat-icon> {{ selectedArtwork.tenderNumber }}</span>
+              }
             </div>
             <div class="viewer-header-right">
-              <button mat-icon-button matTooltip="Send to Marketing" (click)="openSendToMarketing(selectedArtwork)" [disabled]="selectedArtwork.annotations.length === 0">
-                <mat-icon>send</mat-icon>
+              <button mat-raised-button class="link-tender-viewer-btn" (click)="openLinkTenderDialog(selectedArtwork)">
+                <mat-icon>link</mat-icon> {{ selectedArtwork.tenderNumber ? 'Change Tender' : 'Link to Tender' }}
               </button>
               <button mat-icon-button matTooltip="Download" (click)="downloadArtwork(selectedArtwork)">
                 <mat-icon>download</mat-icon>
@@ -1067,50 +1060,8 @@ interface ArtworkFile {
           </div>
 
           <div class="artwork-viewer-body">
-            <!-- Annotation Toolbar -->
-            <div class="annotation-toolbar">
-              <div class="tool-group">
-                <button mat-icon-button [class.active]="annotationMode === 'note'" (click)="setAnnotationMode('note')" matTooltip="Add Note">
-                  <mat-icon>sticky_note_2</mat-icon>
-                </button>
-                <button mat-icon-button [class.active]="annotationMode === 'highlight'" (click)="setAnnotationMode('highlight')" matTooltip="Highlight Area">
-                  <mat-icon>highlight</mat-icon>
-                </button>
-                <button mat-icon-button [class.active]="annotationMode === 'arrow'" (click)="setAnnotationMode('arrow')" matTooltip="Point Arrow">
-                  <mat-icon>arrow_right_alt</mat-icon>
-                </button>
-              </div>
-              <span class="toolbar-hint"><mat-icon>mouse</mat-icon> Right-click to place</span>
-              <mat-divider vertical></mat-divider>
-              <div class="tool-group">
-                <mat-form-field appearance="outline" class="color-picker-field">
-                  <mat-label>Color</mat-label>
-                  <mat-select [(ngModel)]="annotationColor">
-                    <mat-option value="#FF5722"><span class="color-dot" style="background:#FF5722"></span> Red</mat-option>
-                    <mat-option value="#FF9800"><span class="color-dot" style="background:#FF9800"></span> Orange</mat-option>
-                    <mat-option value="#4CAF50"><span class="color-dot" style="background:#4CAF50"></span> Green</mat-option>
-                    <mat-option value="#2196F3"><span class="color-dot" style="background:#2196F3"></span> Blue</mat-option>
-                    <mat-option value="#9C27B0"><span class="color-dot" style="background:#9C27B0"></span> Purple</mat-option>
-                  </mat-select>
-                </mat-form-field>
-              </div>
-              <mat-divider vertical></mat-divider>
-              <div class="tool-group">
-                <button mat-icon-button matTooltip="Undo Last" (click)="undoAnnotation()" [disabled]="selectedArtwork.annotations.length === 0">
-                  <mat-icon>undo</mat-icon>
-                </button>
-                <button mat-icon-button matTooltip="Clear All Annotations" (click)="clearAnnotations()" [disabled]="selectedArtwork.annotations.length === 0">
-                  <mat-icon>delete_sweep</mat-icon>
-                </button>
-              </div>
-              <div class="annotation-count">
-                <mat-icon>rate_review</mat-icon>
-                {{ selectedArtwork.annotations.length }} note{{ selectedArtwork.annotations.length !== 1 ? 's' : '' }}
-              </div>
-            </div>
-
-            <!-- PDF / Image Preview with Annotation Canvas -->
-            <div class="artwork-preview-area" (contextmenu)="onPreviewRightClick($event)">
+            <!-- PDF / Image Preview -->
+            <div class="artwork-preview-area artwork-preview-full">
               <div class="artwork-scroll-content" #artworkScrollContent>
                 @if (selectedArtwork.fileType === 'pdf') {
                   @for (page of pdfPages; track page.pageNum) {
@@ -1119,74 +1070,59 @@ interface ArtworkFile {
                 } @else {
                   <img [src]="selectedArtwork.safeUrl" class="artwork-image-preview" alt="Artwork preview">
                 }
-
-                <!-- Annotation Overlays - INSIDE scroll content so they scroll with pages -->
-                <div class="annotations-layer">
-                @for (annotation of selectedArtwork.annotations; track annotation.id) {
-                  <div class="annotation-pin"
-                       [style.left.%]="annotation.x"
-                       [style.top.%]="annotation.y"
-                       [style.borderColor]="annotation.color"
-                       [class.highlight]="annotation.type === 'highlight'"
-                       [class.arrow]="annotation.type === 'arrow'"
-                       [class.note]="annotation.type === 'note'"
-                       [class.selected]="editingAnnotation?.id === annotation.id"
-                       (click)="selectAnnotation(annotation, $event)">
-                    <div class="annotation-marker" [style.background]="annotation.color">
-                      <mat-icon>{{ annotation.type === 'note' ? 'comment' : annotation.type === 'highlight' ? 'highlight' : 'arrow_right_alt' }}</mat-icon>
-                      <span class="annotation-number">{{ annotation.id }}</span>
-                    </div>
-                    @if (editingAnnotation?.id === annotation.id || annotation.type === 'note') {
-                      <div class="annotation-popup" [style.borderColor]="annotation.color" (click)="$event.stopPropagation()">
-                        <div class="annotation-popup-header" [style.background]="annotation.color">
-                          <span>Note #{{ annotation.id }}</span>
-                          <button mat-icon-button (click)="removeAnnotation(annotation); $event.stopPropagation()">
-                            <mat-icon>close</mat-icon>
-                          </button>
-                        </div>
-                        <textarea class="annotation-text" [(ngModel)]="annotation.text" placeholder="Describe the change needed..." rows="3" (click)="$event.stopPropagation()" (blur)="saveAnnotationText(annotation)"></textarea>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    }
 
-            <!-- Annotations List Panel -->
-            <div class="annotations-panel">
-              <div class="annotations-panel-header">
-                <h4><mat-icon>rate_review</mat-icon> Annotations</h4>
-              </div>
-              <div class="annotations-list">
-                @if (selectedArtwork.annotations.length === 0) {
-                  <div class="no-annotations">
-                    <mat-icon>touch_app</mat-icon>
-                    <p>Click on the document to add annotations. Use the toolbar to choose annotation type.</p>
-                  </div>
-                }
-                @for (annotation of selectedArtwork.annotations; track annotation.id) {
-                  <div class="annotation-list-item" [style.borderLeftColor]="annotation.color" (click)="selectAnnotation(annotation, $event)">
-                    <div class="annotation-item-header">
-                      <span class="annotation-item-number" [style.background]="annotation.color">#{{ annotation.id }}</span>
-                      <span class="annotation-item-type">{{ annotation.type | titlecase }}</span>
-                      <button mat-icon-button (click)="removeAnnotation(annotation); $event.stopPropagation()">
-                        <mat-icon>delete</mat-icon>
-                      </button>
-                    </div>
-                    <textarea class="annotation-item-text" [(ngModel)]="annotation.text" placeholder="Describe the change..." rows="2" (blur)="saveAnnotationText(annotation)"></textarea>
-                    <span class="annotation-item-time">{{ annotation.createdAt | date:'dd MMM HH:mm' }}</span>
-                  </div>
-                }
-              </div>
-              @if (selectedArtwork.annotations.length > 0) {
-                <div class="annotations-panel-footer">
-                  <button mat-raised-button color="primary" (click)="openSendToMarketing(selectedArtwork)" class="send-marketing-btn">
-                    <mat-icon>send</mat-icon> Send to Marketing
-                  </button>
+    <!-- Link to Tender Dialog -->
+    @if (showLinkTenderDialog && linkTenderArtwork) {
+      <div class="artwork-overlay" (click)="closeLinkTenderDialog()">
+        <div class="link-tender-dialog" (click)="$event.stopPropagation()">
+          <div class="artwork-dialog-header link-header">
+            <mat-icon>link</mat-icon>
+            <h2>Link Artwork to Tender</h2>
+            <button mat-icon-button (click)="closeLinkTenderDialog()"><mat-icon>close</mat-icon></button>
+          </div>
+          <div class="artwork-dialog-body">
+            <div class="send-summary-card">
+              <div class="send-summary-info">
+                <mat-icon>{{ linkTenderArtwork.fileType === 'pdf' ? 'picture_as_pdf' : 'image' }}</mat-icon>
+                <div>
+                  <strong>{{ linkTenderArtwork.fileName }}</strong>
+                  <span>{{ linkTenderArtwork.companyCode }} &bull; {{ linkTenderArtwork.category }}</span>
                 </div>
-              }
+              </div>
             </div>
+
+            @if (linkTenderArtwork.tenderNumber) {
+              <div class="current-link-info">
+                <mat-icon>info</mat-icon>
+                <span>Currently linked to <strong>{{ linkTenderArtwork.tenderNumber }}</strong></span>
+              </div>
+            }
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Select Tender</mat-label>
+              <mat-select [(ngModel)]="linkTenderSelectedId">
+                <mat-option [value]="0">None (Unlink)</mat-option>
+                @for (tender of tenders; track tender.id) {
+                  <mat-option [value]="tender.id">{{ tender.tenderNumber }} - {{ tender.title | slice:0:50 }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </div>
+          <div class="artwork-dialog-actions">
+            <button mat-stroked-button (click)="closeLinkTenderDialog()">Cancel</button>
+            <button mat-raised-button color="primary" (click)="linkArtworkToTender()" [disabled]="linkingTender">
+              @if (linkingTender) {
+                <mat-spinner diameter="20"></mat-spinner> Saving...
+              } @else {
+                <mat-icon>link</mat-icon> {{ linkTenderSelectedId === 0 ? 'Unlink' : 'Link to Tender' }}
+              }
+            </button>
           </div>
         </div>
       </div>
@@ -2842,6 +2778,8 @@ interface ArtworkFile {
     .artwork-stat-chip.pending mat-icon { color: #FF9800; }
     .artwork-stat-chip.sent { border-color: #4CAF50; }
     .artwork-stat-chip.sent mat-icon { color: #4CAF50; }
+    .artwork-stat-chip.linked { border-color: #1976D2; }
+    .artwork-stat-chip.linked mat-icon { color: #1976D2; }
 
     .artwork-grid {
       display: grid;
@@ -2929,6 +2867,23 @@ interface ArtworkFile {
     }
     .sent-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
 
+    .linked-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #1976D2;
+      color: white;
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .linked-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
     .artwork-card-info { padding: 16px !important; }
     .artwork-card-title {
       margin: 0 0 8px;
@@ -2999,7 +2954,7 @@ interface ArtworkFile {
       justify-content: center;
       backdrop-filter: blur(4px);
     }
-    .artwork-upload-dialog, .send-marketing-dialog {
+    .artwork-upload-dialog, .send-marketing-dialog, .link-tender-dialog {
       background: white;
       border-radius: 20px;
       width: 90%;
@@ -3017,9 +2972,23 @@ interface ArtworkFile {
     }
     .artwork-dialog-header mat-icon { font-size: 28px; width: 28px; height: 28px; color: #9C27B0; }
     .artwork-dialog-header.send-header mat-icon { color: #4CAF50; }
+    .artwork-dialog-header.link-header mat-icon { color: #1976D2; }
     .artwork-dialog-header h2 { margin: 0; flex: 1; font-size: 20px; font-weight: 700; }
     .artwork-dialog-body { padding: 24px; }
     .artwork-dialog-body .full-width { width: 100%; }
+    .current-link-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #e3f2fd;
+      color: #1565c0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .current-link-info mat-icon { font-size: 20px; width: 20px; height: 20px; }
     .artwork-dialog-actions {
       display: flex;
       justify-content: flex-end;
@@ -3208,6 +3177,25 @@ interface ArtworkFile {
       overflow: auto;
       background: #e0e0e0;
       margin-top: 48px;
+    }
+    .artwork-preview-area.artwork-preview-full {
+      margin-top: 0;
+    }
+    .viewer-tender-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #e3f2fd;
+      color: #1976D2;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .viewer-tender-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .link-tender-viewer-btn {
+      border-radius: 12px !important;
+      font-weight: 600 !important;
     }
     .artwork-scroll-content {
       position: relative;
@@ -3570,6 +3558,12 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
   pdfPages: { pageNum: number; width: number; height: number; rendered: boolean }[] = [];
   private pdfPagesNeedRender = false;
   @ViewChildren('pdfCanvas') pdfCanvases!: QueryList<ElementRef<HTMLCanvasElement>>;
+
+  // Link to Tender
+  showLinkTenderDialog = false;
+  linkTenderArtwork: ArtworkFile | null = null;
+  linkTenderSelectedId = 0;
+  linkingTender = false;
 
   artworkUploadForm = {
     companyCode: '',
@@ -4340,8 +4334,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
   // Artwork stat helpers for template
   getArtworkPdfCount(): number { return this.artworkFiles.filter(f => f.fileType === 'pdf').length; }
   getArtworkImageCount(): number { return this.artworkFiles.filter(f => f.fileType === 'image').length; }
-  getArtworkPendingReviewCount(): number { return this.artworkFiles.filter(f => f.annotations.length > 0 && !f.sentToMarketing).length; }
-  getArtworkSentCount(): number { return this.artworkFiles.filter(f => f.sentToMarketing).length; }
+  getArtworkLinkedCount(): number { return this.artworkFiles.filter(f => !!f.tenderNumber).length; }
 
   loadArtworkFiles(): void {
     this.artworkService.getArtworkFiles().subscribe({
@@ -4500,9 +4493,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         document.body.classList.add('artwork-viewer-open');
       },
       error: () => {
-        // Still show viewer even if file can't be loaded (for annotations)
-        this.showArtworkViewer = true;
-        document.body.classList.add('artwork-viewer-open');
+        this.snackBar.open('File not found on server — it may need to be re-uploaded', 'OK', { duration: 5000 });
       }
     });
   }
@@ -4647,6 +4638,51 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         }
       });
     }
+  }
+
+  // Link to Tender Methods
+  openLinkTenderDialog(artwork: ArtworkFile): void {
+    this.linkTenderArtwork = artwork;
+    this.linkTenderSelectedId = artwork.tenderId || 0;
+    this.showLinkTenderDialog = true;
+  }
+
+  closeLinkTenderDialog(): void {
+    this.showLinkTenderDialog = false;
+    this.linkTenderArtwork = null;
+    this.linkingTender = false;
+  }
+
+  linkArtworkToTender(): void {
+    if (!this.linkTenderArtwork) return;
+    this.linkingTender = true;
+
+    const artworkId = this.linkTenderArtwork.id;
+    const tenderId = this.linkTenderSelectedId === 0 ? null : this.linkTenderSelectedId;
+    const tender = tenderId ? this.tenders.find(t => t.id === tenderId) : null;
+    const tenderNumber = tender ? tender.tenderNumber : null;
+
+    this.artworkService.linkToTender(artworkId, tenderId, tenderNumber).subscribe({
+      next: () => {
+        // Update the local artwork object
+        if (this.linkTenderArtwork) {
+          this.linkTenderArtwork.tenderId = tenderId ?? undefined;
+          this.linkTenderArtwork.tenderNumber = tenderNumber ?? undefined;
+        }
+        // Also update in the selected artwork if the viewer is open
+        if (this.selectedArtwork?.id === artworkId) {
+          this.selectedArtwork.tenderId = tenderId ?? undefined;
+          this.selectedArtwork.tenderNumber = tenderNumber ?? undefined;
+        }
+        this.snackBar.open(tenderId ? `Linked to ${tenderNumber}` : 'Unlinked from tender', 'OK', { duration: 3000 });
+        this.linkingTender = false;
+        this.showLinkTenderDialog = false;
+      },
+      error: (err) => {
+        this.linkingTender = false;
+        this.snackBar.open('Failed to update tender link', 'Close', { duration: 4000 });
+      }
+    });
   }
 
   // Send to Marketing Methods

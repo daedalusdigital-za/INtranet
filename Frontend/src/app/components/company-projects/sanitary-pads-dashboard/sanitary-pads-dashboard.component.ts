@@ -53,7 +53,7 @@ import { environment } from '../../../../environments/environment';
             </div>
           </div>
           <div class="hero-actions">
-            <button mat-flat-button class="request-delivery-btn" (click)="openDeliveryDialog()">
+            <button mat-flat-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
               <mat-icon>local_shipping</mat-icon> Request Delivery
             </button>
             <button mat-flat-button class="refresh-btn" (click)="loadDashboard()" matTooltip="Refresh data">
@@ -446,6 +446,31 @@ import { environment } from '../../../../environments/environment';
 
         </mat-tab-group>
       </div>
+      }
+
+      <!-- ==================== DELIVERY PASSWORD DIALOG ==================== -->
+      @if (showDeliveryPasswordDialog) {
+        <div class="dlg-backdrop" (click)="cancelDeliveryPassword()"></div>
+        <div class="pwd-dialog">
+          <mat-icon class="pwd-lock-icon">lock</mat-icon>
+          <h3>Password Required</h3>
+          <p>Enter the delivery request password to continue</p>
+          @if (deliveryPasswordError) {
+            <div class="pwd-error">{{ deliveryPasswordError }}</div>
+          }
+          <mat-form-field appearance="outline" class="pwd-input">
+            <mat-label>Password</mat-label>
+            <input matInput type="password" [(ngModel)]="deliveryPasswordInput"
+                   (keydown.enter)="verifyDeliveryPassword()"
+                   placeholder="Enter password" autofocus>
+          </mat-form-field>
+          <div class="pwd-actions">
+            <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
+            <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+              <mat-icon>lock_open</mat-icon> Verify
+            </button>
+          </div>
+        </div>
       }
 
       <!-- ==================== REQUEST DELIVERY DIALOG ==================== -->
@@ -1320,6 +1345,19 @@ import { environment } from '../../../../environments/environment';
       .kpi-row { grid-template-columns: 1fr; }
       .pads-dashboard { padding: 0 12px 24px; }
     }
+
+    /* Delivery Password Dialog */
+    .pwd-dialog {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: white; border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
+      text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 1200;
+    }
+    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: #f57c00; margin-bottom: 12px; }
+    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: #1a1a2e; }
+    .pwd-dialog p { margin: 0 0 20px 0; color: #666; font-size: 14px; }
+    .pwd-input { width: 100%; margin-bottom: 16px; }
+    .pwd-actions { display: flex; gap: 12px; justify-content: center; }
+    .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
   `]
 })
 export class SanitaryPadsDashboardComponent implements OnInit {
@@ -1343,6 +1381,11 @@ export class SanitaryPadsDashboardComponent implements OnInit {
   deliveryError = '';
   deliverySuccess = false;
   deliverySuccessMsg = '';
+  // Delivery password gate
+  showDeliveryPasswordDialog = false;
+  deliveryPasswordInput = '';
+  deliveryPasswordError = '';
+  private readonly DELIVERY_PASSWORD = '0000';
   addressVerified = false;
   private autocomplete: google.maps.places.Autocomplete | null = null;
   deliveryForm = {
@@ -1448,6 +1491,30 @@ export class SanitaryPadsDashboardComponent implements OnInit {
   }
 
   // ── Delivery Request Methods ──
+
+  showDeliveryPasswordPrompt(): void {
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+    this.showDeliveryPasswordDialog = true;
+  }
+
+  verifyDeliveryPassword(): void {
+    if (this.deliveryPasswordInput === this.DELIVERY_PASSWORD) {
+      this.showDeliveryPasswordDialog = false;
+      this.deliveryPasswordInput = '';
+      this.deliveryPasswordError = '';
+      this.openDeliveryDialog();
+    } else {
+      this.deliveryPasswordError = 'Incorrect password. Please try again.';
+      this.deliveryPasswordInput = '';
+    }
+  }
+
+  cancelDeliveryPassword(): void {
+    this.showDeliveryPasswordDialog = false;
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+  }
 
   openDeliveryDialog(): void {
     this.resetDeliveryForm();

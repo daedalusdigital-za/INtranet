@@ -155,6 +155,9 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Projects.PadsCreditNote> PadsCreditNotes { get; set; }
         public DbSet<Models.Projects.PadsInvoiceProcessed> PadsInvoicesProcessed { get; set; }
 
+        // Company Projects — Car Track (HBA1C Sales Rep Tracking)
+        public DbSet<Models.Projects.CarTrackEntry> CarTrackEntries { get; set; }
+
         // Email Accounts Management
         public DbSet<EmailAccount> EmailAccounts { get; set; }
 

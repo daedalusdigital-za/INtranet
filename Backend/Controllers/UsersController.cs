@@ -195,13 +195,15 @@ namespace ProjectTracker.API.Controllers
             var permissions = new List<ModulePermissionDto>
             {
                 new ModulePermissionDto { Key = "sales", Name = "Sales", Icon = "point_of_sale", Description = "Access to Sales dashboard and invoice management" },
+                new ModulePermissionDto { Key = "logistics", Name = "Logistics", Icon = "local_shipping", Description = "Access to delivery routes, tripsheets, and driver management" },
+                new ModulePermissionDto { Key = "tenders", Name = "Tenders", Icon = "gavel", Description = "Access to tender management, compliance vault, and analytics" },
                 new ModulePermissionDto { Key = "project_management", Name = "Project Management", Icon = "business", Description = "Access to project boards, tasks, and team management" },
                 new ModulePermissionDto { Key = "human_resource", Name = "Human Resource", Icon = "people", Description = "Access to employee management, attendance, and HR functions" },
                 new ModulePermissionDto { Key = "stock_management", Name = "Stock Management", Icon = "inventory", Description = "Access to inventory, stock levels, and warehouse management" },
-                new ModulePermissionDto { Key = "logistics", Name = "Logistics", Icon = "local_shipping", Description = "Access to delivery routes, tripsheets, and driver management" },
                 new ModulePermissionDto { Key = "documents", Name = "Documents", Icon = "folder", Description = "Access to document management and file storage" },
                 new ModulePermissionDto { Key = "support_tickets", Name = "Support Tickets", Icon = "support_agent", Description = "Access to support ticket system" },
                 new ModulePermissionDto { Key = "messaging", Name = "Messaging", Icon = "mail", Description = "Access to internal messaging system" },
+                new ModulePermissionDto { Key = "calendar", Name = "Calendar", Icon = "calendar_month", Description = "Access to meetings, events, and scheduling" },
                 new ModulePermissionDto { Key = "ai", Name = "AI Assistant", Icon = "smart_toy", Description = "Access to AI chat assistant" }
             };
 

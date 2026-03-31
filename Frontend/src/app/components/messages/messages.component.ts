@@ -1994,35 +1994,55 @@ export class MessagesComponent implements OnInit, OnDestroy {
 
     if (selectedIds.length === 0) return;
 
-    if (!confirm('Are you sure you want to delete ' + selectedIds.length + ' conversation(s)?')) return;
+    if (!confirm('Are you sure you want to permanently delete ' + selectedIds.length + ' conversation(s)? All messages will be lost.')) return;
 
-    // For now, just remove from local list (would need backend endpoint to truly delete)
-    this.conversations = this.conversations.filter(c => !selectedIds.includes(c.conversationId));
-    this.filterConversations();
-    
-    if (this.selectedConversation && selectedIds.includes(this.selectedConversation.conversationId)) {
-      this.selectedConversation = null;
-      this.messages = [];
-    }
-
-    this.selectedForDelete = {};
-    this.selectMode = false;
-    this.snackBar.open('Conversations removed', 'Close', { duration: 2000 });
+    let completed = 0;
+    let failed = 0;
+    selectedIds.forEach(id => {
+      this.messageService.deleteConversation(id, this.currentUserId).subscribe({
+        next: () => {
+          completed++;
+          this.conversations = this.conversations.filter(c => c.conversationId !== id);
+          this.filterConversations();
+          if (this.selectedConversation?.conversationId === id) {
+            this.selectedConversation = null;
+            this.messages = [];
+          }
+          if (completed + failed === selectedIds.length) {
+            this.selectedForDelete = {};
+            this.selectMode = false;
+            this.snackBar.open(`${completed} conversation(s) deleted`, 'Close', { duration: 2000 });
+          }
+        },
+        error: () => {
+          failed++;
+          if (completed + failed === selectedIds.length) {
+            this.selectedForDelete = {};
+            this.selectMode = false;
+            this.snackBar.open(`${completed} deleted, ${failed} failed`, 'Close', { duration: 3000 });
+          }
+        }
+      });
+    });
   }
 
   deleteConversation(conversation: Conversation): void {
-    if (!confirm('Are you sure you want to delete this conversation?')) return;
+    if (!confirm('Are you sure you want to permanently delete this conversation? All messages will be lost.')) return;
 
-    // Remove from local list
-    this.conversations = this.conversations.filter(c => c.conversationId !== conversation.conversationId);
-    this.filterConversations();
-    
-    if (this.selectedConversation?.conversationId === conversation.conversationId) {
-      this.selectedConversation = null;
-      this.messages = [];
-    }
-
-    this.snackBar.open('Conversation removed', 'Close', { duration: 2000 });
+    this.messageService.deleteConversation(conversation.conversationId, this.currentUserId).subscribe({
+      next: () => {
+        this.conversations = this.conversations.filter(c => c.conversationId !== conversation.conversationId);
+        this.filterConversations();
+        if (this.selectedConversation?.conversationId === conversation.conversationId) {
+          this.selectedConversation = null;
+          this.messages = [];
+        }
+        this.snackBar.open('Conversation deleted', 'Close', { duration: 2000 });
+      },
+      error: () => {
+        this.snackBar.open('Failed to delete conversation', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   startConversationWithUser(user: User): void {

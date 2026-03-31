@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject } from '@angular/core';
+import { Component, OnInit, Inject, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -1030,13 +1030,17 @@ export class CalendarComponent implements OnInit {
   }
 
   openDayEvents(day: any): void {
-    if (day.events.length > 0) {
-      this.dialog.open(DayEventsDialogComponent, {
-        width: '600px',
+    if (day.events.length > 0 || day.tasks.length > 0) {
+      const dialogRef = this.dialog.open(DayEventsDialogComponent, {
+        width: '650px',
         data: {
           date: day.date,
-          events: day.events
+          events: day.events,
+          tasks: day.tasks
         }
+      });
+      dialogRef.componentInstance.taskCompleted.subscribe(() => {
+        this.loadTasks();
       });
     }
   }
@@ -1047,7 +1051,7 @@ export class CalendarComponent implements OnInit {
   }
 }
 
-// Dialog Component for showing day events
+// Dialog Component for showing day events and tasks
 @Component({
   selector: 'app-day-events-dialog',
   standalone: true,
@@ -1056,7 +1060,8 @@ export class CalendarComponent implements OnInit {
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
-    MatCardModule
+    MatCardModule,
+    MatCheckboxModule
   ],
   template: `
     <div class="modern-dialog-container">
@@ -1076,51 +1081,136 @@ export class CalendarComponent implements OnInit {
       </div>
 
       <mat-dialog-content>
-        <div class="events-count">
-          <mat-icon>event_available</mat-icon>
-          <span>{{ data.events.length }} {{ data.events.length === 1 ? 'Event' : 'Events' }} Scheduled</span>
-        </div>
+        <!-- Tasks Section -->
+        @if (data.tasks && data.tasks.length > 0) {
+          <div class="events-count tasks-count">
+            <mat-icon>task_alt</mat-icon>
+            <span>{{ data.tasks.length }} {{ data.tasks.length === 1 ? 'Task' : 'Tasks' }}</span>
+          </div>
 
-        <div class="events-container">
-          @for (event of data.events; track event.id) {
-            <div class="event-card" [style.--event-color]="event.color">
-              <div class="event-header">
-                <div class="event-badge" [style.background]="event.color">
-                  <mat-icon>calendar_today</mat-icon>
+          <div class="events-container" style="margin-bottom: 24px;">
+            @for (task of data.tasks; track task.id) {
+              <div class="event-card task-card-dialog" 
+                   [class.task-completed]="task.isCompleted"
+                   [style.--event-color]="getTaskColor(task)">
+                <div class="event-header">
+                  <div class="event-badge" [style.background]="getTaskColor(task)">
+                    <mat-icon>{{ task.isCompleted ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                  </div>
+                  <div class="event-title-section">
+                    <h3 [class.completed-title]="task.isCompleted">{{ task.title }}</h3>
+                    <div class="task-badges">
+                      <span class="task-priority-badge" [class]="'priority-' + task.priority.toLowerCase()">{{ task.priority }}</span>
+                      <span class="task-status-badge" [class]="'status-' + task.status.toLowerCase()">{{ task.status }}</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="event-title-section">
-                  <h3>{{ event.title }}</h3>
-                  <span class="event-time">
-                    <mat-icon>schedule</mat-icon>
-                    {{ event.time }}
-                  </span>
+
+                <div class="event-details">
+                  @if (task.description) {
+                    <div class="detail-row">
+                      <div class="detail-icon">
+                        <mat-icon>notes</mat-icon>
+                      </div>
+                      <div class="detail-content">
+                        <span class="detail-label">Description</span>
+                        <span class="detail-value">{{ task.description }}</span>
+                      </div>
+                    </div>
+                  }
+
+                  @if (!task.isSelfAssigned) {
+                    <div class="detail-row">
+                      <div class="detail-icon">
+                        <mat-icon>person</mat-icon>
+                      </div>
+                      <div class="detail-content">
+                        <span class="detail-label">Assigned By</span>
+                        <span class="detail-value">{{ task.createdByUserName }}</span>
+                      </div>
+                    </div>
+                  }
+
+                  @if (task.category) {
+                    <div class="detail-row">
+                      <div class="detail-icon">
+                        <mat-icon>label</mat-icon>
+                      </div>
+                      <div class="detail-content">
+                        <span class="detail-label">Category</span>
+                        <span class="detail-value">{{ task.category }}</span>
+                      </div>
+                    </div>
+                  }
+
+                  @if (!task.isCompleted && task.status !== 'Pending') {
+                    <div class="task-action">
+                      <button mat-flat-button class="complete-task-btn" (click)="onCompleteTask(task)">
+                        <mat-icon>check</mat-icon>
+                        Mark Complete
+                      </button>
+                    </div>
+                  }
+                  @if (task.status === 'Pending') {
+                    <div class="task-pending-note">
+                      <mat-icon>hourglass_empty</mat-icon>
+                      <span>Waiting to be accepted</span>
+                    </div>
+                  }
                 </div>
               </div>
+            }
+          </div>
+        }
 
-              <div class="event-details">
-                <div class="detail-row">
-                  <div class="detail-icon">
-                    <mat-icon>place</mat-icon>
+        <!-- Events Section -->
+        @if (data.events && data.events.length > 0) {
+          <div class="events-count">
+            <mat-icon>event_available</mat-icon>
+            <span>{{ data.events.length }} {{ data.events.length === 1 ? 'Event' : 'Events' }} Scheduled</span>
+          </div>
+
+          <div class="events-container">
+            @for (event of data.events; track event.id) {
+              <div class="event-card" [style.--event-color]="event.color">
+                <div class="event-header">
+                  <div class="event-badge" [style.background]="event.color">
+                    <mat-icon>calendar_today</mat-icon>
                   </div>
-                  <div class="detail-content">
-                    <span class="detail-label">Location</span>
-                    <span class="detail-value">{{ event.location }}</span>
+                  <div class="event-title-section">
+                    <h3>{{ event.title }}</h3>
+                    <span class="event-time">
+                      <mat-icon>schedule</mat-icon>
+                      {{ event.time }}
+                    </span>
                   </div>
                 </div>
 
-                <div class="detail-row">
-                  <div class="detail-icon">
-                    <mat-icon>description</mat-icon>
+                <div class="event-details">
+                  <div class="detail-row">
+                    <div class="detail-icon">
+                      <mat-icon>place</mat-icon>
+                    </div>
+                    <div class="detail-content">
+                      <span class="detail-label">Location</span>
+                      <span class="detail-value">{{ event.location }}</span>
+                    </div>
                   </div>
-                  <div class="detail-content">
-                    <span class="detail-label">Details</span>
-                    <span class="detail-value">{{ event.description }}</span>
+
+                  <div class="detail-row">
+                    <div class="detail-icon">
+                      <mat-icon>description</mat-icon>
+                    </div>
+                    <div class="detail-content">
+                      <span class="detail-label">Details</span>
+                      <span class="detail-value">{{ event.description }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          }
-        </div>
+            }
+          </div>
+        }
       </mat-dialog-content>
 
       <mat-dialog-actions>
@@ -1434,12 +1524,132 @@ export class CalendarComponent implements OnInit {
     ::-webkit-scrollbar-thumb:hover {
       background: #1e90ff;
     }
+
+    /* Task-specific styles */
+    .tasks-count {
+      border-left-color: #1976d2;
+      background: linear-gradient(135deg, rgba(25, 118, 210, 0.08) 0%, rgba(25, 118, 210, 0.04) 100%);
+    }
+
+    .tasks-count mat-icon {
+      color: #1976d2;
+    }
+
+    .task-card-dialog.task-completed {
+      opacity: 0.65;
+    }
+
+    .task-card-dialog.task-completed h3.completed-title {
+      text-decoration: line-through;
+      color: #999;
+    }
+
+    .task-badges {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .task-priority-badge, .task-status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .task-priority-badge.priority-low { background: #e3f2fd; color: #1976d2; }
+    .task-priority-badge.priority-normal { background: #e8f5e9; color: #388e3c; }
+    .task-priority-badge.priority-high { background: #fff3e0; color: #f57c00; }
+    .task-priority-badge.priority-urgent { background: #ffebee; color: #d32f2f; }
+
+    .task-status-badge.status-pending { background: #fff3e0; color: #f57c00; }
+    .task-status-badge.status-accepted { background: #e3f2fd; color: #1976d2; }
+    .task-status-badge.status-completed { background: #e8f5e9; color: #388e3c; }
+    .task-status-badge.status-inprogress { background: #e8eaf6; color: #3f51b5; }
+
+    .task-action {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 2px dashed #e0e0e0;
+    }
+
+    .complete-task-btn {
+      background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+      color: white;
+      border-radius: 10px;
+      font-weight: 600;
+      padding: 0 20px;
+      height: 40px;
+      transition: all 0.3s ease;
+    }
+
+    .complete-task-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(46, 125, 50, 0.3);
+    }
+
+    .complete-task-btn mat-icon {
+      margin-right: 6px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .task-pending-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: #fff8e1;
+      border-radius: 10px;
+      color: #f57c00;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .task-pending-note mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
   `]
 })
 export class DayEventsDialogComponent {
+  taskCompleted = new EventEmitter<void>();
+
   constructor(
-    @Inject(MAT_DIALOG_DATA) public data: { date: Date; events: any[] }
+    @Inject(MAT_DIALOG_DATA) public data: { date: Date; events: any[]; tasks: TodoTask[] },
+    private http: HttpClient,
+    private snackBar: MatSnackBar
   ) {}
+
+  getTaskColor(task: TodoTask): string {
+    if (task.isCompleted) return '#4caf50';
+    switch (task.priority.toLowerCase()) {
+      case 'urgent': return '#d32f2f';
+      case 'high': return '#f57c00';
+      case 'normal': return '#1976d2';
+      case 'low': return '#78909c';
+      default: return '#1976d2';
+    }
+  }
+
+  onCompleteTask(task: TodoTask): void {
+    this.http.post(`${environment.apiUrl}/todo/${task.id}/complete`, {}).subscribe({
+      next: () => {
+        task.isCompleted = true;
+        task.status = 'Completed';
+        this.snackBar.open('Task completed!', 'Close', { duration: 3000 });
+        this.taskCompleted.emit();
+      },
+      error: () => {
+        this.snackBar.open('Error completing task', 'Close', { duration: 3000 });
+      }
+    });
+  }
 }
 
 

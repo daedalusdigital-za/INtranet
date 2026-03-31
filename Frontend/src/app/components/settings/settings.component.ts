@@ -29,7 +29,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SystemLogsService, SystemLog } from '../../services/system-logs.service';
 import { AnnouncementHistoryService, Announcement } from '../../services/announcement-history.service';
 import { AuthService } from '../../services/auth.service';
-import { UserManagementService, User, Department, CreateUserDto, Permission, OperatingCompany, ClockInEmployee } from '../../services/user-management.service';
+import { UserManagementService, User, Department, CreateUserDto, Permission, ModulePermission, OperatingCompany, ClockInEmployee } from '../../services/user-management.service';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { environment } from '../../../environments/environment';
@@ -1272,10 +1272,48 @@ import * as XLSX from 'xlsx';
                 </div>
               </div>
 
-              <!-- Permissions -->
+              <!-- Module Access -->
+              <div class="form-section module-access-section">
+                <div class="section-header-row">
+                  <div>
+                    <h4>Module Access</h4>
+                    <p class="section-hint">Select which modules this user can access</p>
+                  </div>
+                  <div class="module-actions">
+                    <button mat-button type="button" (click)="selectAllModules()" class="select-all-btn">
+                      <mat-icon>check_box</mat-icon> All
+                    </button>
+                    <button mat-button type="button" (click)="deselectAllModules()" class="select-all-btn">
+                      <mat-icon>check_box_outline_blank</mat-icon> None
+                    </button>
+                  </div>
+                </div>
+                <div class="module-permissions-grid">
+                  @for (mod of modulePermissions; track mod.key) {
+                    <div class="module-permission-card" 
+                         [class.selected]="hasModulePermission(mod.key)"
+                         (click)="toggleModulePermission(mod.key, !hasModulePermission(mod.key))">
+                      <mat-icon class="module-icon">{{ mod.icon }}</mat-icon>
+                      <div class="module-info">
+                        <span class="module-name">{{ mod.name }}</span>
+                        <span class="module-desc">{{ mod.description }}</span>
+                      </div>
+                      <mat-icon class="module-check">{{ hasModulePermission(mod.key) ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                    </div>
+                  }
+                </div>
+                @if (modulePermissions.length === 0) {
+                  <p class="no-data-hint">Loading modules...</p>
+                }
+                <div class="module-count-hint">
+                  {{ selectedModulePermissions.length }} of {{ modulePermissions.length }} modules selected
+                </div>
+              </div>
+
+              <!-- Granular Permissions -->
               <div class="form-section permissions-section">
-                <h4>Permissions</h4>
-                <p class="section-hint">Configure user permissions</p>
+                <h4>Granular Permissions</h4>
+                <p class="section-hint">Fine-tune specific feature permissions</p>
                 <div class="permissions-grid">
                   @for (category of getPermissionCategories(); track category) {
                     <div class="permission-category">
@@ -2033,6 +2071,128 @@ import * as XLSX from 'xlsx';
 
     .companies-section h4 {
       color: #2e7d32;
+    }
+
+    /* Module Access Section */
+    .module-access-section {
+      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+    }
+
+    .module-access-section h4 {
+      color: #e65100;
+    }
+
+    .section-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .section-header-row h4 {
+      margin: 0;
+    }
+
+    .section-header-row .section-hint {
+      margin: 4px 0 0 0;
+    }
+
+    .module-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .select-all-btn {
+      font-size: 0.8rem !important;
+      min-width: auto !important;
+      padding: 0 8px !important;
+      height: 32px !important;
+      line-height: 32px !important;
+    }
+
+    .select-all-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .module-permissions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 8px;
+    }
+
+    .module-permission-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.7);
+      border: 2px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .module-permission-card:hover {
+      background: rgba(255,255,255,0.95);
+      border-color: #e65100;
+    }
+
+    .module-permission-card.selected {
+      background: rgba(255,255,255,0.95);
+      border-color: #e65100;
+      box-shadow: 0 2px 8px rgba(230, 81, 0, 0.15);
+    }
+
+    .module-permission-card .module-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: #e65100;
+      flex-shrink: 0;
+    }
+
+    .module-permission-card .module-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .module-permission-card .module-name {
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: #333;
+    }
+
+    .module-permission-card .module-desc {
+      font-size: 0.75rem;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .module-permission-card .module-check {
+      flex-shrink: 0;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #ccc;
+      transition: color 0.2s;
+    }
+
+    .module-permission-card.selected .module-check {
+      color: #e65100;
+    }
+
+    .module-count-hint {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: #e65100;
+      font-weight: 500;
+      text-align: right;
     }
 
     .permissions-section {
@@ -3015,7 +3175,9 @@ export class SettingsComponent implements OnInit {
   companies: OperatingCompany[] = [];
   clockInEmployees: ClockInEmployee[] = [];
   permissions: Permission[] = [];
+  modulePermissions: ModulePermission[] = [];
   selectedPermissions: string[] = [];
+  selectedModulePermissions: string[] = [];
   selectedCompanies: number[] = [];
   
   // Reset Password
@@ -3347,6 +3509,7 @@ export class SettingsComponent implements OnInit {
     this.userService.getCompanies().subscribe(companies => this.companies = companies);
     this.userService.getClockInEmployees().subscribe(employees => this.clockInEmployees = employees);
     this.userService.getPermissions().subscribe(perms => this.permissions = perms);
+    this.userService.getModulePermissions().subscribe(mods => this.modulePermissions = mods);
   }
 
   searchUsers(): void {
@@ -3356,6 +3519,7 @@ export class SettingsComponent implements OnInit {
   openCreateUserDialog(): void {
     this.editingUser = null;
     this.selectedPermissions = [];
+    this.selectedModulePermissions = [];
     this.selectedCompanies = [];
     this.userForm.reset({
       role: 'Employee',
@@ -3369,7 +3533,11 @@ export class SettingsComponent implements OnInit {
 
   editUser(user: User): void {
     this.editingUser = user;
-    this.selectedPermissions = user.permissions ? [...user.permissions] : [];
+    // Separate module permissions from granular permissions
+    const allPerms = user.permissions ? [...user.permissions] : [];
+    const moduleKeys = this.modulePermissions.map(m => m.key);
+    this.selectedModulePermissions = allPerms.filter(p => moduleKeys.includes(p));
+    this.selectedPermissions = allPerms.filter(p => !moduleKeys.includes(p));
     this.selectedCompanies = user.companyIds ? [...user.companyIds] : [];
     this.userForm.patchValue({
       name: user.name,
@@ -3418,6 +3586,36 @@ export class SettingsComponent implements OnInit {
     }
   }
 
+  // Module permission methods
+  hasModulePermission(key: string): boolean {
+    return this.selectedModulePermissions.includes(key);
+  }
+
+  toggleModulePermission(key: string, checked: boolean): void {
+    if (checked) {
+      if (!this.selectedModulePermissions.includes(key)) {
+        this.selectedModulePermissions.push(key);
+      }
+    } else {
+      const index = this.selectedModulePermissions.indexOf(key);
+      if (index > -1) {
+        this.selectedModulePermissions.splice(index, 1);
+      }
+    }
+  }
+
+  selectAllModules(): void {
+    this.selectedModulePermissions = this.modulePermissions.map(m => m.key);
+  }
+
+  deselectAllModules(): void {
+    this.selectedModulePermissions = [];
+  }
+
+  getAllCombinedPermissions(): string[] {
+    return [...this.selectedModulePermissions, ...this.selectedPermissions];
+  }
+
   getPermissionCategories(): string[] {
     const categories = [...new Set(this.permissions.map(p => p.category))];
     return categories.sort();
@@ -3461,7 +3659,7 @@ export class SettingsComponent implements OnInit {
           title: formValue.title,
           birthday: formValue.birthday || null,
           linkedEmpId: formValue.linkedEmpId || null,
-          permissions: this.selectedPermissions,
+          permissions: this.getAllCombinedPermissions(),
           companyIds: this.selectedCompanies,
           isActive: formValue.isActive
         };
@@ -3491,7 +3689,7 @@ export class SettingsComponent implements OnInit {
           title: formValue.title,
           birthday: formValue.birthday || null,
           linkedEmpId: formValue.linkedEmpId || null,
-          permissions: this.selectedPermissions,
+          permissions: this.getAllCombinedPermissions(),
           companyIds: this.selectedCompanies,
           isActive: formValue.isActive
         };

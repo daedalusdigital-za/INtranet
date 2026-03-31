@@ -12,6 +12,8 @@ import { MatTableModule } from '@angular/material/table';
 import { MatSortModule } from '@angular/material/sort';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
@@ -47,6 +49,8 @@ import {
     MatSortModule,
     MatBadgeModule,
     MatDividerModule,
+    MatFormFieldModule,
+    MatInputModule,
     FormsModule
   ],
   template: `
@@ -72,7 +76,7 @@ import {
             <span>{{ loading ? 'Connecting...' : isConnected ? 'Live' : 'Offline' }}</span>
           </div>
           @if (!loading && isConnected) {
-            <button mat-flat-button class="request-delivery-btn" (click)="openDeliveryDialog()">
+            <button mat-flat-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
               <mat-icon>local_shipping</mat-icon> Request Delivery
             </button>
             <button mat-flat-button class="refresh-btn" (click)="loadDashboard()" matTooltip="Refresh all data">
@@ -504,6 +508,31 @@ import {
         </div>
       }
 
+      <!-- ==================== DELIVERY PASSWORD DIALOG ==================== -->
+      @if (showDeliveryPasswordDialog) {
+        <div class="dlg-backdrop" (click)="cancelDeliveryPassword()"></div>
+        <div class="pwd-dialog">
+          <mat-icon class="pwd-lock-icon">lock</mat-icon>
+          <h3>Password Required</h3>
+          <p>Enter the delivery request password to continue</p>
+          @if (deliveryPasswordError) {
+            <div class="pwd-error">{{ deliveryPasswordError }}</div>
+          }
+          <mat-form-field appearance="outline" class="pwd-input">
+            <mat-label>Password</mat-label>
+            <input matInput type="password" [(ngModel)]="deliveryPasswordInput"
+                   (keydown.enter)="verifyDeliveryPassword()"
+                   placeholder="Enter password" autofocus>
+          </mat-form-field>
+          <div class="pwd-actions">
+            <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
+            <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+              <mat-icon>lock_open</mat-icon> Verify
+            </button>
+          </div>
+        </div>
+      }
+
       <!-- ==================== REQUEST DELIVERY DIALOG ==================== -->
       @if (showDeliveryDialog) {
         <div class="dlg-backdrop" (click)="closeDeliveryDialog()"></div>
@@ -658,6 +687,7 @@ import {
                   @case ('inventory') { <mat-icon>inventory_2</mat-icon> }
                   @case ('sale') { <mat-icon>point_of_sale</mat-icon> }
                   @case ('creditNote') { <mat-icon>receipt</mat-icon> }
+                  @case ('carTrack') { <mat-icon>directions_car</mat-icon> }
                 }
               </div>
               <div>
@@ -667,6 +697,7 @@ import {
                     @case ('inventory') { Inventory Item }
                     @case ('sale') { Sale }
                     @case ('creditNote') { Credit Note }
+                    @case ('carTrack') { Car Track Entry }
                   }
                 </h2>
                 <p class="dlg-subtitle">{{ editMode === 'create' ? 'Create a new record' : 'Update existing record' }}</p>
@@ -915,6 +946,122 @@ import {
                       <label class="dlg-label checkbox-label">
                         <input type="checkbox" [(ngModel)]="creditNoteForm.reverseSale"> Reverse Sale
                       </label>
+                    </div>
+                  </div>
+                }
+
+                <!-- ── Car Track Form ── -->
+                @if (editEntity === 'carTrack') {
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Sales Rep / Trainer <span class="req">*</span></label>
+                      <select class="dlg-select" [(ngModel)]="carTrackForm.salesRepName" (ngModelChange)="onCarTrackRepChange($event)">
+                        <option value="">Select rep...</option>
+                        @for (rep of carTrackReps; track rep.name) {
+                          <option [value]="rep.name">{{ rep.name }}{{ rep.registration ? ' (' + rep.registration + ')' : '' }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Vehicle Registration</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="carTrackForm.registrationNumber" placeholder="Auto-filled from rep" [readonly]="!!carTrackForm.registrationNumber">
+                      @if (carTrackForm.registrationNumber) {
+                        <span class="field-hint green"><mat-icon class="hint-icon">check_circle</mat-icon> Linked to CarTrack GPS</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Venue / Location <span class="req">*</span></label>
+                      <div class="venue-input-wrap">
+                        <input #carTrackLocationInput type="text" class="dlg-input" [(ngModel)]="carTrackForm.location"
+                          placeholder="Search Google Maps or select venue..." list="venuesList"
+                          (input)="filterVenuesSuggestions($event)">
+                        <datalist id="venuesList">
+                          @for (v of filteredVenues; track v) {
+                            <option [value]="v"></option>
+                          }
+                        </datalist>
+                        @if (carTrackLocationVerified) {
+                          <span class="field-hint green"><mat-icon class="hint-icon">place</mat-icon> Address verified</span>
+                        }
+                      </div>
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Province</label>
+                      <select class="dlg-select" [(ngModel)]="carTrackForm.province">
+                        <option value="">Select province...</option>
+                        <option value="Eastern Cape">Eastern Cape</option>
+                        <option value="Free State">Free State</option>
+                        <option value="Gauteng">Gauteng</option>
+                        <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                        <option value="Limpopo">Limpopo</option>
+                        <option value="Mpumalanga">Mpumalanga</option>
+                        <option value="North West">North West</option>
+                        <option value="Northern Cape">Northern Cape</option>
+                        <option value="Western Cape">Western Cape</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Client / Facility Visited</label>
+                      <input type="text" class="dlg-input" [(ngModel)]="carTrackForm.clientVisited" placeholder="Client/facility name">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Purpose of Visit</label>
+                      <select class="dlg-select" [(ngModel)]="carTrackForm.purpose">
+                        <option value="">Select purpose...</option>
+                        <option value="NCD Awareness Training">NCD Awareness Training</option>
+                        <option value="Diabetes Management Training">Diabetes Management Training</option>
+                        <option value="Equipment Training">Equipment Training</option>
+                        <option value="Product Demo">Product Demo</option>
+                        <option value="Follow-up Visit">Follow-up Visit</option>
+                        <option value="Client Meeting">Client Meeting</option>
+                        <option value="Stock Delivery">Stock Delivery</option>
+                        <option value="Sales Call">Sales Call</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Visit Date <span class="req">*</span></label>
+                      <input type="date" class="dlg-input" [(ngModel)]="carTrackForm.visitDate">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Status</label>
+                      <select class="dlg-select" [(ngModel)]="carTrackForm.status">
+                        <option value="Scheduled">Scheduled</option>
+                        <option value="In Transit">In Transit</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Time Arrived</label>
+                      <input type="time" class="dlg-input" [(ngModel)]="carTrackForm.timeArrived">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Time Departed</label>
+                      <input type="time" class="dlg-input" [(ngModel)]="carTrackForm.timeDeparted">
+                    </div>
+                  </div>
+                  <div class="dlg-row two-col">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Km Start</label>
+                      <input type="number" class="dlg-input" [(ngModel)]="carTrackForm.kilometerStart" min="0" step="0.1" placeholder="Odometer start">
+                    </div>
+                    <div class="dlg-field">
+                      <label class="dlg-label">Km End</label>
+                      <input type="number" class="dlg-input" [(ngModel)]="carTrackForm.kilometerEnd" min="0" step="0.1" placeholder="Odometer end">
+                    </div>
+                  </div>
+                  <div class="dlg-row">
+                    <div class="dlg-field">
+                      <label class="dlg-label">Notes</label>
+                      <textarea class="dlg-input dlg-textarea" [(ngModel)]="carTrackForm.notes" placeholder="Additional notes..." rows="3"></textarea>
                     </div>
                   </div>
                 }
@@ -1830,6 +1977,480 @@ import {
                   </div>
                 }
               </section>
+            </div>
+          </mat-tab>
+
+          <!-- ==================== CAR TRACK TAB ==================== -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>directions_car</mat-icon>
+              <span>Car Track</span>
+              @if (carTrackEntries.length) {
+                <span class="tab-count">{{ carTrackEntries.length }}</span>
+              }
+            </ng-template>
+
+            <div class="tab-body">
+              <!-- Stats Cards -->
+              @if (carTrackStats) {
+                <div class="car-track-stats-grid">
+                  <div class="ct-stat-card">
+                    <div class="ct-stat-icon blue"><mat-icon>people</mat-icon></div>
+                    <div class="ct-stat-info">
+                      <span class="ct-stat-val">{{ carTrackStats.totalReps }}</span>
+                      <span class="ct-stat-lbl">Sales Reps</span>
+                    </div>
+                  </div>
+                  <div class="ct-stat-card">
+                    <div class="ct-stat-icon green"><mat-icon>place</mat-icon></div>
+                    <div class="ct-stat-info">
+                      <span class="ct-stat-val">{{ carTrackStats.totalEntries }}</span>
+                      <span class="ct-stat-lbl">Total Visits</span>
+                    </div>
+                  </div>
+                  <div class="ct-stat-card">
+                    <div class="ct-stat-icon orange"><mat-icon>speed</mat-icon></div>
+                    <div class="ct-stat-info">
+                      <span class="ct-stat-val">{{ carTrackStats.totalKilometers | number:'1.0-0' }} km</span>
+                      <span class="ct-stat-lbl">Total Distance</span>
+                    </div>
+                  </div>
+                  <div class="ct-stat-card">
+                    <div class="ct-stat-icon purple"><mat-icon>calendar_month</mat-icon></div>
+                    <div class="ct-stat-info">
+                      <span class="ct-stat-val">{{ carTrackStats.thisMonthVisits }}</span>
+                      <span class="ct-stat-lbl">This Month</span>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              <!-- Live GPS Tracking Section -->
+              <section class="panel live-tracking-panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon green"><mat-icon>gps_fixed</mat-icon></div>
+                    <div>
+                      <h3>Live Vehicle Tracking</h3>
+                      <p>Real-time GPS locations from CarTrack</p>
+                    </div>
+                  </div>
+                  <div class="live-pulse-wrap">
+                    @if (!liveTrackingLoading) {
+                      <span class="live-dot"></span>
+                      <span class="live-label">LIVE</span>
+                    }
+                  </div>
+                  <button mat-stroked-button class="panel-action" (click)="loadLiveLocations()" [disabled]="liveTrackingLoading">
+                    @if (liveTrackingLoading) {
+                      <mat-spinner diameter="16" strokeWidth="2"></mat-spinner>
+                    } @else {
+                      <mat-icon>refresh</mat-icon>
+                    }
+                    Refresh
+                  </button>
+                </div>
+
+                @if (liveTrackingLoading && !liveVehicles.length) {
+                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                } @else {
+                  <div class="live-vehicles-grid">
+                    @for (v of liveVehicles; track v.registration) {
+                      <div class="live-vehicle-card" [class.status-moving]="v.status === 'moving'" [class.status-idling]="v.status === 'idling'" [class.status-stopped]="v.status === 'stopped'" [class.status-offline]="v.status === 'offline' || v.status === 'not-found'">
+                        <div class="lv-header">
+                          <div class="lv-avatar-wrap">
+                            <div class="lv-avatar">{{ v.driverName.charAt(0) }}</div>
+                            <span class="lv-status-dot" [class]="'dot-' + v.status"></span>
+                          </div>
+                          <div class="lv-name-block">
+                            <span class="lv-driver">{{ v.driverName }}</span>
+                            <span class="lv-reg">{{ v.registration }}</span>
+                          </div>
+                          <span class="lv-status-badge" [class]="'badge-' + v.status">
+                            {{ v.status === 'moving' ? 'Moving' : v.status === 'idling' ? 'Idling' : v.status === 'stopped' ? 'Stopped' : 'Offline' }}
+                          </span>
+                        </div>
+                        <div class="lv-body">
+                          @if (v.location) {
+                            <div class="lv-location">
+                              <mat-icon class="lv-loc-icon">place</mat-icon>
+                              <span>{{ v.location.address }}</span>
+                            </div>
+                            <div class="lv-meta-row">
+                              <div class="lv-meta">
+                                <mat-icon>speed</mat-icon>
+                                <span>{{ v.speed | number:'1.0-0' }} km/h</span>
+                              </div>
+                              <div class="lv-meta">
+                                <mat-icon>schedule</mat-icon>
+                                <span>{{ getTimeAgo(v.lastUpdate) }}</span>
+                              </div>
+                              <div class="lv-meta">
+                                <mat-icon>badge</mat-icon>
+                                <span>{{ v.unitId }}</span>
+                              </div>
+                            </div>
+                            <div class="lv-coords">
+                              <a [href]="'https://www.google.com/maps?q=' + v.location.latitude + ',' + v.location.longitude" target="_blank" class="lv-map-link">
+                                <mat-icon class="lv-map-icon">map</mat-icon>
+                                {{ v.location.latitude | number:'1.5-5' }}, {{ v.location.longitude | number:'1.5-5' }}
+                              </a>
+                            </div>
+                          } @else {
+                            <div class="lv-no-signal">
+                              <mat-icon>signal_wifi_off</mat-icon>
+                              <span>No GPS signal available</span>
+                            </div>
+                          }
+                          <div class="lv-actions">
+                            <button class="lv-history-btn" (click)="loadTripHistory(v)" [disabled]="tripHistoryLoading">
+                              <mat-icon>history</mat-icon>
+                              @if (tripHistoryLoading && tripHistoryReg === v.registration && !historicalDatePickerReg) {
+                                <mat-spinner diameter="14" strokeWidth="2"></mat-spinner>
+                              } @else {
+                                Today's Trips
+                              }
+                            </button>
+                            <button class="lv-history-btn lv-historical-btn" (click)="toggleHistoricalDatePicker(v.registration)" [disabled]="tripHistoryLoading && tripHistoryReg !== v.registration">
+                              <mat-icon>calendar_month</mat-icon>
+                              @if (tripHistoryLoading && historicalDatePickerReg === v.registration) {
+                                <mat-spinner diameter="14" strokeWidth="2"></mat-spinner>
+                              } @else {
+                                Historical Trips
+                              }
+                            </button>
+                            @if (historicalDatePickerReg === v.registration) {
+                              <div class="historical-date-picker">
+                                <input type="date" class="historical-date-input" [(ngModel)]="historicalDateValue" [max]="getTodayDate()" />
+                                <button class="historical-go-btn" (click)="loadHistoricalTrips(v)" [disabled]="!historicalDateValue || tripHistoryLoading">
+                                  <mat-icon>search</mat-icon> View Trips
+                                </button>
+                                <button class="historical-cancel-btn" (click)="historicalDatePickerReg = ''">
+                                  <mat-icon>close</mat-icon>
+                                </button>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    }
+                    @if (!liveVehicles.length && !liveTrackingLoading) {
+                      <div class="lv-empty">
+                        <mat-icon>directions_car</mat-icon>
+                        <p>Click Refresh to fetch live vehicle locations</p>
+                      </div>
+                    }
+                  </div>
+
+                  @if (tripHistoryData) {
+                    <div class="trip-history-panel">
+                      <div class="trip-history-header">
+                        <div class="trip-history-title">
+                          <mat-icon>route</mat-icon>
+                          <div>
+                            <h4>{{ tripHistoryData.driverName }} — {{ tripHistoryDateLabel || "Today's Trips" }}</h4>
+                            <span class="trip-history-date">{{ tripHistoryData.date }}</span>
+                          </div>
+                        </div>
+                        <div class="trip-header-actions">
+                          <button class="trip-export-btn" (click)="exportTripHistoryToExcel()" title="Export to Excel">
+                            <mat-icon>download</mat-icon> Export
+                          </button>
+                          <button mat-icon-button (click)="closeTripHistory()" class="trip-close-btn">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="trip-summary-row">
+                        <div class="trip-stat">
+                          <mat-icon>straighten</mat-icon>
+                          <div>
+                            <span class="trip-stat-val">{{ tripHistoryData.summary.totalDistanceKm }} km</span>
+                            <span class="trip-stat-lbl">Distance</span>
+                          </div>
+                        </div>
+                        <div class="trip-stat">
+                          <mat-icon>timer</mat-icon>
+                          <div>
+                            <span class="trip-stat-val">{{ tripHistoryData.summary.totalDuration }}</span>
+                            <span class="trip-stat-lbl">Drive Time</span>
+                          </div>
+                        </div>
+                        <div class="trip-stat">
+                          <mat-icon>speed</mat-icon>
+                          <div>
+                            <span class="trip-stat-val">{{ tripHistoryData.summary.maxSpeed }} km/h</span>
+                            <span class="trip-stat-lbl">Top Speed</span>
+                          </div>
+                        </div>
+                        <div class="trip-stat">
+                          <mat-icon>pin_drop</mat-icon>
+                          <div>
+                            <span class="trip-stat-val">{{ tripHistoryData.summary.tripCount }}</span>
+                            <span class="trip-stat-lbl">Trips</span>
+                          </div>
+                        </div>
+                        <div class="trip-stat">
+                          <mat-icon>hourglass_empty</mat-icon>
+                          <div>
+                            <span class="trip-stat-val">{{ tripHistoryData.summary.totalIdleDuration }}</span>
+                            <span class="trip-stat-lbl">Idle Time</span>
+                          </div>
+                        </div>
+                        @if (tripHistoryData.summary.harshEvents > 0) {
+                          <div class="trip-stat harsh">
+                            <mat-icon>warning</mat-icon>
+                            <div>
+                              <span class="trip-stat-val">{{ tripHistoryData.summary.harshEvents }}</span>
+                              <span class="trip-stat-lbl">Harsh Events</span>
+                            </div>
+                          </div>
+                        }
+                      </div>
+
+                      <div #tripHistoryMap class="trip-history-map"></div>
+
+                      <div class="trip-list">
+                        @for (trip of tripHistoryData.trips; track trip.tripId; let i = $index) {
+                          <div class="trip-item" [class.trip-zero]="trip.tripDistance === 0">
+                            <div class="trip-num">{{ i + 1 }}</div>
+                            <div class="trip-detail">
+                              <div class="trip-route">
+                                <span class="trip-from">{{ trip.startLocation || 'Unknown' }}</span>
+                                <mat-icon class="trip-arrow">east</mat-icon>
+                                <span class="trip-to">{{ trip.endLocation || 'Unknown' }}</span>
+                              </div>
+                              <div class="trip-meta">
+                                <span><mat-icon>schedule</mat-icon> {{ formatTripTime(trip.startTimestamp) }} — {{ formatTripTime(trip.endTimestamp) }}</span>
+                                <span><mat-icon>straighten</mat-icon> {{ (trip.tripDistance / 1000) | number:'1.1-1' }} km</span>
+                                <span><mat-icon>timer</mat-icon> {{ trip.tripDuration }}</span>
+                                @if (trip.maxSpeed > 0) {
+                                  <span><mat-icon>speed</mat-icon> {{ trip.maxSpeed }} km/h</span>
+                                }
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                }
+                @if (liveTrackingFetchedAt) {
+                  <div class="lv-footer">
+                    Last updated: {{ liveTrackingFetchedAt | date:'dd MMM yyyy, HH:mm:ss' }}
+                  </div>
+                }
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title-group">
+                    <div class="panel-icon teal"><mat-icon>directions_car</mat-icon></div>
+                    <div>
+                      <h3>Sales Rep Car Tracking</h3>
+                      <p>{{ carTrackEntries.length }} visit{{ carTrackEntries.length !== 1 ? 's' : '' }} recorded</p>
+                    </div>
+                  </div>
+                  <div class="car-track-filter-row">
+                    <select class="ct-filter-select" [(ngModel)]="carTrackFilterRep" (ngModelChange)="filterCarTrackEntries()">
+                      <option value="">All Reps</option>
+                      @for (rep of carTrackReps; track rep.name) {
+                        <option [value]="rep.name">{{ rep.name }}</option>
+                      }
+                      @for (rep of knownSalesReps; track rep) {
+                        @if (!carTrackReps.length || !isRepInList(rep)) {
+                          <option [value]="rep">{{ rep }}</option>
+                        }
+                      }
+                    </select>
+                    <select class="ct-filter-select" [(ngModel)]="carTrackFilterProvince" (ngModelChange)="filterCarTrackEntries()">
+                      <option value="">All Provinces</option>
+                      <option value="Eastern Cape">Eastern Cape</option>
+                      <option value="Free State">Free State</option>
+                      <option value="Gauteng">Gauteng</option>
+                      <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                      <option value="Limpopo">Limpopo</option>
+                      <option value="Mpumalanga">Mpumalanga</option>
+                      <option value="North West">North West</option>
+                      <option value="Northern Cape">Northern Cape</option>
+                      <option value="Western Cape">Western Cape</option>
+                    </select>
+                  </div>
+                  <button mat-stroked-button class="panel-action" (click)="loadCarTrack()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                  <button mat-stroked-button class="panel-action export-btn" (click)="openExportDialog()">
+                    <mat-icon>file_download</mat-icon> Export Report
+                  </button>
+                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('carTrack')">
+                    <mat-icon>add</mat-icon> Log Visit
+                  </button>
+                </div>
+
+                @if (carTrackLoading) {
+                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                } @else {
+                  <div class="table-wrap">
+                    <table class="modern-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Sales Rep</th>
+                          <th>Reg #</th>
+                          <th>Location</th>
+                          <th>Client</th>
+                          <th>Province</th>
+                          <th>Time</th>
+                          <th class="right">Distance</th>
+                          <th class="center">Status</th>
+                          <th class="center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (entry of filteredCarTrackEntries; track entry.id) {
+                          <tr>
+                            <td class="mono-text">{{ entry.visitDate | date:'dd MMM yyyy' }}</td>
+                            <td class="primary-cell">
+                              <div class="rep-cell">
+                                <div class="rep-avatar">{{ getInitials(entry.salesRepName) }}</div>
+                                <span>{{ entry.salesRepName }}</span>
+                              </div>
+                            </td>
+                            <td class="mono-text">{{ entry.registrationNumber || '—' }}</td>
+                            <td>
+                              <div class="location-cell">
+                                <mat-icon class="loc-pin">place</mat-icon>
+                                <span>{{ entry.location }}</span>
+                              </div>
+                            </td>
+                            <td class="secondary-text">{{ entry.clientVisited || '—' }}</td>
+                            <td>
+                              @if (entry.province) {
+                                <span class="province-chip">{{ entry.province }}</span>
+                              } @else {
+                                <span class="secondary-text">—</span>
+                              }
+                            </td>
+                            <td class="mono-text">
+                              @if (entry.timeArrived) {
+                                {{ entry.timeArrived.substring(0, 5) }}
+                                @if (entry.timeDeparted) {
+                                  – {{ entry.timeDeparted.substring(0, 5) }}
+                                }
+                              } @else {
+                                —
+                              }
+                            </td>
+                            <td class="right mono-text">
+                              @if (entry.kilometerStart != null && entry.kilometerEnd != null) {
+                                {{ (entry.kilometerEnd - entry.kilometerStart) | number:'1.1-1' }} km
+                              } @else {
+                                —
+                              }
+                            </td>
+                            <td class="center">
+                              <span class="status-tag" [class]="'st-' + (entry.status || 'completed').toLowerCase().replace(' ', '-')">
+                                {{ entry.status }}
+                              </span>
+                            </td>
+                            <td class="center actions-cell">
+                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('carTrack', entry)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('carTrack', entry.id, entry.salesRepName + ' - ' + entry.location)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </td>
+                          </tr>
+                        }
+                        @if (!filteredCarTrackEntries.length) {
+                          <tr><td colspan="10" class="empty-row">
+                            @if (carTrackFilterRep || carTrackFilterProvince) {
+                              No visits match the current filters
+                            } @else {
+                              No car track entries yet — click "Log Visit" to add one
+                            }
+                          </td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
+
+              <!-- Export Report Dialog -->
+              @if (showExportDialog) {
+                <div class="export-backdrop" (click)="closeExportDialog()"></div>
+                <div class="export-dialog">
+                  <div class="export-dialog-header">
+                    <div class="export-title-group">
+                      <div class="export-icon-ring"><mat-icon>file_download</mat-icon></div>
+                      <div>
+                        <h3>Export Car Track Report</h3>
+                        <p>Select a date range to export visit log and trip history</p>
+                      </div>
+                    </div>
+                    <button class="export-close-btn" (click)="closeExportDialog()">
+                      <mat-icon>close</mat-icon>
+                    </button>
+                  </div>
+                  <div class="export-dialog-body">
+                    <div class="export-form-row">
+                      <div class="export-field">
+                        <label>From Date</label>
+                        <input type="date" [(ngModel)]="exportFromDate" class="export-date-input" />
+                      </div>
+                      <div class="export-field">
+                        <label>To Date</label>
+                        <input type="date" [(ngModel)]="exportToDate" class="export-date-input" />
+                      </div>
+                    </div>
+                    <div class="export-form-row">
+                      <div class="export-field full">
+                        <label>Sales Rep (optional)</label>
+                        <select [(ngModel)]="exportSalesRep" class="export-select">
+                          <option value="">All Reps</option>
+                          @for (rep of carTrackReps; track rep.name) {
+                            <option [value]="rep.name">{{ rep.name }}</option>
+                          }
+                          @for (rep of knownSalesReps; track rep) {
+                            @if (!carTrackReps.length || !isRepInList(rep)) {
+                              <option [value]="rep">{{ rep }}</option>
+                            }
+                          }
+                        </select>
+                      </div>
+                    </div>
+                    <div class="export-form-row">
+                      <label class="export-checkbox-label">
+                        <input type="checkbox" [(ngModel)]="exportIncludeTrips" />
+                        Include live GPS trip history (from CarTrack API)
+                      </label>
+                    </div>
+                    @if (exportIncludeTrips) {
+                      <div class="export-info-note">
+                        <mat-icon>info</mat-icon>
+                        <span>Trip history is fetched from CarTrack's GPS API for each day in the range. Large date ranges may take longer to generate.</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="export-dialog-footer">
+                    <button mat-stroked-button (click)="closeExportDialog()">Cancel</button>
+                    <button mat-flat-button color="primary" class="export-download-btn"
+                            (click)="downloadExportReport()"
+                            [disabled]="!exportFromDate || !exportToDate || exportLoading">
+                      @if (exportLoading) {
+                        <mat-spinner diameter="16" strokeWidth="2"></mat-spinner>
+                        Generating...
+                      } @else {
+                        <mat-icon>download</mat-icon>
+                        Export to Excel
+                      }
+                    </button>
+                  </div>
+                </div>
+              }
             </div>
           </mat-tab>
         </mat-tab-group>
@@ -3083,11 +3704,478 @@ import {
       .bar-label { width: 80px; font-size: 11px; }
       .dialog-split { grid-template-columns: 1fr; }
     }
+
+    /* Delivery Password Dialog */
+    .pwd-dialog {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: white; border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
+      text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 1200;
+    }
+    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: #f57c00; margin-bottom: 12px; }
+    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: #1a1a2e; }
+    .pwd-dialog p { margin: 0 0 20px 0; color: #666; font-size: 14px; }
+    .pwd-input { width: 100%; margin-bottom: 16px; }
+    .pwd-actions { display: flex; gap: 12px; justify-content: center; }
+    .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
+
+    /* ============================== */
+    /*  CAR TRACK TAB STYLES          */
+    /* ============================== */
+    .car-track-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .ct-stat-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .ct-stat-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ct-stat-icon.blue { background: var(--blue-soft); color: var(--blue); }
+    .ct-stat-icon.green { background: var(--green-soft); color: var(--green); }
+    .ct-stat-icon.orange { background: var(--orange-soft); color: var(--orange); }
+    .ct-stat-icon.purple { background: var(--purple-soft); color: var(--purple); }
+    .ct-stat-icon mat-icon { font-size: 22px; width: 22px; height: 22px; }
+    .ct-stat-info { display: flex; flex-direction: column; }
+    .ct-stat-val { font-size: 22px; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+    .ct-stat-lbl { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+    .car-track-filter-row {
+      display: flex; gap: 8px; margin-left: auto; margin-right: 8px;
+    }
+    .ct-filter-select {
+      padding: 6px 12px; border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px; color: var(--text-primary);
+      cursor: pointer;
+    }
+    .ct-filter-select:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+
+    .rep-cell {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rep-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      color: #fff; font-size: 11px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .location-cell {
+      display: flex; align-items: center; gap: 4px;
+    }
+    .loc-pin { font-size: 16px; width: 16px; height: 16px; color: var(--red); flex-shrink: 0; }
+    .province-chip {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .st-completed { background: var(--green-soft); color: var(--green); }
+    .st-in-transit { background: var(--orange-soft); color: var(--orange); }
+    .st-scheduled { background: var(--blue-soft); color: var(--blue); }
+
+    /* ============================== */
+    /*  LIVE TRACKING STYLES          */
+    /* ============================== */
+    .live-tracking-panel { margin-bottom: 24px; }
+    .live-pulse-wrap {
+      display: flex; align-items: center; gap: 6px; margin-left: auto; margin-right: 12px;
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      animation: livePulse 2s ease-in-out infinite;
+    }
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+      50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+    }
+    .live-label { font-size: 11px; font-weight: 700; color: var(--green); letter-spacing: 1px; }
+
+    .live-vehicles-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      padding: 0 0 8px 0;
+    }
+    .live-vehicle-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background: var(--surface);
+      transition: box-shadow 0.2s;
+    }
+    .live-vehicle-card:hover { box-shadow: var(--shadow-md); }
+    .live-vehicle-card.status-moving { border-left: 4px solid var(--green); }
+    .live-vehicle-card.status-idling { border-left: 4px solid var(--orange); }
+    .live-vehicle-card.status-stopped { border-left: 4px solid var(--blue); }
+    .live-vehicle-card.status-offline { border-left: 4px solid var(--text-muted); }
+
+    .lv-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px 10px;
+    }
+    .lv-avatar-wrap { position: relative; }
+    .lv-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--teal), var(--blue));
+      color: #fff; font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .lv-status-dot {
+      position: absolute; bottom: -1px; right: -1px;
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid var(--surface);
+    }
+    .dot-moving { background: var(--green); }
+    .dot-idling { background: var(--orange); }
+    .dot-stopped { background: var(--blue); }
+    .dot-offline, .dot-not-found { background: var(--text-muted); }
+    .lv-name-block { display: flex; flex-direction: column; flex: 1; }
+    .lv-driver { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .lv-reg { font-size: 12px; color: var(--text-secondary); font-family: 'Courier New', monospace; }
+    .lv-status-badge {
+      padding: 3px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .badge-moving { background: var(--green-soft); color: var(--green); }
+    .badge-idling { background: var(--orange-soft); color: var(--orange); }
+    .badge-stopped { background: var(--blue-soft); color: var(--blue); }
+    .badge-offline, .badge-not-found { background: #f1f5f9; color: var(--text-muted); }
+
+    .lv-body { padding: 0 16px 14px; }
+    .lv-location {
+      display: flex; align-items: flex-start; gap: 6px;
+      font-size: 13px; color: var(--text-primary);
+      margin-bottom: 10px; line-height: 1.4;
+    }
+    .lv-loc-icon { font-size: 16px; width: 16px; height: 16px; color: var(--red); margin-top: 1px; flex-shrink: 0; }
+    .lv-meta-row {
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+    .lv-meta {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .lv-meta mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .lv-coords {
+      margin-top: 8px; font-size: 11px;
+      color: var(--text-muted); font-family: 'Courier New', monospace;
+    }
+    .lv-map-link {
+      color: var(--primary, #1976d2); text-decoration: none;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: color 0.2s;
+    }
+    .lv-map-link:hover { color: #1565c0; text-decoration: underline; }
+    .lv-map-icon { font-size: 13px; width: 13px; height: 13px; }
+    .field-hint {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; margin-top: 4px;
+    }
+    .field-hint.green { color: #4caf50; }
+    .hint-icon { font-size: 14px; width: 14px; height: 14px; }
+    .venue-input-wrap { position: relative; }
+    .dlg-textarea {
+      resize: vertical; min-height: 60px;
+      font-family: inherit; padding: 8px 12px;
+    }
+    .lv-no-signal {
+      display: flex; align-items: center; gap: 8px;
+      color: var(--text-muted); font-size: 13px;
+      padding: 8px 0;
+    }
+    .lv-no-signal mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .lv-empty {
+      grid-column: 1 / -1;
+      text-align: center; padding: 40px 20px;
+      color: var(--text-muted);
+    }
+    .lv-empty mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: 0.4; }
+    .lv-empty p { margin: 8px 0 0; font-size: 14px; }
+    .lv-footer {
+      text-align: center; padding: 8px 16px 12px;
+      font-size: 12px; color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+
+    /* History button on vehicle card */
+    .lv-actions {
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start;
+    }
+    .lv-history-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 6px;
+      border: 1px solid var(--primary, #1976d2); color: var(--primary, #1976d2);
+      background: transparent; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .lv-history-btn:hover { background: rgba(25, 118, 210, 0.08); }
+    .lv-history-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .lv-history-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .lv-historical-btn { border-color: #7b1fa2 !important; color: #7b1fa2 !important; }
+    .lv-historical-btn:hover { background: rgba(123, 31, 162, 0.08) !important; }
+
+    .historical-date-picker {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; margin-top: 2px;
+      animation: slideDown 0.2s ease;
+    }
+    .historical-date-input {
+      flex: 1; padding: 6px 10px; border-radius: 6px;
+      border: 1px solid var(--border, #ccc); font-size: 13px;
+      background: var(--background, #f8f9fa); color: var(--text-primary, #333);
+      outline: none; transition: border-color 0.2s;
+    }
+    .historical-date-input:focus { border-color: #7b1fa2; box-shadow: 0 0 0 2px rgba(123,31,162,0.12); }
+    .historical-go-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 12px; border-radius: 6px; border: none;
+      background: #7b1fa2; color: #fff; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .historical-go-btn:hover { background: #6a1b9a; }
+    .historical-go-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .historical-go-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .historical-cancel-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 50%; border: none;
+      background: var(--background, #eee); color: var(--text-secondary, #888);
+      cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+    }
+    .historical-cancel-btn:hover { background: #ffcdd2; color: #c62828; }
+    .historical-cancel-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+    /* Trip History Panel */
+    .trip-history-panel {
+      margin-top: 16px; padding: 0;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--surface); overflow: hidden;
+      animation: slideDown 0.3s ease;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .trip-history-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; background: linear-gradient(135deg, #1976d2, #1565c0);
+      color: #fff;
+    }
+    .trip-history-title {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .trip-history-title h4 { margin: 0; font-size: 15px; font-weight: 600; }
+    .trip-history-date { font-size: 12px; opacity: 0.85; }
+    .trip-close-btn { color: #fff !important; }
+    .trip-header-actions {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .trip-export-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 14px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.5); color: #fff;
+      background: rgba(255,255,255,0.12); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .trip-export-btn:hover { background: rgba(255,255,255,0.25); border-color: #fff; }
+    .trip-export-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+    .trip-summary-row {
+      display: flex; gap: 12px; padding: 14px 16px; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border); background: var(--background);
+    }
+    .trip-stat {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      min-width: 100px;
+    }
+    .trip-stat mat-icon { font-size: 20px; width: 20px; height: 20px; color: var(--primary, #1976d2); }
+    .trip-stat.harsh mat-icon { color: var(--red, #f44336); }
+    .trip-stat-val { font-size: 15px; font-weight: 700; color: var(--text-primary); display: block; }
+    .trip-stat-lbl { font-size: 11px; color: var(--text-secondary); }
+
+    .trip-history-map {
+      width: 100%; height: 360px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .trip-list { padding: 8px 0; max-height: 400px; overflow-y: auto; }
+    .trip-item {
+      display: flex; gap: 12px; padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .trip-item:last-child { border-bottom: none; }
+    .trip-item:hover { background: var(--background); }
+    .trip-item.trip-zero { opacity: 0.55; }
+    .trip-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--primary, #1976d2); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    }
+    .trip-detail { flex: 1; min-width: 0; }
+    .trip-route {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--text-primary); font-weight: 500;
+      flex-wrap: wrap;
+    }
+    .trip-from, .trip-to { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+    .trip-arrow { font-size: 16px; width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+    .trip-meta {
+      display: flex; gap: 14px; margin-top: 4px; flex-wrap: wrap;
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .trip-meta span {
+      display: inline-flex; align-items: center; gap: 3px;
+    }
+    .trip-meta mat-icon { font-size: 13px; width: 13px; height: 13px; }
+
+    @media (max-width: 900px) {
+      .live-vehicles-grid { grid-template-columns: 1fr; }
+      .car-track-stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .car-track-filter-row { flex-wrap: wrap; }
+    }
+    @media (max-width: 600px) {
+      .car-track-stats-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ============================== */
+    /*  EXPORT REPORT DIALOG          */
+    /* ============================== */
+    .export-backdrop {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease;
+    }
+    .export-dialog {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1001; width: 520px; max-width: 95vw;
+      background: var(--surface, #fff);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      animation: slideUp 0.25s ease;
+      overflow: hidden;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translate(-50%, -45%); }
+      to   { opacity: 1; transform: translate(-50%, -50%); }
+    }
+    .export-dialog-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px; gap: 16px;
+      background: linear-gradient(135deg, #1565c0, #0d47a1);
+      color: #fff;
+    }
+    .export-title-group {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .export-icon-ring {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: rgba(255,255,255,0.18);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .export-icon-ring mat-icon { color: #fff; font-size: 22px; }
+    .export-title-group h3 { margin: 0; font-size: 16px; font-weight: 700; }
+    .export-title-group p { margin: 2px 0 0; font-size: 12px; opacity: 0.85; }
+    .export-close-btn {
+      background: rgba(255,255,255,0.15); border: none;
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.2s;
+      color: #fff;
+    }
+    .export-close-btn:hover { background: rgba(255,255,255,0.3); }
+
+    .export-dialog-body { padding: 24px; }
+    .export-form-row {
+      display: flex; gap: 16px; margin-bottom: 16px;
+    }
+    .export-field {
+      flex: 1; display: flex; flex-direction: column; gap: 6px;
+    }
+    .export-field.full { flex: 1 1 100%; }
+    .export-field label {
+      font-size: 13px; font-weight: 600;
+      color: var(--text-secondary, #666);
+    }
+    .export-date-input, .export-select {
+      padding: 10px 14px; border-radius: 10px;
+      border: 1px solid var(--border, #ddd);
+      background: var(--background, #f8f9fa);
+      font-size: 14px; color: var(--text-primary, #333);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    .export-date-input:focus, .export-select:focus {
+      border-color: #1565c0;
+      box-shadow: 0 0 0 3px rgba(21,101,192,0.12);
+    }
+    .export-checkbox-label {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; color: var(--text-primary, #333);
+      cursor: pointer;
+    }
+    .export-checkbox-label input[type="checkbox"] {
+      width: 18px; height: 18px; accent-color: #1565c0;
+    }
+    .export-info-note {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px 14px; border-radius: 10px;
+      background: #fff3e0; border: 1px solid #ffe0b2;
+      font-size: 13px; color: #e65100;
+      margin-bottom: 8px;
+    }
+    .export-info-note mat-icon {
+      font-size: 18px; width: 18px; height: 18px;
+      color: #f57c00; flex-shrink: 0; margin-top: 1px;
+    }
+    .export-dialog-footer {
+      display: flex; justify-content: flex-end; gap: 12px;
+      padding: 16px 24px; border-top: 1px solid var(--border, #eee);
+      background: var(--background, #f8f9fa);
+    }
+    .export-download-btn {
+      display: inline-flex !important; align-items: center; gap: 8px;
+      background: #1565c0 !important; color: #fff !important;
+      border-radius: 10px !important; padding: 8px 20px !important;
+      font-weight: 600 !important;
+    }
+    .export-download-btn:disabled {
+      opacity: 0.5 !important; cursor: not-allowed !important;
+    }
+    .export-download-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .export-btn {
+      color: #1565c0 !important; border-color: #1565c0 !important;
+    }
+    .export-btn mat-icon { color: #1565c0; }
   `]
 })
 export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   @Output() goBack = new EventEmitter<void>();
   @ViewChild('deliveryAddressInput') deliveryAddressInputRef!: ElementRef<HTMLInputElement>;
+  @ViewChild('carTrackLocationInput') carTrackLocationInputRef!: ElementRef<HTMLInputElement>;
 
   private destroy$ = new Subject<void>();
 
@@ -3102,6 +4190,11 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   deliveryError = '';
   deliverySuccess = false;
   deliverySuccessMsg = '';
+  // Delivery password gate
+  showDeliveryPasswordDialog = false;
+  deliveryPasswordInput = '';
+  deliveryPasswordError = '';
+  private readonly DELIVERY_PASSWORD = '0000';
   addressVerified = false;
   private autocomplete: google.maps.places.Autocomplete | null = null;
   deliveryForm = {
@@ -3127,6 +4220,43 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   creditNotes: HBA1CCreditNote[] = [];
   creditNotesLoading = false;
 
+  // Car Track state
+  carTrackEntries: any[] = [];
+  filteredCarTrackEntries: any[] = [];
+  carTrackLoading = false;
+  carTrackStats: any = null;
+  knownSalesReps: string[] = [];
+  carTrackFilterRep = '';
+  carTrackFilterProvince = '';
+  carTrackReps: any[] = [];
+  carTrackVenues: string[] = [];
+  filteredVenues: string[] = [];
+  carTrackLocationVerified = false;
+  private carTrackAutocomplete: google.maps.places.Autocomplete | null = null;
+
+  // Live GPS tracking
+  liveVehicles: any[] = [];
+  liveTrackingLoading = false;
+  liveTrackingFetchedAt: Date | null = null;
+
+  // Trip history
+  tripHistoryData: any = null;
+  tripHistoryLoading = false;
+  tripHistoryReg = '';
+  tripHistoryDateLabel = '';
+  historicalDatePickerReg = '';
+  historicalDateValue = '';
+  private tripHistoryMap: google.maps.Map | null = null;
+  @ViewChild('tripHistoryMap') tripHistoryMapRef!: ElementRef;
+
+  // Export report dialog state
+  showExportDialog = false;
+  exportFromDate = '';
+  exportToDate = '';
+  exportSalesRep = '';
+  exportIncludeTrips = true;
+  exportLoading = false;
+
   // Dialog state
   activeDialog: string | null = null;
   dialogLoading = false;
@@ -3150,7 +4280,7 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   // CRUD state
   showEditDialog = false;
   showDeleteDialog = false;
-  editEntity: 'training' | 'inventory' | 'sale' | 'creditNote' = 'training';
+  editEntity: 'training' | 'inventory' | 'sale' | 'creditNote' | 'carTrack' = 'training';
   editMode: 'create' | 'edit' = 'create';
   editSaving = false;
   editError = '';
@@ -3178,6 +4308,13 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     creditNoteNumber: '', invoiceNumber: '', customerName: '',
     originalAmount: 0, creditAmount: 0, reason: '', status: 'Pending',
     notes: '', reverseStock: false, reverseSale: false
+  };
+
+  carTrackForm = {
+    salesRepName: '', registrationNumber: '', location: '', province: '',
+    purpose: '', clientVisited: '', visitDate: '', status: 'Completed',
+    timeArrived: '', timeDeparted: '', kilometerStart: null as number | null,
+    kilometerEnd: null as number | null, notes: ''
   };
 
   // Stock update state
@@ -3296,6 +4433,9 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
       case 4:
         if (!this.creditNotes.length) this.loadCreditNotes();
         break;
+      case 5:
+        if (!this.carTrackEntries.length) this.loadCarTrack();
+        break;
     }
   }
 
@@ -3337,6 +4477,446 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
         next: (data) => { this.creditNotes = data || []; this.creditNotesLoading = false; },
         error: () => { this.creditNotesLoading = false; }
       });
+  }
+
+  // ── Car Track Methods ──
+
+  loadCarTrack(): void {
+    this.carTrackLoading = true;
+    const apiUrl = `${environment.apiUrl}/hba1c/car-track`;
+    this.http.get<any[]>(apiUrl)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          this.carTrackEntries = data || [];
+          this.filteredCarTrackEntries = [...this.carTrackEntries];
+          this.carTrackLoading = false;
+        },
+        error: () => { this.carTrackLoading = false; }
+      });
+
+    // Load stats
+    this.http.get<any>(`${apiUrl}/stats`)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (stats) => { this.carTrackStats = stats; },
+        error: () => {}
+      });
+
+    // Load known sales reps for autocomplete
+    this.http.get<string[]>(`${apiUrl}/sales-reps`)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (reps) => { this.knownSalesReps = reps || []; },
+        error: () => {}
+      });
+
+    // Load reps (trainers) and venues from external HBA1C API
+    this.http.get<any>(`${apiUrl}/reps-and-venues`)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          this.carTrackReps = data.reps || [];
+          this.carTrackVenues = data.venues || [];
+          this.filteredVenues = [...this.carTrackVenues];
+        },
+        error: () => {}
+      });
+
+    // Auto-load live GPS locations
+    this.loadLiveLocations();
+  }
+
+  filterCarTrackEntries(): void {
+    this.filteredCarTrackEntries = this.carTrackEntries.filter(e => {
+      if (this.carTrackFilterRep && e.salesRepName !== this.carTrackFilterRep) return false;
+      if (this.carTrackFilterProvince && e.province !== this.carTrackFilterProvince) return false;
+      return true;
+    });
+  }
+
+  loadLiveLocations(): void {
+    this.liveTrackingLoading = true;
+    const apiUrl = `${environment.apiUrl}/hba1c/car-track/live-locations`;
+    this.http.get<any>(apiUrl)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          this.liveVehicles = data.vehicles || [];
+          this.liveTrackingFetchedAt = data.fetchedAt ? new Date(data.fetchedAt) : new Date();
+          this.liveTrackingLoading = false;
+        },
+        error: () => { this.liveTrackingLoading = false; }
+      });
+  }
+
+  getTimeAgo(dateStr: string | null): string {
+    if (!dateStr) return 'Unknown';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  }
+
+  loadTripHistory(vehicle: any, date?: string): void {
+    this.tripHistoryLoading = true;
+    this.tripHistoryReg = vehicle.registration;
+    const queryDate = date || new Date().toISOString().split('T')[0];
+    if (!date) {
+      this.tripHistoryDateLabel = "Today's Trips";
+    } else {
+      const d = new Date(date + 'T00:00:00');
+      this.tripHistoryDateLabel = d.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    const apiUrl = `${environment.apiUrl}/hba1c/car-track/trip-history/${vehicle.registration}?date=${queryDate}`;
+    this.http.get<any>(apiUrl)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          this.tripHistoryData = data;
+          this.tripHistoryLoading = false;
+          this.historicalDatePickerReg = '';
+          setTimeout(() => this.initTripHistoryMap(), 100);
+        },
+        error: () => {
+          this.tripHistoryLoading = false;
+          this.tripHistoryData = null;
+          this.historicalDatePickerReg = '';
+        }
+      });
+  }
+
+  closeTripHistory(): void {
+    this.tripHistoryData = null;
+    this.tripHistoryMap = null;
+    this.tripHistoryDateLabel = '';
+  }
+
+  toggleHistoricalDatePicker(registration: string): void {
+    if (this.historicalDatePickerReg === registration) {
+      this.historicalDatePickerReg = '';
+    } else {
+      this.historicalDatePickerReg = registration;
+      this.historicalDateValue = '';
+    }
+  }
+
+  loadHistoricalTrips(vehicle: any): void {
+    if (!this.historicalDateValue) return;
+    this.loadTripHistory(vehicle, this.historicalDateValue);
+  }
+
+  getTodayDate(): string {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  async exportTripHistoryToExcel(): Promise<void> {
+    if (!this.tripHistoryData?.trips?.length) return;
+    const XLSX = await import('xlsx');
+    const data = this.tripHistoryData;
+
+    // Build rows from the loaded trip data
+    const rows = data.trips.map((t: any, i: number) => ({
+      '#': i + 1,
+      'Driver': data.driverName,
+      'Registration': data.registration,
+      'Start Time': this.formatTripTime(t.startTimestamp),
+      'End Time': this.formatTripTime(t.endTimestamp),
+      'Duration': t.tripDuration || '',
+      'Start Location': t.startLocation || '',
+      'End Location': t.endLocation || '',
+      'Distance (km)': Math.round((t.tripDistance / 1000) * 10) / 10,
+      'Max Speed (km/h)': t.maxSpeed || 0,
+      'Harsh Braking': t.harshBrakingEvents || 0,
+      'Harsh Cornering': t.harshCorneringEvents || 0,
+      'Harsh Accel': t.harshAccelerationEvents || 0,
+      'Idle Time (s)': t.idleTimeSeconds || 0
+    }));
+
+    // Add summary row
+    rows.push({});
+    rows.push({
+      '#': 'TOTAL',
+      'Driver': data.driverName,
+      'Duration': data.summary.totalDuration,
+      'Distance (km)': data.summary.totalDistanceKm,
+      'Max Speed (km/h)': data.summary.maxSpeed,
+      'Start Location': `${data.summary.tripCount} trips`,
+      'Idle Time (s)': data.summary.totalIdleDuration
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 4 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+      { wch: 10 }, { wch: 35 }, { wch: 35 }, { wch: 12 }, { wch: 14 },
+      { wch: 13 }, { wch: 14 }, { wch: 12 }, { wch: 12 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Trip History');
+
+    const dateStr = data.date?.replace(/\s/g, '_') || this.getTodayDate();
+    const regStr = data.registration || 'vehicle';
+    XLSX.writeFile(wb, `TripHistory_${regStr}_${dateStr}.xlsx`);
+  }
+
+  // ── Export Report Dialog ─────────────────────────────────
+  openExportDialog(): void {
+    // Default to current month
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    this.exportFromDate = firstOfMonth.toISOString().split('T')[0];
+    this.exportToDate = now.toISOString().split('T')[0];
+    this.exportSalesRep = '';
+    this.exportIncludeTrips = true;
+    this.exportLoading = false;
+    this.showExportDialog = true;
+  }
+
+  closeExportDialog(): void {
+    this.showExportDialog = false;
+    this.exportLoading = false;
+  }
+
+  downloadExportReport(): void {
+    if (!this.exportFromDate || !this.exportToDate) return;
+    this.exportLoading = true;
+
+    let url = `${environment.apiUrl}/hba1c/car-track/export?from=${this.exportFromDate}&to=${this.exportToDate}&includeTrips=${this.exportIncludeTrips}`;
+    if (this.exportSalesRep) {
+      url += `&salesRep=${encodeURIComponent(this.exportSalesRep)}`;
+    }
+
+    this.http.get(url, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `CarTrack_Report_${this.exportFromDate}_to_${this.exportToDate}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        this.exportLoading = false;
+        this.showExportDialog = false;
+      },
+      error: (err) => {
+        console.error('Export failed', err);
+        this.exportLoading = false;
+        alert('Failed to export report. Please try again.');
+      }
+    });
+  }
+
+  formatTripTime(ts: string | null): string {
+    if (!ts) return '--:--';
+    // Format: "2026-03-31 06:36:12+02" → "06:36"
+    const match = ts.match(/(\d{2}:\d{2})/);
+    return match ? match[1] : '--:--';
+  }
+
+  private initTripHistoryMap(): void {
+    if (!this.tripHistoryMapRef?.nativeElement || !this.tripHistoryData?.trips?.length) return;
+    const trips = this.tripHistoryData.trips;
+    const mapEl = this.tripHistoryMapRef.nativeElement;
+
+    const map = new google.maps.Map(mapEl, {
+      zoom: 10,
+      mapTypeId: 'roadmap',
+      styles: [{ featureType: 'poi', stylers: [{ visibility: 'off' }] }],
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true
+    });
+    this.tripHistoryMap = map;
+
+    const bounds = new google.maps.LatLngBounds();
+    const colors = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336', '#00BCD4', '#FF5722', '#3F51B5', '#CDDC39', '#E91E63'];
+    const directionsService = new google.maps.DirectionsService();
+
+    // Place numbered markers for each trip start (and end if distance > 0)
+    trips.forEach((trip: any, idx: number) => {
+      const color = colors[idx % colors.length];
+      const startPos = { lat: trip.startLatitude, lng: trip.startLongitude };
+      const endPos = { lat: trip.endLatitude, lng: trip.endLongitude };
+
+      if (trip.startLatitude && trip.startLongitude) {
+        bounds.extend(startPos);
+        new google.maps.Marker({
+          position: startPos,
+          map,
+          label: { text: `${idx + 1}`, color: '#fff', fontSize: '11px', fontWeight: '700' },
+          title: `Trip ${idx + 1} Start: ${trip.startLocation || 'Unknown'}`,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 14,
+            fillColor: color,
+            fillOpacity: 1,
+            strokeColor: '#fff',
+            strokeWeight: 2
+          },
+          zIndex: 10
+        });
+      }
+
+      if (trip.endLatitude && trip.endLongitude && trip.tripDistance > 0) {
+        bounds.extend(endPos);
+        new google.maps.Marker({
+          position: endPos,
+          map,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 8,
+            fillColor: color,
+            fillOpacity: 0.6,
+            strokeColor: '#fff',
+            strokeWeight: 2
+          },
+          title: `Trip ${idx + 1} End: ${trip.endLocation || 'Unknown'}`,
+          zIndex: 5
+        });
+      }
+    });
+
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, 40);
+    }
+
+    // Request road-following directions for each trip (with staggered requests to avoid rate limits)
+    const routeTrips = trips.filter((t: any) =>
+      t.startLatitude && t.startLongitude && t.endLatitude && t.endLongitude && t.tripDistance > 0);
+
+    routeTrips.forEach((trip: any, idx: number) => {
+      const color = colors[trips.indexOf(trip) % colors.length];
+      setTimeout(() => {
+        directionsService.route({
+          origin: { lat: trip.startLatitude, lng: trip.startLongitude },
+          destination: { lat: trip.endLatitude, lng: trip.endLongitude },
+          travelMode: google.maps.TravelMode.DRIVING
+        }, (result, status) => {
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            new google.maps.DirectionsRenderer({
+              map,
+              directions: result,
+              suppressMarkers: true,
+              preserveViewport: true,
+              polylineOptions: {
+                strokeColor: color,
+                strokeOpacity: 0.85,
+                strokeWeight: 4
+              }
+            });
+          } else {
+            // Fallback to straight line if directions fail
+            new google.maps.Polyline({
+              path: [
+                { lat: trip.startLatitude, lng: trip.startLongitude },
+                { lat: trip.endLatitude, lng: trip.endLongitude }
+              ],
+              map,
+              strokeColor: color,
+              strokeOpacity: 0.7,
+              strokeWeight: 3,
+              icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 3, strokeColor: color }, offset: '50%' }]
+            });
+          }
+        });
+      }, idx * 300); // stagger 300ms between each request
+    });
+
+    // Draw connecting dashed lines between consecutive trips (idle/stop gaps)
+    for (let i = 0; i < trips.length - 1; i++) {
+      const cur = trips[i];
+      const next = trips[i + 1];
+      if (cur.endLatitude && cur.endLongitude && next.startLatitude && next.startLongitude) {
+        new google.maps.Polyline({
+          path: [
+            { lat: cur.endLatitude, lng: cur.endLongitude },
+            { lat: next.startLatitude, lng: next.startLongitude }
+          ],
+          map,
+          strokeColor: '#999',
+          strokeOpacity: 0,
+          icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.4, strokeWeight: 2, scale: 3 }, offset: '0', repeat: '12px' }]
+        });
+      }
+    }
+  }
+
+  onCarTrackRepChange(repName: string): void {
+    const rep = this.carTrackReps.find((r: any) => r.name === repName);
+    if (rep) {
+      this.carTrackForm.registrationNumber = rep.registration || '';
+    } else {
+      this.carTrackForm.registrationNumber = '';
+    }
+  }
+
+  filterVenuesSuggestions(event: Event): void {
+    const val = (event.target as HTMLInputElement).value?.toLowerCase() || '';
+    if (!val) {
+      this.filteredVenues = [...this.carTrackVenues];
+    } else {
+      this.filteredVenues = this.carTrackVenues.filter(v => v.toLowerCase().includes(val));
+    }
+  }
+
+  isRepInList(repName: string): boolean {
+    return this.carTrackReps.some((r: any) => r.name === repName);
+  }
+
+  private initCarTrackLocationAutocomplete(): void {
+    if (!this.carTrackLocationInputRef?.nativeElement) return;
+    if (typeof google === 'undefined' || !google.maps?.places) return;
+    this.carTrackLocationVerified = false;
+    this.carTrackAutocomplete = new google.maps.places.Autocomplete(
+      this.carTrackLocationInputRef.nativeElement,
+      { types: ['establishment', 'geocode'], componentRestrictions: { country: 'za' } }
+    );
+    this.carTrackAutocomplete.addListener('place_changed', () => {
+      this.ngZone.run(() => {
+        const place = this.carTrackAutocomplete!.getPlace();
+        if (place?.formatted_address) {
+          this.carTrackForm.location = place.formatted_address;
+          this.carTrackLocationVerified = true;
+          // Try to auto-detect province from address components
+          const provincePart = place.address_components?.find(
+            (c: any) => c.types.includes('administrative_area_level_1')
+          );
+          if (provincePart?.long_name) {
+            const provinces: Record<string, string> = {
+              'Eastern Cape': 'Eastern Cape', 'Free State': 'Free State',
+              'Gauteng': 'Gauteng', 'KwaZulu-Natal': 'KwaZulu-Natal',
+              'Limpopo': 'Limpopo', 'Mpumalanga': 'Mpumalanga',
+              'North West': 'North West', 'Northern Cape': 'Northern Cape',
+              'Western Cape': 'Western Cape'
+            };
+            const match = Object.keys(provinces).find(p =>
+              provincePart.long_name.toLowerCase().includes(p.toLowerCase())
+            );
+            if (match) this.carTrackForm.province = provinces[match];
+          }
+        } else if (place?.name) {
+          this.carTrackForm.location = place.name;
+          this.carTrackLocationVerified = true;
+        }
+      });
+    });
+  }
+
+  getInitials(name: string): string {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    return parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : name.substring(0, 2).toUpperCase();
   }
 
   getTrainerName(session: HBA1CTrainingSession): string {
@@ -3394,6 +4974,30 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   }
 
   // ── Delivery Request Methods ──
+
+  showDeliveryPasswordPrompt(): void {
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+    this.showDeliveryPasswordDialog = true;
+  }
+
+  verifyDeliveryPassword(): void {
+    if (this.deliveryPasswordInput === this.DELIVERY_PASSWORD) {
+      this.showDeliveryPasswordDialog = false;
+      this.deliveryPasswordInput = '';
+      this.deliveryPasswordError = '';
+      this.openDeliveryDialog();
+    } else {
+      this.deliveryPasswordError = 'Incorrect password. Please try again.';
+      this.deliveryPasswordInput = '';
+    }
+  }
+
+  cancelDeliveryPassword(): void {
+    this.showDeliveryPasswordDialog = false;
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+  }
 
   openDeliveryDialog(): void {
     this.resetDeliveryForm();
@@ -3600,21 +5204,41 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
 
   // ── CRUD Methods ──
 
-  openCreateDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote'): void {
+  openCreateDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote' | 'carTrack'): void {
     this.editEntity = entity;
     this.editMode = 'create';
     this.editItemId = null;
     this.editError = '';
     this.editSuccess = false;
+    this.carTrackLocationVerified = false;
     this.resetEditForms();
+    if (entity === 'carTrack') {
+      this.carTrackForm.visitDate = new Date().toISOString().substring(0, 10);
+      // Load reps/venues if not loaded yet
+      if (!this.carTrackReps.length) {
+        const apiUrl = `${environment.apiUrl}/hba1c/car-track`;
+        this.http.get<any>(`${apiUrl}/reps-and-venues`).pipe(takeUntil(this.destroy$)).subscribe({
+          next: (data) => {
+            this.carTrackReps = data.reps || [];
+            this.carTrackVenues = data.venues || [];
+            this.filteredVenues = [...this.carTrackVenues];
+          },
+          error: () => {}
+        });
+      }
+    }
     this.showEditDialog = true;
+    if (entity === 'carTrack') {
+      setTimeout(() => this.initCarTrackLocationAutocomplete(), 200);
+    }
   }
 
-  openEditDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote', item: any): void {
+  openEditDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote' | 'carTrack', item: any): void {
     this.editEntity = entity;
     this.editMode = 'edit';
     this.editError = '';
     this.editSuccess = false;
+    this.carTrackLocationVerified = false;
 
     if (entity === 'training') {
       this.editItemId = item.id;
@@ -3667,9 +5291,29 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
         reverseStock: item.reverseStock || false,
         reverseSale: item.reverseSale || false
       };
+    } else if (entity === 'carTrack') {
+      this.editItemId = item.id;
+      this.carTrackForm = {
+        salesRepName: item.salesRepName || '',
+        registrationNumber: item.registrationNumber || '',
+        location: item.location || '',
+        province: item.province || '',
+        purpose: item.purpose || '',
+        clientVisited: item.clientVisited || '',
+        visitDate: item.visitDate ? item.visitDate.substring(0, 10) : '',
+        status: item.status || 'Completed',
+        timeArrived: item.timeArrived ? item.timeArrived.substring(0, 5) : '',
+        timeDeparted: item.timeDeparted ? item.timeDeparted.substring(0, 5) : '',
+        kilometerStart: item.kilometerStart,
+        kilometerEnd: item.kilometerEnd,
+        notes: item.notes || ''
+      };
     }
 
     this.showEditDialog = true;
+    if (entity === 'carTrack') {
+      setTimeout(() => this.initCarTrackLocationAutocomplete(), 200);
+    }
   }
 
   closeEditDialog(): void {
@@ -3679,7 +5323,7 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     this.editSaving = false;
   }
 
-  openDeleteDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote', id: number, name: string): void {
+  openDeleteDialog(entity: 'training' | 'inventory' | 'sale' | 'creditNote' | 'carTrack', id: number, name: string): void {
     this.editEntity = entity;
     this.editItemId = id;
     this.deleteItemName = name;
@@ -3712,6 +5356,12 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
       creditNoteNumber: '', invoiceNumber: '', customerName: '',
       originalAmount: 0, creditAmount: 0, reason: '', status: 'Pending',
       notes: '', reverseStock: false, reverseSale: false
+    };
+    this.carTrackForm = {
+      salesRepName: '', registrationNumber: '', location: '', province: '',
+      purpose: '', clientVisited: '', visitDate: '', status: 'Completed',
+      timeArrived: '', timeDeparted: '', kilometerStart: null,
+      kilometerEnd: null, notes: ''
     };
   }
 
@@ -3772,6 +5422,20 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
           error: (err) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to update credit note'; }
         });
       }
+    } else if (this.editEntity === 'carTrack') {
+      const apiUrl = `${environment.apiUrl}/hba1c/car-track`;
+      const payload: any = { ...this.carTrackForm };
+      if (this.editMode === 'create') {
+        this.http.post(apiUrl, payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadCarTrack(); },
+          error: (err: any) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to log visit'; }
+        });
+      } else {
+        this.http.put(`${apiUrl}/${this.editItemId}`, payload).pipe(takeUntil(this.destroy$)).subscribe({
+          next: () => { this.editSaving = false; this.editSuccess = true; this.loadCarTrack(); },
+          error: (err: any) => { this.editSaving = false; this.editError = err.error?.message || 'Failed to update visit'; }
+        });
+      }
     }
   }
 
@@ -3787,6 +5451,8 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
       obs = this.hba1cService.deleteInventoryItem(this.editItemId);
     } else if (this.editEntity === 'sale') {
       obs = this.hba1cService.deleteSale(this.editItemId);
+    } else if (this.editEntity === 'carTrack') {
+      obs = this.http.delete(`${environment.apiUrl}/hba1c/car-track/${this.editItemId}`);
     } else {
       obs = this.hba1cService.deleteCreditNote(this.editItemId);
     }
@@ -3795,10 +5461,10 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
       next: () => {
         this.editSaving = false;
         this.closeDeleteDialog();
-        // Reload the relevant list
         if (this.editEntity === 'training') this.loadTraining();
         else if (this.editEntity === 'inventory') this.loadInventory();
         else if (this.editEntity === 'sale') this.loadSales();
+        else if (this.editEntity === 'carTrack') this.loadCarTrack();
         else this.loadCreditNotes();
       },
       error: (err) => {

@@ -29,7 +29,6 @@ export const MODULE_KEYS = {
   SUPPORT_TICKETS: 'support_tickets',
   MESSAGING: 'messaging',
   AI: 'ai',
-  PBX: 'pbx',
   CALENDAR: 'calendar',
   SETTINGS: 'settings'
 } as const;
@@ -168,17 +167,6 @@ export const MODULES: ModuleConfig[] = [
     requiresPermission: true,
     showInNavbar: false, // Shown in toolbar instead
     showInDashboard: true
-  },
-  {
-    key: 'pbx',
-    name: 'Phone System',
-    description: 'PBX integration, call history, and extensions',
-    icon: 'phone',
-    route: '/call-history',
-    color: '#009688',
-    requiresPermission: false, // Available to all authenticated users
-    showInNavbar: false,
-    showInDashboard: false
   },
   {
     key: 'calendar',
@@ -396,6 +384,13 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'messaging' } 
     },
+
+    // Email Viewer
+    {
+      path: 'emails',
+      loadComponent: () => import('../components/email-viewer/email-viewer.component').then(m => m.EmailViewerComponent),
+      canActivate: [authGuard]
+    },
     
     // Settings
     { 
@@ -403,24 +398,6 @@ export function getModuleRoutes(): Routes {
       loadComponent: () => import('../components/settings/settings.component').then(m => m.SettingsComponent),
       canActivate: [authGuard] 
     },
-    
-    // PBX / Phone System
-    { 
-      path: 'call-history', 
-      loadComponent: () => import('../components/active-calls/active-calls.component').then(m => m.ActiveCallsComponent),
-      canActivate: [authGuard] 
-    },
-    { 
-      path: 'my-extension', 
-      loadComponent: () => import('../components/active-calls/active-calls.component').then(m => m.ActiveCallsComponent),
-      canActivate: [authGuard] 
-    },
-    { 
-      path: 'call-center', 
-      loadComponent: () => import('../components/active-calls/active-calls.component').then(m => m.ActiveCallsComponent),
-      canActivate: [authGuard] 
-    },
-    { path: 'pbx/active-calls', redirectTo: '/call-history', pathMatch: 'full' },
     
     // Collaborative Documents Module
     { 

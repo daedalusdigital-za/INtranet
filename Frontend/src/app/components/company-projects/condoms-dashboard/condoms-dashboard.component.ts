@@ -95,7 +95,7 @@ interface DashboardData {
             <mat-icon>add_circle</mat-icon>
             Capture Stock
           </button>
-          <button mat-raised-button class="request-delivery-btn" (click)="openRequestDeliveryDialog()">
+          <button mat-raised-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
             <mat-icon>local_shipping</mat-icon>
             Request Delivery
           </button>
@@ -551,6 +551,31 @@ interface DashboardData {
           </div>
         }
 
+        <!-- ==================== DELIVERY PASSWORD DIALOG ==================== -->
+        @if (showDeliveryPasswordDialog) {
+          <div class="dialog-backdrop" (click)="cancelDeliveryPassword()"></div>
+          <div class="pwd-dialog">
+            <mat-icon class="pwd-lock-icon">lock</mat-icon>
+            <h3>Password Required</h3>
+            <p>Enter the delivery request password to continue</p>
+            @if (deliveryPasswordError) {
+              <div class="pwd-error">{{ deliveryPasswordError }}</div>
+            }
+            <mat-form-field appearance="outline" class="pwd-input">
+              <mat-label>Password</mat-label>
+              <input matInput type="password" [(ngModel)]="deliveryPasswordInput"
+                     (keydown.enter)="verifyDeliveryPassword()"
+                     placeholder="Enter password" autofocus>
+            </mat-form-field>
+            <div class="pwd-actions">
+              <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+                <mat-icon>lock_open</mat-icon> Verify
+              </button>
+            </div>
+          </div>
+        }
+
         <!-- ==================== REQUEST DELIVERY DIALOG ==================== -->
         @if (showDeliveryDialog) {
           <div class="dialog-backdrop" (click)="closeDeliveryDialog()"></div>
@@ -705,28 +730,69 @@ interface DashboardData {
           </div>
         }
 
-        <!-- Scent Breakdown Cards -->
-        <div class="scent-cards-row">
-          @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
-            <div class="scent-card" [style.border-left-color]="getScentColor(sb.scent)">
-              <div class="scent-card-header">
-                <span class="scent-emoji">{{ getScentEmoji(sb.scent) }}</span>
-                <span class="scent-name">{{ sb.scent }}</span>
-              </div>
-              <div class="scent-card-stats">
-                <div class="scs-item">
-                  <span class="scs-val">{{ sb.batchCount }}</span>
-                  <span class="scs-lbl">Batches</span>
+        <!-- Scent Breakdown Pod -->
+        <div class="scent-pod">
+          <div class="scent-pod-header">
+            <h3 class="scent-pod-title"><mat-icon>palette</mat-icon> Scent Breakdown</h3>
+            <div class="scent-pod-view-toggle">
+              <button class="view-toggle-btn" [class.active]="scentPodView === 'list'" (click)="scentPodView = 'list'" matTooltip="List view">
+                <mat-icon>view_list</mat-icon>
+              </button>
+              <button class="view-toggle-btn" [class.active]="scentPodView === 'grid'" (click)="scentPodView = 'grid'" matTooltip="Grid view">
+                <mat-icon>grid_view</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          @if (scentPodView === 'grid') {
+            <div class="scent-cards-row">
+              @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
+                <div class="scent-card" [style.border-left-color]="getScentColor(sb.scent)">
+                  <div class="scent-card-header">
+                    <span class="scent-emoji">{{ getScentEmoji(sb.scent) }}</span>
+                    <span class="scent-name">{{ sb.scent }}</span>
+                  </div>
+                  <div class="scent-card-stats">
+                    <div class="scs-item">
+                      <span class="scs-val">{{ sb.batchCount }}</span>
+                      <span class="scs-lbl">Batches</span>
+                    </div>
+                    <div class="scs-item">
+                      <span class="scs-val">{{ sb.totalUnits | number }}</span>
+                      <span class="scs-lbl">Total Units</span>
+                    </div>
+                    <div class="scs-item">
+                      <span class="scs-val">{{ sb.types.join(', ') }}</span>
+                      <span class="scs-lbl">Types</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="scs-item">
-                  <span class="scs-val">{{ sb.totalUnits | number }}</span>
-                  <span class="scs-lbl">Total Units</span>
+              }
+            </div>
+          } @else {
+            <div class="scent-list">
+              @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
+                <div class="scent-list-item" [style.border-left-color]="getScentColor(sb.scent)">
+                  <div class="scent-list-left">
+                    <span class="scent-emoji">{{ getScentEmoji(sb.scent) }}</span>
+                    <span class="scent-name">{{ sb.scent }}</span>
+                  </div>
+                  <div class="scent-list-stats">
+                    <div class="scs-item">
+                      <span class="scs-val">{{ sb.batchCount }}</span>
+                      <span class="scs-lbl">Batches</span>
+                    </div>
+                    <div class="scs-item">
+                      <span class="scs-val">{{ sb.totalUnits | number }}</span>
+                      <span class="scs-lbl">Total Units</span>
+                    </div>
+                    <div class="scs-item">
+                      <span class="scs-val">{{ sb.types.join(', ') }}</span>
+                      <span class="scs-lbl">Types</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="scs-item">
-                  <span class="scs-val">{{ sb.types.join(', ') }}</span>
-                  <span class="scs-lbl">Types</span>
-                </div>
-              </div>
+              }
             </div>
           }
         </div>
@@ -1264,12 +1330,113 @@ interface DashboardData {
     .sdc-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
     .sdc-units { font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; font-family: 'SF Mono', monospace; }
 
-    /* ── Scent Breakdown Cards ── */
+    /* ── Scent Breakdown Pod ── */
+    .scent-pod {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px 24px 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .scent-pod-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .scent-pod-title {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text-primary);
+    }
+    .scent-pod-title mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: var(--purple);
+    }
+
+    .scent-pod-view-toggle {
+      display: flex;
+      background: #f1f5f9;
+      border-radius: 10px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .view-toggle-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .view-toggle-btn:hover {
+      color: var(--text-secondary);
+      background: rgba(0,0,0,0.04);
+    }
+    .view-toggle-btn.active {
+      background: white;
+      color: var(--purple);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .view-toggle-btn mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    /* ── Scent List View ── */
+    .scent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .scent-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: #f8fafc;
+      border-radius: var(--radius-sm);
+      border-left: 4px solid #ccc;
+      transition: all 0.2s;
+    }
+    .scent-list-item:hover {
+      background: #f1f5f9;
+      transform: translateX(4px);
+    }
+
+    .scent-list-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .scent-list-stats {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    /* ── Scent Grid View (Cards) ── */
     .scent-cards-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 14px;
-      margin-bottom: 24px;
     }
 
     .scent-card {
@@ -1935,6 +2102,19 @@ interface DashboardData {
       .dialog-panel { width: 100vw; max-height: 95vh; border-radius: 16px 16px 0 0; }
       .dialog-header { padding: 18px 20px 16px; }
     }
+
+    /* Delivery Password Dialog */
+    .pwd-dialog {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: white; border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
+      text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 1200;
+    }
+    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: #f57c00; margin-bottom: 12px; }
+    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: #1a1a2e; }
+    .pwd-dialog p { margin: 0 0 20px 0; color: #666; font-size: 14px; }
+    .pwd-input { width: 100%; margin-bottom: 16px; }
+    .pwd-actions { display: flex; gap: 12px; justify-content: center; }
+    .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
   `]
 })
 export class CondomsDashboardComponent implements OnInit {
@@ -1967,6 +2147,9 @@ export class CondomsDashboardComponent implements OnInit {
   filterType = 'all';
   collapsedGroups = new Set<string>();
 
+  // Scent pod view toggle
+  scentPodView: 'list' | 'grid' = 'list';
+
   // Dialog
   activeDialog: string | null = null;
 
@@ -1992,6 +2175,11 @@ export class CondomsDashboardComponent implements OnInit {
   deliveryError = '';
   deliverySuccess = false;
   deliverySuccessMsg = '';
+  // Delivery password gate
+  showDeliveryPasswordDialog = false;
+  deliveryPasswordInput = '';
+  deliveryPasswordError = '';
+  private readonly DELIVERY_PASSWORD = '0000';
   addressVerified = false;
   private autocomplete: google.maps.places.Autocomplete | null = null;
   deliveryForm = {
@@ -2173,6 +2361,30 @@ export class CondomsDashboardComponent implements OnInit {
   }
 
   // ── Request Delivery Methods ──
+
+  showDeliveryPasswordPrompt(): void {
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+    this.showDeliveryPasswordDialog = true;
+  }
+
+  verifyDeliveryPassword(): void {
+    if (this.deliveryPasswordInput === this.DELIVERY_PASSWORD) {
+      this.showDeliveryPasswordDialog = false;
+      this.deliveryPasswordInput = '';
+      this.deliveryPasswordError = '';
+      this.openRequestDeliveryDialog();
+    } else {
+      this.deliveryPasswordError = 'Incorrect password. Please try again.';
+      this.deliveryPasswordInput = '';
+    }
+  }
+
+  cancelDeliveryPassword(): void {
+    this.showDeliveryPasswordDialog = false;
+    this.deliveryPasswordInput = '';
+    this.deliveryPasswordError = '';
+  }
 
   openRequestDeliveryDialog(): void {
     this.resetDeliveryForm();

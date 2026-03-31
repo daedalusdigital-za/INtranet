@@ -14,6 +14,32 @@ namespace ProjectTracker.API.Services
         Task<List<CarTrackVehicleData>> GetRawVehicleDataAsync();
         Task<LivestreamResponseDto?> GetVehicleLivestreamAsync(string registration, int[] cameras);
         Task<List<VisionVehicleDto>> GetVisionEnabledVehiclesAsync();
+        Task<List<CarTrackTripData>> GetVehicleTripsAsync(string registration, DateTime date);
+    }
+
+    // DTO for CarTrack trip data
+    public class CarTrackTripData
+    {
+        public long TripId { get; set; }
+        public string? Registration { get; set; }
+        public string? StartTimestamp { get; set; }
+        public string? EndTimestamp { get; set; }
+        public string? TripDuration { get; set; }
+        public int TripDurationSeconds { get; set; }
+        public string? StartLocation { get; set; }
+        public string? EndLocation { get; set; }
+        public double TripDistance { get; set; } // meters
+        public double MaxSpeed { get; set; }
+        public int HarshBrakingEvents { get; set; }
+        public int HarshCorneringEvents { get; set; }
+        public int HarshAccelerationEvents { get; set; }
+        public int IdleTimeSeconds { get; set; }
+        public double StartLatitude { get; set; }
+        public double StartLongitude { get; set; }
+        public double EndLatitude { get; set; }
+        public double EndLongitude { get; set; }
+        public string? StartGeofence { get; set; }
+        public string? EndGeofence { get; set; }
     }
 
     // DTO for raw CarTrack vehicle data used in sync
@@ -353,6 +379,77 @@ namespace ProjectTracker.API.Services
             }
         }
 
+        public async Task<List<CarTrackTripData>> GetVehicleTripsAsync(string registration, DateTime date)
+        {
+            try
+            {
+                _logger.LogInformation("Fetching trips for {Registration} on {Date}", registration, date.ToString("yyyy-MM-dd"));
+
+                var startTs = date.ToString("yyyy-MM-dd") + " 00:00:00";
+                var endTs = date.ToString("yyyy-MM-dd") + " 23:59:59";
+                var url = $"trips?start_timestamp={Uri.EscapeDataString(startTs)}&end_timestamp={Uri.EscapeDataString(endTs)}&limit=1000";
+
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("CarTrack trips API returned {StatusCode}", response.StatusCode);
+                    return new List<CarTrackTripData>();
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var tripResponse = JsonSerializer.Deserialize<CarTrackTripsResponse>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (tripResponse?.Data == null)
+                {
+                    return new List<CarTrackTripData>();
+                }
+
+                // Filter to only the requested registration (API may return all)
+                var trips = tripResponse.Data
+                    .Where(t => t.Registration != null &&
+                        t.Registration.Equals(registration, StringComparison.OrdinalIgnoreCase))
+                    .Select(t => new CarTrackTripData
+                    {
+                        TripId = t.TripId,
+                        Registration = t.Registration,
+                        StartTimestamp = t.StartTimestamp,
+                        EndTimestamp = t.EndTimestamp,
+                        TripDuration = t.TripDuration,
+                        TripDurationSeconds = t.TripDurationSeconds ?? 0,
+                        StartLocation = t.StartLocation,
+                        EndLocation = t.EndLocation,
+                        TripDistance = t.TripDistance ?? 0,
+                        MaxSpeed = t.MaxSpeed ?? 0,
+                        HarshBrakingEvents = t.HarshBrakingEvents ?? 0,
+                        HarshCorneringEvents = t.HarshCorneringEvents ?? 0,
+                        HarshAccelerationEvents = t.HarshAccelerationEvents ?? 0,
+                        IdleTimeSeconds = t.IdleTimeSeconds ?? 0,
+                        StartLatitude = t.StartCoordinates?.Latitude ?? 0,
+                        StartLongitude = t.StartCoordinates?.Longitude ?? 0,
+                        EndLatitude = t.EndCoordinates?.Latitude ?? 0,
+                        EndLongitude = t.EndCoordinates?.Longitude ?? 0,
+                        StartGeofence = t.StartGeofenceName,
+                        EndGeofence = t.EndGeofenceName
+                    })
+                    .OrderBy(t => t.StartTimestamp)
+                    .ToList();
+
+                _logger.LogInformation("Found {Count} trips for {Registration} on {Date}",
+                    trips.Count, registration, date.ToString("yyyy-MM-dd"));
+
+                return trips;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching trips for {Registration}", registration);
+                return new List<CarTrackTripData>();
+            }
+        }
+
         private static string GetCameraName(int cameraId)
         {
             return cameraId switch
@@ -469,6 +566,82 @@ namespace ProjectTracker.API.Services
             
             [System.Text.Json.Serialization.JsonPropertyName("thumbnail_url")]
             public string? ThumbnailUrl { get; set; }
+        }
+
+        // Trips API response models
+        private class CarTrackTripsResponse
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("data")]
+            public List<CarTrackTrip>? Data { get; set; }
+        }
+
+        private class CarTrackTrip
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("trip_id")]
+            public long TripId { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("vehicle_id")]
+            public long VehicleId { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("registration")]
+            public string? Registration { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("start_timestamp")]
+            public string? StartTimestamp { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("end_timestamp")]
+            public string? EndTimestamp { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("trip_duration")]
+            public string? TripDuration { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("trip_duration_seconds")]
+            public int? TripDurationSeconds { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("start_location")]
+            public string? StartLocation { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("end_location")]
+            public string? EndLocation { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("trip_distance")]
+            public double? TripDistance { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("max_speed")]
+            public double? MaxSpeed { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("harsh_braking_events")]
+            public int? HarshBrakingEvents { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("harsh_cornering_events")]
+            public int? HarshCorneringEvents { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("harsh_acceleration_events")]
+            public int? HarshAccelerationEvents { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("idle_time_seconds")]
+            public int? IdleTimeSeconds { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("start_coordinates")]
+            public CarTrackCoordinates? StartCoordinates { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("end_coordinates")]
+            public CarTrackCoordinates? EndCoordinates { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("start_geofence_name")]
+            public string? StartGeofenceName { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("end_geofence_name")]
+            public string? EndGeofenceName { get; set; }
+        }
+
+        private class CarTrackCoordinates
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("latitude")]
+            public double? Latitude { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("longitude")]
+            public double? Longitude { get; set; }
         }
     }
 }

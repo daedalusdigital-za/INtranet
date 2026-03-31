@@ -129,11 +129,8 @@ builder.Services.AddCors(options =>
 // Add SignalR
 builder.Services.AddSignalR();
 
-// Add Memory Cache for PBX session management
+// Add Memory Cache
 builder.Services.AddMemoryCache();
-
-// Configure PBX Settings
-builder.Services.Configure<PbxSettings>(builder.Configuration.GetSection("PbxSettings"));
 
 // Add HttpClient for AI service
 builder.Services.AddHttpClient();
@@ -143,9 +140,6 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IDatabaseSeederService, DatabaseSeederService>();
-
-// Add PBX Service (singleton to maintain session cache)
-builder.Services.AddSingleton<IPbxService, PbxService>();
 
 // Add CarTrack Service for logistics GPS tracking
 builder.Services.AddHttpClient<ICarTrackService, CarTrackService>();

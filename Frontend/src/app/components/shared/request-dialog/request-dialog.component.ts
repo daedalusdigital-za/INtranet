@@ -151,20 +151,6 @@ interface RequestCategory {
 export class RequestDialogComponent {
   categories: RequestCategory[] = [
     {
-      name: 'HR Requests',
-      icon: 'people',
-      color: '#4caf50',
-      description: 'Leave, payslips, attendance issues',
-      type: 'hr'
-    },
-    {
-      name: 'Finance',
-      icon: 'account_balance',
-      color: '#2196f3',
-      description: 'Expense claims, petty cash, invoices',
-      type: 'finance'
-    },
-    {
       name: 'Meeting',
       icon: 'event',
       color: '#9c27b0',
@@ -172,11 +158,11 @@ export class RequestDialogComponent {
       type: 'meeting'
     },
     {
-      name: 'Marketing',
-      icon: 'campaign',
-      color: '#ff9800',
-      description: 'Design requests, promotional materials',
-      type: 'marketing'
+      name: 'Finance',
+      icon: 'account_balance',
+      color: '#2196f3',
+      description: 'Expense claims, petty cash, invoices',
+      type: 'finance'
     }
   ];
 
@@ -191,15 +177,12 @@ export class RequestDialogComponent {
     this.dialogRef.close();
     
     switch (category.type) {
-      case 'hr':
-        // Open HR sub-menu dialog with Leave, Payslip, Meeting options
-        this.dialog.open(HRRequestMenuComponent, {
-          width: '500px',
-          maxHeight: '90vh'
-        });
-        break;
       case 'finance':
-        this.snackBar.open('Finance request submitted! A representative will contact you.', 'OK', { duration: 4000 });
+        this.dialog.open(FinanceInquiryDialogComponent, {
+          width: '600px',
+          autoFocus: false,
+          panelClass: 'no-scroll-dialog'
+        });
         break;
       case 'meeting':
         // Open meeting request dialog
@@ -208,9 +191,6 @@ export class RequestDialogComponent {
           autoFocus: false,
           panelClass: 'no-scroll-dialog'
         });
-        break;
-      case 'marketing':
-        this.snackBar.open('Marketing request submitted! A representative will contact you.', 'OK', { duration: 4000 });
         break;
     }
   }
@@ -852,6 +832,622 @@ export class ScheduleMeetingDialogComponent implements OnInit {
 
   displayUser(user: UserOption | string): string {
     return typeof user === 'string' ? user : (user?.name || '');
+  }
+
+  close(): void {
+    this.dialogRef.close();
+  }
+}
+
+// Invoice search result interface
+interface InvoiceSearchResult {
+  id: number;
+  invoiceNumber?: string;
+  supplierName: string;
+  companyName?: string;
+  invoiceDate: string;
+  total: number;
+  currency: string;
+  status: string;
+  paymentDate?: string;
+  paymentMethod?: string;
+  paymentReference?: string;
+  departmentId: number;
+}
+
+interface BookDepartment {
+  departmentId: number;
+  departmentName: string;
+}
+
+// Finance Invoice Inquiry Dialog Component
+@Component({
+  selector: 'app-finance-inquiry-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatButtonModule,
+    MatIconModule,
+    MatAutocompleteModule,
+    MatSnackBarModule,
+    MatProgressSpinnerModule
+  ],
+  template: `
+    <div class="finance-dialog">
+      <div class="dialog-header">
+        <mat-icon class="header-icon">account_balance</mat-icon>
+        <h2>Invoice Payment Inquiry</h2>
+        <button mat-icon-button class="close-btn" (click)="close()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-content">
+        <p class="subtitle">Check if an invoice has been paid</p>
+
+        <!-- Step 1: Select Department -->
+        <div class="step" [class.completed]="selectedDepartment">
+          <div class="step-header">
+            <div class="step-number" [class.active]="!selectedDepartment">1</div>
+            <span class="step-label">Select Department</span>
+            @if (selectedDepartment) {
+              <button mat-icon-button class="change-btn" (click)="resetDepartment()">
+                <mat-icon>edit</mat-icon>
+              </button>
+            }
+          </div>
+          @if (!selectedDepartment) {
+            <div class="department-grid">
+              @for (dept of departments; track dept.departmentId) {
+                <div class="dept-chip" (click)="selectDepartment(dept)">
+                  <mat-icon>folder_open</mat-icon>
+                  {{ dept.departmentName }}
+                </div>
+              }
+              @if (departments.length === 0) {
+                <div class="loading-hint">
+                  <mat-spinner diameter="20"></mat-spinner>
+                  <span>Loading departments...</span>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="selected-dept-chip">
+              <mat-icon>folder</mat-icon>
+              {{ selectedDepartment.departmentName }}
+            </div>
+          }
+        </div>
+
+        <!-- Step 2: Search Invoice -->
+        @if (selectedDepartment) {
+          <div class="step" [class.completed]="selectedInvoice">
+            <div class="step-header">
+              <div class="step-number" [class.active]="selectedDepartment && !selectedInvoice">2</div>
+              <span class="step-label">Find Invoice</span>
+              @if (selectedInvoice) {
+                <button mat-icon-button class="change-btn" (click)="resetInvoice()">
+                  <mat-icon>edit</mat-icon>
+                </button>
+              }
+            </div>
+            @if (!selectedInvoice) {
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Search by invoice number or supplier</mat-label>
+                <input matInput [formControl]="invoiceSearchControl"
+                       [matAutocomplete]="invoiceAuto"
+                       placeholder="Start typing...">
+                <mat-icon matPrefix>search</mat-icon>
+                @if (isSearching) {
+                  <mat-spinner matSuffix diameter="20"></mat-spinner>
+                }
+                <mat-autocomplete #invoiceAuto="matAutocomplete" (optionSelected)="selectInvoice($event)">
+                  @for (inv of invoiceResults; track inv.id) {
+                    <mat-option [value]="inv">
+                      <div class="invoice-option">
+                        <div class="invoice-option-main">
+                          <span class="inv-number">{{ inv.invoiceNumber || 'No Number' }}</span>
+                          <span class="inv-supplier">{{ inv.supplierName }}</span>
+                        </div>
+                        <div class="invoice-option-sub">
+                          <span>{{ inv.invoiceDate | date:'dd MMM yyyy' }}</span>
+                          <span class="inv-amount">{{ inv.currency }} {{ inv.total | number:'1.2-2' }}</span>
+                          <span class="inv-status" [class]="'status-' + inv.status.toLowerCase().replace(' ', '-')">{{ inv.status }}</span>
+                        </div>
+                      </div>
+                    </mat-option>
+                  }
+                  @if (invoiceSearchControl.value && (invoiceSearchControl.value + '').length >= 2 && invoiceResults.length === 0 && !isSearching) {
+                    <mat-option disabled>
+                      <div class="no-results">
+                        <mat-icon>search_off</mat-icon>
+                        <span>No invoices found</span>
+                      </div>
+                    </mat-option>
+                  }
+                </mat-autocomplete>
+              </mat-form-field>
+            } @else {
+              <!-- Selected Invoice Card -->
+              <div class="invoice-card">
+                <div class="invoice-card-row">
+                  <span class="label">Invoice #</span>
+                  <span class="value">{{ selectedInvoice.invoiceNumber || 'N/A' }}</span>
+                </div>
+                <div class="invoice-card-row">
+                  <span class="label">Supplier</span>
+                  <span class="value">{{ selectedInvoice.supplierName }}</span>
+                </div>
+                @if (selectedInvoice.companyName) {
+                  <div class="invoice-card-row">
+                    <span class="label">Company</span>
+                    <span class="value">{{ selectedInvoice.companyName }}</span>
+                  </div>
+                }
+                <div class="invoice-card-row">
+                  <span class="label">Date</span>
+                  <span class="value">{{ selectedInvoice.invoiceDate | date:'dd MMM yyyy' }}</span>
+                </div>
+                <div class="invoice-card-row">
+                  <span class="label">Amount</span>
+                  <span class="value amount">{{ selectedInvoice.currency }} {{ selectedInvoice.total | number:'1.2-2' }}</span>
+                </div>
+                <div class="invoice-card-row">
+                  <span class="label">Status</span>
+                  <span class="value">
+                    <span class="inv-status-badge" [class]="'status-' + selectedInvoice.status.toLowerCase().replace(' ', '-')">
+                      {{ selectedInvoice.status }}
+                    </span>
+                  </span>
+                </div>
+                @if (selectedInvoice.paymentDate) {
+                  <div class="invoice-card-row">
+                    <span class="label">Payment Date</span>
+                    <span class="value">{{ selectedInvoice.paymentDate | date:'dd MMM yyyy' }}</span>
+                  </div>
+                }
+                @if (selectedInvoice.paymentReference) {
+                  <div class="invoice-card-row">
+                    <span class="label">Payment Ref</span>
+                    <span class="value">{{ selectedInvoice.paymentReference }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Step 3: Add Notes & Send -->
+        @if (selectedInvoice) {
+          <div class="step">
+            <div class="step-header">
+              <div class="step-number active">3</div>
+              <span class="step-label">Send Inquiry</span>
+            </div>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Additional notes (optional)</mat-label>
+              <textarea matInput [formControl]="notesControl" rows="3"
+                        placeholder="Any extra info for finance..."></textarea>
+            </mat-form-field>
+          </div>
+        }
+      </div>
+
+      @if (selectedInvoice) {
+        <div class="dialog-actions">
+          <button mat-button type="button" (click)="close()">Cancel</button>
+          <button mat-raised-button color="primary" (click)="sendInquiry()" [disabled]="isSending">
+            @if (isSending) {
+              <mat-spinner diameter="20"></mat-spinner>
+            } @else {
+              <mat-icon>send</mat-icon> Send to Finance
+            }
+          </button>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .finance-dialog {
+      width: 100%;
+    }
+
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);
+      color: white;
+      margin: -24px -24px 0 -24px;
+      position: relative;
+    }
+
+    .header-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.4rem;
+      text-align: center;
+    }
+
+    .close-btn {
+      color: white;
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .dialog-content {
+      padding: 24px 0 8px 0;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 20px;
+      font-size: 0.95rem;
+    }
+
+    .full-width { width: 100%; }
+
+    /* Steps */
+    .step {
+      margin-bottom: 20px;
+      padding: 16px;
+      background: #fafafa;
+      border-radius: 12px;
+      border: 1px solid #e0e0e0;
+      transition: all 0.3s;
+    }
+
+    .step.completed {
+      background: #e8f5e9;
+      border-color: #a5d6a7;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .step-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .step-number.active {
+      background: #2196f3;
+      color: white;
+    }
+
+    .step.completed .step-number {
+      background: #4caf50;
+      color: white;
+    }
+
+    .step-label {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #333;
+    }
+
+    .change-btn {
+      margin-left: auto;
+      width: 32px !important;
+      height: 32px !important;
+      line-height: 32px !important;
+    }
+
+    .change-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Department Grid */
+    .department-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px;
+    }
+
+    .dept-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #333;
+      transition: all 0.2s;
+    }
+
+    .dept-chip:hover {
+      border-color: #2196f3;
+      background: #e3f2fd;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+    }
+
+    .dept-chip mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #2196f3;
+    }
+
+    .selected-dept-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: white;
+      border: 1px solid #4caf50;
+      border-radius: 20px;
+      font-weight: 500;
+      color: #2e7d32;
+    }
+
+    .selected-dept-chip mat-icon {
+      color: #4caf50;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .loading-hint {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #666;
+      font-size: 0.9rem;
+      grid-column: 1 / -1;
+    }
+
+    /* Invoice Option in autocomplete */
+    .invoice-option {
+      display: flex;
+      flex-direction: column;
+      padding: 4px 0;
+    }
+
+    .invoice-option-main {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .inv-number {
+      font-weight: 600;
+      color: #1565c0;
+      font-size: 0.9rem;
+    }
+
+    .inv-supplier {
+      color: #555;
+      font-size: 0.85rem;
+    }
+
+    .invoice-option-sub {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .inv-amount {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .inv-status, .inv-status-badge {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-draft { background: #fff3e0; color: #e65100; }
+    .status-confirmed { background: #e8f5e9; color: #2e7d32; }
+    .status-payment-requested { background: #e3f2fd; color: #1565c0; }
+    .status-archived { background: #f5f5f5; color: #757575; }
+
+    .no-results {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #999;
+    }
+
+    /* Invoice Card */
+    .invoice-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .invoice-card-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .invoice-card-row:last-child { border-bottom: none; }
+
+    .invoice-card-row .label {
+      font-size: 0.85rem;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .invoice-card-row .value {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .invoice-card-row .value.amount {
+      color: #1565c0;
+      font-weight: 700;
+    }
+
+    /* Actions */
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+
+    .dialog-actions button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  `]
+})
+export class FinanceInquiryDialogComponent implements OnInit {
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+  private dialogRef = inject(MatDialogRef<FinanceInquiryDialogComponent>);
+
+  departments: BookDepartment[] = [];
+  selectedDepartment: BookDepartment | null = null;
+  
+  invoiceSearchControl = new FormControl('');
+  invoiceResults: InvoiceSearchResult[] = [];
+  selectedInvoice: InvoiceSearchResult | null = null;
+  isSearching = false;
+  
+  notesControl = new FormControl('');
+  isSending = false;
+
+  private searchTimeout: any;
+
+  ngOnInit(): void {
+    this.loadDepartments();
+    
+    // Debounced invoice search
+    this.invoiceSearchControl.valueChanges.subscribe(value => {
+      if (this.searchTimeout) clearTimeout(this.searchTimeout);
+      
+      const searchTerm = typeof value === 'string' ? value : '';
+      if (searchTerm.length < 2) {
+        this.invoiceResults = [];
+        return;
+      }
+
+      this.isSearching = true;
+      this.searchTimeout = setTimeout(() => {
+        this.searchInvoices(searchTerm);
+      }, 300);
+    });
+  }
+
+  loadDepartments(): void {
+    this.http.get<BookDepartment[]>(`${environment.apiUrl}/Books/departments`).subscribe({
+      next: (depts) => this.departments = depts,
+      error: () => this.departments = []
+    });
+  }
+
+  selectDepartment(dept: BookDepartment): void {
+    this.selectedDepartment = dept;
+    this.resetInvoice();
+  }
+
+  resetDepartment(): void {
+    this.selectedDepartment = null;
+    this.selectedInvoice = null;
+    this.invoiceSearchControl.setValue('');
+    this.invoiceResults = [];
+  }
+
+  searchInvoices(query: string): void {
+    const deptId = this.selectedDepartment?.departmentId;
+    let url = `${environment.apiUrl}/Books/invoice-search?query=${encodeURIComponent(query)}&limit=15`;
+    if (deptId) url += `&departmentId=${deptId}`;
+
+    this.http.get<InvoiceSearchResult[]>(url).subscribe({
+      next: (results) => {
+        this.invoiceResults = results;
+        this.isSearching = false;
+      },
+      error: () => {
+        this.invoiceResults = [];
+        this.isSearching = false;
+      }
+    });
+  }
+
+  selectInvoice(event: any): void {
+    this.selectedInvoice = event.option.value as InvoiceSearchResult;
+    this.invoiceSearchControl.setValue('');
+  }
+
+  resetInvoice(): void {
+    this.selectedInvoice = null;
+    this.invoiceSearchControl.setValue('');
+    this.invoiceResults = [];
+  }
+
+  sendInquiry(): void {
+    if (!this.selectedInvoice) return;
+    
+    this.isSending = true;
+    const body = {
+      invoiceId: this.selectedInvoice.id,
+      invoiceNumber: this.selectedInvoice.invoiceNumber,
+      notes: this.notesControl.value || ''
+    };
+
+    this.http.post<any>(`${environment.apiUrl}/Books/payment-inquiry`, body).subscribe({
+      next: (res) => {
+        this.isSending = false;
+        this.snackBar.open(
+          'Payment inquiry sent to finance for invoice ' + (this.selectedInvoice?.invoiceNumber || 'N/A') + '!',
+          'OK',
+          { duration: 5000 }
+        );
+        this.dialogRef.close(true);
+      },
+      error: (err) => {
+        this.isSending = false;
+        this.snackBar.open('Failed to send inquiry. Please try again.', 'OK', { duration: 4000 });
+      }
+    });
   }
 
   close(): void {

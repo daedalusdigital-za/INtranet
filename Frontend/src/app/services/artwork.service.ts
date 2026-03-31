@@ -106,4 +106,9 @@ export class ArtworkService {
   sendToMarketing(artworkId: number, request: { recipients: string; priority?: string; message?: string; requestedByDate?: string; requestedByUser?: string }): Observable<{ success: boolean; message: string }> {
     return this.http.post<{ success: boolean; message: string }>(`${this.apiUrl}/${artworkId}/send-to-marketing`, request);
   }
+
+  // Link artwork to tender
+  linkToTender(artworkId: number, tenderId: number | null, tenderNumber: string | null): Observable<void> {
+    return this.http.put<void>(`${this.apiUrl}/${artworkId}/link-tender`, { tenderId, tenderNumber });
+  }
 }
