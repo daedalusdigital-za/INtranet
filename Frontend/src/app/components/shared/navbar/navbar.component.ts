@@ -90,6 +90,11 @@ import { Subscription } from 'rxjs';
           <mat-icon>support_agent</mat-icon> Support Ticket
         </button>
       }
+      @if (hasPermission('finance')) {
+        <button mat-button routerLink="/finance" routerLinkActive="active-link">
+          <mat-icon>account_balance</mat-icon> Finance
+        </button>
+      }
 
       <span class="spacer"></span>
 
@@ -1343,7 +1348,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
   }
 
   isAdmin(): boolean {
-    return this.currentUser?.role === 'Admin' || this.currentUser?.role === 'Super Admin';
+    const role = this.currentUser?.role?.toLowerCase() || '';
+    return role === 'admin' || role === 'super admin';
   }
 
   isManager(): boolean {

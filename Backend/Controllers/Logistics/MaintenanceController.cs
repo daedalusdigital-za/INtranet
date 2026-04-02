@@ -233,6 +233,47 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(new { message = "Maintenance marked as complete" });
         }
 
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteMaintenanceRecord(int id)
+        {
+            var maintenance = await _context.VehicleMaintenance.FindAsync(id);
+            if (maintenance == null)
+                return NotFound();
+
+            // Delete associated files if they exist
+            if (!string.IsNullOrEmpty(maintenance.ProofOfWorkPath))
+            {
+                var workFile = Path.Combine(Directory.GetCurrentDirectory(), maintenance.ProofOfWorkPath.TrimStart('/'));
+                if (System.IO.File.Exists(workFile))
+                    System.IO.File.Delete(workFile);
+            }
+            if (!string.IsNullOrEmpty(maintenance.ProofOfPaymentPath))
+            {
+                var payFile = Path.Combine(Directory.GetCurrentDirectory(), maintenance.ProofOfPaymentPath.TrimStart('/'));
+                if (System.IO.File.Exists(payFile))
+                    System.IO.File.Delete(payFile);
+            }
+
+            // Delete any maintenance attachments
+            var attachments = await _context.MaintenanceAttachments
+                .Where(a => a.MaintenanceRecordId == id)
+                .ToListAsync();
+
+            foreach (var att in attachments)
+            {
+                var attFile = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "maintenance", att.StoredFileName);
+                if (System.IO.File.Exists(attFile))
+                    System.IO.File.Delete(attFile);
+            }
+            _context.MaintenanceAttachments.RemoveRange(attachments);
+
+            _context.VehicleMaintenance.Remove(maintenance);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Deleted maintenance record {Id}", id);
+            return NoContent();
+        }
+
         [HttpPost("{id}/upload")]
         public async Task<IActionResult> UploadFiles(int id, [FromForm] IFormFile? proofOfWork, [FromForm] IFormFile? proofOfPayment)
         {

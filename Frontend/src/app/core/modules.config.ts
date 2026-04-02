@@ -30,6 +30,7 @@ export const MODULE_KEYS = {
   MESSAGING: 'messaging',
   AI: 'ai',
   CALENDAR: 'calendar',
+  FINANCE: 'finance',
   SETTINGS: 'settings'
 } as const;
 
@@ -178,6 +179,25 @@ export const MODULES: ModuleConfig[] = [
     requiresPermission: false, // Available to all authenticated users
     showInNavbar: true,
     showInDashboard: false
+  },
+  {
+    key: 'finance',
+    name: 'Finance',
+    description: 'Budgets, expenses, purchase orders, and payments',
+    icon: 'account_balance',
+    route: '/finance',
+    color: '#4CAF50',
+    requiresPermission: true,
+    showInNavbar: true,
+    showInDashboard: true,
+    subRoutes: [
+      { path: '/finance', name: 'Dashboard', icon: 'dashboard' },
+      { path: '/finance/budgets', name: 'Budgets', icon: 'account_balance_wallet' },
+      { path: '/finance/expenses', name: 'Expenses', icon: 'receipt' },
+      { path: '/finance/purchase-orders', name: 'Purchase Orders', icon: 'shopping_cart' },
+      { path: '/finance/payments', name: 'Payments', icon: 'payment' },
+      { path: '/finance/categories', name: 'Categories', icon: 'category' }
+    ]
   },
   {
     key: 'ai',
@@ -356,6 +376,44 @@ export function getModuleRoutes(): Routes {
       loadComponent: () => import('../components/tenders/tenders.component').then(m => m.TendersComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'tenders' } 
+    },
+    
+    // Finance Module
+    { 
+      path: 'finance', 
+      loadComponent: () => import('../components/finance/finance.component').then(m => m.FinanceComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/budgets', 
+      loadComponent: () => import('../components/finance/budgets/budgets.component').then(m => m.BudgetsComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/expenses', 
+      loadComponent: () => import('../components/finance/expenses/expenses.component').then(m => m.ExpensesComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/purchase-orders', 
+      loadComponent: () => import('../components/finance/purchase-orders/purchase-orders.component').then(m => m.PurchaseOrdersComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/payments', 
+      loadComponent: () => import('../components/finance/payments/payments.component').then(m => m.PaymentsComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/categories', 
+      loadComponent: () => import('../components/finance/categories/categories.component').then(m => m.CategoriesComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
     },
     
     // Books - Paid Invoice Management (managers)

@@ -1,0 +1,80 @@
+<div class="finance-container">
+  <div class="page-header">
+    <h1><mat-icon>account_balance</mat-icon> Finance Module</h1>
+    <p>Manage budgets, expenses, purchase orders, and payments</p>
+  </div>
+
+  <!-- Stats Overview -->
+  <div class="stats-grid">
+    <mat-card class="stat-card budget">
+      <mat-card-content>
+        <div class="stat-icon"><mat-icon>payments</mat-icon></div>
+        <div class="stat-info">
+          <h3>Total Budget</h3>
+          <p class="stat-value">{{ stats.totalBudget | currency:'ZAR':'symbol':'1.2-2' }}</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card spent">
+      <mat-card-content>
+        <div class="stat-icon"><mat-icon>trending_down</mat-icon></div>
+        <div class="stat-info">
+          <h3>Total Spent</h3>
+          <p class="stat-value">{{ stats.totalSpent | currency:'ZAR':'symbol':'1.2-2' }}</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card expenses">
+      <mat-card-content>
+        <div class="stat-icon"><mat-icon>receipt_long</mat-icon></div>
+        <div class="stat-info">
+          <h3>Pending Expenses</h3>
+          <p class="stat-value">{{ stats.pendingExpenses }}</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card payments">
+      <mat-card-content>
+        <div class="stat-icon"><mat-icon>credit_card</mat-icon></div>
+        <div class="stat-info">
+          <h3>Pending Payments</h3>
+          <p class="stat-value">{{ stats.pendingPayments }}</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Quick Actions -->
+  <mat-card class="actions-card">
+    <mat-card-header>
+      <mat-card-title>Quick Actions</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="actions-grid">
+        <button mat-raised-button color="primary" routerLink="/finance/budgets">
+          <mat-icon>account_balance_wallet</mat-icon>
+          Budgets
+        </button>
+        <button mat-raised-button color="primary" routerLink="/finance/expenses">
+          <mat-icon>receipt</mat-icon>
+          Expenses
+        </button>
+        <button mat-raised-button color="primary" routerLink="/finance/purchase-orders">
+          <mat-icon>shopping_cart</mat-icon>
+          Purchase Orders
+        </button>
+        <button mat-raised-button color="primary" routerLink="/finance/payments">
+          <mat-icon>payment</mat-icon>
+          Payments
+        </button>
+        <button mat-raised-button color="accent" routerLink="/finance/categories">
+          <mat-icon>category</mat-icon>
+          Categories
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

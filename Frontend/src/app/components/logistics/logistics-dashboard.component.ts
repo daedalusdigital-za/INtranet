@@ -132,11 +132,12 @@ interface MaintenanceRecord {
   id: number;
   vehicleId: number;
   vehicleReg: string;
+  vehicleRegistration?: string;
   vehicleType: string;
-  maintenanceType: 'scheduled' | 'repair' | 'license' | 'inspection' | 'other';
+  maintenanceType: string;
   description: string;
-  status: 'scheduled' | 'in-progress' | 'completed' | 'overdue';
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  priority: string;
   scheduledDate: Date;
   completedDate?: Date;
   estimatedCost?: number;
@@ -144,6 +145,7 @@ interface MaintenanceRecord {
   actualCost?: number;
   odometerReading?: number;
   assignedTo?: string;
+  serviceProvider?: string;
   notes?: string;
   licenseExpiryDate?: Date;
   daysUntilExpiry?: number;
@@ -723,43 +725,90 @@ interface DeliveryRequestSummary {
                 Maintenance
               </ng-template>
               <div class="tab-content">
+                <!-- Stats Row -->
                 <div class="maintenance-header">
                   <div class="maintenance-stats-row">
-                    <mat-card class="maintenance-stat-card critical">
+                    <mat-card class="maintenance-stat-card critical" (click)="maintenanceStatusFilter = 'overdue'">
                       <mat-icon>warning</mat-icon>
                       <div class="stat-info">
                         <span class="stat-value">{{ getMaintenanceByStatus('overdue').length }}</span>
                         <span class="stat-label">Overdue</span>
                       </div>
                     </mat-card>
-                    <mat-card class="maintenance-stat-card in-progress">
+                    <mat-card class="maintenance-stat-card in-progress" (click)="maintenanceStatusFilter = 'in-progress'">
                       <mat-icon>engineering</mat-icon>
                       <div class="stat-info">
                         <span class="stat-value">{{ getMaintenanceByStatus('in-progress').length }}</span>
                         <span class="stat-label">In Progress</span>
                       </div>
                     </mat-card>
-                    <mat-card class="maintenance-stat-card scheduled">
+                    <mat-card class="maintenance-stat-card scheduled" (click)="maintenanceStatusFilter = 'scheduled'">
                       <mat-icon>schedule</mat-icon>
                       <div class="stat-info">
                         <span class="stat-value">{{ getMaintenanceByStatus('scheduled').length }}</span>
                         <span class="stat-label">Scheduled</span>
                       </div>
                     </mat-card>
-                    <mat-card class="maintenance-stat-card license">
+                    <mat-card class="maintenance-stat-card license" (click)="maintenanceStatusFilter = 'all'">
                       <mat-icon>badge</mat-icon>
                       <div class="stat-info">
                         <span class="stat-value">{{ getExpiringLicenses().length }}</span>
                         <span class="stat-label">Licenses Expiring</span>
                       </div>
                     </mat-card>
-                    <mat-card class="maintenance-stat-card completed">
+                    <mat-card class="maintenance-stat-card completed" (click)="maintenanceStatusFilter = 'completed'">
                       <mat-icon>check_circle</mat-icon>
                       <div class="stat-info">
                         <span class="stat-value">{{ getCompletedMaintenance().length }}</span>
                         <span class="stat-label">Completed</span>
                       </div>
                     </mat-card>
+                  </div>
+                </div>
+
+                <!-- Filters & Actions Bar -->
+                <div class="maintenance-toolbar">
+                  <div class="maintenance-filters">
+                    <mat-form-field appearance="outline" class="filter-field search-field">
+                      <mat-label>Search</mat-label>
+                      <mat-icon matPrefix>search</mat-icon>
+                      <input matInput [(ngModel)]="maintenanceSearch" placeholder="Search reg, type, description...">
+                      @if (maintenanceSearch) {
+                        <button matSuffix mat-icon-button (click)="maintenanceSearch = ''">
+                          <mat-icon>close</mat-icon>
+                        </button>
+                      }
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Vehicle</mat-label>
+                      <mat-select [(ngModel)]="maintenanceVehicleFilter">
+                        <mat-option value="all">All Vehicles</mat-option>
+                        @for (v of getUniqueMaintenanceVehicles(); track v) {
+                          <mat-option [value]="v">{{ v }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Status</mat-label>
+                      <mat-select [(ngModel)]="maintenanceStatusFilter">
+                        <mat-option value="all">All Statuses</mat-option>
+                        <mat-option value="scheduled">Scheduled</mat-option>
+                        <mat-option value="in-progress">In Progress</mat-option>
+                        <mat-option value="overdue">Overdue</mat-option>
+                        <mat-option value="completed">Completed</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Type</mat-label>
+                      <mat-select [(ngModel)]="maintenanceTypeFilter">
+                        <mat-option value="all">All Types</mat-option>
+                        <mat-option value="scheduled">Scheduled Service</mat-option>
+                        <mat-option value="repair">Repair</mat-option>
+                        <mat-option value="license">License</mat-option>
+                        <mat-option value="inspection">Inspection</mat-option>
+                        <mat-option value="other">Other</mat-option>
+                      </mat-select>
+                    </mat-form-field>
                   </div>
                   <div class="maintenance-actions">
                     <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
@@ -773,269 +822,288 @@ interface DeliveryRequestSummary {
                   </div>
                 </div>
 
-                @if (maintenanceRecords().length === 0) {
+                <!-- License Expiry Alerts -->
+                @if (getExpiringLicenses().length > 0 && maintenanceStatusFilter === 'all') {
+                  <div class="license-alerts">
+                    <h4><mat-icon>notification_important</mat-icon> License Expiry Alerts</h4>
+                    <div class="license-cards">
+                      @for (record of getExpiringLicenses(); track record.id) {
+                        <mat-card class="license-card" [class.critical]="record.daysUntilExpiry! <= 7" [class.warning]="record.daysUntilExpiry! > 7 && record.daysUntilExpiry! <= 30">
+                          <div class="license-info">
+                            <mat-icon>directions_car</mat-icon>
+                            <div>
+                              <span class="vehicle-reg">{{ record.vehicleReg }}</span>
+                              <span class="expiry-text">
+                                @if (record.daysUntilExpiry! <= 0) {
+                                  License EXPIRED!
+                                } @else {
+                                  Expires in {{ record.daysUntilExpiry }} days
+                                }
+                              </span>
+                            </div>
+                          </div>
+                          <button mat-icon-button color="primary" matTooltip="Schedule License Renewal" (click)="scheduleLicenseRenewal(record)">
+                            <mat-icon>event</mat-icon>
+                          </button>
+                        </mat-card>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (getFilteredMaintenanceRecords().length === 0) {
                   <div class="empty-state">
                     <mat-icon>build_circle</mat-icon>
                     <h3>No Maintenance Records</h3>
-                    <p>No vehicles are currently scheduled for maintenance</p>
-                    <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
-                      <mat-icon>add</mat-icon> Schedule Maintenance
-                    </button>
+                    <p>{{ maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' ? 'No records match your filters' : 'No vehicles are currently scheduled for maintenance' }}</p>
+                    @if (maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all') {
+                      <button mat-raised-button (click)="clearMaintenanceFilters()">
+                        <mat-icon>filter_list_off</mat-icon> Clear Filters
+                      </button>
+                    } @else {
+                      <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
+                        <mat-icon>add</mat-icon> Schedule Maintenance
+                      </button>
+                    }
                   </div>
                 } @else {
-                  <!-- Completed Maintenance Section -->
-                  @if (getCompletedMaintenance().length > 0) {
-                    <div class="completed-maintenance-section">
-                      <h4><mat-icon>check_circle</mat-icon> Completed Maintenance</h4>
-                      <p class="section-description">All completed maintenance records</p>
-                      <div class="maintenance-grid completed-section">
-                        @for (record of getCompletedMaintenance(); track record.id) {
-                          <mat-card class="maintenance-card completed-card">
-                            <mat-card-header>
-                              <div class="maintenance-icon completed">
-                                <mat-icon>check_circle</mat-icon>
-                              </div>
-                              <mat-card-title>{{ record.vehicleReg }}</mat-card-title>
-                              <mat-card-subtitle>
-                                {{ record.vehicleType }} - Completed {{ record.completedDate | date:'dd MMM yyyy' }}
-                              </mat-card-subtitle>
-                            </mat-card-header>
-                            <mat-card-content>
-                              <div class="maintenance-type-badge completed">
-                                {{ record.maintenanceType | titlecase }}
-                              </div>
-                              <p class="maintenance-description">{{ record.description }}</p>
-                              
-                              <div class="maintenance-details">
-                                <div class="detail-row completed">
-                                  <mat-icon>event_available</mat-icon>
-                                  <span>
-                                    @if (record.completedDate) {
-                                      Completed: {{ record.completedDate | date:'dd MMM yyyy' }}
-                                    }
+                  <!-- Modern Table View -->
+                  <div class="maintenance-table-container">
+                    <table mat-table [dataSource]="getFilteredMaintenanceRecords()" class="maintenance-table" matSort>
+                      <!-- Vehicle Reg Column -->
+                      <ng-container matColumnDef="vehicleReg">
+                        <th mat-header-cell *matHeaderCellDef>Vehicle</th>
+                        <td mat-cell *matCellDef="let record">
+                          <div class="vehicle-cell">
+                            <div class="reg-plate">
+                              <span class="plate-text">{{ record.vehicleReg || 'N/A' }}</span>
+                            </div>
+                            <span class="vehicle-type-label">{{ record.vehicleType }}</span>
+                          </div>
+                        </td>
+                      </ng-container>
+
+                      <!-- Type Column -->
+                      <ng-container matColumnDef="maintenanceType">
+                        <th mat-header-cell *matHeaderCellDef>Type</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="maintenance-type-badge" [class]="record.maintenanceType">
+                            {{ record.maintenanceType | titlecase }}
+                          </span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Description Column -->
+                      <ng-container matColumnDef="description">
+                        <th mat-header-cell *matHeaderCellDef>Description</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="description-text">{{ record.description }}</span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Scheduled Date Column -->
+                      <ng-container matColumnDef="scheduledDate">
+                        <th mat-header-cell *matHeaderCellDef>Scheduled</th>
+                        <td mat-cell *matCellDef="let record">
+                          {{ record.scheduledDate | date:'dd MMM yyyy' }}
+                        </td>
+                      </ng-container>
+
+                      <!-- Cost Column -->
+                      <ng-container matColumnDef="cost">
+                        <th mat-header-cell *matHeaderCellDef>Cost</th>
+                        <td mat-cell *matCellDef="let record">
+                          @if (record.cost) {
+                            <span class="cost-value">R{{ record.cost | number:'1.2-2' }}</span>
+                          } @else if (record.estimatedCost) {
+                            <span class="cost-estimate">Est: R{{ record.estimatedCost | number:'1.2-2' }}</span>
+                          } @else {
+                            <span class="cost-na">—</span>
+                          }
+                        </td>
+                      </ng-container>
+
+                      <!-- Priority Column -->
+                      <ng-container matColumnDef="priority">
+                        <th mat-header-cell *matHeaderCellDef>Priority</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="priority-badge" [class]="record.priority">
+                            {{ record.priority | titlecase }}
+                          </span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Status Column -->
+                      <ng-container matColumnDef="status">
+                        <th mat-header-cell *matHeaderCellDef>Status</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="status-badge" [class]="record.status">
+                            @switch (record.status) {
+                              @case ('scheduled') { <mat-icon>schedule</mat-icon> Scheduled }
+                              @case ('in-progress') { <mat-icon>engineering</mat-icon> In Progress }
+                              @case ('completed') { <mat-icon>check_circle</mat-icon> Completed }
+                              @case ('overdue') { <mat-icon>warning</mat-icon> Overdue }
+                            }
+                          </span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Files Column -->
+                      <ng-container matColumnDef="files">
+                        <th mat-header-cell *matHeaderCellDef>Files</th>
+                        <td mat-cell *matCellDef="let record">
+                          <button mat-icon-button 
+                            class="files-btn"
+                            [class.has-files]="(maintenanceAttachmentCounts()[record.id] || 0) > 0"
+                            matTooltip="View / Upload Files"
+                            (click)="openMaintenanceAttachments(record)">
+                            <mat-icon>attach_file</mat-icon>
+                            @if ((maintenanceAttachmentCounts()[record.id] || 0) > 0) {
+                              <span class="file-count-badge">{{ maintenanceAttachmentCounts()[record.id] }}</span>
+                            }
+                          </button>
+                        </td>
+                      </ng-container>
+
+                      <!-- Actions Column -->
+                      <ng-container matColumnDef="actions">
+                        <th mat-header-cell *matHeaderCellDef>Actions</th>
+                        <td mat-cell *matCellDef="let record">
+                          <div class="action-buttons">
+                            @if (record.status === 'scheduled') {
+                              <button mat-icon-button color="primary" matTooltip="Start" (click)="startMaintenance(record)">
+                                <mat-icon>play_arrow</mat-icon>
+                              </button>
+                            }
+                            @if (record.status === 'in-progress') {
+                              <button mat-icon-button color="accent" matTooltip="Complete" (click)="completeMaintenance(record)">
+                                <mat-icon>check</mat-icon>
+                              </button>
+                            }
+                            <button mat-icon-button matTooltip="Edit" (click)="editMaintenance(record)">
+                              <mat-icon>edit</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="maintenanceMenu">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #maintenanceMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item class="modern-menu-item" [matMenuTriggerFor]="statusMenu">
+                                <mat-icon class="menu-icon-purple">update</mat-icon>
+                                <span>Change Status</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="openMaintenanceAttachments(record)">
+                                <mat-icon class="menu-icon-teal">attach_file</mat-icon>
+                                <span>Upload Files</span>
+                              </button>
+                              <div class="menu-divider"></div>
+                              <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteMaintenance(record)">
+                                <mat-icon class="menu-icon-red">delete</mat-icon>
+                                <span>Delete</span>
+                              </button>
+                            </mat-menu>
+                            <mat-menu #statusMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'scheduled')">
+                                <mat-icon class="menu-icon-blue">schedule</mat-icon>
+                                <span>Scheduled</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'in-progress')">
+                                <mat-icon class="menu-icon-amber">engineering</mat-icon>
+                                <span>In Progress</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'overdue')">
+                                <mat-icon class="menu-icon-red">warning</mat-icon>
+                                <span>Overdue</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'completed')">
+                                <mat-icon class="menu-icon-green">check_circle</mat-icon>
+                                <span>Completed</span>
+                              </button>
+                            </mat-menu>
+                          </div>
+                        </td>
+                      </ng-container>
+
+                      <tr mat-header-row *matHeaderRowDef="maintenanceColumns"></tr>
+                      <tr mat-row *matRowDef="let row; columns: maintenanceColumns;" 
+                          [class]="'status-row-' + row.status"></tr>
+                    </table>
+                  </div>
+                }
+
+                <!-- Maintenance Attachment Slide-Out Panel -->
+                @if (showMaintenanceAttachmentPanel) {
+                  <div class="attachment-overlay" (click)="closeMaintenanceAttachments()"></div>
+                  <div class="attachment-slide-panel" [class.open]="showMaintenanceAttachmentPanel">
+                    <div class="attachment-panel-header">
+                      <div class="panel-title-section">
+                        <mat-icon>attach_file</mat-icon>
+                        <div>
+                          <h3>Maintenance Files</h3>
+                          <span class="panel-subtitle">
+                            {{ selectedMaintenanceRecord?.vehicleReg }} — {{ selectedMaintenanceRecord?.maintenanceType | titlecase }}
+                          </span>
+                        </div>
+                      </div>
+                      <button mat-icon-button (click)="closeMaintenanceAttachments()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+
+                    <div class="attachment-panel-body">
+                      <!-- Upload Section -->
+                      <div class="upload-section">
+                        <div class="upload-dropzone"
+                             (dragover)="$event.preventDefault(); maintenanceDragOver = true"
+                             (dragleave)="maintenanceDragOver = false"
+                             (drop)="onMaintenanceFileDrop($event)"
+                             [class.drag-over]="maintenanceDragOver">
+                          <mat-icon>cloud_upload</mat-icon>
+                          <p>Drag & drop files here or</p>
+                          <button mat-raised-button color="primary" (click)="maintenanceFileInput.click()">
+                            <mat-icon>upload_file</mat-icon> Choose Files
+                          </button>
+                          <input #maintenanceFileInput type="file" multiple hidden
+                                 (change)="onMaintenanceFileSelected($event)">
+                          <span class="upload-hint">PDF, images, documents up to 50MB each</span>
+                        </div>
+                        @if (maintenanceUploading) {
+                          <mat-progress-bar mode="indeterminate" class="upload-progress"></mat-progress-bar>
+                        }
+                      </div>
+
+                      <!-- Existing Attachments -->
+                      <div class="attachments-list">
+                        <h4>Uploaded Files ({{ maintenanceAttachments().length }})</h4>
+                        @if (maintenanceAttachments().length === 0) {
+                          <div class="no-attachments">
+                            <mat-icon>folder_open</mat-icon>
+                            <p>No files uploaded yet</p>
+                          </div>
+                        } @else {
+                          @for (att of maintenanceAttachments(); track att.id) {
+                            <div class="attachment-item">
+                              <div class="attachment-info">
+                                <mat-icon class="file-icon">{{ getFileIcon(att.fileName) }}</mat-icon>
+                                <div class="file-details">
+                                  <span class="file-name">{{ att.fileName }}</span>
+                                  <span class="file-meta">
+                                    {{ formatFileSize(att.fileSize) }} · {{ att.uploadedBy || 'Unknown' }} · {{ att.uploadedAt | date:'dd MMM yyyy HH:mm' }}
                                   </span>
                                 </div>
-                                <div class="detail-row">
-                                  <mat-icon>calendar_today</mat-icon>
-                                  <span>Scheduled: {{ record.scheduledDate | date:'dd MMM yyyy' }}</span>
-                                </div>
-                                @if (record.assignedTo) {
-                                  <div class="detail-row">
-                                    <mat-icon>person</mat-icon>
-                                    <span>{{ record.assignedTo }}</span>
-                                  </div>
-                                }
-                                @if (record.cost) {
-                                  <div class="detail-row">
-                                    <mat-icon>payments</mat-icon>
-                                    <span>R{{ record.cost | number:'1.2-2' }}</span>
-                                  </div>
-                                }
                               </div>
-
-                              <div class="status-section">
-                                <span class="status-badge completed">
-                                  <mat-icon>check_circle</mat-icon> Completed
-                                </span>
+                              <div class="attachment-actions">
+                                <button mat-icon-button matTooltip="Download" (click)="downloadMaintenanceAttachment(att)">
+                                  <mat-icon>download</mat-icon>
+                                </button>
+                                <button mat-icon-button matTooltip="Delete" color="warn" (click)="deleteMaintenanceAttachment(att)">
+                                  <mat-icon>delete</mat-icon>
+                                </button>
                               </div>
-                            </mat-card-content>
-                            <mat-card-actions>
-                              <button mat-icon-button [matMenuTriggerFor]="completedMenu">
-                                <mat-icon>more_vert</mat-icon>
-                              </button>
-                              <mat-menu #completedMenu="matMenu" class="modern-menu">
-                                <button mat-menu-item class="modern-menu-item" (click)="viewMaintenanceHistory(record)">
-                                  <mat-icon class="menu-icon-teal">history</mat-icon>
-                                  <span>View History</span>
-                                </button>
-                                <button mat-menu-item class="modern-menu-item" (click)="viewMaintenanceDetails(record)">
-                                  <mat-icon class="menu-icon-blue">visibility</mat-icon>
-                                  <span>View Details</span>
-                                </button>
-                              </mat-menu>
-                            </mat-card-actions>
-                          </mat-card>
+                            </div>
+                          }
                         }
                       </div>
                     </div>
-                  }
-
-                  <!-- License Expiry Alerts -->
-                  @if (getExpiringLicenses().length > 0) {
-                    <div class="license-alerts">
-                      <h4><mat-icon>notification_important</mat-icon> License Expiry Alerts</h4>
-                      <div class="license-cards">
-                        @for (record of getExpiringLicenses(); track record.id) {
-                          <mat-card class="license-card" [class.critical]="record.daysUntilExpiry! <= 7" [class.warning]="record.daysUntilExpiry! > 7 && record.daysUntilExpiry! <= 30">
-                            <div class="license-info">
-                              <mat-icon>directions_car</mat-icon>
-                              <div>
-                                <span class="vehicle-reg">{{ record.vehicleReg }}</span>
-                                <span class="expiry-text">
-                                  @if (record.daysUntilExpiry! <= 0) {
-                                    License EXPIRED!
-                                  } @else {
-                                    Expires in {{ record.daysUntilExpiry }} days
-                                  }
-                                </span>
-                              </div>
-                            </div>
-                            <button mat-icon-button color="primary" matTooltip="Schedule License Renewal" (click)="scheduleLicenseRenewal(record)">
-                              <mat-icon>event</mat-icon>
-                            </button>
-                          </mat-card>
-                        }
-                      </div>
-                    </div>
-                  }
-
-                  <!-- Maintenance Grid -->
-                  <div class="maintenance-grid">
-                    @for (record of maintenanceRecords(); track record.id) {
-                      <mat-card class="maintenance-card" [class]="'status-' + record.status">
-                        <mat-card-header>
-                          <div class="maintenance-icon" [class]="'type-' + record.maintenanceType">
-                            @switch (record.maintenanceType) {
-                              @case ('scheduled') { <mat-icon>event</mat-icon> }
-                              @case ('repair') { <mat-icon>build</mat-icon> }
-                              @case ('license') { <mat-icon>badge</mat-icon> }
-                              @case ('inspection') { <mat-icon>fact_check</mat-icon> }
-                              @default { <mat-icon>miscellaneous_services</mat-icon> }
-                            }
-                          </div>
-                          <mat-card-title>{{ record.vehicleReg }}</mat-card-title>
-                          <mat-card-subtitle>{{ record.vehicleType }}</mat-card-subtitle>
-                        </mat-card-header>
-                        <mat-card-content>
-                          <div class="maintenance-type-badge" [class]="record.maintenanceType">
-                            {{ record.maintenanceType | titlecase }}
-                          </div>
-                          <p class="maintenance-description">{{ record.description }}</p>
-                          
-                          <div class="maintenance-details">
-                            <div class="detail-row">
-                              <mat-icon>calendar_today</mat-icon>
-                              <span>{{ record.scheduledDate | date:'dd MMM yyyy' }}</span>
-                            </div>
-                            @if (record.completedDate) {
-                              <div class="detail-row completed">
-                                <mat-icon>check_circle</mat-icon>
-                                <span>Completed: {{ record.completedDate | date:'dd MMM yyyy' }}</span>
-                              </div>
-                            }
-                            @if (record.assignedTo) {
-                              <div class="detail-row">
-                                <mat-icon>person</mat-icon>
-                                <span>{{ record.assignedTo }}</span>
-                              </div>
-                            }
-                            @if (record.estimatedCost || record.cost) {
-                              <div class="detail-row">
-                                <mat-icon>payments</mat-icon>
-                                <span>{{ record.cost ? 'R' + (record.cost | number:'1.2-2') : 'Est: R' + (record.estimatedCost | number:'1.2-2') }}</span>
-                              </div>
-                            }
-                            @if (record.odometerReading) {
-                              <div class="detail-row">
-                                <mat-icon>speed</mat-icon>
-                                <span>{{ record.odometerReading | number }} km</span>
-                              </div>
-                            }
-                          </div>
-
-                          @if (record.status === 'completed') {
-                            <div class="attachments-section">
-                              @if (record.proofOfWorkPath || record.proofOfPaymentPath) {
-                                <div class="attachment-label">
-                                  <mat-icon>attach_file</mat-icon>
-                                  <span>Attachments:</span>
-                                </div>
-                                <div class="attachment-links">
-                                  @if (record.proofOfWorkPath) {
-                                    <a [href]="apiUrl + record.proofOfWorkPath" target="_blank" class="attachment-link">
-                                      <mat-icon>description</mat-icon>
-                                      Proof of Work
-                                    </a>
-                                  }
-                                  @if (record.proofOfPaymentPath) {
-                                    <a [href]="apiUrl + record.proofOfPaymentPath" target="_blank" class="attachment-link">
-                                      <mat-icon>receipt_long</mat-icon>
-                                      Proof of Payment
-                                    </a>
-                                  }
-                                </div>
-                              }
-                            </div>
-                          }
-
-                          <div class="status-section">
-                            <span class="status-badge" [class]="record.status">
-                              @switch (record.status) {
-                                @case ('scheduled') { <mat-icon>schedule</mat-icon> Scheduled }
-                                @case ('in-progress') { <mat-icon>engineering</mat-icon> In Progress }
-                                @case ('completed') { <mat-icon>check_circle</mat-icon> Completed }
-                                @case ('overdue') { <mat-icon>warning</mat-icon> Overdue }
-                              }
-                            </span>
-                            <span class="priority-badge" [class]="record.priority">
-                              {{ record.priority | titlecase }}
-                            </span>
-                          </div>
-                        </mat-card-content>
-                        <mat-card-actions>
-                          @if (record.status === 'scheduled') {
-                            <button mat-button color="primary" (click)="startMaintenance(record)">
-                              <mat-icon>play_arrow</mat-icon> Start
-                            </button>
-                          }
-                          @if (record.status === 'in-progress') {
-                            <button mat-button color="accent" (click)="completeMaintenance(record)">
-                              <mat-icon>check</mat-icon> Complete
-                            </button>
-                          }
-                          <button mat-icon-button [matMenuTriggerFor]="maintenanceMenu">
-                            <mat-icon>more_vert</mat-icon>
-                          </button>
-                          <mat-menu #maintenanceMenu="matMenu" class="modern-menu">
-                            <button mat-menu-item class="modern-menu-item" (click)="editMaintenance(record)">
-                              <mat-icon class="menu-icon-blue">edit</mat-icon>
-                              <span>Edit</span>
-                            </button>
-                            <button mat-menu-item class="modern-menu-item" [matMenuTriggerFor]="statusMenu">
-                              <mat-icon class="menu-icon-purple">update</mat-icon>
-                              <span>Change Status</span>
-                            </button>
-                            <button mat-menu-item class="modern-menu-item" (click)="viewMaintenanceHistory(record)">
-                              <mat-icon class="menu-icon-teal">history</mat-icon>
-                              <span>View History</span>
-                            </button>
-                            <div class="menu-divider"></div>
-                            <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteMaintenance(record)">
-                              <mat-icon class="menu-icon-red">delete</mat-icon>
-                              <span>Delete</span>
-                            </button>
-                          </mat-menu>
-                          <mat-menu #statusMenu="matMenu" class="modern-menu">
-                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'scheduled')">
-                              <mat-icon class="menu-icon-blue">schedule</mat-icon>
-                              <span>Scheduled</span>
-                            </button>
-                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'in-progress')">
-                              <mat-icon class="menu-icon-amber">engineering</mat-icon>
-                              <span>In Progress</span>
-                            </button>
-                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'overdue')">
-                              <mat-icon class="menu-icon-red">warning</mat-icon>
-                              <span>Overdue</span>
-                            </button>
-                            <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'completed')">
-                              <mat-icon class="menu-icon-green">check_circle</mat-icon>
-                              <span>Completed</span>
-                            </button>
-                          </mat-menu>
-                        </mat-card-actions>
-                      </mat-card>
-                    }
                   </div>
                 }
               </div>
@@ -1156,8 +1224,14 @@ interface DeliveryRequestSummary {
                           <th mat-header-cell *matHeaderCellDef>Product</th>
                           <td mat-cell *matCellDef="let inv">
                             <div class="product-cell">
-                              <span class="product-desc">{{ inv.productDescription }}</span>
-                              <span class="product-code">{{ inv.productCode }}</span>
+                              @if (inv.productDescription) {
+                                <span class="product-desc">{{ inv.productDescription }}</span>
+                                @if (inv.productCode) {
+                                  <span class="product-code">{{ inv.productCode }}</span>
+                                }
+                              } @else {
+                                <span class="product-desc no-product">No product info</span>
+                              }
                             </div>
                           </td>
                         </ng-container>
@@ -1170,11 +1244,6 @@ interface DeliveryRequestSummary {
                         <ng-container matColumnDef="salesAmount">
                           <th mat-header-cell *matHeaderCellDef>Sales (incl. VAT)</th>
                           <td mat-cell *matCellDef="let inv">R{{ inv.salesAmount * 1.15 | number:'1.2-2' }}</td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="costOfSales">
-                          <th mat-header-cell *matHeaderCellDef>Cost</th>
-                          <td mat-cell *matCellDef="let inv">R{{ inv.costOfSales | number:'1.2-2' }}</td>
                         </ng-container>
 
                         <ng-container matColumnDef="status">
@@ -2912,21 +2981,21 @@ interface DeliveryRequestSummary {
 
     /* Maintenance Tab Styles - Modern UI */
     .maintenance-header {
-      margin-bottom: 32px;
+      margin-bottom: 16px;
     }
 
     .maintenance-stats-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 8px;
     }
 
     .maintenance-stat-card {
       display: flex;
       align-items: center;
       gap: 16px;
-      padding: 24px;
+      padding: 20px;
       border-radius: 16px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
@@ -2948,88 +3017,53 @@ interface DeliveryRequestSummary {
     }
 
     .maintenance-stat-card:hover {
-      transform: translateY(-6px);
+      transform: translateY(-4px);
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
     }
 
     .maintenance-stat-card mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      padding: 12px;
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      padding: 10px;
       border-radius: 12px;
       background: rgba(255, 255, 255, 0.5);
       backdrop-filter: blur(10px);
     }
 
-    .maintenance-stat-card.critical { 
-      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); 
-    }
-    .maintenance-stat-card.critical mat-icon { 
-      color: #fff; 
-      background: rgba(255, 255, 255, 0.25);
-    }
+    .maintenance-stat-card.critical { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); }
+    .maintenance-stat-card.critical mat-icon { color: #fff; background: rgba(255, 255, 255, 0.25); }
     .maintenance-stat-card.critical .stat-value,
     .maintenance-stat-card.critical .stat-label { color: #fff; }
 
-    .maintenance-stat-card.in-progress { 
-      background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); 
-    }
-    .maintenance-stat-card.in-progress mat-icon { 
-      color: #fff; 
-      background: rgba(255, 255, 255, 0.25);
-    }
+    .maintenance-stat-card.in-progress { background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); }
+    .maintenance-stat-card.in-progress mat-icon { color: #fff; background: rgba(255, 255, 255, 0.25); }
     .maintenance-stat-card.in-progress .stat-value,
     .maintenance-stat-card.in-progress .stat-label { color: #fff; }
 
-    .maintenance-stat-card.scheduled { 
-      background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%); 
-    }
-    .maintenance-stat-card.scheduled mat-icon { 
-      color: #fff; 
-      background: rgba(255, 255, 255, 0.25);
-    }
+    .maintenance-stat-card.scheduled { background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%); }
+    .maintenance-stat-card.scheduled mat-icon { color: #fff; background: rgba(255, 255, 255, 0.25); }
     .maintenance-stat-card.scheduled .stat-value,
     .maintenance-stat-card.scheduled .stat-label { color: #fff; }
 
-    .maintenance-stat-card.license { 
-      background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%); 
-    }
-    .maintenance-stat-card.license mat-icon { 
-      color: #fff; 
-      background: rgba(255, 255, 255, 0.25);
-    }
+    .maintenance-stat-card.license { background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%); }
+    .maintenance-stat-card.license mat-icon { color: #fff; background: rgba(255, 255, 255, 0.25); }
     .maintenance-stat-card.license .stat-value,
     .maintenance-stat-card.license .stat-label { color: #fff; }
 
-    .maintenance-stat-card.urgent { 
-      background: linear-gradient(135deg, #ff5252 0%, #d32f2f 100%); 
-    }
-    .maintenance-stat-card.urgent mat-icon { 
-      color: #fff; 
-      background: rgba(255, 255, 255, 0.25);
-    }
-    .maintenance-stat-card.urgent .stat-value,
-    .maintenance-stat-card.urgent .stat-label { color: #fff; }
-
-    .maintenance-stat-card.completed { 
-      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%); 
-    }
-    .maintenance-stat-card.completed mat-icon { 
-      color: #fff; 
-      background: rgba(255, 255, 255, 0.25);
-    }
+    .maintenance-stat-card.completed { background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%); }
+    .maintenance-stat-card.completed mat-icon { color: #fff; background: rgba(255, 255, 255, 0.25); }
     .maintenance-stat-card.completed .stat-value,
     .maintenance-stat-card.completed .stat-label { color: #fff; }
 
     .maintenance-stat-card .stat-info {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 2px;
     }
 
     .maintenance-stat-card .stat-value {
-      font-size: 2rem;
+      font-size: 1.8rem;
       font-weight: 700;
       display: block;
       line-height: 1;
@@ -3037,22 +3071,54 @@ interface DeliveryRequestSummary {
     }
 
     .maintenance-stat-card .stat-label {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 500;
       opacity: 0.9;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
+    /* Toolbar - filters + actions */
+    .maintenance-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .maintenance-filters {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    .maintenance-filters .filter-field {
+      min-width: 160px;
+      max-width: 220px;
+    }
+
+    .maintenance-filters .search-field {
+      min-width: 240px;
+      max-width: 320px;
+    }
+
+    .maintenance-filters .mat-mdc-form-field {
+      font-size: 13px;
+    }
+
     .maintenance-actions {
       display: flex;
-      gap: 16px;
+      gap: 12px;
       flex-wrap: wrap;
+      padding-top: 4px;
     }
 
     .maintenance-actions button {
       border-radius: 12px;
-      padding: 8px 24px;
+      padding: 8px 20px;
       font-weight: 500;
       transition: all 0.2s ease;
     }
@@ -3061,299 +3127,13 @@ interface DeliveryRequestSummary {
       transform: translateY(-2px);
     }
 
-    /* Complete Before Expiry Section - Modern UI */
-    .complete-before-expiry-section {
-      background: linear-gradient(135deg, rgba(239, 83, 80, 0.08) 0%, rgba(198, 40, 40, 0.05) 100%);
-      border: none;
-      border-radius: 20px;
-      padding: 28px;
-      margin-bottom: 28px;
-      box-shadow: 0 4px 24px rgba(239, 83, 80, 0.12);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .complete-before-expiry-section::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #ef5350 0%, #c62828 100%);
-    }
-
-    .complete-before-expiry-section h4 {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 0 0 8px 0;
-      color: #c62828;
-      font-size: 1.35rem;
-      font-weight: 700;
-    }
-
-    .complete-before-expiry-section h4 mat-icon {
-      color: #ef5350;
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.1); }
-    }
-
-    .complete-before-expiry-section .section-description {
-      color: #666;
-      margin: 0 0 20px 0;
-      font-size: 0.95rem;
-    }
-
-    .maintenance-grid.urgent-section {
-      background: transparent;
-      padding: 0;
-    }
-
-    /* Urgent Card - Modern UI */
-    .maintenance-card.urgent-card {
-      background: white;
-      border-radius: 16px;
-      border-left: 4px solid #ef5350;
-      box-shadow: 0 4px 16px rgba(239, 83, 80, 0.15);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .maintenance-card.urgent-card.critical {
-      border-left: 4px solid #b71c1c;
-      box-shadow: 0 6px 20px rgba(183, 28, 28, 0.2);
-      background: linear-gradient(135deg, #fff 0%, rgba(198, 40, 40, 0.03) 100%);
-    }
-
-    @keyframes urgentBorder {
-      0%, 100% { border-color: #b71c1c; }
-      50% { border-color: #ef5350; }
-    }
-
-    .maintenance-card.urgent-card:hover {
-      transform: translateY(-6px) scale(1.01);
-      box-shadow: 0 12px 32px rgba(239, 83, 80, 0.25);
-    }
-
-    .maintenance-icon.urgent {
-      background: linear-gradient(135deg, #ef5350 0%, #c62828 100%);
-      box-shadow: 0 4px 12px rgba(239, 83, 80, 0.3);
-    }
-
-    .maintenance-icon.urgent mat-icon {
-      color: white;
-      font-size: 26px;
-      width: 26px;
-      height: 26px;
-    }
-
-    .maintenance-type-badge.license-renewal {
-      background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
-      color: #c62828;
-      border: none;
-    }
-
-    .maintenance-details .detail-row.urgent {
-      color: #c62828;
-      font-weight: 600;
-    }
-
-    .maintenance-details .detail-row.urgent mat-icon {
-      color: #c62828;
-    }
-
-    /* Completed Maintenance Section Styles - Modern UI */
-    .completed-maintenance-section {
-      background: linear-gradient(135deg, rgba(102, 187, 106, 0.08) 0%, rgba(67, 160, 71, 0.05) 100%);
-      border: none;
-      border-radius: 20px;
-      padding: 28px;
-      margin-bottom: 28px;
-      box-shadow: 0 4px 24px rgba(76, 175, 80, 0.12);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .completed-maintenance-section::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #66bb6a 0%, #43a047 100%);
-    }
-
-    .completed-maintenance-section h4 {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 0 0 8px 0;
-      color: #2e7d32;
-      font-size: 1.35rem;
-      font-weight: 700;
-    }
-
-    .completed-maintenance-section h4 mat-icon {
-      color: #43a047;
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-    }
-
-    .completed-maintenance-section .section-description {
-      color: #666;
-      margin: 0 0 20px 0;
-      font-size: 0.95rem;
-    }
-
-    .maintenance-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 20px;
-    }
-
-    .maintenance-grid.completed-section {
-      background: transparent;
-      padding: 0;
-    }
-
-    .maintenance-card {
-      border-radius: 16px;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      overflow: hidden;
-      border: none;
-    }
-
-    .maintenance-card.completed-card {
-      background: white;
-      box-shadow: 0 4px 16px rgba(76, 175, 80, 0.15);
-      border-left: 4px solid #43a047;
-    }
-
-    .maintenance-card.completed-card:hover {
-      transform: translateY(-6px) scale(1.01);
-      box-shadow: 0 12px 32px rgba(76, 175, 80, 0.2);
-    }
-
-    .maintenance-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .maintenance-icon.completed {
-      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
-      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
-    }
-
-    .maintenance-icon.completed mat-icon {
-      color: white;
-      font-size: 26px;
-      width: 26px;
-      height: 26px;
-    }
-
-    .maintenance-type-badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .maintenance-type-badge.completed {
-      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-      color: #2e7d32;
-      border: none;
-    }
-
-    .maintenance-description {
-      color: #555;
-      font-size: 0.9rem;
-      line-height: 1.5;
-      margin: 12px 0;
-    }
-
-    .maintenance-details {
-      background: rgba(0, 0, 0, 0.02);
-      border-radius: 12px;
-      padding: 14px;
-      margin: 16px 0;
-    }
-
-    .maintenance-details .detail-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 0;
-      font-size: 0.9rem;
-      color: #555;
-    }
-
-    .maintenance-details .detail-row mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      color: #888;
-    }
-
-    .maintenance-details .detail-row.completed {
-      color: #2e7d32;
-      font-weight: 600;
-    }
-
-    .maintenance-details .detail-row.completed mat-icon {
-      color: #43a047;
-    }
-
-    .status-section {
-      margin-top: 16px;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border-radius: 24px;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-
-    .status-badge.completed {
-      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
-      color: white;
-      border: none;
-      box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-    }
-
-    .status-badge.completed mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    /* License Alerts - Modern UI */
+    /* License Alerts */
     .license-alerts {
       background: linear-gradient(135deg, rgba(255, 152, 0, 0.08) 0%, rgba(251, 140, 0, 0.05) 100%);
       border: none;
-      border-radius: 20px;
-      padding: 28px;
-      margin-bottom: 28px;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
       box-shadow: 0 4px 24px rgba(255, 152, 0, 0.12);
       position: relative;
       overflow: hidden;
@@ -3365,96 +3145,294 @@ interface DeliveryRequestSummary {
       top: 0;
       left: 0;
       right: 0;
-      height: 4px;
+      height: 3px;
       background: linear-gradient(90deg, #ffa726 0%, #fb8c00 100%);
     }
 
     .license-alerts h4 {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin: 0 0 16px 0;
+      gap: 10px;
+      margin: 0 0 12px 0;
       color: #e65100;
-      font-size: 1.35rem;
+      font-size: 1.15rem;
       font-weight: 700;
     }
 
     .license-alerts h4 mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
       animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.1); }
     }
 
     .license-cards {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
     }
 
     .license-card {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 18px 20px;
+      padding: 14px 16px;
       background: white;
-      border-radius: 14px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      transition: all 0.3s;
       border-left: 4px solid #ff9800;
     }
 
     .license-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
     }
 
     .license-card.critical {
       border-left: 4px solid #c62828;
-      background: linear-gradient(135deg, #fff 0%, rgba(198, 40, 40, 0.05) 100%);
+      background: linear-gradient(135deg, #fff 0%, rgba(198, 40, 40, 0.04) 100%);
     }
 
     .license-card.warning {
       border-left: 4px solid #ff9800;
-      background: linear-gradient(135deg, #fff 0%, rgba(255, 152, 0, 0.05) 100%);
     }
 
     .license-info {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
     }
 
     .license-info mat-icon {
       color: #666;
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
     }
 
     .license-info .vehicle-reg {
       font-weight: 700;
-      font-size: 1.05rem;
+      font-size: 0.95rem;
       display: block;
       color: #333;
     }
 
     .license-info .expiry-text {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       color: #888;
-      margin-top: 2px;
     }
 
-    .license-card.critical .license-info mat-icon {
-      color: #c62828;
+    .license-card.critical .license-info mat-icon { color: #c62828; }
+    .license-card.critical .expiry-text { color: #c62828; font-weight: 600; }
+
+    /* Modern Table */
+    .maintenance-table-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
     }
 
-    .license-card.critical .expiry-text {
-      color: #c62828;
+    .maintenance-table {
+      width: 100%;
+    }
+
+    .maintenance-table th.mat-mdc-header-cell {
+      background: #f8f9fa;
+      color: #555;
       font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 14px 16px;
+      border-bottom: 2px solid #e0e0e0;
     }
 
-    /* Empty State - Modern UI */
+    .maintenance-table td.mat-mdc-cell {
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      color: #333;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: middle;
+    }
+
+    .maintenance-table tr.mat-mdc-row:hover {
+      background: #f8f9fe;
+    }
+
+    .maintenance-table tr.status-row-overdue {
+      border-left: 4px solid #c62828;
+    }
+
+    .maintenance-table tr.status-row-in-progress {
+      border-left: 4px solid #ff9800;
+    }
+
+    .maintenance-table tr.status-row-scheduled {
+      border-left: 4px solid #1976d2;
+    }
+
+    .maintenance-table tr.status-row-completed {
+      border-left: 4px solid #4caf50;
+    }
+
+    /* Vehicle Cell with Number Plate */
+    .vehicle-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .reg-plate {
+      display: inline-flex;
+      align-items: center;
+      background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+      border-radius: 6px;
+      padding: 4px 12px;
+      border: 2px solid #0d1b5e;
+      position: relative;
+      min-width: 110px;
+      justify-content: center;
+    }
+
+    .reg-plate::before {
+      content: 'ZA';
+      position: absolute;
+      left: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.5rem;
+      color: rgba(255,255,255,0.6);
+      font-weight: 700;
+    }
+
+    .plate-text {
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 1.5px;
+      font-family: 'Courier New', monospace;
+      text-transform: uppercase;
+    }
+
+    .vehicle-type-label {
+      font-size: 0.75rem;
+      color: #888;
+      font-weight: 500;
+    }
+
+    /* Type Badge */
+    .maintenance-type-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .maintenance-type-badge.scheduled { background: #e3f2fd; color: #1565c0; }
+    .maintenance-type-badge.repair { background: #fff3e0; color: #e65100; }
+    .maintenance-type-badge.license { background: #f3e5f5; color: #7b1fa2; }
+    .maintenance-type-badge.inspection { background: #e0f7fa; color: #00838f; }
+    .maintenance-type-badge.other { background: #eceff1; color: #455a64; }
+
+    /* Description */
+    .description-text {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      font-size: 0.85rem;
+      color: #555;
+      line-height: 1.4;
+      max-width: 280px;
+    }
+
+    /* Cost */
+    .cost-value { font-weight: 600; color: #2e7d32; }
+    .cost-estimate { color: #888; font-style: italic; font-size: 0.85rem; }
+    .cost-na { color: #ccc; }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-badge mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+    }
+
+    .status-badge.scheduled { background: #e3f2fd; color: #1565c0; }
+    .status-badge.in-progress { background: #fff3e0; color: #e65100; }
+    .status-badge.completed { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.overdue { background: #ffebee; color: #c62828; }
+
+    /* Priority Badge */
+    .priority-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .priority-badge.low { background: #e8f5e9; color: #2e7d32; }
+    .priority-badge.medium { background: #fff3e0; color: #e65100; }
+    .priority-badge.high { background: #fbe9e7; color: #d84315; }
+    .priority-badge.critical { background: #ffebee; color: #c62828; }
+
+    /* Files Button */
+    .files-btn {
+      position: relative;
+    }
+
+    .files-btn.has-files {
+      color: #7b1fa2;
+    }
+
+    .file-count-badge {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: #7b1fa2;
+      color: white;
+      font-size: 0.6rem;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    /* Empty State */
     .empty-state {
       display: flex;
       flex-direction: column;
@@ -3494,207 +3472,228 @@ interface DeliveryRequestSummary {
       font-weight: 500;
     }
 
-    .maintenance-card.status-overdue {
-      border-left: 4px solid #c62828;
+    /* Attachment Slide-Out Panel */
+    .attachment-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      z-index: 999;
+      animation: fadeIn 0.2s ease;
     }
 
-    .maintenance-card.status-in-progress {
-      border-left: 4px solid #ff9800;
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
-    .maintenance-card.status-scheduled {
-      border-left: 4px solid #1976d2;
+    .attachment-slide-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 480px;
+      max-width: 90vw;
+      height: 100vh;
+      background: white;
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .maintenance-card.status-completed {
-      border-left: 4px solid #4caf50;
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
     }
 
-    .maintenance-card mat-card-header {
-      margin-bottom: 16px;
+    .attachment-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
     }
 
-    .maintenance-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
+    .panel-title-section {
       display: flex;
       align-items: center;
-      justify-content: center;
-      margin-right: 12px;
+      gap: 14px;
     }
 
-    .maintenance-icon mat-icon {
-      color: white;
+    .panel-title-section mat-icon {
       font-size: 28px;
       width: 28px;
       height: 28px;
     }
 
-    .maintenance-icon.type-scheduled { background: linear-gradient(135deg, #1976d2, #1565c0); }
-    .maintenance-icon.type-repair { background: linear-gradient(135deg, #ff9800, #f57c00); }
-    .maintenance-icon.type-license { background: linear-gradient(135deg, #9c27b0, #7b1fa2); }
-    .maintenance-icon.type-inspection { background: linear-gradient(135deg, #00bcd4, #0097a7); }
-    .maintenance-icon.type-other { background: linear-gradient(135deg, #607d8b, #455a64); }
-
-    .maintenance-type-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 16px;
-      font-size: 0.75rem;
+    .panel-title-section h3 {
+      margin: 0;
+      font-size: 1.1rem;
       font-weight: 600;
-      text-transform: uppercase;
-      margin-bottom: 12px;
     }
 
-    .maintenance-type-badge.scheduled { background: #e3f2fd; color: #1565c0; }
-    .maintenance-type-badge.repair { background: #fff3e0; color: #e65100; }
-    .maintenance-type-badge.license { background: #f3e5f5; color: #7b1fa2; }
-    .maintenance-type-badge.inspection { background: #e0f7fa; color: #00838f; }
-    .maintenance-type-badge.other { background: #eceff1; color: #455a64; }
+    .panel-subtitle {
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
 
-    .maintenance-description {
-      color: #666;
+    .attachment-panel-header button {
+      color: white;
+    }
+
+    .attachment-panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    /* Upload Dropzone */
+    .upload-section {
+      margin-bottom: 24px;
+    }
+
+    .upload-dropzone {
+      border: 2px dashed #ccc;
+      border-radius: 12px;
+      padding: 28px 20px;
+      text-align: center;
+      transition: all 0.3s;
+      background: #fafafa;
+    }
+
+    .upload-dropzone.drag-over {
+      border-color: #667eea;
+      background: rgba(102, 126, 234, 0.06);
+    }
+
+    .upload-dropzone mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: #999;
+      margin-bottom: 8px;
+    }
+
+    .upload-dropzone p {
+      margin: 0 0 12px 0;
+      color: #888;
       font-size: 0.9rem;
-      margin-bottom: 16px;
-      line-height: 1.4;
     }
 
-    .maintenance-details {
+    .upload-dropzone button {
+      border-radius: 10px;
+    }
+
+    .upload-hint {
+      display: block;
+      margin-top: 10px;
+      font-size: 0.75rem;
+      color: #aaa;
+    }
+
+    .upload-progress {
+      margin-top: 12px;
+      border-radius: 4px;
+    }
+
+    /* Attachments List */
+    .attachments-list h4 {
+      margin: 0 0 12px 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .no-attachments {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 16px;
+      align-items: center;
+      padding: 32px 20px;
+      color: #aaa;
     }
 
-    .maintenance-details .detail-row {
+    .no-attachments mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 8px;
+    }
+
+    .no-attachments p {
+      margin: 0;
+      font-size: 0.9rem;
+    }
+
+    .attachment-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: #f8f9fa;
+      transition: all 0.2s;
+      border: 1px solid #eee;
+    }
+
+    .attachment-item:hover {
+      background: #f0f1f3;
+      border-color: #ddd;
+    }
+
+    .attachment-info {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 0.875rem;
-      color: #555;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
     }
 
-    .maintenance-details .detail-row mat-icon {
+    .file-icon {
+      color: #667eea;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .file-details {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .file-name {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-meta {
+      font-size: 0.75rem;
+      color: #999;
+    }
+
+    .attachment-actions {
+      display: flex;
+      gap: 2px;
+    }
+
+    .attachment-actions button {
+      width: 32px;
+      height: 32px;
+    }
+
+    .attachment-actions mat-icon {
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #888;
-    }
-
-    .maintenance-details .detail-row.completed {
-      color: #2e7d32;
-      font-weight: 500;
-    }
-
-    .maintenance-details .detail-row.completed mat-icon {
-      color: #4caf50;
-    }
-
-    .attachments-section {
-      margin-top: 12px;
-      padding: 12px;
-      background: #f9f9f9;
-      border-radius: 8px;
-      border: 1px dashed #ddd;
-    }
-
-    .attachment-label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: #666;
-      margin-bottom: 8px;
-      font-weight: 600;
-    }
-
-    .attachment-label mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-      color: #ff9800;
-    }
-
-    .attachment-links {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .attachment-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      text-decoration: none;
-      color: #1976d2;
-      font-size: 0.8rem;
-      transition: all 0.2s;
-    }
-
-    .attachment-link:hover {
-      background: #e3f2fd;
-      border-color: #1976d2;
-    }
-
-    .attachment-link mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .status-section {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 12px;
-      border-top: 1px solid #eee;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 12px;
-      border-radius: 16px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .status-badge mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .status-badge.scheduled { background: #e3f2fd; color: #1565c0; }
-    .status-badge.in-progress { background: #fff3e0; color: #e65100; }
-    .status-badge.completed { background: #e8f5e9; color: #2e7d32; }
-    .status-badge.overdue { background: #ffebee; color: #c62828; }
-
-    .priority-badge {
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .priority-badge.low { background: #e8f5e9; color: #2e7d32; }
-    .priority-badge.medium { background: #fff3e0; color: #e65100; }
-    .priority-badge.high { background: #fbe9e7; color: #d84315; }
-    .priority-badge.critical { background: #ffebee; color: #c62828; }
-
-    .maintenance-card mat-card-actions {
-      padding: 12px 16px;
-      border-top: 1px solid #eee;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
     }
 
     .delete-action {
@@ -4555,6 +4554,12 @@ interface DeliveryRequestSummary {
     .customer-name, .product-desc {
       font-weight: 500;
       color: #333;
+    }
+
+    .product-desc.no-product {
+      color: #999;
+      font-style: italic;
+      font-weight: 400;
     }
 
     .customer-code, .product-code {
@@ -6236,6 +6241,21 @@ export class LogisticsDashboardComponent implements OnInit {
   tfnSyncing = signal(false);
   carTrackSyncing = signal(false);
 
+  // Maintenance filters & table
+  maintenanceSearch = '';
+  maintenanceVehicleFilter = 'all';
+  maintenanceStatusFilter = 'all';
+  maintenanceTypeFilter = 'all';
+  maintenanceColumns = ['vehicleReg', 'maintenanceType', 'description', 'scheduledDate', 'cost', 'priority', 'status', 'files', 'actions'];
+
+  // Maintenance attachments
+  showMaintenanceAttachmentPanel = false;
+  selectedMaintenanceRecord: MaintenanceRecord | null = null;
+  maintenanceAttachments = signal<any[]>([]);
+  maintenanceAttachmentCounts = signal<{[key: number]: number}>({});
+  maintenanceUploading = false;
+  maintenanceDragOver = false;
+
   // Tripsheets
   tripsheets = signal<any[]>([]);
   tripsheetSearch = '';
@@ -6251,7 +6271,7 @@ export class LogisticsDashboardComponent implements OnInit {
   invoiceStatusFilter = signal('all');
   invoiceSourceFilter = signal('all');
   invoiceProvinceFilter = signal('all');
-  invoiceColumns = ['transactionNumber', 'date', 'customer', 'product', 'quantity', 'salesAmount', 'costOfSales', 'status', 'actions'];
+  invoiceColumns = ['transactionNumber', 'date', 'customer', 'product', 'quantity', 'salesAmount', 'status', 'actions'];
 
   // Invoice pagination
   invoicePageIndex = signal(0);
@@ -6452,10 +6472,19 @@ export class LogisticsDashboardComponent implements OnInit {
 
   // Maintenance Methods
   loadMaintenanceRecords(): void {
-    this.http.get<MaintenanceRecord[]>(`${this.apiUrl}/logistics/maintenance`).subscribe({
+    this.http.get<any[]>(`${this.apiUrl}/logistics/maintenance`).subscribe({
       next: (records) => {
-        this.maintenanceRecords.set(records);
+        // Map API field names to our interface and normalize status
+        const mapped = records.map(r => ({
+          ...r,
+          vehicleReg: r.vehicleRegistration || r.vehicleReg || '',
+          status: (r.status || '').toLowerCase().replace(/\s+/g, '-'),
+          priority: r.priority || 'medium',
+          assignedTo: r.assignedTo || r.serviceProvider || ''
+        }));
+        this.maintenanceRecords.set(mapped);
         this.updateMaintenanceStats();
+        this.loadMaintenanceAttachmentCounts();
         this.checkInitialLoadComplete();
       },
       error: () => {
@@ -6633,7 +6662,8 @@ export class LogisticsDashboardComponent implements OnInit {
 
   completeMaintenance(record: MaintenanceRecord): void {
     const dialogRef = this.dialog.open(CompleteMaintenanceDialog, {
-      width: '900px',
+      width: '1100px',
+      maxWidth: '95vw',
       data: { record }
     });
 
@@ -6767,7 +6797,19 @@ export class LogisticsDashboardComponent implements OnInit {
   }
 
   viewMaintenanceHistory(record: MaintenanceRecord): void {
-    // Could open a dialog showing maintenance history for this vehicle
+    // Open maintenance history dialog using record's vehicle info
+    const vehicle = {
+      id: record.vehicleId,
+      registrationNumber: record.vehicleReg || record.vehicleRegistration,
+      type: record.vehicleType
+    };
+    this.dialog.open(VehicleMaintenanceHistoryDialog, {
+      width: '95vw',
+      maxWidth: '1200px',
+      maxHeight: '90vh',
+      panelClass: 'maintenance-history-dialog-panel',
+      data: { vehicle, apiUrl: environment.apiUrl }
+    });
   }
 
   viewMaintenanceDetails(record: MaintenanceRecord): void {
@@ -6808,6 +6850,163 @@ Notes: ${record.notes || 'No notes'}
     // This would scroll to and select the maintenance tab
     // For now, just load the data
     this.loadMaintenanceRecords();
+  }
+
+  // === Maintenance Filtering ===
+  getUniqueMaintenanceVehicles(): string[] {
+    const vehicles = this.maintenanceRecords().map(r => r.vehicleReg).filter(Boolean);
+    return [...new Set(vehicles)].sort();
+  }
+
+  getFilteredMaintenanceRecords(): MaintenanceRecord[] {
+    let records = this.maintenanceRecords();
+
+    if (this.maintenanceStatusFilter !== 'all') {
+      records = records.filter(r => r.status === this.maintenanceStatusFilter);
+    }
+    if (this.maintenanceVehicleFilter !== 'all') {
+      records = records.filter(r => r.vehicleReg === this.maintenanceVehicleFilter);
+    }
+    if (this.maintenanceTypeFilter !== 'all') {
+      records = records.filter(r => r.maintenanceType === this.maintenanceTypeFilter);
+    }
+    if (this.maintenanceSearch) {
+      const search = this.maintenanceSearch.toLowerCase();
+      records = records.filter(r =>
+        (r.vehicleReg || '').toLowerCase().includes(search) ||
+        (r.vehicleType || '').toLowerCase().includes(search) ||
+        (r.description || '').toLowerCase().includes(search) ||
+        (r.maintenanceType || '').toLowerCase().includes(search) ||
+        (r.assignedTo || '').toLowerCase().includes(search)
+      );
+    }
+    // Sort: overdue first, then in-progress, scheduled, completed
+    const statusOrder: Record<string, number> = { 'overdue': 0, 'in-progress': 1, 'scheduled': 2, 'completed': 3 };
+    return records.sort((a, b) => (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4));
+  }
+
+  clearMaintenanceFilters(): void {
+    this.maintenanceSearch = '';
+    this.maintenanceVehicleFilter = 'all';
+    this.maintenanceStatusFilter = 'all';
+    this.maintenanceTypeFilter = 'all';
+  }
+
+  // === Maintenance Attachments ===
+  loadMaintenanceAttachmentCounts(): void {
+    const ids = this.maintenanceRecords().map(r => r.id);
+    if (ids.length === 0) return;
+
+    this.http.post<{[key: number]: number}>(`${this.apiUrl}/logistics/maintenance-attachments/counts`, ids).subscribe({
+      next: (counts) => this.maintenanceAttachmentCounts.set(counts),
+      error: () => {} // silent fail
+    });
+  }
+
+  openMaintenanceAttachments(record: MaintenanceRecord): void {
+    this.selectedMaintenanceRecord = record;
+    this.showMaintenanceAttachmentPanel = true;
+    this.loadMaintenanceAttachmentsForRecord(record.id);
+  }
+
+  closeMaintenanceAttachments(): void {
+    this.showMaintenanceAttachmentPanel = false;
+    this.selectedMaintenanceRecord = null;
+    this.maintenanceAttachments.set([]);
+  }
+
+  loadMaintenanceAttachmentsForRecord(recordId: number): void {
+    this.http.get<any[]>(`${this.apiUrl}/logistics/maintenance-attachments/${recordId}`).subscribe({
+      next: (attachments) => this.maintenanceAttachments.set(attachments),
+      error: () => this.maintenanceAttachments.set([])
+    });
+  }
+
+  onMaintenanceFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.uploadMaintenanceFiles(Array.from(input.files));
+      input.value = '';
+    }
+  }
+
+  onMaintenanceFileDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.maintenanceDragOver = false;
+    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+      this.uploadMaintenanceFiles(Array.from(event.dataTransfer.files));
+    }
+  }
+
+  uploadMaintenanceFiles(files: File[]): void {
+    if (!this.selectedMaintenanceRecord) return;
+
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    formData.append('maintenanceRecordId', this.selectedMaintenanceRecord.id.toString());
+    formData.append('vehicleRegistration', this.selectedMaintenanceRecord.vehicleReg || '');
+    formData.append('uploadedBy', 'Admin');
+
+    this.maintenanceUploading = true;
+    this.http.post<any[]>(`${this.apiUrl}/logistics/maintenance-attachments/upload`, formData).subscribe({
+      next: (result) => {
+        this.maintenanceUploading = false;
+        this.loadMaintenanceAttachmentsForRecord(this.selectedMaintenanceRecord!.id);
+        this.loadMaintenanceAttachmentCounts();
+        this.snackBar.open(`${files.length} file(s) uploaded successfully`, 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        this.maintenanceUploading = false;
+        this.snackBar.open('Failed to upload files', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  downloadMaintenanceAttachment(att: any): void {
+    this.http.get(`${this.apiUrl}/logistics/maintenance-attachments/download/${att.id}`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = att.fileName;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: () => this.snackBar.open('Failed to download file', 'Close', { duration: 3000 })
+    });
+  }
+
+  deleteMaintenanceAttachment(att: any): void {
+    if (!confirm(`Delete "${att.fileName}"?`)) return;
+
+    this.http.delete(`${this.apiUrl}/logistics/maintenance-attachments/${att.id}`).subscribe({
+      next: () => {
+        this.maintenanceAttachments.update(list => list.filter(a => a.id !== att.id));
+        this.loadMaintenanceAttachmentCounts();
+        this.snackBar.open('File deleted', 'Close', { duration: 3000 });
+      },
+      error: () => this.snackBar.open('Failed to delete file', 'Close', { duration: 3000 })
+    });
+  }
+
+  getFileIcon(fileName: string): string {
+    if (!fileName) return 'insert_drive_file';
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (['pdf'].includes(ext || '')) return 'picture_as_pdf';
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext || '')) return 'image';
+    if (['doc', 'docx'].includes(ext || '')) return 'description';
+    if (['xls', 'xlsx', 'csv'].includes(ext || '')) return 'table_chart';
+    if (['zip', 'rar', '7z'].includes(ext || '')) return 'folder_zip';
+    return 'insert_drive_file';
+  }
+
+  formatFileSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    let size = bytes;
+    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+    return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
   }
 
   async loadDashboardData(): Promise<void> {
@@ -7338,7 +7537,13 @@ Notes: ${record.notes || 'No notes'}
   }
 
   viewVehicleMaintenanceHistory(vehicle: Vehicle): void {
-    // TODO: Open maintenance history dialog for vehicle
+    this.dialog.open(VehicleMaintenanceHistoryDialog, {
+      width: '95vw',
+      maxWidth: '1200px',
+      maxHeight: '90vh',
+      panelClass: 'maintenance-history-dialog-panel',
+      data: { vehicle, apiUrl: environment.apiUrl }
+    });
   }
 
   deleteVehicle(vehicle: Vehicle): void {
@@ -12622,6 +12827,8 @@ interface RouteEstimate {
                   <th class="col-end">End</th>
                   <th class="col-km">KM</th>
                   <th class="col-value">Value</th>
+                  <th class="col-vat">VAT</th>
+                  <th class="col-total">Incl VAT</th>
                 </tr>
               </thead>
               <tbody>
@@ -12639,6 +12846,8 @@ interface RouteEstimate {
                     <td class="col-end editable"></td>
                     <td class="col-km editable"></td>
                     <td class="col-value">R {{ item.value | number:'1.2-2' }}</td>
+                    <td class="col-vat">R {{ (item.value || 0) * 0.15 | number:'1.2-2' }}</td>
+                    <td class="col-total">R {{ (item.value || 0) * 1.15 | number:'1.2-2' }}</td>
                   </tr>
                 }
                 @if (!tripSheet.lineItems || tripSheet.lineItems.length === 0) {
@@ -12658,6 +12867,8 @@ interface RouteEstimate {
                         <td class="col-end editable"></td>
                         <td class="col-km editable"></td>
                         <td class="col-value">R {{ com.totalPrice | number:'1.2-2' }}</td>
+                        <td class="col-vat">R {{ (com.totalPrice || 0) * 0.15 | number:'1.2-2' }}</td>
+                        <td class="col-total">R {{ (com.totalPrice || 0) * 1.15 | number:'1.2-2' }}</td>
                       </tr>
                     }
                   }
@@ -12677,6 +12888,8 @@ interface RouteEstimate {
                     <td class="col-end editable"></td>
                     <td class="col-km editable"></td>
                     <td class="col-value"></td>
+                    <td class="col-vat"></td>
+                    <td class="col-total"></td>
                   </tr>
                 }
               </tbody>
@@ -12684,21 +12897,10 @@ interface RouteEstimate {
                 <tr class="totals-row">
                   <td colspan="5" class="totals-label">SUBTOTAL</td>
                   <td class="col-qty">{{ getTotalQty() }}</td>
-                  <td colspan="4"></td>
-                  <td class="col-km"></td>
+                  <td colspan="5"></td>
                   <td class="col-value">R {{ tripSheet.totalValue | number:'1.2-2' }}</td>
-                </tr>
-                <tr class="totals-row vat-row">
-                  <td colspan="5" class="totals-label">VAT (15%)</td>
-                  <td colspan="5"></td>
-                  <td class="col-km"></td>
-                  <td class="col-value">R {{ tripSheet.vatAmount | number:'1.2-2' }}</td>
-                </tr>
-                <tr class="totals-row grand-total-row">
-                  <td colspan="5" class="totals-label">TOTAL INCL. VAT</td>
-                  <td colspan="5"></td>
-                  <td class="col-km"></td>
-                  <td class="col-value total-value">R {{ tripSheet.totalWithVat | number:'1.2-2' }}</td>
+                  <td class="col-vat">R {{ tripSheet.vatAmount | number:'1.2-2' }}</td>
+                  <td class="col-total total-value">R {{ tripSheet.totalWithVat | number:'1.2-2' }}</td>
                 </tr>
               </tfoot>
             </table>
@@ -12920,7 +13122,9 @@ interface RouteEstimate {
     .col-start { width: 55px; text-align: center; }
     .col-end { width: 55px; text-align: center; }
     .col-km { width: 50px; text-align: right; }
-    .col-value { width: 85px; text-align: right; font-weight: 500; }
+    .col-value { width: 80px; text-align: right; font-weight: 500; }
+    .col-vat { width: 70px; text-align: right; color: #666; font-size: 11px; }
+    .col-total { width: 85px; text-align: right; font-weight: 600; color: #2e7d32; }
     
     /* Editable cells */
     td.editable {
@@ -17511,6 +17715,125 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   }
 }
 
+// Add Delivery Note Dialog Component
+@Component({
+  selector: 'app-add-delivery-note-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    FormsModule
+  ],
+  template: `
+    <div class="add-delivery-note-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>note_add</mat-icon> Add Delivery Note</h2>
+        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="dialog-content">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Delivery Note Number</mat-label>
+          <input matInput [(ngModel)]="deliveryNoteNumber" placeholder="e.g. DN001, DEL-2026-001">
+          <mat-hint>Can contain letters and numbers</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Customer Name</mat-label>
+          <input matInput [(ngModel)]="customerName" placeholder="Enter customer name">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Delivery Address</mat-label>
+          <textarea matInput [(ngModel)]="address" rows="2" placeholder="Enter delivery address"></textarea>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Product Description</mat-label>
+          <textarea matInput [(ngModel)]="productDescription" rows="2" placeholder="Enter product description"></textarea>
+        </mat-form-field>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Quantity</mat-label>
+            <input matInput type="number" [(ngModel)]="quantity" min="1" placeholder="0">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Value (R)</mat-label>
+            <input matInput type="number" [(ngModel)]="value" min="0" step="0.01" placeholder="0.00">
+          </mat-form-field>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button mat-dialog-close>Cancel</button>
+        <button mat-raised-button color="primary" [disabled]="!isValid()" (click)="add()">
+          <mat-icon>add</mat-icon> Add to Trip Sheet
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .add-delivery-note-dialog {
+      width: 500px;
+      .dialog-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
+          mat-icon { color: #ff9800; }
+        }
+      }
+      .dialog-content {
+        padding: 20px 24px;
+        .full-width { width: 100%; }
+        .form-row { display: flex; gap: 16px;
+          mat-form-field { flex: 1; }
+        }
+      }
+      .dialog-actions {
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+      }
+    }
+  `]
+})
+export class AddDeliveryNoteDialog {
+  deliveryNoteNumber = '';
+  customerName = '';
+  address = '';
+  productDescription = '';
+  quantity = 1;
+  value = 0;
+
+  constructor(
+    public dialogRef: MatDialogRef<AddDeliveryNoteDialog>
+  ) {}
+
+  isValid(): boolean {
+    return !!(this.deliveryNoteNumber && this.customerName);
+  }
+
+  add(): void {
+    const deliveryNote = {
+      id: Date.now(), // Temporary unique ID
+      transactionNumber: this.deliveryNoteNumber,
+      customerName: this.customerName,
+      address: this.address,
+      deliveryAddress: this.address,
+      productDescription: this.productDescription,
+      quantity: this.quantity,
+      salesAmount: this.value,
+      totalAmount: this.value,
+      isDeliveryNote: true // Flag to identify delivery notes
+    };
+    this.dialogRef.close(deliveryNote);
+  }
+}
+
 // Create Trip Sheet Dialog Component
 @Component({
   selector: 'app-create-tripsheet-dialog',
@@ -17644,15 +17967,20 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
               <div class="stops-panel">
                 <div class="panel-header">
                   <h3><mat-icon>pin_drop</mat-icon> Selected Stops ({{ selectedStops.length }})</h3>
-                  @if (selectedStops.length > 0) {
-                    <button mat-stroked-button (click)="clearAllStops()">
-                      <mat-icon>clear_all</mat-icon> Clear All
+                  <div class="panel-actions">
+                    <button mat-stroked-button color="accent" (click)="openAddDeliveryNoteDialog()">
+                      <mat-icon>note_add</mat-icon> Add Delivery Note
                     </button>
-                  }
+                    @if (selectedStops.length > 0) {
+                      <button mat-stroked-button (click)="clearAllStops()">
+                        <mat-icon>clear_all</mat-icon> Clear All
+                      </button>
+                    }
+                  </div>
                 </div>
                 <div class="stops-list" cdkDropList (cdkDropListDropped)="dropStop($event)">
                   @for (stop of selectedStops; track stop.id; let i = $index) {
-                    <div class="stop-item" [class.part-delivery]="stop.isPartDelivery" cdkDrag>
+                    <div class="stop-item" [class.part-delivery]="stop.isPartDelivery" [class.delivery-note]="stop.isDeliveryNote" cdkDrag>
                       <div class="stop-drag-handle" cdkDragHandle>
                         <mat-icon>drag_indicator</mat-icon>
                       </div>
@@ -17661,6 +17989,11 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
                         <span class="stop-customer">{{ stop.customerName }}</span>
                         <span class="stop-address">{{ stop.address || 'No address' }}</span>
                         <span class="stop-invoice">{{ stop.transactionNumber }}</span>
+                        @if (stop.isDeliveryNote) {
+                          <span class="delivery-note-badge">
+                            <mat-icon>note_add</mat-icon> Delivery Note
+                          </span>
+                        }
                         @if (stop.isPartDelivery) {
                           <span class="part-delivery-badge">
                             <mat-icon>splitscreen</mat-icon> Part Delivery
@@ -18312,6 +18645,11 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       font-size: 16px;
       color: #333;
     }
+    .panel-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     .search-field {
       width: 250px;
     }
@@ -18516,6 +18854,27 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       margin-top: 4px;
     }
     .part-delivery-badge mat-icon {
+      font-size: 12px;
+      width: 12px;
+      height: 12px;
+    }
+    .stop-item.delivery-note {
+      border-left-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .delivery-note-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #4caf50;
+      color: white;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .delivery-note-badge mat-icon {
       font-size: 12px;
       width: 12px;
       height: 12px;
@@ -19337,7 +19696,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     },
     private dialogRef: MatDialogRef<CreateTripsheetDialog>,
     private injector: Injector,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog
   ) {
     this.http = this.injector.get(HttpClient);
     this.ngZone = this.injector.get(NgZone);
@@ -19869,6 +20229,27 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     if (this.mapInitialized) {
       this.updateRouteMap();
     }
+  }
+
+  // Open Add Delivery Note dialog
+  openAddDeliveryNoteDialog(): void {
+    const dialogRef = this.dialog.open(AddDeliveryNoteDialog, {
+      width: '520px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Add the delivery note as a stop
+        this.selectedStops.push(result);
+        this.calculateTotalValue();
+        this.updateGroupedStops();
+        
+        // Update the map if already initialized
+        if (this.mapInitialized) {
+          this.updateRouteMap();
+        }
+      }
+    });
   }
 
   // Group stops by customer name (same customer = same delivery location)
@@ -24898,7 +25279,7 @@ export class AssignTripsheetDialog {
       display: flex;
       flex-direction: column;
       gap: 16px;
-      min-width: 550px;
+      min-width: 850px;
       padding: 8px 0;
     }
     .maintenance-info {
@@ -29705,6 +30086,515 @@ export class FuelHistoryDialog {
         this.loading = false;
       }
     });
+  }
+
+  close(): void {
+    this.dialogRef.close();
+  }
+}
+
+// ==========================================
+// Vehicle Maintenance History Dialog
+// ==========================================
+@Component({
+  selector: 'app-vehicle-maintenance-history-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatProgressSpinnerModule,
+    MatChipsModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    FormsModule
+  ],
+  template: `
+    <div class="maint-history-dialog">
+      <div class="dialog-header">
+        <div class="header-info">
+          <h2>
+            <mat-icon>build_circle</mat-icon>
+            Maintenance History — {{ data.vehicle.registrationNumber }}
+          </h2>
+          <div class="vehicle-meta">
+            @if (data.vehicle.make) {
+              <span class="meta-tag">{{ data.vehicle.make }} {{ data.vehicle.model }}</span>
+            }
+            @if (data.vehicle.vehicleTypeName || data.vehicle.type) {
+              <span class="meta-tag type">{{ data.vehicle.vehicleTypeName || data.vehicle.type }}</span>
+            }
+            @if (data.vehicle.province) {
+              <span class="meta-tag province">{{ data.vehicle.province }}</span>
+            }
+          </div>
+        </div>
+        <button mat-icon-button (click)="close()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="dialog-body">
+        @if (loading) {
+          <div class="loading-center">
+            <mat-spinner diameter="40"></mat-spinner>
+            <p>Loading maintenance history...</p>
+          </div>
+        } @else if (records.length === 0) {
+          <div class="empty-center">
+            <mat-icon>build_circle</mat-icon>
+            <h3>No Maintenance History</h3>
+            <p>No maintenance records found for this vehicle.</p>
+          </div>
+        } @else {
+          <!-- Summary Cards -->
+          <div class="summary-row">
+            <div class="summary-card">
+              <mat-icon>assignment</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">{{ records.length }}</span>
+                <span class="summary-label">Total Records</span>
+              </div>
+            </div>
+            <div class="summary-card completed">
+              <mat-icon>check_circle</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">{{ completedCount }}</span>
+                <span class="summary-label">Completed</span>
+              </div>
+            </div>
+            <div class="summary-card scheduled">
+              <mat-icon>schedule</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">{{ scheduledCount }}</span>
+                <span class="summary-label">Scheduled</span>
+              </div>
+            </div>
+            <div class="summary-card in-progress">
+              <mat-icon>autorenew</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">{{ inProgressCount }}</span>
+                <span class="summary-label">In Progress</span>
+              </div>
+            </div>
+            <div class="summary-card cost">
+              <mat-icon>payments</mat-icon>
+              <div class="summary-info">
+                <span class="summary-value">R {{ totalCost | number:'1.2-2' }}</span>
+                <span class="summary-label">Total Cost</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filter -->
+          <div class="filter-row">
+            <mat-form-field appearance="outline" class="filter-field">
+              <mat-label>Status</mat-label>
+              <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()">
+                <mat-option value="all">All Statuses</mat-option>
+                <mat-option value="scheduled">Scheduled</mat-option>
+                <mat-option value="in-progress">In Progress</mat-option>
+                <mat-option value="completed">Completed</mat-option>
+                <mat-option value="overdue">Overdue</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="filter-field">
+              <mat-label>Type</mat-label>
+              <mat-select [(ngModel)]="typeFilter" (selectionChange)="applyFilter()">
+                <mat-option value="all">All Types</mat-option>
+                @for (type of uniqueTypes; track type) {
+                  <mat-option [value]="type">{{ type | titlecase }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </div>
+
+          <!-- Records Table -->
+          <div class="table-container">
+            <table mat-table [dataSource]="filteredRecords" class="maint-table">
+              <ng-container matColumnDef="type">
+                <th mat-header-cell *matHeaderCellDef>Type</th>
+                <td mat-cell *matCellDef="let r">
+                  <span class="type-badge" [ngClass]="'type-' + r.maintenanceType">
+                    {{ r.maintenanceType | titlecase }}
+                  </span>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="description">
+                <th mat-header-cell *matHeaderCellDef>Description</th>
+                <td mat-cell *matCellDef="let r">{{ r.description || '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Status</th>
+                <td mat-cell *matCellDef="let r">
+                  <span class="status-chip" [ngClass]="'status-' + r.status">
+                    {{ r.status | titlecase }}
+                  </span>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="priority">
+                <th mat-header-cell *matHeaderCellDef>Priority</th>
+                <td mat-cell *matCellDef="let r">
+                  <span class="priority-dot" [ngClass]="'priority-' + r.priority"></span>
+                  {{ r.priority | titlecase }}
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="scheduledDate">
+                <th mat-header-cell *matHeaderCellDef>Scheduled</th>
+                <td mat-cell *matCellDef="let r">{{ r.scheduledDate | date:'dd MMM yyyy' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="completedDate">
+                <th mat-header-cell *matHeaderCellDef>Completed</th>
+                <td mat-cell *matCellDef="let r">
+                  @if (r.completedDate) {
+                    {{ r.completedDate | date:'dd MMM yyyy' }}
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="cost">
+                <th mat-header-cell *matHeaderCellDef>Cost</th>
+                <td mat-cell *matCellDef="let r">
+                  @if (r.cost || r.actualCost) {
+                    <strong>R {{ (r.actualCost || r.cost) | number:'1.2-2' }}</strong>
+                  } @else if (r.estimatedCost) {
+                    <span class="muted">~R {{ r.estimatedCost | number:'1.2-2' }}</span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="serviceProvider">
+                <th mat-header-cell *matHeaderCellDef>Service Provider</th>
+                <td mat-cell *matCellDef="let r">{{ r.serviceProvider || r.assignedTo || '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="odometer">
+                <th mat-header-cell *matHeaderCellDef>Odometer</th>
+                <td mat-cell *matCellDef="let r">
+                  @if (r.odometerReading) {
+                    {{ r.odometerReading | number:'1.0-0' }} km
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="getRowClass(row)"></tr>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  `,
+  styles: [`
+    .maint-history-dialog {
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #e9ecef;
+      background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+    }
+
+    .header-info h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-info h2 mat-icon {
+      color: #ff9800;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .vehicle-meta {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .meta-tag {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.06);
+      color: #555;
+      font-weight: 500;
+    }
+
+    .meta-tag.type {
+      background: rgba(33,150,243,0.1);
+      color: #1565c0;
+    }
+
+    .meta-tag.province {
+      background: rgba(76,175,80,0.1);
+      color: #2e7d32;
+    }
+
+    .dialog-body {
+      padding: 20px 24px;
+      overflow-y: auto;
+      max-height: calc(85vh - 100px);
+    }
+
+    .loading-center, .empty-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-center mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #ddd;
+      margin-bottom: 16px;
+    }
+
+    .empty-center h3 {
+      margin: 0 0 8px;
+      color: #666;
+    }
+
+    .summary-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .summary-card {
+      flex: 1;
+      min-width: 140px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+      border: 1px solid #e9ecef;
+    }
+
+    .summary-card mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: #1e90ff;
+    }
+
+    .summary-card.completed mat-icon { color: #4caf50; }
+    .summary-card.scheduled mat-icon { color: #ff9800; }
+    .summary-card.in-progress mat-icon { color: #2196f3; }
+    .summary-card.cost mat-icon { color: #9c27b0; }
+
+    .summary-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .filter-field {
+      width: 180px;
+    }
+
+    .filter-field ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+      display: none;
+    }
+
+    .table-container {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid #e9ecef;
+    }
+
+    .maint-table {
+      width: 100%;
+    }
+
+    .maint-table th {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      font-weight: 600;
+      color: #1a1a2e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .maint-table td {
+      color: #333;
+      font-size: 13px;
+    }
+
+    .maint-table tr:hover td {
+      background: rgba(255,152,0,0.04);
+    }
+
+    .maint-table tr.row-overdue td {
+      background: rgba(244,67,54,0.04);
+    }
+
+    .maint-table tr.row-in-progress td {
+      background: rgba(33,150,243,0.04);
+    }
+
+    .type-badge {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .type-badge.type-scheduled { background: rgba(255,152,0,0.12); color: #e65100; }
+    .type-badge.type-repair { background: rgba(244,67,54,0.12); color: #c62828; }
+    .type-badge.type-inspection { background: rgba(33,150,243,0.12); color: #1565c0; }
+    .type-badge.type-license { background: rgba(156,39,176,0.12); color: #7b1fa2; }
+    .type-badge.type-tire { background: rgba(121,85,72,0.12); color: #4e342e; }
+    .type-badge.type-body { background: rgba(0,150,136,0.12); color: #00695c; }
+    .type-badge.type-electrical { background: rgba(255,193,7,0.12); color: #f57f17; }
+    .type-badge.type-preventive { background: rgba(76,175,80,0.12); color: #2e7d32; }
+
+    .status-chip {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-chip.status-completed { background: rgba(76,175,80,0.12); color: #2e7d32; }
+    .status-chip.status-scheduled { background: rgba(255,152,0,0.12); color: #e65100; }
+    .status-chip.status-in-progress { background: rgba(33,150,243,0.12); color: #1565c0; }
+    .status-chip.status-overdue { background: rgba(244,67,54,0.12); color: #c62828; }
+
+    .priority-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .priority-dot.priority-critical { background: #f44336; }
+    .priority-dot.priority-high { background: #ff9800; }
+    .priority-dot.priority-medium { background: #2196f3; }
+    .priority-dot.priority-low { background: #4caf50; }
+
+    .muted {
+      color: #bbb;
+    }
+  `]
+})
+export class VehicleMaintenanceHistoryDialog {
+  loading = true;
+  records: any[] = [];
+  filteredRecords: any[] = [];
+  statusFilter = 'all';
+  typeFilter = 'all';
+  uniqueTypes: string[] = [];
+
+  completedCount = 0;
+  scheduledCount = 0;
+  inProgressCount = 0;
+  totalCost = 0;
+
+  displayedColumns = ['type', 'description', 'status', 'priority', 'scheduledDate', 'completedDate', 'cost', 'serviceProvider', 'odometer'];
+
+  private http = inject(HttpClient);
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private dialogRef: MatDialogRef<VehicleMaintenanceHistoryDialog>
+  ) {
+    this.loadMaintenanceHistory();
+  }
+
+  loadMaintenanceHistory(): void {
+    const vehicleId = this.data.vehicle.id;
+    this.http.get<any[]>(`${this.data.apiUrl}/logistics/maintenance?vehicleId=${vehicleId}`).subscribe({
+      next: (records) => {
+        this.records = records.map(r => ({
+          ...r,
+          vehicleReg: r.vehicleRegistration || r.vehicleReg || '',
+          status: (r.status || '').toLowerCase().replace(/\s+/g, '-'),
+          priority: r.priority || 'medium',
+          assignedTo: r.assignedTo || r.serviceProvider || ''
+        }));
+        // Sort by date descending (most recent first)
+        this.records.sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
+        this.calculateSummary();
+        this.uniqueTypes = [...new Set(this.records.map(r => r.maintenanceType).filter(Boolean))].sort();
+        this.filteredRecords = [...this.records];
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Failed to load maintenance history:', err);
+        this.loading = false;
+      }
+    });
+  }
+
+  calculateSummary(): void {
+    this.completedCount = this.records.filter(r => r.status === 'completed').length;
+    this.scheduledCount = this.records.filter(r => r.status === 'scheduled').length;
+    this.inProgressCount = this.records.filter(r => r.status === 'in-progress').length;
+    this.totalCost = this.records.reduce((sum, r) => sum + (r.actualCost || r.cost || 0), 0);
+  }
+
+  applyFilter(): void {
+    let filtered = [...this.records];
+    if (this.statusFilter !== 'all') {
+      filtered = filtered.filter(r => r.status === this.statusFilter);
+    }
+    if (this.typeFilter !== 'all') {
+      filtered = filtered.filter(r => r.maintenanceType === this.typeFilter);
+    }
+    this.filteredRecords = filtered;
+  }
+
+  getRowClass(record: any): string {
+    if (record.status === 'overdue') return 'row-overdue';
+    if (record.status === 'in-progress') return 'row-in-progress';
+    return '';
   }
 
   close(): void {

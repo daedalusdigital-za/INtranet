@@ -1,0 +1,110 @@
+<div class="budgets-container">
+  <div class="page-header">
+    <div>
+      <h1><mat-icon>account_balance_wallet</mat-icon> Budgets</h1>
+      <p>Manage fiscal year budgets and allocations</p>
+    </div>
+    <button mat-raised-button color="primary">
+      <mat-icon>add</mat-icon>
+      New Budget
+    </button>
+  </div>
+
+  <mat-card>
+    <mat-card-content>
+      @if (loading) {
+        <div class="loading">Loading budgets...</div>
+      } @else if (budgets.length === 0) {
+        <div class="empty-state">
+          <mat-icon>account_balance_wallet</mat-icon>
+          <h3>No budgets found</h3>
+          <p>Create your first budget to get started</p>
+        </div>
+      } @else {
+        <table mat-table [dataSource]="budgets" class="budgets-table">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Budget Name</th>
+            <td mat-cell *matCellDef="let budget">
+              <strong>{{ budget.name }}</strong>
+              @if (budget.description) {
+                <div class="description">{{ budget.description }}</div>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="fiscalYear">
+            <th mat-header-cell *matHeaderCellDef>Fiscal Year</th>
+            <td mat-cell *matCellDef="let budget">{{ budget.fiscalYear }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="department">
+            <th mat-header-cell *matHeaderCellDef>Department</th>
+            <td mat-cell *matCellDef="let budget">{{ budget.department || 'N/A' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="totalBudget">
+            <th mat-header-cell *matHeaderCellDef>Total Budget</th>
+            <td mat-cell *matCellDef="let budget">{{ budget.totalBudget | currency:'ZAR':'symbol':'1.2-2' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="spent">
+            <th mat-header-cell *matHeaderCellDef>Spent</th>
+            <td mat-cell *matCellDef="let budget">
+              <div class="progress-cell">
+                <span>{{ budget.spentAmount | currency:'ZAR':'symbol':'1.2-2' }}</span>
+                <mat-progress-bar 
+                  mode="determinate" 
+                  [value]="getProgressPercentage(budget)"
+                  [color]="getProgressColor(getProgressPercentage(budget))">
+                </mat-progress-bar>
+                <small>{{ getProgressPercentage(budget) | number:'1.0-0' }}%</small>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="remaining">
+            <th mat-header-cell *matHeaderCellDef>Remaining</th>
+            <td mat-cell *matCellDef="let budget">
+              <span [class.negative]="budget.remainingAmount < 0">
+                {{ budget.remainingAmount | currency:'ZAR':'symbol':'1.2-2' }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let budget">
+              <mat-chip [color]="getStatusColor(budget.status)">{{ budget.status }}</mat-chip>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let budget">
+              <button mat-icon-button [matMenuTriggerFor]="menu">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #menu="matMenu">
+                <button mat-menu-item>
+                  <mat-icon>visibility</mat-icon>
+                  <span>View Details</span>
+                </button>
+                <button mat-menu-item>
+                  <mat-icon>edit</mat-icon>
+                  <span>Edit</span>
+                </button>
+                <button mat-menu-item (click)="deleteBudget(budget)">
+                  <mat-icon color="warn">delete</mat-icon>
+                  <span>Delete</span>
+                </button>
+              </mat-menu>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

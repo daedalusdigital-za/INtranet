@@ -1478,7 +1478,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         <div class='info-item'><span class='info-icon'>&#x1F69A;</span> <strong>{totalStops} Stops</strong> <span class='info-sub'>({uniqueCustomers} customers)</span></div>
         <div class='info-item'><span class='info-icon'>&#x23F1;</span> <strong>{tripSheet.EstimatedDistance:N0}km</strong> <span class='info-sub'>{FormatDuration(totalMinutesWithOffload)} (incl. {offloadHours}h offload)</span></div>
         <div class='info-item' style='background: #fff3e0; border-color: #ff9800;'><span class='info-icon'>&#x1F504;</span> <strong>Return:</strong> <span class='info-sub'>{returnDistanceKm:N0}km &bull; {returnTimeFormatted}</span></div>
-        <div class='info-item'><span class='info-icon'>&#x1F4B0;</span> <strong>R {tripSheet.TotalValue:N2}</strong></div>
+        <div class='info-item'><span class='info-icon'>&#x1F4B0;</span> <strong>R {tripSheet.TotalValue:N2}</strong> <span class='info-sub'>(Incl VAT: R {tripSheet.TotalValue * 1.15m:N2})</span></div>
     </div>");
 
             // Main Delivery Table
@@ -1487,13 +1487,15 @@ namespace ProjectTracker.API.Controllers.Logistics
         <thead>
             <tr>
                 <th class='center' style='width: 35px;'>NO</th>
-                <th style='width: 90px;'>INV NO</th>
-                <th style='width: 180px;'>CUSTOMER NAME</th>
+                <th style='width: 80px;'>INV NO</th>
+                <th style='width: 150px;'>CUSTOMER NAME</th>
                 <th>DELIVERY ADDRESS</th>
-                <th style='width: 180px;'>PRODUCT</th>
-                <th class='center' style='width: 50px;'>QTY</th>
-                <th class='right' style='width: 80px;'>VALUE</th>
-                <th class='center' style='width: 40px;'>&#x2713;</th>
+                <th style='width: 150px;'>PRODUCT</th>
+                <th class='center' style='width: 40px;'>QTY</th>
+                <th class='right' style='width: 70px;'>VALUE</th>
+                <th class='right' style='width: 55px;'>VAT</th>
+                <th class='right' style='width: 75px;'>INCL VAT</th>
+                <th class='center' style='width: 35px;'>&#x2713;</th>
             </tr>
         </thead>
         <tbody>");
@@ -1505,6 +1507,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             foreach (var stop in deliveryStops)
             {
                 var stopValue = stop.Commodities?.Sum(c => c.TotalPrice ?? 0m) ?? 0m;
+                var stopVat = stopValue * 0.15m;
+                var stopInclVat = stopValue * 1.15m;
                 var stopQty = (int)(stop.Commodities?.Sum(c => c.Quantity) ?? 1m);
                 totalValue += stopValue;
                 totalQty += stopQty;
@@ -1531,17 +1535,23 @@ namespace ProjectTracker.API.Controllers.Logistics
                 <td class='product-cell'>{productDisplay}</td>
                 <td class='center'><strong>{stopQty}</strong></td>
                 <td class='right'>R {stopValue:N2}</td>
+                <td class='right' style='color: #666; font-size: 11px;'>R {stopVat:N2}</td>
+                <td class='right' style='font-weight: 600; color: #2e7d32;'>R {stopInclVat:N2}</td>
                 <td class='center'><span class='checkbox-cell'></span></td>
             </tr>");
                 stopNum++;
             }
 
             // Totals Row
+            var totalVat = totalValue * 0.15m;
+            var totalInclVat = totalValue * 1.15m;
             sb.AppendLine($@"
             <tr class='totals-row'>
                 <td colspan='5' style='text-align: right;'>TOTALS:</td>
                 <td class='center'>{totalQty}</td>
                 <td class='right'>R {totalValue:N2}</td>
+                <td class='right' style='color: #666;'>R {totalVat:N2}</td>
+                <td class='right' style='font-weight: 700; color: #2e7d32;'>R {totalInclVat:N2}</td>
                 <td></td>
             </tr>
         </tbody>

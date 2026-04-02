@@ -214,6 +214,28 @@ export interface HBA1CCreditNote {
   approvedBy: string;
 }
 
+export interface CreditNoteAttachment {
+  id: number;
+  creditNoteId: number;
+  creditNoteNumber: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface TrainingAttachment {
+  id: number;
+  trainingSessionId: number;
+  trainingName: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
 export interface HBA1CProvince {
   id: number;
   name: string;
@@ -309,6 +331,34 @@ export class HBA1CService {
 
   deleteTraining(id: number): Observable<any> {
     return this.http.delete(`${this.baseUrl}/training/${id}`);
+  }
+
+  // ── Training Attachments ──
+  getTrainingAttachments(trainingSessionId: number): Observable<TrainingAttachment[]> {
+    return this.http.get<TrainingAttachment[]>(`${environment.apiUrl}/hba1c/training-attachments/${trainingSessionId}`);
+  }
+
+  getTrainingAttachmentCounts(trainingSessionIds: number[]): Observable<{ [key: number]: number }> {
+    return this.http.post<{ [key: number]: number }>(`${environment.apiUrl}/hba1c/training-attachments/counts`, trainingSessionIds);
+  }
+
+  uploadTrainingAttachments(trainingSessionId: number, trainingName: string, files: File[], uploadedBy?: string): Observable<TrainingAttachment[]> {
+    const formData = new FormData();
+    formData.append('trainingSessionId', trainingSessionId.toString());
+    formData.append('trainingName', trainingName);
+    if (uploadedBy) formData.append('uploadedBy', uploadedBy);
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    return this.http.post<TrainingAttachment[]>(`${environment.apiUrl}/hba1c/training-attachments/upload`, formData);
+  }
+
+  deleteTrainingAttachment(id: number): Observable<any> {
+    return this.http.delete(`${environment.apiUrl}/hba1c/training-attachments/${id}`);
+  }
+
+  getTrainingAttachmentDownloadUrl(id: number): string {
+    return `${environment.apiUrl}/hba1c/training-attachments/download/${id}`;
   }
 
   // ── Inventory ──
@@ -407,6 +457,34 @@ export class HBA1CService {
 
   deleteCreditNote(id: number): Observable<any> {
     return this.http.delete(`${this.baseUrl}/credit-notes/${id}`);
+  }
+
+  // ── Credit Note Attachments ──
+  getCreditNoteAttachments(creditNoteId: number): Observable<CreditNoteAttachment[]> {
+    return this.http.get<CreditNoteAttachment[]>(`${environment.apiUrl}/hba1c/credit-note-attachments/${creditNoteId}`);
+  }
+
+  getCreditNoteAttachmentCounts(creditNoteIds: number[]): Observable<{ [key: number]: number }> {
+    return this.http.post<{ [key: number]: number }>(`${environment.apiUrl}/hba1c/credit-note-attachments/counts`, creditNoteIds);
+  }
+
+  uploadCreditNoteAttachments(creditNoteId: number, creditNoteNumber: string, files: File[], uploadedBy?: string): Observable<CreditNoteAttachment[]> {
+    const formData = new FormData();
+    formData.append('creditNoteId', creditNoteId.toString());
+    formData.append('creditNoteNumber', creditNoteNumber);
+    if (uploadedBy) formData.append('uploadedBy', uploadedBy);
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    return this.http.post<CreditNoteAttachment[]>(`${environment.apiUrl}/hba1c/credit-note-attachments/upload`, formData);
+  }
+
+  deleteCreditNoteAttachment(id: number): Observable<any> {
+    return this.http.delete(`${environment.apiUrl}/hba1c/credit-note-attachments/${id}`);
+  }
+
+  getCreditNoteAttachmentDownloadUrl(id: number): string {
+    return `${environment.apiUrl}/hba1c/credit-note-attachments/download/${id}`;
   }
 
   // ── Locations ──

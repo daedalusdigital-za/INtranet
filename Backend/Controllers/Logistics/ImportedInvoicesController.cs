@@ -75,8 +75,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 query = query.Where(i =>
                     i.TransactionNumber.ToLower().Contains(searchLower) ||
                     i.CustomerName.ToLower().Contains(searchLower) ||
-                    i.ProductCode.ToLower().Contains(searchLower) ||
-                    i.ProductDescription.ToLower().Contains(searchLower));
+                    (i.ProductCode != null && i.ProductCode.ToLower().Contains(searchLower)) ||
+                    (i.ProductDescription != null && i.ProductDescription.ToLower().Contains(searchLower)));
             }
 
             // Filter by delivery priority

@@ -92,6 +92,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.Invoice> Invoices { get; set; }
         public DbSet<Models.Logistics.InvoiceLineItem> InvoiceLineItems { get; set; }
         public DbSet<Models.Logistics.VehicleMaintenance> VehicleMaintenance { get; set; }
+        public DbSet<Models.Logistics.MaintenanceAttachment> MaintenanceAttachments { get; set; }
         public DbSet<Models.Logistics.CustomerContract> CustomerContracts { get; set; }
         public DbSet<Models.Logistics.CustomerDeliveryAddress> CustomerDeliveryAddresses { get; set; }
         public DbSet<Models.Logistics.ImportedInvoice> ImportedInvoices { get; set; }
@@ -158,12 +159,27 @@ namespace ProjectTracker.API.Data
         // Company Projects — Car Track (HBA1C Sales Rep Tracking)
         public DbSet<Models.Projects.CarTrackEntry> CarTrackEntries { get; set; }
 
+        // Company Projects — Credit Note Attachments (HBA1C)
+        public DbSet<Models.Projects.CreditNoteAttachment> CreditNoteAttachments { get; set; }
+
+        // Company Projects — Training Attachments (HBA1C)
+        public DbSet<Models.Projects.TrainingAttachment> TrainingAttachments { get; set; }
+
         // Email Accounts Management
         public DbSet<EmailAccount> EmailAccounts { get; set; }
 
         // Books - Paid Invoice Management
         public DbSet<BookInvoice> BookInvoices { get; set; }
         public DbSet<BookDepartmentAccess> BookDepartmentAccess { get; set; }
+
+        // Finance Module
+        public DbSet<Models.Finance.FinanceCategory> FinanceCategories { get; set; }
+        public DbSet<Models.Finance.Budget> Budgets { get; set; }
+        public DbSet<Models.Finance.BudgetLineItem> BudgetLineItems { get; set; }
+        public DbSet<Models.Finance.Expense> Expenses { get; set; }
+        public DbSet<Models.Finance.PurchaseOrder> PurchaseOrders { get; set; }
+        public DbSet<Models.Finance.PurchaseOrderItem> PurchaseOrderItems { get; set; }
+        public DbSet<Models.Finance.Payment> Payments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -730,6 +746,61 @@ namespace ProjectTracker.API.Data
                 entity.HasIndex(e => e.DriverId);
                 entity.HasIndex(e => new { e.DriverName, e.DeliveryDate, e.Region });
             });
+
+            // Finance Module Relationships
+            modelBuilder.Entity<Models.Finance.Budget>()
+                .HasMany(b => b.LineItems)
+                .WithOne(li => li.Budget)
+                .HasForeignKey(li => li.BudgetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Finance.BudgetLineItem>()
+                .HasOne(li => li.Category)
+                .WithMany()
+                .HasForeignKey(li => li.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Finance.PurchaseOrder>()
+                .HasMany(po => po.Items)
+                .WithOne(i => i.PurchaseOrder)
+                .HasForeignKey(i => i.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Models.Finance.PurchaseOrder>()
+                .HasOne(po => po.Category)
+                .WithMany()
+                .HasForeignKey(po => po.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Finance.Expense>()
+                .HasOne(e => e.Category)
+                .WithMany()
+                .HasForeignKey(e => e.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Finance.Expense>()
+                .HasOne(e => e.Budget)
+                .WithMany()
+                .HasForeignKey(e => e.BudgetId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Finance.Expense>()
+                .HasOne(e => e.PurchaseOrder)
+                .WithMany()
+                .HasForeignKey(e => e.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Finance.Payment>()
+                .HasOne(p => p.Expense)
+                .WithMany()
+                .HasForeignKey(p => p.ExpenseId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Models.Finance.Payment>()
+                .HasOne(p => p.PurchaseOrder)
+                .WithMany()
+                .HasForeignKey(p => p.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

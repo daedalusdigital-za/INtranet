@@ -1,0 +1,117 @@
+<div class="payments-container">
+  <div class="page-header">
+    <div>
+      <h1><mat-icon>payment</mat-icon> Payments</h1>
+      <p>Track payments and transactions</p>
+    </div>
+    <button mat-raised-button color="primary">
+      <mat-icon>add</mat-icon>
+      New Payment
+    </button>
+  </div>
+
+  <mat-card>
+    <mat-card-content>
+      @if (loading) {
+        <div class="loading">Loading payments...</div>
+      } @else if (payments.length === 0) {
+        <div class="empty-state">
+          <mat-icon>payment</mat-icon>
+          <h3>No payments found</h3>
+          <p>Record your first payment to get started</p>
+        </div>
+      } @else {
+        <table mat-table [dataSource]="payments" class="payments-table">
+          <ng-container matColumnDef="paymentNumber">
+            <th mat-header-cell *matHeaderCellDef>Payment #</th>
+            <td mat-cell *matCellDef="let payment">
+              <strong>{{ payment.paymentNumber }}</strong>
+              <div class="linked-entity">{{ getLinkedEntityInfo(payment) }}</div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="payee">
+            <th mat-header-cell *matHeaderCellDef>Payee</th>
+            <td mat-cell *matCellDef="let payment">
+              {{ payment.payeeName }}
+              @if (payment.department) {
+                <div class="department">{{ payment.department }}</div>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="amount">
+            <th mat-header-cell *matHeaderCellDef>Amount</th>
+            <td mat-cell *matCellDef="let payment">
+              <div class="amount-cell">
+                <span class="total">{{ payment.amount | currency:'ZAR':'symbol':'1.2-2' }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="paymentDate">
+            <th mat-header-cell *matHeaderCellDef>Payment Date</th>
+            <td mat-cell *matCellDef="let payment">
+              {{ payment.paymentDate | date:'mediumDate' }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="method">
+            <th mat-header-cell *matHeaderCellDef>Method</th>
+            <td mat-cell *matCellDef="let payment">
+              {{ payment.paymentMethod }}
+              @if (payment.reference) {
+                <div class="reference">Ref: {{ payment.reference }}</div>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let payment">
+              <mat-chip [color]="getStatusColor(payment.status)">{{ payment.status }}</mat-chip>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let payment">
+              <button mat-icon-button [matMenuTriggerFor]="menu">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #menu="matMenu">
+                <button mat-menu-item>
+                  <mat-icon>visibility</mat-icon>
+                  <span>View Details</span>
+                </button>
+                <button mat-menu-item>
+                  <mat-icon>edit</mat-icon>
+                  <span>Edit</span>
+                </button>
+                @if (payment.status === 'Pending') {
+                  <button mat-menu-item>
+                    <mat-icon>check_circle</mat-icon>
+                    <span>Mark as Completed</span>
+                  </button>
+                }
+                @if (payment.proofOfPaymentPath) {
+                  <button mat-menu-item>
+                    <mat-icon>download</mat-icon>
+                    <span>Download Proof</span>
+                  </button>
+                }
+                <button mat-menu-item (click)="deletePayment(payment)">
+                  <mat-icon color="warn">delete</mat-icon>
+                  <span>Delete</span>
+                </button>
+              </mat-menu>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

@@ -1,0 +1,104 @@
+<div class="categories-container">
+  <div class="page-header">
+    <div>
+      <h1><mat-icon>category</mat-icon> Finance Categories</h1>
+      <p>Manage income and expense categories</p>
+    </div>
+    <button mat-raised-button color="primary">
+      <mat-icon>add</mat-icon>
+      New Category
+    </button>
+  </div>
+
+  <mat-card>
+    <mat-card-content>
+      @if (loading) {
+        <div class="loading">Loading categories...</div>
+      } @else if (categories.length === 0) {
+        <div class="empty-state">
+          <mat-icon>category</mat-icon>
+          <h3>No categories found</h3>
+          <p>Create your first category to get started</p>
+        </div>
+      } @else {
+        <table mat-table [dataSource]="categories" class="categories-table">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let category">
+              <strong>{{ category.name }}</strong>
+              @if (category.description) {
+                <div class="description">{{ category.description }}</div>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="code">
+            <th mat-header-cell *matHeaderCellDef>Code</th>
+            <td mat-cell *matCellDef="let category">
+              @if (category.code) {
+                <span class="code">{{ category.code }}</span>
+              } @else {
+                <span class="no-code">-</span>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="type">
+            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <td mat-cell *matCellDef="let category">
+              <mat-chip [color]="getTypeColor(category.type)">{{ category.type | titlecase }}</mat-chip>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let category">
+              @if (category.isActive) {
+                <mat-chip color="accent">Active</mat-chip>
+              } @else {
+                <mat-chip>Inactive</mat-chip>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let category">
+              <button mat-icon-button [matMenuTriggerFor]="menu">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #menu="matMenu">
+                <button mat-menu-item>
+                  <mat-icon>visibility</mat-icon>
+                  <span>View Details</span>
+                </button>
+                <button mat-menu-item>
+                  <mat-icon>edit</mat-icon>
+                  <span>Edit</span>
+                </button>
+                @if (category.isActive) {
+                  <button mat-menu-item>
+                    <mat-icon>block</mat-icon>
+                    <span>Deactivate</span>
+                  </button>
+                } @else {
+                  <button mat-menu-item>
+                    <mat-icon>check_circle</mat-icon>
+                    <span>Activate</span>
+                  </button>
+                }
+                <button mat-menu-item (click)="deleteCategory(category)">
+                  <mat-icon color="warn">delete</mat-icon>
+                  <span>Delete</span>
+                </button>
+              </mat-menu>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

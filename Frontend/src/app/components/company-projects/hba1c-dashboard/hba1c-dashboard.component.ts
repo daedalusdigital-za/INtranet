@@ -25,6 +25,8 @@ import {
   HBA1CInventoryItem,
   HBA1CSale,
   HBA1CCreditNote,
+  CreditNoteAttachment,
+  TrainingAttachment,
   HBA1CProvincialSalesData,
   HBA1CTopProduct,
   HBA1CProvinceBreakdown,
@@ -1525,6 +1527,7 @@ import {
                           <th>Date</th>
                           <th class="center">Participants</th>
                           <th class="center">Status</th>
+                          <th class="center">Files</th>
                           <th class="center">Actions</th>
                         </tr>
                       </thead>
@@ -1546,6 +1549,14 @@ import {
                                 {{ session.statusText || 'Unknown' }}
                               </span>
                             </td>
+                            <td class="center">
+                              <button mat-icon-button class="action-attach" matTooltip="View / Upload Attachments" (click)="openTrainingAttachmentsPanel(session)">
+                                <mat-icon>attach_file</mat-icon>
+                              </button>
+                              @if (trainingAttachmentCounts[session.id!]) {
+                                <span class="attach-count-badge">{{ trainingAttachmentCounts[session.id!] }}</span>
+                              }
+                            </td>
                             <td class="center actions-cell">
                               <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('training', session)">
                                 <mat-icon>edit</mat-icon>
@@ -1557,10 +1568,71 @@ import {
                           </tr>
                         }
                         @if (!trainingSessions.length) {
-                          <tr><td colspan="8" class="empty-row">No training sessions found</td></tr>
+                          <tr><td colspan="9" class="empty-row">No training sessions found</td></tr>
                         }
                       </tbody>
                     </table>
+                  </div>
+                }
+
+                <!-- Training Attachments Slide-out Panel -->
+                @if (showTrainingAttachmentsPanel && trainingAttachmentsPanelSession) {
+                  <div class="attachments-overlay" (click)="closeTrainingAttachmentsPanel()"></div>
+                  <div class="attachments-panel">
+                    <div class="attachments-panel-header">
+                      <div class="attachments-panel-title">
+                        <mat-icon>attach_file</mat-icon>
+                        <div>
+                          <h4>Attachments</h4>
+                          <span class="attachments-panel-sub">{{ trainingAttachmentsPanelSession.trainingName }} — {{ trainingAttachmentsPanelSession.venue }}</span>
+                        </div>
+                      </div>
+                      <button mat-icon-button (click)="closeTrainingAttachmentsPanel()" matTooltip="Close"><mat-icon>close</mat-icon></button>
+                    </div>
+
+                    <div class="attachments-panel-upload">
+                      <label class="upload-drop-zone">
+                        <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                        <span>Click to upload files</span>
+                        <span class="upload-hint">PDF, Images, Word, Excel — up to 50 MB</span>
+                        <input type="file" multiple hidden (change)="onTrainingAttachmentFileSelected($event)"
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.csv,.txt">
+                      </label>
+                      @if (trainingAttachmentUploading) {
+                        <div class="upload-progress"><mat-spinner diameter="20" strokeWidth="2"></mat-spinner> Uploading...</div>
+                      }
+                    </div>
+
+                    <div class="attachments-panel-list">
+                      @if (trainingAttachmentsLoading) {
+                        <div class="panel-loading"><mat-spinner diameter="24" strokeWidth="2"></mat-spinner></div>
+                      } @else if (!trainingAttachments.length) {
+                        <div class="attachments-empty">
+                          <mat-icon>folder_open</mat-icon>
+                          <p>No files attached yet</p>
+                        </div>
+                      } @else {
+                        @for (att of trainingAttachments; track att.id) {
+                          <div class="attachment-item">
+                            <div class="attachment-icon">
+                              <mat-icon>{{ getFileIcon(att.contentType) }}</mat-icon>
+                            </div>
+                            <div class="attachment-info">
+                              <span class="attachment-name">{{ att.fileName }}</span>
+                              <span class="attachment-meta">{{ formatFileSize(att.fileSize) }} · {{ att.uploadedAt | date:'dd MMM yyyy HH:mm' }}</span>
+                            </div>
+                            <div class="attachment-actions">
+                              <button mat-icon-button matTooltip="Download" (click)="downloadTrainingAttachment(att)">
+                                <mat-icon>download</mat-icon>
+                              </button>
+                              <button mat-icon-button matTooltip="Delete" class="action-delete" (click)="deleteTrainingAttachment(att)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </div>
+                          </div>
+                        }
+                      }
+                    </div>
                   </div>
                 }
               </section>
@@ -1941,6 +2013,7 @@ import {
                           <th>Reason</th>
                           <th>Created</th>
                           <th class="center">Status</th>
+                          <th class="center">Files</th>
                           <th class="center">Actions</th>
                         </tr>
                       </thead>
@@ -1959,6 +2032,14 @@ import {
                                 {{ cn.status }}
                               </span>
                             </td>
+                            <td class="center">
+                              <button mat-icon-button class="action-attach" matTooltip="View / Upload Attachments" (click)="openAttachmentsPanel(cn)">
+                                <mat-icon>attach_file</mat-icon>
+                              </button>
+                              @if (creditNoteAttachmentCounts[cn.id]) {
+                                <span class="attach-count-badge">{{ creditNoteAttachmentCounts[cn.id] }}</span>
+                              }
+                            </td>
                             <td class="center actions-cell">
                               <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('creditNote', cn)">
                                 <mat-icon>edit</mat-icon>
@@ -1970,10 +2051,71 @@ import {
                           </tr>
                         }
                         @if (!creditNotes.length) {
-                          <tr><td colspan="9" class="empty-row">No credit notes found</td></tr>
+                          <tr><td colspan="10" class="empty-row">No credit notes found</td></tr>
                         }
                       </tbody>
                     </table>
+                  </div>
+                }
+
+                <!-- Attachments Slide-out Panel -->
+                @if (showAttachmentsPanel && attachmentsPanelCreditNote) {
+                  <div class="attachments-overlay" (click)="closeAttachmentsPanel()"></div>
+                  <div class="attachments-panel">
+                    <div class="attachments-panel-header">
+                      <div class="attachments-panel-title">
+                        <mat-icon>attach_file</mat-icon>
+                        <div>
+                          <h4>Attachments</h4>
+                          <span class="attachments-panel-sub">{{ attachmentsPanelCreditNote.creditNoteNumber }} — {{ attachmentsPanelCreditNote.customerName }}</span>
+                        </div>
+                      </div>
+                      <button mat-icon-button (click)="closeAttachmentsPanel()" matTooltip="Close"><mat-icon>close</mat-icon></button>
+                    </div>
+
+                    <div class="attachments-panel-upload">
+                      <label class="upload-drop-zone">
+                        <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                        <span>Click to upload files</span>
+                        <span class="upload-hint">PDF, Images, Word, Excel — up to 50 MB</span>
+                        <input type="file" multiple hidden (change)="onAttachmentFileSelected($event)"
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.csv,.txt">
+                      </label>
+                      @if (attachmentUploading) {
+                        <div class="upload-progress"><mat-spinner diameter="20" strokeWidth="2"></mat-spinner> Uploading...</div>
+                      }
+                    </div>
+
+                    <div class="attachments-panel-list">
+                      @if (attachmentsLoading) {
+                        <div class="panel-loading"><mat-spinner diameter="24" strokeWidth="2"></mat-spinner></div>
+                      } @else if (!creditNoteAttachments.length) {
+                        <div class="attachments-empty">
+                          <mat-icon>folder_open</mat-icon>
+                          <p>No files attached yet</p>
+                        </div>
+                      } @else {
+                        @for (att of creditNoteAttachments; track att.id) {
+                          <div class="attachment-item">
+                            <div class="attachment-icon">
+                              <mat-icon>{{ getFileIcon(att.contentType) }}</mat-icon>
+                            </div>
+                            <div class="attachment-info">
+                              <span class="attachment-name">{{ att.fileName }}</span>
+                              <span class="attachment-meta">{{ formatFileSize(att.fileSize) }} · {{ att.uploadedAt | date:'dd MMM yyyy HH:mm' }}</span>
+                            </div>
+                            <div class="attachment-actions">
+                              <button mat-icon-button matTooltip="Download" (click)="downloadAttachment(att)">
+                                <mat-icon>download</mat-icon>
+                              </button>
+                              <button mat-icon-button matTooltip="Delete" class="action-delete" (click)="deleteAttachment(att)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </div>
+                          </div>
+                        }
+                      }
+                    </div>
                   </div>
                 }
               </section>
@@ -3590,6 +3732,109 @@ import {
       width: 32px !important; height: 32px !important;
     }
     .action-delete mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+    /* ── Attachment badge & button ── */
+    .action-attach {
+      color: var(--purple, #7c3aed) !important;
+      width: 32px !important; height: 32px !important;
+    }
+    .action-attach mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .attach-count-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--purple, #7c3aed); color: #fff;
+      font-size: 11px; font-weight: 600;
+      min-width: 18px; height: 18px; border-radius: 9px;
+      padding: 0 5px; margin-left: -4px; vertical-align: middle;
+    }
+
+    /* ── Attachments slide-out panel ── */
+    .attachments-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+      z-index: 1000; animation: fadeIn 0.2s ease;
+    }
+    .attachments-panel {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: 420px; max-width: 92vw;
+      background: var(--surface, #fff); box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+      z-index: 1001; display: flex; flex-direction: column;
+      animation: slideInRight 0.25s ease;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    .attachments-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0);
+      background: var(--surface-2, #f8fafc);
+    }
+    .attachments-panel-title {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .attachments-panel-title mat-icon {
+      color: var(--purple, #7c3aed); font-size: 28px; width: 28px; height: 28px;
+    }
+    .attachments-panel-title h4 {
+      margin: 0; font-size: 16px; font-weight: 600; color: var(--text, #1e293b);
+    }
+    .attachments-panel-sub {
+      font-size: 12px; color: var(--text-secondary, #64748b);
+    }
+
+    /* Upload drop zone */
+    .attachments-panel-upload {
+      padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0);
+    }
+    .upload-drop-zone {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; padding: 20px; border: 2px dashed var(--border, #cbd5e1);
+      border-radius: 12px; cursor: pointer; transition: all 0.2s;
+      color: var(--text-secondary, #64748b); text-align: center;
+    }
+    .upload-drop-zone:hover {
+      border-color: var(--purple, #7c3aed); background: rgba(124, 58, 237, 0.04);
+      color: var(--purple, #7c3aed);
+    }
+    .upload-icon { font-size: 32px; width: 32px; height: 32px; opacity: 0.6; }
+    .upload-drop-zone span { font-size: 13px; font-weight: 500; }
+    .upload-hint { font-size: 11px !important; font-weight: 400 !important; opacity: 0.7; }
+    .upload-progress {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0; font-size: 13px; color: var(--purple, #7c3aed);
+    }
+
+    /* Attachment list */
+    .attachments-panel-list {
+      flex: 1; overflow-y: auto; padding: 8px 0;
+    }
+    .attachments-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 40px 20px; color: var(--text-secondary, #94a3b8);
+    }
+    .attachments-empty mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: 0.4; margin-bottom: 8px; }
+    .attachments-empty p { margin: 0; font-size: 14px; }
+
+    .attachment-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 20px; transition: background 0.15s;
+    }
+    .attachment-item:hover { background: var(--surface-2, #f1f5f9); }
+    .attachment-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(124, 58, 237, 0.08); color: var(--purple, #7c3aed);
+    }
+    .attachment-icon mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .attachment-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .attachment-name {
+      font-size: 13px; font-weight: 500; color: var(--text, #1e293b);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .attachment-meta { font-size: 11px; color: var(--text-secondary, #94a3b8); }
+    .attachment-actions { display: flex; gap: 2px; }
+    .attachment-actions button { width: 30px !important; height: 30px !important; }
+    .attachment-actions mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
     .crud-panel {
       max-width: 680px;
     }
@@ -4211,6 +4456,14 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   trainingSessions: HBA1CTrainingSession[] = [];
   trainingLoading = false;
 
+  // Training Attachments
+  trainingAttachmentCounts: { [key: number]: number } = {};
+  showTrainingAttachmentsPanel = false;
+  trainingAttachmentsPanelSession: HBA1CTrainingSession | null = null;
+  trainingAttachments: TrainingAttachment[] = [];
+  trainingAttachmentsLoading = false;
+  trainingAttachmentUploading = false;
+
   inventoryItems: HBA1CInventoryItem[] = [];
   inventoryLoading = false;
 
@@ -4219,6 +4472,14 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
 
   creditNotes: HBA1CCreditNote[] = [];
   creditNotesLoading = false;
+
+  // Credit Note Attachments
+  creditNoteAttachmentCounts: { [key: number]: number } = {};
+  showAttachmentsPanel = false;
+  attachmentsPanelCreditNote: HBA1CCreditNote | null = null;
+  creditNoteAttachments: CreditNoteAttachment[] = [];
+  attachmentsLoading = false;
+  attachmentUploading = false;
 
   // Car Track state
   carTrackEntries: any[] = [];
@@ -4444,7 +4705,20 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     this.hba1cService.getAllTraining()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (data) => { this.trainingSessions = data || []; this.trainingLoading = false; },
+        next: (data) => {
+          this.trainingSessions = data || [];
+          this.trainingLoading = false;
+          // Load attachment counts for all training sessions
+          const ids = this.trainingSessions.filter(s => s.id != null).map(s => s.id!);
+          if (ids.length) {
+            this.hba1cService.getTrainingAttachmentCounts(ids)
+              .pipe(takeUntil(this.destroy$))
+              .subscribe({
+                next: (counts) => { this.trainingAttachmentCounts = counts || {}; },
+                error: () => {}
+              });
+          }
+        },
         error: () => { this.trainingLoading = false; }
       });
   }
@@ -4474,8 +4748,169 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     this.hba1cService.getCreditNotes()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (data) => { this.creditNotes = data || []; this.creditNotesLoading = false; },
+        next: (data) => {
+          this.creditNotes = data || [];
+          this.creditNotesLoading = false;
+          // Load attachment counts for all credit notes
+          if (this.creditNotes.length) {
+            const ids = this.creditNotes.map(cn => cn.id);
+            this.hba1cService.getCreditNoteAttachmentCounts(ids)
+              .pipe(takeUntil(this.destroy$))
+              .subscribe({
+                next: (counts) => { this.creditNoteAttachmentCounts = counts || {}; },
+                error: () => {}
+              });
+          }
+        },
         error: () => { this.creditNotesLoading = false; }
+      });
+  }
+
+  // ── Credit Note Attachment Methods ──
+
+  openAttachmentsPanel(cn: HBA1CCreditNote): void {
+    this.attachmentsPanelCreditNote = cn;
+    this.showAttachmentsPanel = true;
+    this.loadAttachments(cn.id);
+  }
+
+  closeAttachmentsPanel(): void {
+    this.showAttachmentsPanel = false;
+    this.attachmentsPanelCreditNote = null;
+    this.creditNoteAttachments = [];
+  }
+
+  loadAttachments(creditNoteId: number): void {
+    this.attachmentsLoading = true;
+    this.hba1cService.getCreditNoteAttachments(creditNoteId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => { this.creditNoteAttachments = data || []; this.attachmentsLoading = false; },
+        error: () => { this.attachmentsLoading = false; }
+      });
+  }
+
+  onAttachmentFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length || !this.attachmentsPanelCreditNote) return;
+    const files = Array.from(input.files);
+    const cn = this.attachmentsPanelCreditNote;
+
+    this.attachmentUploading = true;
+    this.hba1cService.uploadCreditNoteAttachments(cn.id, cn.creditNoteNumber, files)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.attachmentUploading = false;
+          this.loadAttachments(cn.id);
+          // Update count
+          this.creditNoteAttachmentCounts[cn.id] = (this.creditNoteAttachmentCounts[cn.id] || 0) + files.length;
+        },
+        error: () => { this.attachmentUploading = false; }
+      });
+
+    // Reset input so same file can be uploaded again
+    input.value = '';
+  }
+
+  downloadAttachment(att: CreditNoteAttachment): void {
+    const url = this.hba1cService.getCreditNoteAttachmentDownloadUrl(att.id);
+    window.open(url, '_blank');
+  }
+
+  deleteAttachment(att: CreditNoteAttachment): void {
+    if (!confirm(`Delete "${att.fileName}"?`)) return;
+    this.hba1cService.deleteCreditNoteAttachment(att.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.creditNoteAttachments = this.creditNoteAttachments.filter(a => a.id !== att.id);
+          if (this.attachmentsPanelCreditNote) {
+            const cnId = this.attachmentsPanelCreditNote.id;
+            this.creditNoteAttachmentCounts[cnId] = Math.max(0, (this.creditNoteAttachmentCounts[cnId] || 1) - 1);
+          }
+        },
+        error: () => {}
+      });
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  getFileIcon(contentType: string): string {
+    if (contentType?.startsWith('image/')) return 'image';
+    if (contentType === 'application/pdf') return 'picture_as_pdf';
+    if (contentType?.includes('spreadsheet') || contentType?.includes('excel')) return 'table_chart';
+    if (contentType?.includes('word') || contentType?.includes('document')) return 'description';
+    return 'attach_file';
+  }
+
+  // ── Training Attachment Methods ──
+
+  openTrainingAttachmentsPanel(session: HBA1CTrainingSession): void {
+    this.trainingAttachmentsPanelSession = session;
+    this.showTrainingAttachmentsPanel = true;
+    this.loadTrainingAttachments(session.id!);
+  }
+
+  closeTrainingAttachmentsPanel(): void {
+    this.showTrainingAttachmentsPanel = false;
+    this.trainingAttachmentsPanelSession = null;
+    this.trainingAttachments = [];
+  }
+
+  loadTrainingAttachments(trainingSessionId: number): void {
+    this.trainingAttachmentsLoading = true;
+    this.hba1cService.getTrainingAttachments(trainingSessionId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => { this.trainingAttachments = data || []; this.trainingAttachmentsLoading = false; },
+        error: () => { this.trainingAttachmentsLoading = false; }
+      });
+  }
+
+  onTrainingAttachmentFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length || !this.trainingAttachmentsPanelSession) return;
+    const files = Array.from(input.files);
+    const session = this.trainingAttachmentsPanelSession;
+
+    this.trainingAttachmentUploading = true;
+    this.hba1cService.uploadTrainingAttachments(session.id!, session.trainingName, files)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.trainingAttachmentUploading = false;
+          this.loadTrainingAttachments(session.id!);
+          this.trainingAttachmentCounts[session.id!] = (this.trainingAttachmentCounts[session.id!] || 0) + files.length;
+        },
+        error: () => { this.trainingAttachmentUploading = false; }
+      });
+
+    input.value = '';
+  }
+
+  downloadTrainingAttachment(att: TrainingAttachment): void {
+    const url = this.hba1cService.getTrainingAttachmentDownloadUrl(att.id);
+    window.open(url, '_blank');
+  }
+
+  deleteTrainingAttachment(att: TrainingAttachment): void {
+    if (!confirm(`Delete "${att.fileName}"?`)) return;
+    this.hba1cService.deleteTrainingAttachment(att.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.trainingAttachments = this.trainingAttachments.filter(a => a.id !== att.id);
+          if (this.trainingAttachmentsPanelSession) {
+            const sId = this.trainingAttachmentsPanelSession.id!;
+            this.trainingAttachmentCounts[sId] = Math.max(0, (this.trainingAttachmentCounts[sId] || 1) - 1);
+          }
+        },
+        error: () => {}
       });
   }
 

@@ -1,0 +1,121 @@
+<div class="purchase-orders-container">
+  <div class="page-header">
+    <div>
+      <h1><mat-icon>shopping_cart</mat-icon> Purchase Orders</h1>
+      <p>Manage supplier purchase orders</p>
+    </div>
+    <button mat-raised-button color="primary">
+      <mat-icon>add</mat-icon>
+      New Purchase Order
+    </button>
+  </div>
+
+  <mat-card>
+    <mat-card-content>
+      @if (loading) {
+        <div class="loading">Loading purchase orders...</div>
+      } @else if (purchaseOrders.length === 0) {
+        <div class="empty-state">
+          <mat-icon>shopping_cart</mat-icon>
+          <h3>No purchase orders found</h3>
+          <p>Create your first purchase order to get started</p>
+        </div>
+      } @else {
+        <table mat-table [dataSource]="purchaseOrders" class="po-table">
+          <ng-container matColumnDef="orderNumber">
+            <th mat-header-cell *matHeaderCellDef>PO Number</th>
+            <td mat-cell *matCellDef="let po">
+              <strong>{{ po.poNumber }}</strong>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="supplier">
+            <th mat-header-cell *matHeaderCellDef>Supplier</th>
+            <td mat-cell *matCellDef="let po">
+              {{ po.supplierName }}
+              @if (po.departmentName) {
+                <div class="department">{{ po.departmentName }}</div>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="orderDate">
+            <th mat-header-cell *matHeaderCellDef>Order Date</th>
+            <td mat-cell *matCellDef="let po">
+              <div class="dates">
+                <div>{{ po.orderDate | date:'shortDate' }}</div>
+                @if (po.expectedDeliveryDate) {
+                  <small>Due: {{ po.expectedDeliveryDate | date:'shortDate' }}</small>
+                }
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="totalAmount">
+            <th mat-header-cell *matHeaderCellDef>Total</th>
+            <td mat-cell *matCellDef="let po">
+              <div class="amount-cell">
+                <span class="total">{{ po.total | currency:'ZAR':'symbol':'1.2-2' }}</span>
+                @if (po.items && po.items.length > 0) {
+                  <small>{{ po.items.length }} item{{ po.items.length !== 1 ? 's' : '' }}</small>
+                }
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let po">
+              <mat-chip [color]="getStatusColor(po.status)">{{ po.status }}</mat-chip>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="delivery">
+            <th mat-header-cell *matHeaderCellDef>Delivery</th>
+            <td mat-cell *matCellDef="let po">
+              <span class="delivery-status">{{ getDeliveryStatus(po) }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let po">
+              <button mat-icon-button [matMenuTriggerFor]="menu">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #menu="matMenu">
+                <button mat-menu-item>
+                  <mat-icon>visibility</mat-icon>
+                  <span>View Details</span>
+                </button>
+                <button mat-menu-item>
+                  <mat-icon>edit</mat-icon>
+                  <span>Edit</span>
+                </button>
+                @if (po.status === 'Ordered') {
+                  <button mat-menu-item>
+                    <mat-icon>local_shipping</mat-icon>
+                    <span>Receive Items</span>
+                  </button>
+                }
+                @if (po.status === 'Draft') {
+                  <button mat-menu-item>
+                    <mat-icon>send</mat-icon>
+                    <span>Submit for Approval</span>
+                  </button>
+                }
+                <button mat-menu-item (click)="deletePurchaseOrder(po)">
+                  <mat-icon color="warn">delete</mat-icon>
+                  <span>Delete</span>
+                </button>
+              </mat-menu>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>
