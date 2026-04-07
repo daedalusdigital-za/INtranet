@@ -27,6 +27,7 @@ import { MatStepperModule } from '@angular/material/stepper';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -636,6 +637,10 @@ interface DeliveryRequestSummary {
                             <button mat-menu-item class="modern-menu-item" (click)="viewVehicleMaintenanceHistory(vehicle)">
                               <mat-icon class="menu-icon-orange">build</mat-icon>
                               <span>Maintenance History</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewTodayHistory(vehicle)">
+                              <mat-icon class="menu-icon-cyan">timeline</mat-icon>
+                              <span>Today's History</span>
                             </button>
                             <div class="menu-divider"></div>
                             <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteVehicle(vehicle)">
@@ -1348,6 +1353,7 @@ interface DeliveryRequestSummary {
                           <span class="ts-filter-label"><mat-icon>flag</mat-icon> Status</span>
                           <mat-button-toggle-group [(ngModel)]="tripsheetStatusFilter" (ngModelChange)="onTripsheetFilterChange()" class="ts-toggle-group status-toggles" appearance="standard">
                             <mat-button-toggle value="all">All</mat-button-toggle>
+                            <mat-button-toggle value="draft" class="draft-toggle">Draft</mat-button-toggle>
                             <mat-button-toggle value="pending">Pending</mat-button-toggle>
                             <mat-button-toggle value="assigned">Assigned</mat-button-toggle>
                             <mat-button-toggle value="scheduled">Scheduled</mat-button-toggle>
@@ -1553,7 +1559,13 @@ interface DeliveryRequestSummary {
                               <span>Email to Warehouse Manager</span>
                             </button>
                             <div class="menu-divider"></div>
-                            @if (trip.status !== 'Active' && trip.status !== 'Completed') {
+                            @if (trip.status === 'Draft') {
+                              <button mat-menu-item class="modern-menu-item" (click)="continueDraft(trip)">
+                                <mat-icon class="menu-icon-orange">edit_note</mat-icon>
+                                <span>Continue Draft</span>
+                              </button>
+                            }
+                            @if (trip.status !== 'Active' && trip.status !== 'Completed' && trip.status !== 'Draft') {
                               <button mat-menu-item class="modern-menu-item" (click)="activateTripsheet(trip)">
                                 <mat-icon class="menu-icon-green">play_arrow</mat-icon>
                                 <span>Generate Load</span>
@@ -3806,6 +3818,17 @@ interface DeliveryRequestSummary {
       font-weight: 600 !important;
       border: 1px solid #e57373 !important;
     }
+    .trip-status-draft {
+      background: linear-gradient(135deg, #ffe0b2, #ffcc80) !important;
+      color: #e65100 !important;
+      font-weight: 600 !important;
+      border: 2px dashed #ff9800 !important;
+      animation: pulse-draft 2s ease-in-out infinite;
+    }
+    @keyframes pulse-draft {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
 
     .fleet-grid {
       display: grid;
@@ -3939,6 +3962,9 @@ interface DeliveryRequestSummary {
     }
     ::ng-deep .modern-menu .menu-icon-amber {
       color: #ffa726 !important;
+    }
+    ::ng-deep .modern-menu .menu-icon-cyan {
+      color: #00acc1 !important;
     }
     ::ng-deep .modern-menu .menu-icon-red {
       color: #ef5350 !important;
@@ -7546,6 +7572,16 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
+  viewTodayHistory(vehicle: Vehicle): void {
+    this.dialog.open(TodayHistoryDialog, {
+      width: '95vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      panelClass: 'today-history-dialog-panel',
+      data: { vehicle, apiUrl: environment.apiUrl }
+    });
+  }
+
   deleteVehicle(vehicle: Vehicle): void {
     if (confirm(`Are you sure you want to delete vehicle ${vehicle.registrationNumber}? This action cannot be undone.`)) {
       this.http.delete<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}`).subscribe({
@@ -7983,6 +8019,8 @@ Notes: ${record.notes || 'No notes'}
         return 'trip-status-scheduled';
       case 'cancelled':
         return 'trip-status-cancelled';
+      case 'draft':
+        return 'trip-status-draft';
       default: 
         return 'trip-status-pending';
     }
@@ -8257,6 +8295,13 @@ Notes: ${record.notes || 'No notes'}
         this.loadImportedInvoices();
       }
     });
+  }
+
+  // Continue editing a draft tripsheet - opens in edit mode
+  continueDraft(trip: any): void {
+    // Drafts use editTripsheet - the dialog will detect edit mode and allow completion
+    this.snackBar.open('Opening draft tripsheet...', '', { duration: 2000 });
+    this.editTripsheet(trip);
   }
 
   // Edit existing tripsheet - load data and open CreateTripsheetDialog
@@ -17858,6 +17903,7 @@ export class AddDeliveryNoteDialog {
     MatAutocompleteModule,
     FormsModule,
     ReactiveFormsModule,
+    ScrollingModule,
     CdkDrag,
     CdkDropList
   ],
@@ -17869,6 +17915,16 @@ export class AddDeliveryNoteDialog {
           {{ data.isEditMode ? 'Edit Trip Sheet' : 'Create Trip Sheet' }}
         </h2>
         <div class="header-info">
+          @if (draftId) {
+            <mat-chip class="draft-badge" color="accent">
+              <mat-icon>save</mat-icon> Draft Saved
+            </mat-chip>
+          }
+          @if (autoSaving) {
+            <mat-chip class="saving-badge">
+              <mat-spinner diameter="16"></mat-spinner> Saving...
+            </mat-chip>
+          }
           @if (data.isEditMode && data.existingTripsheet?.loadNumber) {
             <mat-chip class="edit-badge">{{ data.existingTripsheet.loadNumber }}</mat-chip>
           }
@@ -17879,7 +17935,7 @@ export class AddDeliveryNoteDialog {
             <mat-chip class="distance-chip">{{ totalDistance | number:'1.0-0' }} km</mat-chip>
           }
         </div>
-        <button mat-icon-button mat-dialog-close>
+        <button mat-icon-button (click)="onCloseDialog()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -17891,7 +17947,7 @@ export class AddDeliveryNoteDialog {
             <div class="step-content">
               <div class="source-panel">
                 <div class="panel-header">
-                  <h3><mat-icon>receipt_long</mat-icon> Available Invoices ({{ filteredInvoices().length }})</h3>
+                  <h3><mat-icon>receipt_long</mat-icon> Available Invoices ({{ totalFilteredCount }})</h3>
                   <div class="filter-controls">
                     <mat-form-field appearance="outline" class="province-filter">
                       <mat-label>Province</mat-label>
@@ -17906,7 +17962,7 @@ export class AddDeliveryNoteDialog {
                     </mat-form-field>
                     <mat-form-field appearance="outline" class="search-field">
                       <mat-label>Search invoices...</mat-label>
-                      <input matInput [(ngModel)]="invoiceSearch" placeholder="Customer, invoice #...">
+                      <input matInput [ngModel]="invoiceSearch" (ngModelChange)="onSearchInput($event)" placeholder="Customer, invoice #...">
                       <mat-icon matSuffix>search</mat-icon>
                     </mat-form-field>
                   </div>
@@ -17917,8 +17973,14 @@ export class AddDeliveryNoteDialog {
                     <span>Loading province data...</span>
                   </div>
                 }
-                <div class="invoice-list">
-                  @for (invoice of filteredInvoices(); track invoice.id) {
+                <cdk-virtual-scroll-viewport itemSize="72" class="invoice-list">
+                  @if (totalFilteredCount > 200) {
+                    <div class="scroll-hint">
+                      <mat-icon>info</mat-icon>
+                      Showing first 200 of {{ totalFilteredCount }} invoices. Use search to filter.
+                    </div>
+                  }
+                  @for (invoice of displayedInvoices; track invoice.id) {
                     <div class="invoice-item" 
                          [class.selected]="isInvoiceSelected(invoice)"
                          [class.part-delivery-marked]="partDeliveryMap.get(invoice.id)">
@@ -17955,13 +18017,13 @@ export class AddDeliveryNoteDialog {
                       </button>
                     </div>
                   }
-                  @if (filteredInvoices().length === 0) {
+                  @if (totalFilteredCount === 0) {
                     <div class="empty-list">
                       <mat-icon>inventory_2</mat-icon>
                       <p>No pending invoices found{{ selectedProvince !== 'all' ? ' in ' + getProvinceName(selectedProvince) : '' }}</p>
                     </div>
                   }
-                </div>
+                </cdk-virtual-scroll-viewport>
               </div>
 
               <div class="stops-panel">
@@ -18544,6 +18606,25 @@ export class AddDeliveryNoteDialog {
       background: rgba(255,255,255,0.2) !important;
       color: white !important;
     }
+    .header-info .draft-badge {
+      background: #ff9800 !important;
+      color: white !important;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .header-info .draft-badge mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+    .header-info .saving-badge {
+      background: #2196f3 !important;
+      color: white !important;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
     .dialog-header button {
       color: white;
     }
@@ -18657,6 +18738,26 @@ export class AddDeliveryNoteDialog {
       flex: 1;
       overflow-y: auto;
       padding: 12px;
+      height: 400px; /* Required for virtual scroll */
+    }
+    .invoice-list {
+      contain: strict; /* Performance optimization */
+    }
+    .scroll-hint {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #fff3e0;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #e65100;
+    }
+    .scroll-hint mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
     }
     .invoice-item {
       display: flex;
@@ -19556,6 +19657,24 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   selectedProvince = 'all';
   loadingProvinces = false;
   
+  // Draft auto-save tracking
+  draftId: number | null = null;
+  autoSaving = false;
+  lastAutoSaved: Date | null = null;
+  
+  // Performance optimization: Set for O(1) lookup
+  private selectedStopIds = new Set<number>();
+  
+  // Performance optimization: Cached filtered invoices
+  private _cachedFilteredInvoices: any[] = [];
+  private _lastSearchTerm = '';
+  private _lastProvince = 'all';
+  private _cacheValid = false;
+  
+  // Debounced search subject
+  private searchSubject = new Subject<string>();
+  private searchSubscription: any;
+  
   // Searchable dropdown filters
   warehouseSearchText = '';
   driverSearchText = '';
@@ -19778,7 +19897,22 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     ).subscribe(({group, query}) => {
       this.searchAddresses(query);
     });
+    
+    // Setup invoice search debounce for performance
+    this.searchSubscription = this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(searchTerm => {
+      this.invoiceSearch = searchTerm;
+      this._cacheValid = false; // Invalidate cache when search changes
+    });
+    
+    // Pre-filter invoices to only pending ones (performance optimization)
+    this._pendingInvoices = (data.invoices || []).filter((inv: any) => inv.status === 'Pending');
   }
+  
+  // Pre-filtered pending invoices (computed once)
+  private _pendingInvoices: any[] = [];
 
   ngAfterViewInit(): void {
     // Map will be initialized when step 2 is active
@@ -19791,10 +19925,192 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       setTimeout(() => {
         this.initializeMap();
       }, 300);
+      
+      // Auto-save as draft when moving to step 2 (Route Details)
+      // This ensures work is not lost if dialog is closed accidentally
+      if (this.selectedStops.length > 0 && !this.data.isEditMode) {
+        this.autoSaveDraft();
+      }
     }
+  }
+  
+  // Auto-save the tripsheet as a Draft so work isn't lost if dialog closes
+  private autoSaveDraft(): void {
+    // Don't save if already in edit mode (editing existing tripsheet)
+    if (this.data.isEditMode && this.data.editLoadId) {
+      return;
+    }
+    
+    // Don't auto-save if no stops selected
+    if (this.selectedStops.length === 0) {
+      return;
+    }
+    
+    this.autoSaving = true;
+    
+    // Use groupedStops (grouped by customer) instead of raw selectedStops
+    const stopsToUse = this.groupedStops.length > 0 ? this.groupedStops : this.selectedStops;
+    
+    const payload = {
+      warehouseId: this.selectedWarehouse?.id,
+      driverId: this.selectedDriver?.id,
+      vehicleId: this.selectedVehicle?.id,
+      scheduledPickupDate: this.scheduledDate,
+      specialInstructions: this.specialInstructions,
+      estimatedDistance: this.totalDistance,
+      estimatedTimeMinutes: Math.round(this.totalDistance * 1.2),
+      priority: 'Normal',
+      status: 'Draft', // Mark as draft
+      stops: stopsToUse.map((stop, index) => ({
+        stopSequence: index + 1,
+        stopType: index === stopsToUse.length - 1 ? 'Destination' : 'Delivery',
+        customerId: stop.customerId || null,
+        companyName: stop.customerName || stop.companyName || 'Unknown',
+        address: stop.deliveryAddress || stop.address || 'Unknown Address',
+        city: stop.city || null,
+        province: stop.province || null,
+        latitude: stop.latitude || null,
+        longitude: stop.longitude || null,
+        orderNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
+        invoiceNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
+        commodities: stop.invoices 
+          ? stop.invoices.map((inv: any) => ({
+              commodityName: inv.productDescription || 'Product',
+              commodityCode: inv.productCode || null,
+              quantity: inv.quantity || 1,
+              unitPrice: inv.salesAmount || 0,
+              totalPrice: inv.salesAmount || 0
+            }))
+          : [{
+              commodityName: stop.productDescription || 'Product',
+              commodityCode: stop.productCode || null,
+              quantity: stop.quantity || 1,
+              unitPrice: stop.salesAmount || 0,
+              totalPrice: stop.salesAmount || 0
+            }]
+      })),
+      invoiceIds: this.selectedStops
+        .map(s => s.id)
+        .filter(id => id != null && id !== undefined)
+        .map(id => typeof id === 'string' ? parseInt(id, 10) : id)
+        .filter(id => !isNaN(id))
+    };
+    
+    // If we already have a draft, update it; otherwise create new
+    const isUpdate = this.draftId !== null;
+    const apiUrl = isUpdate 
+      ? `${environment.apiUrl}/logistics/loads/${this.draftId}`
+      : `${environment.apiUrl}/logistics/loads`;
+    const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
+    
+    httpMethod(apiUrl, payload).subscribe({
+      next: (result: any) => {
+        if (!isUpdate && result.id) {
+          this.draftId = result.id;
+        }
+        this.lastAutoSaved = new Date();
+        this.autoSaving = false;
+        this.snackBar.open('Draft saved - your progress is protected', 'OK', { duration: 2000 });
+      },
+      error: (err) => {
+        console.error('Failed to auto-save draft:', err);
+        this.autoSaving = false;
+        // Don't show error - draft save is a background operation
+      }
+    });
+  }
+  
+  // Handle dialog close with draft save confirmation
+  onCloseDialog(): void {
+    // If we have selected stops and no draft yet, offer to save
+    if (this.selectedStops.length > 0 && !this.draftId && !this.data.isEditMode) {
+      const confirmSave = confirm(
+        'You have unsaved stops selected. Would you like to save this as a draft?\n\n' +
+        'Click OK to save draft and close, or Cancel to discard and close.'
+      );
+      
+      if (confirmSave) {
+        // Save as draft then close
+        this.autoSaving = true;
+        
+        const stopsToUse = this.groupedStops.length > 0 ? this.groupedStops : this.selectedStops;
+        
+        const payload = {
+          warehouseId: this.selectedWarehouse?.id,
+          driverId: this.selectedDriver?.id,
+          vehicleId: this.selectedVehicle?.id,
+          scheduledPickupDate: this.scheduledDate,
+          specialInstructions: this.specialInstructions,
+          estimatedDistance: this.totalDistance,
+          estimatedTimeMinutes: Math.round(this.totalDistance * 1.2),
+          priority: 'Normal',
+          status: 'Draft',
+          stops: stopsToUse.map((stop, index) => ({
+            stopSequence: index + 1,
+            stopType: index === stopsToUse.length - 1 ? 'Destination' : 'Delivery',
+            customerId: stop.customerId || null,
+            companyName: stop.customerName || stop.companyName || 'Unknown',
+            address: stop.deliveryAddress || stop.address || 'Unknown Address',
+            city: stop.city || null,
+            province: stop.province || null,
+            latitude: stop.latitude || null,
+            longitude: stop.longitude || null,
+            orderNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
+            invoiceNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
+            commodities: stop.invoices 
+              ? stop.invoices.map((inv: any) => ({
+                  commodityName: inv.productDescription || 'Product',
+                  commodityCode: inv.productCode || null,
+                  quantity: inv.quantity || 1,
+                  unitPrice: inv.salesAmount || 0,
+                  totalPrice: inv.salesAmount || 0
+                }))
+              : [{
+                  commodityName: stop.productDescription || 'Product',
+                  commodityCode: stop.productCode || null,
+                  quantity: stop.quantity || 1,
+                  unitPrice: stop.salesAmount || 0,
+                  totalPrice: stop.salesAmount || 0
+                }]
+          })),
+          invoiceIds: this.selectedStops
+            .map(s => s.id)
+            .filter(id => id != null && id !== undefined)
+            .map(id => typeof id === 'string' ? parseInt(id, 10) : id)
+            .filter(id => !isNaN(id))
+        };
+        
+        this.http.post(`${environment.apiUrl}/logistics/loads`, payload).subscribe({
+          next: (result: any) => {
+            this.snackBar.open('Draft saved successfully!', 'OK', { duration: 3000 });
+            this.dialogRef.close({ savedDraft: true, draftId: result.id });
+          },
+          error: (err) => {
+            console.error('Failed to save draft:', err);
+            this.snackBar.open('Failed to save draft', 'Close', { duration: 3000 });
+            this.dialogRef.close();
+          }
+        });
+        return;
+      }
+    }
+    
+    // If already has a draft, just close (draft already saved)
+    if (this.draftId) {
+      this.dialogRef.close({ savedDraft: true, draftId: this.draftId });
+      return;
+    }
+    
+    // Otherwise just close
+    this.dialogRef.close();
   }
 
   ngOnDestroy(): void {
+    // Cleanup search subscription
+    if (this.searchSubscription) {
+      this.searchSubscription.unsubscribe();
+    }
+    
     if (this.routePolyline) {
       this.routePolyline.setMap(null);
     }
@@ -20027,24 +20343,46 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     return province?.name || code;
   }
 
-  // Get count of invoices for a province
+  // Get count of invoices for a province (cached for performance)
+  private _provinceCountCache: Map<string, number> = new Map();
+  private _provinceCountCacheValid = false;
+  
   getProvinceInvoiceCount(provinceCode: string): number {
-    return this.data.invoices.filter(inv => 
-      inv.status === 'Pending' && 
-      !this.isInvoiceSelected(inv) && 
-      inv.province === provinceCode
-    ).length;
+    if (!this._provinceCountCacheValid) {
+      this._provinceCountCache.clear();
+      for (const inv of this._pendingInvoices) {
+        if (!this.selectedStopIds.has(inv.id) && inv.province) {
+          const count = this._provinceCountCache.get(inv.province) || 0;
+          this._provinceCountCache.set(inv.province, count + 1);
+        }
+      }
+      this._provinceCountCacheValid = true;
+    }
+    return this._provinceCountCache.get(provinceCode) || 0;
   }
 
   // Handle province selection change
   onProvinceChange(): void {
     this.invoiceSearch = ''; // Clear search when province changes
+    this._cacheValid = false; // Invalidate filtered cache
+  }
+  
+  // Debounced search handler - call this from template
+  onSearchInput(value: string): void {
+    this.searchSubject.next(value);
   }
 
+  // Optimized filtered invoices with caching and limit for virtual scroll
   filteredInvoices(): any[] {
-    let invoices = this.data.invoices.filter(inv => 
-      inv.status === 'Pending' && !this.isInvoiceSelected(inv)
-    );
+    // Check if cache is still valid
+    if (this._cacheValid && 
+        this._lastSearchTerm === this.invoiceSearch && 
+        this._lastProvince === this.selectedProvince) {
+      return this._cachedFilteredInvoices;
+    }
+    
+    // Use pre-filtered pending invoices and Set for O(1) lookup
+    let invoices = this._pendingInvoices.filter(inv => !this.selectedStopIds.has(inv.id));
     
     // Filter by province
     if (this.selectedProvince !== 'all') {
@@ -20062,11 +20400,28 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       );
     }
     
+    // Cache the results
+    this._cachedFilteredInvoices = invoices;
+    this._lastSearchTerm = this.invoiceSearch;
+    this._lastProvince = this.selectedProvince;
+    this._cacheValid = true;
+    
     return invoices;
   }
+  
+  // Get limited invoices for virtual scrolling display (max 100 visible at a time)
+  get displayedInvoices(): any[] {
+    return this.filteredInvoices().slice(0, 200);
+  }
+  
+  // Total count for display
+  get totalFilteredCount(): number {
+    return this.filteredInvoices().length;
+  }
 
+  // O(1) lookup using Set
   isInvoiceSelected(invoice: any): boolean {
-    return this.selectedStops.some(s => s.id === invoice.id);
+    return this.selectedStopIds.has(invoice.id);
   }
 
   toggleInvoiceSelection(invoice: any): void {
@@ -20097,6 +20452,11 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       longitude: longitude
     });
     
+    // Update Set for O(1) lookup
+    this.selectedStopIds.add(invoice.id);
+    this._cacheValid = false; // Invalidate filtered cache
+    this._provinceCountCacheValid = false; // Invalidate province counts
+    
     this.calculateTotalValue();
     this.updateGroupedStops();
     
@@ -20126,6 +20486,9 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       latitude: latitude,
       longitude: longitude
     });
+    
+    // Update Set for O(1) lookup
+    this.selectedStopIds.add(invoice.id);
     
     this.calculateTotalValue();
     // Note: No updateGroupedStops or map updates here - done after all stops added
@@ -20199,7 +20562,16 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   }
 
   removeStop(index: number): void {
+    const removed = this.selectedStops[index];
     this.selectedStops.splice(index, 1);
+    
+    // Update Set for O(1) lookup
+    if (removed?.id) {
+      this.selectedStopIds.delete(removed.id);
+    }
+    this._cacheValid = false; // Invalidate filtered cache
+    this._provinceCountCacheValid = false; // Invalidate province counts
+    
     this.calculateTotalValue();
     this.updateGroupedStops();
     
@@ -20218,6 +20590,9 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   clearAllStops(): void {
     this.selectedStops = [];
+    this.selectedStopIds.clear(); // Clear the Set
+    this._cacheValid = false; // Invalidate filtered cache
+    this._provinceCountCacheValid = false; // Invalidate province counts
     this.groupedStops = [];
     this.totalDistance = 0;
     this.estimatedTime = '';
@@ -20241,6 +20616,9 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       if (result) {
         // Add the delivery note as a stop
         this.selectedStops.push(result);
+        this.selectedStopIds.add(result.id); // Update Set
+        this._cacheValid = false;
+        this._provinceCountCacheValid = false;
         this.calculateTotalValue();
         this.updateGroupedStops();
         
@@ -21746,8 +22124,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     // Use groupedStops (grouped by customer) instead of raw selectedStops
     const stopsToUse = this.groupedStops.length > 0 ? this.groupedStops : this.selectedStops;
     
+    // Determine if this is an update or create
+    const isUpdate = this.data.isEditMode && this.data.editLoadId;
+    
     // Build the load/tripsheet payload
-    const payload = {
+    // When updating (especially from draft), set status to Assigned/Available
+    const payload: any = {
       warehouseId: this.selectedWarehouse?.id,
       driverId: this.selectedDriver?.id,
       vehicleId: this.selectedVehicle?.id,
@@ -21791,8 +22173,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         .filter(id => !isNaN(id))
     };
     
-    // Determine if this is an update or create
-    const isUpdate = this.data.isEditMode && this.data.editLoadId;
+    // When completing a tripsheet (creating or updating from draft), set proper status
+    if (isUpdate) {
+      // Update: set status to Assigned if driver selected, otherwise Available
+      payload.status = this.selectedDriver?.id ? 'Assigned' : 'Available';
+    }
+    
     const apiUrl = isUpdate 
       ? `${environment.apiUrl}/logistics/loads/${this.data.editLoadId}`
       : `${environment.apiUrl}/logistics/loads`;
@@ -30595,6 +30981,828 @@ export class VehicleMaintenanceHistoryDialog {
     if (record.status === 'overdue') return 'row-overdue';
     if (record.status === 'in-progress') return 'row-in-progress';
     return '';
+  }
+
+  close(): void {
+    this.dialogRef.close();
+  }
+}
+
+// ==========================================
+// Today's Trip History Dialog — Map View
+// ==========================================
+@Component({
+  selector: 'app-today-history-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule
+  ],
+  template: `
+    <div class="trip-history-dialog">
+      <div class="dialog-header">
+        <div class="header-info">
+          <h2>
+            <mat-icon>timeline</mat-icon>
+            Today's Trip History — {{ data.vehicle.registrationNumber }}
+          </h2>
+          <div class="vehicle-meta">
+            @if (data.vehicle.make) {
+              <span class="meta-tag">{{ data.vehicle.make }} {{ data.vehicle.model }}</span>
+            }
+            @if (data.vehicle.currentDriver || data.vehicle.currentDriverName) {
+              <span class="meta-tag driver">
+                <mat-icon>person</mat-icon>
+                {{ data.vehicle.currentDriver || data.vehicle.currentDriverName }}
+              </span>
+            }
+            <span class="meta-tag date-tag">
+              <mat-icon>calendar_today</mat-icon>
+              {{ todayDate }}
+            </span>
+          </div>
+        </div>
+        <div class="header-actions">
+          @if (trips.length > 0) {
+            <button mat-icon-button matTooltip="Export to Excel" (click)="exportToExcel()" class="header-btn">
+              <mat-icon>download</mat-icon>
+            </button>
+          }
+          <button mat-icon-button (click)="close()" class="header-btn">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      @if (loading) {
+        <div class="loading-center">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Loading trip history from CarTrack...</p>
+        </div>
+      } @else if (!isLinked) {
+        <div class="empty-center">
+          <mat-icon>link_off</mat-icon>
+          <h3>Not Linked to CarTrack</h3>
+          <p>This vehicle is not linked to CarTrack. Link it first to view trip history.</p>
+        </div>
+      } @else if (trips.length === 0) {
+        <div class="empty-center">
+          <mat-icon>directions_car</mat-icon>
+          <h3>No Trips Today</h3>
+          <p>No trip data recorded for this vehicle today.</p>
+        </div>
+      } @else {
+        <!-- Summary Strip -->
+        <div class="summary-strip">
+          <div class="summary-chip distance">
+            <mat-icon>straighten</mat-icon>
+            <span><strong>{{ totalDistanceKm }}</strong> km</span>
+          </div>
+          <div class="summary-chip">
+            <mat-icon>route</mat-icon>
+            <span><strong>{{ trips.length }}</strong> trips</span>
+          </div>
+          <div class="summary-chip">
+            <mat-icon>schedule</mat-icon>
+            <span><strong>{{ totalDurationFormatted }}</strong> driving</span>
+          </div>
+          <div class="summary-chip speed">
+            <mat-icon>speed</mat-icon>
+            <span><strong>{{ maxSpeed }}</strong> km/h max</span>
+          </div>
+          <div class="summary-chip">
+            <mat-icon>hourglass_empty</mat-icon>
+            <span><strong>{{ totalIdleFormatted }}</strong> idle</span>
+          </div>
+          @if (totalHarshEvents > 0) {
+            <div class="summary-chip warning">
+              <mat-icon>warning</mat-icon>
+              <span><strong>{{ totalHarshEvents }}</strong> harsh events</span>
+            </div>
+          }
+          <div class="export-btn-wrap">
+            <button mat-raised-button class="export-btn" (click)="exportToExcel()">
+              <mat-icon>download</mat-icon>
+              Export
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Content: Sidebar + Map -->
+        <div class="main-content">
+          <!-- Trip List Sidebar -->
+          <div class="trip-sidebar">
+            <div class="sidebar-header">
+              <span>Trips</span>
+            </div>
+            <div class="trip-list">
+              @for (trip of trips; track trip.tripId; let i = $index) {
+                <div class="trip-item" [class.active]="selectedTripIndex === i" (click)="selectTrip(i)">
+                  <div class="trip-number">{{ i + 1 }}</div>
+                  <div class="trip-details">
+                    <div class="trip-time">
+                      {{ formatTime(trip.startTimestamp) }} → {{ formatTime(trip.endTimestamp) }}
+                    </div>
+                    <div class="trip-locations">
+                      <span class="loc-from">{{ trip.startGeofence || trip.startLocation || 'Unknown' }}</span>
+                      <mat-icon class="arrow-icon">arrow_forward</mat-icon>
+                      <span class="loc-to">{{ trip.endGeofence || trip.endLocation || 'Unknown' }}</span>
+                    </div>
+                    <div class="trip-stats">
+                      <span>{{ (trip.tripDistance / 1000).toFixed(1) }} km</span>
+                      <span class="dot-sep">·</span>
+                      <span>{{ trip.tripDuration || formatDuration(trip.tripDurationSeconds) }}</span>
+                      <span class="dot-sep">·</span>
+                      <span [class.speed-warning]="trip.maxSpeed > 120">{{ trip.maxSpeed | number:'1.0-0' }} km/h</span>
+                      @if (trip.harshBrakingEvents + trip.harshCorneringEvents + trip.harshAccelerationEvents > 0) {
+                        <span class="dot-sep">·</span>
+                        <span class="harsh-count" matTooltip="Harsh events">⚠ {{ trip.harshBrakingEvents + trip.harshCorneringEvents + trip.harshAccelerationEvents }}</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Map Area -->
+          <div class="map-area">
+            <div #tripMapElement class="trip-map"></div>
+            @if (mapLoading) {
+              <div class="map-loading-overlay">
+                <mat-spinner diameter="36"></mat-spinner>
+                <p>Loading map...</p>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .trip-history-dialog {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: #fff;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px 24px 14px;
+      background: linear-gradient(135deg, #00838f 0%, #00acc1 100%);
+      color: #fff;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+
+    .dialog-header h2 mat-icon {
+      font-size: 24px; width: 24px; height: 24px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .header-btn { color: rgba(255,255,255,0.85); }
+
+    .vehicle-meta {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .meta-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+    }
+
+    .meta-tag mat-icon {
+      font-size: 13px; width: 13px; height: 13px;
+    }
+
+    /* Loading / Empty states */
+    .loading-center, .empty-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-center mat-icon {
+      font-size: 56px; width: 56px; height: 56px;
+      color: #ccc; margin-bottom: 16px;
+    }
+
+    .empty-center h3 { color: #555; margin: 0 0 8px; }
+
+    /* Summary Strip */
+    .summary-strip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+      flex-wrap: wrap;
+    }
+
+    .summary-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: #555;
+      padding: 4px 10px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+    }
+
+    .summary-chip mat-icon {
+      font-size: 16px; width: 16px; height: 16px; color: #00838f;
+    }
+
+    .summary-chip.speed mat-icon { color: #e53935; }
+    .summary-chip.warning mat-icon { color: #ff8f00; }
+    .summary-chip.warning { background: #fff8e1; border-color: #ffe082; }
+    .summary-chip.distance { background: #e0f7fa; border-color: #80deea; }
+
+    .summary-chip strong {
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .export-btn-wrap {
+      margin-left: auto;
+    }
+
+    .export-btn {
+      background: #00838f !important;
+      color: #fff !important;
+      font-size: 12px;
+      height: 32px;
+      line-height: 32px;
+      padding: 0 14px;
+    }
+
+    .export-btn mat-icon {
+      font-size: 16px; width: 16px; height: 16px; margin-right: 4px;
+    }
+
+    /* Main Content Layout */
+    .main-content {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .trip-sidebar {
+      width: 320px;
+      min-width: 320px;
+      border-right: 1px solid #e9ecef;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+
+    .sidebar-header {
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 1px solid #e9ecef;
+      background: #fafafa;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .trip-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .trip-item {
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background 0.15s;
+    }
+
+    .trip-item:hover { background: #f5f9ff; }
+    .trip-item.active {
+      background: #e3f2fd;
+      border-left: 3px solid #00838f;
+    }
+
+    .trip-number {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: #00838f;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .trip-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .trip-time {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .trip-locations {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 3px;
+      font-size: 11px;
+      color: #666;
+    }
+
+    .loc-from, .loc-to {
+      max-width: 100px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .arrow-icon {
+      font-size: 12px !important;
+      width: 12px !important;
+      height: 12px !important;
+      color: #bbb;
+    }
+
+    .trip-stats {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: #888;
+    }
+
+    .dot-sep { color: #ccc; }
+    .speed-warning { color: #e53935; font-weight: 600; }
+    .harsh-count { color: #ff8f00; font-weight: 600; }
+
+    /* Map Area */
+    .map-area {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+
+    .trip-map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-loading-overlay {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      color: #999;
+    }
+
+    @media (max-width: 768px) {
+      .trip-sidebar { display: none; }
+      .summary-strip { padding: 8px 12px; gap: 6px; }
+    }
+  `]
+})
+export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
+  @ViewChild('tripMapElement') mapElement!: ElementRef;
+
+  loading = true;
+  isLinked = true;
+  mapLoading = true;
+  trips: any[] = [];
+  totalDistanceKm = 0;
+  totalDurationFormatted = '';
+  maxSpeed = 0;
+  totalIdleFormatted = '';
+  totalHarshEvents = 0;
+  todayDate = '';
+  selectedTripIndex = -1;
+
+  private map: google.maps.Map | null = null;
+  private markers: google.maps.Marker[] = [];
+  private polylines: google.maps.Polyline[] = [];
+  private infoWindow: google.maps.InfoWindow | null = null;
+  private directionsService: google.maps.DirectionsService | null = null;
+  private mapInitialized = false;
+
+  private http = inject(HttpClient);
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private dialogRef: MatDialogRef<TodayHistoryDialog>
+  ) {
+    this.todayDate = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    this.loadTripHistory();
+  }
+
+  ngAfterViewInit(): void {
+    // Map will be initialized after data loads
+  }
+
+  ngOnDestroy(): void {
+    this.clearMapOverlays();
+    if (this.infoWindow) this.infoWindow.close();
+  }
+
+  private clearMapOverlays(): void {
+    this.markers.forEach(m => m.setMap(null));
+    this.markers = [];
+    this.polylines.forEach(p => p.setMap(null));
+    this.polylines = [];
+  }
+
+  loadTripHistory(): void {
+    const vehicle = this.data.vehicle;
+
+    if (!vehicle.carTrackId && !vehicle.isLinkedToCarTrack) {
+      this.isLinked = false;
+      this.loading = false;
+      return;
+    }
+
+    const reg = vehicle.registrationNumber;
+    const today = new Date().toISOString().split('T')[0];
+
+    this.http.get<any>(`${this.data.apiUrl}/fleet/vehicles/${encodeURIComponent(reg)}/trip-history?date=${today}`).subscribe({
+      next: (response) => {
+        this.trips = response.trips || [];
+        this.totalDistanceKm = response.totalDistanceKm || 0;
+        this.maxSpeed = response.maxSpeed || 0;
+        this.totalHarshEvents = (response.totalHarshBraking || 0) + (response.totalHarshCornering || 0) + (response.totalHarshAcceleration || 0);
+        this.totalDurationFormatted = this.formatDuration((response.totalDurationMinutes || 0) * 60);
+        this.totalIdleFormatted = this.formatDuration((response.totalIdleMinutes || 0) * 60);
+        this.loading = false;
+
+        if (this.trips.length > 0) {
+          setTimeout(() => this.initMap(), 100);
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load trip history:', err);
+        this.loading = false;
+      }
+    });
+  }
+
+  private initMap(): void {
+    if (this.mapInitialized || !this.mapElement?.nativeElement) return;
+
+    const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
+
+    if (typeof google !== 'undefined' && google.maps) {
+      this.createMap();
+      return;
+    }
+
+    const cbName = 'initTripHistoryMap_' + Date.now();
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${cbName}`;
+    script.async = true;
+    script.defer = true;
+    (window as any)[cbName] = () => {
+      this.createMap();
+      delete (window as any)[cbName];
+    };
+    document.head.appendChild(script);
+  }
+
+  private createMap(): void {
+    if (this.mapInitialized) return;
+
+    this.map = new google.maps.Map(this.mapElement.nativeElement, {
+      zoom: 10,
+      center: { lat: -26.2041, lng: 28.0473 },
+      mapTypeId: 'roadmap',
+      mapTypeControl: true,
+      zoomControl: true,
+      streetViewControl: false,
+      fullscreenControl: true,
+      scaleControl: true,
+      styles: [{ featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }]
+    } as any);
+
+    this.infoWindow = new google.maps.InfoWindow();
+    this.directionsService = new google.maps.DirectionsService();
+    this.mapInitialized = true;
+    this.mapLoading = false;
+
+    this.plotAllTrips();
+  }
+
+  private plotAllTrips(): void {
+    if (!this.map) return;
+    this.clearMapOverlays();
+    this.mapLoading = true;
+
+    const bounds = new google.maps.LatLngBounds();
+    const colors = ['#00838f', '#5c6bc0', '#43a047', '#e53935', '#ff8f00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#546e7a'];
+
+    // Collect all markers and route data first (don't add to map yet)
+    const pendingMarkers: { marker: google.maps.Marker }[] = [];
+    const routeRequests: { index: number; origin: any; destination: any; color: string }[] = [];
+
+    this.trips.forEach((trip, i) => {
+      const color = colors[i % colors.length];
+      const startLat = trip.startLatitude;
+      const startLng = trip.startLongitude;
+      const endLat = trip.endLatitude;
+      const endLng = trip.endLongitude;
+
+      if (startLat && startLng) {
+        const startPos = { lat: startLat, lng: startLng };
+        bounds.extend(startPos);
+
+        const startMarker = new google.maps.Marker({
+          position: startPos,
+          title: `Trip ${i + 1} Start`,
+          label: { text: String(i + 1), color: '#fff', fontSize: '11px', fontWeight: '700' },
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 14,
+            fillColor: color,
+            fillOpacity: 1,
+            strokeColor: '#fff',
+            strokeWeight: 2
+          }
+        });
+
+        startMarker.addListener('click', () => {
+          this.showStopInfo(trip, i, 'start', startMarker);
+          this.selectedTripIndex = i;
+        });
+
+        pendingMarkers.push({ marker: startMarker });
+      }
+
+      if (endLat && endLng) {
+        const endPos = { lat: endLat, lng: endLng };
+        bounds.extend(endPos);
+
+        const endMarker = new google.maps.Marker({
+          position: endPos,
+          title: `Trip ${i + 1} End`,
+          icon: {
+            path: 'M 0,-8 8,0 0,8 -8,0 Z',
+            scale: 1.4,
+            fillColor: color,
+            fillOpacity: 0.9,
+            strokeColor: '#fff',
+            strokeWeight: 2
+          }
+        });
+
+        endMarker.addListener('click', () => {
+          this.showStopInfo(trip, i, 'end', endMarker);
+          this.selectedTripIndex = i;
+        });
+
+        pendingMarkers.push({ marker: endMarker });
+      }
+
+      if (startLat && startLng && endLat && endLng) {
+        routeRequests.push({
+          index: i,
+          origin: { lat: startLat, lng: startLng },
+          destination: { lat: endLat, lng: endLng },
+          color: color
+        });
+      }
+    });
+
+    // Fetch all routes with staggered requests, then render everything at once
+    const routeResults: { path: any[]; color: string; isFallback: boolean }[] = [];
+    let completedCount = 0;
+    const totalRoutes = routeRequests.length;
+
+    const renderAll = () => {
+      // Add all markers to map
+      pendingMarkers.forEach(m => {
+        m.marker.setMap(this.map);
+        this.markers.push(m.marker);
+      });
+
+      // Add all route lines to map
+      routeResults.forEach(r => {
+        const line = new google.maps.Polyline({
+          path: r.path,
+          strokeColor: r.color,
+          strokeOpacity: r.isFallback ? 0.5 : 0.8,
+          strokeWeight: r.isFallback ? 3 : 4,
+          map: this.map
+        });
+        this.polylines.push(line);
+      });
+
+      if (pendingMarkers.length > 0) {
+        this.map!.fitBounds(bounds, 60);
+      }
+      this.mapLoading = false;
+    };
+
+    if (totalRoutes === 0) {
+      renderAll();
+      return;
+    }
+
+    // Stagger requests at 150ms intervals to avoid rate limiting
+    routeRequests.forEach((req, idx) => {
+      setTimeout(() => {
+        if (!this.directionsService) {
+          routeResults.push({ path: [req.origin, req.destination], color: req.color, isFallback: true });
+          completedCount++;
+          if (completedCount >= totalRoutes) renderAll();
+          return;
+        }
+
+        this.directionsService.route(
+          { origin: req.origin, destination: req.destination, travelMode: google.maps.TravelMode.DRIVING },
+          (result: any, status: any) => {
+            if (status === google.maps.DirectionsStatus.OK && result) {
+              routeResults.push({ path: result.routes[0].overview_path, color: req.color, isFallback: false });
+            } else {
+              // Fallback to straight line
+              routeResults.push({ path: [req.origin, req.destination], color: req.color, isFallback: true });
+            }
+            completedCount++;
+            if (completedCount >= totalRoutes) renderAll();
+          }
+        );
+      }, idx * 150);
+    });
+  }
+
+  private showStopInfo(trip: any, index: number, type: 'start' | 'end', marker: google.maps.Marker): void {
+    if (!this.infoWindow || !this.map) return;
+
+    const loc = type === 'start'
+      ? (trip.startGeofence || trip.startLocation || 'Unknown')
+      : (trip.endGeofence || trip.endLocation || 'Unknown');
+    const time = this.formatTime(type === 'start' ? trip.startTimestamp : trip.endTimestamp);
+    const distKm = (trip.tripDistance / 1000).toFixed(1);
+    const dur = trip.tripDuration || this.formatDuration(trip.tripDurationSeconds);
+    const harsh = trip.harshBrakingEvents + trip.harshCorneringEvents + trip.harshAccelerationEvents;
+    const harshHtml = harsh > 0
+      ? `<p style="margin:4px 0;font-size:12px;color:#ff8f00;"><strong>⚠ ${harsh} harsh events</strong></p>`
+      : '';
+
+    const content = `
+      <div style="padding:12px;min-width:220px;max-width:300px;">
+        <h3 style="margin:0 0 6px;font-size:15px;color:#00838f;">
+          Trip ${index + 1} — ${type === 'start' ? 'Start' : 'End'}
+        </h3>
+        <p style="margin:4px 0;font-size:13px;"><strong>📍 ${loc}</strong></p>
+        <p style="margin:4px 0;font-size:12px;color:#666;"><strong>Time:</strong> ${time}</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:8px 0;">
+        <p style="margin:4px 0;font-size:12px;"><strong>Distance:</strong> ${distKm} km</p>
+        <p style="margin:4px 0;font-size:12px;"><strong>Duration:</strong> ${dur}</p>
+        <p style="margin:4px 0;font-size:12px;"><strong>Max Speed:</strong> <span style="color:${trip.maxSpeed > 120 ? '#e53935' : '#333'};">${Math.round(trip.maxSpeed)} km/h</span></p>
+        ${harshHtml}
+      </div>
+    `;
+
+    this.infoWindow.setContent(content);
+    this.infoWindow.open(this.map, marker);
+  }
+
+  selectTrip(index: number): void {
+    this.selectedTripIndex = index;
+    const trip = this.trips[index];
+    if (!this.map) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    let hasBounds = false;
+
+    if (trip.startLatitude && trip.startLongitude) {
+      bounds.extend({ lat: trip.startLatitude, lng: trip.startLongitude });
+      hasBounds = true;
+    }
+    if (trip.endLatitude && trip.endLongitude) {
+      bounds.extend({ lat: trip.endLatitude, lng: trip.endLongitude });
+      hasBounds = true;
+    }
+
+    if (hasBounds) {
+      this.map.fitBounds(bounds, 80);
+      // Open info on the start marker
+      const startMarker = this.markers[index * 2];
+      if (startMarker) {
+        this.showStopInfo(trip, index, 'start', startMarker);
+      }
+    }
+  }
+
+  exportToExcel(): void {
+    const vehicle = this.data.vehicle;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Build CSV content
+    const headers = ['Trip #', 'Start Time', 'End Time', 'Duration', 'From', 'To', 'Distance (km)', 'Max Speed (km/h)', 'Harsh Braking', 'Harsh Cornering', 'Harsh Acceleration', 'Idle Time (min)'];
+    const rows = this.trips.map((trip, i) => [
+      i + 1,
+      trip.startTimestamp || '',
+      trip.endTimestamp || '',
+      trip.tripDuration || this.formatDuration(trip.tripDurationSeconds),
+      (trip.startGeofence || trip.startLocation || 'Unknown').replace(/,/g, ';'),
+      (trip.endGeofence || trip.endLocation || 'Unknown').replace(/,/g, ';'),
+      (trip.tripDistance / 1000).toFixed(1),
+      Math.round(trip.maxSpeed),
+      trip.harshBrakingEvents,
+      trip.harshCorneringEvents,
+      trip.harshAccelerationEvents,
+      Math.round(trip.idleTimeSeconds / 60)
+    ]);
+
+    // Summary row
+    rows.push([]);
+    rows.push(['Summary']);
+    rows.push(['Total Distance (km)', this.totalDistanceKm]);
+    rows.push(['Total Trips', this.trips.length]);
+    rows.push(['Max Speed (km/h)', this.maxSpeed]);
+    rows.push(['Total Harsh Events', this.totalHarshEvents]);
+    rows.push(['Vehicle', vehicle.registrationNumber]);
+    rows.push(['Driver', vehicle.currentDriver || vehicle.currentDriverName || 'N/A']);
+    rows.push(['Date', today]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => (r as any[]).join(','))].join('\\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Trip_History_${vehicle.registrationNumber}_${today}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  formatTime(timestamp: string): string {
+    if (!timestamp) return '—';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      const parts = timestamp.split(' ');
+      return parts.length > 1 ? parts[1].substring(0, 5) : timestamp;
+    }
+  }
+
+  formatDuration(seconds: number): string {
+    if (!seconds || seconds <= 0) return '0m';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
   }
 
   close(): void {

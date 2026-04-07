@@ -204,8 +204,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 int? createdByUserId = int.TryParse(userIdClaim, out var uid) ? uid : null;
 
-                // Determine status based on driver assignment
-                var status = dto.DriverId.HasValue ? "Assigned" : "Available";
+                // Determine status: use provided status (Draft), or default based on driver assignment
+                var status = !string.IsNullOrEmpty(dto.Status) 
+                    ? dto.Status 
+                    : (dto.DriverId.HasValue ? "Assigned" : "Available");
 
                 // Get pickup and delivery locations from stops
                 var pickupStop = dto.Stops.FirstOrDefault(s => s.StopType == "Pickup");

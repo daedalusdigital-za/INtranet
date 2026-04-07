@@ -214,6 +214,36 @@ namespace ProjectTracker.API.Controllers
                 return StatusCode(500, new { error = "Failed to fetch summary" });
             }
         }
+        
+        // ============================================================================
+        // GET: api/Books/all-invoices-summary - Get summary across all departments
+        // ============================================================================
+        [HttpGet("all-invoices-summary")]
+        public async Task<IActionResult> GetAllInvoicesSummary()
+        {
+            try
+            {
+                var allInvoices = await _context.BookInvoices.ToListAsync();
+
+                var summary = new
+                {
+                    totalCount = allInvoices.Count,
+                    totalAmount = allInvoices.Sum(b => b.Total),
+                    paidCount = allInvoices.Count(b => b.Status == "Paid" || b.PaymentDate.HasValue),
+                    unpaidCount = allInvoices.Count(b => b.Status != "Paid" && !b.PaymentDate.HasValue),
+                    pendingCount = allInvoices.Count(b => b.Status == "Pending"),
+                    overdueCount = allInvoices.Count(b => b.Status == "Overdue"),
+                    submittedCount = allInvoices.Count(b => b.Status == "Submitted")
+                };
+
+                return Ok(summary);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching all invoices summary");
+                return StatusCode(500, new { error = "Failed to fetch summary" });
+            }
+        }
 
         // ============================================================================
         // GET: api/Books/{id} - Get single invoice details

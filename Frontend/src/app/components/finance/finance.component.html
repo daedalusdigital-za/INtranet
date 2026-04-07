@@ -1,80 +1,586 @@
+<app-navbar></app-navbar>
 <div class="finance-container">
-  <div class="page-header">
-    <h1><mat-icon>account_balance</mat-icon> Finance Module</h1>
-    <p>Manage budgets, expenses, purchase orders, and payments</p>
+  <!-- Hero Header -->
+  <div class="hero-header animate-in">
+    <div class="hero-content">
+      <div class="hero-left">
+        <div class="hero-icon-ring">
+          <div class="hero-icon-inner">
+            <mat-icon>account_balance</mat-icon>
+          </div>
+        </div>
+        <div class="hero-text">
+          <h1>Finance</h1>
+          <p class="hero-subtitle">Invoices · Expenses · Payments</p>
+        </div>
+      </div>
+      <div class="hero-kpis">
+        <div class="kpi-pill">
+          <div class="kpi-icon-wrap invoices-kpi">
+            <mat-icon>receipt_long</mat-icon>
+          </div>
+          <div class="kpi-data">
+            <span class="kpi-number">{{ stats.totalInvoices }}</span>
+            <span class="kpi-label">Invoices</span>
+          </div>
+        </div>
+        <div class="kpi-pill">
+          <div class="kpi-icon-wrap amount-kpi">
+            <mat-icon>payments</mat-icon>
+          </div>
+          <div class="kpi-data">
+            <span class="kpi-number">{{ stats.totalAmount | currency:'ZAR':'symbol':'1.0-0' }}</span>
+            <span class="kpi-label">Total Value</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- Stats Overview -->
-  <div class="stats-grid">
-    <mat-card class="stat-card budget">
-      <mat-card-content>
-        <div class="stat-icon"><mat-icon>payments</mat-icon></div>
-        <div class="stat-info">
-          <h3>Total Budget</h3>
-          <p class="stat-value">{{ stats.totalBudget | currency:'ZAR':'symbol':'1.2-2' }}</p>
+  <!-- Stats Cards -->
+  <div class="stats-grid animate-in delay-1">
+    <div class="stat-card-modern invoices-card-stat">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>description</mat-icon>
         </div>
-      </mat-card-content>
-    </mat-card>
+        <div class="stat-detail">
+          <span class="stat-number">{{ stats.totalInvoices }}</span>
+          <span class="stat-title">Total Invoices</span>
+        </div>
+      </div>
+    </div>
 
-    <mat-card class="stat-card spent">
-      <mat-card-content>
-        <div class="stat-icon"><mat-icon>trending_down</mat-icon></div>
-        <div class="stat-info">
-          <h3>Total Spent</h3>
-          <p class="stat-value">{{ stats.totalSpent | currency:'ZAR':'symbol':'1.2-2' }}</p>
+    <div class="stat-card-modern unpaid-card-stat">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>pending_actions</mat-icon>
         </div>
-      </mat-card-content>
-    </mat-card>
+        <div class="stat-detail">
+          <span class="stat-number">{{ stats.unpaidInvoices }}</span>
+          <span class="stat-title">Unpaid Invoices</span>
+        </div>
+      </div>
+    </div>
 
-    <mat-card class="stat-card expenses">
-      <mat-card-content>
-        <div class="stat-icon"><mat-icon>receipt_long</mat-icon></div>
-        <div class="stat-info">
-          <h3>Pending Expenses</h3>
-          <p class="stat-value">{{ stats.pendingExpenses }}</p>
+    <div class="stat-card-modern expenses-card-stat" (click)="openRequestedPayments()" style="cursor: pointer;">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>request_quote</mat-icon>
         </div>
-      </mat-card-content>
-    </mat-card>
+        <div class="stat-detail">
+          <span class="stat-number">{{ stats.requestedPayments }}</span>
+          <span class="stat-title">Requested Payments</span>
+        </div>
+        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
+      </div>
+    </div>
 
-    <mat-card class="stat-card payments">
-      <mat-card-content>
-        <div class="stat-icon"><mat-icon>credit_card</mat-icon></div>
-        <div class="stat-info">
-          <h3>Pending Payments</h3>
-          <p class="stat-value">{{ stats.pendingPayments }}</p>
+    <div class="stat-card-modern payments-card-stat">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>credit_card</mat-icon>
         </div>
-      </mat-card-content>
-    </mat-card>
+        <div class="stat-detail">
+          <span class="stat-number">{{ stats.pendingPayments }}</span>
+          <span class="stat-title">Pending Payments</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card-modern submitted-card-stat">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>send</mat-icon>
+        </div>
+        <div class="stat-detail">
+          <span class="stat-number">{{ stats.submittedInvoices }}</span>
+          <span class="stat-title">Submitted Invoices</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invoice Management Panel -->
+  <div class="invoice-panel animate-in delay-2">
+    <div class="panel-header">
+      <div class="panel-title-group">
+        <div class="panel-icon">
+          <mat-icon>description</mat-icon>
+        </div>
+        <div>
+          <h2 class="panel-title">Department Invoices</h2>
+          <p class="panel-subtitle">Filter and manage invoices by department</p>
+        </div>
+      </div>
+      @if (totalInvoices > 0) {
+        <div class="results-badge">
+          <mat-icon>format_list_numbered</mat-icon>
+          {{ totalInvoices }} results
+        </div>
+      }
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <div class="filter-item">
+          <label for="deptSelect">
+            <mat-icon>business</mat-icon>
+            Department
+          </label>
+          <select id="deptSelect" [(ngModel)]="selectedDepartment" (ngModelChange)="onDepartmentChange()">
+            <option [ngValue]="null">-- Select Department --</option>
+            @for (dept of departments; track dept.departmentId) {
+              <option [ngValue]="dept.departmentId">{{ dept.name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="filter-item search-item">
+          <label>
+            <mat-icon>search</mat-icon>
+            Search
+          </label>
+          <div class="search-input-wrap">
+            <input type="text" [(ngModel)]="searchTerm" placeholder="Invoice #, supplier, description..." (keyup.enter)="applyFilters()">
+            <mat-icon class="search-icon-inside">search</mat-icon>
+          </div>
+        </div>
+
+        <div class="filter-item">
+          <label for="statusSelect">
+            <mat-icon>flag</mat-icon>
+            Status
+          </label>
+          <select id="statusSelect" [(ngModel)]="selectedStatus" (ngModelChange)="applyFilters()">
+            <option value="">All Statuses</option>
+            <option value="Draft">Draft</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Pending">Pending</option>
+            <option value="Payment Requested">Payment Requested</option>
+            <option value="Paid">Paid</option>
+            <option value="Submitted">Submitted</option>
+            <option value="Overdue">Overdue</option>
+            <option value="Archived">Archived</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="filter-apply-btn" (click)="applyFilters()" [disabled]="!selectedDepartment">
+        <mat-icon>filter_list</mat-icon>
+        Apply
+      </button>
+    </div>
+
+    <!-- Table Area -->
+    <div class="table-area">
+      @if (loading) {
+        <div class="loading-state">
+          <div class="loading-pulse">
+            <mat-spinner diameter="48"></mat-spinner>
+          </div>
+          <p>Loading invoices...</p>
+        </div>
+      } @else if (selectedDepartment && !loading && filteredInvoices.length > 0) {
+        <div class="table-wrapper">
+          <table mat-table [dataSource]="filteredInvoices" class="modern-table">
+            <!-- Invoice Number -->
+            <ng-container matColumnDef="invoiceNumber">
+              <th mat-header-cell *matHeaderCellDef>Invoice #</th>
+              <td mat-cell *matCellDef="let invoice">
+                <span class="invoice-num">{{ invoice.invoiceNumber || 'N/A' }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Supplier -->
+            <ng-container matColumnDef="supplierName">
+              <th mat-header-cell *matHeaderCellDef>Supplier</th>
+              <td mat-cell *matCellDef="let invoice">
+                <div class="supplier-cell">
+                  <div class="supplier-avatar">{{ (invoice.supplierName || '?')[0] }}</div>
+                  <span>{{ invoice.supplierName }}</span>
+                </div>
+              </td>
+            </ng-container>
+
+            <!-- Date -->
+            <ng-container matColumnDef="invoiceDate">
+              <th mat-header-cell *matHeaderCellDef>Date</th>
+              <td mat-cell *matCellDef="let invoice">
+                <span class="date-cell">{{ invoice.invoiceDate | date:'dd MMM yyyy' }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Category -->
+            <ng-container matColumnDef="category">
+              <th mat-header-cell *matHeaderCellDef>Category</th>
+              <td mat-cell *matCellDef="let invoice">
+                <span class="category-chip">{{ invoice.category || 'General' }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Total -->
+            <ng-container matColumnDef="total">
+              <th mat-header-cell *matHeaderCellDef>Total</th>
+              <td mat-cell *matCellDef="let invoice">
+                <span class="amount-cell">{{ invoice.total | currency:'ZAR' }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Status -->
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let invoice">
+                <span class="status-pill" [class]="'status-' + invoice.status.toLowerCase().replace(' ', '-')">
+                  <span class="status-dot"></span>
+                  {{ invoice.status }}
+                </span>
+              </td>
+            </ng-container>
+
+            <!-- Actions -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Actions</th>
+              <td mat-cell *matCellDef="let invoice">
+                <div class="action-btns">
+                  <button class="action-btn view" (click)="viewInvoice(invoice)" matTooltip="View Details">
+                    <mat-icon>visibility</mat-icon>
+                  </button>
+                  <button class="action-btn download" (click)="downloadInvoice(invoice)" matTooltip="Download">
+                    <mat-icon>download</mat-icon>
+                  </button>
+                </div>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row-hover"></tr>
+          </table>
+
+          <mat-paginator
+            [length]="totalInvoices"
+            [pageSize]="pageSize"
+            [pageIndex]="pageIndex"
+            [pageSizeOptions]="[10, 20, 50, 100]"
+            (page)="onPageChange($event)"
+            showFirstLastButtons>
+          </mat-paginator>
+        </div>
+      } @else if (selectedDepartment && filteredInvoices.length === 0 && !loading) {
+        <div class="empty-state">
+          <div class="empty-icon">
+            <mat-icon>search_off</mat-icon>
+          </div>
+          <h3>No Invoices Found</h3>
+          <p>No invoices found for the selected department</p>
+        </div>
+      } @else {
+        <div class="empty-state welcome">
+          <div class="empty-icon">
+            <mat-icon>touch_app</mat-icon>
+          </div>
+          <h3>Select a Department</h3>
+          <p>Choose a department from the filter above to view invoices</p>
+        </div>
+      }
+    </div>
   </div>
 
   <!-- Quick Actions -->
-  <mat-card class="actions-card">
-    <mat-card-header>
-      <mat-card-title>Quick Actions</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="actions-grid">
-        <button mat-raised-button color="primary" routerLink="/finance/budgets">
-          <mat-icon>account_balance_wallet</mat-icon>
-          Budgets
-        </button>
-        <button mat-raised-button color="primary" routerLink="/finance/expenses">
+  <div class="quick-actions animate-in delay-3">
+    <h2 class="section-label">
+      <mat-icon>bolt</mat-icon>
+      Quick Actions
+    </h2>
+    <div class="actions-grid-modern">
+      <button class="action-card" (click)="goToBooks()">
+        <div class="action-card-icon invoices-action">
+          <mat-icon>description</mat-icon>
+        </div>
+        <span class="action-card-label">Manage Invoices</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/expenses">
+        <div class="action-card-icon expenses-action">
           <mat-icon>receipt</mat-icon>
-          Expenses
-        </button>
-        <button mat-raised-button color="primary" routerLink="/finance/purchase-orders">
+        </div>
+        <span class="action-card-label">Expenses</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/purchase-orders">
+        <div class="action-card-icon po-action">
           <mat-icon>shopping_cart</mat-icon>
-          Purchase Orders
-        </button>
-        <button mat-raised-button color="primary" routerLink="/finance/payments">
+        </div>
+        <span class="action-card-label">Purchase Orders</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/payments">
+        <div class="action-card-icon payments-action">
           <mat-icon>payment</mat-icon>
-          Payments
-        </button>
-        <button mat-raised-button color="accent" routerLink="/finance/categories">
+        </div>
+        <span class="action-card-label">Payments</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/categories">
+        <div class="action-card-icon categories-action">
           <mat-icon>category</mat-icon>
-          Categories
+        </div>
+        <span class="action-card-label">Categories</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!--  COMPANY SELECT DIALOG                         -->
+<!-- ═══════════════════════════════════════════════ -->
+@if (showCompanyDialog) {
+  <div class="dialog-backdrop" (click)="closeCompanyDialog()">
+    <div class="dialog-panel company-dialog" (click)="$event.stopPropagation()">
+      <div class="dialog-header">
+        <div class="dialog-header-left">
+          <div class="dialog-icon">
+            <mat-icon>business</mat-icon>
+          </div>
+          <div>
+            <h2>Select Company</h2>
+            <p>Choose a company to view requested payments</p>
+          </div>
+        </div>
+        <button class="dialog-close" (click)="closeCompanyDialog()">
+          <mat-icon>close</mat-icon>
         </button>
       </div>
-    </mat-card-content>
-  </mat-card>
-</div>
+      <div class="company-grid">
+        @for (company of companies; track company.name) {
+          <button class="company-card" (click)="selectCompany(company.name)">
+            <div class="company-card-icon">
+              <mat-icon>{{ company.icon }}</mat-icon>
+            </div>
+            <span class="company-card-name">{{ company.name }}</span>
+            <mat-icon class="company-card-arrow">chevron_right</mat-icon>
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════════════════════════════════════════ -->
+<!--  PASSWORD DIALOG                               -->
+<!-- ═══════════════════════════════════════════════ -->
+@if (showPasswordDialog) {
+  <div class="dialog-backdrop" (click)="closePasswordDialog()">
+    <div class="dialog-panel password-dialog" (click)="$event.stopPropagation()">
+      <div class="dialog-header">
+        <div class="dialog-header-left">
+          <div class="dialog-icon lock-icon">
+            <mat-icon>lock</mat-icon>
+          </div>
+          <div>
+            <h2>Authentication Required</h2>
+            <p>Enter the password for <strong>{{ selectedCompany }}</strong></p>
+          </div>
+        </div>
+        <button class="dialog-close" (click)="closePasswordDialog()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      <div class="password-body">
+        <div class="password-input-group">
+          <label>
+            <mat-icon>vpn_key</mat-icon>
+            Password
+          </label>
+          <input
+            type="password"
+            [(ngModel)]="companyPassword"
+            placeholder="Enter company password..."
+            (keyup.enter)="submitPassword()"
+            autofocus>
+        </div>
+        @if (passwordError) {
+          <div class="password-error">
+            <mat-icon>error_outline</mat-icon>
+            {{ passwordError }}
+          </div>
+        }
+        <div class="password-actions">
+          <button class="btn-secondary" (click)="backToCompanySelect()">
+            <mat-icon>arrow_back</mat-icon>
+            Back
+          </button>
+          <button class="btn-primary" (click)="submitPassword()" [disabled]="!companyPassword">
+            <mat-icon>login</mat-icon>
+            Unlock
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════════════════════════════════════════ -->
+<!--  REQUESTED PAYMENTS PANEL (full overlay)       -->
+<!-- ═══════════════════════════════════════════════ -->
+@if (showRequestedPaymentsPanel) {
+  <div class="dialog-backdrop" (click)="closeRequestedPayments()">
+    <div class="dialog-panel payments-panel" (click)="$event.stopPropagation()">
+      <div class="dialog-header">
+        <div class="dialog-header-left">
+          <div class="dialog-icon payments-icon">
+            <mat-icon>request_quote</mat-icon>
+          </div>
+          <div>
+            <h2>Requested Payments</h2>
+            <p>{{ selectedCompany }} — {{ requestedPayments.length }} pending requests</p>
+          </div>
+        </div>
+        <button class="dialog-close" (click)="closeRequestedPayments()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="payments-body">
+        @if (requestedPaymentsLoading) {
+          <div class="loading-state">
+            <mat-spinner diameter="40"></mat-spinner>
+            <p>Loading payments...</p>
+          </div>
+        } @else if (requestedPayments.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <mat-icon>check_circle</mat-icon>
+            </div>
+            <h3>All Caught Up!</h3>
+            <p>No pending payment requests for {{ selectedCompany }}</p>
+          </div>
+        } @else {
+          <div class="rp-list">
+            @for (payment of requestedPayments; track payment.id) {
+              <div class="rp-card">
+                <div class="rp-card-left">
+                  <div class="rp-avatar">
+                    {{ (payment.supplierName || '?')[0] }}
+                  </div>
+                  <div class="rp-info">
+                    <span class="rp-invoice-num">{{ payment.invoiceNumber }}</span>
+                    <span class="rp-supplier">{{ payment.supplierName }}</span>
+                    <span class="rp-dept">
+                      <mat-icon>apartment</mat-icon>
+                      {{ payment.departmentName }}
+                    </span>
+                  </div>
+                </div>
+                <div class="rp-card-center">
+                  <span class="rp-amount">{{ payment.total | currency:'ZAR' }}</span>
+                  <span class="rp-date">{{ payment.invoiceDate | date:'dd MMM yyyy' }}</span>
+                </div>
+                <div class="rp-card-actions">
+                  <button class="rp-btn preview" (click)="previewRequestedPayment(payment)" matTooltip="Preview">
+                    <mat-icon>visibility</mat-icon>
+                  </button>
+                  <button class="rp-btn download" (click)="downloadRequestedPayment(payment)" matTooltip="Download">
+                    <mat-icon>download</mat-icon>
+                  </button>
+                  <button class="rp-btn approve" (click)="approvePayment(payment)" matTooltip="Submit / Approve">
+                    <mat-icon>check_circle</mat-icon>
+                  </button>
+                  <button class="rp-btn reject" (click)="rejectPayment(payment)" matTooltip="Reject">
+                    <mat-icon>cancel</mat-icon>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════════════════════════════════════════ -->
+<!--  INVOICE PREVIEW DIALOG                        -->
+<!-- ═══════════════════════════════════════════════ -->
+@if (showPreviewDialog && previewPayment) {
+  <div class="dialog-backdrop" (click)="closePreviewDialog()">
+    <div class="dialog-panel preview-dialog" (click)="$event.stopPropagation()">
+      <div class="dialog-header">
+        <div class="dialog-header-left">
+          <div class="dialog-icon preview-icon">
+            <mat-icon>description</mat-icon>
+          </div>
+          <div>
+            <h2>Invoice Preview</h2>
+            <p>{{ previewPayment.invoiceNumber }}</p>
+          </div>
+        </div>
+        <button class="dialog-close" (click)="closePreviewDialog()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="preview-body">
+        <div class="preview-grid">
+          <div class="preview-field">
+            <span class="preview-label">Invoice #</span>
+            <span class="preview-value mono">{{ previewPayment.invoiceNumber }}</span>
+          </div>
+          <div class="preview-field">
+            <span class="preview-label">Supplier</span>
+            <span class="preview-value">{{ previewPayment.supplierName }}</span>
+          </div>
+          <div class="preview-field">
+            <span class="preview-label">Department</span>
+            <span class="preview-value">{{ previewPayment.departmentName }}</span>
+          </div>
+          <div class="preview-field">
+            <span class="preview-label">Category</span>
+            <span class="preview-value">{{ previewPayment.category }}</span>
+          </div>
+          <div class="preview-field">
+            <span class="preview-label">Date</span>
+            <span class="preview-value">{{ previewPayment.invoiceDate | date:'dd MMMM yyyy' }}</span>
+          </div>
+          <div class="preview-field">
+            <span class="preview-label">Total Amount</span>
+            <span class="preview-value amount">{{ previewPayment.total | currency:'ZAR' }}</span>
+          </div>
+        </div>
+
+        @if (previewPayment.description) {
+          <div class="preview-description">
+            <span class="preview-label">Description</span>
+            <p>{{ previewPayment.description }}</p>
+          </div>
+        }
+
+        @if (previewPayment.fileName) {
+          <div class="preview-attachment">
+            <mat-icon>attach_file</mat-icon>
+            <span>{{ previewPayment.fileName }}</span>
+            <button class="btn-link" (click)="downloadRequestedPayment(previewPayment)">Download</button>
+          </div>
+        }
+
+        <div class="preview-actions">
+          <button class="btn-reject" (click)="rejectPayment(previewPayment)">
+            <mat-icon>cancel</mat-icon>
+            Rejected
+          </button>
+          <button class="btn-approve" (click)="approvePayment(previewPayment)">
+            <mat-icon>check_circle</mat-icon>
+            Submitted
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

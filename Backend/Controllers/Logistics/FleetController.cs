@@ -399,6 +399,52 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // GET: api/Fleet/vehicles/{registration}/trip-history?date=2026-04-07
+        [HttpGet("vehicles/{registration}/trip-history")]
+        public async Task<ActionResult<List<CarTrackTripData>>> GetVehicleTripHistory(string registration, [FromQuery] string? date)
+        {
+            try
+            {
+                var targetDate = DateTime.Today;
+                if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, out var parsed))
+                {
+                    targetDate = parsed;
+                }
+
+                _logger.LogInformation("Fetching trip history for {Registration} on {Date}", registration, targetDate.ToString("yyyy-MM-dd"));
+                var trips = await _carTrackService.GetVehicleTripsAsync(registration, targetDate);
+
+                // Calculate summary
+                var totalDistance = trips.Sum(t => t.TripDistance);
+                var totalDuration = trips.Sum(t => t.TripDurationSeconds);
+                var maxSpeed = trips.Any() ? trips.Max(t => t.MaxSpeed) : 0;
+                var totalHarshBraking = trips.Sum(t => t.HarshBrakingEvents);
+                var totalHarshCornering = trips.Sum(t => t.HarshCorneringEvents);
+                var totalHarshAcceleration = trips.Sum(t => t.HarshAccelerationEvents);
+                var totalIdleTime = trips.Sum(t => t.IdleTimeSeconds);
+
+                return Ok(new
+                {
+                    registration,
+                    date = targetDate.ToString("yyyy-MM-dd"),
+                    tripCount = trips.Count,
+                    totalDistanceKm = Math.Round(totalDistance / 1000.0, 2),
+                    totalDurationMinutes = Math.Round(totalDuration / 60.0, 1),
+                    maxSpeed = Math.Round(maxSpeed, 1),
+                    totalHarshBraking,
+                    totalHarshCornering,
+                    totalHarshAcceleration,
+                    totalIdleMinutes = Math.Round(totalIdleTime / 60.0, 1),
+                    trips
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching trip history for {Registration}", registration);
+                return StatusCode(500, new { error = "Failed to fetch trip history", message = ex.Message });
+            }
+        }
+
         [HttpGet("vehicles/{id}")]
         public async Task<ActionResult<VehicleDto>> GetVehicle(int id)
         {

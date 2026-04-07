@@ -64,6 +64,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         
         public string Priority { get; set; } = "Normal";
         
+        // Status (defaults to Available, can be Draft for auto-saved incomplete tripsheets)
+        public string? Status { get; set; }
+        
         // Scheduling
         public DateTime? ScheduledPickupDate { get; set; }
         public DateTime? ScheduledPickupTime { get; set; }
