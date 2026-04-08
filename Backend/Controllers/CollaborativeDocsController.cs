@@ -466,6 +466,10 @@ namespace ProjectTracker.API.Controllers
 
             try
             {
+                // Global email kill switch
+                if (!_configuration.GetValue<bool>("EmailEnabled", true))
+                    return Ok(new { message = "Email module is currently disabled. Document was not sent." });
+
                 // Get sender info
                 var sender = await _context.Users.FindAsync(userId);
                 var senderName = sender?.FullName ?? "ProMed User";

@@ -52,6 +52,14 @@ namespace ProjectTracker.API.Services
         public async Task<List<EmailSearchResult>> SearchIncomingOrdersAsync(EmailSearchRequest request)
         {
             var results = new List<EmailSearchResult>();
+
+            // Global email kill switch
+            if (!(_configuration.GetValue<bool>("EmailEnabled", true)))
+            {
+                _logger.LogWarning("Email DISABLED - skipping IMAP search");
+                return results;
+            }
+
             var imapHost = _configuration["ImapSettings:Host"] ?? "mail.promedtechnologies.co.za";
             var imapPort = int.Parse(_configuration["ImapSettings:Port"] ?? "993");
             var useSsl = bool.Parse(_configuration["ImapSettings:UseSsl"] ?? "true");
@@ -264,6 +272,13 @@ namespace ProjectTracker.API.Services
         public async Task<object> FetchUserInboxAsync(
             string email, string password, string? folderName, string? search, int page, int pageSize)
         {
+            // Global email kill switch
+            if (!(_configuration.GetValue<bool>("EmailEnabled", true)))
+            {
+                _logger.LogWarning("Email DISABLED - skipping inbox fetch for {Email}", email);
+                return new { emails = new List<object>(), total = 0, page, pageSize, disabled = true };
+            }
+
             var imapHost = _configuration["ImapSettings:Host"] ?? "mail.promedtechnologies.co.za";
             var imapPort = int.Parse(_configuration["ImapSettings:Port"] ?? "993");
             var useSsl = bool.Parse(_configuration["ImapSettings:UseSsl"] ?? "true");
@@ -349,6 +364,13 @@ namespace ProjectTracker.API.Services
         /// </summary>
         public async Task<List<object>> GetFoldersAsync(string email, string password)
         {
+            // Global email kill switch
+            if (!(_configuration.GetValue<bool>("EmailEnabled", true)))
+            {
+                _logger.LogWarning("Email DISABLED - skipping folder list for {Email}", email);
+                return new List<object>();
+            }
+
             var imapHost = _configuration["ImapSettings:Host"] ?? "mail.promedtechnologies.co.za";
             var imapPort = int.Parse(_configuration["ImapSettings:Port"] ?? "993");
             var useSsl = bool.Parse(_configuration["ImapSettings:UseSsl"] ?? "true");
@@ -414,6 +436,13 @@ namespace ProjectTracker.API.Services
         /// </summary>
         public async Task<object?> GetEmailBodyAsync(string email, string password, string? folderName, uint uid)
         {
+            // Global email kill switch
+            if (!(_configuration.GetValue<bool>("EmailEnabled", true)))
+            {
+                _logger.LogWarning("Email DISABLED - skipping email body fetch");
+                return null;
+            }
+
             var imapHost = _configuration["ImapSettings:Host"] ?? "mail.promedtechnologies.co.za";
             var imapPort = int.Parse(_configuration["ImapSettings:Port"] ?? "993");
             var useSsl = bool.Parse(_configuration["ImapSettings:UseSsl"] ?? "true");

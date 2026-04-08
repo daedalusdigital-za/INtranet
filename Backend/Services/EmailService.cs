@@ -106,6 +106,17 @@ namespace ProjectTracker.API.Services
         public async Task<EmailHealthStatus> CheckEmailHealthAsync()
         {
             var status = new EmailHealthStatus();
+
+            // Global email kill switch
+            if (!_configuration.GetValue<bool>("EmailEnabled", true))
+            {
+                _logger.LogInformation("Email module is DISABLED via config. No SMTP/IMAP connections will be made.");
+                status.IsHealthy = false;
+                status.ActiveProvider = "Disabled";
+                status.Message = "Email module is disabled in configuration. Set EmailEnabled=true to re-enable.";
+                status.Providers.Add(new ProviderStatus { Name = "All", IsAvailable = false, Error = "Disabled by config" });
+                return status;
+            }
             
             // Check primary provider (Office 365)
             var primaryStatus = await TestSmtpConnectionAsync(
@@ -198,6 +209,13 @@ namespace ProjectTracker.API.Services
 
         public async Task<bool> SendEmailAsync(List<string> to, string subject, string body, bool isHtml = true, List<EmailAttachment>? attachments = null, List<string>? cc = null)
         {
+            // Global email kill switch
+            if (!_configuration.GetValue<bool>("EmailEnabled", true))
+            {
+                _logger.LogWarning("Email DISABLED - skipping send to {Recipients}. Subject: {Subject}", string.Join(", ", to), subject);
+                return false;
+            }
+
             // Try primary provider first, then fallback
             var primarySuccess = await TrySendWithProviderAsync(
                 "Office365",

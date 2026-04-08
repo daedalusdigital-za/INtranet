@@ -93,6 +93,10 @@
               "target": "Package",
               "version": "[8.0.2, )"
             },
+            "itext7.bouncy-castle-adapter": {
+              "target": "Package",
+              "version": "[9.5.0, )"
+            },
             "itext7.pdfhtml": {
               "target": "Package",
               "version": "[6.3.1, )"

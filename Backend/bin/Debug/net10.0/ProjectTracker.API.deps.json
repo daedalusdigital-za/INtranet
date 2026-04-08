@@ -16,6 +16,7 @@
           "Microsoft.AspNetCore.OpenApi": "10.0.1",
           "Microsoft.EntityFrameworkCore.Design": "10.0.1",
           "Microsoft.EntityFrameworkCore.SqlServer": "10.0.1",
+          "itext7.bouncy-castle-adapter": "9.5.0",
           "itext7.pdfhtml": "6.3.1"
         },
         "runtime": {
@@ -56,11 +57,11 @@
           }
         }
       },
-      "BouncyCastle.Cryptography/2.5.0": {
+      "BouncyCastle.Cryptography/2.6.2": {
         "runtime": {
           "lib/net6.0/BouncyCastle.Cryptography.dll": {
             "assemblyVersion": "2.0.0.0",
-            "fileVersion": "2.5.0.6119"
+            "fileVersion": "2.6.2.46322"
           }
         }
       },
@@ -211,6 +212,18 @@
           }
         }
       },
+      "itext.bouncy-castle-adapter/9.5.0": {
+        "dependencies": {
+          "BouncyCastle.Cryptography": "2.6.2",
+          "itext.commons": "9.5.0"
+        },
+        "runtime": {
+          "lib/netstandard2.0/itext.bouncy-castle-adapter.dll": {
+            "assemblyVersion": "9.5.0.0",
+            "fileVersion": "9.5.0.0"
+          }
+        }
+      },
       "itext.commons/9.5.0": {
         "runtime": {
           "lib/netstandard2.0/itext.commons.dll": {
@@ -228,6 +241,11 @@
             "assemblyVersion": "6.3.1.0",
             "fileVersion": "6.3.1.0"
           }
+        }
+      },
+      "itext7.bouncy-castle-adapter/9.5.0": {
+        "dependencies": {
+          "itext.bouncy-castle-adapter": "9.5.0"
         }
       },
       "itext7.pdfhtml/6.3.1": {
@@ -927,7 +945,7 @@
       },
       "MimeKit/4.9.0": {
         "dependencies": {
-          "BouncyCastle.Cryptography": "2.5.0"
+          "BouncyCastle.Cryptography": "2.6.2"
         },
         "runtime": {
           "lib/net8.0/MimeKit.dll": {
@@ -1199,12 +1217,12 @@
       "path": "bcrypt.net-next/4.0.3",
       "hashPath": "bcrypt.net-next.4.0.3.nupkg.sha512"
     },
-    "BouncyCastle.Cryptography/2.5.0": {
+    "BouncyCastle.Cryptography/2.6.2": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-rc7vRCq/KD3GtIwSgRtjanGaBwTb9nLenFDZnEcauWlssuuEoxcbMfWA3QWWho6QDMSOSkWjs657McdHzEtEcw==",
-      "path": "bouncycastle.cryptography/2.5.0",
-      "hashPath": "bouncycastle.cryptography.2.5.0.nupkg.sha512"
+      "sha512": "sha512-7oWOcvnntmMKNzDLsdxAYqApt+AjpRpP2CShjMfIa3umZ42UQMvH0tl1qAliYPNYO6vTdcGMqnRrCPmsfzTI1w==",
+      "path": "bouncycastle.cryptography/2.6.2",
+      "hashPath": "bouncycastle.cryptography.2.6.2.nupkg.sha512"
     },
     "ClosedXML/0.104.2": {
       "type": "package",
@@ -1276,6 +1294,13 @@
       "path": "itext/9.5.0",
       "hashPath": "itext.9.5.0.nupkg.sha512"
     },
+    "itext.bouncy-castle-adapter/9.5.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-NyttPZzpFS0iAVDo2GJHQ1tmYScqKozEmp9YRTUsxCEg/HIfqL6qBo9l/eaLYmPmjhR99AkZWL1S08OQ+6c2Bw==",
+      "path": "itext.bouncy-castle-adapter/9.5.0",
+      "hashPath": "itext.bouncy-castle-adapter.9.5.0.nupkg.sha512"
+    },
     "itext.commons/9.5.0": {
       "type": "package",
       "serviceable": true,
@@ -1289,6 +1314,13 @@
       "sha512": "sha512-w4lhsn68EP0JLTcrPH0HD8ynAMLykmav0ytZErXSuxGTjUSEE855s+LHC77fqdCO2nTsaAOe1jh2mvZ9njyC+w==",
       "path": "itext.pdfhtml/6.3.1",
       "hashPath": "itext.pdfhtml.6.3.1.nupkg.sha512"
+    },
+    "itext7.bouncy-castle-adapter/9.5.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-zwKY/JLTn1VxJQFdVrpgZAuRVwgXT4GpwczSL3heyGgMX1qbR+aiU/JWmrAFEFLKUPD1JSfnQRvhsLlPMh8yJQ==",
+      "path": "itext7.bouncy-castle-adapter/9.5.0",
+      "hashPath": "itext7.bouncy-castle-adapter.9.5.0.nupkg.sha512"
     },
     "itext7.pdfhtml/6.3.1": {
       "type": "package",

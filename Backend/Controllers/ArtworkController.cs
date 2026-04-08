@@ -378,6 +378,9 @@ namespace ProjectTracker.API.Controllers
             if (!artwork.Annotations.Any())
                 return BadRequest("No annotations to send. Add notes to the artwork first.");
 
+            // Global email kill switch - skip sending but still update artwork record below
+            var emailDisabled = !_configuration.GetValue<bool>("EmailEnabled", true);
+
             // Build email
             var smtpHost = _configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
             var smtpPort = int.TryParse(_configuration["AIEmail:SmtpPort"], out var port) ? port : 587;
@@ -458,30 +461,37 @@ namespace ProjectTracker.API.Controllers
     </div>
 </div>";
 
-            try
+            if (emailDisabled)
             {
-                using var message = new MailMessage();
-                message.From = new MailAddress(senderEmail, senderName);
-                foreach (var recipient in recipients)
-                {
-                    message.To.Add(recipient.Trim());
-                }
-                message.Subject = $"🎨 Artwork Change Request: {artwork.FileName} [{request.Priority?.ToUpper() ?? "NORMAL"}] - {artwork.CompanyCode}";
-                message.Body = htmlBody;
-                message.IsBodyHtml = true;
-
-                using var smtp = new SmtpClient(smtpHost, smtpPort)
-                {
-                    Credentials = new NetworkCredential(senderEmail, senderPassword),
-                    EnableSsl = enableSsl
-                };
-
-                await smtp.SendMailAsync(message);
-                _logger.LogInformation("Artwork change request email sent for {FileName} to {Recipients}", artwork.FileName, request.Recipients);
+                _logger.LogWarning("Email DISABLED - skipping artwork change request email for {FileName}", artwork.FileName);
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "Failed to send artwork change request email, but marking as sent");
+                try
+                {
+                    using var message = new MailMessage();
+                    message.From = new MailAddress(senderEmail, senderName);
+                    foreach (var recipient in recipients)
+                    {
+                        message.To.Add(recipient.Trim());
+                    }
+                    message.Subject = $"🎨 Artwork Change Request: {artwork.FileName} [{request.Priority?.ToUpper() ?? "NORMAL"}] - {artwork.CompanyCode}";
+                    message.Body = htmlBody;
+                    message.IsBodyHtml = true;
+
+                    using var smtp = new SmtpClient(smtpHost, smtpPort)
+                    {
+                        Credentials = new NetworkCredential(senderEmail, senderPassword),
+                        EnableSsl = enableSsl
+                    };
+
+                    await smtp.SendMailAsync(message);
+                    _logger.LogInformation("Artwork change request email sent for {FileName} to {Recipients}", artwork.FileName, request.Recipients);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send artwork change request email, but marking as sent");
+                }
             }
 
             // Update artwork record

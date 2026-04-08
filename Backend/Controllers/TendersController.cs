@@ -805,6 +805,10 @@ namespace ProjectTracker.API.Controllers
             if (!dueReminders.Any())
                 return Ok(new { sent = 0, message = "No reminders due" });
 
+            // Global email kill switch
+            if (!_configuration.GetValue<bool>("EmailEnabled", true))
+                return Ok(new { sent = 0, message = "Email module is disabled. Reminders not sent.", disabled = true });
+
             var smtpHost = _configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
             var smtpPort = int.TryParse(_configuration["AIEmail:SmtpPort"], out var port) ? port : 587;
             var senderEmail = _configuration["AIEmail:SenderEmail"] ?? "ai@promedtechnologies.co.za";
@@ -905,6 +909,10 @@ namespace ProjectTracker.API.Controllers
             if (reminder == null) return NotFound();
             if (string.IsNullOrWhiteSpace(reminder.EmailRecipients))
                 return BadRequest("No email recipients set for this reminder");
+
+            // Global email kill switch
+            if (!_configuration.GetValue<bool>("EmailEnabled", true))
+                return Ok(new { success = false, message = "Email module is disabled. Enable it in config to send reminders." });
 
             var smtpHost = _configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
             var smtpPort = int.TryParse(_configuration["AIEmail:SmtpPort"], out var port) ? port : 587;

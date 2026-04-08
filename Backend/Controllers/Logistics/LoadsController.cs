@@ -287,7 +287,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     // Add commodities for this stop
                     foreach (var commodityDto in stopDto.Commodities)
                     {
-                        var totalPrice = (commodityDto.UnitPrice ?? 0) * commodityDto.Quantity;
+                        // Use TotalPrice from DTO if provided (frontend sends salesAmount as totalPrice),
+                        // otherwise calculate from unitPrice * quantity
+                        var totalPrice = commodityDto.TotalPrice ?? ((commodityDto.UnitPrice ?? 0) * commodityDto.Quantity);
 
                         // Use commodityName/code as comment if no explicit comment provided
                         var comment = commodityDto.Comment;

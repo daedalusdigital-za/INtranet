@@ -13593,13 +13593,13 @@ interface RouteEstimate {
                 <label>Fuel Level:</label>
                 <div class="fuel-gauge">
                   <span>E</span>
-                  <span class="fuel-box">â˜</span>
-                  <span>Â¼</span>
-                  <span class="fuel-box">â˜</span>
-                  <span>Â½</span>
-                  <span class="fuel-box">â˜</span>
-                  <span>Â¾</span>
-                  <span class="fuel-box">â˜</span>
+                  <span class="fuel-box">&#9744;</span>
+                  <span>&#188;</span>
+                  <span class="fuel-box">&#9744;</span>
+                  <span>&#189;</span>
+                  <span class="fuel-box">&#9744;</span>
+                  <span>&#190;</span>
+                  <span class="fuel-box">&#9744;</span>
                   <span>F</span>
                 </div>
               </div>
@@ -20603,14 +20603,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
               commodityName: inv.productDescription || 'Product',
               commodityCode: inv.productCode || null,
               quantity: inv.quantity || 1,
-              unitPrice: inv.salesAmount || 0,
+              unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
               totalPrice: inv.salesAmount || 0
             }))
           : [{
               commodityName: stop.productDescription || 'Product',
               commodityCode: stop.productCode || null,
               quantity: stop.quantity || 1,
-              unitPrice: stop.salesAmount || 0,
+              unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
               totalPrice: stop.salesAmount || 0
             }]
       })),
@@ -20687,14 +20687,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
                   commodityName: inv.productDescription || 'Product',
                   commodityCode: inv.productCode || null,
                   quantity: inv.quantity || 1,
-                  unitPrice: inv.salesAmount || 0,
+                  unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
                   totalPrice: inv.salesAmount || 0
                 }))
               : [{
                   commodityName: stop.productDescription || 'Product',
                   commodityCode: stop.productCode || null,
                   quantity: stop.quantity || 1,
-                  unitPrice: stop.salesAmount || 0,
+                  unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
                   totalPrice: stop.salesAmount || 0
                 }]
           })),
@@ -22780,14 +22780,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
               commodityName: inv.productDescription || 'Product',
               commodityCode: inv.productCode || null,
               quantity: inv.quantity || 1,
-              unitPrice: inv.salesAmount || 0,
+              unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
               totalPrice: inv.salesAmount || 0
             }))
           : [{
               commodityName: stop.productDescription || 'Product',
               commodityCode: stop.productCode || null,
               quantity: stop.quantity || 1,
-              unitPrice: stop.salesAmount || 0,
+              unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
               totalPrice: stop.salesAmount || 0
             }]
       })),
@@ -22876,14 +22876,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
               commodityName: inv.productDescription || 'Product',
               commodityCode: inv.productCode || null,
               quantity: inv.quantity || 1,
-              unitPrice: inv.salesAmount || 0,
+              unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
               totalPrice: inv.salesAmount || 0
             }))
           : [{
               commodityName: stop.productDescription || 'Product',
               commodityCode: stop.productCode || null,
               quantity: stop.quantity || 1,
-              unitPrice: stop.salesAmount || 0,
+              unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
               totalPrice: stop.salesAmount || 0
             }]
       })),

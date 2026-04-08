@@ -369,6 +369,17 @@ namespace ProjectTracker.API.Services
                 using var scope = _scopeFactory.CreateScope();
                 var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
+                // Global email kill switch
+                if (!configuration.GetValue<bool>("EmailEnabled", true))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "SEND_EMAIL",
+                        Message = "⚠️ Email module is currently disabled. The email was not sent."
+                    };
+                }
+
                 // Load AI-specific email settings (separate from logistics email)
                 var smtpHost = configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
                 var smtpPort = int.TryParse(configuration["AIEmail:SmtpPort"], out var port) ? port : 465;
