@@ -2154,6 +2154,14 @@ interface DeliveryRequestSummary {
                       <button mat-stroked-button class="fuel-export-btn" (click)="openFuelExportDialog()">
                         <mat-icon>download</mat-icon> Export Excel
                       </button>
+                      <button mat-stroked-button class="fuel-sync-btn" (click)="syncFuelFromTfn()" [disabled]="fuelSyncing">
+                        @if (fuelSyncing) {
+                          <mat-spinner diameter="16"></mat-spinner>
+                          Syncing...
+                        } @else {
+                          <mat-icon>sync</mat-icon> Sync from TFN
+                        }
+                      </button>
                     </div>
                   </div>
 
@@ -2382,8 +2390,235 @@ interface DeliveryRequestSummary {
               </div>
             </mat-tab>
 
+            <!-- Sleep Out Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>hotel</mat-icon>
+                Sleep Out
+              </ng-template>
+              <div class="tab-content">
+                <div class="sleep-out-section">
+                  <!-- Toolbar -->
+                  <div class="fuel-toolbar">
+                    <div class="fuel-period-selector" style="flex: 1; display: flex; gap: 12px; align-items: center;">
+                      <mat-form-field appearance="outline" class="period-select" style="min-width: 220px;">
+                        <mat-label>Search</mat-label>
+                        <input matInput [(ngModel)]="sleepOutSearch" placeholder="Search driver, trip, vehicle...">
+                        <mat-icon matSuffix>search</mat-icon>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="period-select" style="min-width: 150px;">
+                        <mat-label>Status</mat-label>
+                        <mat-select [(ngModel)]="sleepOutStatusFilter">
+                          <mat-option value="all">All</mat-option>
+                          <mat-option value="Requested">Requested</mat-option>
+                          <mat-option value="Approved">Approved</mat-option>
+                          <mat-option value="Rejected">Rejected</mat-option>
+                          <mat-option value="Paid">Paid</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+                    <div class="fuel-stats-bar">
+                      @if (sleepOutSummary()) {
+                        <span class="fuel-stat">
+                          <mat-icon style="font-size: 16px; height: 16px; width: 16px;">pending</mat-icon>
+                          Pending: {{ sleepOutSummary().PendingCount }}
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
+                          Approved: R{{ sleepOutSummary().TotalAmountApproved | number:'1.2-2' }}
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon style="font-size: 16px; height: 16px; width: 16px;">payments</mat-icon>
+                          Paid: R{{ sleepOutSummary().TotalAmountPaid | number:'1.2-2' }}
+                        </span>
+                      }
+                    </div>
+                    <button mat-raised-button color="primary" (click)="openSleepOutDialog()">
+                      <mat-icon>add</mat-icon> New Sleep Out
+                    </button>
+                    <button mat-icon-button (click)="loadSleepOuts()" matTooltip="Refresh">
+                      <mat-icon>refresh</mat-icon>
+                    </button>
+                  </div>
+
+                  <!-- Sleep Out Table -->
+                  @if (sleepOutLoading()) {
+                    <div style="display: flex; justify-content: center; padding: 40px;">
+                      <mat-spinner diameter="40"></mat-spinner>
+                    </div>
+                  } @else {
+                    <div class="table-container">
+                      <table mat-table [dataSource]="filteredSleepOuts()" class="full-width-table">
+                        <ng-container matColumnDef="date">
+                          <th mat-header-cell *matHeaderCellDef>Date</th>
+                          <td mat-cell *matCellDef="let row">{{ row.date | date:'dd MMM yyyy' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="tripNumber">
+                          <th mat-header-cell *matHeaderCellDef>Trip #</th>
+                          <td mat-cell *matCellDef="let row">{{ row.tripNumber || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="driver">
+                          <th mat-header-cell *matHeaderCellDef>Driver</th>
+                          <td mat-cell *matCellDef="let row">{{ row.driverName || 'Unknown' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="vehicle">
+                          <th mat-header-cell *matHeaderCellDef>Vehicle</th>
+                          <td mat-cell *matCellDef="let row">{{ row.vehicleReg || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="amount">
+                          <th mat-header-cell *matHeaderCellDef>Amount</th>
+                          <td mat-cell *matCellDef="let row" style="font-weight: 600;">R{{ row.amount | number:'1.2-2' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="status">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let row">
+                            <span class="status-chip" [ngClass]="{
+                              'status-requested': row.status === 'Requested',
+                              'status-approved': row.status === 'Approved',
+                              'status-rejected': row.status === 'Rejected',
+                              'status-paid': row.status === 'Paid'
+                            }">{{ row.status }}</span>
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="reason">
+                          <th mat-header-cell *matHeaderCellDef>Reason</th>
+                          <td mat-cell *matCellDef="let row">{{ row.reason || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="createdBy">
+                          <th mat-header-cell *matHeaderCellDef>Created By</th>
+                          <td mat-cell *matCellDef="let row">{{ row.createdByUserName || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="actions">
+                          <th mat-header-cell *matHeaderCellDef>Actions</th>
+                          <td mat-cell *matCellDef="let row">
+                            <div style="display: flex; gap: 4px;">
+                              <button mat-icon-button matTooltip="Download PDF" (click)="downloadSleepOutPdf(row)">
+                                <mat-icon>picture_as_pdf</mat-icon>
+                              </button>
+                              @if (row.status === 'Requested') {
+                                <button mat-icon-button color="primary" matTooltip="Approve" (click)="approveSleepOut(row, true)">
+                                  <mat-icon>check_circle</mat-icon>
+                                </button>
+                                <button mat-icon-button color="warn" matTooltip="Reject" (click)="approveSleepOut(row, false)">
+                                  <mat-icon>cancel</mat-icon>
+                                </button>
+                                <button mat-icon-button matTooltip="Edit" (click)="editSleepOut(row)">
+                                  <mat-icon>edit</mat-icon>
+                                </button>
+                                <button mat-icon-button color="warn" matTooltip="Delete" (click)="deleteSleepOut(row)">
+                                  <mat-icon>delete</mat-icon>
+                                </button>
+                              }
+                              @if (row.status === 'Approved') {
+                                <button mat-icon-button color="accent" matTooltip="Mark as Paid" (click)="markSleepOutPaid(row)">
+                                  <mat-icon>payments</mat-icon>
+                                </button>
+                              }
+                            </div>
+                          </td>
+                        </ng-container>
+                        <tr mat-header-row *matHeaderRowDef="sleepOutColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: sleepOutColumns;"></tr>
+                      </table>
+                      @if (filteredSleepOuts().length === 0) {
+                        <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
+                          <mat-icon style="font-size: 48px; height: 48px; width: 48px;">hotel</mat-icon>
+                          <p>No sleep out records found</p>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
           </mat-tab-group>
         </mat-card>
+      }
+
+      <!-- Sleep Out Dialog Overlay -->
+      @if (showSleepOutDialog) {
+        <div class="sleep-out-overlay" (click)="closeSleepOutDialog()">
+          <div class="sleep-out-dialog" (click)="$event.stopPropagation()">
+            <div class="sleep-out-dialog-header">
+              <mat-icon>hotel</mat-icon>
+              <h3>{{ editingSleepOut ? 'Edit Sleep Out' : 'New Sleep Out Request' }}</h3>
+              <button mat-icon-button (click)="closeSleepOutDialog()" class="close-btn">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <p class="sleep-out-subtitle">Select a tripsheet to auto-fill driver and vehicle details, then specify the allowance amount.</p>
+            <div class="sleep-out-form-body">
+              <!-- Tripsheet Selector -->
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Select Tripsheet</mat-label>
+                <mat-select [(ngModel)]="sleepOutForm.tripSheetId" (selectionChange)="onSleepOutTripsheetChange($event.value)">
+                  @for (trip of tripsheets(); track (trip.loadId || trip.id)) {
+                    <mat-option [value]="trip.loadId || trip.id">
+                      {{ trip.tripNumber || trip.loadNumber }} - {{ trip.driverName }} ({{ trip.vehicleReg || trip.vehicleRegNumber || trip.vehicleRegistration }})
+                    </mat-option>
+                  }
+                </mat-select>
+                <mat-hint>Driver and vehicle will auto-fill from tripsheet</mat-hint>
+              </mat-form-field>
+
+              <div class="sleep-out-row">
+                <!-- Driver (auto-populated, read-only) -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Driver</mat-label>
+                  <input matInput [(ngModel)]="sleepOutForm.driverName" readonly>
+                  <mat-icon matSuffix>person</mat-icon>
+                </mat-form-field>
+                <!-- Vehicle (auto-populated, read-only) -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Vehicle</mat-label>
+                  <input matInput [(ngModel)]="sleepOutForm.vehicleReg" readonly>
+                  <mat-icon matSuffix>local_shipping</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <!-- Date -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Date</mat-label>
+                  <input matInput [matDatepicker]="sleepOutDatePicker" [(ngModel)]="sleepOutForm.date">
+                  <mat-datepicker-toggle matSuffix [for]="sleepOutDatePicker"></mat-datepicker-toggle>
+                  <mat-datepicker #sleepOutDatePicker></mat-datepicker>
+                </mat-form-field>
+                <!-- Amount -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Amount (R)</mat-label>
+                  <input matInput type="number" [(ngModel)]="sleepOutForm.amount" placeholder="0.00">
+                  <span matPrefix style="padding-left: 12px;">R&nbsp;</span>
+                  <mat-icon matSuffix>payments</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <!-- Reason -->
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Reason</mat-label>
+                <textarea matInput [(ngModel)]="sleepOutForm.reason" rows="2" placeholder="e.g. Long-haul delivery, overnight stop required"></textarea>
+              </mat-form-field>
+
+              <!-- Notes -->
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Notes (optional)</mat-label>
+                <textarea matInput [(ngModel)]="sleepOutForm.notes" rows="2"></textarea>
+              </mat-form-field>
+            </div>
+
+            <div class="sleep-out-dialog-actions">
+              <button mat-button (click)="closeSleepOutDialog()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="saveSleepOut()" [disabled]="!sleepOutForm.driverId || !sleepOutForm.amount">
+                @if (editingSleepOut) {
+                  <mat-icon>save</mat-icon> Update
+                } @else {
+                  <mat-icon>add</mat-icon> Submit Request
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       }
     </div>
   `,
@@ -4664,6 +4899,116 @@ interface DeliveryRequestSummary {
       color: #d32f2f;
     }
 
+    /* Sleep Out Status Styles */
+    .status-chip.status-requested {
+      background: rgba(255,152,0,0.15);
+      color: #e65100;
+    }
+    .status-chip.status-approved {
+      background: rgba(76,175,80,0.15);
+      color: #2e7d32;
+    }
+    .status-chip.status-rejected {
+      background: rgba(244,67,54,0.15);
+      color: #c62828;
+    }
+    .status-chip.status-paid {
+      background: rgba(33,150,243,0.15);
+      color: #1565c0;
+    }
+
+    /* Sleep Out Section */
+    .sleep-out-section {
+      padding: 8px 0;
+    }
+
+    /* Sleep Out Dialog */
+    .sleep-out-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .sleep-out-dialog {
+      background: white;
+      border-radius: 16px;
+      padding: 28px 32px;
+      max-width: 580px;
+      width: 95%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+      animation: slideUp 0.25s ease;
+    }
+
+    .sleep-out-dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+
+      mat-icon {
+        font-size: 28px;
+        width: 28px;
+        height: 28px;
+        color: #1565c0;
+      }
+
+      h3 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a1a2e;
+        flex: 1;
+      }
+
+      .close-btn {
+        color: #999;
+      }
+    }
+
+    .sleep-out-subtitle {
+      color: #666;
+      font-size: 13px;
+      margin: 0 0 20px 0;
+    }
+
+    .sleep-out-form-body {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sleep-out-field {
+      width: 100%;
+    }
+
+    .sleep-out-row {
+      display: flex;
+      gap: 16px;
+    }
+
+    .sleep-out-row .sleep-out-field {
+      flex: 1;
+    }
+
+    .sleep-out-dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+
     /* Tripsheets Tab Styles */
     .tripsheets-section {
       padding: 8px 0;
@@ -5502,6 +5847,36 @@ interface DeliveryRequestSummary {
       }
     }
 
+    .fuel-sync-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-color: #00838f !important;
+      color: #00838f !important;
+      font-weight: 500;
+      margin-left: 8px;
+      
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+
+      mat-spinner {
+        margin-right: 4px;
+      }
+      
+      &:hover {
+        background: rgba(0,131,143,0.08) !important;
+      }
+
+      &:disabled {
+        opacity: 0.7;
+        border-color: #ccc !important;
+        color: #999 !important;
+      }
+    }
+
     /* Fuel Export Dialog Overlay */
     .fuel-export-overlay {
       position: fixed;
@@ -6334,6 +6709,7 @@ export class LogisticsDashboardComponent implements OnInit {
   fuelGroupData = signal<any[]>([]);
   fuelAssignmentGroups = signal<string[]>([]);
   fuelLoading = signal(false);
+  fuelSyncing = false;
   selectedFuelPeriod: any = null;
   fuelViewMode = 'summary';
   fuelSearchTerm = '';
@@ -6346,6 +6722,44 @@ export class LogisticsDashboardComponent implements OnInit {
   fuelExportToDate = new Date();
   fuelExportGenerating = false;
   fuelExportQuickSelect = '';
+
+  // Sleep Out
+  sleepOuts = signal<any[]>([]);
+  sleepOutSummary = signal<any>(null);
+  sleepOutLoading = signal(false);
+  sleepOutSearch = '';
+  sleepOutStatusFilter = 'all';
+  sleepOutColumns = ['date', 'tripNumber', 'driver', 'vehicle', 'amount', 'status', 'reason', 'createdBy', 'actions'];
+  showSleepOutDialog = false;
+  editingSleepOut: any = null;
+  sleepOutForm: any = {
+    tripSheetId: null,
+    driverId: null,
+    driverName: '',
+    vehicleReg: '',
+    tripNumber: '',
+    amount: null,
+    date: new Date(),
+    reason: '',
+    notes: ''
+  };
+
+  filteredSleepOuts = computed(() => {
+    let data = this.sleepOuts();
+    if (this.sleepOutStatusFilter && this.sleepOutStatusFilter !== 'all') {
+      data = data.filter(s => s.status === this.sleepOutStatusFilter);
+    }
+    if (this.sleepOutSearch) {
+      const term = this.sleepOutSearch.toLowerCase();
+      data = data.filter(s =>
+        (s.driverName || '').toLowerCase().includes(term) ||
+        (s.tripNumber || '').toLowerCase().includes(term) ||
+        (s.vehicleReg || '').toLowerCase().includes(term) ||
+        (s.reason || '').toLowerCase().includes(term)
+      );
+    }
+    return data;
+  });
 
   // POD Documents
   podDocuments: any[] = [];
@@ -6392,6 +6806,7 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadFuelPeriods();
     this.loadPodSummary();
     this.loadPodDocuments();
+    this.loadSleepOuts();
   }
 
   private checkInitialLoadComplete(): void {
@@ -8823,6 +9238,31 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
+  syncFuelFromTfn(): void {
+    this.fuelSyncing = true;
+    this.http.post<any>(`${environment.apiUrl}/fuelhistory/sync-from-tfn`, {}).subscribe({
+      next: (result) => {
+        this.fuelSyncing = false;
+        const imported = result.imported || 0;
+        const skipped = result.skippedDuplicates || 0;
+        
+        if (imported > 0) {
+          // Refresh periods and current report
+          this.selectedFuelPeriod = null;
+          this.loadFuelPeriods();
+          alert(`✅ Synced ${imported} new fuel transactions from TFN\n${skipped > 0 ? `(${skipped} duplicates skipped)` : ''}\n\n${result.monthBreakdown?.map((m: any) => `${m.month}: ${m.count} transactions, ${m.litres?.toFixed(0)}L, R${m.amount?.toFixed(2)}`).join('\n') || ''}`);
+        } else {
+          alert(`ℹ️ ${result.message || 'No new transactions to sync'}\n\nPeriod checked: ${result.periodChecked || 'N/A'}`);
+        }
+      },
+      error: (err) => {
+        this.fuelSyncing = false;
+        console.error('Failed to sync fuel from TFN:', err);
+        alert('❌ Failed to sync fuel data from TFN. Check the console for details.');
+      }
+    });
+  }
+
   loadFuelMonthlyReport(): void {
     if (!this.selectedFuelPeriod) return;
     this.fuelLoading.set(true);
@@ -9126,6 +9566,191 @@ Notes: ${record.notes || 'No notes'}
     if (assignment.includes('GP')) return 'assignment-gp';
     if (assignment.includes('CPT')) return 'assignment-cpt';
     return 'assignment-default';
+  }
+
+  // ─── Sleep Out Methods ─────────────────────────────────────────
+
+  loadSleepOuts(): void {
+    this.sleepOutLoading.set(true);
+    this.http.get<any[]>(`${this.apiUrl}/logistics/sleepouts`).subscribe({
+      next: (data) => {
+        this.sleepOuts.set(data);
+        this.sleepOutLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load sleep outs:', err);
+        this.sleepOuts.set([]);
+        this.sleepOutLoading.set(false);
+      }
+    });
+    // Also load summary
+    this.http.get<any>(`${this.apiUrl}/logistics/sleepouts/summary`).subscribe({
+      next: (summary) => this.sleepOutSummary.set(summary),
+      error: () => {}
+    });
+  }
+
+  openSleepOutDialog(sleepOut?: any): void {
+    if (sleepOut) {
+      this.editingSleepOut = sleepOut;
+      this.sleepOutForm = {
+        tripSheetId: sleepOut.tripSheetId,
+        driverId: sleepOut.driverId,
+        driverName: sleepOut.driverName || '',
+        vehicleReg: sleepOut.vehicleReg || '',
+        tripNumber: sleepOut.tripNumber || '',
+        amount: sleepOut.amount,
+        date: new Date(sleepOut.date),
+        reason: sleepOut.reason || '',
+        notes: sleepOut.notes || ''
+      };
+    } else {
+      this.editingSleepOut = null;
+      this.sleepOutForm = {
+        tripSheetId: null,
+        driverId: null,
+        driverName: '',
+        vehicleReg: '',
+        tripNumber: '',
+        amount: null,
+        date: new Date(),
+        reason: '',
+        notes: ''
+      };
+    }
+    this.showSleepOutDialog = true;
+  }
+
+  closeSleepOutDialog(): void {
+    this.showSleepOutDialog = false;
+    this.editingSleepOut = null;
+  }
+
+  onSleepOutTripsheetChange(tripSheetId: number): void {
+    const trip = this.tripsheets().find(t => (t.loadId || t.id) === tripSheetId);
+    if (trip) {
+      const vehicleReg = trip.vehicleReg || trip.vehicleRegNumber || trip.vehicleRegistration || '';
+      const tripNumber = trip.tripNumber || trip.loadNumber || '';
+      const tripDate = trip.date || trip.tripDate;
+      // Replace entire object to ensure Angular change detection fires
+      this.sleepOutForm = {
+        ...this.sleepOutForm,
+        tripSheetId: tripSheetId,
+        driverId: trip.driverId || null,
+        driverName: trip.driverName || '',
+        vehicleReg: vehicleReg,
+        tripNumber: tripNumber,
+        date: tripDate ? new Date(tripDate) : new Date()
+      };
+    }
+  }
+
+  editSleepOut(row: any): void {
+    this.openSleepOutDialog(row);
+  }
+
+  saveSleepOut(): void {
+    if (!this.sleepOutForm.driverId || !this.sleepOutForm.amount) {
+      this.snackBar.open('Please select a tripsheet and enter an amount', 'Close', { duration: 3000 });
+      return;
+    }
+
+    const payload: any = {
+      driverId: this.sleepOutForm.driverId,
+      amount: this.sleepOutForm.amount,
+      date: this.sleepOutForm.date,
+      reason: this.sleepOutForm.reason || null,
+      notes: this.sleepOutForm.notes || null,
+      tripSheetId: this.sleepOutForm.tripSheetId,
+      tripNumber: this.sleepOutForm.tripNumber,
+      vehicleReg: this.sleepOutForm.vehicleReg
+    };
+
+    if (this.editingSleepOut) {
+      this.http.put(`${this.apiUrl}/logistics/sleepouts/${this.editingSleepOut.id}`, payload).subscribe({
+        next: () => {
+          this.snackBar.open('Sleep out updated', 'Close', { duration: 3000 });
+          this.closeSleepOutDialog();
+          this.loadSleepOuts();
+        },
+        error: (err) => {
+          this.snackBar.open(err.error?.error || 'Failed to update sleep out', 'Close', { duration: 3000 });
+        }
+      });
+    } else {
+      this.http.post(`${this.apiUrl}/logistics/sleepouts`, payload).subscribe({
+        next: () => {
+          this.snackBar.open('Sleep out request submitted', 'Close', { duration: 3000 });
+          this.closeSleepOutDialog();
+          this.loadSleepOuts();
+        },
+        error: (err) => {
+          this.snackBar.open(err.error?.error || 'Failed to create sleep out', 'Close', { duration: 3000 });
+        }
+      });
+    }
+  }
+
+  approveSleepOut(row: any, approved: boolean): void {
+    const action = approved ? 'approve' : 'reject';
+    if (!confirm(`Are you sure you want to ${action} this sleep out for ${row.driverName}?`)) return;
+
+    this.http.post(`${this.apiUrl}/logistics/sleepouts/${row.id}/approve`, { approved, notes: '' }).subscribe({
+      next: () => {
+        this.snackBar.open(`Sleep out ${approved ? 'approved' : 'rejected'}`, 'Close', { duration: 3000 });
+        this.loadSleepOuts();
+      },
+      error: (err) => {
+        this.snackBar.open(err.error?.error || `Failed to ${action} sleep out`, 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  markSleepOutPaid(row: any): void {
+    if (!confirm(`Mark sleep out for ${row.driverName} (R${row.amount}) as paid?`)) return;
+
+    this.http.post(`${this.apiUrl}/logistics/sleepouts/${row.id}/mark-paid`, {}).subscribe({
+      next: () => {
+        this.snackBar.open('Sleep out marked as paid', 'Close', { duration: 3000 });
+        this.loadSleepOuts();
+      },
+      error: (err) => {
+        this.snackBar.open(err.error?.error || 'Failed to mark as paid', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  deleteSleepOut(row: any): void {
+    if (!confirm(`Delete sleep out request for ${row.driverName}?`)) return;
+
+    this.http.delete(`${this.apiUrl}/logistics/sleepouts/${row.id}`).subscribe({
+      next: () => {
+        this.snackBar.open('Sleep out deleted', 'Close', { duration: 3000 });
+        this.loadSleepOuts();
+      },
+      error: (err) => {
+        this.snackBar.open(err.error?.error || 'Failed to delete sleep out', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  downloadSleepOutPdf(row: any): void {
+    this.http.get(`${this.apiUrl}/logistics/sleepouts/${row.id}/pdf`, { responseType: 'blob' }).subscribe({
+      next: (blob: Blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `SleepOut_${row.id}_${(row.driverName || 'Driver').replace(/\s+/g, '_')}_${new Date(row.date).toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        this.snackBar.open('PDF downloaded', 'Close', { duration: 3000 });
+      },
+      error: (err) => {
+        this.snackBar.open('Failed to download PDF', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   // ─── POD Documents Methods ───────────────────────────────────────

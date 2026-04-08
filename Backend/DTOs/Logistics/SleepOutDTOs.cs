@@ -13,9 +13,14 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? Notes { get; set; }
         public int? LoadId { get; set; }
         public string? LoadNumber { get; set; }
+        public int? TripSheetId { get; set; }
+        public string? TripNumber { get; set; }
+        public string? VehicleReg { get; set; }
         public int? ApprovedByUserId { get; set; }
         public string? ApprovedByUserName { get; set; }
         public DateTime? ApprovedAt { get; set; }
+        public int? CreatedByUserId { get; set; }
+        public string? CreatedByUserName { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 
@@ -27,6 +32,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? Reason { get; set; }
         public string? Notes { get; set; }
         public int? LoadId { get; set; }
+        public int? TripSheetId { get; set; }
+        public string? TripNumber { get; set; }
+        public string? VehicleReg { get; set; }
     }
 
     public class UpdateSleepOutDto

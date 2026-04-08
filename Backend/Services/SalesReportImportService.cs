@@ -31,6 +31,11 @@ public class SalesReportImportService
     private const int COL_SALES_RETURNS = 10;
     private const int COL_COST_OF_SALES = 11;
     private const int COL_PERCENT = 12;
+    
+    // Extended columns - detected from header row
+    private int? _colProductCode = null;
+    private int? _colProductDescription = null;
+    private int _lastUsedColumn = 12;
 
     public SalesReportImportService(ApplicationDbContext context, ILogger<SalesReportImportService> logger)
     {
@@ -76,6 +81,8 @@ public class SalesReportImportService
             // Parser state
             string? currentCustomerNumber = null;
             string? currentCustomerName = null;
+            string? currentProductCode = null;
+            string? currentProductDescription = null;
             var customerSet = new HashSet<string>();
             DateTime? minDate = null;
             DateTime? maxDate = null;
@@ -83,6 +90,34 @@ public class SalesReportImportService
             decimal costTotal = 0;
 
             // Process each row (start from row 2, assuming row 1 is header)
+            // But first, scan the header row for product-related columns
+            _colProductCode = null;
+            _colProductDescription = null;
+            _lastUsedColumn = 12;
+            var headerRow = worksheet.Row(1);
+            var lastColUsed = headerRow.LastCellUsed()?.Address?.ColumnNumber ?? 13;
+            for (int col = 1; col <= lastColUsed; col++)
+            {
+                var headerText = headerRow.Cell(col).GetString()?.Trim().ToLower() ?? "";
+                if (headerText.Contains("product code") || headerText.Contains("productcode") || 
+                    headerText.Contains("stock code") || headerText.Contains("stockcode") ||
+                    headerText.Contains("item code") || headerText.Contains("itemcode"))
+                {
+                    _colProductCode = col - 1; // 0-indexed
+                    _logger.LogInformation("Detected product code column at index {Col}: {Header}", col, headerText);
+                }
+                else if (headerText.Contains("product desc") || headerText.Contains("productdesc") ||
+                         headerText.Contains("item desc") || headerText.Contains("itemdesc") ||
+                         headerText.Contains("stock desc") || headerText.Contains("stockdesc") ||
+                         headerText.Contains("description") || headerText.Contains("product name") ||
+                         headerText.Contains("item name") || headerText.Contains("stock item"))
+                {
+                    _colProductDescription = col - 1; // 0-indexed
+                    _logger.LogInformation("Detected product description column at index {Col}: {Header}", col, headerText);
+                }
+            }
+            if (lastColUsed > 13) _lastUsedColumn = lastColUsed - 1;
+
             for (int rowIndex = 2; rowIndex <= lastRowUsed; rowIndex++)
             {
                 var row = worksheet.Row(rowIndex);
@@ -94,6 +129,8 @@ public class SalesReportImportService
                         rowIndex, 
                         ref currentCustomerNumber, 
                         ref currentCustomerName,
+                        ref currentProductCode,
+                        ref currentProductDescription,
                         strictMode,
                         issues,
                         batch.ImportBatchId);
@@ -315,6 +352,8 @@ public class SalesReportImportService
         int rowIndex,
         ref string? currentCustomerNumber,
         ref string? currentCustomerName,
+        ref string? currentProductCode,
+        ref string? currentProductDescription,
         bool strictMode,
         List<SalesImportIssue> issues,
         Guid batchId)
@@ -328,6 +367,8 @@ public class SalesReportImportService
             // Extract customer number from Period column and name from Date column
             currentCustomerNumber = row.Cell(COL_PERIOD + 1).GetString()?.Trim();
             currentCustomerName = row.Cell(COL_DATE + 1).GetString()?.Trim();
+            currentProductCode = null;  // Reset product context on new customer
+            currentProductDescription = null;
             
             _logger.LogDebug("Found customer header: {Number} - {Name}", currentCustomerNumber, currentCustomerName);
             return null; // Header row, not a transaction
@@ -339,7 +380,55 @@ public class SalesReportImportService
             _logger.LogDebug("Found customer total for: {Number}", currentCustomerNumber);
             currentCustomerNumber = null;
             currentCustomerName = null;
+            currentProductCode = null;
+            currentProductDescription = null;
             return null; // Total row, not a transaction
+        }
+
+        // Check for Total Sales Row
+        if (yearCell.StartsWith("Total Sales", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // Check for Product Header Row: a row where Col1 has an alphanumeric product code
+        // (not a year number), and there's no valid date or transaction number.
+        // Sage format: Col1 = product code (e.g. RT4208001), Col2 = product description
+        if (!string.IsNullOrEmpty(yearCell) && !int.TryParse(yearCell, out _))
+        {
+            // Not a year number - could be a product header
+            var periodCell = row.Cell(COL_PERIOD + 1).GetString()?.Trim() ?? "";
+            var dateCellStr = row.Cell(COL_DATE + 1).GetString()?.Trim() ?? "";
+            var txnNumStr = row.Cell(COL_TRANSACTION_NUMBER + 1).GetString()?.Trim() ?? "";
+            
+            // Product header: has text in first column, possibly description in second,
+            // and no date or transaction number in their expected columns
+            bool hasDate = false;
+            if (row.Cell(COL_DATE + 1).DataType == XLDataType.DateTime) hasDate = true;
+            else if (DateTime.TryParse(dateCellStr, out _)) hasDate = true;
+            
+            if (!hasDate && string.IsNullOrEmpty(txnNumStr))
+            {
+                // This is a product header row
+                currentProductCode = yearCell;
+                currentProductDescription = periodCell;
+                
+                // If description is empty, check if it spans across other cells
+                if (string.IsNullOrEmpty(currentProductDescription))
+                {
+                    var descParts = new List<string>();
+                    for (int c = COL_PERIOD + 1; c <= COL_PERCENT + 1; c++)
+                    {
+                        var cellVal = row.Cell(c).GetString()?.Trim();
+                        if (!string.IsNullOrEmpty(cellVal))
+                            descParts.Add(cellVal);
+                    }
+                    currentProductDescription = string.Join(" ", descParts);
+                }
+                
+                _logger.LogDebug("Found product header: {Code} - {Description}", currentProductCode, currentProductDescription);
+                return null; // Product header row, not a transaction
+            }
         }
 
         // Try to parse as a transaction row
@@ -428,6 +517,52 @@ public class SalesReportImportService
         // Mark if this transaction has any issues
         transaction.HasIssues = issues.Any(i => i.RowIndex == rowIndex);
 
+        // Apply product context from product header rows (Sage hierarchical format)
+        if (!string.IsNullOrEmpty(currentProductCode))
+        {
+            transaction.ProductCode = currentProductCode;
+        }
+        if (!string.IsNullOrEmpty(currentProductDescription))
+        {
+            transaction.ProductDescription = currentProductDescription;
+        }
+
+        // Try to get product information from detected header columns (overrides if present)
+        if (_colProductCode.HasValue)
+        {
+            transaction.ProductCode = row.Cell(_colProductCode.Value + 1).GetString()?.Trim();
+        }
+        if (_colProductDescription.HasValue)
+        {
+            transaction.ProductDescription = row.Cell(_colProductDescription.Value + 1).GetString()?.Trim();
+        }
+
+        // If no product columns were detected in header, check for extra text columns beyond the standard 13
+        if (!_colProductCode.HasValue && !_colProductDescription.HasValue)
+        {
+            // Check columns after COL_PERCENT (13+) for any text that could be product info
+            for (int extraCol = COL_PERCENT + 2; extraCol <= _lastUsedColumn + 1; extraCol++)
+            {
+                var extraVal = row.Cell(extraCol).GetString()?.Trim();
+                if (!string.IsNullOrEmpty(extraVal) && extraVal.Length > 2)
+                {
+                    // First extra text column = product code, second = product description
+                    if (string.IsNullOrEmpty(transaction.ProductCode))
+                    {
+                        // If it looks like a description (long text), put in description instead
+                        if (extraVal.Length > 20)
+                            transaction.ProductDescription = extraVal;
+                        else
+                            transaction.ProductCode = extraVal;
+                    }
+                    else if (string.IsNullOrEmpty(transaction.ProductDescription))
+                    {
+                        transaction.ProductDescription = extraVal;
+                    }
+                }
+            }
+        }
+
         return transaction;
     }
 
@@ -496,7 +631,8 @@ public class SalesReportImportService
     private string SerializeRowToJson(IXLRow row)
     {
         var rowData = new Dictionary<string, string>();
-        for (int i = 1; i <= 13; i++)
+        var lastCol = Math.Max(13, _lastUsedColumn + 1);
+        for (int i = 1; i <= lastCol; i++)
         {
             rowData[$"Col{i}"] = row.Cell(i).GetString() ?? "";
         }
@@ -570,6 +706,8 @@ public class SalesReportImportService
                 SalesReturns = t.SalesReturns,
                 CostOfSales = t.CostOfSales,
                 Percent = t.Percent,
+                ProductCode = t.ProductCode,
+                ProductDescription = t.ProductDescription,
                 HasIssues = t.HasIssues
             })
             .ToListAsync();
@@ -633,8 +771,12 @@ public class SalesReportImportService
                     Year = staging.Year ?? 0,
                     Period = staging.Period ?? string.Empty,
                     TransactionType = staging.Type ?? string.Empty,
-                    ProductCode = string.Empty, // Not available in Sage summary report
-                    ProductDescription = string.Empty,
+                    ProductCode = !string.IsNullOrEmpty(staging.ProductCode) 
+                        ? staging.ProductCode 
+                        : (staging.Category.HasValue ? $"CAT-{staging.Category}" : string.Empty),
+                    ProductDescription = !string.IsNullOrEmpty(staging.ProductDescription) 
+                        ? staging.ProductDescription 
+                        : string.Empty,
                     SalesAmount = staging.SalesAmount ?? 0,
                     SalesReturns = staging.SalesReturns ?? 0,
                     CostOfSales = staging.CostOfSales ?? 0,

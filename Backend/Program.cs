@@ -10,6 +10,11 @@ using ProjectTracker.API.Services;
 using ProjectTracker.API.Hubs;
 using ProjectTracker.API.DTOs;
 
+// Force BouncyCastle adapter registration for iText PDF generation.
+// The adapter assembly must be loaded before any iText code runs, otherwise the
+// BouncyCastleFactoryCreator static constructor falls back to BouncyCastleDefaultFactory.
+iText.Bouncycastleconnector.BouncyCastleFactoryCreator.SetFactory(new iText.Bouncycastle.BouncyCastleFactory());
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add Response Compression for better performance

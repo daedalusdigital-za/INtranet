@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.TFN.Clients;
 using System.Globalization;
 
 namespace ProjectTracker.API.Controllers.Logistics
@@ -15,11 +16,16 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<FuelHistoryController> _logger;
+        private readonly TfnTransactionsClient _tfnTransactionsClient;
 
-        public FuelHistoryController(ApplicationDbContext context, ILogger<FuelHistoryController> logger)
+        public FuelHistoryController(
+            ApplicationDbContext context, 
+            ILogger<FuelHistoryController> logger,
+            TfnTransactionsClient tfnTransactionsClient)
         {
             _context = context;
             _logger = logger;
+            _tfnTransactionsClient = tfnTransactionsClient;
         }
 
         /// <summary>
@@ -302,6 +308,156 @@ namespace ProjectTracker.API.Controllers.Logistics
                 _logger.LogError(ex, "Error importing fuel data");
                 result.Errors.Add(ex.Message);
                 return StatusCode(500, result);
+            }
+        }
+
+        /// <summary>
+        /// Sync fuel transactions from TFN API into the FuelTransactions table.
+        /// Fetches TFN transactions from the day after the latest existing record (or last 14 days)
+        /// and converts them to the same format as manually imported data.
+        /// </summary>
+        [HttpPost("sync-from-tfn")]
+        public async Task<ActionResult> SyncFromTfn()
+        {
+            try
+            {
+                // Find the latest transaction date we already have
+                var latestDate = await _context.FuelTransactions
+                    .MaxAsync(f => (DateTime?)f.TransactionDate);
+
+                // Start from the day after latest, or 14 days back if no data
+                var fromDate = latestDate?.Date.AddDays(1) ?? DateTime.UtcNow.AddDays(-14);
+
+                // Don't fetch if we're already up to today
+                if (fromDate.Date > DateTime.UtcNow.Date)
+                {
+                    return Ok(new { 
+                        message = "Already up to date", 
+                        imported = 0, 
+                        skippedDuplicates = 0,
+                        latestDate = latestDate?.ToString("yyyy-MM-dd") 
+                    });
+                }
+
+                _logger.LogInformation("Syncing TFN transactions from {FromDate} to FuelTransactions table", fromDate);
+
+                // Try TransactionsWithUtilisedOrders first, fall back to basic Transactions
+                var tfnTransactions = await _tfnTransactionsClient.GetTransactionsWithOrdersAsync(fromDate);
+                if (tfnTransactions == null)
+                {
+                    _logger.LogWarning("TransactionsWithOrders failed, trying basic Transactions endpoint");
+                    tfnTransactions = await _tfnTransactionsClient.GetTransactionsAsync(fromDate);
+                }
+
+                if (tfnTransactions == null || tfnTransactions.Count == 0)
+                {
+                    return Ok(new { 
+                        message = "No new transactions found from TFN", 
+                        imported = 0, 
+                        skippedDuplicates = 0,
+                        periodChecked = $"{fromDate:yyyy-MM-dd} to {DateTime.UtcNow:yyyy-MM-dd}" 
+                    });
+                }
+
+                // Build lookup of vehicles for matching
+                var vehicles = await _context.Vehicles
+                    .ToDictionaryAsync(v => v.RegistrationNumber.ToUpper().Replace("-", "").Replace(" ", ""), v => v);
+
+                // Get existing transactions for deduplication (date + reg + amount)
+                var existingKeys = await _context.FuelTransactions
+                    .Where(f => f.TransactionDate >= fromDate)
+                    .Select(f => new { f.RegistrationNumber, f.TransactionDate, f.AmountSpent })
+                    .ToListAsync();
+
+                var existingSet = new HashSet<string>(existingKeys.Select(k => 
+                    $"{k.RegistrationNumber.ToUpper()}|{k.TransactionDate:yyyy-MM-dd HH:mm}|{k.AmountSpent:F2}"));
+
+                // Determine DepotAssignment from existing data (reg -> most recent assignment)
+                var depotAssignments = await _context.FuelTransactions
+                    .Where(f => f.DepotAssignment != null)
+                    .GroupBy(f => f.RegistrationNumber.ToUpper())
+                    .Select(g => new { 
+                        Reg = g.Key, 
+                        Assignment = g.OrderByDescending(f => f.TransactionDate).First().DepotAssignment 
+                    })
+                    .ToDictionaryAsync(x => x.Reg, x => x.Assignment);
+
+                var newRecords = new List<FuelTransaction>();
+                int skipped = 0;
+
+                foreach (var tfn in tfnTransactions)
+                {
+                    if (string.IsNullOrEmpty(tfn.VehicleRegistration)) continue;
+
+                    var regNormalized = tfn.VehicleRegistration.ToUpper().Replace("-", "").Replace(" ", "");
+                    var regUpper = tfn.VehicleRegistration.ToUpper().Trim();
+
+                    // Dedup check
+                    var key = $"{regUpper}|{tfn.TransactionDate:yyyy-MM-dd HH:mm}|{tfn.TotalAmount:F2}";
+                    if (existingSet.Contains(key))
+                    {
+                        skipped++;
+                        continue;
+                    }
+                    existingSet.Add(key);
+
+                    // Match vehicle
+                    int? vehicleId = vehicles.ContainsKey(regNormalized) ? vehicles[regNormalized].Id : null;
+
+                    // Get depot assignment from history
+                    var assignment = depotAssignments.ContainsKey(regUpper) ? depotAssignments[regUpper] : null;
+
+                    newRecords.Add(new FuelTransaction
+                    {
+                        VehicleId = vehicleId,
+                        RegistrationNumber = regUpper,
+                        CardNumber = tfn.VirtualCardNumber,
+                        DepotName = tfn.DepotName ?? "TFN",
+                        AllocationLitres = tfn.Litres, // TFN doesn't have separate allocation, use litres
+                        LitresUsed = tfn.Litres,
+                        TransactionDate = tfn.TransactionDate,
+                        AmountSpent = tfn.TotalAmount,
+                        DepotAssignment = assignment,
+                        ReportMonth = tfn.TransactionDate.Month,
+                        ReportYear = tfn.TransactionDate.Year,
+                        Notes = $"TFN Sync - {tfn.TransactionNumber}"
+                    });
+                }
+
+                if (newRecords.Count > 0)
+                {
+                    await _context.FuelTransactions.AddRangeAsync(newRecords);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Group by month for reporting
+                var monthGroups = newRecords
+                    .GroupBy(r => new { r.ReportMonth, r.ReportYear })
+                    .Select(g => new { 
+                        Month = $"{CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(g.Key.ReportMonth)} {g.Key.ReportYear}",
+                        Count = g.Count(),
+                        Litres = g.Sum(r => r.LitresUsed),
+                        Amount = g.Sum(r => r.AmountSpent)
+                    })
+                    .ToList();
+
+                _logger.LogInformation("TFN Fuel Sync: Imported {Count} new transactions, skipped {Skipped} duplicates",
+                    newRecords.Count, skipped);
+
+                return Ok(new
+                {
+                    message = $"Successfully synced {newRecords.Count} transactions from TFN",
+                    imported = newRecords.Count,
+                    skippedDuplicates = skipped,
+                    totalFromTfn = tfnTransactions.Count,
+                    periodChecked = $"{fromDate:yyyy-MM-dd} to {DateTime.UtcNow:yyyy-MM-dd}",
+                    monthBreakdown = monthGroups
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing fuel data from TFN");
+                return StatusCode(500, new { message = "Failed to sync from TFN", error = ex.Message });
             }
         }
 

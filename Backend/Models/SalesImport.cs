@@ -100,6 +100,12 @@ public class SalesTransactionStaging
     [Column(TypeName = "decimal(18,6)")]
     public decimal? Percent { get; set; }
     
+    [MaxLength(100)]
+    public string? ProductCode { get; set; }
+    
+    [MaxLength(500)]
+    public string? ProductDescription { get; set; }
+    
     public bool HasIssues { get; set; }
     
     // Navigation property

@@ -93,6 +93,8 @@ public class SalesTransactionDto
     public decimal? SalesReturns { get; set; }
     public decimal? CostOfSales { get; set; }
     public decimal? Percent { get; set; }
+    public string? ProductCode { get; set; }
+    public string? ProductDescription { get; set; }
     public bool HasIssues { get; set; }
 }
 

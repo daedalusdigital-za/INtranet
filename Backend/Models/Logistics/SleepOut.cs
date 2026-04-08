@@ -40,6 +40,15 @@ namespace ProjectTracker.API.Models.Logistics
         [ForeignKey("LoadId")]
         public virtual Load? Load { get; set; }
 
+        // Tripsheet reference
+        public int? TripSheetId { get; set; }
+
+        [StringLength(100)]
+        public string? TripNumber { get; set; }
+
+        [StringLength(50)]
+        public string? VehicleReg { get; set; }
+
         // Approval tracking
         public int? ApprovedByUserId { get; set; }
         public DateTime? ApprovedAt { get; set; }
