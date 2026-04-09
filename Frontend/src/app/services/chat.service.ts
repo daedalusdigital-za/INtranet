@@ -44,6 +44,78 @@ export class ChatService {
   }
 
   /**
+   * Scrape visible page content to give Welly awareness of what the user sees.
+   * Captures headings, active tab, stats, table headers, buttons, and section labels.
+   * Excludes chatbot, overlays, menus, and loading spinners.
+   * Capped at ~1500 chars to fit in the LLM context budget.
+   */
+  private getPageSummary(): string {
+    const MAX_LEN = 1500;
+    const EXCLUDE = 'app-chatbot, app-chat-bubble, app-user-search-popup, .dropdown-panel, .cdk-overlay-container, .mat-mdc-menu-panel, .loading-state, .loading-card, mat-progress-spinner';
+    const parts: string[] = [];
+
+    const getText = (selector: string): string[] => {
+      const els = document.querySelectorAll(selector);
+      const texts: string[] = [];
+      els.forEach(el => {
+        if (el.closest(EXCLUDE)) return;
+        const t = (el.textContent || '').trim().replace(/\s+/g, ' ');
+        if (t && t.length > 1 && t.length < 120) texts.push(t);
+      });
+      return [...new Set(texts)];
+    };
+
+    // 1. Page title
+    const titles = getText('.page-header h1, .modern-header h1, .dashboard-header h1, .hero-header h1, .header-section-modern h1, .header-section h1');
+    if (titles.length) parts.push('Page: ' + titles[0]);
+
+    // 2. Active tab
+    const activeTabs = getText('.mat-mdc-tab-labels .mdc-tab--active .mdc-tab__text-label');
+    if (activeTabs.length) parts.push('Active Tab: ' + activeTabs.join(', '));
+
+    // 3. All available tabs
+    const allTabs = getText('.mat-mdc-tab-labels .mdc-tab__text-label');
+    if (allTabs.length > 1) parts.push('Tabs: ' + allTabs.join(' | '));
+
+    // 4. Stats / KPIs visible on page
+    const statValues = document.querySelectorAll('.stat-value, .mini-value, .stat-number, .kpi-number, .metric-content h2');
+    const statLabels = document.querySelectorAll('.stat-label, .mini-label, .stat-title, .kpi-label, .metric-content p');
+    const stats: string[] = [];
+    statLabels.forEach((label, i) => {
+      if (label.closest(EXCLUDE)) return;
+      const lbl = (label.textContent || '').trim();
+      const val = statValues[i] ? (statValues[i].textContent || '').trim() : '';
+      if (lbl && val) stats.push(lbl + ': ' + val);
+    });
+    if (stats.length) parts.push('Stats: ' + stats.slice(0, 8).join(', '));
+
+    // 5. Section headings
+    const sections = getText('.panel-title, .section-label, .section-header h3, .submenu-header h2, .operation-block h3');
+    if (sections.length) parts.push('Sections: ' + sections.slice(0, 6).join(', '));
+
+    // 6. Table headers (what data columns are visible)
+    const headers = getText('th.mat-mdc-header-cell, .mat-mdc-header-cell, mat-header-cell');
+    if (headers.length) parts.push('Table Columns: ' + headers.slice(0, 10).join(', '));
+
+    // 7. Row count hint
+    const rows = document.querySelectorAll('.mat-mdc-row, mat-row, tr.mat-mdc-row');
+    const visibleRows = Array.from(rows).filter(r => !r.closest(EXCLUDE));
+    if (visibleRows.length) parts.push('Table Rows Visible: ' + visibleRows.length);
+
+    // 8. Action buttons
+    const btns = getText('[mat-raised-button], [mat-flat-button], .action-btn, .header-actions button');
+    if (btns.length) parts.push('Actions: ' + btns.slice(0, 8).join(', '));
+
+    // 9. Cards / key elements
+    const cards = getText('mat-card-title, .mat-mdc-card-title, .vehicle-card .vehicle-name, .operation-block h3');
+    if (cards.length) parts.push('Cards: ' + cards.slice(0, 6).join(', '));
+
+    let summary = parts.join('\n');
+    if (summary.length > MAX_LEN) summary = summary.substring(0, MAX_LEN) + '...';
+    return summary;
+  }
+
+  /**
    * Get the JWT token from localStorage
    */
   private getAuthHeaders(): Record<string, string> {
@@ -109,7 +181,8 @@ export class ChatService {
         body: JSON.stringify({
           prompt: userMessage,
           sessionId: this.getSessionId(),
-          pageContext: this.getCurrentPageContext()
+          pageContext: this.getCurrentPageContext(),
+          pageContent: this.getPageSummary()
         })
       });
 

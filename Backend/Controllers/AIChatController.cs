@@ -333,6 +333,7 @@ namespace ProjectTracker.API.Controllers
                 var userMessage = request.Prompt ?? request.Messages?.LastOrDefault(m => m.Role == "user")?.Content ?? "";
                 var userContext = await GetCurrentUserContext();
                 var pageContext = request.PageContext;
+                var pageContent = request.PageContent;
                 
                 if (string.IsNullOrWhiteSpace(userMessage))
                 {
@@ -349,8 +350,8 @@ namespace ProjectTracker.API.Controllers
 
                 if (useLocalLlm)
                 {
-                    _logger.LogInformation("Session chat: Using Local LLM (Qwen2.5) for session {SessionId}, user {User}, page {Page}", sessionId, userContext?.FullName ?? "unknown", pageContext ?? "none");
-                    await foreach (var token in _localLlmService.ChatStreamingWithSessionAsync(sessionId, userMessage, userContext, pageContext, HttpContext.RequestAborted))
+                    _logger.LogInformation("Session chat: Using Local LLM for session {SessionId}, user {User}, page {Page}, content {ContentLen} chars", sessionId, userContext?.FullName ?? "unknown", pageContext ?? "none", pageContent?.Length ?? 0);
+                    await foreach (var token in _localLlmService.ChatStreamingWithSessionAsync(sessionId, userMessage, userContext, pageContext, pageContent, HttpContext.RequestAborted))
                     {
                         fullResponse.Append(token);
                         await WriteSSEToken(token);
@@ -1891,6 +1892,7 @@ Use ZAR (R) currency. Focus on actionable product insights.",
         public string? Prompt { get; set; }
         public string? SessionId { get; set; }
         public string? PageContext { get; set; }
+        public string? PageContent { get; set; }
         public List<ChatMessageDto>? Messages { get; set; }
         public ChatOptions? Options { get; set; }
     }

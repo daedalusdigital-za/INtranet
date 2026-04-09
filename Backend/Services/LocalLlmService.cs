@@ -15,6 +15,7 @@ namespace ProjectTracker.API.Services
         IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, ChatUserContext? userContext, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, ChatUserContext? userContext, string? pageContext, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, ChatUserContext? userContext, string? pageContext, string? pageContent, CancellationToken cancellationToken = default);
         Task<string> AnalyzeDocumentAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken = default);
         Task<bool> IsAvailableAsync();
     }
@@ -421,6 +422,20 @@ Be concise, professional, and friendly. Use the provided database context when a
             string? pageContext,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            await foreach (var token in ChatStreamingWithSessionAsync(sessionId, userMessage, userContext, pageContext, null, cancellationToken))
+            {
+                yield return token;
+            }
+        }
+
+        public async IAsyncEnumerable<string> ChatStreamingWithSessionAsync(
+            string sessionId,
+            string userMessage,
+            ChatUserContext? userContext,
+            string? pageContext,
+            string? pageContent,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
             _conversationMemory.AddMessage(sessionId, "user", userMessage);
 
             var history = _conversationMemory.GetHistory(sessionId);
@@ -430,6 +445,12 @@ Be concise, professional, and friendly. Use the provided database context when a
             if (!string.IsNullOrEmpty(pageContext))
             {
                 systemContent += $"\n## Current Page\nThe user is currently viewing the **{GetPageLabel(pageContext)}** page (route: {pageContext}). Prioritize information relevant to this page when answering.\n";
+            }
+
+            // Add visible page content so Welly can see what the user sees
+            if (!string.IsNullOrEmpty(pageContent))
+            {
+                systemContent += $"\n## Visible Page Content\nBelow is a summary of what is currently visible on the user's screen. Use this to answer questions like 'what's on this page', 'how do I...', or 'explain this'.\n```\n{pageContent}\n```\n";
             }
 
             var dbContext = await GetContextForQueryAsync(userMessage, pageContext);
