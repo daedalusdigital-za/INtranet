@@ -395,30 +395,45 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 var driverName = sleepOut.Driver != null ? $"{sleepOut.Driver.FirstName} {sleepOut.Driver.LastName}" : "N/A";
                 var empNumber = sleepOut.Driver?.EmployeeNumber ?? "N/A";
-                var html = GenerateSleepOutHtml(sleepOut, driverName, empNumber, createdByName, approvedByName);
 
-                using var memoryStream = new MemoryStream();
+                // Look up payment info if paid
+                ProjectTracker.API.Models.Finance.Payment? payment = null;
+                if (sleepOut.Status == "Paid")
+                {
+                    payment = await _context.Set<ProjectTracker.API.Models.Finance.Payment>()
+                        .Where(p => p.Description != null && p.Description.Contains($"Sleep Out #{sleepOut.Id}"))
+                        .FirstOrDefaultAsync();
+                }
+
+                var html = GenerateSleepOutHtml(sleepOut, driverName, empNumber, createdByName, approvedByName, payment);
+
+                var memoryStream = new MemoryStream();
                 var writerProperties = new WriterProperties();
-                using var pdfWriter = new PdfWriter(memoryStream, writerProperties);
-                using var pdfDocument = new iText.Kernel.Pdf.PdfDocument(pdfWriter);
+                var pdfWriter = new PdfWriter(memoryStream, writerProperties);
+                var pdfDocument = new iText.Kernel.Pdf.PdfDocument(pdfWriter);
                 pdfDocument.SetDefaultPageSize(iText.Kernel.Geom.PageSize.A4);
 
                 var converterProperties = new ConverterProperties();
                 HtmlConverter.ConvertToPdf(html, pdfDocument, converterProperties);
 
+                // Ensure document is fully closed/flushed
+                if (!pdfDocument.IsClosed())
+                    pdfDocument.Close();
+
                 var pdfBytes = memoryStream.ToArray();
                 var fileName = $"SleepOut_{sleepOut.Id}_{driverName.Replace(" ", "_")}_{sleepOut.Date:yyyyMMdd}.pdf";
 
+                _logger.LogInformation("Generated sleep out PDF for {Id}, size: {Size} bytes", id, pdfBytes.Length);
                 return File(pdfBytes, "application/pdf", fileName);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating PDF for sleep out {Id}", id);
-                return StatusCode(500, new { error = "Failed to generate PDF" });
+                return StatusCode(500, new { error = $"Failed to generate PDF: {ex.Message}" });
             }
         }
 
-        private string GenerateSleepOutHtml(SleepOut sleepOut, string driverName, string empNumber, string? createdByName, string? approvedByName)
+        private string GenerateSleepOutHtml(SleepOut sleepOut, string driverName, string empNumber, string? createdByName, string? approvedByName, ProjectTracker.API.Models.Finance.Payment? payment)
         {
             var statusColor = sleepOut.Status switch
             {
@@ -432,14 +447,29 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (sleepOut.Status == "Approved" || sleepOut.Status == "Rejected" || sleepOut.Status == "Paid")
             {
                 approvalSection = $@"
-                <div class='section'>
-                    <div class='section-title'>Approval Information</div>
-                    <table class='info-table'>
-                        <tr><td class='label'>Decision:</td><td><span style='color:{statusColor}; font-weight:bold;'>{sleepOut.Status}</span></td></tr>
-                        <tr><td class='label'>Approved/Rejected By:</td><td>{approvedByName ?? "N/A"}</td></tr>
-                        <tr><td class='label'>Date:</td><td>{(sleepOut.ApprovedAt.HasValue ? sleepOut.ApprovedAt.Value.ToString("dd MMM yyyy HH:mm") : "N/A")}</td></tr>
+                <div style='margin-bottom:15px;'>
+                    <div style='font-size:11pt; font-weight:bold; color:#033142; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:8px;'>Approval Information</div>
+                    <table style='width:100%; border-collapse:collapse;'>
+                        <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Decision:</td><td style='padding:5px 10px;'><span style='color:{statusColor}; font-weight:bold;'>{sleepOut.Status}</span></td></tr>
+                        <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Approved/Rejected By:</td><td style='padding:5px 10px;'>{approvedByName ?? "N/A"}</td></tr>
+                        <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Date:</td><td style='padding:5px 10px;'>{(sleepOut.ApprovedAt.HasValue ? sleepOut.ApprovedAt.Value.ToString("dd MMM yyyy HH:mm") : "N/A")}</td></tr>
                     </table>
                 </div>";
+            }
+
+            // Payment info section
+            var paymentSection = "";
+            if (sleepOut.Status == "Paid" && payment != null)
+            {
+                paymentSection = $@"
+                    <div style='margin-bottom:15px;'>
+                        <div style='font-size:11pt; font-weight:bold; color:#033142; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:8px;'>Payment Information</div>
+                        <table style='width:100%; border-collapse:collapse;'>
+                            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Payment Date:</td><td style='padding:5px 10px;'>{payment.PaymentDate:dd MMM yyyy}</td></tr>
+                            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Amount Paid:</td><td style='padding:5px 10px;'>R {payment.Amount:N2}</td></tr>
+                            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Reference:</td><td style='padding:5px 10px;'>{payment.PaymentReference ?? "N/A"}</td></tr>
+                        </table>
+                    </div>";
             }
 
             return $@"
@@ -448,101 +478,106 @@ namespace ProjectTracker.API.Controllers.Logistics
 <head>
     <meta charset='utf-8'/>
     <style>
-        @page {{ size: portrait; margin: 15mm; }}
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #333; font-size: 11pt; }}
-        .header {{ display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #033142; padding-bottom: 12px; margin-bottom: 20px; }}
-        .header-logo {{ height: 60px; }}
-        .header-right {{ text-align: right; }}
-        .company-name {{ font-size: 18pt; font-weight: bold; color: #033142; }}
-        .company-sub {{ font-size: 9pt; color: #666; }}
-        .doc-title {{ text-align: center; font-size: 16pt; font-weight: bold; color: #033142; margin: 15px 0; text-transform: uppercase; letter-spacing: 1px; }}
-        .doc-ref {{ text-align: center; font-size: 9pt; color: #888; margin-bottom: 20px; }}
-        .section {{ margin-bottom: 15px; }}
-        .section-title {{ font-size: 11pt; font-weight: bold; color: #033142; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 8px; }}
-        .info-table {{ width: 100%; border-collapse: collapse; }}
-        .info-table td {{ padding: 5px 10px; vertical-align: top; }}
-        .info-table .label {{ font-weight: bold; color: #555; width: 180px; }}
-        .status-badge {{ display: inline-block; padding: 4px 14px; border-radius: 12px; color: white; font-weight: bold; font-size: 10pt; }}
-        .amount-box {{ background: #f0f7ff; border: 2px solid #033142; border-radius: 8px; padding: 15px; text-align: center; margin: 15px 0; }}
-        .amount-value {{ font-size: 22pt; font-weight: bold; color: #033142; }}
-        .amount-label {{ font-size: 9pt; color: #666; text-transform: uppercase; }}
-        .notes-box {{ background: #fafafa; border: 1px solid #eee; border-radius: 4px; padding: 10px; min-height: 40px; font-style: italic; color: #666; }}
-        .footer {{ margin-top: 30px; border-top: 2px solid #033142; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8pt; color: #999; }}
-        .signature-section {{ margin-top: 40px; display: flex; justify-content: space-between; }}
-        .signature-block {{ width: 45%; }}
-        .signature-line {{ border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; font-size: 9pt; color: #666; }}
+        body {{ font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 20px; color: #333; font-size: 11pt; }}
+        table {{ border-collapse: collapse; }}
     </style>
 </head>
 <body>
-    <div class='header'>
-        <img src='data:image/png;base64,{CompanyAssets.LOGO_BASE64}' class='header-logo' alt='Rocket Freight Logo' />
-        <div class='header-right'>
-            <div class='company-name'>{CompanyAssets.COMPANY_NAME}</div>
-            <div class='company-sub'>Logistics Division</div>
-            <div class='company-sub'>Sleep Out Allowance</div>
-        </div>
+    <!-- HEADER: using table layout for iText compatibility -->
+    <table style='width:100%; border-bottom:3px solid #033142; padding-bottom:10px; margin-bottom:20px;'>
+        <tr>
+            <td style='width:80px; vertical-align:middle;'>
+                <img src='data:image/png;base64,{CompanyAssets.LOGO_BASE64}' style='height:60px;' />
+            </td>
+            <td style='vertical-align:middle; padding-left:12px;'>
+                <span style='font-size:10pt; color:#666;'>Logistics Division</span>
+            </td>
+            <td style='text-align:right; vertical-align:middle;'>
+                <div style='font-size:18pt; font-weight:bold; color:#033142;'>{CompanyAssets.COMPANY_NAME}</div>
+                <div style='font-size:9pt; color:#666;'>Sleep Out Allowance</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- TITLE -->
+    <div style='text-align:center; font-size:16pt; font-weight:bold; color:#033142; margin:15px 0; text-transform:uppercase; letter-spacing:1px;'>
+        Driver Sleep Out Allowance
+    </div>
+    <div style='text-align:center; font-size:9pt; color:#888; margin-bottom:20px;'>
+        Reference: SO-{sleepOut.Id:D5} &nbsp;|&nbsp; Generated: {DateTime.Now:dd MMM yyyy HH:mm}
     </div>
 
-    <div class='doc-title'>Driver Sleep Out Allowance</div>
-    <div class='doc-ref'>Reference: SO-{sleepOut.Id:D5} | Generated: {DateTime.Now:dd MMM yyyy HH:mm}</div>
-
-    <div class='section'>
-        <div class='section-title'>Driver Information</div>
-        <table class='info-table'>
-            <tr><td class='label'>Driver Name:</td><td><strong>{driverName}</strong></td></tr>
-            <tr><td class='label'>Employee Number:</td><td>{empNumber}</td></tr>
+    <!-- DRIVER INFO -->
+    <div style='margin-bottom:15px;'>
+        <div style='font-size:11pt; font-weight:bold; color:#033142; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:8px;'>Driver Information</div>
+        <table style='width:100%;'>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Driver Name:</td><td style='padding:5px 10px;'><strong>{driverName}</strong></td></tr>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Employee Number:</td><td style='padding:5px 10px;'>{empNumber}</td></tr>
         </table>
     </div>
 
-    <div class='section'>
-        <div class='section-title'>Trip Details</div>
-        <table class='info-table'>
-            <tr><td class='label'>Trip Number:</td><td>{sleepOut.TripNumber ?? "N/A"}</td></tr>
-            <tr><td class='label'>Vehicle Registration:</td><td>{sleepOut.VehicleReg ?? "N/A"}</td></tr>
-            <tr><td class='label'>Date:</td><td>{sleepOut.Date:dd MMM yyyy}</td></tr>
-            <tr><td class='label'>Status:</td><td><span class='status-badge' style='background:{statusColor};'>{sleepOut.Status}</span></td></tr>
+    <!-- TRIP DETAILS -->
+    <div style='margin-bottom:15px;'>
+        <div style='font-size:11pt; font-weight:bold; color:#033142; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:8px;'>Trip Details</div>
+        <table style='width:100%;'>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Trip Number:</td><td style='padding:5px 10px;'>{sleepOut.TripNumber ?? "N/A"}</td></tr>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Vehicle Registration:</td><td style='padding:5px 10px;'>{sleepOut.VehicleReg ?? "N/A"}</td></tr>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Date:</td><td style='padding:5px 10px;'>{sleepOut.Date:dd MMM yyyy}</td></tr>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Status:</td><td style='padding:5px 10px;'><span style='background:{statusColor}; color:white; padding:4px 14px; font-weight:bold; font-size:10pt;'>{sleepOut.Status}</span></td></tr>
         </table>
     </div>
 
-    <div class='amount-box'>
-        <div class='amount-label'>Sleep Out Allowance Amount</div>
-        <div class='amount-value'>R {sleepOut.Amount:N2}</div>
+    <!-- AMOUNT BOX -->
+    <div style='background:#f0f7ff; border:2px solid #033142; padding:15px; text-align:center; margin:15px 0;'>
+        <div style='font-size:9pt; color:#666; text-transform:uppercase;'>Sleep Out Allowance Amount</div>
+        <div style='font-size:22pt; font-weight:bold; color:#033142;'>R {sleepOut.Amount:N2}</div>
     </div>
 
-    <div class='section'>
-        <div class='section-title'>Reason</div>
-        <div class='notes-box'>{(string.IsNullOrEmpty(sleepOut.Reason) ? "No reason provided" : sleepOut.Reason)}</div>
+    <!-- REASON -->
+    <div style='margin-bottom:15px;'>
+        <div style='font-size:11pt; font-weight:bold; color:#033142; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:8px;'>Reason</div>
+        <div style='background:#fafafa; border:1px solid #eee; padding:10px; min-height:30px; font-style:italic; color:#666;'>{(string.IsNullOrEmpty(sleepOut.Reason) ? "No reason provided" : sleepOut.Reason)}</div>
     </div>
 
     {(string.IsNullOrEmpty(sleepOut.Notes) ? "" : $@"
-    <div class='section'>
-        <div class='section-title'>Additional Notes</div>
-        <div class='notes-box'>{sleepOut.Notes}</div>
+    <!-- NOTES -->
+    <div style='margin-bottom:15px;'>
+        <div style='font-size:11pt; font-weight:bold; color:#033142; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:8px;'>Additional Notes</div>
+        <div style='background:#fafafa; border:1px solid #eee; padding:10px; min-height:30px; font-style:italic; color:#666;'>{sleepOut.Notes}</div>
     </div>")}
 
-    <div class='section'>
-        <div class='section-title'>Request Information</div>
-        <table class='info-table'>
-            <tr><td class='label'>Requested By:</td><td><strong>{createdByName ?? "N/A"}</strong></td></tr>
-            <tr><td class='label'>Request Date:</td><td>{sleepOut.CreatedAt:dd MMM yyyy HH:mm}</td></tr>
+    <!-- REQUEST INFO -->
+    <div style='margin-bottom:15px;'>
+        <div style='font-size:11pt; font-weight:bold; color:#033142; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:8px;'>Request Information</div>
+        <table style='width:100%;'>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Requested By:</td><td style='padding:5px 10px;'><strong>{createdByName ?? "N/A"}</strong></td></tr>
+            <tr><td style='padding:5px 10px; font-weight:bold; color:#555; width:180px;'>Request Date:</td><td style='padding:5px 10px;'>{sleepOut.CreatedAt:dd MMM yyyy HH:mm}</td></tr>
         </table>
     </div>
 
     {approvalSection}
 
-    <div class='signature-section'>
-        <div class='signature-block'>
-            <div class='signature-line'>Driver Signature</div>
-        </div>
-        <div class='signature-block'>
-            <div class='signature-line'>Manager Signature</div>
-        </div>
-    </div>
+    {paymentSection}
 
-    <div class='footer'>
-        <span>{CompanyAssets.COMPANY_NAME} &bull; Sleep Out Allowance &bull; SO-{sleepOut.Id:D5}</span>
-        <span>Printed: {DateTime.Now:dd MMM yyyy HH:mm}</span>
-    </div>
+    <!-- SIGNATURES: table layout -->
+    <table style='width:100%; margin-top:50px;'>
+        <tr>
+            <td style='width:45%; padding-right:5%;'>
+                <div style='border-top:1px solid #333; padding-top:5px; font-size:9pt; color:#666;'>Driver Signature</div>
+            </td>
+            <td style='width:45%; padding-left:5%;'>
+                <div style='border-top:1px solid #333; padding-top:5px; font-size:9pt; color:#666;'>Manager Signature</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- FOOTER: table layout -->
+    <table style='width:100%; margin-top:30px; border-top:2px solid #033142; padding-top:10px;'>
+        <tr>
+            <td style='font-size:8pt; color:#999;'>{CompanyAssets.COMPANY_NAME} &bull; Sleep Out Allowance &bull; SO-{sleepOut.Id:D5}</td>
+            <td style='font-size:8pt; color:#999; text-align:right;'>Printed: {DateTime.Now:dd MMM yyyy HH:mm}</td>
+        </tr>
+    </table>
 </body>
 </html>";
         }

@@ -27341,7 +27341,7 @@ export class ViewRouteMapDialog implements OnInit {
     fullscreenControl: true,
   };
 
-  mapCenter: google.maps.LatLngLiteral = { lat: 39.8283, lng: -98.5795 }; // Center of US
+  mapCenter: google.maps.LatLngLiteral = { lat: -28.7, lng: 25.5 }; // Center of South Africa
   mapZoom = 6;
 
   warehouseMarkerOptions: google.maps.MarkerOptions = {
@@ -27431,17 +27431,32 @@ export class ViewRouteMapDialog implements OnInit {
       }
 
       // Adjust map bounds to fit all markers
-      if (this.routePath.length > 0) {
-        const bounds = new google.maps.LatLngBounds();
-        this.routePath.forEach(point => bounds.extend(point));
+      const bounds = new google.maps.LatLngBounds();
+      let hasPoints = false;
+
+      if (this.warehousePosition) {
+        bounds.extend(this.warehousePosition);
+        hasPoints = true;
+      }
+      this.geocodedStops.forEach(s => { bounds.extend(s.position); hasPoints = true; });
+      if (this.vehiclePosition) {
+        bounds.extend(this.vehiclePosition);
+        hasPoints = true;
+      }
+      this.routePath.forEach(p => bounds.extend(p));
+
+      if (hasPoints) {
         this.mapCenter = bounds.getCenter().toJSON();
-        
-        // Calculate appropriate zoom level
-        if (this.routePath.length === 1) {
-          this.mapZoom = 12;
-        } else {
-          this.mapZoom = 8;
-        }
+        // Use a generous zoom that fits SA routes; fitBounds via @ViewChild is better
+        // but for now, pick zoom based on bounds span
+        const latSpan = bounds.toJSON().north - bounds.toJSON().south;
+        const lngSpan = bounds.toJSON().east - bounds.toJSON().west;
+        const maxSpan = Math.max(latSpan, lngSpan);
+        if (maxSpan < 0.05) this.mapZoom = 14;
+        else if (maxSpan < 0.5) this.mapZoom = 11;
+        else if (maxSpan < 2) this.mapZoom = 9;
+        else if (maxSpan < 5) this.mapZoom = 7;
+        else this.mapZoom = 6;
       }
 
       this.isLoadingMap = false;
