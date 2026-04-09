@@ -11,8 +11,8 @@ namespace ProjectTracker.API.Services
 {
     public interface IAIContextService
     {
-        Task<string?> GetContextForQueryAsync(string query);
-        List<string> DetectQueryDomains(string query);
+        Task<string?> GetContextForQueryAsync(string query, string? pageContext = null);
+        List<string> DetectQueryDomains(string query, string? pageContext = null);
     }
 
     public class AIContextService : IAIContextService
@@ -98,11 +98,29 @@ namespace ProjectTracker.API.Services
             _logisticsService = logisticsService;
         }
 
+        // Route-to-domain mapping for page context awareness
+        // When user is on a specific page, boost related domains so Welly auto-loads relevant data
+        private static readonly Dictionary<string, string[]> PageDomainMapping = new()
+        {
+            ["logistics"] = new[] { "logistics", "tripsheets" },
+            ["people"] = new[] { "employees", "attendance", "leave" },
+            ["sales"] = new[] { "customers", "invoices" },
+            ["stock-management"] = new[] { "stock" },
+            ["tenders"] = new[] { "tickets" },
+            ["finance"] = new[] { "invoices", "customers" },
+            ["books"] = new[] { "invoices" },
+            ["calendar"] = new[] { "meetings" },
+            ["company-projects"] = new[] { "tickets" },
+            ["dashboard"] = new[] { "announcements", "employees" }
+        };
+
         /// <summary>
-        /// Detect relevant domains using weighted keyword scoring.
+        /// Detect relevant domains using weighted keyword scoring + page context boosting.
         /// Returns top 2 domains with score >= 2 to avoid context bloat.
+        /// When a pageContext is provided, related domains get a +5 score boost,
+        /// ensuring they appear in results even for vague queries like "what's happening" or "show me data".
         /// </summary>
-        public List<string> DetectQueryDomains(string query)
+        public List<string> DetectQueryDomains(string query, string? pageContext = null)
         {
             var lowerQuery = query.ToLower();
             var domainScores = new Dictionary<string, int>();
@@ -117,26 +135,47 @@ namespace ProjectTracker.API.Services
                         score += weight;
                     }
                 }
-                if (score >= 2)
+                if (score > 0)
                 {
                     domainScores[domain.Key] = score;
                 }
             }
 
-            // Return top 2 domains by score (prevents over-fetching from too many domains)
+            // Apply page context boost — if user is on a specific page, boost related domains
+            if (!string.IsNullOrEmpty(pageContext))
+            {
+                var route = pageContext.ToLower().TrimStart('/').Split('?')[0].Split('#')[0];
+                // Find matching page domain mapping (supports sub-routes like "finance/payments")
+                var matchedPage = PageDomainMapping.Keys.FirstOrDefault(k => route == k || route.StartsWith(k + "/"));
+                if (matchedPage != null)
+                {
+                    foreach (var boostedDomain in PageDomainMapping[matchedPage])
+                    {
+                        if (domainScores.ContainsKey(boostedDomain))
+                            domainScores[boostedDomain] += 5;
+                        else
+                            domainScores[boostedDomain] = 5; // Even with no keyword match, page context forces inclusion
+                    }
+                    _logger.LogInformation("AI Context: Page boost applied for route '{Route}' → domains [{Domains}]",
+                        route, string.Join(", ", PageDomainMapping[matchedPage]));
+                }
+            }
+
+            // Filter to score >= 2 and return top 2 by score
             return domainScores
+                .Where(d => d.Value >= 2)
                 .OrderByDescending(d => d.Value)
                 .Take(2)
                 .Select(d => d.Key)
                 .ToList();
         }
 
-        public async Task<string?> GetContextForQueryAsync(string query)
+        public async Task<string?> GetContextForQueryAsync(string query, string? pageContext = null)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var domains = DetectQueryDomains(query);
-            _logger.LogInformation("AI Context: Detected domains for '{Query}': [{Domains}]", 
-                query, string.Join(", ", domains));
+            var domains = DetectQueryDomains(query, pageContext);
+            _logger.LogInformation("AI Context: Detected domains for '{Query}' (page: {Page}): [{Domains}]", 
+                query, pageContext ?? "none", string.Join(", ", domains));
             
             if (!domains.Any())
             {

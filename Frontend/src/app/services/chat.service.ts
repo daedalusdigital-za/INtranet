@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Router } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
 import { environment } from '../../environments/environment';
 
@@ -30,9 +31,16 @@ export class ChatService {
   private actionSubject = new Subject<ActionResult>();
   public actionResults$ = this.actionSubject.asObservable();
 
-  constructor() {
+  constructor(private router: Router) {
     // Try to restore session from storage
     this.sessionId = sessionStorage.getItem('welly_session_id');
+  }
+
+  /**
+   * Get the current page route for context awareness
+   */
+  private getCurrentPageContext(): string {
+    return this.router.url || '/dashboard';
   }
 
   /**
@@ -100,7 +108,8 @@ export class ChatService {
         headers: this.getAuthHeaders(),
         body: JSON.stringify({
           prompt: userMessage,
-          sessionId: this.getSessionId()
+          sessionId: this.getSessionId(),
+          pageContext: this.getCurrentPageContext()
         })
       });
 

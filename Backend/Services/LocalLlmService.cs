@@ -14,6 +14,7 @@ namespace ProjectTracker.API.Services
         IAsyncEnumerable<string> ChatStreamingAsync(string userMessage, ChatUserContext? userContext, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, CancellationToken cancellationToken = default);
         IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, ChatUserContext? userContext, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, ChatUserContext? userContext, string? pageContext, CancellationToken cancellationToken = default);
         Task<string> AnalyzeDocumentAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken = default);
         Task<bool> IsAvailableAsync();
     }
@@ -114,7 +115,7 @@ Be concise, professional, and friendly. Use the provided database context when a
         /// Get RAG context for the user's query from the database AND knowledge base documents.
         /// Enforces a character budget to prevent context window overflow.
         /// </summary>
-        private async Task<string?> GetContextForQueryAsync(string query)
+        private async Task<string?> GetContextForQueryAsync(string query, string? pageContext = null)
         {
             try
             {
@@ -128,11 +129,11 @@ Be concise, professional, and friendly. Use the provided database context when a
                 var contextService = scope.ServiceProvider.GetService<IAIContextService>();
                 if (contextService != null)
                 {
-                    var dbContext = await contextService.GetContextForQueryAsync(query);
+                    var dbContext = await contextService.GetContextForQueryAsync(query, pageContext);
                     if (!string.IsNullOrEmpty(dbContext))
                     {
                         sb.Append(dbContext);
-                        _logger.LogInformation("LocalLLM: DB context {Length} chars", dbContext.Length);
+                        _logger.LogInformation("LocalLLM: DB context {Length} chars (page: {Page})", dbContext.Length, pageContext ?? "none");
                     }
                 }
 
@@ -190,6 +191,29 @@ Be concise, professional, and friendly. Use the provided database context when a
             if (!string.IsNullOrEmpty(user.Department))
                 sb.AppendLine($"- Department: {user.Department}");
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Convert a frontend route path to a friendly page label for the system prompt
+        /// </summary>
+        private static string GetPageLabel(string pageContext)
+        {
+            var route = pageContext.ToLower().TrimStart('/').Split('?')[0].Split('#')[0];
+            return route switch
+            {
+                "" or "dashboard" => "Dashboard (Home)",
+                "logistics" => "Logistics (Loads, Drivers, Vehicles)",
+                "people" => "People / Human Resources",
+                "sales" => "Sales (Customers, Invoices)",
+                "stock-management" => "Stock Management (Inventory, Warehouses)",
+                "tenders" => "Tenders",
+                "calendar" => "Calendar (Meetings, Events)",
+                "company-projects" => "Company Projects",
+                "books" => "Books (Invoices, Credit Notes)",
+                var r when r.StartsWith("finance") => "Finance (Payments, Expenses, Purchase Orders)",
+                var r when r.StartsWith("knowledge") => "Knowledge Base",
+                _ => pageContext
+            };
         }
 
         public Task<string> ChatAsync(string userMessage, CancellationToken cancellationToken = default)
@@ -384,12 +408,31 @@ Be concise, professional, and friendly. Use the provided database context when a
             ChatUserContext? userContext,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            await foreach (var token in ChatStreamingWithSessionAsync(sessionId, userMessage, userContext, null, cancellationToken))
+            {
+                yield return token;
+            }
+        }
+
+        public async IAsyncEnumerable<string> ChatStreamingWithSessionAsync(
+            string sessionId,
+            string userMessage,
+            ChatUserContext? userContext,
+            string? pageContext,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
             _conversationMemory.AddMessage(sessionId, "user", userMessage);
 
             var history = _conversationMemory.GetHistory(sessionId);
             var systemContent = _systemPrompt + BuildUserContextBlock(userContext);
 
-            var dbContext = await GetContextForQueryAsync(userMessage);
+            // Add page awareness to system prompt
+            if (!string.IsNullOrEmpty(pageContext))
+            {
+                systemContent += $"\n## Current Page\nThe user is currently viewing the **{GetPageLabel(pageContext)}** page (route: {pageContext}). Prioritize information relevant to this page when answering.\n";
+            }
+
+            var dbContext = await GetContextForQueryAsync(userMessage, pageContext);
             if (!string.IsNullOrEmpty(dbContext))
             {
                 systemContent += $"\n\n{dbContext}";
