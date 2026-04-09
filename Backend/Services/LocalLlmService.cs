@@ -28,11 +28,11 @@ namespace ProjectTracker.API.Services
         private readonly string _model;
         private string _systemPrompt = string.Empty;
 
-        // Token budget — Qwen2.5-14B supports 32K context, we use 16K with 2 parallel (8K per slot)
-        // System prompt (~2500 tokens) + DB context + KB context + conversation history must fit within this
-        private const int MaxContextTokens = 7500;
+        // Token budget — Gemma 4 26B MoE with 16K context (--ctx-size 16384, --parallel 2 = 8K per slot)
+        // System prompt (~600 tokens) + DB context + KB context + conversation history must fit
+        private const int MaxContextTokens = 6000;
         private const int ApproxCharsPerToken = 4;
-        private const int MaxResponseTokens = 1024;
+        private const int MaxResponseTokens = 2048;
 
         public LocalLlmService(
             ILogger<LocalLlmService> logger,
@@ -44,7 +44,7 @@ namespace ProjectTracker.API.Services
             _scopeFactory = scopeFactory;
             _conversationMemory = conversationMemory;
             _baseUrl = configuration["LocalLlm:BaseUrl"] ?? "http://localhost:8090";
-            _model = configuration["LocalLlm:Model"] ?? "qwen2.5-14b-instruct";
+            _model = configuration["LocalLlm:Model"] ?? "gemma-4-27b-it";
 
             _httpClient = new HttpClient
             {
@@ -111,7 +111,8 @@ Be concise, professional, and friendly. Use the provided database context when a
         }
 
         /// <summary>
-        /// Get RAG context for the user's query from the database AND knowledge base documents
+        /// Get RAG context for the user's query from the database AND knowledge base documents.
+        /// Enforces a character budget to prevent context window overflow.
         /// </summary>
         private async Task<string?> GetContextForQueryAsync(string query)
         {
@@ -119,6 +120,9 @@ Be concise, professional, and friendly. Use the provided database context when a
             {
                 using var scope = _scopeFactory.CreateScope();
                 var sb = new StringBuilder();
+
+                // Budget: leave room for system prompt (~2400 chars), user context (~200), user msg (~400), history
+                var maxContextChars = (MaxContextTokens - 1500) * ApproxCharsPerToken; // ~18000 chars for DB+KB
 
                 // 1. Live database context (employees, attendance, customers, etc.)
                 var contextService = scope.ServiceProvider.GetService<IAIContextService>();
@@ -128,20 +132,37 @@ Be concise, professional, and friendly. Use the provided database context when a
                     if (!string.IsNullOrEmpty(dbContext))
                     {
                         sb.Append(dbContext);
+                        _logger.LogInformation("LocalLLM: DB context {Length} chars", dbContext.Length);
                     }
                 }
 
                 // 2. Knowledge base document search (policies, procedures, guides)
-                var kbService = scope.ServiceProvider.GetService<IKnowledgeBaseService>();
-                if (kbService != null)
+                // Only add KB if we have budget remaining
+                var remainingBudget = maxContextChars - sb.Length;
+                if (remainingBudget > 500)
                 {
-                    var kbContext = await kbService.GetContextForQueryAsync(query, topK: 3);
-                    if (!string.IsNullOrEmpty(kbContext))
+                    var kbService = scope.ServiceProvider.GetService<IKnowledgeBaseService>();
+                    if (kbService != null)
                     {
-                        if (sb.Length > 0) sb.AppendLine();
-                        sb.Append(kbContext);
-                        _logger.LogInformation("LocalLLM: Added KB context ({Length} chars)", kbContext.Length);
+                        var kbContext = await kbService.GetContextForQueryAsync(query, topK: 2);
+                        if (!string.IsNullOrEmpty(kbContext))
+                        {
+                            // Truncate KB if needed
+                            if (kbContext.Length > remainingBudget)
+                            {
+                                kbContext = kbContext.Substring(0, remainingBudget - 50) + "\n[KB truncated]";
+                            }
+                            if (sb.Length > 0) sb.AppendLine();
+                            sb.Append(kbContext);
+                            _logger.LogInformation("LocalLLM: KB context {Length} chars", kbContext.Length);
+                        }
                     }
+                }
+
+                if (sb.Length > 0)
+                {
+                    _logger.LogInformation("LocalLLM: Total context {Length} chars (~{Tokens} tokens)", 
+                        sb.Length, sb.Length / ApproxCharsPerToken);
                 }
 
                 return sb.Length > 0 ? sb.ToString() : null;

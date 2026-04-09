@@ -72,7 +72,7 @@ namespace ProjectTracker.API.Controllers
 
             if (localLlmAvailable)
             {
-                model = _configuration["LocalLlm:Model"] ?? "qwen2.5-14b-instruct";
+                model = _configuration["LocalLlm:Model"] ?? "gemma-4-27b-it";
                 provider = "local-llm";
             }
             else if (claudeAvailable)
@@ -139,7 +139,7 @@ namespace ProjectTracker.API.Controllers
 
                 if (useLocalLlm)
                 {
-                    _logger.LogInformation("Chat: Using Local LLM (Qwen2.5) for user {User}", userContext?.FullName ?? "unknown");
+                    _logger.LogInformation("Chat: Using Local LLM (Gemma 4) for user {User}", userContext?.FullName ?? "unknown");
                     await foreach (var token in _localLlmService.ChatStreamingAsync(userMessage, userContext, HttpContext.RequestAborted))
                     {
                         fullResponse.Append(token);

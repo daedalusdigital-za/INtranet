@@ -313,23 +313,22 @@ namespace ProjectTracker.API.Services
         {
             var results = await SearchAsync(query, topK);
 
-            // Only include chunks with a meaningful relevance score
-            var relevant = results.Where(r => r.Score >= 1.5).ToList();
+            // Only include chunks with a meaningful relevance score (raised threshold for better precision)
+            var relevant = results.Where(r => r.Score >= 2.5).ToList();
             if (relevant.Count == 0)
             {
                 return "";
             }
 
             var sb = new StringBuilder();
-            sb.AppendLine("--- KNOWLEDGE BASE CONTEXT ---");
+            sb.AppendLine("--- KNOWLEDGE BASE ---");
             
             foreach (var result in relevant)
             {
-                sb.AppendLine($"\n[Source: {result.FileName}]");
-                sb.AppendLine(result.Content);
+                sb.AppendLine($"[{result.FileName}] {result.Content}");
             }
 
-            sb.AppendLine("\n--- END CONTEXT ---");
+            sb.AppendLine("--- END KB ---");
             return sb.ToString();
         }
 

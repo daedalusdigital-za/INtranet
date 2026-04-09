@@ -157,7 +157,7 @@ Full logistics operations module with tabs:
 ## Welly AI Assistant
 
 ### What is Welly?
-Welly is the AI assistant built into the ProMed Intranet. Welly appears as a chat bubble in the corner of every page. Welly is powered by a local AI model (Qwen2.5-14B-Instruct) running on the server.
+Welly is the AI assistant built into the ProMed Intranet. Welly appears as a chat bubble in the corner of every page. Welly is powered by a local AI model (Gemma 4 26B MoE) running on the server.
 
 ### What Can Welly Do?
 - Answer questions about company data and employees

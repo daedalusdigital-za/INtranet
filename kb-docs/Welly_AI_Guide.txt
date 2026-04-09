@@ -2,7 +2,7 @@
 
 ## What is Welly?
 
-Welly is the AI assistant built into the ProMed Technologies Intranet. Welly is available on every page as a floating chat bubble in the bottom corner. Welly is powered by a local AI model (Qwen2.5-14B-Instruct) running directly on the ProMed server — no data leaves the company network.
+Welly is the AI assistant built into the ProMed Technologies Intranet. Welly is available on every page as a floating chat bubble in the bottom corner. Welly is powered by a local AI model (Gemma 4 26B MoE) running directly on the ProMed server — no data leaves the company network.
 
 ## How to Use Welly
 

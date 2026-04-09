@@ -22,7 +22,7 @@ $Models = @{
     "gemma" = @{
         Name        = "Gemma 4 26B-A4B MoE (Q4_K_M)"
         Path        = "C:\Models\gemma-4-26B-A4B-it-Q4_K_M.gguf"
-        ContextSize = 8192      # Practical for CPU + 2 slots (supports 256K)
+        ContextSize = 16384     # 8K per slot with parallel=2 (supports 256K native)
         BatchSize   = 2048
         Parallel    = 2
         Threads     = 12        # Physical cores on 1 NUMA node

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
 using ProjectTracker.API.Models.Logistics;
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -19,22 +21,71 @@ namespace ProjectTracker.API.Services
         private readonly ILogger<AIContextService> _logger;
         private readonly ILogisticsAIService _logisticsService;
 
-        // Domain keyword mappings
-        private static readonly Dictionary<string, string[]> DomainKeywords = new()
+        // Simple in-memory cache for slow-changing data
+        private static readonly ConcurrentDictionary<string, (DateTime Expiry, object Data)> _cache = new();
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+
+        // Max context budget (chars) — keeps total DB context under ~3000 tokens
+        private const int MaxContextChars = 12000;
+
+        // Domain keyword mappings with weighted scores
+        // Multi-word phrases score higher (2pts) vs single words (1pt) to reduce false positives
+        private static readonly Dictionary<string, (string Keyword, int Weight)[]> DomainKeywords = new()
         {
-            ["employees"] = new[] { "employee", "employees", "staff", "worker", "colleague", "team member", "who is", "who's", "person", "people", "user", "users", "works", "work in", "works in", "working in", "extension", "extensions", "ext", "phone", "contact", "who works", "list all" },
-            ["attendance"] = new[] { "attendance", "clock in", "clock out", "clocked", "present", "absent", "late", "on time", "working hours", "time in", "time out", "checked in" },
-            ["leave"] = new[] { "leave", "vacation", "holiday", "sick", "annual leave", "off", "day off", "days off", "time off", "pto", "away", "on leave" },
-            ["customers"] = new[] { "customer", "customers", "client", "clients", "account", "accounts", "customer code", "customer name", "contact person", "credit limit", "payment terms", "customer list", "customer info", "customer details", "customer address", "vat number", "company registration" },
-            ["tickets"] = new[] { "ticket", "tickets", "support ticket", "issue", "issues", "problem", "problems", "help desk", "bug", "incident" },
-            ["meetings"] = new[] { "meeting", "meetings", "appointment", "appointments", "schedule", "scheduled", "calendar", "boardroom", "call", "conference" },
-            ["announcements"] = new[] { "announcement", "announcements", "news", "notice", "notices", "update", "updates", "bulletin", "memo" },
-            ["departments"] = new[] { "department", "departments", "team", "teams", "division", "unit", "group" },
-            ["logistics"] = new[] { "load", "loads", "delivery", "deliveries", "driver", "drivers", "vehicle", "truck", "transport", "shipment", "logistics", "dispatch", "route", "commodity", "rf-", "ld-", "in transit", "delivered" },
-            ["tripsheets"] = new[] { "tripsheet", "tripsheets", "trip sheet", "trip sheets", "ts-", "trip", "trips", "generate load", "available tripsheet", "active tripsheet" },
-            ["invoices"] = new[] { "invoice", "invoices", "tfn", "transaction", "transactions", "sales amount", "cost of sales", "billing", "billed", "revenue", "imported invoice", "product sold", "quantity sold" },
-            ["stock"] = new[] { "stock", "inventory", "stock on hand", "soh", "warehouse", "warehouses", "stock level", "stock available", "item", "items", "qty", "quantity", "stock management" },
-            ["email_accounts"] = new[] { "email", "email account", "email address", "mailbox", "mail", "password", "email password", "email credentials", "email login", "@promedtechnologies" }
+            ["employees"] = new[] {
+                ("employee", 2), ("employees", 2), ("staff", 1), ("who is", 2), ("who's", 2),
+                ("team member", 2), ("works in", 2), ("working in", 2), ("who works", 2),
+                ("extension", 1), ("phone number", 2), ("contact number", 2), ("personnel", 2)
+            },
+            ["attendance"] = new[] {
+                ("attendance", 3), ("clock in", 3), ("clock out", 3), ("clocked", 2),
+                ("present", 1), ("absent", 2), ("late", 1), ("working hours", 2),
+                ("time in", 2), ("time out", 2), ("checked in", 2)
+            },
+            ["leave"] = new[] {
+                ("leave", 2), ("vacation", 2), ("holiday", 1), ("sick leave", 3), ("annual leave", 3),
+                ("day off", 2), ("days off", 2), ("time off", 2), ("pto", 3), ("on leave", 3)
+            },
+            ["customers"] = new[] {
+                ("customer", 2), ("customers", 2), ("client", 2), ("clients", 2),
+                ("customer code", 3), ("customer name", 3), ("contact person", 2),
+                ("credit limit", 3), ("payment terms", 3), ("vat number", 3)
+            },
+            ["tickets"] = new[] {
+                ("ticket", 2), ("tickets", 2), ("support ticket", 3), ("issue", 1),
+                ("help desk", 3), ("bug", 2), ("incident", 2)
+            },
+            ["meetings"] = new[] {
+                ("meeting", 2), ("meetings", 2), ("appointment", 2), ("scheduled", 1),
+                ("calendar", 2), ("boardroom", 2), ("conference", 1)
+            },
+            ["announcements"] = new[] {
+                ("announcement", 3), ("announcements", 3), ("notice", 1), ("bulletin", 2), ("memo", 2)
+            },
+            ["departments"] = new[] {
+                ("department", 2), ("departments", 2), ("division", 2), ("unit", 1)
+            },
+            ["logistics"] = new[] {
+                ("load", 1), ("loads", 2), ("delivery", 1), ("deliveries", 2), ("driver", 1), ("drivers", 2),
+                ("vehicle", 1), ("truck", 2), ("transport", 2), ("shipment", 2), ("logistics", 3),
+                ("dispatch", 2), ("route", 1), ("commodity", 2), ("rf-", 3), ("ld-", 3), ("in transit", 3)
+            },
+            ["tripsheets"] = new[] {
+                ("tripsheet", 3), ("tripsheets", 3), ("trip sheet", 3), ("trip sheets", 3),
+                ("ts-", 3), ("generate load", 3), ("available tripsheet", 3)
+            },
+            ["invoices"] = new[] {
+                ("invoice", 2), ("invoices", 2), ("tfn", 3), ("transaction", 1), ("transactions", 2),
+                ("sales amount", 3), ("cost of sales", 3), ("billing", 2), ("revenue", 2)
+            },
+            ["stock"] = new[] {
+                ("stock", 2), ("inventory", 2), ("stock on hand", 3), ("soh", 3),
+                ("warehouse", 2), ("warehouses", 2), ("stock level", 3), ("stock available", 3)
+            },
+            ["email_accounts"] = new[] {
+                ("email account", 3), ("email address", 2), ("mailbox", 2), ("email password", 3),
+                ("email credentials", 3), ("email login", 3), ("@promedtechnologies", 3)
+            }
         };
 
         public AIContextService(
@@ -47,41 +98,58 @@ namespace ProjectTracker.API.Services
             _logisticsService = logisticsService;
         }
 
+        /// <summary>
+        /// Detect relevant domains using weighted keyword scoring.
+        /// Returns top 2 domains with score >= 2 to avoid context bloat.
+        /// </summary>
         public List<string> DetectQueryDomains(string query)
         {
             var lowerQuery = query.ToLower();
-            var detectedDomains = new List<string>();
+            var domainScores = new Dictionary<string, int>();
 
             foreach (var domain in DomainKeywords)
             {
-                if (domain.Value.Any(keyword => lowerQuery.Contains(keyword)))
+                var score = 0;
+                foreach (var (keyword, weight) in domain.Value)
                 {
-                    detectedDomains.Add(domain.Key);
+                    if (lowerQuery.Contains(keyword))
+                    {
+                        score += weight;
+                    }
+                }
+                if (score >= 2)
+                {
+                    domainScores[domain.Key] = score;
                 }
             }
 
-            return detectedDomains;
+            // Return top 2 domains by score (prevents over-fetching from too many domains)
+            return domainScores
+                .OrderByDescending(d => d.Value)
+                .Take(2)
+                .Select(d => d.Key)
+                .ToList();
         }
 
         public async Task<string?> GetContextForQueryAsync(string query)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var domains = DetectQueryDomains(query);
-            _logger.LogInformation("Detected domains for query '{Query}': {Domains}", query, string.Join(", ", domains));
+            _logger.LogInformation("AI Context: Detected domains for '{Query}': [{Domains}]", 
+                query, string.Join(", ", domains));
             
             if (!domains.Any())
             {
-                _logger.LogWarning("No domains detected for query: {Query}", query);
                 return null;
             }
 
             var contextBuilder = new StringBuilder();
-            contextBuilder.AppendLine("## Relevant Data from Database\n");
+            contextBuilder.AppendLine("## Database Context\n");
 
             foreach (var domain in domains)
             {
                 try
                 {
-                    _logger.LogInformation("Getting context for domain: {Domain}", domain);
                     var domainContext = domain switch
                     {
                         "employees" => await GetEmployeeContextAsync(query),
@@ -103,7 +171,6 @@ namespace ProjectTracker.API.Services
                     if (!string.IsNullOrEmpty(domainContext))
                     {
                         contextBuilder.AppendLine(domainContext);
-                        contextBuilder.AppendLine();
                     }
                 }
                 catch (Exception ex)
@@ -113,7 +180,33 @@ namespace ProjectTracker.API.Services
             }
 
             var result = contextBuilder.ToString();
+            
+            // Truncate if over budget to prevent context window overflow
+            if (result.Length > MaxContextChars)
+            {
+                result = result.Substring(0, MaxContextChars) + "\n\n[Context truncated for brevity]";
+                _logger.LogWarning("AI Context truncated from {Original} to {Max} chars", contextBuilder.Length, MaxContextChars);
+            }
+
+            sw.Stop();
+            _logger.LogInformation("AI Context: Built {Chars} chars in {Ms}ms for domains [{Domains}]", 
+                result.Length, sw.ElapsedMilliseconds, string.Join(", ", domains));
+
             return string.IsNullOrWhiteSpace(result) ? null : result;
+        }
+
+        /// <summary>
+        /// Simple cache helper — returns cached data or fetches fresh
+        /// </summary>
+        private T GetCached<T>(string key, Func<T> factory)
+        {
+            if (_cache.TryGetValue(key, out var cached) && cached.Expiry > DateTime.UtcNow)
+            {
+                return (T)cached.Data;
+            }
+            var data = factory();
+            _cache[key] = (DateTime.UtcNow.Add(CacheDuration), data!);
+            return data;
         }
 
         private async Task<string?> GetEmployeeContextAsync(string query)
@@ -149,11 +242,10 @@ namespace ProjectTracker.API.Services
                 usersQuery = usersQuery.Where(u => u.Department != null && u.Department.Name == matchedDept);
             }
 
-            var users = await usersQuery.Take(50).ToListAsync();
+            var users = await usersQuery.Take(10).ToListAsync();
 
             if (!users.Any())
             {
-                // If no specific match, return employee count summary
                 var totalCount = await context.Users.CountAsync(u => u.IsActive);
                 var departmentCounts = await context.Users
                     .Where(u => u.IsActive && u.DepartmentId != null)
@@ -162,35 +254,21 @@ namespace ProjectTracker.API.Services
                     .ToListAsync();
 
                 var sb = new StringBuilder();
-                sb.AppendLine($"### Employee Summary");
-                sb.AppendLine($"- **Total Active Employees:** {totalCount}");
-                if (departmentCounts.Any())
-                {
-                    sb.AppendLine($"- **By Department:**");
-                    foreach (var dc in departmentCounts)
-                    {
-                        sb.AppendLine($"  - {dc.Department}: {dc.Count}");
-                    }
-                }
+                sb.AppendLine($"### Employees: {totalCount} active");
+                foreach (var dc in departmentCounts)
+                    sb.AppendLine($"- {dc.Department}: {dc.Count}");
                 return sb.ToString();
             }
 
             var builder = new StringBuilder();
-            builder.AppendLine($"### Employee Information ({users.Count} found)");
-            
+            builder.AppendLine($"### Employees ({users.Count} found)");
             foreach (var user in users)
             {
-                builder.AppendLine($"- **{user.Name} {user.Surname}**");
-                builder.AppendLine($"  - Email: {user.Email}");
-                builder.AppendLine($"  - Role: {user.Role}");
-                if (!string.IsNullOrEmpty(user.Title))
-                    builder.AppendLine($"  - Title: {user.Title}");
-                if (user.Department != null)
-                    builder.AppendLine($"  - Department: {user.Department.Name}");
-                if (user.Extensions.Any())
-                    builder.AppendLine($"  - Extensions: {string.Join(", ", user.Extensions.Select(e => e.ExtensionNumber))}");
+                var dept = user.Department?.Name ?? "";
+                var title = !string.IsNullOrEmpty(user.Title) ? $", {user.Title}" : "";
+                var ext = user.Extensions.Any() ? $", Ext: {string.Join("/", user.Extensions.Select(e => e.ExtensionNumber))}" : "";
+                builder.AppendLine($"- **{user.Name} {user.Surname}** — {user.Email} | {user.Role}{title} | {dept}{ext}");
             }
-
             return builder.ToString();
         }
 
@@ -231,7 +309,7 @@ namespace ProjectTracker.API.Services
                 .Include(a => a.Employee)
                 .Where(a => a.Date >= startDate && a.Date <= endDate)
                 .OrderByDescending(a => a.Date)
-                .Take(20)
+                .Take(15)
                 .ToListAsync();
 
             var builder = new StringBuilder();
@@ -239,49 +317,28 @@ namespace ProjectTracker.API.Services
                 ? startDate.ToString("dd MMM yyyy") 
                 : $"{startDate:dd MMM} - {endDate:dd MMM yyyy}";
             
-            builder.AppendLine($"### Attendance for {dateRange}");
+            builder.AppendLine($"### Attendance ({dateRange})");
 
             if (!attendanceRecords.Any())
             {
-                builder.AppendLine("No attendance records found for this period.");
+                builder.AppendLine("No records found.");
                 return builder.ToString();
             }
 
-            var summary = attendanceRecords.GroupBy(a => a.Status)
-                .Select(g => new { Status = g.Key, Count = g.Count() })
-                .ToList();
-
-            builder.AppendLine($"**Summary:**");
-            foreach (var s in summary)
-            {
-                builder.AppendLine($"- {s.Status}: {s.Count}");
-            }
-
+            var summary = attendanceRecords.GroupBy(a => a.Status).Select(g => $"{g.Key}: {g.Count()}");
             var lateCount = attendanceRecords.Count(a => a.IsLate);
-            if (lateCount > 0)
-            {
-                builder.AppendLine($"- Late arrivals: {lateCount}");
-            }
+            builder.AppendLine($"**Summary:** {string.Join(", ", summary)}{(lateCount > 0 ? $", Late: {lateCount}" : "")}");
 
-            // If asking about specific status
             if (lowerQuery.Contains("late"))
             {
-                var lateRecords = attendanceRecords.Where(a => a.IsLate).Take(10);
-                builder.AppendLine("\n**Late Arrivals:**");
-                foreach (var record in lateRecords)
-                {
-                    builder.AppendLine($"- {record.Employee?.FullName ?? "Unknown"}: {record.LateMinutes} minutes late ({record.TimeIn:HH:mm})");
-                }
+                foreach (var record in attendanceRecords.Where(a => a.IsLate).Take(8))
+                    builder.AppendLine($"- {record.Employee?.FullName ?? "?"}: {record.LateMinutes}min late ({record.TimeIn:HH:mm})");
             }
 
             if (lowerQuery.Contains("absent"))
             {
-                var absentRecords = attendanceRecords.Where(a => a.Status == "Absent").Take(10);
-                builder.AppendLine("\n**Absent:**");
-                foreach (var record in absentRecords)
-                {
-                    builder.AppendLine($"- {record.Employee?.FullName ?? "Unknown"} on {record.Date:dd MMM}");
-                }
+                foreach (var record in attendanceRecords.Where(a => a.Status == "Absent").Take(8))
+                    builder.AppendLine($"- {record.Employee?.FullName ?? "?"}: absent {record.Date:dd MMM}");
             }
 
             return builder.ToString();
@@ -353,9 +410,17 @@ namespace ProjectTracker.API.Services
             var nameMatch = Regex.Match(query, @"(?:customer|client|account)\s+[""']?([^""']+?)[""']?(?:\s+details|\s+info|\s+address|\s*$)", RegexOptions.IgnoreCase);
             var codeMatch = Regex.Match(query, @"[A-Z]{2,5}-?\d{3,}", RegexOptions.IgnoreCase);
 
-            IQueryable<Customer> customersQuery = context.LogisticsCustomers
-                .Include(c => c.Contracts)
-                .Include(c => c.DeliveryAddresses);
+            IQueryable<Customer> customersQuery = context.LogisticsCustomers;
+
+            // Only include heavy relations if asking about a specific customer
+            bool specificSearch = codeMatch.Success || (nameMatch.Success && !new[] { "list", "all", "info", "details", "how many", "total" }.Contains(nameMatch.Groups[1].Value.Trim().ToLower()));
+            
+            if (specificSearch)
+            {
+                customersQuery = customersQuery
+                    .Include(c => c.Contracts.Where(ct => ct.Status == "Active"))
+                    .Include(c => c.DeliveryAddresses);
+            }
 
             // Filter by specific customer code
             if (codeMatch.Success)
@@ -395,84 +460,49 @@ namespace ProjectTracker.API.Services
 
             var customers = await customersQuery
                 .OrderBy(c => c.Name)
-                .Take(25)
-                .ToListAsync();
-
-            // Summary stats
-            var totalCount = await context.LogisticsCustomers.CountAsync();
-            var activeCount = await context.LogisticsCustomers.CountAsync(c => c.Status == "Active");
-            var inactiveCount = await context.LogisticsCustomers.CountAsync(c => c.Status == "Inactive");
-            var suspendedCount = await context.LogisticsCustomers.CountAsync(c => c.Status == "Suspended");
-
-            var provinceCounts = await context.LogisticsCustomers
-                .Where(c => c.Province != null && c.Province != "")
-                .GroupBy(c => c.Province)
-                .Select(g => new { Province = g.Key, Count = g.Count() })
-                .OrderByDescending(g => g.Count)
                 .Take(10)
                 .ToListAsync();
 
-            builder.AppendLine($"**Customer Summary:**");
-            builder.AppendLine($"- Total Customers: {totalCount}");
-            builder.AppendLine($"- Active: {activeCount}");
-            if (inactiveCount > 0) builder.AppendLine($"- Inactive: {inactiveCount}");
-            if (suspendedCount > 0) builder.AppendLine($"- Suspended: {suspendedCount}");
-
-            if (provinceCounts.Any())
+            // Only include summary stats if this is a general customer query (not specific lookup)
+            if (!specificSearch)
             {
-                builder.AppendLine($"\n**By Province:**");
-                foreach (var pc in provinceCounts)
-                {
-                    builder.AppendLine($"- {pc.Province}: {pc.Count}");
-                }
+                var totalCount = await context.LogisticsCustomers.CountAsync();
+                var activeCount = await context.LogisticsCustomers.CountAsync(c => c.Status == "Active");
+                builder.AppendLine($"**Customers:** {totalCount} total ({activeCount} active)");
             }
 
             if (customers.Any())
             {
-                builder.AppendLine($"\n**Customers (showing {customers.Count} of {totalCount}):**");
                 foreach (var customer in customers)
                 {
-                    builder.AppendLine($"\n**{customer.Name}** {(!string.IsNullOrEmpty(customer.CustomerCode) ? $"({customer.CustomerCode})" : "")}");
-                    builder.AppendLine($"- Status: {customer.Status}");
+                    var code = !string.IsNullOrEmpty(customer.CustomerCode) ? $" ({customer.CustomerCode})" : "";
+                    var location = !string.IsNullOrEmpty(customer.City) ? $" | {customer.City}" : "";
+                    var province = !string.IsNullOrEmpty(customer.Province) ? $", {customer.Province}" : "";
+                    builder.AppendLine($"\n**{customer.Name}**{code} — {customer.Status}{location}{province}");
+                    
                     if (!string.IsNullOrEmpty(customer.ContactPerson))
-                        builder.AppendLine($"- Contact: {customer.ContactPerson}");
-                    if (!string.IsNullOrEmpty(customer.Email))
-                        builder.AppendLine($"- Email: {customer.Email}");
-                    if (!string.IsNullOrEmpty(customer.PhoneNumber))
-                        builder.AppendLine($"- Phone: {customer.PhoneNumber}");
-                    if (!string.IsNullOrEmpty(customer.City) || !string.IsNullOrEmpty(customer.Province))
-                        builder.AppendLine($"- Location: {customer.City ?? ""}{(!string.IsNullOrEmpty(customer.City) && !string.IsNullOrEmpty(customer.Province) ? ", " : "")}{customer.Province ?? ""}");
-                    if (!string.IsNullOrEmpty(customer.PaymentTerms))
-                        builder.AppendLine($"- Payment Terms: {customer.PaymentTerms}");
-                    if (customer.CreditLimit.HasValue)
-                        builder.AppendLine($"- Credit Limit: R{customer.CreditLimit:N2}");
-                    if (!string.IsNullOrEmpty(customer.VatNumber))
-                        builder.AppendLine($"- VAT: {customer.VatNumber}");
-                    if (customer.Contracts.Any())
+                        builder.AppendLine($"- Contact: {customer.ContactPerson} | {customer.Email ?? ""} | {customer.PhoneNumber ?? ""}");
+                    if (!string.IsNullOrEmpty(customer.PaymentTerms) || customer.CreditLimit.HasValue)
+                        builder.AppendLine($"- Terms: {customer.PaymentTerms ?? "N/A"}{(customer.CreditLimit.HasValue ? $" | Credit: R{customer.CreditLimit:N2}" : "")}");
+                    
+                    // Only show contracts/addresses for specific lookups
+                    if (specificSearch)
                     {
-                        var activeContracts = customer.Contracts.Where(c => c.Status == "Active").ToList();
-                        if (activeContracts.Any())
+                        if (!string.IsNullOrEmpty(customer.VatNumber))
+                            builder.AppendLine($"- VAT: {customer.VatNumber}");
+                        if (customer.Contracts?.Any() == true)
                         {
-                            builder.AppendLine($"- Active Contracts: {activeContracts.Count}");
-                            foreach (var contract in activeContracts.Take(3))
-                            {
-                                builder.AppendLine($"  - {contract.ContractNumber}: {contract.ContractName ?? "N/A"} (R{contract.TotalValue:N2}, expires {contract.EndDate:dd MMM yyyy})");
-                            }
+                            foreach (var contract in customer.Contracts.Take(3))
+                                builder.AppendLine($"- Contract: {contract.ContractNumber} — {contract.ContractName ?? "N/A"} (R{contract.TotalValue:N2}, exp {contract.EndDate:dd MMM yyyy})");
                         }
-                    }
-                    if (customer.DeliveryAddresses.Any())
-                    {
-                        builder.AppendLine($"- Delivery Addresses: {customer.DeliveryAddresses.Count}");
+                        if (customer.DeliveryAddresses?.Any() == true)
+                            builder.AppendLine($"- Delivery Addresses: {customer.DeliveryAddresses.Count}");
                     }
                 }
             }
-            else if (!codeMatch.Success && !nameMatch.Success)
+            else if (specificSearch)
             {
-                // No specific search was done and no customers returned - shouldn't happen
-            }
-            else
-            {
-                builder.AppendLine("\nNo customers found matching your search.");
+                builder.AppendLine("No customers found matching your search.");
             }
 
             return builder.ToString();
@@ -506,30 +536,20 @@ namespace ProjectTracker.API.Services
             var tickets = await ticketsQuery
                 .OrderByDescending(t => t.Priority == "Critical" ? 0 : t.Priority == "High" ? 1 : t.Priority == "Medium" ? 2 : 3)
                 .ThenByDescending(t => t.SubmittedDate)
-                .Take(10)
+                .Take(8)
                 .ToListAsync();
 
             var builder = new StringBuilder();
-            builder.AppendLine("### Support Tickets");
-
-            // Summary stats
+            
             var openCount = await context.SupportTickets.CountAsync(t => t.Status == "Open");
             var inProgressCount = await context.SupportTickets.CountAsync(t => t.Status == "InProgress");
             var criticalCount = await context.SupportTickets.CountAsync(t => (t.Status == "Open" || t.Status == "InProgress") && t.Priority == "Critical");
+            builder.AppendLine($"### Tickets: {openCount} open, {inProgressCount} in-progress, {criticalCount} critical");
 
-            builder.AppendLine($"**Overview:** {openCount} open, {inProgressCount} in progress, {criticalCount} critical");
-
-            if (tickets.Any())
+            foreach (var ticket in tickets)
             {
-                builder.AppendLine("\n**Recent/Matching Tickets:**");
-                foreach (var ticket in tickets)
-                {
-                    builder.AppendLine($"- **#{ticket.TicketId}** [{ticket.Priority}] {ticket.Title}");
-                    builder.AppendLine($"  Status: {ticket.Status} | Category: {ticket.Category}");
-                    builder.AppendLine($"  Submitted by: {ticket.SubmittedBy} on {ticket.SubmittedDate:dd MMM yyyy}");
-                    if (!string.IsNullOrEmpty(ticket.AssignedTo))
-                        builder.AppendLine($"  Assigned to: {ticket.AssignedTo}");
-                }
+                var assigned = !string.IsNullOrEmpty(ticket.AssignedTo) ? $" → {ticket.AssignedTo}" : "";
+                builder.AppendLine($"- **#{ticket.TicketId}** [{ticket.Priority}] {ticket.Title} | {ticket.Status} | {ticket.Category} | by {ticket.SubmittedBy}{assigned}");
             }
 
             return builder.ToString();
@@ -572,36 +592,25 @@ namespace ProjectTracker.API.Services
             var meetings = await meetingsQuery
                 .OrderBy(m => m.MeetingDate)
                 .ThenBy(m => m.StartTime)
-                .Take(10)
+                .Take(8)
                 .ToListAsync();
 
             var builder = new StringBuilder();
-            builder.AppendLine("### Meetings");
+            builder.AppendLine($"### Meetings ({meetings.Count} found)");
 
             if (!meetings.Any())
             {
-                builder.AppendLine("No meetings found for the specified period.");
+                builder.AppendLine("No meetings found.");
                 return builder.ToString();
             }
 
             foreach (var meeting in meetings)
             {
-                var endTimeStr = meeting.EndTime.HasValue ? $" - {meeting.EndTime:hh\\:mm}" : "";
-                builder.AppendLine($"\n**{meeting.Title}**");
-                builder.AppendLine($"- Date: {meeting.MeetingDate:dddd, dd MMM yyyy}");
-                builder.AppendLine($"- Time: {meeting.StartTime:hh\\:mm}{endTimeStr}");
-                builder.AppendLine($"- Location: {meeting.Location}");
-                builder.AppendLine($"- Organizer: {meeting.Organizer?.Name ?? "Unknown"} {meeting.Organizer?.Surname ?? ""}");
-                builder.AppendLine($"- Status: {meeting.Status}");
-                
-                if (meeting.Attendees.Any())
-                {
-                    var attendeeNames = meeting.Attendees
-                        .Where(a => a.User != null)
-                        .Select(a => $"{a.User!.Name} ({a.ResponseStatus})")
-                        .Take(5);
-                    builder.AppendLine($"- Attendees: {string.Join(", ", attendeeNames)}");
-                }
+                var end = meeting.EndTime.HasValue ? $"-{meeting.EndTime:hh\\:mm}" : "";
+                var attendees = meeting.Attendees.Any() 
+                    ? $" | {string.Join(", ", meeting.Attendees.Where(a => a.User != null).Take(4).Select(a => a.User!.Name))}"
+                    : "";
+                builder.AppendLine($"- **{meeting.Title}** — {meeting.MeetingDate:ddd dd MMM} {meeting.StartTime:hh\\:mm}{end} | {meeting.Location} | {meeting.Status}{attendees}");
             }
 
             return builder.ToString();
@@ -648,19 +657,14 @@ namespace ProjectTracker.API.Services
 
             var departments = await context.Departments
                 .Include(d => d.Users.Where(u => u.IsActive))
-                .Include(d => d.Boards)
                 .ToListAsync();
 
             var builder = new StringBuilder();
             builder.AppendLine("### Departments");
-
             foreach (var dept in departments)
             {
-                builder.AppendLine($"\n**{dept.Name}**");
-                if (!string.IsNullOrEmpty(dept.ManagerName))
-                    builder.AppendLine($"- Manager: {dept.ManagerName}");
-                builder.AppendLine($"- Employees: {dept.Users.Count}");
-                builder.AppendLine($"- Active Projects: {dept.Boards.Count(b => b.Status == "InProgress")}");
+                var manager = !string.IsNullOrEmpty(dept.ManagerName) ? $" (Mgr: {dept.ManagerName})" : "";
+                builder.AppendLine($"- **{dept.Name}**: {dept.Users.Count} employees{manager}");
             }
 
             return builder.ToString();
@@ -754,41 +758,20 @@ namespace ProjectTracker.API.Services
             // Get summary
             var invoices = await invoiceQuery
                 .OrderByDescending(i => i.TransactionDate)
-                .Take(20)
+                .Take(10)
                 .ToListAsync();
 
             var totalCount = await invoiceQuery.CountAsync();
             var totalSales = await invoiceQuery.SumAsync(i => i.SalesAmount);
             var totalCost = await invoiceQuery.SumAsync(i => i.CostOfSales);
 
-            builder.AppendLine($"**Summary ({fromDate:dd MMM} - {toDate:dd MMM yyyy}):**");
-            builder.AppendLine($"- Total Invoices: {totalCount}");
-            builder.AppendLine($"- Total Sales: R{totalSales:N2}");
-            builder.AppendLine($"- Total Cost: R{totalCost:N2}");
-            builder.AppendLine($"- Gross Profit: R{(totalSales - totalCost):N2}");
+            builder.AppendLine($"**{fromDate:dd MMM} - {toDate:dd MMM yyyy}:** {totalCount} invoices | Sales: R{totalSales:N2} | Cost: R{totalCost:N2} | Profit: R{(totalSales - totalCost):N2}");
 
             if (invoices.Any())
             {
-                builder.AppendLine($"\n**Recent Invoices (showing {invoices.Count} of {totalCount}):**");
-                foreach (var inv in invoices.Take(10))
-                {
-                    builder.AppendLine($"- {inv.TransactionNumber} | {inv.TransactionDate:dd MMM} | {inv.Customer?.Name ?? inv.CustomerName} | {inv.ProductDescription} | R{inv.SalesAmount:N2}");
-                }
-            }
-
-            // Status breakdown
-            var statusBreakdown = await invoiceQuery
-                .GroupBy(i => i.Status)
-                .Select(g => new { Status = g.Key, Count = g.Count(), Total = g.Sum(i => i.SalesAmount) })
-                .ToListAsync();
-
-            if (statusBreakdown.Any())
-            {
-                builder.AppendLine($"\n**By Status:**");
-                foreach (var status in statusBreakdown)
-                {
-                    builder.AppendLine($"- {status.Status}: {status.Count} invoices (R{status.Total:N2})");
-                }
+                builder.AppendLine($"\n**Recent ({Math.Min(invoices.Count, 10)} of {totalCount}):**");
+                foreach (var inv in invoices)
+                    builder.AppendLine($"- {inv.TransactionNumber} | {inv.TransactionDate:dd MMM} | {inv.Customer?.Name ?? inv.CustomerName} | {inv.ProductDescription} | R{inv.SalesAmount:N2} | {inv.Status}");
             }
 
             return builder.ToString();
@@ -863,7 +846,7 @@ namespace ProjectTracker.API.Services
 
             var loads = await loadsQuery
                 .OrderByDescending(l => l.ScheduledPickupDate ?? l.CreatedAt)
-                .Take(20)
+                .Take(10)
                 .ToListAsync();
 
             // Summary stats
@@ -871,33 +854,19 @@ namespace ProjectTracker.API.Services
             var availableCount = await context.Loads.CountAsync(l => l.Status == "Available");
             var assignedCount = await context.Loads.CountAsync(l => l.Status == "Assigned" || l.Status == "Active");
             var inTransitCount = await context.Loads.CountAsync(l => l.Status == "InTransit");
-            var deliveredToday = await context.Loads.CountAsync(l => l.Status == "Delivered" && l.ActualDeliveryDate.HasValue && l.ActualDeliveryDate.Value.Date == DateTime.Today);
 
-            builder.AppendLine($"**Summary:**");
-            builder.AppendLine($"- Total Loads: {totalCount}");
-            builder.AppendLine($"- Available: {availableCount}");
-            builder.AppendLine($"- Assigned/Active: {assignedCount}");
-            builder.AppendLine($"- In Transit: {inTransitCount}");
-            builder.AppendLine($"- Delivered Today: {deliveredToday}");
+            builder.AppendLine($"**Loads:** {totalCount} total | Available: {availableCount} | Active: {assignedCount} | In Transit: {inTransitCount}");
 
             if (loads.Any())
             {
-                builder.AppendLine($"\n**Loads/TripSheets (showing {loads.Count}):**");
-                foreach (var load in loads.Take(10))
+                builder.AppendLine($"\n**Showing {loads.Count} loads:**");
+                foreach (var load in loads)
                 {
-                    builder.AppendLine($"\n**{load.LoadNumber}**");
-                    builder.AppendLine($"- Status: {load.Status}");
-                    builder.AppendLine($"- Date: {load.ScheduledPickupDate?.ToString("dd MMM yyyy") ?? "Not scheduled"}");
-                    builder.AppendLine($"- Driver: {(load.Driver != null ? $"{load.Driver.FirstName} {load.Driver.LastName}" : "Unassigned")}");
-                    builder.AppendLine($"- Vehicle: {load.Vehicle?.RegistrationNumber ?? "Unassigned"}");
-                    builder.AppendLine($"- Warehouse: {load.Warehouse?.Name ?? "N/A"}");
-                    builder.AppendLine($"- Customer: {load.Customer?.Name ?? "N/A"}");
-                    builder.AppendLine($"- Route: {load.PickupLocation ?? "N/A"} → {load.DeliveryLocation ?? "N/A"}");
-                    builder.AppendLine($"- Stops: {load.Stops.Count}");
-                    if (load.EstimatedDistance.HasValue)
-                    {
-                        builder.AppendLine($"- Distance: {load.EstimatedDistance:N0} km");
-                    }
+                    var driver = load.Driver != null ? $"{load.Driver.FirstName} {load.Driver.LastName}" : "Unassigned";
+                    var vehicle = load.Vehicle?.RegistrationNumber ?? "N/A";
+                    var date = load.ScheduledPickupDate?.ToString("dd MMM") ?? "Not scheduled";
+                    var route = $"{load.PickupLocation ?? "?"} → {load.DeliveryLocation ?? "?"}";
+                    builder.AppendLine($"- **{load.LoadNumber}** | {load.Status} | {date} | {driver} | {vehicle} | {route} | {load.Stops.Count} stops");
                 }
             }
 
@@ -974,45 +943,28 @@ namespace ProjectTracker.API.Services
                 var buildingSummaries = summaryByBuilding.Where(s => s.WarehouseId == wh.Id).ToList();
                 var totalItems = buildingSummaries.Sum(s => s.ItemCount);
                 var totalValue = buildingSummaries.Sum(s => s.TotalValue);
-                
-                builder.AppendLine($"- **{wh.Name}** ({wh.Code})");
-                builder.AppendLine($"  - Manager: {wh.ManagerName ?? "Not assigned"}");
-                builder.AppendLine($"  - Buildings: {wh.Buildings?.Count ?? 0}");
-                builder.AppendLine($"  - Total Items: {totalItems:N0}");
-                builder.AppendLine($"  - Total Value: R{totalValue:N2}");
-                
-                foreach (var bldg in buildingSummaries)
-                {
-                    builder.AppendLine($"    - {bldg.BuildingName}: {bldg.ItemCount:N0} items, R{bldg.TotalValue:N2}");
-                }
+                var bldgList = string.Join(", ", buildingSummaries.Select(b => $"{b.BuildingName}: {b.ItemCount}items R{b.TotalValue:N0}"));
+                builder.AppendLine($"- **{wh.Name}** ({wh.Code}) | Mgr: {wh.ManagerName ?? "N/A"} | {totalItems:N0} items R{totalValue:N2} | {bldgList}");
             }
 
-            // If specific location was queried, show top items
+            // If specific location or item was queried, show top items
             if (warehouseFilter.HasValue || itemMatch.Success)
             {
                 var items = await inventoryQuery
                     .OrderByDescending(i => i.QuantityOnHand * i.UnitCost)
-                    .Take(15)
+                    .Take(10)
                     .ToListAsync();
 
                 if (items.Any())
                 {
-                    builder.AppendLine($"\n**Top Items{(warehouseFilter.HasValue ? $" at {warehouses.FirstOrDefault(w => w.Id == warehouseFilter)?.Code}" : "")}:**");
+                    builder.AppendLine($"\n**Top Items:**");
                     foreach (var item in items)
-                    {
-                        builder.AppendLine($"- {item.ItemCode}: {item.ItemDescription}");
-                        builder.AppendLine($"  - Building: {item.Building?.Name ?? "Unknown"} | Qty: {item.QuantityOnHand:N0} {item.Uom}");
-                        builder.AppendLine($"  - Available: {item.QuantityAvailable:N0} | Value: R{item.QuantityOnHand * item.UnitCost:N2}");
-                    }
+                        builder.AppendLine($"- {item.ItemCode}: {item.ItemDescription} | {item.Building?.Name ?? "?"} | Qty: {item.QuantityOnHand:N0} {item.Uom} | Avail: {item.QuantityAvailable:N0} | R{item.QuantityOnHand * item.UnitCost:N2}");
                 }
             }
 
-            // Overall totals
             var overallTotal = summaryByBuilding.Sum(s => s.TotalValue);
-            var overallQty = summaryByBuilding.Sum(s => s.TotalQty);
-            builder.AppendLine($"\n**Overall Totals:**");
-            builder.AppendLine($"- Total Stock Value: R{overallTotal:N2}");
-            builder.AppendLine($"- Total Quantity: {overallQty:N0}");
+            builder.AppendLine($"\n**Total Stock Value: R{overallTotal:N2}**");
 
             return builder.ToString();
         }
@@ -1051,12 +1003,12 @@ namespace ProjectTracker.API.Services
             builder.AppendLine($"### Email Accounts ({filtered.Count} found)");
             foreach (var acct in filtered)
             {
-                builder.AppendLine($"- **{acct.Email}**");
-                builder.AppendLine($"  - Password: {acct.Password}");
-                if (!string.IsNullOrEmpty(acct.DisplayName))
-                    builder.AppendLine($"  - Display Name: {acct.DisplayName}");
-                if (!string.IsNullOrEmpty(acct.Department))
-                    builder.AppendLine($"  - Department: {acct.Department}");
+                var dept = !string.IsNullOrEmpty(acct.Department) ? $" | {acct.Department}" : "";
+                var display = !string.IsNullOrEmpty(acct.DisplayName) ? $" ({acct.DisplayName})" : "";
+                // Only include password if user specifically asked for it
+                var pwd = lowerQuery.Contains("password") || lowerQuery.Contains("credential") || lowerQuery.Contains("login")
+                    ? $" | Pwd: {acct.Password}" : "";
+                builder.AppendLine($"- **{acct.Email}**{display}{dept}{pwd}");
             }
 
             return builder.ToString();
