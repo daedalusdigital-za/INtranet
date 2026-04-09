@@ -227,6 +227,15 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.Notes != null)
                 sleepOut.Notes = dto.Notes;
 
+            if (dto.TripSheetId.HasValue)
+                sleepOut.TripSheetId = dto.TripSheetId;
+
+            if (!string.IsNullOrEmpty(dto.TripNumber))
+                sleepOut.TripNumber = dto.TripNumber;
+
+            if (!string.IsNullOrEmpty(dto.VehicleReg))
+                sleepOut.VehicleReg = dto.VehicleReg;
+
             sleepOut.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

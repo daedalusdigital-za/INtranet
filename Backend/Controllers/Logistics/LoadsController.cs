@@ -439,7 +439,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.ActualCost.HasValue) load.ActualCost = dto.ActualCost;
             if (dto.ChargeAmount.HasValue) load.ChargeAmount = dto.ChargeAmount;
             if (dto.ActualDistance.HasValue) load.ActualDistance = dto.ActualDistance;
-            if (dto.EstimatedDistance.HasValue) load.EstimatedDistance = (int)dto.EstimatedDistance;
+            if (dto.EstimatedDistance.HasValue) load.EstimatedDistance = dto.EstimatedDistance;
             if (dto.ActualTimeMinutes.HasValue) load.ActualTimeMinutes = dto.ActualTimeMinutes;
             if (dto.EstimatedTimeMinutes.HasValue) load.EstimatedTimeMinutes = dto.EstimatedTimeMinutes;
             if (dto.Notes != null) load.Notes = dto.Notes;
@@ -524,16 +524,25 @@ namespace ProjectTracker.API.Controllers.Logistics
                     {
                         foreach (var commDto in stopDto.Commodities)
                         {
+                            // Use commodityName/code as comment if no explicit comment provided
+                            var comment = commDto.Comment;
+                            if (string.IsNullOrEmpty(comment) && !string.IsNullOrEmpty(commDto.CommodityName))
+                            {
+                                comment = commDto.CommodityCode != null 
+                                    ? $"{commDto.CommodityCode}: {commDto.CommodityName}"
+                                    : commDto.CommodityName;
+                            }
+
                             var commodity = new StopCommodity
                             {
                                 LoadStopId = stop.Id,
-                                CommodityId = commDto.CommodityId ?? 0,  // Default to 0 if no commodity ID provided
+                                CommodityId = commDto.CommodityId,  // Nullable - imported invoices don't have Commodity FK
                                 Quantity = commDto.Quantity,
                                 UnitPrice = commDto.UnitPrice,
                                 TotalPrice = commDto.TotalPrice ?? (commDto.Quantity * (commDto.UnitPrice ?? 0)),
                                 Weight = commDto.Weight,
                                 Volume = commDto.Volume,
-                                Comment = commDto.CommodityName ?? commDto.Comment
+                                Comment = comment
                             };
                             _context.StopCommodities.Add(commodity);
                         }
@@ -541,8 +550,35 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
             }
 
+            // Link imported invoices to this load if invoiceIds are provided
+            if (dto.InvoiceIds != null && dto.InvoiceIds.Any())
+            {
+                // First, unlink any previously linked invoices for this load
+                var previouslyLinked = await _context.ImportedInvoices
+                    .Where(i => i.LoadId == load.Id)
+                    .ToListAsync();
+                foreach (var inv in previouslyLinked)
+                {
+                    inv.LoadId = null;
+                    inv.Status = "Pending";
+                    inv.UpdatedAt = DateTime.UtcNow;
+                }
+
+                // Link the new set of invoices
+                var invoicesToLink = await _context.ImportedInvoices
+                    .Where(i => dto.InvoiceIds.Contains(i.Id))
+                    .ToListAsync();
+                foreach (var invoice in invoicesToLink)
+                {
+                    invoice.LoadId = load.Id;
+                    invoice.Status = "Assigned";
+                    invoice.UpdatedAt = DateTime.UtcNow;
+                }
+                _logger.LogInformation("Re-linked {InvoiceCount} invoices to load {LoadNumber}", invoicesToLink.Count, load.LoadNumber);
+            }
+
             // Update status to Assigned if driver is now set
-            if (dto.DriverId.HasValue && load.Status == "Available")
+            if (dto.DriverId.HasValue && (load.Status == "Available" || load.Status == "Draft"))
             {
                 load.Status = "Assigned";
             }

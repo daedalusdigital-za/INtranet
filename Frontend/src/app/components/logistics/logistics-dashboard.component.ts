@@ -406,6 +406,13 @@ interface DeliveryRequestSummary {
                       </td>
                     </ng-container>
 
+                    <ng-container matColumnDef="date">
+                      <th mat-header-cell *matHeaderCellDef>Date</th>
+                      <td mat-cell *matCellDef="let load">
+                        <span class="load-date">{{ load.scheduledDate ? (load.scheduledDate | date:'dd MMM yyyy') : 'No date' }}</span>
+                      </td>
+                    </ng-container>
+
                     <ng-container matColumnDef="customer">
                       <th mat-header-cell *matHeaderCellDef>Customer</th>
                       <td mat-cell *matCellDef="let load">{{ load.customerName }}</td>
@@ -438,16 +445,6 @@ interface DeliveryRequestSummary {
                         <mat-chip [ngClass]="getStatusClass(load.status)">
                           {{ load.status }}
                         </mat-chip>
-                      </td>
-                    </ng-container>
-
-                    <ng-container matColumnDef="progress">
-                      <th mat-header-cell *matHeaderCellDef>Progress</th>
-                      <td mat-cell *matCellDef="let load">
-                        <div class="progress-cell">
-                          <mat-progress-bar mode="determinate" [value]="load.progress"></mat-progress-bar>
-                          <span>{{ load.progress }}%</span>
-                        </div>
                       </td>
                     </ng-container>
 
@@ -2403,12 +2400,12 @@ interface DeliveryRequestSummary {
                     <div class="fuel-period-selector" style="flex: 1; display: flex; gap: 12px; align-items: center;">
                       <mat-form-field appearance="outline" class="period-select" style="min-width: 220px;">
                         <mat-label>Search</mat-label>
-                        <input matInput [(ngModel)]="sleepOutSearch" placeholder="Search driver, trip, vehicle...">
+                        <input matInput [ngModel]="sleepOutSearch()" (ngModelChange)="sleepOutSearch.set($event)" placeholder="Search driver, trip, vehicle...">
                         <mat-icon matSuffix>search</mat-icon>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="period-select" style="min-width: 150px;">
                         <mat-label>Status</mat-label>
-                        <mat-select [(ngModel)]="sleepOutStatusFilter">
+                        <mat-select [ngModel]="sleepOutStatusFilter()" (ngModelChange)="sleepOutStatusFilter.set($event)">
                           <mat-option value="all">All</mat-option>
                           <mat-option value="Requested">Requested</mat-option>
                           <mat-option value="Approved">Approved</mat-option>
@@ -2421,15 +2418,15 @@ interface DeliveryRequestSummary {
                       @if (sleepOutSummary()) {
                         <span class="fuel-stat">
                           <mat-icon style="font-size: 16px; height: 16px; width: 16px;">pending</mat-icon>
-                          Pending: {{ sleepOutSummary().PendingCount }}
+                          Pending: {{ sleepOutSummary().pendingCount }}
                         </span>
                         <span class="fuel-stat">
                           <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
-                          Approved: R{{ sleepOutSummary().TotalAmountApproved | number:'1.2-2' }}
+                          Approved: R{{ sleepOutSummary().totalAmountApproved | number:'1.2-2' }}
                         </span>
                         <span class="fuel-stat">
                           <mat-icon style="font-size: 16px; height: 16px; width: 16px;">payments</mat-icon>
-                          Paid: R{{ sleepOutSummary().TotalAmountPaid | number:'1.2-2' }}
+                          Paid: R{{ sleepOutSummary().totalAmountPaid | number:'1.2-2' }}
                         </span>
                       }
                     </div>
@@ -3962,12 +3959,12 @@ interface DeliveryRequestSummary {
     }
 
     .load-row-today {
-      background-color: #e8f5e9 !important;
-      border-left: 4px solid #4caf50;
+      background-color: #fff8e1 !important;
+      border-left: 4px solid #ff8f00;
     }
 
     .load-row-today:hover {
-      background-color: #c8e6c9 !important;
+      background-color: #ffecb3 !important;
     }
 
     .load-row-tomorrow {
@@ -3990,6 +3987,12 @@ interface DeliveryRequestSummary {
       width: 16px;
       height: 16px;
       color: #666;
+    }
+
+    .load-date {
+      font-size: 12px;
+      color: #555;
+      white-space: nowrap;
     }
 
     .progress-cell {
@@ -4054,10 +4057,10 @@ interface DeliveryRequestSummary {
       border: 1px solid #e57373 !important;
     }
     .trip-status-draft {
-      background: linear-gradient(135deg, #ffe0b2, #ffcc80) !important;
-      color: #e65100 !important;
+      background: linear-gradient(135deg, #bbdefb, #90caf9) !important;
+      color: #0d47a1 !important;
       font-weight: 600 !important;
-      border: 2px dashed #ff9800 !important;
+      border: 2px dashed #1976d2 !important;
       animation: pulse-draft 2s ease-in-out infinite;
     }
     @keyframes pulse-draft {
@@ -6682,7 +6685,7 @@ export class LogisticsDashboardComponent implements OnInit {
   tripsheetPageIndex = signal(0);
   tripsheetPageSize = signal(25);
 
-  loadColumns = ['loadNumber', 'customer', 'route', 'vehicle', 'driver', 'status', 'progress', 'actions'];
+  loadColumns = ['loadNumber', 'date', 'customer', 'route', 'vehicle', 'driver', 'status', 'actions'];
 
   // Part Delivered Tracking
 
@@ -6727,8 +6730,8 @@ export class LogisticsDashboardComponent implements OnInit {
   sleepOuts = signal<any[]>([]);
   sleepOutSummary = signal<any>(null);
   sleepOutLoading = signal(false);
-  sleepOutSearch = '';
-  sleepOutStatusFilter = 'all';
+  sleepOutSearch = signal('');
+  sleepOutStatusFilter = signal('all');
   sleepOutColumns = ['date', 'tripNumber', 'driver', 'vehicle', 'amount', 'status', 'reason', 'createdBy', 'actions'];
   showSleepOutDialog = false;
   editingSleepOut: any = null;
@@ -6746,11 +6749,13 @@ export class LogisticsDashboardComponent implements OnInit {
 
   filteredSleepOuts = computed(() => {
     let data = this.sleepOuts();
-    if (this.sleepOutStatusFilter && this.sleepOutStatusFilter !== 'all') {
-      data = data.filter(s => s.status === this.sleepOutStatusFilter);
+    const statusFilter = this.sleepOutStatusFilter();
+    if (statusFilter && statusFilter !== 'all') {
+      data = data.filter(s => s.status === statusFilter);
     }
-    if (this.sleepOutSearch) {
-      const term = this.sleepOutSearch.toLowerCase();
+    const search = this.sleepOutSearch();
+    if (search) {
+      const term = search.toLowerCase();
       data = data.filter(s =>
         (s.driverName || '').toLowerCase().includes(term) ||
         (s.tripNumber || '').toLowerCase().includes(term) ||
@@ -7457,11 +7462,20 @@ Notes: ${record.notes || 'No notes'}
       // Load active loads from tracking controller
       this.http.get<any[]>(`${this.apiUrl}/tracking/active-loads`).subscribe({
         next: (loads) => {
-          this.activeLoads.set(loads.map(l => ({
+          const mapped = loads.map(l => ({
             ...l,
-            scheduledDate: l.scheduledPickupDate || l.scheduledDeliveryDate || l.scheduledDate,
+            scheduledDate: l.scheduledPickupDate || l.scheduledDeliveryDate || l.scheduledDate || l.createdAt,
+            origin: this.abbreviateLocation(l.warehouseName || l.origin || l.pickupLocation || 'N/A'),
+            destination: this.abbreviateLocation(l.destination || l.deliveryLocation || 'N/A'),
             progress: this.calculateProgress(l.status)
-          })));
+          }));
+          // Sort newest first (most recent dates on top)
+          mapped.sort((a, b) => {
+            const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
+            const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
+            return dateB - dateA;
+          });
+          this.activeLoads.set(mapped);
           this.stats.update(s => ({
             ...s,
             activeLoads: loads.length,
@@ -7646,6 +7660,42 @@ Notes: ${record.notes || 'No notes'}
     }
   }
 
+  abbreviateLocation(location: string): string {
+    if (!location || location === 'N/A') return location;
+    const lower = location.toLowerCase();
+
+    // Warehouse abbreviations
+    if (lower.includes('gauteng main') || lower.includes('gauteng warehouse')) return 'GP';
+    if (lower.includes('kzn distribution') || lower.includes('kzn warehouse')) return 'KZN';
+    if (lower.includes('cape town warehouse')) return 'CPT';
+    if (lower.includes('pe distribution') || lower.includes('pe warehouse')) return 'PE';
+    if (lower.includes('private division')) return 'Private';
+    if (lower.includes('bond store')) return 'Bond Store';
+
+    // City/region abbreviations for delivery addresses
+    if (lower.includes('johannesburg') || lower.includes('sandton') || lower.includes('soweto') || lower.includes('randburg') || lower.includes('midrand')) return 'GP';
+    if (lower.includes('pretoria') || lower.includes('centurion') || lower.includes('tshwane')) return 'GP';
+    if (lower.includes('ga-rankuwa') || lower.includes('krugersdorp') || lower.includes('germiston') || lower.includes('edenvale') || lower.includes('springs') || lower.includes('carletonville') || lower.includes('benoni')) return 'GP';
+    if (lower.includes('durban') || lower.includes('pietermaritzburg') || lower.includes('umhlanga') || lower.includes('pinetown') || lower.includes('kwazulu') || lower.includes('newcastle') || lower.includes('ladysmith') || lower.includes('madadeni') || lower.includes('empangeni') || lower.includes('eshowe') || lower.includes('stanger')) return 'KZN';
+    if (lower.includes('cape town') || lower.includes('stellenbosch') || lower.includes('paarl') || lower.includes('atlantis') || lower.includes('khayelitsha') || lower.includes('mitchell') || lower.includes('tygerberg') || lower.includes('western cape')) return 'CPT';
+    if (lower.includes('gqeberha') || lower.includes('port elizabeth') || lower.includes('uitenhage')) return 'PE';
+    if (lower.includes('bloemfontein') || lower.includes('free state')) return 'FS';
+    if (lower.includes('polokwane') || lower.includes('limpopo')) return 'LP';
+    if (lower.includes('nelspruit') || lower.includes('mpumalanga') || lower.includes('middelburg') || lower.includes('witbank') || lower.includes('kwamhlanga') || lower.includes('emakhazeni') || lower.includes('barberton')) return 'MP';
+    if (lower.includes('north west') || lower.includes('rustenburg') || lower.includes('mahikeng') || lower.includes('klerksdorp')) return 'NW';
+    if (lower.includes('northern cape') || lower.includes('kimberley') || lower.includes('douglas') || lower.includes('upington') || lower.includes('vredendal')) return 'NC';
+    if (lower.includes('east london') || lower.includes('mthatha') || lower.includes('eastern cape') || lower.includes('bhisho')) return 'EC';
+
+    // Fallback: return first meaningful part (before first comma)
+    const parts = location.split(',');
+    if (parts.length > 1) {
+      // Try to get a short name - take up to the city part
+      const short = parts[0].trim();
+      return short.length > 30 ? short.substring(0, 28) + '…' : short;
+    }
+    return location.length > 30 ? location.substring(0, 28) + '…' : location;
+  }
+
   getStatusClass(status: string): string {
     return 'status-' + status.toLowerCase().replace(/\s+/g, '-');
   }
@@ -7767,6 +7817,35 @@ Notes: ${record.notes || 'No notes'}
   }
 
   trackLoad(load: ActiveLoad): void {
+    // Try live tracking via CarTrack first, fall back to route map
+    this.http.get<any>(`${this.apiUrl}/tracking/load/${load.id}/track`).subscribe({
+      next: (tracking) => {
+        // Open route map dialog with live vehicle position overlay
+        this.http.get<any>(`${environment.apiUrl}/logistics/loads/${load.id}`).subscribe({
+          next: (loadDetails) => {
+            this.dialog.open(ViewRouteMapDialog, {
+              width: '95vw',
+              maxWidth: '1400px',
+              height: '85vh',
+              data: { 
+                load: loadDetails,
+                liveTracking: tracking
+              }
+            });
+          },
+          error: () => {
+            this.snackBar.open('Failed to load route details', 'Close', { duration: 3000 });
+          }
+        });
+      },
+      error: (err) => {
+        // No CarTrack or vehicle not linked — fall back to showing route on map
+        this.viewRouteOnMap(load);
+        if (err.status === 400) {
+          this.snackBar.open('Live tracking unavailable — vehicle not linked to CarTrack. Showing route map.', 'Close', { duration: 5000 });
+        }
+      }
+    });
   }
 
   updateLoadStatus(load: ActiveLoad): void {
@@ -7852,7 +7931,7 @@ Notes: ${record.notes || 'No notes'}
     if (loadDate < today) {
       return 'load-row-overdue';
     }
-    // Green: Today's load
+    // Amber: Today's load (due today)
     else if (loadDate.getTime() === today.getTime()) {
       return 'load-row-today';
     }
@@ -7880,7 +7959,7 @@ Notes: ${record.notes || 'No notes'}
     if (tripDate < today) {
       return 'load-row-overdue';
     }
-    // Green: Today's tripsheet
+    // Amber: Today's tripsheet (due today)
     else if (tripDate.getTime() === today.getTime()) {
       return 'load-row-today';
     }
@@ -9624,6 +9703,17 @@ Notes: ${record.notes || 'No notes'}
   closeSleepOutDialog(): void {
     this.showSleepOutDialog = false;
     this.editingSleepOut = null;
+    this.sleepOutForm = {
+      tripSheetId: null,
+      driverId: null,
+      driverName: '',
+      vehicleReg: '',
+      tripNumber: '',
+      amount: null,
+      date: new Date(),
+      reason: '',
+      notes: ''
+    };
   }
 
   onSleepOutTripsheetChange(tripSheetId: number): void {
@@ -18123,6 +18213,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
           this.drawAllRoutes();
           this.calculateNearestDepots();
         } else {
+          console.warn('No active loads with sufficient GPS coordinates to display routes');
         }
       },
       error: (err) => {
@@ -19232,7 +19323,7 @@ export class AddDeliveryNoteDialog {
       color: white !important;
     }
     .header-info .draft-badge {
-      background: #ff9800 !important;
+      background: #1976d2 !important;
       color: white !important;
       display: flex;
       align-items: center;
@@ -27000,7 +27091,34 @@ export class ViewLoadDetailsDialog {
               [options]="polylineOptions">
             </map-polyline>
           }
+
+          <!-- Live vehicle position marker -->
+          @if (vehiclePosition) {
+            <map-marker
+              [position]="vehiclePosition"
+              [options]="vehicleMarkerOptions"
+              [title]="'Vehicle: ' + (trackingInfo?.vehicleRegistration || data.load.vehicleRegistration || 'Unknown')">
+            </map-marker>
+          }
         </google-map>
+
+        <!-- Live tracking info banner -->
+        @if (trackingInfo) {
+          <div class="tracking-banner">
+            <mat-icon>gps_fixed</mat-icon>
+            <div class="tracking-details">
+              <strong>Live Tracking</strong>
+              <span>{{ trackingInfo.vehicleRegistration }} · {{ trackingInfo.currentLocation?.status || 'Unknown' }}
+                @if (trackingInfo.currentLocation?.speed > 0) {
+                  · {{ trackingInfo.currentLocation.speed }} km/h
+                }
+              </span>
+              @if (trackingInfo.distanceToNextStop) {
+                <span>Next stop: {{ trackingInfo.distanceToNextStop | number:'1.1-1' }} km away</span>
+              }
+            </div>
+          </div>
+        }
 
         <div class="stops-legend">
           <h3>Stops Details</h3>
@@ -27161,6 +27279,40 @@ export class ViewLoadDetailsDialog {
       font-weight: 500;
     }
 
+    .tracking-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      margin-top: 12px;
+      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+      border-radius: 8px;
+      border-left: 4px solid #4caf50;
+    }
+
+    .tracking-banner mat-icon {
+      color: #4caf50;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .tracking-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .tracking-details strong {
+      color: #2e7d32;
+      font-size: 14px;
+    }
+
+    .tracking-details span {
+      color: #555;
+      font-size: 13px;
+    }
+
     mat-dialog-actions {
       padding: 16px 24px;
       margin: 0;
@@ -27212,12 +27364,27 @@ export class ViewRouteMapDialog implements OnInit {
     strokeWeight: 4,
   };
 
+  vehiclePosition: google.maps.LatLngLiteral | null = null;
+  vehicleMarkerOptions: google.maps.MarkerOptions = {
+    icon: {
+      url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+      scaledSize: new google.maps.Size(44, 44),
+    },
+  };
+  trackingInfo: any = null;
+
   constructor(
     public dialogRef: MatDialogRef<ViewRouteMapDialog>,
-    @Inject(MAT_DIALOG_DATA) public data: { load: any }
+    @Inject(MAT_DIALOG_DATA) public data: { load: any; liveTracking?: any }
   ) {}
 
   ngOnInit(): void {
+    // If live tracking data is provided, set vehicle position
+    if (this.data.liveTracking?.currentLocation?.location) {
+      const loc = this.data.liveTracking.currentLocation.location;
+      this.vehiclePosition = { lat: loc.latitude, lng: loc.longitude };
+      this.trackingInfo = this.data.liveTracking;
+    }
     this.initializeMap();
   }
 

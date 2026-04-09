@@ -1051,6 +1051,7 @@ export class UserManagementComponent implements OnInit {
             @if (form.get('password')?.hasError('minlength')) {
               <mat-error>Password must be at least 8 characters</mat-error>
             }
+            <mat-hint>Minimum 8 characters</mat-hint>
           </mat-form-field>
         }
 
@@ -1160,9 +1161,15 @@ export class UserManagementComponent implements OnInit {
         </div>
       </form>
     </mat-dialog-content>
+    @if (formSubmitted && form.invalid) {
+      <div class="form-error-summary">
+        <mat-icon>error_outline</mat-icon>
+        <span>Please fill in all required fields correctly before submitting.</span>
+      </div>
+    }
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="form.invalid" (click)="submit()">
+      <button mat-raised-button color="primary" (click)="submit()">
         {{ data.mode === 'create' ? 'Create User' : 'Save Changes' }}
       </button>
     </mat-dialog-actions>
@@ -1195,6 +1202,27 @@ export class UserManagementComponent implements OnInit {
 
     mat-form-field {
       margin-bottom: 8px;
+    }
+
+    .form-error-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      margin: 0 24px 8px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: #dc2626;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .form-error-summary mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #dc2626;
     }
 
     .birthday-section {
@@ -1327,6 +1355,7 @@ export class UserFormDialogComponent {
   form: FormGroup;
   selectedPermissions: string[] = [];
   selectedCompanies: number[] = [];
+  formSubmitted = false;
 
   constructor(
     private fb: FormBuilder,
@@ -1396,6 +1425,9 @@ export class UserFormDialogComponent {
   }
 
   submit(): void {
+    this.formSubmitted = true;
+    this.form.markAllAsTouched();
+    
     if (this.form.valid) {
       const formData = { ...this.form.value };
       formData.permissions = this.selectedPermissions.join(',');

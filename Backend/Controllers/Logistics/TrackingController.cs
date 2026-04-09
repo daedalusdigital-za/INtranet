@@ -219,9 +219,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Include(l => l.Customer)
                 .Include(l => l.Vehicle)
                 .Include(l => l.Driver)
+                .Include(l => l.Warehouse)
                 .Include(l => l.Stops)
                     .ThenInclude(s => s.Customer)
                 .Where(l => l.Status == "In Transit" || l.Status == "Assigned")
+                .OrderByDescending(l => l.ScheduledPickupDate ?? l.ScheduledDeliveryDate ?? l.CreatedAt)
                 .Select(l => new LoadDto
                 {
                     Id = l.Id,
@@ -231,13 +233,18 @@ namespace ProjectTracker.API.Controllers.Logistics
                                    (l.Stops != null && l.Stops.Any()) ? 
                                    l.Stops.OrderBy(s => s.StopSequence).First().CompanyName : 
                                    "No Customer",
+                    WarehouseId = l.WarehouseId,
+                    WarehouseName = l.Warehouse != null ? l.Warehouse.Name : null,
                     VehicleId = l.VehicleId,
                     VehicleRegistration = l.Vehicle != null ? l.Vehicle.RegistrationNumber : null,
                     DriverId = l.DriverId,
                     DriverName = l.Driver != null ? $"{l.Driver.FirstName} {l.Driver.LastName}" : null,
                     Status = l.Status,
+                    PickupLocation = l.PickupLocation,
+                    DeliveryLocation = l.DeliveryLocation,
                     ScheduledPickupDate = l.ScheduledPickupDate,
-                    ScheduledDeliveryDate = l.ScheduledDeliveryDate
+                    ScheduledDeliveryDate = l.ScheduledDeliveryDate,
+                    CreatedAt = l.CreatedAt
                 })
                 .ToListAsync();
 

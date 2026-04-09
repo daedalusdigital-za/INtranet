@@ -479,7 +479,7 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("roles")]
         public ActionResult<IEnumerable<string>> GetRoles()
         {
-            var roles = new[] { "Admin", "Manager", "Employee", "HR", "IT Support" };
+            var roles = new[] { "Super Admin", "Admin", "Manager", "Employee", "HR", "IT Support" };
             return Ok(roles);
         }
 

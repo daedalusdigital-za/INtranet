@@ -44,6 +44,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? Status { get; set; }
         public string? Reason { get; set; }
         public string? Notes { get; set; }
+        public int? TripSheetId { get; set; }
+        public string? TripNumber { get; set; }
+        public string? VehicleReg { get; set; }
     }
 
     public class ApproveSleepOutDto

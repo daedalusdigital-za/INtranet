@@ -118,6 +118,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         
         // Stops for full tripsheet update
         public List<CreateLoadStopDto>? Stops { get; set; }
+        
+        // Invoice IDs to link to this load (for tripsheets updated from drafts)
+        public List<int>? InvoiceIds { get; set; }
     }
 
     public class LoadStopDto
