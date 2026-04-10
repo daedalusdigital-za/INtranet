@@ -115,3 +115,8 @@ coverage/
 *.temp
 tmp/
 temp/
+
+# ===================
+# Large data files
+# ===================
+docs/Master/

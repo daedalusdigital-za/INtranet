@@ -73,6 +73,9 @@ namespace ProjectTracker.API.Data
         // Phone Extension System
         public DbSet<Extension> Extensions { get; set; }
 
+        // PBX Call Records
+        public DbSet<CallRecord> CallRecords { get; set; }
+
         // Logistics System
         public DbSet<Models.Logistics.Driver> Drivers { get; set; }
         public DbSet<Models.Logistics.Vehicle> Vehicles { get; set; }
