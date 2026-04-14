@@ -22841,7 +22841,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const stopsToUse = this.groupedStops.length > 0 ? this.groupedStops : this.selectedStops;
     
     // Determine if this is an update or create
-    const isUpdate = this.data.isEditMode && this.data.editLoadId;
+    // IMPORTANT: Also check draftId - if auto-save created a draft, update it instead of creating a duplicate
+    const isUpdate = (this.data.isEditMode && this.data.editLoadId) || this.draftId !== null;
     
     // Build the load/tripsheet payload
     // When updating (especially from draft), set status to Assigned/Available
@@ -22895,14 +22896,15 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       payload.status = this.selectedDriver?.id ? 'Assigned' : 'Available';
     }
     
+    const loadIdToUpdate = this.data.editLoadId || this.draftId;
     const apiUrl = isUpdate 
-      ? `${environment.apiUrl}/logistics/loads/${this.data.editLoadId}`
+      ? `${environment.apiUrl}/logistics/loads/${loadIdToUpdate}`
       : `${environment.apiUrl}/logistics/loads`;
     const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
     
     httpMethod(apiUrl, payload).subscribe({
       next: (result: any) => {
-        const loadId = isUpdate ? this.data.editLoadId : result.id;
+        const loadId = isUpdate ? loadIdToUpdate : result.id;
         // Download the PDF
         this.http.get(`${environment.apiUrl}/logistics/tripsheet/${loadId}/pdf`, { responseType: 'text' }).subscribe({
           next: (html) => {
@@ -22982,15 +22984,17 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     };
     
     // Determine if this is an update or create
-    const isUpdate = this.data.isEditMode && this.data.editLoadId;
+    // IMPORTANT: Also check draftId - if auto-save created a draft, update it instead of creating a duplicate
+    const isUpdate = (this.data.isEditMode && this.data.editLoadId) || this.draftId !== null;
+    const loadIdToUpdate = this.data.editLoadId || this.draftId;
     const apiUrl = isUpdate 
-      ? `${environment.apiUrl}/logistics/loads/${this.data.editLoadId}`
+      ? `${environment.apiUrl}/logistics/loads/${loadIdToUpdate}`
       : `${environment.apiUrl}/logistics/loads`;
     const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
     
     httpMethod(apiUrl, payload).subscribe({
       next: (result: any) => {
-        const loadId = isUpdate ? this.data.editLoadId : result.id;
+        const loadId = isUpdate ? loadIdToUpdate : result.id;
         
         // Send email with the tripsheet
         this.http.post(`${environment.apiUrl}/logistics/tripsheet/${loadId}/email`, {
