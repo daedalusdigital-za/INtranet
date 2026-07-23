@@ -12,6 +12,11 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
     catchError((error: HttpErrorResponse) => {
       let errorMessage = 'An unexpected error occurred';
 
+      // Requests to the School Delivery integration authenticate against an
+      // EXTERNAL system. Their 401/403 responses must NOT sign the user out of
+      // the intranet — let the calling component handle those itself.
+      const isExternalIntegration = req.url.includes('/schooldelivery');
+
       if (error.status === 0) {
         // Network error - server unreachable
         errorMessage = 'Unable to connect to server. Please check your connection and try again.';
@@ -22,6 +27,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           verticalPosition: 'top'
         });
       } else if (error.status === 401) {
+        if (isExternalIntegration) {
+          // Don't log the user out — surface the error to the component only.
+          return throwError(() => error);
+        }
         // Unauthorized - token expired or invalid
         errorMessage = 'Session expired. Please login again.';
         localStorage.removeItem('token');
@@ -32,6 +41,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           panelClass: ['warning-snackbar']
         });
       } else if (error.status === 403) {
+        if (isExternalIntegration) {
+          return throwError(() => error);
+        }
         // Forbidden
         errorMessage = 'You do not have permission to perform this action.';
         snackBar.open(errorMessage, 'Dismiss', {

@@ -162,6 +162,8 @@ namespace ProjectTracker.API.Models.Logistics
 
         [ForeignKey("ImportedByUserId")]
         public virtual Models.User? ImportedByUser { get; set; }
+
+        public virtual ICollection<PodDocumentInvoiceLink> PodDocumentLinks { get; set; } = new List<PodDocumentInvoiceLink>();
     }
 
     /// <summary>

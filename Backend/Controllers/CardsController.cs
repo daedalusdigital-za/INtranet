@@ -13,7 +13,7 @@ namespace ProjectTracker.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    // [Authorize] // Disabled temporarily
+    [Authorize]
     public class CardsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

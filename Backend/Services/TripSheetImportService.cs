@@ -572,30 +572,89 @@ public class TripSheetImportService
                 rows.Add(dto);
                 lastRow2 = dto;
             }
-            else if (lastRow2 != null && string.IsNullOrEmpty(lastRow2.DeliveryAddress))
+            else if (lastRow2 != null)
             {
-                // This might be an address continuation row
-                // Look for address-like content in the customer/address column
-                var potentialAddress = customerName ?? address;
-                if (!string.IsNullOrWhiteSpace(potentialAddress) && 
-                    !IsLabelRow(potentialAddress) &&
-                    !InvoicePattern.IsMatch(potentialAddress))
+                // Non-invoice row: could be a continuation line item or address continuation
+                // Check if this row has quantity/amount data (= additional line item for same invoice)
+                var continuationProduct = GetCellValue(row, columnMap, "ProductDescription");
+                var continuationQtyStr = GetCellValue(row, columnMap, "Quantity");
+                var continuationAmountStr = GetCellValue(row, columnMap, "SalesAmount");
+
+                bool hasQuantity = !string.IsNullOrEmpty(continuationQtyStr) && 
+                    decimal.TryParse(Regex.Replace(continuationQtyStr, @"[^\d.]", ""), out _);
+                bool hasAmount = !string.IsNullOrEmpty(continuationAmountStr) && 
+                    decimal.TryParse(Regex.Replace(continuationAmountStr, @"[^\d.,\-]", ""), out _);
+
+                if (hasQuantity || hasAmount)
                 {
-                    lastRow2.DeliveryAddress = potentialAddress.Trim();
-                    
-                    // Check next row for additional address lines
-                    if (rowIndex + 1 <= lastRow)
+                    // This is an additional line item for the same invoice (same invoice number, different product/qty/amount)
+                    var continuationDto = new TripSheetImportRowDto
                     {
-                        var nextRow = worksheet.Row(rowIndex + 1);
-                        var nextValue = GetCellValue(nextRow, columnMap, "CustomerName") ?? 
-                                       GetCellValue(nextRow, columnMap, "DeliveryAddress");
-                        
-                        if (!string.IsNullOrWhiteSpace(nextValue) && 
-                            !IsLabelRow(nextValue) &&
-                            !InvoicePattern.IsMatch(nextValue) &&
-                            nextValue.Length < 100)
+                        // Inherit customer details from the previous invoice row
+                        CustomerName = !string.IsNullOrEmpty(customerName) ? customerName.Trim() : lastRow2.CustomerName,
+                        CustomerNumber = GetCellValue(row, columnMap, "CustomerNumber") ?? lastRow2.CustomerNumber,
+                        DeliveryAddress = !string.IsNullOrEmpty(address) ? address.Trim() : lastRow2.DeliveryAddress,
+                        City = GetCellValue(row, columnMap, "City") ?? lastRow2.City,
+                        Province = GetCellValue(row, columnMap, "Province") ?? lastRow2.Province,
+                        PostalCode = GetCellValue(row, columnMap, "PostalCode") ?? lastRow2.PostalCode,
+                        InvoiceNumber = lastRow2.InvoiceNumber, // Same invoice number
+                        ProductDescription = continuationProduct?.Trim() ?? lastRow2.ProductDescription,
+                        QuantityText = continuationQtyStr,
+                        ContactPerson = GetCellValue(row, columnMap, "ContactPerson") ?? lastRow2.ContactPerson,
+                        ContactPhone = GetCellValue(row, columnMap, "ContactPhone") ?? lastRow2.ContactPhone,
+                        ContactEmail = GetCellValue(row, columnMap, "ContactEmail") ?? lastRow2.ContactEmail,
+                        SourceFileName = fileName,
+                        SourceSheetName = worksheet.Name,
+                        SourceRowIndex = rowIndex
+                    };
+
+                    // Parse quantity
+                    if (!string.IsNullOrEmpty(continuationQtyStr) && decimal.TryParse(
+                        Regex.Replace(continuationQtyStr, @"[^\d.]", ""), out decimal contQty))
+                    {
+                        continuationDto.Quantity = contQty;
+                    }
+
+                    // Parse sales amount
+                    if (!string.IsNullOrEmpty(continuationAmountStr))
+                    {
+                        var cleanAmount = Regex.Replace(continuationAmountStr, @"[^\d.,\-]", "");
+                        if (decimal.TryParse(cleanAmount, out decimal contAmount))
                         {
-                            lastRow2.DeliveryAddress += ", " + nextValue.Trim();
+                            continuationDto.SalesAmount = contAmount;
+                        }
+                    }
+
+                    rows.Add(continuationDto);
+                    _logger.LogInformation(
+                        "Row {Row}: continuation line item for invoice {Invoice} - Product: {Product}, Qty: {Qty}, Amount: {Amount}",
+                        rowIndex, lastRow2.InvoiceNumber, continuationDto.ProductDescription, 
+                        continuationDto.Quantity, continuationDto.SalesAmount);
+                }
+                else if (string.IsNullOrEmpty(lastRow2.DeliveryAddress))
+                {
+                    // This might be an address continuation row
+                    var potentialAddress = customerName ?? address;
+                    if (!string.IsNullOrWhiteSpace(potentialAddress) && 
+                        !IsLabelRow(potentialAddress) &&
+                        !InvoicePattern.IsMatch(potentialAddress))
+                    {
+                        lastRow2.DeliveryAddress = potentialAddress.Trim();
+                        
+                        // Check next row for additional address lines
+                        if (rowIndex + 1 <= lastRow)
+                        {
+                            var nextRow = worksheet.Row(rowIndex + 1);
+                            var nextValue = GetCellValue(nextRow, columnMap, "CustomerName") ?? 
+                                           GetCellValue(nextRow, columnMap, "DeliveryAddress");
+                            
+                            if (!string.IsNullOrWhiteSpace(nextValue) && 
+                                !IsLabelRow(nextValue) &&
+                                !InvoicePattern.IsMatch(nextValue) &&
+                                nextValue.Length < 100)
+                            {
+                                lastRow2.DeliveryAddress += ", " + nextValue.Trim();
+                            }
                         }
                     }
                 }

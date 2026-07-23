@@ -59,6 +59,10 @@ namespace ProjectTracker.API.Services.TFN
                 result.TransactionsResult = await SyncTransactionsAsync();
                 result.BalancesResult = await SyncAccountBalancesAsync();
 
+                // Persist completed-order fuel fills into FuelTransactions so Fuel
+                // History accumulates permanently (TFN only keeps a 14-day window).
+                result.FuelHistoryResult = await SyncFuelHistoryFromOrdersAsync();
+
                 _logger.LogInformation("TFN sync completed. Vehicles: {Vehicles}, Drivers: {Drivers}, Orders: {Orders}, Transactions: {Transactions}",
                     result.VehiclesResult.Synced, result.DriversResult.Synced, result.OrdersResult.Synced, result.TransactionsResult.Synced);
 
@@ -393,6 +397,124 @@ namespace ProjectTracker.API.Services.TFN
         }
 
         /// <summary>
+        /// Persist completed-order fuel fills into the FuelTransactions table (the
+        /// source Fuel History reads from). TFN only exposes ~14 days of data, so we
+        /// snapshot every sync run and de-duplicate by the TFN transaction GUID so
+        /// history accumulates permanently.
+        /// </summary>
+        public async Task<SyncResult> SyncFuelHistoryFromOrdersAsync(DateTime? fromDate = null)
+        {
+            var result = new SyncResult();
+
+            try
+            {
+                fromDate ??= DateTime.UtcNow.AddDays(-13); // stay within TFN's 14-day window
+
+                var orders = await _ordersClient.GetOrdersAsync(fromDate);
+                if (orders == null)
+                {
+                    result.ErrorMessage = "Failed to retrieve orders from TFN for fuel history";
+                    return result;
+                }
+
+                // Collect the linked transaction GUIDs from completed order entries
+                var transactionIds = new List<string>();
+                foreach (var order in orders)
+                {
+                    if (order.IsDeleted) continue;
+                    if (!string.Equals(order.StatusTitle, "Complete", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    foreach (var entry in order.Entries)
+                    {
+                        if (entry.IsDeleted) continue;
+                        foreach (var link in entry.LinkedTransactions)
+                        {
+                            if (link.TransactionID != Guid.Empty)
+                                transactionIds.Add(link.TransactionID.ToString());
+                        }
+                    }
+                }
+
+                transactionIds = transactionIds.Distinct().ToList();
+                if (transactionIds.Count == 0)
+                {
+                    _logger.LogInformation("No completed-order transactions found for fuel history sync.");
+                    return result;
+                }
+
+                // Skip ones we've already stored
+                var existingIds = await _context.FuelTransactions
+                    .Where(f => f.TfnTransactionId != null && transactionIds.Contains(f.TfnTransactionId))
+                    .Select(f => f.TfnTransactionId!)
+                    .ToListAsync();
+                var existingSet = new HashSet<string>(existingIds, StringComparer.OrdinalIgnoreCase);
+
+                var toFetch = transactionIds.Where(id => !existingSet.Contains(id)).ToList();
+                _logger.LogInformation("Fuel history: {Total} completed transactions, {New} new to fetch",
+                    transactionIds.Count, toFetch.Count);
+
+                foreach (var txId in toFetch)
+                {
+                    var detail = await _transactionsClient.GetTransactionDetailAsync(txId);
+                    if (detail == null) continue;
+
+                    // Only store actual fuel fills (skip zero-litre/non-fuel entries)
+                    if (detail.Litres == 0 && detail.Amount == 0) continue;
+
+                    var reg = detail.VehicleRegistration ?? string.Empty;
+
+                    Vehicle? vehicle = null;
+                    if (!string.IsNullOrEmpty(reg))
+                    {
+                        vehicle = await _context.Vehicles
+                            .FirstOrDefaultAsync(v => v.RegistrationNumber == reg);
+                    }
+
+                    var allocatedLitres = detail.UtilisedOrders?.Sum(u => u.AllocatedLitres) ?? 0;
+                    if (allocatedLitres == 0) allocatedLitres = detail.Litres;
+
+                    var fuelTx = new FuelTransaction
+                    {
+                        TfnTransactionId = detail.TransactionID.ToString(),
+                        VehicleId = vehicle?.Id,
+                        RegistrationNumber = reg,
+                        CardNumber = null,
+                        DepotName = detail.SupplierName,
+                        AllocationLitres = allocatedLitres,
+                        LitresUsed = detail.Litres,
+                        TransactionDate = detail.TransactionDate,
+                        AmountSpent = Math.Abs(detail.Amount),
+                        DepotAssignment = vehicle?.Province,
+                        ReportMonth = detail.TransactionDate.Month,
+                        ReportYear = detail.TransactionDate.Year,
+                        Notes = detail.UtilisedOrders != null && detail.UtilisedOrders.Count > 0
+                            ? $"TFN Order: {detail.UtilisedOrders[0].OrderNumber}"
+                            : null,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.FuelTransactions.Add(fuelTx);
+                    result.Created++;
+                }
+
+                if (result.Created > 0)
+                    await _context.SaveChangesAsync();
+
+                result.Synced = result.Created;
+                _logger.LogInformation("Fuel history sync completed: {Created} new fuel transactions stored", result.Created);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing fuel history from TFN orders");
+                result.ErrorMessage = ex.Message;
+                return result;
+            }
+        }
+
+        /// <summary>
         /// Sync fuel transactions
         /// </summary>
         public async Task<SyncResult> SyncTransactionsAsync(DateTime? fromDate = null)
@@ -590,6 +712,7 @@ namespace ProjectTracker.API.Services.TFN
         public SyncResult OrdersResult { get; set; } = new();
         public SyncResult TransactionsResult { get; set; } = new();
         public SyncResult BalancesResult { get; set; } = new();
+        public SyncResult FuelHistoryResult { get; set; } = new();
         public bool HasError { get; set; }
         public string? ErrorMessage { get; set; }
     }

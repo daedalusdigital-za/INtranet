@@ -66,7 +66,6 @@ namespace ProjectTracker.API.Services
         private readonly IConfiguration _configuration;
         
         // Cache provider health status to avoid repeated connection tests
-        private static string? _lastWorkingProvider;
         private static DateTime _lastHealthCheck = DateTime.MinValue;
         private static readonly TimeSpan HealthCheckInterval = TimeSpan.FromMinutes(5);
 
@@ -229,7 +228,6 @@ namespace ProjectTracker.API.Services
                 
             if (primarySuccess)
             {
-                _lastWorkingProvider = "Office365";
                 return true;
             }
             
@@ -248,7 +246,6 @@ namespace ProjectTracker.API.Services
                 
             if (fallbackSuccess)
             {
-                _lastWorkingProvider = "ProMedMail";
                 return true;
             }
             

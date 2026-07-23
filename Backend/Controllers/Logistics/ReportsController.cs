@@ -12,10 +12,12 @@ namespace ProjectTracker.API.Controllers.Logistics
     public class ReportsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<ReportsController> _logger;
 
-        public ReportsController(ApplicationDbContext context)
+        public ReportsController(ApplicationDbContext context, ILogger<ReportsController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: api/logistics/reports/delivery-performance
@@ -272,7 +274,6 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         // GET: api/logistics/reports/daily-dispatch  
-        [AllowAnonymous]
         [HttpGet("daily-dispatch")]
         public async Task<IActionResult> GetDailyDispatchReport([FromQuery] DateTime? reportDate)
         {
@@ -418,9 +419,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"ERROR in GetDailyDispatchReport: {ex.Message}");
-                Console.WriteLine($"StackTrace: {ex.StackTrace}");
-                return StatusCode(500, new { error = ex.Message, stackTrace = ex.StackTrace });
+                _logger.LogError(ex, "ERROR in GetDailyDispatchReport");
+                return StatusCode(500, new { error = "An error occurred generating the daily dispatch report." });
             }
         }
 

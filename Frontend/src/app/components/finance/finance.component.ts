@@ -150,23 +150,18 @@ export class FinanceComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    console.log('Finance Component Initialized');
-    console.log('Environment API URL:', environment.apiUrl);
     this.loadDepartments();
     this.loadStats();
   }
 
   loadDepartments(): void {
-    console.log('Loading departments...');
     this.http.get<Department[]>(`${environment.apiUrl}/departments`).subscribe({
       next: (depts) => {
-        console.log('Departments loaded:', depts);
         this.departments = depts;
         this.selectedDepartment = null;
       },
       error: (err) => {
         console.error('Error loading departments:', err);
-        console.error('Error details:', err.error);
       }
     });
   }
@@ -198,10 +193,6 @@ export class FinanceComponent implements OnInit {
   }
 
   onDepartmentChange(): void {
-    console.log('=== Department Change ===>');
-    console.log('Selected Department:', this.selectedDepartment);
-    console.log('Type:', typeof this.selectedDepartment);
-    
     if (this.selectedDepartment) {
       this.pageIndex = 0;
       this.loadInvoices();
@@ -214,7 +205,6 @@ export class FinanceComponent implements OnInit {
 
   loadInvoices(): void {
     if (!this.selectedDepartment) {
-      console.warn('No department selected');
       return;
     }
     
@@ -225,11 +215,8 @@ export class FinanceComponent implements OnInit {
     if (this.selectedStatus) url += `&status=${this.selectedStatus}`;
     if (this.selectedCategory) url += `&category=${encodeURIComponent(this.selectedCategory)}`;
 
-    console.log('Loading invoices from:', url);
-
     this.http.get<any>(url).subscribe({
       next: (response) => {
-        console.log('Invoices loaded:', response);
         this.invoices = response.items || response.data || [];
         this.filteredInvoices = this.invoices;
         this.totalInvoices = response.totalCount || response.total || 0;
@@ -240,8 +227,6 @@ export class FinanceComponent implements OnInit {
         }
       },
       error: (err) => {
-        console.error('Error loading invoices:', err);
-        console.error('Error details:', err.error);
         this.loading = false;
         this.invoices = [];
         this.filteredInvoices = [];

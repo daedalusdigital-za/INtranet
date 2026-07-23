@@ -41,8 +41,8 @@ services:
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;
       - KnowledgeBase__DocumentsPath=/app/kb-docs
       - DocumentsPath=/app/documents
-      - NasSettings__Host=192.168.11.186
-      - NasSettings__ShareName=NewAge_Tech
+      - NasSettings__Host=192.168.10.76
+      - NasSettings__ShareName=WorkSpace
       - NasSettings__Username=Storage
       - NasSettings__Password=AccMed@2025
       - Ollama__BaseUrl=http://host.docker.internal:11434
@@ -52,8 +52,10 @@ services:
       - Claude__Model=claude-sonnet-4-20250514
       - Claude__Enabled=true
       - LocalLlm__BaseUrl=http://host.docker.internal:8090
-      - LocalLlm__Model=qwen2.5-14b-instruct
+      - LocalLlm__Model=gemma-4-26B-A4B-it-Q4_K_M
       - LocalLlm__Enabled=true
+      - EmailEnabled=true
+      - AzureSync__Enabled=false
       - SearXNG__BaseUrl=http://searxng:8080
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -128,7 +130,7 @@ volumes:
     driver: local
     driver_opts:
       type: cifs
-      device: "//192.168.11.186/WorkSpace/IntranetDocuments"
+      device: "//192.168.10.76/WorkSpace/IntranetDocuments"
       o: "username=Storage,password=AccMed@2025,vers=3.0,uid=1000,gid=1000"
 networks:
   projecttracker-network:

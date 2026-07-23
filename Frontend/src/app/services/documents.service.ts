@@ -41,6 +41,38 @@ export interface DocumentPermissions {
   userRole: string;
 }
 
+export interface ShareUser {
+  userId: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface SharedItem {
+  id: number;
+  name: string;
+  isFolder: boolean;
+  sourceDepartment: string;
+  sharedByName?: string;
+  sharedByUserId: number;
+  shareWithType: string;
+  shareWithDepartment?: string;
+  shareWithUserId?: number;
+  note?: string;
+  createdAt: Date;
+  fileType: string;
+  icon: string;
+}
+
+export interface ShareRequest {
+  sourceDepartment: string;
+  sourcePath: string;
+  shareWithType: 'Department' | 'User';
+  shareWithDepartment?: string;
+  shareWithUserId?: number;
+  note?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -174,5 +206,56 @@ export class DocumentsService {
   // Check if file type is previewable
   isPreviewable(fileType: string): boolean {
     return ['pdf', 'image', 'word', 'excel', 'powerpoint', 'text', 'csv'].includes(fileType);
+  }
+
+  // -------------------------------------------------------------------------
+  // SHARING
+  // -------------------------------------------------------------------------
+
+  // Search users for the "share with person" picker
+  searchShareUsers(search?: string): Observable<ShareUser[]> {
+    let params = new HttpParams();
+    if (search) params = params.set('search', search);
+    return this.http.get<ShareUser[]>(`${this.apiUrl}/users`, { params });
+  }
+
+  // Share a file/folder with a department or a person
+  shareItem(request: ShareRequest): Observable<any> {
+    return this.http.post(`${this.apiUrl}/share`, request);
+  }
+
+  // Items shared with the current user (or their department)
+  getSharedWithMe(): Observable<SharedItem[]> {
+    return this.http.get<SharedItem[]>(`${this.apiUrl}/shared-with-me`);
+  }
+
+  // Items the current user has shared
+  getSharedByMe(): Observable<SharedItem[]> {
+    return this.http.get<SharedItem[]>(`${this.apiUrl}/shared-by-me`);
+  }
+
+  // Browse inside a shared folder
+  getSharedFiles(shareId: number, subfolder?: string): Observable<DocumentFile[]> {
+    let params = new HttpParams();
+    if (subfolder) params = params.set('subfolder', subfolder);
+    return this.http.get<DocumentFile[]>(`${this.apiUrl}/shared/${shareId}/files`, { params });
+  }
+
+  // Download a shared file
+  downloadSharedFile(shareId: number, path?: string): Observable<Blob> {
+    let params = new HttpParams();
+    if (path) params = params.set('path', path);
+    return this.http.get(`${this.apiUrl}/shared/${shareId}/download`, { params, responseType: 'blob' });
+  }
+
+  // Preview URL for a shared file
+  getSharedPreviewUrl(shareId: number, path?: string): string {
+    const q = path ? `?path=${encodeURIComponent(path)}` : '';
+    return `${this.apiUrl}/shared/${shareId}/preview${q}`;
+  }
+
+  // Remove a share (unshare)
+  unshare(shareId: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/share/${shareId}`);
   }
 }

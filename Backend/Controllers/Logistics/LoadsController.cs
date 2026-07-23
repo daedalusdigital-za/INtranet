@@ -721,7 +721,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         /// Sync invoice statuses from all tripsheets/loads.
         /// Matches invoices from load stops to ImportedInvoices and updates their status.
         /// </summary>
-        [AllowAnonymous]
+        [Authorize]
         [HttpPost("sync-invoice-statuses")]
         public async Task<IActionResult> SyncInvoiceStatuses()
         {
@@ -1717,7 +1717,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         /// Bulk fix missing provinces on LogisticsCustomers by mapping city names to provinces.
         /// Uses a hard-coded dictionary first, then Gemini AI for unknown cities.
         /// </summary>
-        [AllowAnonymous]
+        [Authorize]
         [HttpPost("bulk-fix-provinces")]
         public async Task<ActionResult> BulkFixProvinces(
             [FromServices] ProjectTracker.API.Services.GeminiProvinceService geminiService)

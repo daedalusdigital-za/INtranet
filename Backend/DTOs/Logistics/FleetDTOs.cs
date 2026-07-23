@@ -90,6 +90,11 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string Province { get; set; } = string.Empty;
     }
 
+    public class LinkExternalVehicleDto
+    {
+        public string ExternalId { get; set; } = string.Empty;
+    }
+
     // Driver DTOs
     public class DriverDto
     {

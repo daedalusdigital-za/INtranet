@@ -24,6 +24,17 @@ namespace ProjectTracker.API.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // Kill-switch: this background service pulls employees/attendance from the
+            // Azure PharmaCare DB. When that DB is unreachable (e.g. a network/firewall
+            // change) it previously logged ~1,500 timeout errors per day. It is now OFF
+            // by default; set AzureSync:Enabled=true (and ensure the Azure DB is
+            // reachable) to turn it back on.
+            if (!_configuration.GetValue<bool>("AzureSync:Enabled", false))
+            {
+                _logger.LogInformation("Azure Sync Service is disabled (AzureSync:Enabled=false). Not starting.");
+                return;
+            }
+
             _logger.LogInformation("Azure Sync Service starting...");
 
             // Initial sync on startup - wrapped in try-catch to prevent app shutdown

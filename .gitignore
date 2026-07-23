@@ -95,6 +95,10 @@ HashGenerator/
 .env.local
 .env.*.local
 appsettings.local.json
+# appsettings.json contains real credentials — keep sensitive files out of git
+# Use appsettings.Production.json (env-var placeholders) and user secrets in dev
+Backend/appsettings.json
+docker-compose.yml
 
 # ===================
 # Logs

@@ -21,6 +21,7 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatMenuModule } from '@angular/material/menu';
 import { Inject } from '@angular/core';
 import { SanitaryPadsService, PadsDashboard, StockReceived } from '../../../services/sanitary-pads.service';
+import { SchoolDeliveryComponent } from '../school-delivery/school-delivery.component';
 import { environment } from '../../../../environments/environment';
 
 @Component({
@@ -32,7 +33,8 @@ import { environment } from '../../../../environments/environment';
     MatTooltipModule, MatChipsModule, MatTabsModule, MatSelectModule,
     MatFormFieldModule, MatTableModule, MatDividerModule, MatSnackBarModule,
     MatDialogModule, MatInputModule, MatDatepickerModule, MatNativeDateModule,
-    MatMenuModule
+    MatMenuModule,
+    SchoolDeliveryComponent
   ],
   template: `
     <div class="pads-dashboard">
@@ -53,6 +55,9 @@ import { environment } from '../../../../environments/environment';
             </div>
           </div>
           <div class="hero-actions">
+            <button mat-flat-button class="request-delivery-btn" (click)="showSchoolDelivery = true">
+              <mat-icon>school</mat-icon> School Deliveries
+            </button>
             <button mat-flat-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
               <mat-icon>local_shipping</mat-icon> Request Delivery
             </button>
@@ -63,6 +68,9 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
+      @if (showSchoolDelivery) {
+        <app-school-delivery (goBack)="showSchoolDelivery = false"></app-school-delivery>
+      } @else {
       @if (loading) {
         <div class="loading-state">
           <div class="loading-card">
@@ -607,6 +615,7 @@ import { environment } from '../../../../environments/environment';
             }
           </div>
         </div>
+      }
       }
     </div>
   `,
@@ -1365,6 +1374,7 @@ export class SanitaryPadsDashboardComponent implements OnInit {
   @ViewChild('addressInput') addressInputRef!: ElementRef<HTMLInputElement>;
 
   loading = true;
+  showSchoolDelivery = false;
   dashboard: PadsDashboard | null = null;
   stockReceivedList: StockReceived[] = [];
   stockDeliveredList: any[] = [];

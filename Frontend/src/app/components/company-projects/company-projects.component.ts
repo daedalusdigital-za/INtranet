@@ -17,8 +17,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { HBA1CDashboardComponent } from './hba1c-dashboard/hba1c-dashboard.component';
 import { CondomsDashboardComponent } from './condoms-dashboard/condoms-dashboard.component';
 import { SanitaryPadsDashboardComponent } from './sanitary-pads-dashboard/sanitary-pads-dashboard.component';
+import { SchoolDeliveryComponent } from './school-delivery/school-delivery.component';
 import { HBA1CService } from '../../services/hba1c.service';
 import { SanitaryPadsService } from '../../services/sanitary-pads.service';
+import { SchoolDeliveryService } from '../../services/school-delivery.service';
 import { environment } from '../../../environments/environment';
 
 interface CompanyProject {
@@ -55,7 +57,8 @@ interface CompanyProject {
     NavbarComponent,
     HBA1CDashboardComponent,
     CondomsDashboardComponent,
-    SanitaryPadsDashboardComponent
+    SanitaryPadsDashboardComponent,
+    SchoolDeliveryComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -95,8 +98,8 @@ interface CompanyProject {
           <!-- HBA1C Live Dashboard -->
           <app-hba1c-dashboard (goBack)="clearSelection()"></app-hba1c-dashboard>
         } @else if (selectedProject.id === 'sanitary-pads') {
-          <!-- Sanitary Pads Dashboard -->
-          <app-sanitary-pads-dashboard (goBack)="clearSelection()"></app-sanitary-pads-dashboard>
+          <!-- School Delivery Management (replaces old mock dashboard) -->
+          <app-school-delivery (goBack)="clearSelection()"></app-school-delivery>
         } @else {
           <!-- Generic Project Detail View -->
           <div class="project-detail">
@@ -220,18 +223,29 @@ interface CompanyProject {
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      position: relative;
+      background: #0f172a;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(236, 72, 153, 0.30) 0%, transparent 45%),
+        radial-gradient(circle at 75% 85%, rgba(14, 165, 233, 0.30) 0%, transparent 45%),
+        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.25) 0%, transparent 45%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
 
     .projects-container {
-      padding: 80px;
-      max-width: 1400px;
+      padding: 48px clamp(20px, 5vw, 64px) 72px;
+      max-width: 1440px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
+      position: relative;
+      z-index: 1;
     }
 
     .page-header {
-      margin-bottom: 32px;
+      margin-bottom: 40px;
     }
 
     .header-content {
@@ -243,125 +257,179 @@ interface CompanyProject {
     }
 
     .header-text h1 {
-      font-size: 2.5rem;
-      font-weight: 600;
-      color: white;
-      margin: 0 0 8px 0;
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 800;
+      color: #fff;
+      margin: 0 0 10px 0;
       display: flex;
       align-items: center;
-      gap: 12px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+      gap: 14px;
+      letter-spacing: -0.5px;
     }
 
     .header-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
+      font-size: 38px;
+      width: 52px;
+      height: 52px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.9), rgba(236,72,153,0.9));
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+      padding: 7px;
     }
 
     .subtitle {
-      color: rgba(255, 255, 255, 0.9);
+      color: rgba(226, 232, 240, 0.85);
       font-size: 1.1rem;
       margin: 0;
+      font-weight: 400;
     }
 
     .header-stats {
       display: flex;
-      gap: 24px;
+      gap: 16px;
     }
 
     .header-stat {
       text-align: center;
-      padding: 12px 20px;
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      min-width: 100px;
+      padding: 16px 24px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      min-width: 108px;
+      transition: transform 0.25s, background 0.25s;
+    }
+
+    .header-stat:hover {
+      transform: translateY(-3px);
+      background: rgba(255, 255, 255, 0.13);
     }
 
     .header-stat .stat-number {
       display: block;
-      font-size: 24px;
-      font-weight: 700;
-      color: white;
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.1;
     }
 
     .header-stat .stat-label {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.8);
+      font-size: 11px;
+      color: rgba(226, 232, 240, 0.7);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.8px;
+      font-weight: 600;
     }
 
     /* Projects Grid */
     .projects-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-      gap: 24px;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 28px;
     }
 
     .project-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 20px;
+      background: #ffffff;
+      border-radius: 24px;
       overflow: hidden;
       cursor: pointer;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
+      box-shadow: 0 10px 40px rgba(2, 6, 23, 0.35);
       position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .project-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.6), transparent 40%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
     }
 
     .project-card:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+      transform: translateY(-10px);
+      box-shadow: 0 26px 60px rgba(2, 6, 23, 0.5);
     }
 
     .card-gradient {
-      height: 8px;
+      height: 90px;
       width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-gradient::before {
+      content: '';
+      position: absolute;
+      top: -40%; right: -10%;
+      width: 160px; height: 160px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 50%;
+      filter: blur(6px);
     }
 
     .card-content {
-      padding: 24px;
+      padding: 0 24px 24px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
     }
 
     .card-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
+      align-items: flex-end;
+      margin-top: -34px;
+      margin-bottom: 18px;
+      position: relative;
+      z-index: 2;
     }
 
     .card-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: #fff !important;
+      box-shadow: 0 10px 26px rgba(2, 6, 23, 0.22);
+      border: 1px solid rgba(0,0,0,0.05);
     }
 
     .card-icon mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      font-size: 34px;
+      width: 34px;
+      height: 34px;
     }
 
     .card-title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #1a1a2e;
+      font-size: 21px;
+      font-weight: 800;
+      color: #0f172a;
       margin: 0 0 8px 0;
+      letter-spacing: -0.3px;
     }
 
     .card-description {
-      color: #666;
+      color: #64748b;
       font-size: 14px;
-      line-height: 1.5;
-      margin: 0 0 12px 0;
+      line-height: 1.6;
+      margin: 0 0 14px 0;
       display: -webkit-box;
-      -webkit-line-clamp: 2;
+      -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -369,66 +437,109 @@ interface CompanyProject {
     .card-category {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
       font-size: 12px;
-      color: #888;
-      background: #f5f5f5;
-      padding: 4px 10px;
+      font-weight: 600;
+      color: #6366f1;
+      background: #eef2ff;
+      padding: 5px 12px;
       border-radius: 20px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
+      align-self: flex-start;
     }
 
     .card-category mat-icon {
-      font-size: 14px;
-      width: 14px;
-      height: 14px;
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
     }
 
     .card-stats {
-      display: flex;
-      gap: 24px;
-      margin-bottom: 16px;
-      padding: 12px 0;
-      border-top: 1px solid #f0f0f0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .card-stat {
+      background: #f8fafc;
+      border: 1px solid #eef2f7;
+      border-radius: 14px;
+      padding: 12px 14px;
     }
 
     .card-stat .stat-value {
       display: block;
-      font-size: 18px;
-      font-weight: 700;
-      color: #1a1a2e;
+      font-size: 19px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.15;
     }
 
     .card-stat .stat-label {
-      font-size: 11px;
-      color: #999;
+      font-size: 10.5px;
+      color: #94a3b8;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
+      font-weight: 600;
     }
 
     .card-progress {
-      margin-bottom: 16px;
+      margin-bottom: 18px;
+      margin-top: auto;
     }
 
     .progress-info {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 6px;
+      margin-bottom: 7px;
       font-size: 13px;
-      color: #666;
+      color: #64748b;
+      font-weight: 500;
     }
 
     .progress-pct {
-      font-weight: 600;
-      color: #333;
+      font-weight: 700;
+      color: #0f172a;
     }
 
     .card-action-btn {
       width: 100%;
-      border-radius: 10px !important;
-      font-weight: 600;
+      border-radius: 14px !important;
+      font-weight: 700 !important;
       letter-spacing: 0.3px;
+      height: 48px;
+      box-shadow: 0 8px 22px rgba(2, 6, 23, 0.18) !important;
+      transition: filter 0.2s, transform 0.2s;
     }
+
+    .card-action-btn:hover {
+      filter: brightness(1.08);
+    }
+
+    .card-progress ::ng-deep .mat-mdc-progress-bar {
+      --mdc-linear-progress-track-height: 8px;
+      --mdc-linear-progress-active-indicator-height: 8px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .card-progress ::ng-deep .mdc-linear-progress__buffer-bar {
+      background: #eef2f7;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .project-card {
+      animation: cardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .projects-grid .project-card:nth-child(1) { animation-delay: 0.02s; }
+    .projects-grid .project-card:nth-child(2) { animation-delay: 0.08s; }
+    .projects-grid .project-card:nth-child(3) { animation-delay: 0.14s; }
+    .projects-grid .project-card:nth-child(4) { animation-delay: 0.20s; }
+    .projects-grid .project-card:nth-child(5) { animation-delay: 0.26s; }
+    .projects-grid .project-card:nth-child(6) { animation-delay: 0.32s; }
 
     /* Status Chips */
     .status-chip {
@@ -655,7 +766,8 @@ export class CompanyProjectsComponent implements OnInit {
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
     private hba1cService: HBA1CService,
-    private padsService: SanitaryPadsService
+    private padsService: SanitaryPadsService,
+    private sdmService: SchoolDeliveryService
   ) {}
 
   ngOnInit(): void {
@@ -743,48 +855,48 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'sanitary-pads',
         name: 'Sanitary Pads Project',
-        description: 'National Department of Health sanitary pad stock management. Tracking GRN receipts, quarterly deliveries, and warehouse stock across CPT and KZN.',
+        description: 'Sanitary Pads Dignity Programme with the Department of Basic Education — managing the delivery of sanitary pads to schools across Western Cape, Eastern Cape and KwaZulu-Natal to keep girls in class every day.',
         icon: 'volunteer_activism',
         color: '#e91e63',
         gradient: 'linear-gradient(135deg, #e91e63 0%, #c2185b 100%)',
         status: 'active',
         progress: 65,
         category: 'Social Impact',
-        lead: 'Stock Team',
+        lead: 'School Delivery Team',
         startDate: 'June 2025',
         targetDate: 'Ongoing',
         stats: [
-          { label: 'Total Received', value: '—' },
-          { label: 'Total Delivered', value: '—' },
-          { label: 'Balance', value: '—' },
-          { label: 'Total Value', value: '—' }
+          { label: 'Provinces', value: '—' },
+          { label: 'Districts', value: '—' },
+          { label: 'Schools', value: '—' },
+          { label: 'Girls / Month', value: '—' }
         ]
       }
     ];
   }
 
   private loadPadsStats(): void {
-    this.padsService.getDashboard().subscribe({
-      next: (data) => {
-        const pads = this.projects.find(p => p.id === 'sanitary-pads');
-        if (!pads) return;
+    const pads = this.projects.find(p => p.id === 'sanitary-pads');
+    if (!pads) return;
 
-        const fmtValue = data.totalValue >= 1_000_000
-          ? 'R' + (data.totalValue / 1_000_000).toFixed(1) + 'M'
-          : data.totalValue >= 1_000
-          ? 'R' + (data.totalValue / 1_000).toFixed(0) + 'K'
-          : 'R' + data.totalValue.toFixed(0);
+    const provinces = this.sdmService.provinces;
+    const numProvinces = provinces.length;
+    const totalDistricts = provinces.reduce((sum, p) => sum + (p.districts || 0), 0);
+    const totalSchools = provinces.reduce((sum, p) => sum + (p.schools || 0), 0);
+    const totalGirls = provinces.reduce((sum, p) => sum + (p.girlsPerMonth || 0), 0);
 
-        pads.progress = data.totalReceived > 0 ? Math.round((data.totalDelivered / data.totalReceived) * 100) : 0;
-        pads.stats = [
-          { label: 'Total Received', value: data.totalReceived.toLocaleString() + ' boxes' },
-          { label: 'Total Delivered', value: data.totalDelivered.toLocaleString() + ' boxes' },
-          { label: 'Balance', value: data.currentBalance.toLocaleString() + ' boxes' },
-          { label: 'Total Value', value: fmtValue }
-        ];
-      },
-      error: () => { /* keep defaults */ }
-    });
+    const fmtCompact = (n: number): string => {
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+      return n.toLocaleString();
+    };
+
+    pads.stats = [
+      { label: 'Provinces', value: numProvinces.toString() },
+      { label: 'Districts', value: totalDistricts.toString() },
+      { label: 'Schools', value: fmtCompact(totalSchools) },
+      { label: 'Girls / Month', value: fmtCompact(totalGirls) }
+    ];
   }
 
   selectProject(project: CompanyProject): void {

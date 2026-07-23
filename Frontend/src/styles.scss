@@ -232,6 +232,19 @@ mat-toolbar mat-icon {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25) !important;
 }
 
+/* SDM School Delivery login dialog */
+.sdm-login-panel .mat-mdc-dialog-container {
+  padding: 0 !important;
+  border-radius: 22px !important;
+  overflow: hidden;
+}
+.sdm-login-panel .mat-mdc-dialog-surface {
+  padding: 0 !important;
+  border-radius: 22px !important;
+  overflow: hidden;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35) !important;
+}
+
 /* Hide Welly chatbot when artwork viewer is open */
 body.artwork-viewer-open app-chatbot {
   display: none !important;

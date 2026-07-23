@@ -551,6 +551,71 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(new { success = true, province = vehicle.Province });
         }
 
+        /// <summary>
+        /// Manually link a fleet vehicle to a CarTrack vehicle by ID
+        /// </summary>
+        [HttpPost("vehicles/{id}/link-cartrack")]
+        public async Task<IActionResult> LinkCarTrack(int id, [FromBody] LinkExternalVehicleDto dto)
+        {
+            var vehicle = await _context.Vehicles.FindAsync(id);
+            if (vehicle == null)
+                return NotFound();
+
+            // Look up CarTrack vehicle name/registration from the API
+            string carTrackName = dto.ExternalId;
+            try
+            {
+                var carTrackVehicles = await _carTrackService.GetRawVehicleDataAsync();
+                var matched = carTrackVehicles.FirstOrDefault(ct => ct.VehicleId == dto.ExternalId);
+                if (matched != null)
+                {
+                    carTrackName = matched.Registration ?? dto.ExternalId;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not look up CarTrack vehicle name for {CarTrackId}, using ID as name", dto.ExternalId);
+            }
+
+            vehicle.CarTrackId = dto.ExternalId;
+            vehicle.CarTrackName = carTrackName;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Vehicle {VehicleId} ({Reg}) linked to CarTrack ID {CarTrackId} ({CarTrackName})",
+                id, vehicle.RegistrationNumber, dto.ExternalId, carTrackName);
+
+            return Ok(new { success = true, carTrackId = vehicle.CarTrackId, carTrackName = vehicle.CarTrackName });
+        }
+
+        /// <summary>
+        /// Unlink a fleet vehicle from CarTrack
+        /// </summary>
+        [HttpPost("vehicles/{id}/unlink-cartrack")]
+        public async Task<IActionResult> UnlinkCarTrack(int id)
+        {
+            var vehicle = await _context.Vehicles.FindAsync(id);
+            if (vehicle == null)
+                return NotFound();
+
+            _logger.LogInformation("Vehicle {VehicleId} ({Reg}) unlinked from CarTrack ID {CarTrackId}",
+                id, vehicle.RegistrationNumber, vehicle.CarTrackId);
+
+            vehicle.CarTrackId = null;
+            vehicle.CarTrackName = null;
+            vehicle.LastKnownLatitude = null;
+            vehicle.LastKnownLongitude = null;
+            vehicle.LastKnownAddress = null;
+            vehicle.LastKnownStatus = null;
+            vehicle.LastLocationUpdate = null;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true });
+        }
+
         [HttpDelete("vehicles/{id}")]
         public async Task<IActionResult> DeleteVehicle(int id)
         {

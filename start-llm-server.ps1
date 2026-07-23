@@ -3,10 +3,10 @@
 # Uses llama.cpp server with OpenAI-compatible API
 # ============================================================
 # Usage:
-#   .\start-llm-server.ps1              → Start with default model (Gemma 4)
+#   .\start-llm-server.ps1              → Start with default model (Gemma 4 26B-A4B MoE)
 #   .\start-llm-server.ps1 -Model gemma → Start Gemma 4 26B MoE
-#   .\start-llm-server.ps1 -Model qwen  → Start Qwen 2.5 14B
-#   .\start-llm-server.ps1 -Model deep  → Start DeepSeek-R1 14B
+#   .\start-llm-server.ps1 -Model qwen  → Start Qwen 2.5 14B (if installed)
+#   .\start-llm-server.ps1 -Model deep  → Start DeepSeek-R1 14B (if installed)
 # ============================================================
 
 param(
@@ -19,6 +19,16 @@ $Port = 8090
 
 # ── Model Configurations ──────────────────────────────────
 $Models = @{
+    "qwen3" = @{
+        Name        = "Qwen3 30B-A3B MoE (Q4_K_M)"
+        Path        = "C:\Models\Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf"
+        ContextSize = 32768     # 256K native, configured to 32K for safety
+        BatchSize   = 2048
+        Parallel    = 2
+        Threads     = 12        # Physical cores on 1 NUMA node
+        ThreadsBatch = 24       # All physical cores across both sockets
+        ExtraArgs   = @("--reasoning-format", "none")
+    }
     "gemma" = @{
         Name        = "Gemma 4 26B-A4B MoE (Q4_K_M)"
         Path        = "C:\Models\gemma-4-26B-A4B-it-Q4_K_M.gguf"
@@ -29,15 +39,6 @@ $Models = @{
         ThreadsBatch = 24       # All physical cores across both sockets
         ExtraArgs   = @("--reasoning-format", "deepseek", "--reasoning", "off")
     }
-    "qwen" = @{
-        Name        = "Qwen 2.5 14B Instruct (Q4_K_M)"
-        Path        = "C:\Models\Qwen2.5-14B-Instruct-Q4_K_M.gguf"
-        ContextSize = 16384
-        BatchSize   = 2048
-        Parallel    = 2
-        Threads     = 12
-        ThreadsBatch = 24
-        ExtraArgs   = @("--reasoning-format", "none")
     }
     "deep" = @{
         Name        = "DeepSeek-R1-Distill-Qwen 14B (Q4_K_M)"

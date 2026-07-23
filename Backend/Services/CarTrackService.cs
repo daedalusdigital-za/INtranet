@@ -15,8 +15,8 @@ namespace ProjectTracker.API.Services
         Task<LivestreamResponseDto?> GetVehicleLivestreamAsync(string registration, int[] cameras);
         Task<List<VisionVehicleDto>> GetVisionEnabledVehiclesAsync();
         Task<List<CarTrackTripData>> GetVehicleTripsAsync(string registration, DateTime date);
+        Task<List<CarTrackTripData>> GetAllTripsAsync(DateTime fromDate, DateTime toDate);
     }
-
     // DTO for CarTrack trip data
     public class CarTrackTripData
     {
@@ -446,6 +446,71 @@ namespace ProjectTracker.API.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error fetching trips for {Registration}", registration);
+                return new List<CarTrackTripData>();
+            }
+        }
+
+        /// <summary>
+        /// Fetch trips for the WHOLE fleet within a date/time range. Used by the
+        /// controller's night-watch archive to see every vehicle that moved during
+        /// curfew, without filtering to one registration.
+        /// </summary>
+        public async Task<List<CarTrackTripData>> GetAllTripsAsync(DateTime fromDate, DateTime toDate)
+        {
+            try
+            {
+                var startTs = fromDate.ToString("yyyy-MM-dd HH:mm:ss");
+                var endTs = toDate.ToString("yyyy-MM-dd HH:mm:ss");
+                var url = $"trips?start_timestamp={Uri.EscapeDataString(startTs)}&end_timestamp={Uri.EscapeDataString(endTs)}&limit=1000";
+
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("CarTrack trips API (all) returned {StatusCode}", response.StatusCode);
+                    return new List<CarTrackTripData>();
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var tripResponse = JsonSerializer.Deserialize<CarTrackTripsResponse>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (tripResponse?.Data == null)
+                    return new List<CarTrackTripData>();
+
+                var trips = tripResponse.Data.Select(t => new CarTrackTripData
+                {
+                    TripId = t.TripId,
+                    Registration = t.Registration,
+                    StartTimestamp = t.StartTimestamp,
+                    EndTimestamp = t.EndTimestamp,
+                    TripDuration = t.TripDuration,
+                    TripDurationSeconds = t.TripDurationSeconds ?? 0,
+                    StartLocation = t.StartLocation,
+                    EndLocation = t.EndLocation,
+                    TripDistance = t.TripDistance ?? 0,
+                    MaxSpeed = t.MaxSpeed ?? 0,
+                    HarshBrakingEvents = t.HarshBrakingEvents ?? 0,
+                    HarshCorneringEvents = t.HarshCorneringEvents ?? 0,
+                    HarshAccelerationEvents = t.HarshAccelerationEvents ?? 0,
+                    IdleTimeSeconds = t.IdleTimeSeconds ?? 0,
+                    StartLatitude = t.StartCoordinates?.Latitude ?? 0,
+                    StartLongitude = t.StartCoordinates?.Longitude ?? 0,
+                    EndLatitude = t.EndCoordinates?.Latitude ?? 0,
+                    EndLongitude = t.EndCoordinates?.Longitude ?? 0,
+                    StartGeofence = t.StartGeofenceName,
+                    EndGeofence = t.EndGeofenceName
+                })
+                .OrderBy(t => t.StartTimestamp)
+                .ToList();
+
+                _logger.LogInformation("Found {Count} fleet trips between {From} and {To}", trips.Count, startTs, endTs);
+                return trips;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching fleet trips");
                 return new List<CarTrackTripData>();
             }
         }

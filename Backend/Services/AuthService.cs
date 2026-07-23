@@ -42,20 +42,17 @@ namespace ProjectTracker.API.Services
 
             _logger.LogDebug("User found: {Email}", user.Email);
 
-            // Verify password - support both plain text (for dev) and BCrypt hashed
+            // Verify password using BCrypt only
             bool passwordValid = false;
-            
-            // Check if password is BCrypt hashed (starts with $2)
             if (user.PasswordHash.StartsWith("$2"))
             {
-                _logger.LogDebug("Using BCrypt verification");
                 passwordValid = BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash);
             }
             else
             {
-                _logger.LogDebug("Using plain text comparison");
-                // Plain text comparison (for development/testing)
-                passwordValid = user.PasswordHash == loginDto.Password;
+                // Password not hashed — reject and log a warning so it can be corrected
+                _logger.LogWarning("User {Email} has an unhashed password stored. Login denied. Please re-hash this user's password.", user.Email);
+                passwordValid = false;
             }
 
             _logger.LogDebug("Password valid: {IsValid}", passwordValid);

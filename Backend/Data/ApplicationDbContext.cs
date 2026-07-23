@@ -26,6 +26,7 @@ namespace ProjectTracker.API.Data
         public DbSet<CardComment> CardComments { get; set; }
         public DbSet<CardAttachment> CardAttachments { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<DocumentShare> DocumentShares { get; set; }
 
         // Attendance System Tables
         public DbSet<Employee> Employees { get; set; }
@@ -105,6 +106,8 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.FuelTransaction> FuelTransactions { get; set; }
         public DbSet<Models.Logistics.OrderCancellation> OrderCancellations { get; set; }
         public DbSet<Models.Logistics.PodDocument> PodDocuments { get; set; }
+        public DbSet<Models.Logistics.PodDocumentInvoiceLink> PodDocumentInvoiceLinks { get; set; }
+        public DbSet<Models.Logistics.Geofence> Geofences { get; set; }
 
         // Sales Import System
         public DbSet<SalesImportBatch> SalesImportBatches { get; set; }
@@ -174,6 +177,10 @@ namespace ProjectTracker.API.Data
         // Books - Paid Invoice Management
         public DbSet<BookInvoice> BookInvoices { get; set; }
         public DbSet<BookDepartmentAccess> BookDepartmentAccess { get; set; }
+
+        // Books - Expense Tracker
+        public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
+        public DbSet<ExpenseTrackerItem> ExpenseTrackerItems { get; set; }
 
         // Finance Module
         public DbSet<Models.Finance.FinanceCategory> FinanceCategories { get; set; }
@@ -748,6 +755,23 @@ namespace ProjectTracker.API.Data
                 entity.HasIndex(e => e.Region);
                 entity.HasIndex(e => e.DriverId);
                 entity.HasIndex(e => new { e.DriverName, e.DeliveryDate, e.Region });
+            });
+
+            modelBuilder.Entity<Models.Logistics.PodDocumentInvoiceLink>(entity =>
+            {
+                entity.HasIndex(e => e.PodDocumentId);
+                entity.HasIndex(e => e.InvoiceId);
+                entity.HasIndex(e => new { e.PodDocumentId, e.InvoiceId }).IsUnique();
+
+                entity.HasOne(e => e.PodDocument)
+                    .WithMany(p => p.InvoiceLinks)
+                    .HasForeignKey(e => e.PodDocumentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Invoice)
+                    .WithMany(i => i.PodDocumentLinks)
+                    .HasForeignKey(e => e.InvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Finance Module Relationships

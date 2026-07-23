@@ -36,6 +36,7 @@ import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/
 import { environment } from '../../../environments/environment';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { GoogleMapsModule } from '@angular/google-maps';
+import { ControllerMonitoringComponent } from './controller-monitoring.component';
 
 interface DashboardStats {
   activeLoads: number;
@@ -212,7 +213,8 @@ interface DeliveryRequestSummary {
     MatPaginatorModule,
     MatButtonToggleModule,
     FormsModule,
-    NavbarComponent
+    NavbarComponent,
+    ControllerMonitoringComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -1923,9 +1925,9 @@ interface DeliveryRequestSummary {
                                 <span class="pod-driver">{{ pod.driverName }}</span>
                                 <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
                               </div>
-                              <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId) ? 'linked' : 'not-linked'">
-                                <mat-icon>{{ (pod.loadId || pod.invoiceId) ? 'link' : 'link_off' }}</mat-icon>
-                                {{ pod.loadId ? 'Tripsheet' : pod.invoiceId ? 'Invoice' : 'Not Linked' }}
+                              <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId || (pod.invoiceLinks?.length > 0)) ? 'linked' : 'not-linked'">
+                                <mat-icon>{{ (pod.loadId || pod.invoiceId || (pod.invoiceLinks?.length > 0)) ? 'link' : 'link_off' }}</mat-icon>
+                                {{ pod.loadId ? 'Tripsheet' : (pod.invoiceLinks?.length > 0 || pod.invoiceId) ? 'Invoice' : 'Not Linked' }}
                               </span>
                               <span class="pod-region-badge" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
                             </div>
@@ -1935,7 +1937,17 @@ interface DeliveryRequestSummary {
                                 <span>{{ pod.loadNumber }}</span>
                               </div>
                             }
-                            @if (pod.invoiceNumber) {
+                            @if (pod.invoiceLinks?.length > 0) {
+                              <div class="pod-tripsheet-ref invoice-ref">
+                                <mat-icon>receipt</mat-icon>
+                                <span>
+                                  {{ pod.invoiceLinks[0]?.invoiceNumber }}
+                                  @if (pod.invoiceLinks.length > 1) {
+                                    <strong> +{{ pod.invoiceLinks.length - 1 }} more</strong>
+                                  }
+                                </span>
+                              </div>
+                            } @else if (pod.invoiceNumber) {
                               <div class="pod-tripsheet-ref invoice-ref">
                                 <mat-icon>receipt</mat-icon>
                                 <span>{{ pod.invoiceNumber }}</span>
@@ -1965,13 +1977,16 @@ interface DeliveryRequestSummary {
                                     <mat-icon>link_off</mat-icon> Delink from Tripsheet
                                   </button>
                                 }
-                                @if (!pod.invoiceId) {
+                                @if (pod.invoiceLinks?.length === 0) {
                                   <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
-                                    <mat-icon>receipt</mat-icon> Link to Invoice
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
                                   </button>
                                 } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
+                                  </button>
                                   <button mat-menu-item class="modern-menu-item" (click)="delinkInvoice(pod)">
-                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice(s)
                                   </button>
                                 }
                                 <button mat-menu-item class="modern-menu-item" (click)="openEditPodDialog(pod)">
@@ -2008,10 +2023,10 @@ interface DeliveryRequestSummary {
                                   <mat-icon>link</mat-icon>
                                   {{ pod.loadNumber || 'Tripsheet' }}
                                 </span>
-                              } @else if (pod.invoiceId) {
+                              } @else if (pod.invoiceId || (pod.invoiceLinks?.length > 0)) {
                                 <span class="pod-link-badge small linked invoice">
                                   <mat-icon>receipt</mat-icon>
-                                  {{ pod.invoiceNumber || 'Invoice' }}
+                                  {{ (pod.invoiceLinks?.length > 0) ? (pod.invoiceLinks[0]?.invoiceNumber + (pod.invoiceLinks.length > 1 ? (' +' + (pod.invoiceLinks.length - 1)) : '')) : (pod.invoiceNumber || 'Invoice') }}
                                 </span>
                               } @else {
                                 <span class="pod-link-badge small not-linked">
@@ -2051,13 +2066,16 @@ interface DeliveryRequestSummary {
                                     <mat-icon>link_off</mat-icon> Delink from Tripsheet
                                   </button>
                                 }
-                                @if (!pod.invoiceId) {
+                                @if (pod.invoiceLinks?.length === 0) {
                                   <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
-                                    <mat-icon>receipt</mat-icon> Link to Invoice
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
                                   </button>
                                 } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
+                                  </button>
                                   <button mat-menu-item class="modern-menu-item" (click)="delinkInvoice(pod)">
-                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice(s)
                                   </button>
                                 }
                                 <button mat-menu-item class="modern-menu-item" (click)="openEditPodDialog(pod)">
@@ -2529,6 +2547,17 @@ interface DeliveryRequestSummary {
               </div>
             </mat-tab>
 
+            <!-- Controller (Security Monitoring) Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>shield</mat-icon>
+                Controller
+              </ng-template>
+              <div class="tab-content">
+                <app-controller-monitoring></app-controller-monitoring>
+              </div>
+            </mat-tab>
+
           </mat-tab-group>
         </mat-card>
       }
@@ -2623,7 +2652,16 @@ interface DeliveryRequestSummary {
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
+      position: relative;
+      background: #0f172a;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
+        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
+        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
 
     .logistics-dashboard {
@@ -2653,12 +2691,12 @@ interface DeliveryRequestSummary {
       width: 72px;
       height: 72px;
       border-radius: 20px;
-      background: rgba(255, 255, 255, 0.2);
+      background: linear-gradient(135deg, rgba(99,102,241,0.95), rgba(236,72,153,0.9));
       backdrop-filter: blur(10px);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 12px 32px rgba(99, 102, 241, 0.45);
       border: 1px solid rgba(255, 255, 255, 0.3);
     }
 
@@ -2694,11 +2732,18 @@ interface DeliveryRequestSummary {
       display: flex;
       align-items: center;
       gap: 10px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       padding: 12px 20px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      transition: transform 0.25s, background 0.25s;
+    }
+
+    .mini-stat:hover {
+      transform: translateY(-3px);
+      background: rgba(255, 255, 255, 0.13);
     }
 
     .mini-stat mat-icon {
@@ -2729,15 +2774,16 @@ interface DeliveryRequestSummary {
 
     .modern-stat-card {
       background: white;
-      border-radius: 20px;
+      border-radius: 22px;
       padding: 24px;
       display: flex;
       align-items: flex-start;
       gap: 20px;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 10px 34px rgba(2, 6, 23, 0.28);
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
       position: relative;
       overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.6);
     }
 
     .modern-stat-card::before {
@@ -2753,8 +2799,8 @@ interface DeliveryRequestSummary {
     }
 
     .modern-stat-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+      transform: translateY(-8px);
+      box-shadow: 0 22px 52px rgba(2, 6, 23, 0.42);
     }
 
     .modern-stat-card:hover::before {
@@ -9974,7 +10020,7 @@ Notes: ${record.notes || 'No notes'}
 
   openLinkInvoiceDialog(pod: any): void {
     const dialogRef = this.dialog.open(LinkInvoiceDialog, {
-      width: '600px',
+      width: '760px',
       maxWidth: '95vw',
       data: { pod }
     });
@@ -9983,19 +10029,21 @@ Notes: ${record.notes || 'No notes'}
       if (result?.linked) {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open(`POD linked to invoice ${result.invoiceNumber} → Status set to Delivered`, 'Close', { duration: 4000 });
+        const count = result.linkedInvoiceCount || (result.invoiceNumbers?.length ?? 0) || 1;
+        this.snackBar.open(`POD linked to ${count} invoice(s) → Status set to Delivered`, 'Close', { duration: 4500 });
       }
     });
   }
 
   delinkInvoice(pod: any): void {
-    if (!confirm(`Delink this POD from invoice ${pod.invoiceNumber || ''}? The invoice status will revert to Pending.`)) return;
+    const linkedCount = pod.invoiceLinks?.length || (pod.invoiceId ? 1 : 0);
+    if (!confirm(`Delink this POD from ${linkedCount} invoice(s)? Invoice status will revert to Pending only where not linked by another POD.`)) return;
 
     this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink-invoice`, {}).subscribe({
       next: () => {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open('POD delinked from invoice → Status reverted to Pending', 'Close', { duration: 4000 });
+        this.snackBar.open('POD delinked from invoices', 'Close', { duration: 4000 });
       },
       error: (err) => {
         console.error('Failed to delink invoice:', err);
@@ -11102,7 +11150,7 @@ export class EditPodDialog {
   template: `
     <div class="link-invoice-dialog">
       <div class="dialog-header">
-        <h2><mat-icon>receipt</mat-icon> Link to Invoice</h2>
+        <h2><mat-icon>receipt</mat-icon> Link to Invoice(s)</h2>
         <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
@@ -11117,8 +11165,15 @@ export class EditPodDialog {
 
         <div class="link-note">
           <mat-icon>info</mat-icon>
-          <span>Linking a POD to an invoice will automatically update the invoice status to <strong>Delivered</strong>.</span>
+          <span>Select one or more invoices to link. Linked invoices will be marked as <strong>Delivered</strong>.</span>
         </div>
+
+        @if (selectedInvoiceIds.size > 0) {
+          <div class="selected-count">
+            <mat-icon>check_circle</mat-icon>
+            <span>{{ selectedInvoiceIds.size }} invoice(s) selected</span>
+          </div>
+        }
 
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Search Invoice</mat-label>
@@ -11136,19 +11191,24 @@ export class EditPodDialog {
         @if (searchResults.length > 0) {
           <div class="search-results">
             @for (inv of searchResults; track inv.id) {
-              <div class="invoice-option" [class.selected]="selectedInvoiceId === inv.id" (click)="selectInvoice(inv)">
-                <div class="invoice-option-main">
-                  <span class="invoice-number">{{ inv.transactionNumber }}</span>
-                  <span class="invoice-status" [ngClass]="'status-' + inv.status?.toLowerCase()">{{ inv.status }}</span>
+              <div class="invoice-option" [class.selected]="isSelected(inv.id)" (click)="toggleInvoice(inv)">
+                <div class="invoice-selection-checkbox">
+                  <mat-icon>{{ isSelected(inv.id) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
                 </div>
-                <div class="invoice-option-detail">
-                  <span class="invoice-customer">{{ inv.customerName }}</span>
-                  <span class="invoice-amount">R{{ inv.salesAmount | number:'1.2-2' }}</span>
-                </div>
-                <div class="invoice-option-sub">
-                  <span>{{ inv.productDescription }}</span>
-                  <span>Qty: {{ inv.quantity | number:'1.0-0' }}</span>
-                  @if (inv.transactionDate) { <span>{{ inv.transactionDate | date:'dd MMM yyyy' }}</span> }
+                <div class="invoice-option-content">
+                  <div class="invoice-option-main">
+                    <span class="invoice-number">{{ inv.transactionNumber }}</span>
+                    <span class="invoice-status" [ngClass]="'status-' + inv.status?.toLowerCase()">{{ inv.status }}</span>
+                  </div>
+                  <div class="invoice-option-detail">
+                    <span class="invoice-customer">{{ inv.customerName }}</span>
+                    <span class="invoice-amount">R{{ inv.salesAmount | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="invoice-option-sub">
+                    <span>{{ inv.productDescription }}</span>
+                    <span>Qty: {{ inv.quantity | number:'1.0-0' }}</span>
+                    @if (inv.transactionDate) { <span>{{ inv.transactionDate | date:'dd MMM yyyy' }}</span> }
+                  </div>
                 </div>
               </div>
             }
@@ -11163,13 +11223,13 @@ export class EditPodDialog {
 
       <div class="dialog-actions">
         <button mat-button mat-dialog-close>Cancel</button>
-        <button mat-raised-button color="primary" [disabled]="!selectedInvoiceId || linking" (click)="linkInvoice()">
+        <button mat-raised-button color="primary" [disabled]="selectedInvoiceIds.size === 0 || linking" (click)="linkInvoice()">
           @if (linking) {
             <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
           } @else {
             <mat-icon>receipt</mat-icon>
           }
-          Link &amp; Mark Delivered
+          Link {{ selectedInvoiceIds.size > 0 ? selectedInvoiceIds.size : '' }} Invoice(s)
         </button>
       </div>
     </div>
@@ -11201,6 +11261,11 @@ export class EditPodDialog {
         border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #283593;
         mat-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
       }
+      .selected-count {
+        display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #e8f5e9;
+        border-radius: 8px; margin-bottom: 12px; font-size: 13px; color: #2e7d32; font-weight: 600;
+        mat-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
+      }
       .search-loading {
         display: flex; align-items: center; gap: 8px; padding: 12px; color: #666;
       }
@@ -11208,26 +11273,34 @@ export class EditPodDialog {
         display: flex; flex-direction: column; gap: 4px;
       }
       .invoice-option {
-        padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid #e0e0e0;
-        transition: all 0.2s;
+        display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; 
+        cursor: pointer; border: 1px solid #e0e0e0; transition: all 0.2s;
         &:hover { border-color: #283593; background: #f5f6ff; }
-        &.selected { border-color: #283593; background: #e8eaf6; }
-        .invoice-option-main {
-          display: flex; justify-content: space-between; align-items: center;
-          .invoice-number { font-weight: 600; font-size: 14px; color: #1a1a2e; }
-          .invoice-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
-            &.status-pending { background: #fff3e0; color: #e65100; }
-            &.status-assigned { background: #e3f2fd; color: #1565c0; }
-            &.status-inprogress { background: #f3e5f5; color: #7b1fa2; }
-            &.status-delivered { background: #e8f5e9; color: #2e7d32; }
+        &.selected { border-color: #283593; background: #e8eaf6; 
+          .invoice-selection-checkbox mat-icon { color: #283593; }
+        }
+        .invoice-selection-checkbox {
+          mat-icon { font-size: 22px; width: 22px; height: 22px; color: #999; }
+        }
+        .invoice-option-content {
+          flex: 1;
+          .invoice-option-main {
+            display: flex; justify-content: space-between; align-items: center;
+            .invoice-number { font-weight: 600; font-size: 14px; color: #1a1a2e; }
+            .invoice-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
+              &.status-pending { background: #fff3e0; color: #e65100; }
+              &.status-assigned { background: #e3f2fd; color: #1565c0; }
+              &.status-inprogress { background: #f3e5f5; color: #7b1fa2; }
+              &.status-delivered { background: #e8f5e9; color: #2e7d32; }
+            }
           }
+          .invoice-option-detail {
+            display: flex; justify-content: space-between; align-items: center; margin-top: 4px;
+            .invoice-customer { font-size: 13px; color: #333; }
+            .invoice-amount { font-size: 13px; font-weight: 600; color: #2e7d32; }
+          }
+          .invoice-option-sub { font-size: 11px; color: #999; margin-top: 2px; display: flex; gap: 8px; }
         }
-        .invoice-option-detail {
-          display: flex; justify-content: space-between; align-items: center; margin-top: 4px;
-          .invoice-customer { font-size: 13px; color: #333; }
-          .invoice-amount { font-size: 13px; font-weight: 600; color: #2e7d32; }
-        }
-        .invoice-option-sub { font-size: 11px; color: #999; margin-top: 2px; display: flex; gap: 8px; }
       }
       .no-results {
         display: flex; align-items: center; gap: 8px; padding: 16px; color: #999; justify-content: center;
@@ -11242,8 +11315,8 @@ export class EditPodDialog {
 export class LinkInvoiceDialog {
   searchTerm = '';
   searchResults: any[] = [];
-  selectedInvoiceId: number | null = null;
-  selectedInvoiceNumber = '';
+  selectedInvoiceIds: Set<number> = new Set();
+  selectedInvoiceNumbers: string[] = [];
   searching = false;
   linking = false;
   private searchTimeout: any;
@@ -11253,7 +11326,15 @@ export class LinkInvoiceDialog {
     @Inject(MAT_DIALOG_DATA) public data: any,
     private http: HttpClient
   ) {
-    // Load recent invoices on open
+    // Load recent invoices on open and initialize with existing links
+    if (this.data.pod.invoiceLinks && this.data.pod.invoiceLinks.length > 0) {
+      this.data.pod.invoiceLinks.forEach((link: any) => {
+        this.selectedInvoiceIds.add(link.invoiceId);
+        if (link.invoiceNumber) {
+          this.selectedInvoiceNumbers.push(link.invoiceNumber);
+        }
+      });
+    }
     this.searchInvoices();
   }
 
@@ -11276,23 +11357,37 @@ export class LinkInvoiceDialog {
     }, 300);
   }
 
-  selectInvoice(inv: any): void {
-    this.selectedInvoiceId = inv.id;
-    this.selectedInvoiceNumber = inv.transactionNumber;
+  toggleInvoice(inv: any): void {
+    if (this.selectedInvoiceIds.has(inv.id)) {
+      this.selectedInvoiceIds.delete(inv.id);
+      this.selectedInvoiceNumbers = this.selectedInvoiceNumbers.filter(n => n !== inv.transactionNumber);
+    } else {
+      this.selectedInvoiceIds.add(inv.id);
+      this.selectedInvoiceNumbers.push(inv.transactionNumber);
+    }
+  }
+
+  isSelected(invoiceId: number): boolean {
+    return this.selectedInvoiceIds.has(invoiceId);
   }
 
   linkInvoice(): void {
-    if (!this.selectedInvoiceId) return;
+    if (this.selectedInvoiceIds.size === 0) return;
     this.linking = true;
     const apiUrl = environment.apiUrl || 'http://localhost:5143/api';
-    this.http.put(`${apiUrl}/PodDocuments/${this.data.pod.id}/link-invoice`, { invoiceId: this.selectedInvoiceId }).subscribe({
-      next: () => {
+    const invoiceIds = Array.from(this.selectedInvoiceIds);
+    this.http.put(`${apiUrl}/PodDocuments/${this.data.pod.id}/link-invoices`, { invoiceIds }).subscribe({
+      next: (response: any) => {
         this.linking = false;
-        this.dialogRef.close({ linked: true, invoiceNumber: this.selectedInvoiceNumber });
+        this.dialogRef.close({ 
+          linked: true, 
+          linkedInvoiceCount: response.linkedInvoiceCount,
+          invoiceNumbers: response.invoiceNumbers 
+        });
       },
       error: (err) => {
         this.linking = false;
-        console.error('Failed to link invoice:', err);
+        console.error('Failed to link invoices:', err);
       }
     });
   }
@@ -11723,6 +11818,13 @@ export class InvoiceDetailsDialog {
             <mat-icon>local_shipping</mat-icon>
             Nearest TFN
           </button>
+          <button mat-raised-button color="accent"
+                  (click)="printMap()"
+                  matTooltip="Print the current map view"
+                  class="print-map-btn">
+            <mat-icon>print</mat-icon>
+            Print
+          </button>
           <button mat-icon-button (click)="refreshMap()" matTooltip="Refresh">
             <mat-icon>refresh</mat-icon>
           </button>
@@ -11840,6 +11942,22 @@ export class InvoiceDetailsDialog {
     }
 
     .nearest-tfn-btn mat-icon {
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
+    }
+
+    .print-map-btn {
+      background: #1976d2 !important;
+      color: white !important;
+      font-size: 12px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .print-map-btn mat-icon {
       font-size: 18px;
       height: 18px;
       width: 18px;
@@ -12046,6 +12164,8 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
   private mapInitialized = false;
   private depotMarker: google.maps.Marker | null = null;
   private depotLine: google.maps.Polyline | null = null;
+  private depotDirectionsRenderer: google.maps.DirectionsRenderer | null = null;
+  private lastDepotInfo: any = null;
 
   private http = inject(HttpClient);
   private snackBar = inject(MatSnackBar);
@@ -12252,6 +12372,10 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       this.depotLine.setMap(null);
       this.depotLine = null;
     }
+    if (this.depotDirectionsRenderer) {
+      this.depotDirectionsRenderer.setMap(null);
+      this.depotDirectionsRenderer = null;
+    }
 
     const lat = this.selectedVehicle.latitude;
     const lng = this.selectedVehicle.longitude;
@@ -12274,18 +12398,71 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
             }
           });
 
-          // Draw a line from vehicle to depot
-          this.depotLine = new google.maps.Polyline({
-            path: [
-              { lat: lat, lng: lng },
-              { lat: depot.latitude, lng: depot.longitude }
-            ],
-            geodesic: true,
-            strokeColor: '#ff9800',
-            strokeOpacity: 0.8,
-            strokeWeight: 3,
-            map: this.map
+          // Draw a road-based route from vehicle to depot using the Directions API
+          const directionsService = new google.maps.DirectionsService();
+          this.depotDirectionsRenderer = new google.maps.DirectionsRenderer({
+            map: this.map,
+            suppressMarkers: true,
+            preserveViewport: true,
+            polylineOptions: {
+              strokeColor: '#ff9800',
+              strokeOpacity: 0.9,
+              strokeWeight: 5
+            }
           });
+
+          directionsService.route({
+            origin: { lat: lat, lng: lng },
+            destination: { lat: depot.latitude, lng: depot.longitude },
+            travelMode: google.maps.TravelMode.DRIVING
+          }, (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK && result) {
+              this.depotDirectionsRenderer!.setDirections(result);
+              // Update snackbar with real road distance/time
+              const leg = result.routes?.[0]?.legs?.[0];
+              if (leg) {
+                this.snackBar.open(`Nearest TFN: ${depot.name} — ${leg.distance?.text} by road (${leg.duration?.text})`, 'Close', { duration: 6000 });
+                this.lastDepotInfo = { ...this.lastDepotInfo, roadDistance: leg.distance?.text, roadDuration: leg.duration?.text };
+              }
+              // Encode the route path for a printable static map
+              try {
+                const overview = result.routes?.[0]?.overview_path;
+                const enc = (google.maps as any).geometry?.encoding;
+                if (overview && enc) {
+                  this.lastDepotInfo = { ...this.lastDepotInfo, encodedPath: enc.encodePath(overview) };
+                }
+              } catch { /* geometry lib not available */ }
+            } else {
+              // Fallback: straight dashed line if Directions fails
+              console.warn('Directions request failed:', status);
+              this.depotDirectionsRenderer?.setMap(null);
+              this.depotDirectionsRenderer = null;
+              this.depotLine = new google.maps.Polyline({
+                path: [ { lat: lat, lng: lng }, { lat: depot.latitude, lng: depot.longitude } ],
+                geodesic: true,
+                strokeColor: '#ff9800',
+                strokeOpacity: 0.6,
+                strokeWeight: 3,
+                map: this.map!,
+                icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '15px' }]
+              });
+            }
+          });
+
+          // Remember depot for print
+          this.lastDepotInfo = {
+            name: depot.name,
+            code: depot.code,
+            distanceKm: depot.distanceKm,
+            address: depot.address,
+            city: depot.city,
+            province: depot.province,
+            vehicleReg: this.selectedVehicle?.registrationNumber,
+            vehicleLat: lat,
+            vehicleLng: lng,
+            depotLat: depot.latitude,
+            depotLng: depot.longitude
+          };
 
           // Create bounds to show both vehicle and depot
           const bounds = new google.maps.LatLngBounds();
@@ -12329,6 +12506,77 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
   refreshMap(): void {
     this.lastUpdate = new Date();
     this.addVehicleMarkers();
+  }
+
+  async printMap(): Promise<void> {
+    const d = this.lastDepotInfo;
+    const now = new Date();
+
+    // Snapshot the live Google map (with markers + road route) using html2canvas.
+    // This avoids depending on the Static Maps API, which is not enabled for this key.
+    let mapImgDataUrl = '';
+    const mapNode: HTMLElement | null = this.mapElement?.nativeElement || null;
+    if (mapNode) {
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+        const canvas = await html2canvas(mapNode, {
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#e5e3df',
+          scale: 2
+        });
+        mapImgDataUrl = canvas.toDataURL('image/png');
+      } catch (err) {
+        console.error('Map snapshot failed', err);
+      }
+    }
+
+    const summary = d ? `
+      <table style="width:100%; border-collapse:collapse; margin-bottom:12px; font-size:13px;">
+        <tr><td style="padding:4px 8px; font-weight:bold; width:170px;">Vehicle</td><td style="padding:4px 8px;">${d.vehicleReg || '—'}</td></tr>
+        <tr><td style="padding:4px 8px; font-weight:bold;">Nearest TFN Depot</td><td style="padding:4px 8px;">${d.name || '—'} ${d.code ? '(' + d.code + ')' : ''}</td></tr>
+        <tr><td style="padding:4px 8px; font-weight:bold;">Straight-line Distance</td><td style="padding:4px 8px;">${d.distanceKm ?? '—'} km</td></tr>
+        ${d.roadDistance ? `<tr><td style="padding:4px 8px; font-weight:bold;">Road Distance</td><td style="padding:4px 8px;">${d.roadDistance} (${d.roadDuration})</td></tr>` : ''}
+        <tr><td style="padding:4px 8px; font-weight:bold;">Depot Address</td><td style="padding:4px 8px;">${[d.address, d.city, d.province].filter(Boolean).join(', ') || '—'}</td></tr>
+      </table>` : '<p style="font-size:13px; color:#666;">Tip: click <b>Nearest TFN</b> first to include the vehicle, depot and route on the printout.</p>';
+
+    const mapBlock = mapImgDataUrl
+      ? `<img src="${mapImgDataUrl}" style="width:100%; max-width:800px; border:1px solid #ccc; border-radius:8px;" alt="Route map" />
+         <div style="font-size:11px; color:#888; margin-top:6px;">Blue = Vehicle &nbsp;•&nbsp; Orange = TFN Depot &nbsp;•&nbsp; Route follows roads</div>`
+      : '<p style="color:#b00; font-size:13px;">Could not capture the map. Make sure the map is fully loaded and try again.</p>';
+
+    const printWindow = window.open('', '_blank', 'width=960,height=820');
+    if (!printWindow) {
+      this.snackBar.open('Unable to open print window (popup blocked?)', 'Close', { duration: 4000 });
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Fleet Route - ${now.toLocaleString()}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color:#111; }
+            h1 { font-size: 20px; margin: 0 0 4px 0; color:#e65100; }
+            .meta { font-size: 12px; color:#666; margin-bottom: 16px; }
+          </style>
+        </head>
+        <body>
+          <h1>Nearest TFN Depot Route</h1>
+          <div class="meta">Printed ${now.toLocaleString()}</div>
+          ${summary}
+          ${mapBlock}
+          <script>
+            var img = document.querySelector('img');
+            function go(){ window.focus(); window.print(); }
+            if (img) { img.onload = function(){ setTimeout(go, 300); }; img.onerror = go; setTimeout(go, 3000); }
+            else { setTimeout(go, 400); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   }
 }
 
@@ -18631,16 +18879,6 @@ export class AddDeliveryNoteDialog {
           {{ data.isEditMode ? 'Edit Trip Sheet' : 'Create Trip Sheet' }}
         </h2>
         <div class="header-info">
-          @if (draftId) {
-            <mat-chip class="draft-badge" color="accent">
-              <mat-icon>save</mat-icon> Draft Saved
-            </mat-chip>
-          }
-          @if (autoSaving) {
-            <mat-chip class="saving-badge">
-              <mat-spinner diameter="16"></mat-spinner> Saving...
-            </mat-chip>
-          }
           @if (data.isEditMode && data.existingTripsheet?.loadNumber) {
             <mat-chip class="edit-badge">{{ data.existingTripsheet.loadNumber }}</mat-chip>
           }
@@ -20641,183 +20879,20 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       setTimeout(() => {
         this.initializeMap();
       }, 300);
-      
-      // Auto-save as draft when moving to step 2 (Route Details)
-      // This ensures work is not lost if dialog is closed accidentally
-      if (this.selectedStops.length > 0 && !this.data.isEditMode) {
-        this.autoSaveDraft();
-      }
     }
   }
   
-  // Auto-save the tripsheet as a Draft so work isn't lost if dialog closes
-  private autoSaveDraft(): void {
-    // Don't save if already in edit mode (editing existing tripsheet)
-    if (this.data.isEditMode && this.data.editLoadId) {
-      return;
-    }
-    
-    // Don't auto-save if no stops selected
-    if (this.selectedStops.length === 0) {
-      return;
-    }
-    
-    this.autoSaving = true;
-    
-    // Use groupedStops (grouped by customer) instead of raw selectedStops
-    const stopsToUse = this.groupedStops.length > 0 ? this.groupedStops : this.selectedStops;
-    
-    const payload = {
-      warehouseId: this.selectedWarehouse?.id,
-      driverId: this.selectedDriver?.id,
-      vehicleId: this.selectedVehicle?.id,
-      scheduledPickupDate: this.scheduledDate,
-      specialInstructions: this.specialInstructions,
-      estimatedDistance: this.totalDistance,
-      estimatedTimeMinutes: Math.round(this.totalDistance * 1.2),
-      priority: 'Normal',
-      status: 'Draft', // Mark as draft
-      stops: stopsToUse.map((stop, index) => ({
-        stopSequence: index + 1,
-        stopType: index === stopsToUse.length - 1 ? 'Destination' : 'Delivery',
-        customerId: stop.customerId || null,
-        companyName: stop.customerName || stop.companyName || 'Unknown',
-        address: stop.deliveryAddress || stop.address || 'Unknown Address',
-        city: stop.city || null,
-        province: stop.province || null,
-        latitude: stop.latitude || null,
-        longitude: stop.longitude || null,
-        orderNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
-        invoiceNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
-        commodities: stop.invoices 
-          ? stop.invoices.map((inv: any) => ({
-              commodityName: inv.productDescription || 'Product',
-              commodityCode: inv.productCode || null,
-              quantity: inv.quantity || 1,
-              unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
-              totalPrice: inv.salesAmount || 0
-            }))
-          : [{
-              commodityName: stop.productDescription || 'Product',
-              commodityCode: stop.productCode || null,
-              quantity: stop.quantity || 1,
-              unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
-              totalPrice: stop.salesAmount || 0
-            }]
-      })),
-      invoiceIds: this.selectedStops
-        .map(s => s.id)
-        .filter(id => id != null && id !== undefined)
-        .map(id => typeof id === 'string' ? parseInt(id, 10) : id)
-        .filter(id => !isNaN(id))
-    };
-    
-    // If we already have a draft, update it; otherwise create new
-    const isUpdate = this.draftId !== null;
-    const apiUrl = isUpdate 
-      ? `${environment.apiUrl}/logistics/loads/${this.draftId}`
-      : `${environment.apiUrl}/logistics/loads`;
-    const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
-    
-    httpMethod(apiUrl, payload).subscribe({
-      next: (result: any) => {
-        if (!isUpdate && result.id) {
-          this.draftId = result.id;
-        }
-        this.lastAutoSaved = new Date();
-        this.autoSaving = false;
-        this.snackBar.open('Draft saved - your progress is protected', 'OK', { duration: 2000 });
-      },
-      error: (err) => {
-        console.error('Failed to auto-save draft:', err);
-        this.autoSaving = false;
-        // Don't show error - draft save is a background operation
-      }
-    });
-  }
+  // Auto-save draft removed - was causing duplicate tripsheet creation due to race conditions
   
-  // Handle dialog close with draft save confirmation
+  // Handle dialog close - just close without creating draft loads
   onCloseDialog(): void {
-    // If we have selected stops and no draft yet, offer to save
-    if (this.selectedStops.length > 0 && !this.draftId && !this.data.isEditMode) {
-      const confirmSave = confirm(
-        'You have unsaved stops selected. Would you like to save this as a draft?\n\n' +
-        'Click OK to save draft and close, or Cancel to discard and close.'
+    if (this.selectedStops.length > 0 && !this.data.isEditMode) {
+      const confirmClose = confirm(
+        'You have stops selected that haven\'t been saved as a tripsheet yet.\n\n' +
+        'Click OK to close and discard, or Cancel to go back.'
       );
-      
-      if (confirmSave) {
-        // Save as draft then close
-        this.autoSaving = true;
-        
-        const stopsToUse = this.groupedStops.length > 0 ? this.groupedStops : this.selectedStops;
-        
-        const payload = {
-          warehouseId: this.selectedWarehouse?.id,
-          driverId: this.selectedDriver?.id,
-          vehicleId: this.selectedVehicle?.id,
-          scheduledPickupDate: this.scheduledDate,
-          specialInstructions: this.specialInstructions,
-          estimatedDistance: this.totalDistance,
-          estimatedTimeMinutes: Math.round(this.totalDistance * 1.2),
-          priority: 'Normal',
-          status: 'Draft',
-          stops: stopsToUse.map((stop, index) => ({
-            stopSequence: index + 1,
-            stopType: index === stopsToUse.length - 1 ? 'Destination' : 'Delivery',
-            customerId: stop.customerId || null,
-            companyName: stop.customerName || stop.companyName || 'Unknown',
-            address: stop.deliveryAddress || stop.address || 'Unknown Address',
-            city: stop.city || null,
-            province: stop.province || null,
-            latitude: stop.latitude || null,
-            longitude: stop.longitude || null,
-            orderNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
-            invoiceNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
-            commodities: stop.invoices 
-              ? stop.invoices.map((inv: any) => ({
-                  commodityName: inv.productDescription || 'Product',
-                  commodityCode: inv.productCode || null,
-                  quantity: inv.quantity || 1,
-                  unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
-                  totalPrice: inv.salesAmount || 0
-                }))
-              : [{
-                  commodityName: stop.productDescription || 'Product',
-                  commodityCode: stop.productCode || null,
-                  quantity: stop.quantity || 1,
-                  unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
-                  totalPrice: stop.salesAmount || 0
-                }]
-          })),
-          invoiceIds: this.selectedStops
-            .map(s => s.id)
-            .filter(id => id != null && id !== undefined)
-            .map(id => typeof id === 'string' ? parseInt(id, 10) : id)
-            .filter(id => !isNaN(id))
-        };
-        
-        this.http.post(`${environment.apiUrl}/logistics/loads`, payload).subscribe({
-          next: (result: any) => {
-            this.snackBar.open('Draft saved successfully!', 'OK', { duration: 3000 });
-            this.dialogRef.close({ savedDraft: true, draftId: result.id });
-          },
-          error: (err) => {
-            console.error('Failed to save draft:', err);
-            this.snackBar.open('Failed to save draft', 'Close', { duration: 3000 });
-            this.dialogRef.close();
-          }
-        });
-        return;
-      }
+      if (!confirmClose) return;
     }
-    
-    // If already has a draft, just close (draft already saved)
-    if (this.draftId) {
-      this.dialogRef.close({ savedDraft: true, draftId: this.draftId });
-      return;
-    }
-    
-    // Otherwise just close
     this.dialogRef.close();
   }
 
@@ -20905,7 +20980,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     // Google Maps geocoding was causing severe lag on large invoice sets
     // Unmatched invoices will show under "All Provinces" filter
     if (invoicesToGeocode.length > 0) {
-      console.log(`Province detection: ${this.data.invoices.length - invoicesToGeocode.length} matched by keywords, ${invoicesToGeocode.length} unmatched (geocoding disabled for performance)`);
+      // Province detection: keyword-matched invoices vs unmatched (geocoding disabled for performance)
     }
     this.loadingProvinces = false;
   }

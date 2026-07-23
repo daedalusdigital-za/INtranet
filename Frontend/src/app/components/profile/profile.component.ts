@@ -218,8 +218,17 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
   styles: [`
     .profile-container {
       min-height: 100vh;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       padding: 20px;
+      position: relative;
+      background: #0f172a;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
+        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
+        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
 
     .profile-header {

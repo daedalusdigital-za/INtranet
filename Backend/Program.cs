@@ -149,6 +149,13 @@ builder.Services.AddScoped<IDatabaseSeederService, DatabaseSeederService>();
 // Add CarTrack Service for logistics GPS tracking
 builder.Services.AddHttpClient<ICarTrackService, CarTrackService>();
 
+// Add School Delivery Management (SDM) integration for the Sanitary Pads project
+builder.Services.Configure<ProjectTracker.API.Services.SchoolDelivery.SchoolDeliveryOptions>(
+    builder.Configuration.GetSection("SchoolDelivery"));
+builder.Services.AddHttpClient<
+    ProjectTracker.API.Services.SchoolDelivery.ISchoolDeliveryService,
+    ProjectTracker.API.Services.SchoolDelivery.SchoolDeliveryService>();
+
 // Add HBA1C API Service for medical management project
 builder.Services.AddHttpClient<ProjectTracker.API.Services.HBA1C.IHBA1CApiService, ProjectTracker.API.Services.HBA1C.HBA1CApiService>();
 
@@ -162,6 +169,8 @@ builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnTransa
 builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnAccountsClient>();
 builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnDepotsClient>();
 builder.Services.AddScoped<ProjectTracker.API.Services.TFN.TfnSyncService>();
+// Periodically sync TFN fuel data (orders/transactions/etc.) so it doesn't go stale
+builder.Services.AddHostedService<ProjectTracker.API.Services.TFN.TfnSyncBackgroundService>();
 
 // Add Knowledge Base Service (must be registered before LlamaAIService)
 builder.Services.AddSingleton<IKnowledgeBaseService, KnowledgeBaseService>();
@@ -236,21 +245,40 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        context.Database.Migrate();
-    }
-    catch (Microsoft.Data.SqlClient.SqlException sqlEx) when (sqlEx.Number == 2705)
-    {
-        // Column already exists - safe to ignore
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogWarning("Migration skipped: Column already exists in database.");
+
+        // Log exactly which migrations are pending BEFORE applying them, so a
+        // failure can never again be hidden. A previous version caught SQL error
+        // 2705 and logged a benign "Migration skipped" warning, which silently
+        // aborted every remaining migration and left the Finance/PBX/POD tables
+        // uncreated for months.
+        var pending = context.Database.GetPendingMigrations().ToList();
+        if (pending.Count == 0)
+        {
+            logger.LogInformation("Database schema is up to date - no pending migrations.");
+        }
+        else
+        {
+            logger.LogInformation(
+                "Applying {Count} pending migration(s): {Migrations}",
+                pending.Count, string.Join(", ", pending));
+            context.Database.Migrate();
+            logger.LogInformation("Successfully applied {Count} pending migration(s).", pending.Count);
+        }
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating the database.");
+        // NEVER swallow a migration failure as a warning. If migrations cannot be
+        // applied (commonly schema drift: an object a migration creates already
+        // exists from manual SQL), the app may run against an out-of-date schema
+        // and whole modules will silently fail. Surface it loudly instead.
+        logger.LogCritical(ex,
+            "DATABASE MIGRATION FAILED - the schema may be out of date and some features " +
+            "will not work. Do NOT ignore. Reconcile the schema and __EFMigrationsHistory " +
+            "(e.g. via an idempotent migration script) before relying on affected modules.");
     }
 }
 

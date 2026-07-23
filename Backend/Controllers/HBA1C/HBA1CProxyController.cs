@@ -5,7 +5,6 @@ using ProjectTracker.API.Services.HBA1C;
 
 namespace ProjectTracker.API.Controllers.HBA1C
 {
-    [Authorize]
     [ApiController]
     [Route("api/hba1c")]
     public class HBA1CProxyController : ControllerBase
@@ -34,9 +33,53 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         // ====================================================================
+        // Diagnostics - Test API connectivity
+        // ====================================================================
+        [HttpGet("test/connection")]
+        [AllowAnonymous]
+        public async Task<ActionResult> TestConnection()
+        {
+            try
+            {
+                _logger.LogInformation("Testing HBA1C API connection...");
+                
+                // Try a simple GET request
+                var result = await _api.GetAsync<dynamic>("api/Sales/GetDashboardStats");
+                
+                if (result != null)
+                {
+                    return Ok(new { 
+                        status = "success", 
+                        message = "HBA1C API is reachable and responding",
+                        timestamp = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    return StatusCode(503, new { 
+                        status = "failed",
+                        message = "HBA1C API returned null/empty response. Check credentials and network connectivity.",
+                        timestamp = DateTime.UtcNow
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "HBA1C API connection test failed");
+                return StatusCode(503, new { 
+                    status = "error",
+                    message = $"HBA1C API connection failed: {ex.Message}",
+                    details = ex.InnerException?.Message,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+        }
+
+        // ====================================================================
         // Aggregated Dashboard - single call for the frontend
         // ====================================================================
         [HttpGet("dashboard")]
+        [Authorize]
         public async Task<ActionResult<HBA1CProjectDashboard>> GetDashboard()
         {
             _logger.LogInformation("Fetching HBA1C project dashboard");
@@ -237,6 +280,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         // Training Endpoints
         // ====================================================================
         [HttpGet("training")]
+        [Authorize]
         public async Task<ActionResult> GetAllTraining()
         {
             var trainingsTask = _api.GetAsync<List<HBA1CTrainingSession>>("api/Training/GetAll");
@@ -251,6 +295,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("training/{id}")]
+        [Authorize]
         public async Task<ActionResult> GetTraining(int id)
         {
             var result = await _api.GetAsync<HBA1CTrainingSession>("api/Training/GetById", new() { { "id", id.ToString() } });
@@ -258,6 +303,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("training/stats")]
+        [Authorize]
         public async Task<ActionResult> GetTrainingStats()
         {
             var result = await _api.GetAsync<HBA1CTrainingStats>("api/Dashboard/GetTrainingStats");
@@ -265,6 +311,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("training/by-province")]
+        [Authorize]
         public async Task<ActionResult> GetTrainingByProvince([FromQuery] string provinceName)
         {
             var result = await _api.GetAsync<List<HBA1CTrainingSession>>("api/Training/GetByProvince", new() { { "provinceName", provinceName } });
@@ -272,6 +319,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("training/by-status")]
+        [Authorize]
         public async Task<ActionResult> GetTrainingByStatus([FromQuery] string status)
         {
             var result = await _api.GetAsync<List<HBA1CTrainingSession>>("api/Training/GetByStatus", new() { { "status", status } });
@@ -279,6 +327,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpPost("training")]
+        [Authorize]
         public async Task<ActionResult> CreateTraining([FromBody] HBA1CTrainingSession training)
         {
             _logger.LogInformation("Creating HBA1C training session: {Name}", training.TrainingName);
@@ -287,6 +336,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpPut("training/{id}")]
+        [Authorize]
         public async Task<ActionResult> UpdateTraining(int id, [FromBody] HBA1CTrainingSession training)
         {
             _logger.LogInformation("Updating HBA1C training session {Id}", id);
@@ -296,6 +346,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpDelete("training/{id}")]
+        [Authorize]
         public async Task<ActionResult> DeleteTraining(int id)
         {
             _logger.LogInformation("Deleting HBA1C training session {Id}", id);
@@ -307,6 +358,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         // Inventory Endpoints
         // ====================================================================
         [HttpGet("inventory")]
+        [Authorize]
         public async Task<ActionResult> GetAllInventory()
         {
             var result = await _api.GetAsync<List<HBA1CInventoryItem>>("api/Inventory/GetAll");
@@ -314,6 +366,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("inventory/{id}")]
+        [Authorize]
         public async Task<ActionResult> GetInventoryItem(int id)
         {
             var result = await _api.GetAsync<HBA1CInventoryItem>("api/Inventory/GetById", new() { { "id", id.ToString() } });
@@ -321,6 +374,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("inventory/stats")]
+        [Authorize]
         public async Task<ActionResult> GetInventoryStats()
         {
             var result = await _api.GetAsync<HBA1CInventoryStats>("api/Inventory/GetStats");
@@ -328,6 +382,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("inventory/low-stock")]
+        [Authorize]
         public async Task<ActionResult> GetLowStock()
         {
             var result = await _api.GetAsync<List<HBA1CInventoryItem>>("api/Inventory/GetLowStock");
@@ -335,6 +390,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpPost("inventory")]
+        [Authorize]
         public async Task<ActionResult> CreateInventoryItem([FromBody] HBA1CInventoryItem item)
         {
             _logger.LogInformation("Creating HBA1C inventory item: {Name}", item.Name);
@@ -343,6 +399,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpPut("inventory/{id}")]
+        [Authorize]
         public async Task<ActionResult> UpdateInventoryItem(int id, [FromBody] HBA1CInventoryItem item)
         {
             _logger.LogInformation("Updating HBA1C inventory item {Id}", id);
@@ -352,6 +409,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpDelete("inventory/{id}")]
+        [Authorize]
         public async Task<ActionResult> DeleteInventoryItem(int id)
         {
             _logger.LogInformation("Deleting HBA1C inventory item {Id}", id);
@@ -363,6 +421,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         // Sales Endpoints
         // ====================================================================
         [HttpGet("sales")]
+        [Authorize]
         public async Task<ActionResult> GetAllSales()
         {
             var result = await _api.GetAsync<List<HBA1CSale>>("api/Sales/GetAll");
@@ -370,6 +429,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("sales/{id}")]
+        [Authorize]
         public async Task<ActionResult> GetSale(int id)
         {
             var result = await _api.GetAsync<HBA1CSale>("api/Sales/GetById", new() { { "id", id.ToString() } });
@@ -377,6 +437,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("sales/stats")]
+        [Authorize]
         public async Task<ActionResult> GetSalesStats()
         {
             var result = await _api.GetAsync<HBA1CSalesStats>("api/Sales/GetDashboardStats");
@@ -384,6 +445,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("sales/recent")]
+        [Authorize]
         public async Task<ActionResult> GetRecentSales([FromQuery] int limit = 10)
         {
             var result = await _api.GetAsync<List<HBA1CSale>>("api/Sales/GetRecentSales", new() { { "limit", limit.ToString() } });
@@ -391,6 +453,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("sales/provincial")]
+        [Authorize]
         public async Task<ActionResult> GetProvincialData()
         {
             var result = await _api.GetAsync<List<HBA1CProvincialSalesData>>("api/Sales/GetProvincialData");
@@ -398,6 +461,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("sales/top-products")]
+        [Authorize]
         public async Task<ActionResult> GetTopProducts([FromQuery] int limit = 10)
         {
             var result = await _api.GetAsync<List<HBA1CTopProduct>>("api/Sales/GetTopProducts", new() { { "limit", limit.ToString() } });
@@ -405,6 +469,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("sales/by-date-range")]
+        [Authorize]
         public async Task<ActionResult> GetSalesByDateRange([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
         {
             var result = await _api.GetAsync<List<HBA1CSale>>("api/Sales/GetByDateRange", new()
@@ -416,14 +481,34 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpPost("sales")]
+        [Authorize]
         public async Task<ActionResult> CreateSale([FromBody] HBA1CSale sale)
         {
-            _logger.LogInformation("Creating HBA1C sale: {SaleNumber}", sale.SaleNumber);
-            var result = await _api.PostAsync<HBA1CSale>("api/Sales/Create", sale);
-            return result != null ? Ok(result) : StatusCode(500, new { message = "Failed to create sale" });
+            try
+            {
+                _logger.LogInformation("Creating HBA1C sale: {SaleNumber}", sale.SaleNumber);
+                _logger.LogDebug("Sale data: {@Sale}", sale);
+                
+                var result = await _api.PostAsync<HBA1CSale>("api/Sales/Create", sale);
+                
+                if (result != null)
+                {
+                    _logger.LogInformation("Sale created successfully: {Id}", result.Id);
+                    return Ok(result);
+                }
+                
+                _logger.LogError("HBA1C API returned null for sale creation");
+                return StatusCode(500, new { message = "Failed to create sale: External API returned no data" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating HBA1C sale");
+                return StatusCode(500, new { message = $"Failed to create sale: {ex.Message}" });
+            }
         }
 
         [HttpPut("sales/{id}")]
+        [Authorize]
         public async Task<ActionResult> UpdateSale(int id, [FromBody] HBA1CSale sale)
         {
             _logger.LogInformation("Updating HBA1C sale {Id}", id);
@@ -433,6 +518,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpDelete("sales/{id}")]
+        [Authorize]
         public async Task<ActionResult> DeleteSale(int id)
         {
             _logger.LogInformation("Deleting HBA1C sale {Id}", id);
@@ -444,6 +530,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         // Credit Notes Endpoints
         // ====================================================================
         [HttpGet("credit-notes")]
+        [Authorize]
         public async Task<ActionResult> GetCreditNotes([FromQuery] string? status, [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo)
         {
             var qp = new Dictionary<string, string>();
@@ -456,6 +543,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("credit-notes/{id}")]
+        [Authorize]
         public async Task<ActionResult> GetCreditNote(int id)
         {
             var result = await _api.GetAsync<HBA1CCreditNote>($"api/CreditNotes/{id}");
@@ -463,6 +551,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpPost("credit-notes")]
+        [Authorize]
         public async Task<ActionResult> CreateCreditNote([FromBody] HBA1CCreditNote creditNote)
         {
             _logger.LogInformation("Creating HBA1C credit note for invoice {InvoiceId}", creditNote.InvoiceId);
@@ -471,6 +560,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpPut("credit-notes/{id}")]
+        [Authorize]
         public async Task<ActionResult> UpdateCreditNote(int id, [FromBody] HBA1CCreditNote creditNote)
         {
             _logger.LogInformation("Updating HBA1C credit note {Id}", id);
@@ -480,6 +570,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpDelete("credit-notes/{id}")]
+        [Authorize]
         public async Task<ActionResult> DeleteCreditNote(int id)
         {
             _logger.LogInformation("Deleting HBA1C credit note {Id}", id);
@@ -491,6 +582,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         // Location Endpoints
         // ====================================================================
         [HttpGet("provinces")]
+        [Authorize]
         public async Task<ActionResult> GetProvinces()
         {
             var result = await _api.GetAsync<List<HBA1CProvince>>("api/Location/GetProvinces");
@@ -498,6 +590,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         }
 
         [HttpGet("clinics")]
+        [Authorize]
         public async Task<ActionResult> GetClinics([FromQuery] string? province)
         {
             if (!string.IsNullOrEmpty(province))
@@ -516,6 +609,7 @@ namespace ProjectTracker.API.Controllers.HBA1C
         // Trainers
         // ====================================================================
         [HttpGet("trainers")]
+        [Authorize]
         public async Task<ActionResult> GetTrainers()
         {
             var result = await _api.GetAsync<List<HBA1CTrainer>>("api/Trainer/GetAll");

@@ -18,6 +18,14 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(50)]
         public string RegistrationNumber { get; set; } = string.Empty;
 
+        /// <summary>
+        /// TFN transaction GUID (from /api/TransactionsWithUtilisedOrders/{id}).
+        /// Used to de-duplicate automatically-synced fuel transactions so the same
+        /// TFN fill is never imported twice. Null for manually-imported rows.
+        /// </summary>
+        [MaxLength(50)]
+        public string? TfnTransactionId { get; set; }
+
         [MaxLength(50)]
         public string? CardNumber { get; set; }
 

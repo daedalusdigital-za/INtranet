@@ -55,7 +55,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("admin");
+                    b.ToTable("admin", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Announcement", b =>
@@ -100,7 +100,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("Announcements");
+                    b.ToTable("Announcements", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.AnnouncementRead", b =>
@@ -126,7 +126,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AnnouncementReads");
+                    b.ToTable("AnnouncementReads", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Attendance", b =>
@@ -178,7 +178,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("Attendances");
+                    b.ToTable("Attendances", (string)null);
 
                     b.HasData(
                         new
@@ -330,7 +330,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("AdminId");
 
-                    b.ToTable("AttendanceAdmins");
+                    b.ToTable("AttendanceAdmins", (string)null);
 
                     b.HasData(
                         new
@@ -420,7 +420,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("EmpID");
 
-                    b.ToTable("attendance");
+                    b.ToTable("attendance", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.AuditLog", b =>
@@ -500,7 +500,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Board", b =>
@@ -543,7 +543,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("Boards");
+                    b.ToTable("Boards", (string)null);
 
                     b.HasData(
                         new
@@ -837,7 +837,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CompletedByUserId");
 
-                    b.ToTable("BoardChecklistItems");
+                    b.ToTable("BoardChecklistItems", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.BoardMember", b =>
@@ -873,7 +873,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("BoardMembers");
+                    b.ToTable("BoardMembers", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.BookDepartmentAccess", b =>
@@ -907,7 +907,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("BookDepartmentAccess");
+                    b.ToTable("BookDepartmentAccess", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.BookInvoice", b =>
@@ -1039,7 +1039,131 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UploadedByUserId");
 
-                    b.ToTable("BookInvoices");
+                    b.ToTable("BookInvoices", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.CallRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AccountCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ActionType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("AmaFlags")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("AnswerTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AnsweredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CallStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("CallTime")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CallType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CalleeNat")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CalleeNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CallerId")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CallerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CallerNat")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CallerNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Context")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DestChannel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DestChannelExtension")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DestinationTrunkName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastApp")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("LastData")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PremierCaller")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Session")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SourceChannel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SourceTrunkName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TalkTime")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UniqueId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CallRecords", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Card", b =>
@@ -1093,7 +1217,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ListId");
 
-                    b.ToTable("Cards");
+                    b.ToTable("Cards", (string)null);
 
                     b.HasData(
                         new
@@ -1264,7 +1388,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UploadedByUserId");
 
-                    b.ToTable("CardAttachments");
+                    b.ToTable("CardAttachments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CardComment", b =>
@@ -1298,7 +1422,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("CardComments");
+                    b.ToTable("CardComments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CollaborativeDocument", b =>
@@ -1342,7 +1466,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LastModifiedById");
 
-                    b.ToTable("CollaborativeDocuments");
+                    b.ToTable("CollaborativeDocuments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Conversation", b =>
@@ -1372,7 +1496,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("ConversationId");
 
-                    b.ToTable("Conversations");
+                    b.ToTable("Conversations", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.ConversationParticipant", b =>
@@ -1410,7 +1534,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ConversationParticipants");
+                    b.ToTable("ConversationParticipants", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Department", b =>
@@ -1438,7 +1562,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("DepartmentId");
 
-                    b.ToTable("Departments");
+                    b.ToTable("Departments", (string)null);
 
                     b.HasData(
                         new
@@ -1492,7 +1616,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("DocumentCollaborators");
+                    b.ToTable("DocumentCollaborators", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.DocumentSnapshot", b =>
@@ -1525,7 +1649,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.ToTable("DocumentSnapshots");
+                    b.ToTable("DocumentSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.EmailAccount", b =>
@@ -1565,7 +1689,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmailAccountId");
 
-                    b.ToTable("EmailAccounts");
+                    b.ToTable("EmailAccounts", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.EmpRegistration", b =>
@@ -1620,7 +1744,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmpId");
 
-                    b.ToTable("empregistration");
+                    b.ToTable("empregistration", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Employee", b =>
@@ -1684,7 +1808,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmployeeId");
 
-                    b.ToTable("Employees");
+                    b.ToTable("Employees", (string)null);
 
                     b.HasData(
                         new
@@ -1914,7 +2038,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Extensions");
+                    b.ToTable("Extensions", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.Budget", b =>
@@ -1998,7 +2122,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Budgets");
+                    b.ToTable("Budgets", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.BudgetLineItem", b =>
@@ -2039,7 +2163,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("BudgetLineItems");
+                    b.ToTable("BudgetLineItems", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.Expense", b =>
@@ -2159,7 +2283,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("Expenses");
+                    b.ToTable("Expenses", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.FinanceCategory", b =>
@@ -2199,7 +2323,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FinanceCategories");
+                    b.ToTable("FinanceCategories", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.Payment", b =>
@@ -2317,7 +2441,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.PurchaseOrder", b =>
@@ -2422,7 +2546,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("PurchaseOrders");
+                    b.ToTable("PurchaseOrders", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.PurchaseOrderItem", b =>
@@ -2465,7 +2589,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("PurchaseOrderItems");
+                    b.ToTable("PurchaseOrderItems", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.GovernmentContract", b =>
@@ -2535,7 +2659,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GovernmentContracts");
+                    b.ToTable("GovernmentContracts", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseChunk", b =>
@@ -2578,7 +2702,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.ToTable("KnowledgeBaseChunks");
+                    b.ToTable("KnowledgeBaseChunks", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseDocument", b =>
@@ -2649,7 +2773,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KnowledgeBaseDocuments");
+                    b.ToTable("KnowledgeBaseDocuments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseIngestionLog", b =>
@@ -2688,7 +2812,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KnowledgeBaseIngestionLogs");
+                    b.ToTable("KnowledgeBaseIngestionLogs", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.List", b =>
@@ -2720,7 +2844,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("BoardId");
 
-                    b.ToTable("Lists");
+                    b.ToTable("Lists", (string)null);
 
                     b.HasData(
                         new
@@ -2812,7 +2936,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("InventoryId");
 
-                    b.ToTable("Backorders");
+                    b.ToTable("Backorders", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.BuildingInventory", b =>
@@ -2883,7 +3007,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex(new[] { "BuildingId", "ItemCode" }, "UQ_BuildingInventory_Building_Item")
                         .IsUnique();
 
-                    b.ToTable("BuildingInventory");
+                    b.ToTable("BuildingInventory", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Commodity", b =>
@@ -2942,7 +3066,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Commodities");
+                    b.ToTable("Commodities", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Customer", b =>
@@ -3100,7 +3224,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LogisticsCustomers");
+                    b.ToTable("LogisticsCustomers", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.CustomerContract", b =>
@@ -3178,7 +3302,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerContracts");
+                    b.ToTable("CustomerContracts", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.CustomerDeliveryAddress", b =>
@@ -3268,7 +3392,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerDeliveryAddresses");
+                    b.ToTable("CustomerDeliveryAddresses", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Driver", b =>
@@ -3333,7 +3457,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Drivers");
+                    b.ToTable("Drivers", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.FuelTransaction", b =>
@@ -3393,7 +3517,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("FuelTransactions");
+                    b.ToTable("FuelTransactions", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ImportBatch", b =>
@@ -3445,7 +3569,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportedByUserId");
 
-                    b.ToTable("ImportBatches");
+                    b.ToTable("ImportBatches", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ImportedInvoice", b =>
@@ -3610,7 +3734,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("ImportedInvoices");
+                    b.ToTable("ImportedInvoices", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Invoice", b =>
@@ -3684,7 +3808,7 @@ namespace ProjectTracker.API.Migrations
                         .IsUnique()
                         .HasFilter("[LoadId] IS NOT NULL");
 
-                    b.ToTable("Invoices");
+                    b.ToTable("Invoices", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.InvoiceLineItem", b =>
@@ -3722,7 +3846,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("InvoiceId");
 
-                    b.ToTable("InvoiceLineItems");
+                    b.ToTable("InvoiceLineItems", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Load", b =>
@@ -3857,7 +3981,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("Loads");
+                    b.ToTable("Loads", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LoadItem", b =>
@@ -3900,7 +4024,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("LoadItems");
+                    b.ToTable("LoadItems", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LoadStop", b =>
@@ -4008,7 +4132,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("LoadStops");
+                    b.ToTable("LoadStops", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.MaintenanceAttachment", b =>
@@ -4054,7 +4178,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("MaintenanceRecordId");
 
-                    b.ToTable("MaintenanceAttachments");
+                    b.ToTable("MaintenanceAttachments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.OrderCancellation", b =>
@@ -4162,7 +4286,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportedInvoiceId");
 
-                    b.ToTable("OrderCancellations");
+                    b.ToTable("OrderCancellations", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PartDeliveryHistory", b =>
@@ -4216,7 +4340,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("PartDeliveryHistories");
+                    b.ToTable("PartDeliveryHistories", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PodDocument", b =>
@@ -4294,7 +4418,36 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DriverName", "DeliveryDate", "Region");
 
-                    b.ToTable("PodDocuments");
+                    b.ToTable("PodDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PodDocumentInvoiceLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PodDocumentId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("PodDocumentId");
+
+                    b.HasIndex("PodDocumentId", "InvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("PodDocumentInvoiceLinks", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ProofOfDelivery", b =>
@@ -4360,7 +4513,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("LoadId")
                         .IsUnique();
 
-                    b.ToTable("ProofOfDeliveries");
+                    b.ToTable("ProofOfDeliveries", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ScrapRecord", b =>
@@ -4406,7 +4559,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("ScrapRecords");
+                    b.ToTable("ScrapRecords", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SleepOut", b =>
@@ -4454,8 +4607,19 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("TripNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("TripSheetId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("VehicleReg")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
@@ -4463,7 +4627,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("SleepOuts");
+                    b.ToTable("SleepOuts", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockMovement", b =>
@@ -4530,7 +4694,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex(new[] { "ToBuildingId" }, "IX_StockMovements_ToBuildingId");
 
-                    b.ToTable("StockMovements");
+                    b.ToTable("StockMovements", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockTransfer", b =>
@@ -4598,7 +4762,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ToWarehouseId");
 
-                    b.ToTable("StockTransfers");
+                    b.ToTable("StockTransfers", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StopCommodity", b =>
@@ -4660,7 +4824,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadStopId");
 
-                    b.ToTable("StopCommodities");
+                    b.ToTable("StopCommodities", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnAccountBalance", b =>
@@ -4731,7 +4895,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnAccountBalances");
+                    b.ToTable("TfnAccountBalances", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnDepot", b =>
@@ -4804,7 +4968,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TfnDepots");
+                    b.ToTable("TfnDepots", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnOrder", b =>
@@ -4917,7 +5081,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnOrders");
+                    b.ToTable("TfnOrders", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnTransaction", b =>
@@ -5029,7 +5193,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnTransactions");
+                    b.ToTable("TfnTransactions", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Vehicle", b =>
@@ -5176,7 +5340,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleTypeId");
 
-                    b.ToTable("Vehicles");
+                    b.ToTable("Vehicles", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleMaintenance", b =>
@@ -5252,7 +5416,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("VehicleMaintenance");
+                    b.ToTable("VehicleMaintenance", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleType", b =>
@@ -5290,7 +5454,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("VehicleTypes");
+                    b.ToTable("VehicleTypes", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Warehouse", b =>
@@ -5363,7 +5527,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Warehouses");
+                    b.ToTable("Warehouses", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseBuilding", b =>
@@ -5418,7 +5582,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("WarehouseBuildings");
+                    b.ToTable("WarehouseBuildings", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseInventory", b =>
@@ -5466,7 +5630,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("WarehouseInventory");
+                    b.ToTable("WarehouseInventory", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Meeting", b =>
@@ -5522,7 +5686,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("OrganizerId");
 
-                    b.ToTable("Meetings");
+                    b.ToTable("Meetings", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MeetingAttendee", b =>
@@ -5556,7 +5720,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MeetingAttendees");
+                    b.ToTable("MeetingAttendees", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MeetingNotification", b =>
@@ -5595,7 +5759,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MeetingNotifications");
+                    b.ToTable("MeetingNotifications", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Message", b =>
@@ -5644,7 +5808,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("SenderId");
 
-                    b.ToTable("Messages");
+                    b.ToTable("Messages", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MessageAttachment", b =>
@@ -5689,7 +5853,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("MessageId");
 
-                    b.ToTable("MessageAttachments");
+                    b.ToTable("MessageAttachments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MessageReadReceipt", b =>
@@ -5715,7 +5879,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MessageReadReceipts");
+                    b.ToTable("MessageReadReceipts", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.OperatingCompany", b =>
@@ -5765,7 +5929,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("OperatingCompanyId");
 
-                    b.ToTable("OperatingCompanies");
+                    b.ToTable("OperatingCompanies", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CarTrackEntry", b =>
@@ -5837,7 +6001,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CarTrackEntries");
+                    b.ToTable("CarTrackEntries", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CondomDeliveryRequest", b =>
@@ -5927,7 +6091,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CondomDeliveryRequests");
+                    b.ToTable("CondomDeliveryRequests", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CondomProductionSchedule", b =>
@@ -5980,7 +6144,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CondomProductionSchedules");
+                    b.ToTable("CondomProductionSchedules", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CreditNoteAttachment", b =>
@@ -6024,7 +6188,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CreditNoteAttachments");
+                    b.ToTable("CreditNoteAttachments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsCreditNote", b =>
@@ -6055,7 +6219,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsCreditNotes");
+                    b.ToTable("PadsCreditNotes", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsInvoiceProcessed", b =>
@@ -6086,7 +6250,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsInvoicesProcessed");
+                    b.ToTable("PadsInvoicesProcessed", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsStockDelivered", b =>
@@ -6128,7 +6292,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsStockDelivered");
+                    b.ToTable("PadsStockDelivered", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsStockReceived", b =>
@@ -6202,7 +6366,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsStockReceived");
+                    b.ToTable("PadsStockReceived", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsWarehouseStock", b =>
@@ -6246,7 +6410,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsWarehouseStock");
+                    b.ToTable("PadsWarehouseStock", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.TrainingAttachment", b =>
@@ -6290,7 +6454,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TrainingAttachments");
+                    b.ToTable("TrainingAttachments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.ReportCache", b =>
@@ -6356,7 +6520,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ReportType", "FromDate", "ToDate");
 
-                    b.ToTable("ReportCaches");
+                    b.ToTable("ReportCaches", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportBatch", b =>
@@ -6412,7 +6576,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("ImportBatchId");
 
-                    b.ToTable("SalesImportBatches");
+                    b.ToTable("SalesImportBatches", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportIssue", b =>
@@ -6451,7 +6615,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportBatchId");
 
-                    b.ToTable("SalesImportIssues");
+                    b.ToTable("SalesImportIssues", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesTransactionStaging", b =>
@@ -6494,6 +6658,14 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<string>("ProductCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ProductDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<decimal?>("Quantity")
                         .HasColumnType("decimal(18,4)");
 
@@ -6528,7 +6700,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportBatchId");
 
-                    b.ToTable("SalesTransactionStagings");
+                    b.ToTable("SalesTransactionStagings", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.StaffOperatingCompany", b =>
@@ -6568,7 +6740,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("StaffMemberId", "OperatingCompanyId")
                         .IsUnique();
 
-                    b.ToTable("StaffOperatingCompanies");
+                    b.ToTable("StaffOperatingCompanies", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SupportTicket", b =>
@@ -6647,7 +6819,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("SubmittedByUserId");
 
-                    b.ToTable("SupportTickets");
+                    b.ToTable("SupportTickets", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ArtworkAnnotation", b =>
@@ -6695,7 +6867,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ArtworkFileId");
 
-                    b.ToTable("ArtworkAnnotations");
+                    b.ToTable("ArtworkAnnotations", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ArtworkFile", b =>
@@ -6787,7 +6959,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("ArtworkFiles");
+                    b.ToTable("ArtworkFiles", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ComplianceAlert", b =>
@@ -6837,7 +7009,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ComplianceDocumentId");
 
-                    b.ToTable("ComplianceAlerts");
+                    b.ToTable("ComplianceAlerts", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ComplianceDocument", b =>
@@ -6915,7 +7087,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ComplianceDocuments");
+                    b.ToTable("ComplianceDocuments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.Tender", b =>
@@ -7066,7 +7238,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("Tenders");
+                    b.ToTable("Tenders", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderActivity", b =>
@@ -7108,7 +7280,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderActivities");
+                    b.ToTable("TenderActivities", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderBOQItem", b =>
@@ -7161,7 +7333,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderBOQItems");
+                    b.ToTable("TenderBOQItems", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderDocument", b =>
@@ -7221,7 +7393,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderDocuments");
+                    b.ToTable("TenderDocuments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderKnowledgeBase", b =>
@@ -7297,7 +7469,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TenderKnowledgeBase");
+                    b.ToTable("TenderKnowledgeBase", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderReminder", b =>
@@ -7353,7 +7525,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderReminders");
+                    b.ToTable("TenderReminders", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderTeamMember", b =>
@@ -7398,7 +7570,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderTeamMembers");
+                    b.ToTable("TenderTeamMembers", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TicketComment", b =>
@@ -7434,7 +7606,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TicketId");
 
-                    b.ToTable("TicketComments");
+                    b.ToTable("TicketComments", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TodoNotification", b =>
@@ -7476,7 +7648,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("TodoNotifications");
+                    b.ToTable("TodoNotifications", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TodoTask", b =>
@@ -7547,7 +7719,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("TodoTasks");
+                    b.ToTable("TodoTasks", (string)null);
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.User", b =>
@@ -7630,7 +7802,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LinkedEmpId");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
 
                     b.HasData(
                         new
@@ -8380,6 +8552,25 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Load");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PodDocumentInvoiceLink", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.ImportedInvoice", "Invoice")
+                        .WithMany("PodDocumentLinks")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectTracker.API.Models.Logistics.PodDocument", "PodDocument")
+                        .WithMany("InvoiceLinks")
+                        .HasForeignKey("PodDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("PodDocument");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ProofOfDelivery", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Logistics.Load", "Load")
@@ -9042,6 +9233,11 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Vehicles");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ImportedInvoice", b =>
+                {
+                    b.Navigation("PodDocumentLinks");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Invoice", b =>
                 {
                     b.Navigation("LineItems");
@@ -9061,6 +9257,11 @@ namespace ProjectTracker.API.Migrations
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LoadStop", b =>
                 {
                     b.Navigation("Commodities");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PodDocument", b =>
+                {
+                    b.Navigation("InvoiceLinks");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnDepot", b =>

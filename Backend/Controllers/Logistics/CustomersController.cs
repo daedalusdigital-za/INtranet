@@ -1536,7 +1536,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         /// Sync addresses from tripsheet stops to customer delivery addresses.
         /// Scans all load stops and saves unique addresses for customers.
         /// </summary>
-        [AllowAnonymous]
+        [Authorize]
         [HttpPost("sync-addresses-from-tripsheets")]
         public async Task<ActionResult<SyncAddressesResult>> SyncAddressesFromTripsheets()
         {

@@ -56,7 +56,8 @@ namespace ProjectTracker.API.Models.Logistics
         // Tripsheet link (optional)
         public int? LoadId { get; set; }
 
-        // Invoice link (optional)
+        // Legacy single invoice link (optional)
+        // Kept for backward compatibility while supporting multi-invoice links.
         public int? InvoiceId { get; set; }
 
         // Navigation
@@ -68,5 +69,7 @@ namespace ProjectTracker.API.Models.Logistics
 
         [ForeignKey("InvoiceId")]
         public virtual ImportedInvoice? Invoice { get; set; }
+
+        public virtual ICollection<PodDocumentInvoiceLink> InvoiceLinks { get; set; } = new List<PodDocumentInvoiceLink>();
     }
 }

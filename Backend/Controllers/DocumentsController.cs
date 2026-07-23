@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.EntityFrameworkCore;
+using ProjectTracker.API.Data;
+using ProjectTracker.API.Models;
 using System.Security.Claims;
 using System.Collections.Concurrent;
 
@@ -16,25 +19,10 @@ namespace ProjectTracker.API.Controllers
         private readonly string _documentsBasePath;
         private readonly FileExtensionContentTypeProvider _contentTypeProvider;
         private readonly IMemoryCache _cache;
+        private readonly Dictionary<string, string> _departmentPasswords;
+        private readonly ApplicationDbContext _db;
         private const string DepartmentsCacheKey = "DocumentDepartments";
         private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
-
-        // Department passwords - in production, these should be in database
-        private static readonly Dictionary<string, string> DepartmentPasswords = new()
-        {
-            { "IT", "0000" },
-            { "Marketing", "0000" },
-            { "Tender", "0000" },
-            { "Projects", "0000" },
-            { "Sales", "0000" },
-            { "Call Center", "0000" },
-            { "Production", "0000" },
-            { "Human Resource", "0000" },
-            { "Stock", "0000" },
-            { "Logistics", "0000" },
-            { "Finance", "0000" },
-            { "Managers", "0000" }
-        };
 
         // Department permissions - which roles can access which departments
         private static readonly Dictionary<string, string[]> DepartmentPermissions = new()
@@ -53,12 +41,21 @@ namespace ProjectTracker.API.Controllers
             { "Managers", new[] { "Admin", "Manager" } }
         };
 
-        public DocumentsController(ILogger<DocumentsController> logger, IConfiguration configuration, IMemoryCache cache)
+        public DocumentsController(ILogger<DocumentsController> logger, IConfiguration configuration, IMemoryCache cache, ApplicationDbContext db)
         {
             _logger = logger;
             _documentsBasePath = configuration.GetValue<string>("DocumentsPath") ?? "/app/documents";
             _contentTypeProvider = new FileExtensionContentTypeProvider();
             _cache = cache;
+            _db = db;
+
+            // Load department passwords from configuration (DocumentPasswords section)
+            var depts = new[] { "IT", "Marketing", "Tender", "Projects", "Sales", "Call Center",
+                                "Production", "Human Resource", "Stock", "Logistics", "Finance", "Managers" };
+            _departmentPasswords = depts.ToDictionary(
+                d => d,
+                d => configuration[$"DocumentPasswords:{d}"] ?? configuration["DocumentPasswords:Default"] ?? "0000"
+            );
         }
 
         // GET: api/documents/departments
@@ -75,7 +72,7 @@ namespace ProjectTracker.API.Controllers
             var departments = new ConcurrentBag<DepartmentInfo>();
             
             // Process departments in parallel for faster loading
-            Parallel.ForEach(DepartmentPasswords.Keys, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dept =>
+            Parallel.ForEach(_departmentPasswords.Keys, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dept =>
             {
                 var deptPath = Path.Combine(_documentsBasePath, dept);
                 var documentCount = 0;
@@ -150,13 +147,8 @@ namespace ProjectTracker.API.Controllers
                 return BadRequest(new { message = "Department and password are required" });
             }
 
-            // Allow default password "0000" for all departments (for easy access)
-            if (request.Password == "0000")
-            {
-                return Ok(new { success = true, token = GenerateAccessToken(request.Department) });
-            }
-
-            if (DepartmentPasswords.TryGetValue(request.Department, out var correctPassword))
+            // Check configured password for this department
+            if (_departmentPasswords.TryGetValue(request.Department, out var correctPassword))
             {
                 if (request.Password == correctPassword)
                 {
@@ -605,6 +597,353 @@ namespace ProjectTracker.API.Controllers
             return Path.GetRelativePath(basePath, fullPath).Replace("\\", "/");
         }
 
+        // ---------------------------------------------------------------------
+        // SHARING
+        // ---------------------------------------------------------------------
+
+        // GET: api/documents/users  (lightweight list for the share "person" picker)
+        [HttpGet("users")]
+        public async Task<ActionResult<IEnumerable<ShareUserDto>>> GetShareableUsers([FromQuery] string? search)
+        {
+            var currentUserId = GetUserId();
+            var query = _db.Users.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim();
+                query = query.Where(u => u.Name.Contains(s) || u.Surname.Contains(s) || u.Email.Contains(s));
+            }
+
+            var users = await query
+                .OrderBy(u => u.Name)
+                .Take(50)
+                .Select(u => new ShareUserDto
+                {
+                    UserId = u.UserId,
+                    Name = (u.Name + " " + u.Surname).Trim(),
+                    Email = u.Email,
+                    Role = u.Role
+                })
+                .ToListAsync();
+
+            // Exclude self from the picker
+            users = users.Where(u => u.UserId != currentUserId).ToList();
+            return Ok(users);
+        }
+
+        // POST: api/documents/share
+        [HttpPost("share")]
+        public async Task<ActionResult> ShareItem([FromBody] ShareRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.SourceDepartment) || string.IsNullOrWhiteSpace(request.SourcePath))
+            {
+                return BadRequest(new { message = "Source department and path are required" });
+            }
+
+            // Validate the source item actually exists
+            var fullPath = Path.Combine(_documentsBasePath, request.SourceDepartment, request.SourcePath);
+            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
+            var requestedFullPath = Path.GetFullPath(fullPath);
+            if (!requestedFullPath.StartsWith(documentsFullPath))
+            {
+                return BadRequest(new { message = "Invalid source path" });
+            }
+
+            var isFolder = Directory.Exists(fullPath);
+            if (!isFolder && !System.IO.File.Exists(fullPath))
+            {
+                return NotFound(new { message = "Source item not found" });
+            }
+
+            var itemName = Path.GetFileName(request.SourcePath.TrimEnd('/'));
+            var userId = GetUserId();
+            var userName = User.FindFirst("name")?.Value
+                           ?? User.Identity?.Name
+                           ?? User.FindFirst(ClaimTypes.Name)?.Value;
+
+            var shareType = string.Equals(request.ShareWithType, "User", StringComparison.OrdinalIgnoreCase)
+                ? "User" : "Department";
+
+            if (shareType == "Department" && string.IsNullOrWhiteSpace(request.ShareWithDepartment))
+            {
+                return BadRequest(new { message = "Target department is required" });
+            }
+            if (shareType == "User" && (request.ShareWithUserId == null || request.ShareWithUserId <= 0))
+            {
+                return BadRequest(new { message = "Target user is required" });
+            }
+
+            // Prevent duplicate identical shares
+            var exists = await _db.DocumentShares.AnyAsync(s =>
+                s.SourceDepartment == request.SourceDepartment &&
+                s.SourcePath == request.SourcePath &&
+                s.ShareWithType == shareType &&
+                s.ShareWithDepartment == request.ShareWithDepartment &&
+                s.ShareWithUserId == request.ShareWithUserId);
+
+            if (exists)
+            {
+                return Ok(new { message = "Item is already shared with that recipient" });
+            }
+
+            var share = new DocumentShare
+            {
+                SourceDepartment = request.SourceDepartment,
+                SourcePath = request.SourcePath,
+                ItemName = itemName,
+                IsFolder = isFolder,
+                SharedByUserId = userId,
+                SharedByName = userName,
+                ShareWithType = shareType,
+                ShareWithDepartment = shareType == "Department" ? request.ShareWithDepartment : null,
+                ShareWithUserId = shareType == "User" ? request.ShareWithUserId : null,
+                Note = request.Note,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.DocumentShares.Add(share);
+            await _db.SaveChangesAsync();
+
+            return Ok(new { message = "Shared successfully", id = share.Id });
+        }
+
+        // GET: api/documents/shared-with-me
+        [HttpGet("shared-with-me")]
+        public async Task<ActionResult<IEnumerable<SharedItemDto>>> GetSharedWithMe()
+        {
+            var userId = GetUserId();
+            var myDept = await GetUserDepartmentNameAsync(userId);
+
+            var shares = await _db.DocumentShares
+                .Where(s => (s.ShareWithType == "User" && s.ShareWithUserId == userId)
+                         || (s.ShareWithType == "Department" && myDept != null && s.ShareWithDepartment == myDept))
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+
+            var result = shares.Select(MapShare).ToList();
+            return Ok(result);
+        }
+
+        // GET: api/documents/shared-by-me
+        [HttpGet("shared-by-me")]
+        public async Task<ActionResult<IEnumerable<SharedItemDto>>> GetSharedByMe()
+        {
+            var userId = GetUserId();
+            var shares = await _db.DocumentShares
+                .Where(s => s.SharedByUserId == userId)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+
+            return Ok(shares.Select(MapShare).ToList());
+        }
+
+        // GET: api/documents/shared/{shareId}/files
+        [HttpGet("shared/{shareId}/files")]
+        public async Task<ActionResult<IEnumerable<DocumentFile>>> GetSharedFiles(int shareId, [FromQuery] string? subfolder = null)
+        {
+            var share = await GetAccessibleShare(shareId);
+            if (share == null) return Forbid();
+
+            // A shared file (not folder) with no subfolder request: return the single file
+            var basePath = Path.Combine(_documentsBasePath, share.SourceDepartment, share.SourcePath);
+            if (!share.IsFolder)
+            {
+                if (!System.IO.File.Exists(basePath)) return Ok(new List<DocumentFile>());
+                var fi = new FileInfo(basePath);
+                return Ok(new List<DocumentFile>
+                {
+                    new DocumentFile
+                    {
+                        Name = fi.Name,
+                        Path = "",
+                        IsFolder = false,
+                        Size = fi.Length,
+                        LastModified = fi.LastWriteTime,
+                        FileType = GetFileType(fi.Extension),
+                        Icon = GetFileIcon(fi.Extension)
+                    }
+                });
+            }
+
+            var targetPath = string.IsNullOrEmpty(subfolder) ? basePath : Path.Combine(basePath, subfolder);
+
+            // Security: keep browsing inside the shared folder only
+            var shareRoot = Path.GetFullPath(basePath);
+            if (!Path.GetFullPath(targetPath).StartsWith(shareRoot))
+            {
+                return BadRequest(new { message = "Invalid path" });
+            }
+
+            if (!Directory.Exists(targetPath)) return Ok(new List<DocumentFile>());
+
+            var files = new List<DocumentFile>();
+            foreach (var dir in Directory.GetDirectories(targetPath))
+            {
+                var dirInfo = new DirectoryInfo(dir);
+                files.Add(new DocumentFile
+                {
+                    Name = dirInfo.Name,
+                    Path = Path.GetRelativePath(basePath, dir).Replace("\\", "/"),
+                    IsFolder = true,
+                    Size = 0,
+                    LastModified = dirInfo.LastWriteTime,
+                    FileType = "folder",
+                    Icon = "folder"
+                });
+            }
+            foreach (var file in Directory.GetFiles(targetPath))
+            {
+                var fileInfo = new FileInfo(file);
+                files.Add(new DocumentFile
+                {
+                    Name = fileInfo.Name,
+                    Path = Path.GetRelativePath(basePath, file).Replace("\\", "/"),
+                    IsFolder = false,
+                    Size = fileInfo.Length,
+                    LastModified = fileInfo.LastWriteTime,
+                    FileType = GetFileType(fileInfo.Extension),
+                    Icon = GetFileIcon(fileInfo.Extension)
+                });
+            }
+
+            return Ok(files.OrderByDescending(f => f.IsFolder).ThenBy(f => f.Name));
+        }
+
+        // GET: api/documents/shared/{shareId}/download?path=
+        [HttpGet("shared/{shareId}/download")]
+        public async Task<IActionResult> DownloadSharedFile(int shareId, [FromQuery] string? path = null)
+        {
+            var share = await GetAccessibleShare(shareId);
+            if (share == null) return Forbid();
+
+            var basePath = Path.Combine(_documentsBasePath, share.SourceDepartment, share.SourcePath);
+            var fullPath = share.IsFolder && !string.IsNullOrEmpty(path)
+                ? Path.Combine(basePath, path)
+                : basePath;
+
+            var shareRoot = Path.GetFullPath(basePath);
+            if (!Path.GetFullPath(fullPath).StartsWith(shareRoot))
+            {
+                return BadRequest(new { message = "Invalid path" });
+            }
+
+            if (!System.IO.File.Exists(fullPath))
+            {
+                return NotFound(new { message = "File not found" });
+            }
+
+            var fileName = Path.GetFileName(fullPath);
+            if (!_contentTypeProvider.TryGetContentType(fileName, out var contentType))
+            {
+                contentType = "application/octet-stream";
+            }
+            var fileBytes = System.IO.File.ReadAllBytes(fullPath);
+            return File(fileBytes, contentType, fileName);
+        }
+
+        // GET: api/documents/shared/{shareId}/preview?path=
+        [HttpGet("shared/{shareId}/preview")]
+        public async Task<IActionResult> PreviewSharedFile(int shareId, [FromQuery] string? path = null)
+        {
+            var share = await GetAccessibleShare(shareId);
+            if (share == null) return Forbid();
+
+            var basePath = Path.Combine(_documentsBasePath, share.SourceDepartment, share.SourcePath);
+            var fullPath = share.IsFolder && !string.IsNullOrEmpty(path)
+                ? Path.Combine(basePath, path)
+                : basePath;
+
+            var shareRoot = Path.GetFullPath(basePath);
+            if (!Path.GetFullPath(fullPath).StartsWith(shareRoot))
+            {
+                return BadRequest(new { message = "Invalid path" });
+            }
+            if (!System.IO.File.Exists(fullPath))
+            {
+                return NotFound(new { message = "File not found" });
+            }
+
+            if (!_contentTypeProvider.TryGetContentType(fullPath, out var contentType))
+            {
+                contentType = "application/octet-stream";
+            }
+            var fileBytes = System.IO.File.ReadAllBytes(fullPath);
+            Response.Headers["Content-Disposition"] = $"inline; filename=\"{Path.GetFileName(fullPath)}\"";
+            return File(fileBytes, contentType);
+        }
+
+        // DELETE: api/documents/share/{id}  (unshare - only sharer or admin)
+        [HttpDelete("share/{id}")]
+        public async Task<IActionResult> Unshare(int id)
+        {
+            var share = await _db.DocumentShares.FindAsync(id);
+            if (share == null) return NotFound(new { message = "Share not found" });
+
+            var userId = GetUserId();
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? "User";
+            if (share.SharedByUserId != userId && role != "Admin")
+            {
+                return Forbid();
+            }
+
+            _db.DocumentShares.Remove(share);
+            await _db.SaveChangesAsync();
+            return Ok(new { message = "Share removed" });
+        }
+
+        // Returns the share if the current user is allowed to access it, else null.
+        private async Task<DocumentShare?> GetAccessibleShare(int shareId)
+        {
+            var share = await _db.DocumentShares.FindAsync(shareId);
+            if (share == null) return null;
+
+            var userId = GetUserId();
+            var myDept = await GetUserDepartmentNameAsync(userId);
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? "User";
+
+            var allowed = share.SharedByUserId == userId
+                          || role == "Admin"
+                          || (share.ShareWithType == "User" && share.ShareWithUserId == userId)
+                          || (share.ShareWithType == "Department" && myDept != null && share.ShareWithDepartment == myDept);
+
+            return allowed ? share : null;
+        }
+
+        // Resolves the document-department name the user belongs to (via Users.DepartmentId -> Departments.Name).
+        private async Task<string?> GetUserDepartmentNameAsync(int userId)
+        {
+            if (userId <= 0) return null;
+            return await _db.Users
+                .Where(u => u.UserId == userId && u.DepartmentId != null)
+                .Select(u => u.Department != null ? u.Department.Name : null)
+                .FirstOrDefaultAsync();
+        }
+
+        private SharedItemDto MapShare(DocumentShare s) => new SharedItemDto
+        {
+            Id = s.Id,
+            Name = s.ItemName,
+            IsFolder = s.IsFolder,
+            SourceDepartment = s.SourceDepartment,
+            SharedByName = s.SharedByName,
+            SharedByUserId = s.SharedByUserId,
+            ShareWithType = s.ShareWithType,
+            ShareWithDepartment = s.ShareWithDepartment,
+            ShareWithUserId = s.ShareWithUserId,
+            Note = s.Note,
+            CreatedAt = s.CreatedAt,
+            FileType = s.IsFolder ? "folder" : GetFileType(Path.GetExtension(s.ItemName)),
+            Icon = s.IsFolder ? "folder" : GetFileIcon(Path.GetExtension(s.ItemName))
+        };
+
+        private int GetUserId()
+        {
+            var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                        ?? User.FindFirst("sub")?.Value
+                        ?? User.FindFirst("userId")?.Value;
+            return int.TryParse(idStr, out var id) ? id : 0;
+        }
+
+
         private string GenerateAccessToken(string department)
         {
             // Simple token generation - in production, use proper JWT
@@ -717,5 +1056,40 @@ namespace ProjectTracker.API.Controllers
         public bool CanCreateFolders { get; set; }
         public bool CanMove { get; set; }
         public string UserRole { get; set; } = string.Empty;
+    }
+
+    public class ShareRequest
+    {
+        public string SourceDepartment { get; set; } = string.Empty;
+        public string SourcePath { get; set; } = string.Empty;
+        public string ShareWithType { get; set; } = "Department"; // Department | User
+        public string? ShareWithDepartment { get; set; }
+        public int? ShareWithUserId { get; set; }
+        public string? Note { get; set; }
+    }
+
+    public class ShareUserDto
+    {
+        public int UserId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+    }
+
+    public class SharedItemDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public bool IsFolder { get; set; }
+        public string SourceDepartment { get; set; } = string.Empty;
+        public string? SharedByName { get; set; }
+        public int SharedByUserId { get; set; }
+        public string ShareWithType { get; set; } = string.Empty;
+        public string? ShareWithDepartment { get; set; }
+        public int? ShareWithUserId { get; set; }
+        public string? Note { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public string FileType { get; set; } = "file";
+        public string Icon { get; set; } = "insert_drive_file";
     }
 }

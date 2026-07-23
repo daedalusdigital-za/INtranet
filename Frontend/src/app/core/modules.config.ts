@@ -308,6 +308,13 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard] 
     },
     { path: 'projects', redirectTo: '/dashboard', pathMatch: 'full' },
+
+    // Asset Register (IT) — available to authenticated users
+    { 
+      path: 'asset-register', 
+      loadComponent: () => import('../components/asset-register/asset-register.component').then(m => m.AssetRegisterComponent),
+      canActivate: [authGuard] 
+    },
     
     // Human Resource Module
     { 
@@ -352,6 +359,12 @@ export function getModuleRoutes(): Routes {
     { 
       path: 'documents', 
       loadComponent: () => import('../components/documents/documents.component').then(m => m.DocumentsComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'documents' } 
+    },
+    { 
+      path: 'documents/shared', 
+      loadComponent: () => import('../components/shared-with-me/shared-with-me.component').then(m => m.SharedWithMeComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'documents' } 
     },

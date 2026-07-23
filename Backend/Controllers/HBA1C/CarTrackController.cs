@@ -354,11 +354,11 @@ namespace ProjectTracker.API.Controllers.HBA1C
                         reps.Add(new {
                             id = 0,
                             name = kv.Value.DriverName,
-                            firstName = kv.Value.DriverName.Split(' ')[0],
-                            lastName = kv.Value.DriverName.Contains(' ') ? kv.Value.DriverName.Split(' ', 2)[1] : "",
+                            firstName = (string?)kv.Value.DriverName.Split(' ')[0],
+                            lastName = (string?)(kv.Value.DriverName.Contains(' ') ? kv.Value.DriverName.Split(' ', 2)[1] : ""),
                             email = (string?)null,
                             phone = (string?)null,
-                            specialization = "Sales-rep",
+                            specialization = (string?)"Sales-rep",
                             registration = kv.Key,
                             unitId = (string?)kv.Value.UnitId
                         });

@@ -608,7 +608,16 @@ import { environment } from '../../../environments/environment';
     .attendance-container {
       min-height: 100vh;
       padding: 80px 32px 48px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
+      position: relative;
+      background: #0f172a;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
+        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
+        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
 
     /* Modern Header Section */

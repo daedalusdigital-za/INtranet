@@ -43,7 +43,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50)
         {
-            var query = _context.PodDocuments.AsQueryable();
+            var query = _context.PodDocuments
+                .Include(p => p.InvoiceLinks)
+                    .ThenInclude(l => l.Invoice)
+                .AsQueryable();
 
             if (!string.IsNullOrEmpty(region))
                 query = query.Where(p => p.Region == region);
@@ -69,9 +72,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (!string.IsNullOrEmpty(linkStatus))
             {
                 if (linkStatus == "linked")
-                    query = query.Where(p => p.LoadId != null || p.InvoiceId != null);
+                    query = query.Where(p => p.LoadId != null || p.InvoiceId != null || p.InvoiceLinks.Any());
                 else if (linkStatus == "not-linked")
-                    query = query.Where(p => p.LoadId == null && p.InvoiceId == null);
+                    query = query.Where(p => p.LoadId == null && p.InvoiceId == null && !p.InvoiceLinks.Any());
             }
 
             var total = await query.CountAsync();
@@ -98,7 +101,17 @@ namespace ProjectTracker.API.Controllers.Logistics
                     p.LoadId,
                     LoadNumber = p.Load != null ? p.Load.LoadNumber : null,
                     p.InvoiceId,
-                    InvoiceNumber = p.Invoice != null ? p.Invoice.TransactionNumber : null
+                    InvoiceNumber = p.Invoice != null ? p.Invoice.TransactionNumber : null,
+                    InvoiceLinks = p.InvoiceLinks
+                        .OrderBy(l => l.Invoice != null ? l.Invoice.TransactionNumber : "")
+                        .Select(l => new
+                        {
+                            l.Id,
+                            l.InvoiceId,
+                            InvoiceNumber = l.Invoice != null ? l.Invoice.TransactionNumber : null,
+                            l.LinkedAt
+                        })
+                        .ToList()
                 })
                 .ToListAsync();
 
@@ -113,10 +126,10 @@ namespace ProjectTracker.API.Controllers.Logistics
         {
             var total = await _context.PodDocuments.CountAsync();
             
-            var linked = await _context.PodDocuments.CountAsync(p => p.LoadId != null || p.InvoiceId != null);
+            var linked = await _context.PodDocuments.CountAsync(p => p.LoadId != null || p.InvoiceId != null || p.InvoiceLinks.Any());
             var unlinked = total - linked;
             var linkedToTripsheet = await _context.PodDocuments.CountAsync(p => p.LoadId != null);
-            var linkedToInvoice = await _context.PodDocuments.CountAsync(p => p.InvoiceId != null);
+            var linkedToInvoice = await _context.PodDocuments.CountAsync(p => p.InvoiceId != null || p.InvoiceLinks.Any());
 
             var byRegion = await _context.PodDocuments
                 .GroupBy(p => p.Region)
@@ -282,6 +295,156 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Reconcile the PodDocuments table with the physical files that already live
+        /// in the POD-Documents storage folder. Unlike bulk-import this does NOT copy
+        /// files (they are already in place) - it just registers any file that isn't
+        /// yet in the database. Filenames are expected in the normalized convention
+        /// "{REGION}_{DRIVER}_{yyyyMMdd}.ext" (e.g. GP_BONGINKOSI-LINDO_20260311.pdf),
+        /// with a fallback to the messy date/driver parsers used by bulk-import.
+        /// </summary>
+        [HttpPost("scan-storage")]
+        public async Task<IActionResult> ScanStorage()
+        {
+            if (!Directory.Exists(_storagePath))
+                return BadRequest($"POD storage folder not found: {_storagePath}");
+
+            var drivers = await _context.Drivers.ToListAsync();
+
+            // Existing registered file names (fast dedup)
+            var existingFiles = new HashSet<string>(
+                await _context.PodDocuments.Select(p => p.FileName).ToListAsync(),
+                StringComparer.OrdinalIgnoreCase);
+
+            var files = Directory.GetFiles(_storagePath, "*.*", SearchOption.AllDirectories)
+                .Where(f => new[] { ".pdf", ".jpg", ".jpeg", ".png", ".xlsx", ".xls" }
+                    .Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .ToList();
+
+            var imported = 0;
+            var skipped = 0;
+            var errors = new List<string>();
+
+            foreach (var file in files)
+            {
+                try
+                {
+                    var fileName = Path.GetFileName(file);
+
+                    if (existingFiles.Contains(fileName))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    var (region, driverName, deliveryDate) = ParseNormalizedPodName(fileName);
+
+                    // Fallbacks for non-standard names
+                    if (!deliveryDate.HasValue)
+                        deliveryDate = ParseDate(fileName, fileName);
+                    if (string.IsNullOrEmpty(driverName))
+                        driverName = ParseDriverName(fileName);
+                    if (string.IsNullOrEmpty(region))
+                        region = ParseRegion(fileName);
+
+                    if (!deliveryDate.HasValue)
+                    {
+                        errors.Add($"Could not parse date from: {fileName}");
+                        skipped++;
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(driverName))
+                        driverName = "Unknown";
+
+                    var fileInfo = new FileInfo(file);
+
+                    var matchedDriver = drivers.FirstOrDefault(d =>
+                        d.FirstName.Equals(driverName, StringComparison.OrdinalIgnoreCase) ||
+                        d.LastName?.Equals(driverName, StringComparison.OrdinalIgnoreCase) == true ||
+                        $"{d.FirstName} {d.LastName}".Trim().Equals(driverName, StringComparison.OrdinalIgnoreCase));
+
+                    var pod = new PodDocument
+                    {
+                        DriverId = matchedDriver?.Id,
+                        DriverName = driverName,
+                        DeliveryDate = deliveryDate.Value.Date,
+                        Region = region,
+                        FilePath = file,
+                        FileName = fileName,
+                        OriginalFileName = fileName,
+                        ContentType = GetContentType(file),
+                        FileSize = fileInfo.Length,
+                        UploadedAt = DateTime.UtcNow
+                    };
+
+                    _context.PodDocuments.Add(pod);
+                    existingFiles.Add(fileName);
+                    imported++;
+
+                    if (imported % 100 == 0)
+                        await _context.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Error processing {Path.GetFileName(file)}: {ex.Message}");
+                    skipped++;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "POD storage scan complete",
+                folder = _storagePath,
+                totalFiles = files.Count,
+                imported,
+                skipped,
+                errors = errors.Take(50).ToList()
+            });
+        }
+
+        /// <summary>
+        /// Parse the normalized "{REGION}_{DRIVER}_{yyyyMMdd}.ext" POD filename.
+        /// Region = first token, date = last token (8 digits yyyyMMdd), driver = the rest.
+        /// </summary>
+        private (string Region, string DriverName, DateTime? Date) ParseNormalizedPodName(string fileName)
+        {
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            var tokens = stem.Split('_', StringSplitOptions.RemoveEmptyEntries);
+
+            if (tokens.Length < 3)
+                return (string.Empty, string.Empty, null);
+
+            var region = tokens[0].ToUpperInvariant();
+
+            // Find the yyyyMMdd (8-digit) token - it may not be last because some
+            // files have a trailing dedup counter, e.g. KZN_Unknown_20260203_1.pdf
+            int dateIdx = -1;
+            DateTime? date = null;
+            for (int i = tokens.Length - 1; i >= 1; i--)
+            {
+                if (tokens[i].Length == 8 &&
+                    DateTime.TryParseExact(tokens[i], "yyyyMMdd",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var parsed))
+                {
+                    date = parsed;
+                    dateIdx = i;
+                    break;
+                }
+            }
+
+            if (date == null || dateIdx < 2)
+                return (region, string.Empty, null);
+
+            // Everything between the first token and the date token is the driver name
+            var driver = string.Join(" ", tokens[1..dateIdx]).Replace("-", " ").Trim();
+
+            return (region, driver, date);
+        }
+
+        /// <summary>
         /// Bulk import POD files from a folder path on the server
         /// </summary>
         [HttpPost("bulk-import")]
@@ -425,9 +588,58 @@ namespace ProjectTracker.API.Controllers.Logistics
                 return NotFound("Tripsheet/Load not found");
 
             pod.LoadId = request.LoadId;
+
+            // Auto-link to all non-cancelled invoices on the tripsheet
+            var invoicesOnLoad = await _context.ImportedInvoices
+                .Where(i => i.LoadId == request.LoadId && i.Status != "Cancelled")
+                .ToListAsync();
+
+            var existingInvoiceIds = await _context.PodDocumentInvoiceLinks
+                .Where(l => l.PodDocumentId == pod.Id)
+                .Select(l => l.InvoiceId)
+                .ToListAsync();
+
+            var newLinks = invoicesOnLoad
+                .Where(i => !existingInvoiceIds.Contains(i.Id))
+                .Select(i => new PodDocumentInvoiceLink
+                {
+                    PodDocumentId = pod.Id,
+                    InvoiceId = i.Id,
+                    LinkedAt = DateTime.UtcNow
+                })
+                .ToList();
+
+            if (newLinks.Count > 0)
+            {
+                _context.PodDocumentInvoiceLinks.AddRange(newLinks);
+            }
+
+            foreach (var invoice in invoicesOnLoad)
+            {
+                invoice.Status = "Delivered";
+                invoice.LastDeliveryDate = pod.DeliveryDate;
+            }
+
+            // Keep legacy single-link field populated for compatibility
+            var primaryInvoice = invoicesOnLoad.FirstOrDefault();
+            if (primaryInvoice != null)
+            {
+                pod.InvoiceId = primaryInvoice.Id;
+            }
+
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "POD linked to tripsheet", pod.Id, pod.LoadId, loadNumber = load.LoadNumber });
+            var invoiceNumbers = invoicesOnLoad.Select(i => i.TransactionNumber).Distinct().OrderBy(x => x).ToList();
+            return Ok(new
+            {
+                message = "POD linked to tripsheet" + (invoiceNumbers.Count > 0 ? $" and linked to {invoiceNumbers.Count} invoice(s)" : ""),
+                pod.Id,
+                pod.LoadId,
+                pod.InvoiceId,
+                loadNumber = load.LoadNumber,
+                invoiceNumbers,
+                linkedInvoiceCount = invoiceNumbers.Count
+            });
         }
 
         /// <summary>
@@ -521,51 +733,155 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
-        /// Link a POD to an invoice
+        /// Link a POD to a single invoice (legacy endpoint).
+        /// Adds the invoice to the POD's invoice link set.
         /// </summary>
         [HttpPut("{id}/link-invoice")]
         public async Task<IActionResult> LinkToInvoice(int id, [FromBody] LinkPodInvoiceRequest request)
+        {
+            return await LinkToInvoices(id, new LinkPodInvoicesRequest { InvoiceIds = new List<int> { request.InvoiceId } });
+        }
+
+        /// <summary>
+        /// Link a POD to multiple invoices.
+        /// </summary>
+        [HttpPut("{id}/link-invoices")]
+        public async Task<IActionResult> LinkToInvoices(int id, [FromBody] LinkPodInvoicesRequest request)
         {
             var pod = await _context.PodDocuments.FindAsync(id);
             if (pod == null)
                 return NotFound("POD document not found");
 
-            var invoice = await _context.ImportedInvoices.FindAsync(request.InvoiceId);
-            if (invoice == null)
-                return NotFound("Invoice not found");
+            if (request.InvoiceIds == null || request.InvoiceIds.Count == 0)
+                return BadRequest("At least one invoice is required");
 
-            pod.InvoiceId = request.InvoiceId;
+            var invoiceIds = request.InvoiceIds.Distinct().ToList();
+            var invoices = await _context.ImportedInvoices
+                .Where(i => invoiceIds.Contains(i.Id))
+                .ToListAsync();
 
-            // Update invoice status to Delivered
-            invoice.Status = "Delivered";
-            invoice.LastDeliveryDate = pod.DeliveryDate;
+            if (invoices.Count == 0)
+                return NotFound("No valid invoices found");
+
+            var existingInvoiceIds = await _context.PodDocumentInvoiceLinks
+                .Where(l => l.PodDocumentId == pod.Id)
+                .Select(l => l.InvoiceId)
+                .ToListAsync();
+
+            var newLinks = invoices
+                .Where(i => !existingInvoiceIds.Contains(i.Id))
+                .Select(i => new PodDocumentInvoiceLink
+                {
+                    PodDocumentId = pod.Id,
+                    InvoiceId = i.Id,
+                    LinkedAt = DateTime.UtcNow
+                })
+                .ToList();
+
+            if (newLinks.Count > 0)
+            {
+                _context.PodDocumentInvoiceLinks.AddRange(newLinks);
+            }
+
+            foreach (var invoice in invoices)
+            {
+                invoice.Status = "Delivered";
+                invoice.LastDeliveryDate = pod.DeliveryDate;
+            }
+
+            // Auto-link to tripsheet if POD has none and at least one invoice is assigned
+            string? loadNumber = null;
+            if (pod.LoadId == null)
+            {
+                var loadId = invoices.Select(i => i.LoadId).FirstOrDefault(x => x.HasValue);
+                if (loadId.HasValue)
+                {
+                    pod.LoadId = loadId.Value;
+                    var load = await _context.Loads.FindAsync(loadId.Value);
+                    loadNumber = load?.LoadNumber;
+                }
+            }
+
+            // Keep legacy field set for compatibility (first linked invoice)
+            var primaryInvoiceId = (pod.InvoiceId.HasValue ? pod.InvoiceId : invoices.FirstOrDefault()?.Id);
+            pod.InvoiceId = primaryInvoiceId;
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "POD linked to invoice", pod.Id, pod.InvoiceId, invoiceNumber = invoice.TransactionNumber });
+            var linkedInvoiceNumbers = await _context.PodDocumentInvoiceLinks
+                .Where(l => l.PodDocumentId == pod.Id)
+                .Select(l => l.Invoice != null ? l.Invoice.TransactionNumber : null)
+                .Where(n => n != null)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                message = $"POD linked to {invoices.Count} invoice(s)" + (loadNumber != null ? $" and auto-linked to tripsheet {loadNumber}" : ""),
+                pod.Id,
+                pod.LoadId,
+                pod.InvoiceId,
+                loadNumber,
+                linkedInvoiceCount = linkedInvoiceNumbers.Count,
+                invoiceNumbers = linkedInvoiceNumbers
+            });
         }
 
         /// <summary>
-        /// Delink a POD from its invoice
+        /// Delink a POD from all linked invoices.
         /// </summary>
         [HttpPut("{id}/delink-invoice")]
         public async Task<IActionResult> DelinkFromInvoice(int id)
         {
-            var pod = await _context.PodDocuments.Include(p => p.Invoice).FirstOrDefaultAsync(p => p.Id == id);
+            var pod = await _context.PodDocuments.FirstOrDefaultAsync(p => p.Id == id);
             if (pod == null)
                 return NotFound("POD document not found");
 
-            // Revert invoice status to Pending
-            if (pod.Invoice != null)
+            var links = await _context.PodDocumentInvoiceLinks
+                .Where(l => l.PodDocumentId == id)
+                .ToListAsync();
+
+            var invoiceIds = links.Select(l => l.InvoiceId).Distinct().ToList();
+            if (links.Count > 0)
             {
-                pod.Invoice.Status = "Pending";
-                pod.Invoice.LastDeliveryDate = null;
+                _context.PodDocumentInvoiceLinks.RemoveRange(links);
             }
 
+            // Legacy single-link cleanup
+            if (pod.InvoiceId.HasValue)
+            {
+                invoiceIds.Add(pod.InvoiceId.Value);
+            }
             pod.InvoiceId = null;
+
+            invoiceIds = invoiceIds.Distinct().ToList();
+            if (invoiceIds.Count > 0)
+            {
+                var stillLinkedInvoiceIds = await _context.PodDocumentInvoiceLinks
+                    .Where(l => invoiceIds.Contains(l.InvoiceId))
+                    .Select(l => l.InvoiceId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var invoiceIdsToReset = invoiceIds.Except(stillLinkedInvoiceIds).ToList();
+                if (invoiceIdsToReset.Count > 0)
+                {
+                    var invoicesToReset = await _context.ImportedInvoices
+                        .Where(i => invoiceIdsToReset.Contains(i.Id))
+                        .ToListAsync();
+
+                    foreach (var invoice in invoicesToReset)
+                    {
+                        invoice.Status = "Pending";
+                        invoice.LastDeliveryDate = null;
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "POD delinked from invoice", pod.Id });
+            return Ok(new { message = "POD delinked from all invoices", pod.Id });
         }
 
         /// <summary>
@@ -756,5 +1072,10 @@ namespace ProjectTracker.API.Controllers.Logistics
     public class LinkPodInvoiceRequest
     {
         public int InvoiceId { get; set; }
+    }
+
+    public class LinkPodInvoicesRequest
+    {
+        public List<int> InvoiceIds { get; set; } = new();
     }
 }

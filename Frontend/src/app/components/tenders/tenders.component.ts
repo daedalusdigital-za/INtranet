@@ -1293,9 +1293,16 @@ interface ArtworkFile {
     :host {
       display: block;
       min-height: 100vh;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
       position: relative;
-      z-index: 1;
+      background: #0f172a;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
+        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
+        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
 
     .tenders-container {
@@ -4059,17 +4066,14 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
 
     this.analyzingDocument = true;
     this.startAnalyzerProgress();
-    console.log('Starting document analysis...', this.analyzerDocument.name, this.analyzerDocument.size);
     
     // Create FormData and send to AI service
     const formData = new FormData();
     formData.append('file', this.analyzerDocument);
     formData.append('prompt', 'Analyze this tender document and provide a summary including: 1) The tender title and reference number, 2) The issuing entity, 3) Key dates (closing date, validity period, briefing sessions), 4) Required documents and compliance requirements, 5) Estimated value or budget, 6) Key evaluation criteria. Format your response clearly with sections.');
 
-    console.log('Sending request to /api/aichat/analyze-document');
     this.http.post<{ response: string }>('/api/aichat/analyze-document', formData).subscribe({
       next: (result) => {
-        console.log('Analysis complete:', result);
         this.stopAnalyzerProgress();
         this.analyzerProgressPercent = 100;
         this.analyzerCurrentStep = this.analyzerProgressSteps.length;

@@ -335,6 +335,38 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // GET: api/logistics/tfn/fueling-points
+        [HttpGet("fueling-points")]
+        public async Task<ActionResult> GetFuelingPoints()
+        {
+            try
+            {
+                var fuelingPoints = await _context.TfnDepots
+                    .Where(f => f.IsActive && f.Latitude != null && f.Longitude != null)
+                    .Select(f => new
+                    {
+                        id = f.Id,
+                        code = f.Code,
+                        name = f.Name,
+                        address = f.Address,
+                        city = f.City,
+                        province = f.Province,
+                        latitude = f.Latitude,
+                        longitude = f.Longitude,
+                        brand = "TFN",
+                        fuelType = "Diesel/Petrol"
+                    })
+                    .ToListAsync();
+
+                return Ok(fuelingPoints);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving fueling points");
+                return StatusCode(500, new { error = "Failed to retrieve fueling points", details = ex.Message });
+            }
+        }
+
         // GET: api/logistics/tfn/depots/nearest?lat={lat}&lng={lng}
         [HttpGet("depots/nearest")]
         public async Task<ActionResult> GetNearestDepot([FromQuery] double lat, [FromQuery] double lng)

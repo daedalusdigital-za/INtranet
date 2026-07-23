@@ -27,7 +27,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             _logger = logger;
         }
 
-        [AllowAnonymous]
+        [Authorize]
         [HttpGet("test-cartrack")]
         public async Task<ActionResult> TestCarTrackConnection()
         {

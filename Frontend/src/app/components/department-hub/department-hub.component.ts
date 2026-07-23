@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, Inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -18,8 +18,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
-import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from '../../services/documents.service';
-
+import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, DepartmentInfo, ShareUser } from '../../services/documents.service';
 @Component({
   selector: 'app-department-hub',
   standalone: true,
@@ -54,6 +53,11 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from 
             <button mat-icon-button class="back-btn" routerLink="/documents" matTooltip="Back to Documents">
               <mat-icon>arrow_back</mat-icon>
             </button>
+            @if (breadcrumbs.length > 0) {
+              <button mat-icon-button class="back-btn" (click)="navigateUp()" matTooltip="Up one level">
+                <mat-icon>arrow_upward</mat-icon>
+              </button>
+            }
             <div class="breadcrumb-trail">
               <span class="dept-name" (click)="navigateToRoot()">
                 <mat-icon>folder_special</mat-icon>
@@ -303,6 +307,10 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from 
                     <mat-icon>drive_file_move</mat-icon>
                     <span>Move to...</span>
                   </button>
+                  <button mat-menu-item (click)="shareItem(file)">
+                    <mat-icon>share</mat-icon>
+                    <span>Share</span>
+                  </button>
                   <mat-divider></mat-divider>
                   <button mat-menu-item class="delete-option" (click)="deleteFile(file)">
                     <mat-icon>delete</mat-icon>
@@ -406,8 +414,16 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from 
     .hub-container {
       padding: 80px 32px 32px;
       min-height: 100vh;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
       position: relative;
+      background: #0f172a;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
+        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
+        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
 
     .header-section {
@@ -837,7 +853,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from 
       position: absolute;
       top: 8px;
       right: 8px;
-      opacity: 0;
+      opacity: 0.55;
       transition: opacity 0.2s;
     }
 
@@ -992,7 +1008,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions } from 
     }
   `]
 })
-export class DepartmentHubComponent implements OnInit {
+export class DepartmentHubComponent implements OnInit, OnDestroy {
   departmentName = '';
   breadcrumbs: string[] = [];
   files: DocumentFile[] = [];
@@ -1055,6 +1071,26 @@ export class DepartmentHubComponent implements OnInit {
         this.isDraggingOver = true;
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    clearInterval(this.progressInterval);
+  }
+
+  /**
+   * Intercept the browser Back button. When the user is inside a subfolder,
+   * a synthetic history state was pushed by openFolder(). Pressing Back
+   * consumes that state and fires popstate here, so instead of leaving the
+   * department hub (which felt like being logged out), we navigate up one
+   * folder level. When already at the department root we let the browser
+   * navigate away normally.
+   */
+  @HostListener('window:popstate')
+  onPopState(): void {
+    if (this.breadcrumbs.length > 0) {
+      this.breadcrumbs.pop();
+      this.loadFiles();
+    }
   }
 
   loadPermissions(): void {
@@ -1168,7 +1204,18 @@ export class DepartmentHubComponent implements OnInit {
 
   openFolder(file: DocumentFile): void {
     this.breadcrumbs.push(file.name);
+    // Push a synthetic history entry so the browser Back button navigates
+    // up one folder (handled in onPopState) instead of leaving the module.
+    history.pushState({ folderDepth: this.breadcrumbs.length }, '');
     this.loadFiles();
+  }
+
+  /** Go up one folder level, keeping browser history in sync. */
+  navigateUp(): void {
+    if (this.breadcrumbs.length > 0) {
+      // Triggers onPopState which pops the breadcrumb and reloads.
+      history.back();
+    }
   }
 
   navigateToRoot(): void {
@@ -1308,10 +1355,25 @@ export class DepartmentHubComponent implements OnInit {
     });
   }
 
+  shareItem(file: DocumentFile): void {
+    const subfolder = this.breadcrumbs.length > 0 ? this.breadcrumbs.join('/') : '';
+    const sourcePath = subfolder ? `${subfolder}/${file.name}` : file.name;
+
+    this.dialog.open(ShareDialogComponent, {
+      width: '480px',
+      panelClass: 'modern-dialog',
+      data: {
+        itemName: file.name,
+        isFolder: file.isFolder,
+        department: this.departmentName,
+        sourcePath
+      }
+    });
+  }
+
   moveSelectedFiles(): void {
     const selected = this.selectedFiles;
     if (selected.length === 0) return;
-
     this.dialog.open(MoveDialogComponent, {
       width: '500px',
       data: { files: selected, department: this.departmentName }
@@ -1675,5 +1737,175 @@ export class MoveDialogComponent implements OnInit {
     if (this.selectedFolder !== undefined) {
       this.dialogRef.close(this.selectedFolder);
     }
+  }
+}
+
+// Share Dialog
+@Component({
+  selector: 'app-share-dialog',
+  standalone: true,
+  imports: [
+    CommonModule, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule,
+    MatSelectModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon>share</mat-icon>
+      Share "{{ data.itemName }}"
+    </h2>
+    <mat-dialog-content>
+      <p class="share-info">
+        {{ data.isFolder ? 'Folder' : 'File' }} will appear in the recipient's
+        <strong>Shared with Me</strong> hub. The original is not moved or copied.
+      </p>
+
+      <div class="mode-toggle">
+        <button type="button" [class.active]="mode === 'Department'" (click)="mode = 'Department'">
+          <mat-icon>groups</mat-icon> Department
+        </button>
+        <button type="button" [class.active]="mode === 'User'" (click)="mode = 'User'">
+          <mat-icon>person</mat-icon> Person
+        </button>
+      </div>
+
+      @if (mode === 'Department') {
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Share with department</mat-label>
+          <mat-select [(value)]="selectedDepartment">
+            @for (dept of departments; track dept.name) {
+              <mat-option [value]="dept.name">{{ dept.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+
+      @if (mode === 'User') {
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Search person by name or email</mat-label>
+          <input matInput [(ngModel)]="userSearch" (ngModelChange)="onUserSearch()" placeholder="Start typing...">
+        </mat-form-field>
+        @if (searchingUsers) {
+          <div class="loading"><mat-spinner diameter="24"></mat-spinner></div>
+        }
+        @if (!searchingUsers && users.length > 0) {
+          <div class="user-list">
+            @for (u of users; track u.userId) {
+              <div class="user-row" [class.selected]="selectedUser?.userId === u.userId" (click)="selectedUser = u">
+                <mat-icon>account_circle</mat-icon>
+                <div class="user-meta">
+                  <span class="user-name">{{ u.name }}</span>
+                  <span class="user-email">{{ u.email }}</span>
+                </div>
+                @if (selectedUser?.userId === u.userId) { <mat-icon class="check">check_circle</mat-icon> }
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <mat-form-field appearance="outline" style="width: 100%;">
+        <mat-label>Note (optional)</mat-label>
+        <input matInput [(ngModel)]="note" placeholder="Add a short message">
+      </mat-form-field>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!canShare() || sharing" (click)="share()">
+        <mat-icon>share</mat-icon>
+        Share
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    h2 { display: flex; align-items: center; gap: 8px; }
+    .share-info { color: #666; margin-bottom: 16px; font-size: 14px; line-height: 1.5; }
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+    .mode-toggle button {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff;
+      cursor: pointer; color: #555; font-weight: 500; transition: all 0.2s;
+    }
+    .mode-toggle button.active { background: #1e90ff; color: #fff; border-color: #1e90ff; }
+    .loading { display: flex; justify-content: center; padding: 12px; }
+    .user-list { max-height: 220px; overflow-y: auto; margin-bottom: 16px; border: 1px solid #eee; border-radius: 8px; }
+    .user-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f2f2f2; }
+    .user-row:last-child { border-bottom: none; }
+    .user-row:hover { background: #f7f9fc; }
+    .user-row.selected { background: rgba(30,144,255,0.1); }
+    .user-meta { display: flex; flex-direction: column; flex: 1; }
+    .user-name { font-weight: 500; color: #333; }
+    .user-email { font-size: 12px; color: #888; }
+    .check { color: #1e90ff; }
+  `]
+})
+export class ShareDialogComponent implements OnInit {
+  mode: 'Department' | 'User' = 'Department';
+  departments: DepartmentInfo[] = [];
+  selectedDepartment?: string;
+  users: ShareUser[] = [];
+  selectedUser?: ShareUser;
+  userSearch = '';
+  searchingUsers = false;
+  note = '';
+  sharing = false;
+  private searchTimer: any;
+
+  constructor(
+    public dialogRef: MatDialogRef<ShareDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: { itemName: string; isFolder: boolean; department: string; sourcePath: string },
+    private documentsService: DocumentsService,
+    private snackBar: MatSnackBar
+  ) {}
+
+  ngOnInit(): void {
+    this.documentsService.getDepartments().subscribe({
+      next: (depts) => {
+        // Don't offer to share back into the same department
+        this.departments = depts.filter(d => d.name !== this.data.department);
+      }
+    });
+  }
+
+  onUserSearch(): void {
+    clearTimeout(this.searchTimer);
+    if (!this.userSearch || this.userSearch.trim().length < 2) {
+      this.users = [];
+      return;
+    }
+    this.searchingUsers = true;
+    this.searchTimer = setTimeout(() => {
+      this.documentsService.searchShareUsers(this.userSearch.trim()).subscribe({
+        next: (users) => { this.users = users; this.searchingUsers = false; },
+        error: () => { this.searchingUsers = false; }
+      });
+    }, 350);
+  }
+
+  canShare(): boolean {
+    return this.mode === 'Department' ? !!this.selectedDepartment : !!this.selectedUser;
+  }
+
+  share(): void {
+    if (!this.canShare()) return;
+    this.sharing = true;
+
+    this.documentsService.shareItem({
+      sourceDepartment: this.data.department,
+      sourcePath: this.data.sourcePath,
+      shareWithType: this.mode,
+      shareWithDepartment: this.mode === 'Department' ? this.selectedDepartment : undefined,
+      shareWithUserId: this.mode === 'User' ? this.selectedUser?.userId : undefined,
+      note: this.note?.trim() || undefined
+    }).subscribe({
+      next: (res: any) => {
+        this.sharing = false;
+        this.snackBar.open(res?.message || 'Shared successfully', 'Close', { duration: 3000 });
+        this.dialogRef.close(true);
+      },
+      error: () => {
+        this.sharing = false;
+        this.snackBar.open('Failed to share', 'Close', { duration: 3000 });
+      }
+    });
   }
 }

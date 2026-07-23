@@ -18,7 +18,7 @@ import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
 import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
 import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
 import { RequestDialogComponent } from '../request-dialog/request-dialog.component';
-import { QuickPrintDialogComponent } from '../quick-print-dialog/quick-print-dialog.component';
+import { AssetRegisterDialogComponent } from '../../asset-register/asset-register-dialog.component';
 import { AnnouncementDialogComponent } from '../announcement-dialog/announcement-dialog.component';
 import { BooksDepartmentDialogComponent } from '../../books-department-dialog/books-department-dialog.component';
 import { Subscription } from 'rxjs';
@@ -307,9 +307,9 @@ import { Subscription } from 'rxjs';
           <mat-icon class="pm-icon-amber">assignment</mat-icon>
           <span>Request</span>
         </button>
-        <button mat-menu-item class="pm-menu-item" (click)="openQuickPrintDialog()">
-          <mat-icon class="pm-icon-teal">print</mat-icon>
-          <span>Quick Print</span>
+        <button mat-menu-item class="pm-menu-item" (click)="openAssetRegisterDialog()">
+          <mat-icon class="pm-icon-teal">inventory_2</mat-icon>
+          <span>Asset Register</span>
         </button>
         @if (isAdmin()) {
           <div class="pm-divider"></div>
@@ -1319,10 +1319,11 @@ export class NavbarComponent implements OnInit, OnDestroy {
     });
   }
 
-  openQuickPrintDialog(): void {
-    this.dialog.open(QuickPrintDialogComponent, {
-      width: '650px',
+  openAssetRegisterDialog(): void {
+    this.dialog.open(AssetRegisterDialogComponent, {
+      width: '580px',
       maxWidth: '95vw',
+      maxHeight: '80vh',
       panelClass: 'centered-dialog'
     });
   }

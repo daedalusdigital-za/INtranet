@@ -1,18 +1,31 @@
 # =============================================================================
 # ProjectTracker Database Backup Script
 # Runs a full SQL Server backup inside the Docker container,
-# copies the .bak file out, and optionally mirrors it to the NAS.
-# Keeps the last 14 local backups and 30 NAS backups.
+# copies the .bak file out, and mirrors it to the NAS.
+#
+# RETENTION POLICY: backups are NEVER deleted. Every backup is kept forever,
+# both locally and on the NAS. (Set $PurgeOldBackups = $true only if you ever
+# deliberately want age-based cleanup back.)
+#
+# NAS RESILIENCE: if the NAS is offline, the local backup is still created and
+# the run still succeeds. On the next run where the NAS IS reachable, any local
+# backups that are missing from the NAS are copied over (catch-up), so nothing
+# is lost while the NAS was disconnected.
 # =============================================================================
 
 param(
     [string]$LocalBackupDir = "C:\Backups\ProjectTrackerDB",
-    [string]$NasBackupDir   = "\\192.168.11.186\WorkSpace\Backups\ProjectTrackerDB",
+    [string]$NasBackupDir   = "\\192.168.10.76\WorkSpace\Backups\ProjectTrackerDB",
     [string]$ContainerName  = "projecttracker-db",
     [string]$DatabaseName   = "ProjectTrackerDB",
     [string]$SaPassword     = "YourStrong@Passw0rd",
-    [int]$LocalRetainDays   = 14,
-    [int]$NasRetainDays     = 30
+    [int]$LocalRetainDays   = 30,
+    [int]$NasRetainDays     = 180,
+    [int]$MinRetainCount    = 10,
+    # When $false (default) NO backups are ever deleted - everything is kept
+    # forever. Set to $true only if you deliberately want age-based cleanup
+    # (which then still keeps at least $MinRetainCount recent backups).
+    [bool]$PurgeOldBackups  = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -92,25 +105,44 @@ try {
     }
     Write-Log "Database backup completed inside container."
 
-    # 5. Copy the .bak file from the container to local
+    # 5. Retrieve the .bak file on the host.
+    #    docker-compose bind-mounts the container backup path
+    #    (/var/opt/mssql/backup) to the host backup folder, so the BACKUP
+    #    written above already appears at $localFilePath. If that bind mount
+    #    is not present, fall back to copying it out of the container.
     $localFilePath = Join-Path $LocalBackupDir $backupFileName
-    $cpOutput = docker cp "${ContainerName}:${containerBackupPath}/${backupFileName}" $localFilePath 2>&1 | Out-String
-    Write-Log "docker cp: $cpOutput"
+    if (-not (Test-Path $localFilePath)) {
+        $cpOutput = docker cp "${ContainerName}:${containerBackupPath}/${backupFileName}" $localFilePath 2>&1 | Out-String
+        Write-Log "docker cp: $cpOutput"
+    }
+    else {
+        Write-Log "Backup already present on host via bind mount: $localFilePath"
+    }
 
     if (-not (Test-Path $localFilePath)) {
-        Write-Log "Failed to copy backup file from container." "ERROR"
+        Write-Log "Backup file not found on host: $localFilePath" "ERROR"
         exit 1
     }
 
     $fileSizeMB = [math]::Round((Get-Item $localFilePath).Length / 1MB, 2)
     Write-Log "Backup saved locally: $localFilePath ($fileSizeMB MB)"
 
-    # 6. Clean up backup file inside the container
-    docker exec $ContainerName rm -f "$containerBackupPath/$backupFileName" 2>&1 | Out-Null
-    Write-Log "Cleaned up backup inside container."
+    # 6. Clean up the container-internal backup ONLY when the backup path is
+    #    NOT bind-mounted to the host folder. Deleting a bind-mounted path here
+    #    would destroy the local backup we just created -- this was the original
+    #    data-loss bug.
+    $mounts = docker inspect -f '{{range .Mounts}}{{.Destination}};{{end}}' $ContainerName 2>&1 | Out-String
+    $backupIsBindMounted = $mounts -match [regex]::Escape($containerBackupPath)
+    if (-not $backupIsBindMounted) {
+        docker exec $ContainerName rm -f "$containerBackupPath/$backupFileName" 2>&1 | Out-Null
+        Write-Log "Cleaned up backup inside container."
+    }
+    else {
+        Write-Log "Skipped container cleanup - backup path is bind-mounted to host (backup retained locally)."
+    }
 
     # 7. Copy to NAS if reachable
-    $nasShare = "\\192.168.11.186\WorkSpace"
+    $nasShare = "\\192.168.10.76\WorkSpace"
     if (Test-Path $nasShare) {
         if (-not (Test-Path $NasBackupDir)) {
             New-Item -ItemType Directory -Path $NasBackupDir -Force | Out-Null
@@ -119,25 +151,53 @@ try {
         Copy-Item -Path $localFilePath -Destination $NasBackupDir -Force
         Write-Log "Backup copied to NAS: $NasBackupDir"
 
-        # Purge old NAS backups
-        Get-ChildItem -Path $NasBackupDir -Filter "${DatabaseName}_*.bak" |
-            Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$NasRetainDays) } |
+        # NAS catch-up: copy across any local backups that are missing from the
+        # NAS (e.g. backups taken on days the NAS was offline). This guarantees
+        # every local backup eventually lands on the NAS once it reconnects.
+        $nasNames = @{}
+        Get-ChildItem -Path $NasBackupDir -Filter "${DatabaseName}_*.bak" -ErrorAction SilentlyContinue |
+            ForEach-Object { $nasNames[$_.Name] = $true }
+        $caughtUp = 0
+        Get-ChildItem -Path $LocalBackupDir -Filter "${DatabaseName}_*.bak" -ErrorAction SilentlyContinue |
+            Where-Object { -not $nasNames.ContainsKey($_.Name) } |
             ForEach-Object {
-                Remove-Item $_.FullName -Force
-                Write-Log "Purged old NAS backup: $($_.Name)"
+                Copy-Item -Path $_.FullName -Destination $NasBackupDir -Force
+                Write-Log "NAS catch-up: copied missing backup to NAS: $($_.Name)"
+                $caughtUp++
             }
+        if ($caughtUp -gt 0) {
+            Write-Log "NAS catch-up complete: $caughtUp backup(s) that were missed while the NAS was offline are now on the NAS."
+        }
+
+        # Retention: DISABLED by default - backups are kept forever. Only runs
+        # if $PurgeOldBackups is explicitly set to $true.
+        if ($PurgeOldBackups) {
+            Get-ChildItem -Path $NasBackupDir -Filter "${DatabaseName}_*.bak" |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -Skip $MinRetainCount |
+                Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$NasRetainDays) } |
+                ForEach-Object {
+                    Remove-Item $_.FullName -Force
+                    Write-Log "Purged old NAS backup: $($_.Name)"
+                }
+        }
     }
     else {
-        Write-Log "NAS not reachable - skipping NAS copy." "WARN"
+        Write-Log "NAS not reachable - keeping backup locally only. It will be copied to the NAS automatically on the next run once the NAS reconnects." "WARN"
     }
 
-    # 8. Purge old local backups
-    Get-ChildItem -Path $LocalBackupDir -Filter "${DatabaseName}_*.bak" |
-        Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LocalRetainDays) } |
-        ForEach-Object {
-            Remove-Item $_.FullName -Force
-            Write-Log "Purged old local backup: $($_.Name)"
-        }
+    # 8. Local retention: DISABLED by default - backups are kept forever. Only
+    #    runs if $PurgeOldBackups is explicitly set to $true.
+    if ($PurgeOldBackups) {
+        Get-ChildItem -Path $LocalBackupDir -Filter "${DatabaseName}_*.bak" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip $MinRetainCount |
+            Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LocalRetainDays) } |
+            ForEach-Object {
+                Remove-Item $_.FullName -Force
+                Write-Log "Purged old local backup: $($_.Name)"
+            }
+    }
 
     Write-Log "=== Backup completed successfully ==="
 

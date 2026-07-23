@@ -83,6 +83,28 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       <!-- Departments Grid -->
       <div class="departments-section">
         <div class="departments-grid">
+          <div class="department-card shared-card"
+               routerLink="/documents/shared"
+               matTooltip="View files and folders shared with you">
+            <div class="card-glow"></div>
+            <div class="card-content">
+              <div class="icon-container" data-dept="shared">
+                <mat-icon>folder_shared</mat-icon>
+              </div>
+              <h3>Shared with Me</h3>
+              <div class="document-count">
+                <mat-icon>share</mat-icon>
+                <span>Files &amp; folders shared to you</span>
+              </div>
+              <div class="card-footer">
+                <button mat-flat-button class="access-btn">
+                  <mat-icon>open_in_new</mat-icon>
+                  Open
+                </button>
+              </div>
+            </div>
+            <div class="card-indicator"></div>
+          </div>
           @for (dept of filteredDepartments; track dept.name) {
             <div class="department-card" 
                  [class.loading]="dept.documentCount === -1"
@@ -134,7 +156,16 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .documents-container {
       min-height: 100vh;
       padding: 80px 32px 48px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
+      position: relative;
+      background: #0f172a;
+      background-image:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
+        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
+        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
 
     /* Header Section */
@@ -354,6 +385,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .icon-container[data-dept="stock"] { background: linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%); box-shadow: 0 8px 24px rgba(141, 110, 99, 0.4); }
     .icon-container[data-dept="logistics"] { background: linear-gradient(135deg, #29b6f6 0%, #039be5 100%); box-shadow: 0 8px 24px rgba(41, 182, 246, 0.4); }
     .icon-container[data-dept="finance"] { background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%); box-shadow: 0 8px 24px rgba(102, 187, 106, 0.4); }
+    .icon-container[data-dept="shared"] { background: linear-gradient(135deg, #26c6da 0%, #00acc1 100%); box-shadow: 0 8px 24px rgba(38, 198, 218, 0.4); }
     .icon-container[data-dept="managers"] { background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%); box-shadow: 0 8px 24px rgba(171, 71, 188, 0.4); }
 
     .icon-container mat-icon {
