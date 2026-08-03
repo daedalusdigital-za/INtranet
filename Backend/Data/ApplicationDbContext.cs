@@ -17,6 +17,7 @@ namespace ProjectTracker.API.Data
         }
 
         public DbSet<User> Users { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Department> Departments { get; set; }
         public DbSet<Board> Boards { get; set; }
         public DbSet<BoardChecklistItem> BoardChecklistItems { get; set; }
@@ -36,6 +37,8 @@ namespace ProjectTracker.API.Data
         // Biometric System Tables (Actual Database Schema)
         public DbSet<Admin> Admins { get; set; }
         public DbSet<EmpRegistration> EmpRegistrations { get; set; }
+        public DbSet<AssetRegisterLocation> AssetRegisterLocations { get; set; }
+        public DbSet<AssetRegisterItem> AssetRegisterItems { get; set; }
         public DbSet<AttendanceRecord> AttendanceRecords { get; set; }
 
         // Support Ticket System

@@ -13,14 +13,16 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { LeaveRequestDialogComponent } from '../leave-request-dialog/leave-request-dialog.component';
 import { PayslipRequestDialogComponent } from '../payslip-request-dialog/payslip-request-dialog.component';
 import { PrivateMeetingRequestDialogComponent } from '../private-meeting-request-dialog/private-meeting-request-dialog.component';
 import { Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
-import { environment } from '../../../../environments/environment';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
 import { Observable, map, startWith } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 
 interface RequestCategory {
   name: string;
@@ -163,6 +165,20 @@ export class RequestDialogComponent {
       color: '#2196f3',
       description: 'Expense claims, petty cash, invoices',
       type: 'finance'
+    },
+    {
+      name: 'HR',
+      icon: 'badge',
+      color: '#4caf50',
+      description: 'Leave requests, payslips, private meetings',
+      type: 'hr'
+    },
+    {
+      name: 'Stationery',
+      icon: 'edit_note',
+      color: '#ff9800',
+      description: 'Request pens, paper, and office supplies',
+      type: 'stationery'
     }
   ];
 
@@ -188,6 +204,20 @@ export class RequestDialogComponent {
         // Open meeting request dialog
         this.dialog.open(ScheduleMeetingDialogComponent, {
           width: '900px',
+          autoFocus: false,
+          panelClass: 'no-scroll-dialog'
+        });
+        break;
+      case 'hr':
+        this.dialog.open(HRRequestMenuComponent, {
+          width: '440px',
+          autoFocus: false,
+          panelClass: 'no-scroll-dialog'
+        });
+        break;
+      case 'stationery':
+        this.dialog.open(StationeryRequestDialogComponent, {
+          width: '580px',
           autoFocus: false,
           panelClass: 'no-scroll-dialog'
         });
@@ -1453,4 +1483,262 @@ export class FinanceInquiryDialogComponent implements OnInit {
   close(): void {
     this.dialogRef.close();
   }
+}
+
+// ─── Stationery Request Dialog ────────────────────────────────────────────────
+@Component({
+  selector: 'app-stationery-request-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatButtonModule,
+    MatIconModule,
+    MatSnackBarModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule,
+    MatChipsModule
+  ],
+  template: `
+    <div class="stat-dialog">
+      <div class="stat-header">
+        <mat-icon class="stat-hicon">edit_note</mat-icon>
+        <h2>Stationery / Equipment Request</h2>
+        <button mat-icon-button class="stat-close" (click)="close()"><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="stat-content">
+        <p class="stat-subtitle">Request office supplies, stationery, or equipment. Your request will be sent to Finance for approval.</p>
+
+        <div class="quick-chips">
+          <span class="qc-label">Quick add:</span>
+          @for (item of quickItems; track item) {
+            <button type="button" class="qc-chip" (click)="addQuickItem(item)">+ {{item}}</button>
+          }
+        </div>
+
+        <div class="items-section">
+          <div class="items-header">
+            <span>Items to Request</span>
+            <button mat-icon-button type="button" (click)="addItem()" matTooltip="Add item"><mat-icon>add_circle</mat-icon></button>
+          </div>
+          @for (item of items; track $index; let i = $index) {
+            <div class="item-row">
+              <div class="item-inputs">
+                <input class="item-input name-input" [(ngModel)]="item.name" placeholder="Item name (e.g. A4 Paper)">
+                <input class="item-input qty-input" [(ngModel)]="item.qty" placeholder="Qty" type="number" min="1">
+                <input class="item-input unit-input" [(ngModel)]="item.unit" placeholder="Unit (reams, pcs…)">
+              </div>
+              <button mat-icon-button type="button" class="remove-btn" (click)="removeItem(i)" [disabled]="items.length === 1">
+                <mat-icon>remove_circle_outline</mat-icon>
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="stat-form-row">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Purpose / Reason</mat-label>
+            <input matInput [(ngModel)]="purpose" placeholder="e.g. For the KZN sales team monthly report">
+            <mat-icon matPrefix>description</mat-icon>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Priority</mat-label>
+            <mat-select [(ngModel)]="priority">
+              <mat-option value="Low">Low</mat-option>
+              <mat-option value="Normal">Normal</mat-option>
+              <mat-option value="Urgent">Urgent</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="quotes-section">
+          <label class="quotes-toggle">
+            <input type="checkbox" [(ngModel)]="hasQuotes"> I have a quote to attach (optional, max 3)
+          </label>
+          @if (hasQuotes) {
+            <div class="quote-files">
+              @for (q of quoteSlots; track $index; let qi = $index) {
+                <div class="quote-file-row">
+                  @if (!quoteFiles[qi]) {
+                    <label class="quote-upload-btn" [for]="'quoteFile'+qi">
+                      <mat-icon>attach_file</mat-icon> Attach Quote {{qi+1}}
+                    </label>
+                    <input [id]="'quoteFile'+qi" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display:none" (change)="onQuoteFile($event, qi)">
+                  } @else {
+                    <div class="quote-attached">
+                      <mat-icon class="quote-icon">description</mat-icon>
+                      <span class="quote-name">{{quoteFiles[qi]!.name}}</span>
+                      <button mat-icon-button type="button" class="quote-remove" (click)="removeQuote(qi)" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        @if (myPast.length > 0) {
+          <div class="past-section">
+            <p class="past-title"><mat-icon>history</mat-icon> Your Recent Requests</p>
+            @for (r of myPast; track r.stationeryRequestId) {
+              <div class="past-row">
+                <span class="past-items">{{r.items}}</span>
+                <span class="past-date">{{r.submittedAt | date:'d MMM'}}</span>
+                <span class="stat-pill" [class]="'pill-' + r.status.toLowerCase()">{{r.status}}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="stat-actions">
+        <button mat-button (click)="close()">Cancel</button>
+        <button mat-raised-button color="warn" (click)="submitStat()" [disabled]="!isValid() || submitting">
+          @if (submitting) { <mat-spinner diameter="18"></mat-spinner> }
+          @else { <mat-icon>send</mat-icon> Send to Finance }
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .stat-dialog { min-width: 520px; }
+    .stat-header { display:flex; align-items:center; gap:12px; padding:18px 24px; background:linear-gradient(135deg,#ff9800,#f57c00); color:white; margin:-24px -24px 0; position:relative; }
+    .stat-hicon { font-size:30px; width:30px; height:30px; }
+    .stat-header h2 { margin:0; font-size:1.4rem; font-weight:700; flex:1; }
+    .stat-close { color:white; position:absolute; right:12px; top:50%; transform:translateY(-50%); }
+    .stat-content { padding:20px 0 8px; }
+    .stat-subtitle { color:#666; font-size:13px; margin-bottom:16px; }
+    .quick-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:18px; }
+    .qc-label { font-size:12px; color:#999; font-weight:600; }
+    .qc-chip { background:#fff3e0; color:#e65100; border:1px solid #ffcc80; border-radius:14px; padding:4px 12px; font-size:12px; cursor:pointer; transition:background 0.15s; }
+    .qc-chip:hover { background:#ffe0b2; }
+    .items-section { background:#f9fafb; border-radius:12px; padding:12px; margin-bottom:16px; }
+    .items-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; color:#374151; margin-bottom:10px; }
+    .items-header button { color:#ff9800; }
+    .item-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .item-inputs { display:flex; gap:8px; flex:1; }
+    .item-input { border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; font-size:13px; outline:none; transition:border-color 0.15s; }
+    .item-input:focus { border-color:#ff9800; }
+    .name-input { flex:2; min-width:0; }
+    .qty-input { width:70px; }
+    .unit-input { width:100px; }
+    .remove-btn { color:#ef4444 !important; flex-shrink:0; }
+    .stat-form-row { display:flex; gap:16px; }
+    .stat-form-row .full-width { flex:2; }
+    .stat-form-row mat-form-field:last-child { flex:1; }
+    .full-width { width:100%; }
+    .past-section { border-top:1px solid #eee; padding-top:12px; margin-top:8px; }
+    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#555; margin-bottom:8px; }
+    .past-title mat-icon { font-size:15px; width:15px; height:15px; }
+    .past-row { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:8px; background:#f9fafb; margin-bottom:5px; font-size:12px; }
+    .past-items { flex:1; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .past-date { color:#9ca3af; white-space:nowrap; }
+    .stat-pill { padding:2px 9px; border-radius:10px; font-size:11px; font-weight:700; }
+    .pill-pending { background:#fff3cd; color:#856404; }
+    .pill-approved { background:#d1fae5; color:#065f46; }
+    .pill-declined { background:#fee2e2; color:#991b1b; }
+    .quotes-section { margin-bottom:16px; }
+    .quotes-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:#374151; cursor:pointer; user-select:none; }
+    .quotes-toggle input { width:16px; height:16px; cursor:pointer; accent-color:#ff9800; }
+    .quote-files { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+    .quote-file-row { display:flex; align-items:center; }
+    .quote-upload-btn { display:inline-flex; align-items:center; gap:6px; background:#fff3e0; color:#e65100; border:1px dashed #ffcc80; border-radius:8px; padding:7px 14px; font-size:12px; cursor:pointer; transition:background 0.15s; }
+    .quote-upload-btn:hover { background:#ffe0b2; }
+    .quote-upload-btn mat-icon { font-size:16px; width:16px; height:16px; }
+    .quote-attached { display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:6px 10px; flex:1; }
+    .quote-icon { font-size:16px; width:16px; height:16px; color:#16a34a; }
+    .quote-name { flex:1; font-size:12px; color:#166534; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .quote-remove { color:#ef4444 !important; width:28px; height:28px; line-height:28px; }
+    .quote-remove mat-icon { font-size:16px; width:16px; height:16px; }
+    .stat-actions { display:flex; justify-content:flex-end; gap:12px; padding-top:16px; border-top:1px solid #eee; }
+    .stat-actions mat-spinner { display:inline-block; }
+    .stat-actions mat-icon { margin-right:6px; vertical-align:middle; }
+  `]
+})
+export class StationeryRequestDialogComponent implements OnInit {
+  items: { name: string; qty: number | null; unit: string }[] = [{ name: '', qty: null, unit: '' }];
+  purpose = '';
+  priority = 'Normal';
+  submitting = false;
+  myPast: any[] = [];
+  hasQuotes = false;
+  quoteFiles: (File | null)[] = [null, null, null];
+  quoteSlots = [0, 1, 2];
+
+  quickItems = ['A4 Paper (80gsm)', 'Ballpoint Pens', 'Stapler', 'Highlighters', 'Sticky Notes', 'Folders', 'Envelopes', 'Toner Cartridge', 'Whiteboard Markers', 'Laptop', 'Monitor', 'Keyboard & Mouse', 'Headset', 'USB Hub', 'Extension Cord'];
+
+  constructor(
+    private dialogRef: MatDialogRef<StationeryRequestDialogComponent>,
+    private http: HttpClient,
+    private snackBar: MatSnackBar
+  ) {}
+
+  private headers(): HttpHeaders {
+    const t = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    return new HttpHeaders({ Authorization: `Bearer ${t}` });
+  }
+
+  ngOnInit(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/stationery-requests/my`, { headers: this.headers() })
+      .subscribe({ next: r => this.myPast = r.slice(0, 5), error: () => {} });
+  }
+
+  addItem(): void { this.items.push({ name: '', qty: null, unit: '' }); }
+  removeItem(i: number): void { this.items.splice(i, 1); }
+  addQuickItem(name: string): void {
+    const last = this.items[this.items.length - 1];
+    if (!last.name) { last.name = name; } else { this.items.push({ name, qty: null, unit: '' }); }
+  }
+
+  isValid(): boolean { return this.items.some(i => i.name.trim().length > 0); }
+
+  onQuoteFile(event: Event, index: number): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      this.quoteFiles[index] = input.files[0];
+    }
+  }
+
+  removeQuote(index: number): void {
+    this.quoteFiles[index] = null;
+  }
+
+  submitStat(): void {
+    if (!this.isValid()) return;
+    this.submitting = true;
+    const validItems = this.items.filter(i => i.name.trim());
+    const itemsText = validItems.map(i => `${i.name.trim()}${i.qty ? ' x' + i.qty : ''}${i.unit ? ' ' + i.unit : ''}`).join(', ');
+    const qtyText = validItems.map(i => i.qty ? `${i.name.trim()}: ${i.qty} ${i.unit || 'units'}` : '').filter(Boolean).join('; ');
+
+    const fd = new FormData();
+    fd.append('items', itemsText);
+    if (qtyText) fd.append('quantity', qtyText);
+    if (this.purpose) fd.append('purpose', this.purpose);
+    fd.append('priority', this.priority);
+    if (this.hasQuotes) {
+      this.quoteFiles.filter(Boolean).forEach(f => fd.append('', f!));
+    }
+
+    const t = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const headers = new HttpHeaders({ Authorization: `Bearer ${t}` });
+    this.http.post(`${environment.apiUrl}/stationery-requests`, fd, { headers }).subscribe({
+      next: () => {
+        this.submitting = false;
+        this.snackBar.open('Stationery / Equipment request sent to Finance!', 'Close', { duration: 4000, horizontalPosition: 'center', verticalPosition: 'top' });
+        this.dialogRef.close(true);
+      },
+      error: () => {
+        this.submitting = false;
+        this.snackBar.open('Failed to submit. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  close(): void { this.dialogRef.close(); }
 }

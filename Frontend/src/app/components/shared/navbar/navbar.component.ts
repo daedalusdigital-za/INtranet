@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
+import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
@@ -302,6 +302,10 @@ import { Subscription } from 'rxjs';
         <button mat-menu-item class="pm-menu-item" (click)="openBooksDialog()">
           <mat-icon class="pm-icon-purple">menu_book</mat-icon>
           <span>Books</span>
+        </button>
+        <button mat-menu-item class="pm-menu-item" (click)="downloadNotifier()">
+          <mat-icon class="pm-icon-blue">download</mat-icon>
+          <span>Download</span>
         </button>
         <button mat-menu-item class="pm-menu-item" (click)="openRequestDialog()">
           <mat-icon class="pm-icon-amber">assignment</mat-icon>
@@ -1067,6 +1071,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
   constructor(
     private authService: AuthService,
     private router: Router,
+    private route: ActivatedRoute,
     private messageService: MessageService,
     private notificationService: NotificationService,
     private dialog: MatDialog
@@ -1103,6 +1108,13 @@ export class NavbarComponent implements OnInit, OnDestroy {
     // Subscribe to active chat bubbles
     this.messageService.activeChats$.subscribe((chats: Conversation[]) => {
       this.activeChatBubbles = chats;
+    });
+
+    // Support deep-links from the desktop notifier, e.g. /dashboard?open=todo
+    this.route.queryParams.subscribe(params => {
+      if (params['open'] === 'todo') {
+        setTimeout(() => this.openTodoDialog(), 300);
+      }
     });
   }
 
@@ -1320,11 +1332,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
   }
 
   openAssetRegisterDialog(): void {
-    this.dialog.open(AssetRegisterDialogComponent, {
+    const ref = this.dialog.open(AssetRegisterDialogComponent, {
       width: '580px',
       maxWidth: '95vw',
       maxHeight: '80vh',
       panelClass: 'centered-dialog'
+    });
+    ref.afterClosed().subscribe(result => {
+      if (result) {
+        this.router.navigate(['/asset-register'], { queryParams: result });
+      }
     });
   }
 
@@ -1334,6 +1351,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
       maxWidth: '95vw',
       panelClass: 'centered-dialog'
     });
+  }
+
+  downloadNotifier(): void {
+    const url = `${environment.apiUrl}/download/notifier`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'IntranetNotifier.exe';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   openAnnouncementDialog(): void {

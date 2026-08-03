@@ -246,6 +246,17 @@ export class MessageService {
     );
   }
 
+  // Add attachment to an existing message (streamed multipart -> disk storage)
+  uploadFileToMessage(messageId: number, file: File, userId: number): Observable<MessageAttachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<MessageAttachment>(
+      `${this.apiUrl}/${messageId}/attachments/upload?userId=${userId}`,
+      formData,
+      { headers: new HttpHeaders({ 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }) }
+    );
+  }
+
   // Add attachment to an existing message
   addAttachmentToMessage(messageId: number, attachment: { fileName: string; mimeType: string; base64Data: string }, userId: number): Observable<MessageAttachment> {
     return this.http.post<MessageAttachment>(

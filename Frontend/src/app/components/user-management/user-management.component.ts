@@ -1372,7 +1372,22 @@ export class UserFormDialogComponent {
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {
     const user = data.user;
-    this.selectedPermissions = user?.permissions ? user.permissions.split(',') : [];
+    // Parse permissions — handle plain comma-separated string or JSON array format
+    if (user?.permissions) {
+      try {
+        const parsed = JSON.parse(user.permissions);
+        if (Array.isArray(parsed)) {
+          // Filter out single-char entries (corrupted char-array data) and take valid keys
+          this.selectedPermissions = parsed.filter((p: string) => typeof p === 'string' && p.length > 1);
+        } else {
+          this.selectedPermissions = String(parsed).split(',').map((p: string) => p.trim()).filter(Boolean);
+        }
+      } catch {
+        this.selectedPermissions = user.permissions.split(',').map((p: string) => p.trim()).filter(Boolean);
+      }
+    } else {
+      this.selectedPermissions = [];
+    }
     this.selectedCompanies = user?.companyIds || [];
 
     this.form = this.fb.group({
@@ -1441,6 +1456,10 @@ export class UserFormDialogComponent {
       const formData = { ...this.form.value };
       formData.permissions = this.selectedPermissions.join(',');
       formData.companyIds = this.selectedCompanies;
+      // Ensure unlinking sends '' so backend clears the field (null is ignored)
+      if (formData.linkedEmpId === null || formData.linkedEmpId === undefined) {
+        formData.linkedEmpId = '';
+      }
       
       // Remove password field if editing
       if (this.data.mode === 'edit') {

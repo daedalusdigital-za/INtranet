@@ -17,12 +17,16 @@ namespace ProjectTracker.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<MessagesController> _logger;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly ProjectTracker.API.Services.INotificationBroadcaster _notifier;
+        private readonly ProjectTracker.API.Services.IAttachmentStorageService _attachments;
 
-        public MessagesController(ApplicationDbContext context, ILogger<MessagesController> logger, IHubContext<ChatHub> hubContext)
+        public MessagesController(ApplicationDbContext context, ILogger<MessagesController> logger, IHubContext<ChatHub> hubContext, ProjectTracker.API.Services.INotificationBroadcaster notifier, ProjectTracker.API.Services.IAttachmentStorageService attachments)
         {
             _context = context;
             _logger = logger;
             _hubContext = hubContext;
+            _notifier = notifier;
+            _attachments = attachments;
         }
 
         // GET: api/messages/conversations
@@ -248,6 +252,37 @@ namespace ProjectTracker.API.Controllers
                 _logger.LogError(ex, "Failed to send SignalR notification for message {MessageId}", message.MessageId);
             }
 
+            // Push desktop tray notification to recipients (everyone except the sender)
+            try
+            {
+                var senderName = result?.Sender != null
+                    ? $"{result.Sender.Name} {result.Sender.Surname}".Trim()
+                    : "New message";
+                var recipientIds = conversation.Participants
+                    .Where(p => p.UserId != userId && !p.HasLeft)
+                    .Select(p => p.UserId)
+                    .ToList();
+
+                var preview = string.IsNullOrWhiteSpace(request.Content)
+                    ? "Sent an attachment"
+                    : (request.Content.Length > 120 ? request.Content.Substring(0, 120) + "…" : request.Content);
+
+                _logger.LogInformation("Tray notify: sender={SenderId} recipients=[{Recipients}] title='{Title}'",
+                    userId, string.Join(",", recipientIds), senderName);
+
+                await _notifier.NotifyUsersAsync(recipientIds, new ProjectTracker.API.Services.NotificationPayload
+                {
+                    Type = "message",
+                    Title = senderName,
+                    Body = preview,
+                    Url = "/messages"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to push tray notification for message {MessageId}", message.MessageId);
+            }
+
             return CreatedAtAction(nameof(GetMessages), 
                 new { id = request.ConversationId }, 
                 messageDto);
@@ -413,15 +448,128 @@ namespace ProjectTracker.API.Controllers
             });
         }
 
+        // POST: api/messages/{id}/attachments/upload
+        // Streamed multipart upload — file is written directly to disk (blob-style
+        // volume) instead of base64 in the DB. Only metadata + relative path stored.
+        [HttpPost("{id}/attachments/upload")]
+        [RequestSizeLimit(200 * 1024 * 1024)] // 200 MB
+        [RequestFormLimits(MultipartBodyLengthLimit = 200 * 1024 * 1024)]
+        public async Task<ActionResult<MessageAttachmentDto>> UploadAttachmentFile(int id, IFormFile file, [FromQuery] int userId)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file provided.");
+
+            var message = await _context.Messages
+                .Include(m => m.Conversation)
+                    .ThenInclude(c => c.Participants)
+                .FirstOrDefaultAsync(m => m.MessageId == id);
+            if (message == null)
+                return NotFound();
+
+            // Only a participant of the conversation may attach files.
+            if (!message.Conversation.Participants.Any(p => p.UserId == userId && !p.HasLeft))
+                return Forbid();
+
+            string relativePath;
+            await using (var stream = file.OpenReadStream())
+            {
+                relativePath = await _attachments.SaveAsync(message.ConversationId, file.FileName, stream);
+            }
+
+            var attachment = new MessageAttachment
+            {
+                MessageId = id,
+                FileName = file.FileName,
+                MimeType = string.IsNullOrWhiteSpace(file.ContentType)
+                    ? _attachments.GetContentType(file.FileName)
+                    : file.ContentType,
+                FileSize = file.Length,
+                FileUrl = relativePath,   // relative disk path (blob storage)
+                FileData = null,          // no longer stored in DB
+                UploadedAt = DateTime.UtcNow
+            };
+
+            _context.MessageAttachments.Add(attachment);
+            await _context.SaveChangesAsync();
+
+            return Ok(new MessageAttachmentDto
+            {
+                AttachmentId = attachment.AttachmentId,
+                FileName = attachment.FileName,
+                MimeType = attachment.MimeType,
+                FileSize = attachment.FileSize,
+                FileUrl = $"/api/messages/attachments/{attachment.AttachmentId}",
+                UploadedAt = attachment.UploadedAt
+            });
+        }
+
         // GET: api/messages/attachments/{id}
         [HttpGet("attachments/{id}")]
         public async Task<IActionResult> GetAttachment(int id)
         {
             var attachment = await _context.MessageAttachments.FindAsync(id);
-            if (attachment == null || attachment.FileData == null)
+            if (attachment == null)
                 return NotFound();
 
-            return File(attachment.FileData, attachment.MimeType, attachment.FileName);
+            // Prefer disk storage (FileUrl holds the relative path); fall back to
+            // legacy in-DB bytes for attachments uploaded before the migration.
+            if (!string.IsNullOrWhiteSpace(attachment.FileUrl))
+            {
+                var stream = _attachments.OpenRead(attachment.FileUrl);
+                if (stream != null)
+                    return File(stream, attachment.MimeType, attachment.FileName);
+                // If the DB says disk but the file is missing, fall through to bytes.
+            }
+
+            if (attachment.FileData != null)
+                return File(attachment.FileData, attachment.MimeType, attachment.FileName);
+
+            return NotFound();
+        }
+
+        // POST: api/messages/attachments/migrate-to-disk
+        // One-time admin migration: moves legacy in-DB attachment bytes to the
+        // disk-backed store and nulls out FileData to shrink the database.
+        [HttpPost("attachments/migrate-to-disk")]
+        [Authorize(Roles = "Admin,Super Admin")]
+        public async Task<IActionResult> MigrateAttachmentsToDisk()
+        {
+            var pending = await _context.MessageAttachments
+                .Include(a => a.Message)
+                .Where(a => a.FileData != null && (a.FileUrl == null || a.FileUrl == ""))
+                .ToListAsync();
+
+            int migrated = 0, failed = 0;
+            long bytesMoved = 0;
+
+            foreach (var a in pending)
+            {
+                try
+                {
+                    var conversationId = a.Message?.ConversationId ?? 0;
+                    using var ms = new MemoryStream(a.FileData!);
+                    var relPath = await _attachments.SaveAsync(conversationId, a.FileName, ms);
+                    a.FileUrl = relPath;
+                    bytesMoved += a.FileData!.Length;
+                    a.FileData = null; // reclaim DB space
+                    migrated++;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    _logger.LogError(ex, "Failed to migrate attachment {AttachmentId}", a.AttachmentId);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                total = pending.Count,
+                migrated,
+                failed,
+                megabytesMoved = Math.Round(bytesMoved / 1024d / 1024d, 2)
+            });
         }
 
         // GET: api/messages/search

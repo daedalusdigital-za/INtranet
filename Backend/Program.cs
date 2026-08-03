@@ -134,6 +134,9 @@ builder.Services.AddCors(options =>
 // Add SignalR
 builder.Services.AddSignalR();
 
+// Real-time notification broadcaster (used by the Windows tray notifier)
+builder.Services.AddScoped<ProjectTracker.API.Services.INotificationBroadcaster, ProjectTracker.API.Services.NotificationBroadcaster>();
+builder.Services.AddSingleton<ProjectTracker.API.Services.IAttachmentStorageService, ProjectTracker.API.Services.AttachmentStorageService>();
 // Add Memory Cache
 builder.Services.AddMemoryCache();
 
@@ -308,6 +311,7 @@ app.MapHub<BoardHub>("/hubs/board");
 app.MapHub<AttendanceHub>("/hubs/attendance");
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapHub<CollaborativeDocsHub>("/hubs/collaborative-docs");
+app.MapHub<ProjectTracker.API.Hubs.NotificationHub>("/hubs/notifications");
 
 // Auto-ingest knowledge base documents on startup
 _ = Task.Run(async () =>

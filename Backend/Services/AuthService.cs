@@ -11,6 +11,8 @@ namespace ProjectTracker.API.Services
         Task<LoginResponseDto?> LoginAsync(LoginDto loginDto);
         Task<UserDto?> RegisterAsync(RegisterDto registerDto);
         string GenerateToken(int userId, string name, string email, string role);
+        Task<LoginResponseDto?> RefreshAsync(string refreshToken, string? clientId = null);
+        Task RevokeRefreshTokenAsync(string refreshToken);
     }
 
     public class AuthService : IAuthService
@@ -67,10 +69,13 @@ namespace ProjectTracker.API.Services
             await _context.SaveChangesAsync();
 
             var token = _tokenService.GenerateToken(user);
+            var refreshToken = await CreateRefreshTokenAsync(user.UserId, null);
 
             return new LoginResponseDto
             {
                 Token = token,
+                RefreshToken = refreshToken,
+                AccessTokenExpiresAt = DateTime.UtcNow.AddHours(24),
                 User = new UserDto
                 {
                     UserId = user.UserId,
@@ -86,6 +91,89 @@ namespace ProjectTracker.API.Services
                     LastLoginAt = user.LastLoginAt
                 }
             };
+        }
+
+        // ---- Refresh token support ----
+        private async Task<string> CreateRefreshTokenAsync(int userId, string? clientId)
+        {
+            var bytes = new byte[64];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(bytes);
+            }
+            var tokenValue = Convert.ToBase64String(bytes)
+                .Replace("+", "-").Replace("/", "_").Replace("=", "");
+
+            _context.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = userId,
+                Token = tokenValue,
+                ExpiresAt = DateTime.UtcNow.AddDays(14),
+                IsRevoked = false,
+                CreatedAt = DateTime.UtcNow,
+                ClientId = clientId
+            });
+            await _context.SaveChangesAsync();
+            return tokenValue;
+        }
+
+        public async Task<LoginResponseDto?> RefreshAsync(string refreshToken, string? clientId = null)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken)) return null;
+
+            var existing = await _context.RefreshTokens
+                .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+
+            if (existing == null || existing.IsRevoked || existing.ExpiresAt <= DateTime.UtcNow)
+            {
+                return null;
+            }
+
+            var user = await _context.Users
+                .Include(u => u.Department)
+                .FirstOrDefaultAsync(u => u.UserId == existing.UserId && u.IsActive);
+
+            if (user == null) return null;
+
+            // Rotate: revoke old token, issue a new one
+            existing.IsRevoked = true;
+            await _context.SaveChangesAsync();
+
+            var token = _tokenService.GenerateToken(user);
+            var newRefresh = await CreateRefreshTokenAsync(user.UserId, clientId ?? existing.ClientId);
+
+            return new LoginResponseDto
+            {
+                Token = token,
+                RefreshToken = newRefresh,
+                AccessTokenExpiresAt = DateTime.UtcNow.AddHours(24),
+                User = new UserDto
+                {
+                    UserId = user.UserId,
+                    Name = user.Name,
+                    Surname = user.Surname,
+                    Email = user.Email,
+                    Role = user.Role,
+                    Title = user.Title,
+                    Permissions = user.Permissions,
+                    DepartmentId = user.DepartmentId,
+                    DepartmentName = user.Department?.Name,
+                    ProfilePictureUrl = user.ProfilePictureUrl,
+                    LastLoginAt = user.LastLoginAt
+                }
+            };
+        }
+
+        public async Task RevokeRefreshTokenAsync(string refreshToken)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken)) return;
+            var existing = await _context.RefreshTokens
+                .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+            if (existing != null && !existing.IsRevoked)
+            {
+                existing.IsRevoked = true;
+                await _context.SaveChangesAsync();
+            }
         }
 
         public async Task<UserDto?> RegisterAsync(RegisterDto registerDto)

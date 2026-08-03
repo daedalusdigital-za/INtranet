@@ -1077,6 +1077,77 @@ import * as XLSX from 'xlsx';
             }
           </div>
         </mat-tab>
+        <!-- Asset Management Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>inventory_2</mat-icon>
+            <span>Asset Management</span>
+          </ng-template>
+          <div class="tab-content">
+            <div class="tab-toolbar">
+              <mat-form-field appearance="outline" class="search-field">
+                <mat-label>Search Assets</mat-label>
+                <mat-icon matPrefix>search</mat-icon>
+                <input matInput [(ngModel)]="assetMgmtSearch" (input)="filterMgmtAssets()" placeholder="Code, model, serial, assigned to…">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>Region</mat-label>
+                <mat-select [(ngModel)]="assetMgmtRegion" (selectionChange)="filterMgmtAssets()">
+                  <mat-option value="">All Regions</mat-option>
+                  @for (r of assetRegionList; track r) { <mat-option [value]="r">{{r}}</mat-option> }
+                </mat-select>
+              </mat-form-field>
+              <button mat-raised-button color="primary" (click)="openAddAssetDialog()">
+                <mat-icon>add</mat-icon> Add Asset
+              </button>
+            </div>
+            @if (assetsLoading) {
+              <div class="loading-state"><mat-spinner diameter="40"></mat-spinner></div>
+            } @else {
+              <table mat-table [dataSource]="paginatedMgmtAssets" class="users-table">
+                <ng-container matColumnDef="assetCode">
+                  <th mat-header-cell *matHeaderCellDef>Code</th>
+                  <td mat-cell *matCellDef="let a">{{ a.assetCode || '—' }}</td>
+                </ng-container>
+                <ng-container matColumnDef="assetCategory">
+                  <th mat-header-cell *matHeaderCellDef>Category</th>
+                  <td mat-cell *matCellDef="let a"><span class="status-indicator active">{{a.category}}</span></td>
+                </ng-container>
+                <ng-container matColumnDef="assetModel">
+                  <th mat-header-cell *matHeaderCellDef>Model</th>
+                  <td mat-cell *matCellDef="let a">
+                    <div class="user-name"><strong>{{a.model||'—'}}</strong><small>{{a.manufacturer||''}}</small></div>
+                  </td>
+                </ng-container>
+                <ng-container matColumnDef="assignedTo">
+                  <th mat-header-cell *matHeaderCellDef>Assigned To</th>
+                  <td mat-cell *matCellDef="let a">{{a.assignedTo || 'Unassigned'}}</td>
+                </ng-container>
+                <ng-container matColumnDef="assetLocation">
+                  <th mat-header-cell *matHeaderCellDef>Location</th>
+                  <td mat-cell *matCellDef="let a">{{a.locationName}}</td>
+                </ng-container>
+                <ng-container matColumnDef="assetCondition">
+                  <th mat-header-cell *matHeaderCellDef>Condition</th>
+                  <td mat-cell *matCellDef="let a">{{a.condition||'—'}}</td>
+                </ng-container>
+                <ng-container matColumnDef="assetActions">
+                  <th mat-header-cell *matHeaderCellDef></th>
+                  <td mat-cell *matCellDef="let a">
+                    <button mat-icon-button matTooltip="Edit / Reassign" (click)="openEditAssetDialog(a)"><mat-icon>edit</mat-icon></button>
+                    <button mat-icon-button matTooltip="Deactivate" color="warn" (click)="deactivateAsset(a)"><mat-icon>delete_outline</mat-icon></button>
+                  </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="assetMgmtColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: assetMgmtColumns;"></tr>
+              </table>
+              @if (filteredMgmtAssets.length === 0) {
+                <div class="empty-state"><mat-icon>inventory_2</mat-icon><h3>No assets found</h3></div>
+              }
+              <mat-paginator [length]="filteredMgmtAssets.length" [pageSize]="assetsMgmtPageSize" [pageSizeOptions]="[10,25,50]" (page)="onAssetsMgmtPageChange($event)"></mat-paginator>
+            }
+          </div>
+        </mat-tab>
       </mat-tab-group>
     </div>
     @if (showAnnouncementDialog) {
@@ -1438,6 +1509,94 @@ import * as XLSX from 'xlsx';
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    }
+
+    @if (showAssetDialog) {
+      <div class="dialog-overlay" (click)="closeAssetDialog()">
+        <div class="dialog-container dialog-large" (click)="$event.stopPropagation()">
+          <div class="dialog-header">
+            <h2>{{editingAsset ? 'Edit / Reassign Asset' : 'Add New Asset'}}</h2>
+            <button mat-icon-button (click)="closeAssetDialog()"><mat-icon>close</mat-icon></button>
+          </div>
+          <div class="dialog-content">
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Asset Code</mat-label>
+                <input matInput [(ngModel)]="assetForm.assetCode">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Category *</mat-label>
+                <input matInput [(ngModel)]="assetForm.category" required list="assetCatList">
+              </mat-form-field>
+            </div>
+            <datalist id="assetCatList">
+              @for (c of assetCategoryOptions; track c) { <option [value]="c"> }
+            </datalist>
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Manufacturer</mat-label>
+                <input matInput [(ngModel)]="assetForm.manufacturer">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Model</mat-label>
+                <input matInput [(ngModel)]="assetForm.model">
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Serial Number</mat-label>
+                <input matInput [(ngModel)]="assetForm.serialNumber">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Workstation / Desk</mat-label>
+                <input matInput [(ngModel)]="assetForm.workstation">
+              </mat-form-field>
+            </div>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Assign to User (select from database)</mat-label>
+              <mat-select [(ngModel)]="assetForm.assignedToUserId" (ngModelChange)="onAssetUserSelected($event)">
+                <mat-option value="">— Keep current / Unassigned —</mat-option>
+                @for (u of users; track u.userId) {
+                  <mat-option [value]="u.userId">{{u.name}} {{u.surname}} <span style="opacity:0.6;font-size:12px"> · {{u.departmentName||''}}</span></mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Assigned To (name)</mat-label>
+              <input matInput [(ngModel)]="assetForm.assignedTo" placeholder="Auto-filled from user selection, or type manually">
+            </mat-form-field>
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Location *</mat-label>
+                <mat-select [(ngModel)]="assetForm.locationId" required>
+                  @for (l of assetLocations; track l.locationId) {
+                    <mat-option [value]="l.locationId">{{l.displayName}}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Condition</mat-label>
+                <mat-select [(ngModel)]="assetForm.condition">
+                  <mat-option value="Good">Good</mat-option>
+                  <mat-option value="Fair">Fair</mat-option>
+                  <mat-option value="Poor">Poor</mat-option>
+                  <mat-option value="Not Assessed">Not Assessed</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Notes</mat-label>
+              <textarea matInput [(ngModel)]="assetForm.notes" rows="2"></textarea>
+            </mat-form-field>
+          </div>
+          <div class="dialog-actions">
+            <button mat-button (click)="closeAssetDialog()">Cancel</button>
+            <button mat-raised-button color="primary" (click)="saveAsset()" [disabled]="savingAsset || !assetForm.category || !assetForm.locationId">
+              @if (savingAsset) { <mat-spinner diameter="20"></mat-spinner> } @else { {{editingAsset ? 'Save Changes' : 'Add Asset'}} }
+            </button>
+          </div>
         </div>
       </div>
     }
@@ -3313,6 +3472,24 @@ export class SettingsComponent implements OnInit {
 
   Math = Math;  // Expose Math to template
 
+  // Asset Management
+  allAssets: any[] = [];
+  filteredMgmtAssets: any[] = [];
+  paginatedMgmtAssets: any[] = [];
+  assetsLoading = false;
+  assetMgmtSearch = '';
+  assetMgmtRegion = '';
+  assetRegionList: string[] = [];
+  assetMgmtColumns = ['assetCode', 'assetCategory', 'assetModel', 'assignedTo', 'assetLocation', 'assetCondition', 'assetActions'];
+  assetsMgmtPageSize = 25;
+  assetsMgmtPageIndex = 0;
+  assetLocations: any[] = [];
+  assetCategoryOptions = ['Computer', 'Laptop', 'Monitor', 'Keyboard', 'Mouse', 'Telephone', 'Mobile Phone', 'Printer', 'Scanner', 'UPS', 'Other'];
+  showAssetDialog = false;
+  editingAsset: any = null;
+  savingAsset = false;
+  assetForm: any = {};
+
   private http = inject(HttpClient);
 
   get isExcelFile(): boolean {
@@ -3345,6 +3522,8 @@ export class SettingsComponent implements OnInit {
     this.loadBackupHistory();
     this.loadAvailableTables();
     this.loadEmailAccounts();
+    this.loadMgmtAssets();
+    this.loadAssetLocations();
   }
 
   initAnnouncementForm(): void {
@@ -3667,7 +3846,7 @@ export class SettingsComponent implements OnInit {
           departmentId: formValue.departmentId,
           title: formValue.title,
           birthday: formValue.birthday || null,
-          linkedEmpId: formValue.linkedEmpId || null,
+          linkedEmpId: formValue.linkedEmpId ?? '',
           permissions: this.getAllCombinedPermissions(),
           companyIds: this.selectedCompanies,
           isActive: formValue.isActive
@@ -3697,7 +3876,7 @@ export class SettingsComponent implements OnInit {
           departmentId: formValue.departmentId,
           title: formValue.title,
           birthday: formValue.birthday || null,
-          linkedEmpId: formValue.linkedEmpId || null,
+          linkedEmpId: formValue.linkedEmpId ?? '',
           permissions: this.getAllCombinedPermissions(),
           companyIds: this.selectedCompanies,
           isActive: formValue.isActive
@@ -4835,6 +5014,121 @@ export class SettingsComponent implements OnInit {
   copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).then(() => {
       this.snackBar.open('Copied to clipboard', 'Close', { duration: 2000 });
+    });
+  }
+
+  // ===== Asset Management Methods =====
+
+  loadMgmtAssets(): void {
+    this.assetsLoading = true;
+    this.http.get<any[]>(`${this.apiUrl}/asset-register/items?activeOnly=true`).subscribe({
+      next: (items) => {
+        this.allAssets = items;
+        this.assetRegionList = [...new Set(items.map((i: any) => i.region).filter(Boolean))].sort() as string[];
+        this.filterMgmtAssets();
+        this.assetsLoading = false;
+      },
+      error: () => { this.assetsLoading = false; }
+    });
+  }
+
+  loadAssetLocations(): void {
+    this.http.get<any[]>(`${this.apiUrl}/asset-register/locations`).subscribe({
+      next: (locs) => { this.assetLocations = locs; }
+    });
+  }
+
+  filterMgmtAssets(): void {
+    const q = this.assetMgmtSearch.toLowerCase();
+    this.filteredMgmtAssets = this.allAssets.filter((a: any) => {
+      const matchesSearch = !q ||
+        (a.assetCode||'').toLowerCase().includes(q) ||
+        (a.model||'').toLowerCase().includes(q) ||
+        (a.serialNumber||'').toLowerCase().includes(q) ||
+        (a.assignedTo||'').toLowerCase().includes(q) ||
+        (a.category||'').toLowerCase().includes(q) ||
+        (a.manufacturer||'').toLowerCase().includes(q);
+      const matchesRegion = !this.assetMgmtRegion || a.region === this.assetMgmtRegion;
+      return matchesSearch && matchesRegion;
+    });
+    this.assetsMgmtPageIndex = 0;
+    this.updatePaginatedMgmtAssets();
+  }
+
+  updatePaginatedMgmtAssets(): void {
+    const start = this.assetsMgmtPageIndex * this.assetsMgmtPageSize;
+    this.paginatedMgmtAssets = this.filteredMgmtAssets.slice(start, start + this.assetsMgmtPageSize);
+  }
+
+  onAssetsMgmtPageChange(event: PageEvent): void {
+    this.assetsMgmtPageIndex = event.pageIndex;
+    this.assetsMgmtPageSize = event.pageSize;
+    this.updatePaginatedMgmtAssets();
+  }
+
+  openAddAssetDialog(): void {
+    this.editingAsset = null;
+    this.assetForm = { assetCode: '', category: '', manufacturer: '', model: '', serialNumber: '', workstation: '', assignedTo: '', assignedToUserId: '', locationId: null, condition: 'Not Assessed', notes: '' };
+    this.showAssetDialog = true;
+  }
+
+  openEditAssetDialog(a: any): void {
+    this.editingAsset = a;
+    this.assetForm = { ...a, assignedToUserId: '' };
+    this.showAssetDialog = true;
+  }
+
+  closeAssetDialog(): void {
+    this.showAssetDialog = false;
+    this.editingAsset = null;
+  }
+
+  onAssetUserSelected(userId: any): void {
+    if (!userId) return;
+    const user = this.users.find((u: any) => u.userId === userId);
+    if (user) {
+      this.assetForm.assignedTo = `${user.name} ${user.surname}`.trim();
+    }
+  }
+
+  saveAsset(): void {
+    this.savingAsset = true;
+    const payload = {
+      assetCode: this.assetForm.assetCode || null,
+      category: this.assetForm.category,
+      manufacturer: this.assetForm.manufacturer || null,
+      model: this.assetForm.model || null,
+      serialNumber: this.assetForm.serialNumber || null,
+      workstation: this.assetForm.workstation || null,
+      assignedTo: this.assetForm.assignedTo || null,
+      locationId: this.assetForm.locationId,
+      condition: this.assetForm.condition || 'Not Assessed',
+      notes: this.assetForm.notes || null
+    };
+    if (this.editingAsset) {
+      this.http.put(`${this.apiUrl}/asset-register/items/${this.editingAsset.itemId}`, payload).subscribe({
+        next: () => { this.snackBar.open('Asset updated', 'Close', { duration: 3000 }); this.closeAssetDialog(); this.loadMgmtAssets(); this.savingAsset = false; },
+        error: () => { this.snackBar.open('Failed to save', 'Close', { duration: 3000 }); this.savingAsset = false; }
+      });
+    } else {
+      this.http.post(`${this.apiUrl}/asset-register/items`, payload).subscribe({
+        next: () => { this.snackBar.open('Asset added', 'Close', { duration: 3000 }); this.closeAssetDialog(); this.loadMgmtAssets(); this.savingAsset = false; },
+        error: () => { this.snackBar.open('Failed to add asset', 'Close', { duration: 3000 }); this.savingAsset = false; }
+      });
+    }
+  }
+
+  deactivateAsset(a: any): void {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      data: { title: 'Deactivate Asset', message: `Deactivate ${a.category} — ${a.model || a.assetCode || 'this asset'}?`, confirmText: 'Deactivate', cancelText: 'Cancel' }
+    });
+    ref.afterClosed().subscribe(result => {
+      if (result) {
+        this.http.delete(`${this.apiUrl}/asset-register/items/${a.itemId}`).subscribe({
+          next: () => { this.snackBar.open('Asset deactivated', 'Close', { duration: 3000 }); this.loadMgmtAssets(); },
+          error: () => this.snackBar.open('Failed to deactivate', 'Close', { duration: 3000 })
+        });
+      }
     });
   }
 }

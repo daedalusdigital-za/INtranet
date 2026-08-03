@@ -1,6 +1,5 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -204,26 +203,42 @@ export class AssetRegisterDialogComponent {
     { key: 'church',                   name: 'Church',                 icon: 'church'         }
   ];
 
-  constructor(
-    public dialogRef: MatDialogRef<AssetRegisterDialogComponent>,
-    private router: Router
-  ) {}
+  constructor(public dialogRef: MatDialogRef<AssetRegisterDialogComponent>) {}
+
+  // Maps dialog keys → DB region names
+  private regionDbName: Record<string, string> = {
+    'kwazulu-natal': 'KZN',
+    'cape-town': 'Cape Town',
+    'gauteng': 'Gauteng',
+    'eastern-cape': 'Eastern Cape',
+    'properties': 'Properties',
+    'contracts': 'Contracts'
+  };
+
+  // Maps KZN sub keys → DB subLocation values
+  private subDbName: Record<string, string> = {
+    'main-office':           'Main Building',
+    'pharmacare':            'Pharmacare',
+    'condom-factory':        'Condom Factory',
+    'logistics-building':    'Main Building',
+    'warehouse-1':           'Warehouse 1',
+    'warehouse-2':           'Warehouse 2',
+    'new-road':              'New Road',
+    'albatross-guest-house': 'Albatross Guest House',
+    'church':                'Church'
+  };
 
   selectRegion(r: AssetRegion): void {
     if (r.hasChildren) {
       this.step = 'kzn';
       return;
     }
-    this.dialogRef.close();
-    this.router.navigate(['/asset-register'], {
-      queryParams: { location: r.key, name: r.name }
-    });
+    const dbRegion = this.regionDbName[r.key] || r.name;
+    this.dialogRef.close({ regionName: dbRegion, name: r.name });
   }
 
   selectSub(s: AssetSub): void {
-    this.dialogRef.close();
-    this.router.navigate(['/asset-register'], {
-      queryParams: { location: s.key, name: s.name, region: 'kwazulu-natal', regionName: 'KwaZulu-Natal' }
-    });
+    const dbSub = this.subDbName[s.key] || s.name;
+    this.dialogRef.close({ regionName: 'KZN', name: dbSub });
   }
 }

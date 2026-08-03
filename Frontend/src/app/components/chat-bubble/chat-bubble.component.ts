@@ -148,22 +148,17 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
 
   uploadAndSend(): void {
     if (!this.selectedFile) return;
-    
-    // Upload the file first
-    this.messageService.uploadAttachment(
-      this.conversation.conversationId,
-      this.selectedFile,
-      this.currentUserId
-    ).subscribe({
-      next: (attachment: MessageAttachment) => {
-        // Send a message with the attachment reference
-        this.messageService.sendMessage({
-          conversationId: this.conversation.conversationId,
-          content: this.newMessage.trim() || '',
-          messageType: 'file',
-          attachmentIds: [attachment.attachmentId]
-        }, this.currentUserId).subscribe({
-          next: (message: Message) => {
+
+    const file = this.selectedFile;
+    // Send the message first, then stream the file to it (disk-backed storage).
+    this.messageService.sendMessage({
+      conversationId: this.conversation.conversationId,
+      content: this.newMessage.trim() || '',
+      messageType: 'file'
+    }, this.currentUserId).subscribe({
+      next: (message: Message) => {
+        this.messageService.uploadFileToMessage(message.messageId, file, this.currentUserId).subscribe({
+          next: () => {
             this.messages.push(message);
             this.newMessage = '';
             this.selectedFile = null;
@@ -171,13 +166,13 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
             setTimeout(() => this.scrollToBottom(), 100);
           },
           error: (err: any) => {
-            console.error('Error sending file message:', err);
+            console.error('Error uploading file:', err);
             this.isSending = false;
           }
         });
       },
       error: (err: any) => {
-        console.error('Error uploading file:', err);
+        console.error('Error sending file message:', err);
         this.isSending = false;
       }
     });

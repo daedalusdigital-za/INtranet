@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -78,6 +78,13 @@ import { environment } from '../../../environments/environment';
                   <span class="stat-label">Status</span>
                 </div>
               </div>
+              <button mat-flat-button class="requests-btn" (click)="toggleLeaveRequests()">
+                <mat-icon>inbox</mat-icon>
+                Requests
+                @if (pendingLeaveCount > 0) {
+                  <span class="requests-badge">{{pendingLeaveCount}}</span>
+                }
+              </button>
             </div>
           </div>
 
@@ -97,6 +104,54 @@ import { environment } from '../../../environments/environment';
             </div>
           </div>
         </div>
+
+        @if (showLeaveRequests) {
+          <div class="leave-requests-panel">
+            <div class="lrp-header">
+              <div class="lrp-title"><mat-icon>event_busy</mat-icon><h3>Leave Requests</h3></div>
+              <div class="lrp-filters">
+                <button class="lrp-filter" [class.active]="leaveFilter==='all'" (click)="setLeaveFilter('all')">All ({{leaveCounts.total}})</button>
+                <button class="lrp-filter pending" [class.active]="leaveFilter==='Pending'" (click)="setLeaveFilter('Pending')">Pending ({{leaveCounts.pending}})</button>
+                <button class="lrp-filter approved" [class.active]="leaveFilter==='Approved'" (click)="setLeaveFilter('Approved')">Approved ({{leaveCounts.approved}})</button>
+                <button class="lrp-filter rejected" [class.active]="leaveFilter==='Rejected'" (click)="setLeaveFilter('Rejected')">Rejected ({{leaveCounts.rejected}})</button>
+              </div>
+              <button mat-icon-button (click)="showLeaveRequests=false" style="color:white"><mat-icon>close</mat-icon></button>
+            </div>
+            @if (leaveRequestsLoading) {
+              <div class="lrp-loading"><mat-spinner diameter="32"></mat-spinner></div>
+            } @else if (leaveRequests.length === 0) {
+              <div class="lrp-empty"><mat-icon>inbox</mat-icon><p>No requests found</p></div>
+            } @else {
+              <div class="lrp-list">
+                @for (req of leaveRequests; track req.leaveRequestId) {
+                  <div class="lrp-item" [class]="'lrp-' + req.status.toLowerCase()">
+                    <div class="lrp-avatar">{{lrInitials(req.employeeName)}}</div>
+                    <div class="lrp-info">
+                      <div class="lrp-name">{{req.employeeName}} <span class="lrp-dept">{{req.department || ''}}</span></div>
+                      <div class="lrp-meta">
+                        <span class="lrp-type">{{req.leaveType}}</span>
+                        <span class="lrp-dates">{{req.startDate | date:'d MMM'}} – {{req.endDate | date:'d MMM yyyy'}}</span>
+                        <span class="lrp-days">{{req.daysRequested}} day{{req.daysRequested!==1?'s':''}}</span>
+                      </div>
+                      @if (req.reason) { <div class="lrp-reason">&ldquo;{{req.reason}}&rdquo;</div> }
+                      @if (req.reviewNotes) { <div class="lrp-review-note"><mat-icon>comment</mat-icon> {{req.reviewNotes}}</div> }
+                    </div>
+                    <div class="lrp-right">
+                      <span class="lrp-status" [class]="'status-' + req.status.toLowerCase()">{{req.status}}</span>
+                      <span class="lrp-submitted">{{req.submittedAt | date:'d MMM yyyy'}}</span>
+                      @if (req.status === 'Pending') {
+                        <div class="lrp-actions">
+                          <button mat-icon-button class="approve-btn" matTooltip="Approve" (click)="reviewLeave(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
+                          <button mat-icon-button class="reject-btn" matTooltip="Reject" (click)="reviewLeave(req, 'Rejected')"><mat-icon>cancel</mat-icon></button>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
 
         <!-- Departments Grid -->
         <div class="departments-section">
@@ -918,6 +973,52 @@ import { environment } from '../../../environments/environment';
     .no-results p {
       margin: 0;
     }
+
+    /* Leave Requests Panel */
+    .requests-btn { background: rgba(255,255,255,0.15); color: white; border-radius: 20px; padding: 0 16px; height: 40px; display: flex; align-items: center; gap: 6px; font-weight: 600; position: relative; transition: background 0.2s; }
+    .requests-btn:hover { background: rgba(255,255,255,0.25); }
+    .requests-btn mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .requests-badge { background: #ef4444; color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 800; margin-left: 4px; }
+    .leave-requests-panel { background: white; border-radius: 20px; margin: 0 0 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); overflow: hidden; }
+    .lrp-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #4caf50, #388e3c); color: white; }
+    .lrp-title { display: flex; align-items: center; gap: 8px; flex: 1; }
+    .lrp-title h3 { margin: 0; font-size: 18px; font-weight: 700; }
+    .lrp-title mat-icon { font-size: 22px; width: 22px; height: 22px; }
+    .lrp-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .lrp-filter { background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 16px; padding: 4px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    .lrp-filter.active { background: white; color: #388e3c; }
+    .lrp-filter.pending.active { color: #92400e; }
+    .lrp-filter.approved.active { color: #065f46; }
+    .lrp-filter.rejected.active { color: #991b1b; }
+    .lrp-loading { display: flex; justify-content: center; padding: 40px; }
+    .lrp-empty { text-align: center; padding: 40px; color: #9ca3af; }
+    .lrp-empty mat-icon { font-size: 48px; width: 48px; height: 48px; }
+    .lrp-list { padding: 12px 16px; max-height: 480px; overflow-y: auto; }
+    .lrp-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #f1f5f9; background: #fafafa; transition: background 0.15s; }
+    .lrp-item:hover { background: #f0fdf4; }
+    .lrp-pending { border-left: 4px solid #f59e0b; }
+    .lrp-approved { border-left: 4px solid #10b981; }
+    .lrp-rejected { border-left: 4px solid #ef4444; }
+    .lrp-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #4caf50, #388e3c); color: white; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .lrp-info { flex: 1; min-width: 0; }
+    .lrp-name { font-weight: 700; color: #111827; font-size: 14px; }
+    .lrp-dept { font-size: 12px; color: #6b7280; font-weight: 400; margin-left: 6px; }
+    .lrp-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 12px; color: #374151; }
+    .lrp-type { background: #eff6ff; color: #1d4ed8; border-radius: 8px; padding: 2px 8px; font-weight: 600; }
+    .lrp-dates { color: #4b5563; }
+    .lrp-days { color: #6b7280; }
+    .lrp-reason { font-size: 12px; color: #6b7280; font-style: italic; margin-top: 4px; }
+    .lrp-review-note { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #4b5563; margin-top: 4px; }
+    .lrp-review-note mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .lrp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+    .lrp-status { padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-approved { background: #d1fae5; color: #065f46; }
+    .status-rejected { background: #fee2e2; color: #991b1b; }
+    .lrp-submitted { font-size: 11px; color: #9ca3af; }
+    .lrp-actions { display: flex; gap: 4px; }
+    .approve-btn { color: #10b981 !important; }
+    .reject-btn { color: #ef4444 !important; }
 
     /* Responsive */
     @media (max-width: 768px) {
@@ -2114,6 +2215,14 @@ export class PeopleComponent implements OnInit, OnDestroy {
   private autoRefreshSubscription?: Subscription;
   private signalRSubscription?: Subscription;
 
+  // Leave Requests (HR panel)
+  showLeaveRequests = false;
+  leaveRequests: any[] = [];
+  leaveRequestsLoading = false;
+  leaveFilter = 'all';
+  pendingLeaveCount = 0;
+  leaveCounts = { pending: 0, approved: 0, rejected: 0, total: 0 };
+
   // Location cards data
   locations = [
     { id: 'main-office', name: 'Main Office', icon: 'folder_special', description: 'Access employee attendance records and HR data', action: () => this.openMainOfficeDialog() },
@@ -2139,6 +2248,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadData();
+    this.loadLeaveCounts();
 
     // Auto-refresh every 10 minutes
     this.autoRefreshSubscription = interval(600000)
@@ -2308,6 +2418,56 @@ export class PeopleComponent implements OnInit, OnDestroy {
   clearLocationSearch(): void {
     this.searchQuery = '';
     this.filterLocations();
+  }
+
+  private hrHeaders(): HttpHeaders {
+    const t = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    return new HttpHeaders({ Authorization: `Bearer ${t}` });
+  }
+
+  loadLeaveCounts(): void {
+    this.http.get<any>(`${environment.apiUrl}/leave-requests/counts`, { headers: this.hrHeaders() }).subscribe({
+      next: (c) => {
+        this.leaveCounts = c;
+        this.pendingLeaveCount = c.pending;
+      },
+      error: () => {}
+    });
+  }
+
+  toggleLeaveRequests(): void {
+    this.showLeaveRequests = !this.showLeaveRequests;
+    if (this.showLeaveRequests) this.loadLeaveRequests();
+  }
+
+  setLeaveFilter(f: string): void {
+    this.leaveFilter = f;
+    this.loadLeaveRequests();
+  }
+
+  loadLeaveRequests(): void {
+    this.leaveRequestsLoading = true;
+    const statusParam = this.leaveFilter === 'all' ? '' : `?status=${this.leaveFilter}`;
+    this.http.get<any[]>(`${environment.apiUrl}/leave-requests${statusParam}`, { headers: this.hrHeaders() }).subscribe({
+      next: (r) => { this.leaveRequests = r; this.leaveRequestsLoading = false; },
+      error: () => { this.leaveRequestsLoading = false; }
+    });
+  }
+
+  reviewLeave(req: any, status: 'Approved' | 'Rejected'): void {
+    this.http.put(`${environment.apiUrl}/leave-requests/${req.leaveRequestId}/review`,
+      { status, notes: null }, { headers: this.hrHeaders() }).subscribe({
+      next: () => {
+        req.status = status;
+        this.loadLeaveCounts();
+      },
+      error: () => {}
+    });
+  }
+
+  lrInitials(name: string): string {
+    if (!name) return '?';
+    return name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
   }
 
   openMainOfficeDialog(): void {

@@ -2330,25 +2330,8 @@ export class MessagesComponent implements OnInit, OnDestroy {
   }
 
   private async uploadFileAsAttachment(messageId: number, file: File): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        
-        try {
-          await this.messageService.addAttachmentToMessage(messageId, {
-            fileName: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            base64Data: base64
-          }, this.currentUserId).toPromise();
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+    // Stream the file to disk-backed storage (multipart) instead of base64 in the DB.
+    await this.messageService.uploadFileToMessage(messageId, file, this.currentUserId).toPromise();
   }
 
   // ═══════════════════════════════════════════

@@ -61,10 +61,27 @@ namespace ProjectTracker.API.Controllers
             return Ok(result);
         }
 
-        [HttpPost("logout")]
-        [Authorize]
-        public async Task<IActionResult> Logout()
+        [HttpPost("refresh")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Refresh([FromBody] ProjectTracker.API.DTOs.Auth.RefreshRequestDto dto)
         {
+            var result = await _authService.RefreshAsync(dto.RefreshToken, dto.ClientId);
+            if (result == null)
+            {
+                return Unauthorized(new { message = "Invalid or expired refresh token" });
+            }
+            return Ok(result);
+        }
+
+        [HttpPost("logout")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Logout([FromBody] ProjectTracker.API.DTOs.Auth.RefreshRequestDto? dto = null)
+        {
+            if (dto != null && !string.IsNullOrWhiteSpace(dto.RefreshToken))
+            {
+                await _authService.RevokeRefreshTokenAsync(dto.RefreshToken);
+            }
+
             _auditLogService.SetHttpContext(HttpContext);
             await _auditLogService.LogAsync(
                 "Logout", 

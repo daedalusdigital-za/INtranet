@@ -124,3 +124,18 @@ temp/
 # Large data files
 # ===================
 docs/Master/
+# ===================
+# Intranet Notifier tray app build outputs
+# ===================
+TrayApp/bin/
+TrayApp/obj/
+TrayApp/publish/
+_toasttest/
+_sigtest/
+
+# ===================
+# Runtime data (served/generated, not source)
+# ===================
+downloads/
+attachments/
+

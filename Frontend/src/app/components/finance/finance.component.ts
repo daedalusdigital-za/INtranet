@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -124,6 +124,13 @@ export class FinanceComponent implements OnInit {
   showPasswordDialog = false;
   showRequestedPaymentsPanel = false;
 
+  // Stationery Requests
+  showStationeryPanel = false;
+  stationeryRequests: any[] = [];
+  stationeryLoading = false;
+  stationeryFilter = 'all';
+  stationeryCounts = { pending: 0, approved: 0, declined: 0, total: 0 };
+
   selectedCompany = '';
   companyPassword = '';
   passwordError = '';
@@ -152,6 +159,7 @@ export class FinanceComponent implements OnInit {
   ngOnInit(): void {
     this.loadDepartments();
     this.loadStats();
+    this.loadStationeryCounts();
   }
 
   loadDepartments(): void {
@@ -418,5 +426,58 @@ export class FinanceComponent implements OnInit {
   downloadRequestedPayment(payment: RequestedPayment): void {
     const url = `${environment.apiUrl}/Books/${payment.id}/download`;
     window.open(url, '_blank');
+  }
+
+  // ─── Stationery Requests ───
+
+  private finHeaders(): HttpHeaders {
+    const t = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    return new HttpHeaders({ Authorization: `Bearer ${t}` });
+  }
+
+  loadStationeryCounts(): void {
+    this.http.get<any>(`${environment.apiUrl}/stationery-requests/counts`, { headers: this.finHeaders() }).subscribe({
+      next: c => this.stationeryCounts = c,
+      error: () => {}
+    });
+  }
+
+  toggleStationeryPanel(): void {
+    this.showStationeryPanel = !this.showStationeryPanel;
+    if (this.showStationeryPanel) this.loadStationeryRequests();
+  }
+
+  setStationeryFilter(f: string): void {
+    this.stationeryFilter = f;
+    this.loadStationeryRequests();
+  }
+
+  loadStationeryRequests(): void {
+    this.stationeryLoading = true;
+    const q = this.stationeryFilter !== 'all' ? `?status=${this.stationeryFilter}` : '';
+    this.http.get<any[]>(`${environment.apiUrl}/stationery-requests${q}`, { headers: this.finHeaders() }).subscribe({
+      next: r => { this.stationeryRequests = r; this.stationeryLoading = false; },
+      error: () => { this.stationeryLoading = false; }
+    });
+  }
+
+  reviewStationery(req: any, status: 'Approved' | 'Declined'): void {
+    this.http.put(`${environment.apiUrl}/stationery-requests/${req.stationeryRequestId}/review`,
+      { status, notes: null }, { headers: this.finHeaders() }).subscribe({
+      next: () => {
+        req.status = status;
+        this.loadStationeryCounts();
+      },
+      error: () => this.snackBar.open('Failed to update', 'Close', { duration: 2000 })
+    });
+  }
+
+  spInitials(name: string): string {
+    if (!name) return '?';
+    return name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
+  }
+
+  getQuoteUrl(id: number, n: number): string {
+    return `${environment.apiUrl}/stationery-requests/${id}/quote/${n}`;
   }
 }

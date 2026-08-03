@@ -11,6 +11,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-leave-request-dialog',
@@ -44,13 +46,13 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Leave Type</mat-label>
             <mat-select formControlName="leaveType" required>
-              <mat-option value="annual">Annual Leave</mat-option>
-              <mat-option value="sick">Sick Leave</mat-option>
-              <mat-option value="family">Family Responsibility Leave</mat-option>
-              <mat-option value="maternity">Maternity Leave</mat-option>
-              <mat-option value="paternity">Paternity Leave</mat-option>
-              <mat-option value="study">Study Leave</mat-option>
-              <mat-option value="unpaid">Unpaid Leave</mat-option>
+              <mat-option value="Annual Leave">Annual Leave</mat-option>
+              <mat-option value="Sick Leave">Sick Leave</mat-option>
+              <mat-option value="Family Responsibility">Family Responsibility Leave</mat-option>
+              <mat-option value="Maternity Leave">Maternity Leave</mat-option>
+              <mat-option value="Paternity Leave">Paternity Leave</mat-option>
+              <mat-option value="Study Leave">Study Leave</mat-option>
+              <mat-option value="Unpaid Leave">Unpaid Leave</mat-option>
             </mat-select>
             <mat-error *ngIf="leaveForm.get('leaveType')?.hasError('required')">
               Please select a leave type
@@ -86,7 +88,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Reason</mat-label>
-            <textarea matInput formControlName="reason" rows="4" 
+            <textarea matInput formControlName="reason" rows="4"
                       placeholder="Please provide a reason for your leave request..."></textarea>
           </mat-form-field>
 
@@ -95,11 +97,24 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
             <input matInput formControlName="contactNumber" placeholder="Optional">
             <mat-icon matPrefix>phone</mat-icon>
           </mat-form-field>
+
+          @if (myPastRequests.length > 0) {
+            <div class="past-requests">
+              <p class="past-title"><mat-icon>history</mat-icon> Your Recent Requests</p>
+              @for (r of myPastRequests; track r.leaveRequestId) {
+                <div class="past-item">
+                  <span class="leave-type-label">{{r.leaveType}}</span>
+                  <span class="date-range">{{r.startDate | date:'d MMM'}} – {{r.endDate | date:'d MMM yyyy'}}</span>
+                  <span class="status-pill" [class]="'status-' + r.status.toLowerCase()">{{r.status}}</span>
+                </div>
+              }
+            </div>
+          }
         </div>
 
         <div class="dialog-actions">
           <button mat-button type="button" (click)="close()">Cancel</button>
-          <button mat-raised-button color="primary" type="submit" 
+          <button mat-raised-button color="primary" type="submit"
                   [disabled]="leaveForm.invalid || isSubmitting">
             @if (isSubmitting) {
               <mat-spinner diameter="20"></mat-spinner>
@@ -197,17 +212,35 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     .dialog-actions button mat-icon {
       margin-right: 8px;
     }
+
+    .past-requests { margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px; }
+    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; color:#555; font-weight:600; margin-bottom:8px; }
+    .past-title mat-icon { font-size:16px; width:16px; height:16px; }
+    .past-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; background:#f9fafb; margin-bottom:6px; font-size:13px; }
+    .leave-type-label { font-weight:600; color:#333; flex:1; }
+    .date-range { color:#666; white-space:nowrap; }
+    .status-pill { padding:2px 10px; border-radius:10px; font-size:11px; font-weight:700; }
+    .status-pending { background:#fff3cd; color:#856404; }
+    .status-approved { background:#d1fae5; color:#065f46; }
+    .status-rejected { background:#fee2e2; color:#991b1b; }
   `]
 })
 export class LeaveRequestDialogComponent implements OnInit {
   leaveForm!: FormGroup;
   isSubmitting = false;
+  myPastRequests: any[] = [];
 
   constructor(
     private fb: FormBuilder,
     private dialogRef: MatDialogRef<LeaveRequestDialogComponent>,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private http: HttpClient
   ) {}
+
+  private headers(): HttpHeaders {
+    const t = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    return new HttpHeaders({ Authorization: `Bearer ${t}` });
+  }
 
   ngOnInit(): void {
     this.leaveForm = this.fb.group({
@@ -217,12 +250,17 @@ export class LeaveRequestDialogComponent implements OnInit {
       reason: [''],
       contactNumber: ['']
     });
+    this.loadMyRequests();
+  }
+
+  loadMyRequests(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/leave-requests/my`, { headers: this.headers() })
+      .subscribe({ next: r => this.myPastRequests = r.slice(0, 5), error: () => {} });
   }
 
   calculateDays(): number {
     const start = this.leaveForm.get('startDate')?.value;
     const end = this.leaveForm.get('endDate')?.value;
-    
     if (start && end) {
       const startDate = new Date(start);
       const endDate = new Date(end);
@@ -236,17 +274,27 @@ export class LeaveRequestDialogComponent implements OnInit {
   submitRequest(): void {
     if (this.leaveForm.valid) {
       this.isSubmitting = true;
-      
-      // Simulate API call
-      setTimeout(() => {
-        this.isSubmitting = false;
-        this.snackBar.open('Leave request submitted successfully!', 'Close', {
-          duration: 3000,
-          horizontalPosition: 'center',
-          verticalPosition: 'top'
-        });
-        this.dialogRef.close(this.leaveForm.value);
-      }, 1500);
+      const v = this.leaveForm.value;
+      const payload = {
+        leaveType: v.leaveType,
+        startDate: v.startDate,
+        endDate: v.endDate,
+        reason: v.reason || null,
+        contactNumber: v.contactNumber || null
+      };
+      this.http.post(`${environment.apiUrl}/leave-requests`, payload, { headers: this.headers() }).subscribe({
+        next: () => {
+          this.isSubmitting = false;
+          this.snackBar.open('Leave request submitted successfully!', 'Close', {
+            duration: 3000, horizontalPosition: 'center', verticalPosition: 'top'
+          });
+          this.dialogRef.close(true);
+        },
+        error: () => {
+          this.isSubmitting = false;
+          this.snackBar.open('Failed to submit request. Please try again.', 'Close', { duration: 3000 });
+        }
+      });
     }
   }
 

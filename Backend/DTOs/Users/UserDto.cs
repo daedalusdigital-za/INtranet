@@ -70,10 +70,17 @@ namespace ProjectTracker.API.DTOs.Users
         public string Email { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
         public string? Title { get; set; }
+        public int? DepartmentId { get; set; }
         public string? DepartmentName { get; set; }
         public bool IsActive { get; set; }
         public DateTime? LastLoginAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
         public DateTime? Birthday { get; set; }
+        public string? Permissions { get; set; }
+        public bool HasProfilePicture { get; set; }
+        public List<int> CompanyIds { get; set; } = new();
+        public string? LinkedEmpId { get; set; }
+        public string? LinkedEmployeeName { get; set; }
         public string? PrimaryExtension { get; set; }
     }
 

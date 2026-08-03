@@ -228,7 +228,7 @@ namespace ProjectTracker.API.Controllers
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 Role = dto.Role ?? "Employee",
                 Title = dto.Title,
-                Permissions = dto.Permissions != null ? System.Text.Json.JsonSerializer.Serialize(dto.Permissions) : null,
+                Permissions = dto.Permissions != null ? string.Join(',', dto.Permissions) : null,
                 DepartmentId = dto.DepartmentId.HasValue && dto.DepartmentId.Value > 0 ? dto.DepartmentId : null,
                 LinkedEmpId = dto.LinkedEmpId,
                 Birthday = dto.Birthday,
@@ -324,7 +324,7 @@ namespace ProjectTracker.API.Controllers
                 user.Title = dto.Title;
 
             if (dto.Permissions != null)
-                user.Permissions = System.Text.Json.JsonSerializer.Serialize(dto.Permissions);
+                user.Permissions = string.Join(',', dto.Permissions);
 
             if (dto.DepartmentId.HasValue)
                 user.DepartmentId = dto.DepartmentId.Value == 0 ? null : dto.DepartmentId;

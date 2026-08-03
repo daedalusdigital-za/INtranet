@@ -104,7 +104,77 @@
         </div>
       </div>
     </div>
+
+    <div class="stat-card-modern" style="cursor:pointer" (click)="toggleStationeryPanel()">
+      <div class="stat-card-accent" style="background:linear-gradient(135deg,#ff9800,#f57c00)"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern" style="background:rgba(255,152,0,0.12);color:#f57c00">
+          <mat-icon>edit_note</mat-icon>
+        </div>
+        <div class="stat-detail">
+          <span class="stat-number">{{stationeryCounts.pending}}</span>
+          <span class="stat-title">Stationery Requests</span>
+        </div>
+        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
+      </div>
+    </div>
   </div>
+
+@if (showStationeryPanel) {
+  <div class="stationery-panel animate-in">
+    <div class="sp-header">
+      <div class="sp-title"><mat-icon>edit_note</mat-icon><h3>Stationery Requests</h3></div>
+      <div class="sp-filters">
+        <button class="sp-filter" [class.active]="stationeryFilter==='all'" (click)="setStationeryFilter('all')">All ({{stationeryCounts.total}})</button>
+        <button class="sp-filter sp-pending" [class.active]="stationeryFilter==='Pending'" (click)="setStationeryFilter('Pending')">Pending ({{stationeryCounts.pending}})</button>
+        <button class="sp-filter sp-approved" [class.active]="stationeryFilter==='Approved'" (click)="setStationeryFilter('Approved')">Approved ({{stationeryCounts.approved}})</button>
+        <button class="sp-filter sp-declined" [class.active]="stationeryFilter==='Declined'" (click)="setStationeryFilter('Declined')">Declined ({{stationeryCounts.declined}})</button>
+      </div>
+      <button mat-icon-button (click)="showStationeryPanel=false"><mat-icon>close</mat-icon></button>
+    </div>
+    @if (stationeryLoading) {
+      <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
+    } @else if (stationeryRequests.length === 0) {
+      <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No stationery requests</p></div>
+    } @else {
+      <div class="sp-list">
+        @for (req of stationeryRequests; track req.stationeryRequestId) {
+          <div class="sp-item" [class]="'sp-' + req.status.toLowerCase()">
+            <div class="sp-avatar">{{spInitials(req.requestedBy)}}</div>
+            <div class="sp-info">
+              <div class="sp-name">{{req.requestedBy}} <span class="sp-dept">{{req.department || ''}}</span></div>
+              <div class="sp-items-text"><mat-icon>inventory_2</mat-icon> {{req.items}}</div>
+              @if (req.purpose) { <div class="sp-purpose">{{req.purpose}}</div> }
+              <div class="sp-meta">
+                <span class="sp-priority" [class]="'prio-' + req.priority.toLowerCase()">{{req.priority}}</span>
+                <span class="sp-date">{{req.submittedAt | date:'d MMM yyyy'}}</span>
+              </div>
+              @if (req.reviewNotes) { <div class="sp-rnote"><mat-icon>comment</mat-icon> {{req.reviewNotes}}</div> }
+            </div>
+            <div class="sp-right">
+              <span class="sp-status" [class]="'spill-' + req.status.toLowerCase()">{{req.status}}</span>
+              @if (req.hasQuotes) {
+                <div class="sp-quote-links">
+                  @for (n of [1,2,3]; track n) {
+                    <a [href]="getQuoteUrl(req.stationeryRequestId, n)" target="_blank" mat-icon-button [matTooltip]="'View Quote ' + n" class="sp-quote-btn">
+                      <mat-icon>attach_file</mat-icon>
+                    </a>
+                  }
+                </div>
+              }
+              @if (req.status === 'Pending') {
+                <div class="sp-actions">
+                  <button mat-icon-button class="sp-approve" matTooltip="Approve" (click)="reviewStationery(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
+                  <button mat-icon-button class="sp-decline" matTooltip="Decline" (click)="reviewStationery(req, 'Declined')"><mat-icon>cancel</mat-icon></button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
 
   <!-- Invoice Management Panel -->
   <div class="invoice-panel animate-in delay-2">
