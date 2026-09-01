@@ -1,0 +1,280 @@
+<!--
+  Paperless off-canvas drawers.
+  Shared backdrop + two independent slide-over panels.
+  Left/right are distinguished purely by their panel class.
+-->
+
+<!-- Shared dimming backdrop (click to close everything) -->
+<div
+  class="paperless-backdrop"
+  [class.paperless-backdrop--visible]="paperless.anyOpen()"
+  (click)="closeAll()"
+  aria-hidden="true"
+></div>
+
+<!-- ============================================================ -->
+<!-- RIGHT slide-over panel — controller / navigation rail        -->
+<!-- ============================================================ -->
+<aside
+  class="paperless-panel paperless-panel--right"
+  [class.paperless-panel--open]="paperless.rightState().open"
+  [class.paperless-panel--expanded]="rightExpanded()"
+  role="dialog"
+  aria-label="Paperless controller"
+>
+  <header class="paperless-panel__header">
+    <div class="paperless-panel__title">
+      <span class="paperless-panel__glyph material-icons">inventory_2</span>
+      <span>Paperless</span>
+    </div>
+    <div class="paperless-panel__header-actions">
+      <button type="button" class="paperless-icon-btn" (click)="toggleRightExpanded()"
+              [attr.aria-label]="rightExpanded() ? 'Collapse' : 'Expand'">
+        <span class="material-icons">{{ rightExpanded() ? 'close_fullscreen' : 'open_in_full' }}</span>
+      </button>
+      <button type="button" class="paperless-icon-btn" (click)="close('right')" aria-label="Close">
+        <span class="material-icons">chevron_right</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Overall status strip -->
+  <div class="pl-status-strip">
+    <div class="pl-mini-stat">
+      <span class="pl-mini-stat__val">{{ paperless.documents().length }}</span>
+      <span class="pl-mini-stat__lbl">Docs</span>
+    </div>
+    <div class="pl-mini-stat">
+      <span class="pl-mini-stat__val">{{ paperless.pipelineCount() }}</span>
+      <span class="pl-mini-stat__lbl">Pipeline</span>
+    </div>
+    <div class="pl-mini-stat">
+      <span class="pl-mini-stat__val">{{ paperless.awaitingCount() }}</span>
+      <span class="pl-mini-stat__lbl">Awaiting</span>
+    </div>
+    <div class="pl-mini-stat pl-mini-stat--overall">
+      <span class="pl-mini-stat__val">{{ paperless.overallProgress() }}%</span>
+      <span class="pl-mini-stat__lbl">Overall</span>
+    </div>
+  </div>
+
+  <div class="paperless-panel__body">
+    <!-- Upload zone -->
+    <label
+      class="pl-upload"
+      [class.pl-upload--drag]="dragActive()"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)"
+    >
+      <input type="file" multiple hidden (change)="onFilePicked($event)" />
+      <span class="material-icons pl-upload__icon">cloud_upload</span>
+      <span class="pl-upload__title">Upload documents</span>
+      <span class="pl-upload__hint">Drag &amp; drop or click — PDF, images, contracts</span>
+    </label>
+
+    <!-- Suggestions -->
+    @if (suggestions().length) {
+      <div class="pl-suggestions">
+        <div class="pl-suggestions__head">
+          <span class="material-icons">tips_and_updates</span>
+          <span>Suggestions</span>
+        </div>
+        @for (s of suggestions(); track s) {
+          <div class="pl-suggestion">{{ s }}</div>
+        }
+      </div>
+    }
+
+    <!-- Document list -->
+    <div class="pl-doc-list">
+      @for (d of paperless.documents(); track d.id) {
+        <div class="pl-doc">
+          <!-- progress ring -->
+          <div class="pl-doc__ring">
+            <svg viewBox="0 0 40 40" width="40" height="40">
+              <circle class="pl-ring-bg" cx="20" cy="20" r="16"></circle>
+              <circle class="pl-ring-fg" cx="20" cy="20" r="16"
+                      [style.stroke]="statusColour(d.status)"
+                      [style.stroke-dasharray]="ringCirc"
+                      [style.stroke-dashoffset]="ringOffset(d.progress)"></circle>
+            </svg>
+            <span class="material-icons pl-doc__type">{{ fileIcon(d.mime) }}</span>
+          </div>
+
+          <div class="pl-doc__main">
+            <div class="pl-doc__name" [title]="d.name">{{ d.name }}</div>
+            <div class="pl-doc__meta">
+              <span class="pl-chip" [style.background]="statusColour(d.status) + '22'"
+                    [style.color]="statusColour(d.status)">{{ statusLabel(d.status) }}</span>
+              <span class="pl-doc__size">{{ humanSize(d.sizeBytes) }}</span>
+            </div>
+
+            <!-- shares / receipt notifications -->
+            @if (d.shares.length) {
+              <div class="pl-shares">
+                @for (sh of d.shares; track sh.recipient) {
+                  <div class="pl-share">
+                    <span class="material-icons pl-share__icon"
+                          [class.pl-share__icon--ok]="sh.acknowledged">
+                      {{ sh.acknowledged ? 'mark_email_read' : 'schedule_send' }}
+                    </span>
+                    <span class="pl-share__to">{{ sh.recipient }}</span>
+                    @if (!sh.acknowledged) {
+                      <button class="pl-link" (click)="ack(d.id, sh.recipient)">mark received</button>
+                    } @else {
+                      <span class="pl-share__done">received</span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- share input -->
+            <div class="pl-share-row">
+              <input class="pl-input" type="text" placeholder="Share to (name / email)"
+                     [(ngModel)]="shareInputs[d.id]"
+                     (keyup.enter)="shareDoc(d)" />
+              <button class="pl-btn pl-btn--primary" (click)="shareDoc(d)">
+                <span class="material-icons">send</span>
+              </button>
+            </div>
+
+            <!-- actions -->
+            <div class="pl-doc__actions">
+              <button class="pl-btn" (click)="openDoc(d)">
+                <span class="material-icons">open_in_new</span> Open
+              </button>
+              <button class="pl-btn" (click)="advance(d)" title="Advance status">
+                <span class="material-icons">arrow_forward</span>
+              </button>
+              <button class="pl-btn pl-btn--danger" (click)="remove(d)" title="Remove">
+                <span class="material-icons">delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      } @empty {
+        <div class="pl-empty">
+          <span class="material-icons">folder_open</span>
+          <p>No documents yet. Upload one to get started.</p>
+        </div>
+      }
+    </div>
+  </div>
+</aside>
+
+<!-- ============================================================ -->
+<!-- LEFT slide-over panel — near full-screen document viewer     -->
+<!-- ============================================================ -->
+<aside
+  class="paperless-panel paperless-panel--left"
+  [class.paperless-panel--open]="paperless.leftState().open"
+  role="dialog"
+  aria-label="Paperless viewer"
+>
+  <header class="paperless-panel__header">
+    <div class="paperless-panel__title">
+      <span class="paperless-panel__glyph material-icons">description</span>
+      <span class="pl-viewer-name">{{ doc()?.name || 'Document viewer' }}</span>
+    </div>
+
+    <div class="pl-viewer-tools">
+      <button class="pl-tool" [class.pl-tool--on]="tool()==='annotate'" (click)="setTool('annotate')">
+        <span class="material-icons">edit_note</span> Annotate
+      </button>
+      <button class="pl-tool" [class.pl-tool--on]="tool()==='sign'" (click)="setTool('sign')">
+        <span class="material-icons">draw</span> Sign
+      </button>
+      @if (tool()==='annotate') {
+        <input type="color" class="pl-colour" [ngModel]="annotationColour()"
+               (ngModelChange)="annotationColour.set($event)" title="Annotation colour" />
+      }
+      <button type="button" class="paperless-icon-btn" (click)="close('left')" aria-label="Close">
+        <span class="material-icons">chevron_left</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="paperless-panel__body pl-viewer-body">
+    @if (doc(); as d) {
+      <div class="pl-stage">
+        <!-- The page: click to drop annotations when the tool is active -->
+        <div class="pl-page"
+             [class.pl-page--annotating]="tool()==='annotate'"
+             (click)="onPageClick($event)">
+          @if (isImage()) {
+            <img [src]="d.dataUrl" [alt]="d.name" class="pl-page__media" />
+          } @else if (isPdf()) {
+            <iframe [src]="pdfUrl()" class="pl-page__pdf" title="PDF"></iframe>
+          } @else {
+            <div class="pl-page__unsupported">
+              <span class="material-icons">visibility_off</span>
+              <p>Preview not available for this file type.</p>
+              <a class="pl-btn pl-btn--primary" [href]="d.dataUrl" [download]="d.name">
+                <span class="material-icons">download</span> Download
+              </a>
+            </div>
+          }
+
+          <!-- annotation pins -->
+          @for (a of d.annotations; track a.id) {
+            <div class="pl-pin" [style.left.%]="a.xPct" [style.top.%]="a.yPct"
+                 [style.--pin]="a.colour">
+              <span class="pl-pin__dot"></span>
+              <div class="pl-pin__bubble">
+                <span>{{ a.text }}</span>
+                <button class="pl-pin__del" (click)="deleteAnnotation(a.id); $event.stopPropagation()">
+                  <span class="material-icons">close</span>
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- placed signatures -->
+          @for (s of d.signatures; track s.id) {
+            <div class="pl-sig" [style.left.%]="s.xPct" [style.top.%]="s.yPct">
+              <img [src]="s.dataUrl" alt="signature" />
+              <div class="pl-sig__meta">
+                {{ s.signedBy }} · {{ s.signedAt | date:'d MMM y, HH:mm' }}
+                <button class="pl-pin__del" (click)="deleteSignature(s.id)">
+                  <span class="material-icons">close</span>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Signature pad drawer -->
+      @if (tool()==='sign') {
+        <div class="pl-sign-dock">
+          <div class="pl-sign-dock__head">
+            <span class="material-icons">draw</span>
+            <span>Draw your signature</span>
+          </div>
+          <canvas #sigPad class="pl-sign-pad"
+                  (mousedown)="padDown($event)" (mousemove)="padMove($event)"
+                  (mouseup)="padUp()" (mouseleave)="padUp()"
+                  (touchstart)="padDown($event)" (touchmove)="padMove($event)"
+                  (touchend)="padUp()"></canvas>
+          <div class="pl-sign-dock__row">
+            <input class="pl-input" type="text" placeholder="Signed by" [(ngModel)]="signBy" />
+            <button class="pl-btn" (click)="clearPad()">
+              <span class="material-icons">refresh</span> Clear
+            </button>
+            <button class="pl-btn pl-btn--primary" (click)="applySignature()">
+              <span class="material-icons">check</span> Apply
+            </button>
+          </div>
+          <p class="pl-sign-dock__hint">The signature is stamped onto the document and marks it Signed.</p>
+        </div>
+      }
+    } @else {
+      <div class="pl-empty pl-empty--big">
+        <span class="material-icons">description</span>
+        <p>Open a document from the Paperless controller to view, annotate and sign it.</p>
+      </div>
+    }
+  </div>
+</aside>

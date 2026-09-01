@@ -15,6 +15,7 @@ import { AuthService, MODULE_PERMISSIONS } from '../../../services/auth.service'
 import { MessageService, User, Conversation } from '../../../services/message.service';
 import { NotificationService, UnifiedNotification } from '../../../services/notification.service';
 import { WellyActivityService } from '../../../services/welly-activity.service';
+import { PaperlessService } from '../../../services/paperless.service';
 import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
 import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
 import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
@@ -98,6 +99,14 @@ import { Subscription } from 'rxjs';
       }
 
       <span class="spacer"></span>
+
+      <!-- Paperless off-canvas drawer launchers (available in every module) -->
+      <button mat-icon-button matTooltip="Paperless — left panel" (click)="paperless.toggle('left')">
+        <mat-icon>menu_open</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Paperless — right panel" (click)="paperless.toggle('right')">
+        <mat-icon>description</mat-icon>
+      </button>
 
       <!-- Global 'Welly is working…' indicator -->
       @if (wellyActivity.isBusy()) {
@@ -1151,7 +1160,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
     private messageService: MessageService,
     private notificationService: NotificationService,
     private dialog: MatDialog,
-    public wellyActivity: WellyActivityService
+    public wellyActivity: WellyActivityService,
+    public paperless: PaperlessService
   ) {}
 
   /** Tooltip listing every active Welly task. */

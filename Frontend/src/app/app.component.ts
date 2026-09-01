@@ -2,13 +2,14 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ChatbotComponent } from './components/chatbot/chatbot.component';
+import { PaperlessComponent } from './components/paperless/paperless.component';
 import { AnimatedIconBackgroundComponent } from './components/shared/animated-icon-background/animated-icon-background.component';
 import { Subscription, filter } from 'rxjs';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, ChatbotComponent, CommonModule, AnimatedIconBackgroundComponent],
+  imports: [RouterOutlet, ChatbotComponent, PaperlessComponent, CommonModule, AnimatedIconBackgroundComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
