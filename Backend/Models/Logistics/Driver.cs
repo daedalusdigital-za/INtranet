@@ -27,6 +27,18 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(50)]
         public string? EmployeeNumber { get; set; }
 
+        /// <summary>SA ID number (13 digits) or other national ID</summary>
+        [MaxLength(50)]
+        public string? IdNumber { get; set; }
+
+        /// <summary>Passport number for international (non-SA) drivers</summary>
+        [MaxLength(50)]
+        public string? PassportNumber { get; set; }
+
+        /// <summary>e.g. "South African", "Mozambican", "Zimbabwean"</summary>
+        [MaxLength(50)]
+        public string? Nationality { get; set; } = "South African";
+
         [MaxLength(20)]
         public string? PhoneNumber { get; set; }
 

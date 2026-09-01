@@ -34,9 +34,14 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
+import { WellyActivityService } from '../../services/welly-activity.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { ControllerMonitoringComponent } from './controller-monitoring.component';
+import { PumaGarageDialog } from './puma-garage-dialog.component';
+import { OpenMapComponent } from './open-map.component';
+import { OpenMapDialogComponent } from './open-map-dialog.component';
+import { LogisticsReportsComponent } from './logistics-reports.component';
 
 interface DashboardStats {
   activeLoads: number;
@@ -147,6 +152,12 @@ interface MaintenanceRecord {
   actualCost?: number;
   odometerReading?: number;
   assignedTo?: string;
+  actionOwner?: string;
+  province?: string;
+  feedback?: string;
+  dateStood?: Date;
+  targetDate?: Date;
+  daysStanding?: number;
   serviceProvider?: string;
   notes?: string;
   licenseExpiryDate?: Date;
@@ -214,7 +225,10 @@ interface DeliveryRequestSummary {
     MatButtonToggleModule,
     FormsModule,
     NavbarComponent,
-    ControllerMonitoringComponent
+    ControllerMonitoringComponent,
+    OpenMapComponent,
+    LogisticsReportsComponent,
+    PumaGarageDialog
   ],
   template: `
     <app-navbar></app-navbar>
@@ -223,7 +237,7 @@ interface DeliveryRequestSummary {
       <div class="modern-header">
         <div class="header-main">
           <div class="header-icon-wrapper">
-            <mat-icon>local_shipping</mat-icon>
+            <img class="header-logo" src="logos/rocket-round.png?v=4" alt="Rocket Freight" width="72" height="72" decoding="async" />
           </div>
           <div class="header-text-area">
             <h1>Logistics Management</h1>
@@ -246,6 +260,10 @@ interface DeliveryRequestSummary {
             <span class="mini-value">{{ stats().activeLoads }}</span>
             <span class="mini-label">Active Routes</span>
           </div>
+          <button class="open-map-btn" (click)="openLiveMap()" matTooltip="Open the live fleet map">
+            <mat-icon>map</mat-icon>
+            <span>Open Map</span>
+          </button>
         </div>
       </div>
 
@@ -311,15 +329,15 @@ interface DeliveryRequestSummary {
             </div>
           </div>
 
-          <div class="modern-stat-card clickable" [class.warning]="deliveryRequestsCount() > 5" (click)="openIncomingRequestsDialog()">
-            <div class="stat-icon-wrapper incoming-requests">
-              <mat-icon>move_to_inbox</mat-icon>
+          <div class="modern-stat-card clickable" (click)="openPumaGarageDialog()">
+            <div class="stat-icon-wrapper puma">
+              <mat-icon>local_gas_station</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value" [class.warning-text]="deliveryRequestsCount() > 5">{{ deliveryRequestsCount() }}</span>
-              <span class="stat-label">Incoming Requests</span>
-              <div class="stat-progress" [class.danger]="deliveryRequestsCount() > 5">
-                <div class="progress-bar" [style.width.%]="deliveryRequestsCount() > 0 ? Math.min(deliveryRequestsCount() * 10, 100) : 0"></div>
+              <span class="stat-value">{{ pumaOrdersCount() }}</span>
+              <span class="stat-label">Puma Garage</span>
+              <div class="stat-progress">
+                <div class="progress-bar" [style.width.%]="pumaOrdersCount() > 0 ? Math.min(pumaOrdersCount() * 2, 100) : 0"></div>
               </div>
             </div>
           </div>
@@ -360,12 +378,13 @@ interface DeliveryRequestSummary {
             </div>
           </div>
 
-          <div class="secondary-stat-card clickable" (click)="openReportsDialog()">
-            <div class="stat-icon-mini reports">
-              <mat-icon>schedule</mat-icon>
+          <div class="secondary-stat-card clickable" [class.warning]="deliveryRequestsCount() > 5" (click)="openIncomingRequestsDialog()">
+            <div class="stat-icon-mini incoming-requests">
+              <mat-icon>move_to_inbox</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-label">Schedules</span>
+              <span class="stat-value" [class.warning-text]="deliveryRequestsCount() > 5">{{ deliveryRequestsCount() }}</span>
+              <span class="stat-label">Incoming Requests</span>
             </div>
           </div>
 
@@ -510,6 +529,16 @@ interface DeliveryRequestSummary {
                     </span>
                   </div>
                   <div class="fleet-actions">
+                    <div class="fleet-search">
+                      <mat-icon>search</mat-icon>
+                      <input type="text" [ngModel]="fleetSearch()" (ngModelChange)="fleetSearch.set($event)"
+                             placeholder="Search vehicle ID, reg, driver..." aria-label="Search vehicles" />
+                      @if (fleetSearch()) {
+                        <button type="button" class="fleet-search-clear" (click)="fleetSearch.set('')" aria-label="Clear search">
+                          <mat-icon>close</mat-icon>
+                        </button>
+                      }
+                    </div>
                     <button mat-stroked-button (click)="syncCarTrackVehicles()" [disabled]="carTrackSyncing()">
                       @if (carTrackSyncing()) {
                         <mat-spinner diameter="18"></mat-spinner>
@@ -546,7 +575,7 @@ interface DeliveryRequestSummary {
                   </div>
                 } @else {
                   <div class="fleet-grid">
-                    @for (vehicle of vehicles(); track $index) {
+                    @for (vehicle of filteredVehicles(); track $index) {
                       <mat-card class="vehicle-card" [ngClass]="'status-' + (vehicle.status || 'unknown').toLowerCase().replace(' ', '-')">
 
                         <mat-card-header>
@@ -639,7 +668,7 @@ interface DeliveryRequestSummary {
                             </button>
                             <button mat-menu-item class="modern-menu-item" (click)="viewTodayHistory(vehicle)">
                               <mat-icon class="menu-icon-cyan">timeline</mat-icon>
-                              <span>Today's History</span>
+                              <span>Movement History</span>
                             </button>
                             <div class="menu-divider"></div>
                             <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteVehicle(vehicle)">
@@ -718,6 +747,13 @@ interface DeliveryRequestSummary {
                       </mat-card>
                     }
                   </div>
+                  @if (filteredVehicles().length === 0) {
+                    <div class="fleet-no-results">
+                      <mat-icon>search_off</mat-icon>
+                      <p>No vehicles match “{{ fleetSearch() }}”</p>
+                      <button mat-stroked-button (click)="fleetSearch.set('')">Clear search</button>
+                    </div>
+                  }
                 }
               </div>
             </mat-tab>
@@ -813,11 +849,24 @@ interface DeliveryRequestSummary {
                         <mat-option value="other">Other</mat-option>
                       </mat-select>
                     </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Assigned To</mat-label>
+                      <mat-select [(ngModel)]="maintenanceAssignedToFilter">
+                        <mat-option value="all">All Assignees</mat-option>
+                        @for (a of getUniqueMaintenanceAssignees(); track a) {
+                          <mat-option [value]="a">{{ a }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
                   </div>
                   <div class="maintenance-actions">
                     <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
                       <mat-icon>add</mat-icon>
                       Schedule Maintenance
+                    </button>
+                    <button mat-raised-button color="accent" (click)="exportMaintenanceToExcel()" matTooltip="Export the fleet-repair list &amp; dashboard to Excel">
+                      <mat-icon>file_download</mat-icon>
+                      Export to Excel
                     </button>
                     <button mat-raised-button (click)="loadMaintenanceRecords()">
                       <mat-icon>refresh</mat-icon>
@@ -859,8 +908,8 @@ interface DeliveryRequestSummary {
                   <div class="empty-state">
                     <mat-icon>build_circle</mat-icon>
                     <h3>No Maintenance Records</h3>
-                    <p>{{ maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' ? 'No records match your filters' : 'No vehicles are currently scheduled for maintenance' }}</p>
-                    @if (maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all') {
+                    <p>{{ maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' || maintenanceAssignedToFilter !== 'all' ? 'No records match your filters' : 'No vehicles are currently scheduled for maintenance' }}</p>
+                    @if (maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' || maintenanceAssignedToFilter !== 'all') {
                       <button mat-raised-button (click)="clearMaintenanceFilters()">
                         <mat-icon>filter_list_off</mat-icon> Clear Filters
                       </button>
@@ -949,6 +998,14 @@ interface DeliveryRequestSummary {
                               @case ('overdue') { <mat-icon>warning</mat-icon> Overdue }
                             }
                           </span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Assigned To Column -->
+                      <ng-container matColumnDef="assignedTo">
+                        <th mat-header-cell *matHeaderCellDef>Assigned To</th>
+                        <td mat-cell *matCellDef="let record">
+                          {{ record.assignedTo || record.actionOwner || record.serviceProvider || '—' }}
                         </td>
                       </ng-container>
 
@@ -1113,8 +1170,9 @@ interface DeliveryRequestSummary {
               </div>
             </mat-tab>
 
-            <!-- Invoices Tab -->
-            <mat-tab>
+            <!-- Invoices Tab (hidden from UI but code preserved) -->
+            <!-- @if (false) { -->
+            <mat-tab [disabled]="true" *ngIf="false">
               <ng-template mat-tab-label>
                 <mat-icon [matBadge]="stats().pendingInvoices" matBadgeColor="accent" 
                   [matBadgeHidden]="stats().pendingInvoices === 0" aria-hidden="false">receipt</mat-icon>
@@ -1137,6 +1195,7 @@ interface DeliveryRequestSummary {
                           <mat-option value="pending">Pending</mat-option>
                           <mat-option value="assigned">Assigned</mat-option>
                           <mat-option value="delivered">Delivered</mat-option>
+                          <mat-option value="query">⚠️ Queries ({{ queryInvoiceCount() }})</mat-option>
                         </mat-select>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
@@ -2177,6 +2236,15 @@ interface DeliveryRequestSummary {
                           <mat-icon>sync</mat-icon> Sync from TFN
                         }
                       </button>
+                      @if (fuelSummary()?.syncStatus; as sync) {
+                        <span class="fuel-last-sync"
+                              [class.stale]="isSyncStale(sync.lastSuccessfulSyncUtc)"
+                              [class.error]="sync.lastRunHadError"
+                              [title]="sync.lastRunHadError ? (sync.lastErrorMessage || 'Last sync reported errors') : 'Last successful TFN sync'">
+                          <mat-icon>{{ sync.lastRunHadError ? 'error_outline' : 'schedule' }}</mat-icon>
+                          Last sync: {{ formatLastSync(sync.lastSuccessfulSyncUtc) }}
+                        </span>
+                      }
                     </div>
                   </div>
 
@@ -2324,9 +2392,25 @@ interface DeliveryRequestSummary {
                             }
                           </mat-select>
                         </mat-form-field>
+                        <mat-form-field appearance="outline" class="assignment-filter">
+                          <mat-label>Fuel Source</mat-label>
+                          <mat-select [(ngModel)]="fuelSourceFilter" (selectionChange)="filterFuelTransactions()">
+                            <mat-option value="">All Sources</mat-option>
+                            <mat-option value="TFN">TFN</mat-option>
+                            <mat-option value="PUMA">Puma Garage</mat-option>
+                          </mat-select>
+                        </mat-form-field>
                       </div>
                       <div class="table-responsive">
                         <table mat-table [dataSource]="filteredFuelTransactions()" class="fuel-table modern-table" matSort>
+                          <ng-container matColumnDef="source">
+                            <th mat-header-cell *matHeaderCellDef>Source</th>
+                            <td mat-cell *matCellDef="let t">
+                              <span class="fuel-source-badge" [class.puma]="t.source === 'PUMA'" [class.tfn]="t.source !== 'PUMA'">
+                                {{ t.source === 'PUMA' ? 'PUMA' : 'TFN' }}
+                              </span>
+                            </td>
+                          </ng-container>
                           <ng-container matColumnDef="registrationNumber">
                             <th mat-header-cell *matHeaderCellDef>Vehicle</th>
                             <td mat-cell *matCellDef="let t"><strong>{{ t.registrationNumber }}</strong></td>
@@ -2405,140 +2489,164 @@ interface DeliveryRequestSummary {
               </div>
             </mat-tab>
 
-            <!-- Sleep Out Tab -->
+            <!-- Requisitions / Petty Cash Tab -->
             <mat-tab>
               <ng-template mat-tab-label>
-                <mat-icon>hotel</mat-icon>
-                Sleep Out
+                <mat-icon>receipt_long</mat-icon>
+                Requisitions
               </ng-template>
               <div class="tab-content">
                 <div class="sleep-out-section">
                   <!-- Toolbar -->
                   <div class="fuel-toolbar">
-                    <div class="fuel-period-selector" style="flex: 1; display: flex; gap: 12px; align-items: center;">
-                      <mat-form-field appearance="outline" class="period-select" style="min-width: 220px;">
+                    <div class="fuel-period-selector" style="flex: 1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                      <mat-form-field appearance="outline" class="period-select" style="min-width: 200px;">
+                        <mat-label>Period</mat-label>
+                        <mat-select [ngModel]="reqPeriod()" (ngModelChange)="reqPeriod.set($event); loadRequisitions()">
+                          @for (p of reqPeriods(); track p.year + '-' + p.month) {
+                            <mat-option [value]="p.year + '-' + p.month">{{ reqMonthName(p.month) }} {{ p.year }} ({{ p.count }})</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="period-select" style="min-width: 200px;">
                         <mat-label>Search</mat-label>
-                        <input matInput [ngModel]="sleepOutSearch()" (ngModelChange)="sleepOutSearch.set($event)" placeholder="Search driver, trip, vehicle...">
+                        <input matInput [ngModel]="reqSearch()" (ngModelChange)="reqSearch.set($event)" placeholder="Search paid to, reason, RF#...">
                         <mat-icon matSuffix>search</mat-icon>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="period-select" style="min-width: 150px;">
                         <mat-label>Status</mat-label>
-                        <mat-select [ngModel]="sleepOutStatusFilter()" (ngModelChange)="sleepOutStatusFilter.set($event)">
+                        <mat-select [ngModel]="reqStatusFilter()" (ngModelChange)="reqStatusFilter.set($event)">
                           <mat-option value="all">All</mat-option>
-                          <mat-option value="Requested">Requested</mat-option>
-                          <mat-option value="Approved">Approved</mat-option>
-                          <mat-option value="Rejected">Rejected</mat-option>
-                          <mat-option value="Paid">Paid</mat-option>
+                          <mat-option value="Active">Active</mat-option>
+                          <mat-option value="Cancelled">Cancelled</mat-option>
                         </mat-select>
                       </mat-form-field>
                     </div>
-                    <div class="fuel-stats-bar">
-                      @if (sleepOutSummary()) {
-                        <span class="fuel-stat">
-                          <mat-icon style="font-size: 16px; height: 16px; width: 16px;">pending</mat-icon>
-                          Pending: {{ sleepOutSummary().pendingCount }}
-                        </span>
-                        <span class="fuel-stat">
-                          <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
-                          Approved: R{{ sleepOutSummary().totalAmountApproved | number:'1.2-2' }}
-                        </span>
-                        <span class="fuel-stat">
-                          <mat-icon style="font-size: 16px; height: 16px; width: 16px;">payments</mat-icon>
-                          Paid: R{{ sleepOutSummary().totalAmountPaid | number:'1.2-2' }}
-                        </span>
-                      }
-                    </div>
-                    <button mat-raised-button color="primary" (click)="openSleepOutDialog()">
-                      <mat-icon>add</mat-icon> New Sleep Out
+                    <button mat-raised-button color="primary" (click)="openRequisitionDialog()">
+                      <mat-icon>add</mat-icon> New Requisition
                     </button>
-                    <button mat-icon-button (click)="loadSleepOuts()" matTooltip="Refresh">
+                    <button mat-icon-button (click)="loadRequisitions()" matTooltip="Refresh">
                       <mat-icon>refresh</mat-icon>
                     </button>
                   </div>
 
-                  <!-- Sleep Out Table -->
-                  @if (sleepOutLoading()) {
+                  <!-- Summary Stats -->
+                  @if (reqSummary()) {
+                    <div class="fuel-stats-bar" style="padding: 8px 16px; gap: 20px; flex-wrap: wrap;">
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
+                        Active: {{ reqSummary().activeCount }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">cancel</mat-icon>
+                        Cancelled: {{ reqSummary().cancelledCount }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">account_balance_wallet</mat-icon>
+                        E-Wallet: R{{ reqSummary().totalEwallet | number:'1.2-2' }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">local_gas_station</mat-icon>
+                        Diesel: R{{ reqSummary().totalDiesel | number:'1.2-2' }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">payments</mat-icon>
+                        Non-Diesel: R{{ reqSummary().totalNonDiesel | number:'1.2-2' }}
+                      </span>
+                    </div>
+                    @if (reqSummary().weeks?.length) {
+                      <div class="fuel-stats-bar" style="padding: 4px 16px 12px; gap: 8px; flex-wrap: wrap;">
+                        @for (w of reqSummary().weeks; track w.week) {
+                          <span class="status-chip status-approved" matTooltip="{{ w.from | date:'dd MMM' }} - {{ w.to | date:'dd MMM' }}">
+                            Wk {{ w.week }}: R{{ w.ewallet | number:'1.0-0' }} + diesel R{{ w.diesel | number:'1.0-0' }} ({{ w.count }})
+                          </span>
+                        }
+                      </div>
+                    }
+                  }
+
+                  <!-- Requisitions Table -->
+                  @if (reqLoading()) {
                     <div style="display: flex; justify-content: center; padding: 40px;">
                       <mat-spinner diameter="40"></mat-spinner>
                     </div>
                   } @else {
                     <div class="table-container">
-                      <table mat-table [dataSource]="filteredSleepOuts()" class="full-width-table">
+                      <table mat-table [dataSource]="filteredRequisitions()" class="full-width-table">
+                        <ng-container matColumnDef="rfNumber">
+                          <th mat-header-cell *matHeaderCellDef>RF #</th>
+                          <td mat-cell *matCellDef="let row">{{ row.rfNumber || '-' }}</td>
+                        </ng-container>
                         <ng-container matColumnDef="date">
                           <th mat-header-cell *matHeaderCellDef>Date</th>
-                          <td mat-cell *matCellDef="let row">{{ row.date | date:'dd MMM yyyy' }}</td>
+                          <td mat-cell *matCellDef="let row">{{ row.date ? (row.date | date:'dd MMM yyyy') : '-' }}</td>
                         </ng-container>
-                        <ng-container matColumnDef="tripNumber">
-                          <th mat-header-cell *matHeaderCellDef>Trip #</th>
-                          <td mat-cell *matCellDef="let row">{{ row.tripNumber || '-' }}</td>
+                        <ng-container matColumnDef="paidTo">
+                          <th mat-header-cell *matHeaderCellDef>Paid To</th>
+                          <td mat-cell *matCellDef="let row">{{ row.paidTo || '-' }}</td>
                         </ng-container>
-                        <ng-container matColumnDef="driver">
-                          <th mat-header-cell *matHeaderCellDef>Driver</th>
-                          <td mat-cell *matCellDef="let row">{{ row.driverName || 'Unknown' }}</td>
+                        <ng-container matColumnDef="cellNumber">
+                          <th mat-header-cell *matHeaderCellDef>Cell</th>
+                          <td mat-cell *matCellDef="let row">{{ row.cellNumber || '-' }}</td>
                         </ng-container>
-                        <ng-container matColumnDef="vehicle">
-                          <th mat-header-cell *matHeaderCellDef>Vehicle</th>
-                          <td mat-cell *matCellDef="let row">{{ row.vehicleReg || '-' }}</td>
-                        </ng-container>
-                        <ng-container matColumnDef="amount">
-                          <th mat-header-cell *matHeaderCellDef>Amount</th>
-                          <td mat-cell *matCellDef="let row" style="font-weight: 600;">R{{ row.amount | number:'1.2-2' }}</td>
-                        </ng-container>
-                        <ng-container matColumnDef="status">
-                          <th mat-header-cell *matHeaderCellDef>Status</th>
-                          <td mat-cell *matCellDef="let row">
-                            <span class="status-chip" [ngClass]="{
-                              'status-requested': row.status === 'Requested',
-                              'status-approved': row.status === 'Approved',
-                              'status-rejected': row.status === 'Rejected',
-                              'status-paid': row.status === 'Paid'
-                            }">{{ row.status }}</span>
-                          </td>
+                        <ng-container matColumnDef="amountEwallet">
+                          <th mat-header-cell *matHeaderCellDef>E-Wallet</th>
+                          <td mat-cell *matCellDef="let row" style="font-weight: 600;">{{ row.amountEwallet ? ('R' + (row.amountEwallet | number:'1.2-2')) : '-' }}</td>
                         </ng-container>
                         <ng-container matColumnDef="reason">
                           <th mat-header-cell *matHeaderCellDef>Reason</th>
                           <td mat-cell *matCellDef="let row">{{ row.reason || '-' }}</td>
                         </ng-container>
-                        <ng-container matColumnDef="createdBy">
-                          <th mat-header-cell *matHeaderCellDef>Created By</th>
-                          <td mat-cell *matCellDef="let row">{{ row.createdByUserName || '-' }}</td>
+                        <ng-container matColumnDef="dieselAmount">
+                          <th mat-header-cell *matHeaderCellDef>Diesel</th>
+                          <td mat-cell *matCellDef="let row">{{ row.dieselAmount ? ('R' + (row.dieselAmount | number:'1.2-2')) : '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="status">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let row">
+                            <span class="status-chip" [ngClass]="{
+                              'status-approved': row.status === 'Active',
+                              'status-rejected': row.status === 'Cancelled'
+                            }">{{ row.status }}</span>
+                          </td>
                         </ng-container>
                         <ng-container matColumnDef="actions">
                           <th mat-header-cell *matHeaderCellDef>Actions</th>
                           <td mat-cell *matCellDef="let row">
                             <div style="display: flex; gap: 4px;">
-                              <button mat-icon-button matTooltip="Download PDF" (click)="downloadSleepOutPdf(row)">
-                                <mat-icon>picture_as_pdf</mat-icon>
+                              <button mat-icon-button matTooltip="Edit" (click)="openRequisitionDialog(row)">
+                                <mat-icon>edit</mat-icon>
                               </button>
-                              @if (row.status === 'Requested') {
-                                <button mat-icon-button color="primary" matTooltip="Approve" (click)="approveSleepOut(row, true)">
-                                  <mat-icon>check_circle</mat-icon>
-                                </button>
-                                <button mat-icon-button color="warn" matTooltip="Reject" (click)="approveSleepOut(row, false)">
-                                  <mat-icon>cancel</mat-icon>
-                                </button>
-                                <button mat-icon-button matTooltip="Edit" (click)="editSleepOut(row)">
-                                  <mat-icon>edit</mat-icon>
-                                </button>
-                                <button mat-icon-button color="warn" matTooltip="Delete" (click)="deleteSleepOut(row)">
-                                  <mat-icon>delete</mat-icon>
-                                </button>
-                              }
-                              @if (row.status === 'Approved') {
-                                <button mat-icon-button color="accent" matTooltip="Mark as Paid" (click)="markSleepOutPaid(row)">
-                                  <mat-icon>payments</mat-icon>
-                                </button>
-                              }
+                              <button mat-icon-button color="warn" matTooltip="Delete" (click)="deleteRequisition(row)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
                             </div>
                           </td>
                         </ng-container>
-                        <tr mat-header-row *matHeaderRowDef="sleepOutColumns"></tr>
-                        <tr mat-row *matRowDef="let row; columns: sleepOutColumns;"></tr>
+                        <tr mat-header-row *matHeaderRowDef="reqColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: reqColumns;" [ngClass]="{'cancelled-row': row.status === 'Cancelled'}"></tr>
                       </table>
-                      @if (filteredSleepOuts().length === 0) {
+                      @if (filteredRequisitions().length === 0) {
                         <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
-                          <mat-icon style="font-size: 48px; height: 48px; width: 48px;">hotel</mat-icon>
-                          <p>No sleep out records found</p>
+                          <mat-icon style="font-size: 48px; height: 48px; width: 48px;">receipt_long</mat-icon>
+                          <p>No requisitions found</p>
+                        </div>
+                      }
+
+                      <!-- Period navigation footer -->
+                      @if (reqPeriods().length > 1) {
+                        <div class="req-period-footer">
+                          <button mat-stroked-button (click)="stepRequisitionPeriod(-1)" [disabled]="!reqHasPrevPeriod()">
+                            <mat-icon>chevron_left</mat-icon> Previous
+                          </button>
+                          <div class="req-period-current">
+                            <mat-icon>event</mat-icon>
+                            <span>{{ reqCurrentPeriodLabel() }}</span>
+                            <span class="req-period-count">{{ filteredRequisitions().length }} shown</span>
+                          </div>
+                          <button mat-stroked-button (click)="stepRequisitionPeriod(1)" [disabled]="!reqHasNextPeriod()">
+                            Next <mat-icon>chevron_right</mat-icon>
+                          </button>
                         </div>
                       }
                     </div>
@@ -2555,6 +2663,17 @@ interface DeliveryRequestSummary {
               </ng-template>
               <div class="tab-content">
                 <app-controller-monitoring></app-controller-monitoring>
+              </div>
+            </mat-tab>
+
+            <!-- Reports (daily security incident log) Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>assessment</mat-icon>
+                Reports
+              </ng-template>
+              <div class="tab-content">
+                <app-logistics-reports></app-logistics-reports>
               </div>
             </mat-tab>
 
@@ -2646,6 +2765,98 @@ interface DeliveryRequestSummary {
           </div>
         </div>
       }
+
+      <!-- Requisition Dialog Overlay -->
+      @if (showRequisitionDialog) {
+        <div class="sleep-out-overlay" (click)="closeRequisitionDialog()">
+          <div class="sleep-out-dialog" (click)="$event.stopPropagation()">
+            <div class="sleep-out-dialog-header">
+              <mat-icon>receipt_long</mat-icon>
+              <h3>{{ editingRequisition ? 'Edit Requisition' : 'New Requisition' }}</h3>
+              <button mat-icon-button (click)="closeRequisitionDialog()" class="close-btn">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <p class="sleep-out-subtitle">Capture a petty-cash / e-wallet requisition. Diesel amounts are tracked separately from other payouts.</p>
+            <div class="sleep-out-form-body">
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>RF Number</mat-label>
+                  <input matInput [(ngModel)]="requisitionForm.rfNumber" placeholder="e.g. 325">
+                  <mat-icon matSuffix>tag</mat-icon>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Date</mat-label>
+                  <input matInput [matDatepicker]="reqDatePicker" [(ngModel)]="requisitionForm.date">
+                  <mat-datepicker-toggle matSuffix [for]="reqDatePicker"></mat-datepicker-toggle>
+                  <mat-datepicker #reqDatePicker></mat-datepicker>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Paid To</mat-label>
+                  <input matInput [(ngModel)]="requisitionForm.paidTo" placeholder="Recipient name">
+                  <mat-icon matSuffix>person</mat-icon>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Cell Number</mat-label>
+                  <input matInput [(ngModel)]="requisitionForm.cellNumber" placeholder="Optional">
+                  <mat-icon matSuffix>phone</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>E-Wallet Amount (R)</mat-label>
+                  <input matInput type="number" [(ngModel)]="requisitionForm.amountEwallet" placeholder="0.00">
+                  <span matPrefix style="padding-left: 12px;">R&nbsp;</span>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Diesel Amount (R)</mat-label>
+                  <input matInput type="number" [(ngModel)]="requisitionForm.dieselAmount" placeholder="0.00">
+                  <span matPrefix style="padding-left: 12px;">R&nbsp;</span>
+                  <mat-icon matSuffix>local_gas_station</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Payment Method</mat-label>
+                  <mat-select [(ngModel)]="requisitionForm.paymentMethod">
+                    <mat-option value="E-Wallet">E-Wallet</mat-option>
+                    <mat-option value="Bank Transfer">Bank Transfer</mat-option>
+                    <mat-option value="Cash">Cash</mat-option>
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Status</mat-label>
+                  <mat-select [(ngModel)]="requisitionForm.status">
+                    <mat-option value="Active">Active</mat-option>
+                    <mat-option value="Cancelled">Cancelled</mat-option>
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Reason</mat-label>
+                <textarea matInput [(ngModel)]="requisitionForm.reason" rows="2" placeholder="e.g. Diesel, relocation, casuals..."></textarea>
+              </mat-form-field>
+            </div>
+
+            <div class="sleep-out-dialog-actions">
+              <button mat-button (click)="closeRequisitionDialog()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="saveRequisition()" [disabled]="!requisitionForm.paidTo">
+                @if (editingRequisition) {
+                  <mat-icon>save</mat-icon> Update
+                } @else {
+                  <mat-icon>add</mat-icon> Save
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -2691,13 +2902,22 @@ interface DeliveryRequestSummary {
       width: 72px;
       height: 72px;
       border-radius: 20px;
-      background: linear-gradient(135deg, rgba(99,102,241,0.95), rgba(236,72,153,0.9));
+      background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
       display: flex;
       align-items: center;
       justify-content: center;
       box-shadow: 0 12px 32px rgba(99, 102, 241, 0.45);
       border: 1px solid rgba(255, 255, 255, 0.3);
+      overflow: hidden;
+    }
+
+    .header-logo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      border-radius: 20px;
     }
 
     .header-icon-wrapper mat-icon {
@@ -2726,6 +2946,32 @@ interface DeliveryRequestSummary {
       display: flex;
       gap: 24px;
       flex-wrap: wrap;
+    }
+
+    .open-map-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #2563eb, #0ea5e9);
+      color: #fff;
+      border: none;
+      padding: 12px 22px;
+      border-radius: 16px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
+      transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+    }
+    .open-map-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 26px rgba(37, 99, 235, 0.5);
+      filter: brightness(1.06);
+    }
+    .open-map-btn mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
     }
 
     .mini-stat {
@@ -2837,6 +3083,7 @@ interface DeliveryRequestSummary {
     .stat-icon-wrapper.address { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
     .stat-icon-wrapper.incoming-requests { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); }
     .stat-icon-wrapper.tfn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stat-icon-wrapper.puma { background: linear-gradient(135deg, #d32f2f 0%, #ff6d00 100%); }
 
     .stat-content {
       display: flex;
@@ -2934,6 +3181,7 @@ interface DeliveryRequestSummary {
     .stat-icon-mini.drivers { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
     .stat-icon-mini.reports { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
     .stat-icon-mini.depots { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .stat-icon-mini.incoming-requests { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); }
 
     .secondary-stat-card .stat-content .stat-value {
       font-size: 24px;
@@ -4351,6 +4599,44 @@ interface DeliveryRequestSummary {
       gap: 8px;
     }
 
+    .fleet-search {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      height: 40px;
+      background: #fff;
+      border: 1px solid #d5dae2;
+      border-radius: 8px;
+      min-width: 240px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .fleet-search:focus-within {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+    }
+    .fleet-search mat-icon {
+      font-size: 18px; width: 18px; height: 18px; color: #90a4ae; flex-shrink: 0;
+    }
+    .fleet-search input {
+      flex: 1; border: none; outline: none; background: transparent;
+      font-size: 13px; color: #263238; min-width: 0;
+    }
+    .fleet-search input::placeholder { color: #b0bec5; }
+    .fleet-search-clear {
+      border: none; background: transparent; cursor: pointer; padding: 0;
+      display: flex; align-items: center; color: #90a4ae;
+    }
+    .fleet-search-clear mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .fleet-search-clear:hover { color: #546e7a; }
+
+    .fleet-no-results {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 48px 16px; color: #90a4ae; text-align: center;
+    }
+    .fleet-no-results mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: .6; }
+    .fleet-no-results p { margin: 0; font-size: 14px; }
+
     .fleet-actions button mat-spinner {
       margin-right: 8px;
     }
@@ -4964,6 +5250,55 @@ interface DeliveryRequestSummary {
     .status-chip.status-paid {
       background: rgba(33,150,243,0.15);
       color: #1565c0;
+    }
+
+    /* Cancelled requisition row */
+    .cancelled-row td {
+      opacity: 0.55;
+      text-decoration: line-through;
+    }
+
+    /* Requisition period navigation footer */
+    .req-period-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      margin-top: 4px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.03);
+      position: sticky;
+      bottom: 0;
+    }
+    .req-period-footer button {
+      color: #fff !important;
+      border-color: rgba(255,255,255,0.3) !important;
+    }
+    .req-period-footer button[disabled] {
+      opacity: 0.35;
+    }
+    .req-period-current {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: #fff;
+      font-size: 15px;
+    }
+    .req-period-current mat-icon {
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
+      opacity: 0.8;
+    }
+    .req-period-count {
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.6);
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 2px 10px;
     }
 
     /* Sleep Out Section */
@@ -5833,6 +6168,13 @@ interface DeliveryRequestSummary {
       padding: 16px 0;
     }
 
+    .fuel-source-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; letter-spacing: .03em;
+    }
+    .fuel-source-badge.tfn { background: #e0e7ff; color: #3730a3; }
+    .fuel-source-badge.puma { background: #ffe4d6; color: #c2410c; }
+
     .fuel-toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -5923,6 +6265,30 @@ interface DeliveryRequestSummary {
         opacity: 0.7;
         border-color: #ccc !important;
         color: #999 !important;
+      }
+    }
+
+    .fuel-last-sync {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 10px;
+      font-size: 12px;
+      color: #4caf50;
+      white-space: nowrap;
+
+      mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+      }
+
+      &.stale {
+        color: #ff9800;
+      }
+
+      &.error {
+        color: #e53935;
       }
     }
 
@@ -6683,6 +7049,24 @@ export class LogisticsDashboardComponent implements OnInit {
 
   activeLoads = signal<ActiveLoad[]>([]);
   vehicles = signal<Vehicle[]>([]);
+  fleetSearch = signal<string>('');
+  /** Vehicles filtered by the fleet toolbar search (reg, vehicle ID, driver, type, CarTrack/TFN id, location). */
+  filteredVehicles = computed(() => {
+    const q = this.fleetSearch().trim().toLowerCase();
+    const list = this.vehicles();
+    if (!q) return list;
+    return list.filter(v =>
+      (v.registrationNumber || '').toLowerCase().includes(q) ||
+      String(v.id ?? '').toLowerCase().includes(q) ||
+      (v.carTrackId || '').toLowerCase().includes(q) ||
+      (v.tfnVehicleId || '').toLowerCase().includes(q) ||
+      (v.currentDriver || '').toLowerCase().includes(q) ||
+      (v.currentDriverName || '').toLowerCase().includes(q) ||
+      (v.type || '').toLowerCase().includes(q) ||
+      (v.vehicleTypeName || '').toLowerCase().includes(q) ||
+      (v.lastLocation || '').toLowerCase().includes(q)
+    );
+  });
   maintenanceRecords = signal<MaintenanceRecord[]>([]);
   drivers = signal<any[]>([]);
   customers = signal<any[]>([]);
@@ -6696,7 +7080,8 @@ export class LogisticsDashboardComponent implements OnInit {
   maintenanceVehicleFilter = 'all';
   maintenanceStatusFilter = 'all';
   maintenanceTypeFilter = 'all';
-  maintenanceColumns = ['vehicleReg', 'maintenanceType', 'description', 'scheduledDate', 'cost', 'priority', 'status', 'files', 'actions'];
+  maintenanceAssignedToFilter = 'all';
+  maintenanceColumns = ['vehicleReg', 'maintenanceType', 'description', 'scheduledDate', 'cost', 'priority', 'status', 'assignedTo', 'files', 'actions'];
 
   // Maintenance attachments
   showMaintenanceAttachmentPanel = false;
@@ -6750,6 +7135,11 @@ export class LogisticsDashboardComponent implements OnInit {
   tfnDepotsCount = signal(0);
   tfnDepots = signal<any[]>([]);
 
+  // Puma Garage (Bronkhorstspruit, GP) - alternative fuel source to TFN
+  pumaOrdersCount = signal(0);
+  pumaOrders = signal<any[]>([]);
+  pumaSummary = signal<any>(null);
+
   // Fuel History (Monthly Reports)
   fuelPeriods = signal<any[]>([]);
   fuelReport = signal<any>(null);
@@ -6763,7 +7153,8 @@ export class LogisticsDashboardComponent implements OnInit {
   fuelViewMode = 'summary';
   fuelSearchTerm = '';
   fuelAssignmentFilter = '';
-  fuelDisplayedColumns = ['registrationNumber', 'depotName', 'litresUsed', 'amountSpent', 'transactionDate', 'depotAssignment'];
+  fuelSourceFilter = '';
+  fuelDisplayedColumns = ['source', 'registrationNumber', 'depotName', 'litresUsed', 'amountSpent', 'transactionDate', 'depotAssignment'];
 
   // Fuel Export Dialog
   showFuelExportDialog = false;
@@ -6812,6 +7203,48 @@ export class LogisticsDashboardComponent implements OnInit {
     return data;
   });
 
+  // Requisitions / Petty Cash
+  requisitions = signal<any[]>([]);
+  reqSummary = signal<any>(null);
+  reqPeriods = signal<any[]>([]);
+  reqLoading = signal(false);
+  reqSearch = signal('');
+  reqStatusFilter = signal('all');
+  reqPeriod = signal<string>('');
+  reqColumns = ['rfNumber', 'date', 'paidTo', 'cellNumber', 'amountEwallet', 'reason', 'dieselAmount', 'status', 'actions'];
+  showRequisitionDialog = false;
+  editingRequisition: any = null;
+  requisitionForm: any = {
+    rfNumber: '',
+    date: new Date(),
+    paidTo: '',
+    cellNumber: '',
+    amountEwallet: null,
+    dieselAmount: null,
+    reason: '',
+    paymentMethod: 'E-Wallet',
+    status: 'Active'
+  };
+
+  filteredRequisitions = computed(() => {
+    let data = this.requisitions();
+    const statusFilter = this.reqStatusFilter();
+    if (statusFilter && statusFilter !== 'all') {
+      data = data.filter(r => r.status === statusFilter);
+    }
+    const search = this.reqSearch();
+    if (search) {
+      const term = search.toLowerCase();
+      data = data.filter(r =>
+        (r.paidTo || '').toLowerCase().includes(term) ||
+        (r.reason || '').toLowerCase().includes(term) ||
+        (r.rfNumber || '').toLowerCase().includes(term) ||
+        (r.cellNumber || '').toLowerCase().includes(term)
+      );
+    }
+    return data;
+  });
+
   // POD Documents
   podDocuments: any[] = [];
   podSummary: any = null;
@@ -6840,6 +7273,18 @@ export class LogisticsDashboardComponent implements OnInit {
     private snackBar: MatSnackBar
   ) {}
 
+  /** Open the live fleet map in a large dialog (map's own Maximize still works). */
+  openLiveMap(): void {
+    this.dialog.open(OpenMapDialogComponent, {
+      width: '96vw',
+      height: '94vh',
+      maxWidth: '96vw',
+      panelClass: 'open-map-dialog-panel',
+      autoFocus: false,
+      restoreFocus: false
+    });
+  }
+
   ngOnInit(): void {
     this.startLoadingProgress();
     this.loadDashboardData();
@@ -6848,6 +7293,7 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadCompletedTripsheets();
     this.loadTfnOrders();
     this.loadTfnDepots();
+    this.loadPumaOrders();
     this.loadDrivers();
     this.loadCustomers();
     this.loadMaintenanceRecords();
@@ -6858,6 +7304,7 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadPodSummary();
     this.loadPodDocuments();
     this.loadSleepOuts();
+    this.loadRequisitionPeriods();
   }
 
   private checkInitialLoadComplete(): void {
@@ -6972,7 +7419,11 @@ export class LogisticsDashboardComponent implements OnInit {
           vehicleReg: r.vehicleRegistration || r.vehicleReg || '',
           status: (r.status || '').toLowerCase().replace(/\s+/g, '-'),
           priority: r.priority || 'medium',
-          assignedTo: r.assignedTo || r.serviceProvider || ''
+          assignedTo: r.assignedTo || r.serviceProvider || '',
+          actionOwner: r.actionOwner || '',
+          province: r.province || '',
+          feedback: r.feedback || '',
+          daysStanding: r.daysStanding ?? null
         }));
         this.maintenanceRecords.set(mapped);
         this.updateMaintenanceStats();
@@ -6985,6 +7436,88 @@ export class LogisticsDashboardComponent implements OnInit {
         this.checkInitialLoadComplete();
       }
     });
+  }
+
+  /**
+   * Download the fleet-repair list + status dashboard as a formatted Excel workbook.
+   * Honours the currently selected status filter (open items only by default).
+   */
+  exportMaintenanceToExcel(): void {
+    const hasActiveFilters =
+      !!this.maintenanceSearch ||
+      this.maintenanceVehicleFilter !== 'all' ||
+      this.maintenanceStatusFilter !== 'all' ||
+      this.maintenanceTypeFilter !== 'all' ||
+      this.maintenanceAssignedToFilter !== 'all';
+
+    const dialogRef = this.dialog.open(MaintenanceExportScopeDialog, {
+      width: '420px',
+      data: {
+        hasActiveFilters,
+        filteredCount: this.getFilteredMaintenanceRecords().length,
+        totalCount: this.maintenanceRecords().filter(r => !!r).length
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((scope: 'all' | 'filtered' | undefined) => {
+      if (!scope) return;
+      this.downloadMaintenanceExcel(scope);
+    });
+  }
+
+  private downloadMaintenanceExcel(scope: 'all' | 'filtered'): void {
+    const params: string[] = [];
+
+    if (scope === 'filtered') {
+      // Map the UI status filter to the backend status vocabulary where sensible.
+      const status = this.maintenanceStatusFilter;
+      if (status && status !== 'all' && status !== 'overdue') {
+        const map: Record<string, string> = {
+          'scheduled': 'Scheduled',
+          'in-progress': 'In Progress',
+          'completed': 'Completed'
+        };
+        if (map[status]) params.push(`status=${encodeURIComponent(map[status])}`);
+      }
+      if (this.maintenanceVehicleFilter !== 'all') {
+        params.push(`vehicleReg=${encodeURIComponent(this.maintenanceVehicleFilter)}`);
+      }
+      if (this.maintenanceTypeFilter !== 'all') {
+        params.push(`maintenanceType=${encodeURIComponent(this.maintenanceTypeFilter)}`);
+      }
+      if (this.maintenanceAssignedToFilter !== 'all' && this.maintenanceAssignedToFilter !== 'Unassigned') {
+        params.push(`assignedTo=${encodeURIComponent(this.maintenanceAssignedToFilter)}`);
+      }
+      // When filtering, don't restrict to open-only so completed matches also export.
+      params.push('openOnly=false');
+    } else {
+      // Export everything, including completed/cancelled records.
+      params.push('openOnly=false');
+    }
+
+    const qs = params.length ? `?${params.join('&')}` : '';
+
+    this.http.get(`${this.apiUrl}/logistics/maintenance/export${qs}`, { responseType: 'blob' })
+      .subscribe({
+        next: (blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const stamp = new Date().toISOString().slice(0, 10);
+          const suffix = scope === 'filtered' ? '_Filtered' : '';
+          a.download = `RocketFreight_FleetRepairs${suffix}_${stamp}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          this.snackBar.open(
+            scope === 'filtered' ? 'Filtered fleet repairs exported to Excel' : 'All fleet repairs exported to Excel',
+            'Close', { duration: 3000 });
+        },
+        error: () => {
+          this.snackBar.open('Failed to export maintenance records', 'Close', { duration: 4000 });
+        }
+      });
   }
 
   private loadSampleMaintenanceData(): void {
@@ -7069,7 +7602,7 @@ export class LogisticsDashboardComponent implements OnInit {
   }
 
   getMaintenanceByStatus(status: string): MaintenanceRecord[] {
-    return this.maintenanceRecords().filter(r => r.status === status);
+    return this.maintenanceRecords().filter(r => r && r.status === status);
   }
 
   getExpiringLicenses(): MaintenanceRecord[] {
@@ -7081,7 +7614,7 @@ export class LogisticsDashboardComponent implements OnInit {
   getCompletedMaintenance(): MaintenanceRecord[] {
     // Get all completed maintenance records, sorted by completion date (most recent first)
     return this.maintenanceRecords()
-      .filter(r => r.status === 'completed')
+      .filter(r => r && r.status === 'completed')
       .sort((a, b) => {
         const dateA = a.completedDate ? new Date(a.completedDate).getTime() : 0;
         const dateB = b.completedDate ? new Date(b.completedDate).getTime() : 0;
@@ -7115,23 +7648,49 @@ export class LogisticsDashboardComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.http.post<MaintenanceRecord>(`${this.apiUrl}/logistics/maintenance`, result).subscribe({
+        const payload = this.buildMaintenancePayload(result);
+        this.http.post<MaintenanceRecord>(`${this.apiUrl}/logistics/maintenance`, payload).subscribe({
           next: (record) => {
-            this.maintenanceRecords.update(records => [...records, record]);
+            this.maintenanceRecords.update(records => [...records, this.normalizeMaintenanceRecord(record)]);
             this.updateMaintenanceStats();
           },
           error: () => {
             // Add to local list with generated ID
             const newRecord: MaintenanceRecord = {
               ...result,
-              id: Math.max(0, ...this.maintenanceRecords().map(r => r.id)) + 1
+              id: Math.max(0, ...this.maintenanceRecords().map(r => r?.id ?? 0)) + 1
             };
-            this.maintenanceRecords.update(records => [...records, newRecord]);
+            this.maintenanceRecords.update(records => [...records, this.normalizeMaintenanceRecord(newRecord)]);
             this.updateMaintenanceStats();
           }
         });
       }
     });
+  }
+
+  /**
+   * The add/edit dialog captures `assignedTo`, but the backend persists this as
+   * `serviceProvider`. Map it (and mirror it into actionOwner) so it actually saves.
+   */
+  private buildMaintenancePayload(result: any): any {
+    const payload: any = { ...result };
+    const assigned = (result.assignedTo ?? '').toString().trim();
+    if (assigned) {
+      payload.serviceProvider = payload.serviceProvider || assigned;
+      payload.actionOwner = payload.actionOwner || assigned;
+    }
+    return payload;
+  }
+
+  /** Ensure a record from the API has the lowercase status + assignedTo the UI expects. */
+  private normalizeMaintenanceRecord(r: any): MaintenanceRecord {
+    return {
+      ...r,
+      vehicleReg: r.vehicleRegistration || r.vehicleReg || '',
+      status: (r.status || 'scheduled').toString().toLowerCase().replace(/\s+/g, '-'),
+      priority: r.priority || 'medium',
+      assignedTo: r.assignedTo || r.actionOwner || r.serviceProvider || ''
+    } as MaintenanceRecord;
   }
 
   startMaintenance(record: MaintenanceRecord): void {
@@ -7232,15 +7791,16 @@ export class LogisticsDashboardComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.http.put<MaintenanceRecord>(`${this.apiUrl}/logistics/maintenance/${record.id}`, result).subscribe({
+        const payload = this.buildMaintenancePayload(result);
+        this.http.put<MaintenanceRecord>(`${this.apiUrl}/logistics/maintenance/${record.id}`, payload).subscribe({
           next: (updated) => {
             this.maintenanceRecords.update(records =>
-              records.map(r => r.id === record.id ? updated : r)
+              records.map(r => r.id === record.id ? this.normalizeMaintenanceRecord(updated ?? { ...record, ...payload }) : r)
             );
           },
           error: () => {
             this.maintenanceRecords.update(records =>
-              records.map(r => r.id === record.id ? { ...r, ...result } : r)
+              records.map(r => r.id === record.id ? this.normalizeMaintenanceRecord({ ...r, ...payload }) : r)
             );
           }
         });
@@ -7350,8 +7910,15 @@ Notes: ${record.notes || 'No notes'}
     return [...new Set(vehicles)].sort();
   }
 
+  getUniqueMaintenanceAssignees(): string[] {
+    const assignees = this.maintenanceRecords()
+      .filter(r => !!r)
+      .map(r => (r.assignedTo && r.assignedTo.trim()) ? r.assignedTo.trim() : 'Unassigned');
+    return [...new Set(assignees)].sort();
+  }
+
   getFilteredMaintenanceRecords(): MaintenanceRecord[] {
-    let records = this.maintenanceRecords();
+    let records = this.maintenanceRecords().filter(r => !!r);
 
     if (this.maintenanceStatusFilter !== 'all') {
       records = records.filter(r => r.status === this.maintenanceStatusFilter);
@@ -7361,6 +7928,9 @@ Notes: ${record.notes || 'No notes'}
     }
     if (this.maintenanceTypeFilter !== 'all') {
       records = records.filter(r => r.maintenanceType === this.maintenanceTypeFilter);
+    }
+    if (this.maintenanceAssignedToFilter !== 'all') {
+      records = records.filter(r => (r.assignedTo || 'Unassigned') === this.maintenanceAssignedToFilter);
     }
     if (this.maintenanceSearch) {
       const search = this.maintenanceSearch.toLowerCase();
@@ -7382,6 +7952,7 @@ Notes: ${record.notes || 'No notes'}
     this.maintenanceVehicleFilter = 'all';
     this.maintenanceStatusFilter = 'all';
     this.maintenanceTypeFilter = 'all';
+    this.maintenanceAssignedToFilter = 'all';
   }
 
   // === Maintenance Attachments ===
@@ -8309,7 +8880,7 @@ Notes: ${record.notes || 'No notes'}
   // Pre-computed status counts - single pass over all invoices
   invoiceStatusCounts = computed(() => {
     const invoices = this.importedInvoices();
-    let pending = 0, assigned = 0, delivered = 0, partdelivered = 0;
+    let pending = 0, assigned = 0, delivered = 0, partdelivered = 0, query = 0;
     
     for (const invoice of invoices) {
       const status = invoice.status?.toLowerCase();
@@ -8319,16 +8890,18 @@ Notes: ${record.notes || 'No notes'}
         case 'delivered': delivered++; break;
         case 'partdelivered': partdelivered++; break;
         case 'part delivered': partdelivered++; break;
+        case 'query': query++; break;
       }
     }
     
-    return { pending, assigned, delivered, partdelivered };
+    return { pending, assigned, delivered, partdelivered, query };
   });
 
   pendingInvoiceCount = computed(() => this.invoiceStatusCounts().pending);
   assignedInvoiceCount = computed(() => this.invoiceStatusCounts().assigned);
   deliveredInvoiceCount = computed(() => this.invoiceStatusCounts().delivered);
   partDeliveredInvoiceCount = computed(() => this.invoiceStatusCounts().partdelivered);
+  queryInvoiceCount = computed(() => this.invoiceStatusCounts().query);
 
   loadImportedInvoices(): void {
     // Request all invoices by passing a large pageSize
@@ -9159,7 +9732,7 @@ Notes: ${record.notes || 'No notes'}
           `Vehicle: ${tripsheetData.vehicleRegNumber || tripsheetData.vehicleRegistration || 'Not assigned'}`,
           `Scheduled Pickup: ${tripsheetData.tripDate || tripsheetData.scheduledPickupDate || 'Not scheduled'}`,
           `Total Stops: ${tripsheetData.lineItems?.length || tripsheetData.stops?.length || 0}`,
-          `Total Value: R ${tripsheetData.totalWithVat?.toFixed(2) || '0.00'}`,
+          `Total Value: R ${(tripsheetData.totalValue ?? tripsheetData.totalWithVat)?.toFixed(2) || '0.00'}`,
           '',
           `ACTION REQUIRED: Please confirm stock availability and ensure all items are ready for dispatch at the scheduled time.`,
           '',
@@ -9257,7 +9830,16 @@ Notes: ${record.notes || 'No notes'}
         this.syncingFuel.set(false);
         // Reload fuel summary after sync
         this.loadFuelSummary();
-        alert(`Fuel data synced successfully!\nVehicles: ${result.vehicles?.synced || 0}\nTransactions: ${result.transactions?.synced || 0}`);
+
+        const vehicles = result.vehiclesResult?.synced ?? 0;
+        const orders = result.ordersResult?.synced ?? 0;
+        const transactions = result.transactionsResult?.synced ?? 0;
+
+        if (result.hasError) {
+          alert(`Fuel data synced with errors.\nVehicles: ${vehicles}\nOrders: ${orders}\nTransactions: ${transactions}\n\nDetails: ${result.errorMessage || 'Unknown error'}`);
+        } else {
+          alert(`Fuel data synced successfully!\nVehicles: ${vehicles}\nOrders: ${orders}\nTransactions: ${transactions}`);
+        }
       },
       error: (err) => {
         console.error('Failed to sync fuel data:', err);
@@ -9388,6 +9970,29 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
+  /** Format a UTC sync timestamp into a friendly relative/local string. */
+  formatLastSync(utc: string | null | undefined): string {
+    if (!utc) return 'never';
+    const date = new Date(utc);
+    if (isNaN(date.getTime())) return 'never';
+    const diffMs = Date.now() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin} min ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDays = Math.floor(diffHr / 24);
+    return `${diffDays}d ago (${date.toLocaleDateString()})`;
+  }
+
+  /** Consider data stale if the last successful sync was more than 2 hours ago (or never). */
+  isSyncStale(utc: string | null | undefined): boolean {
+    if (!utc) return true;
+    const date = new Date(utc);
+    if (isNaN(date.getTime())) return true;
+    return (Date.now() - date.getTime()) > 2 * 60 * 60 * 1000;
+  }
+
   loadFuelMonthlyReport(): void {
     if (!this.selectedFuelPeriod) return;
     this.fuelLoading.set(true);
@@ -9441,6 +10046,9 @@ Notes: ${record.notes || 'No notes'}
     }
     if (this.fuelAssignmentFilter) {
       filtered = filtered.filter(t => t.depotAssignment === this.fuelAssignmentFilter);
+    }
+    if (this.fuelSourceFilter) {
+      filtered = filtered.filter(t => (t.source || 'TFN') === this.fuelSourceFilter);
     }
     this.filteredFuelTransactions.set(filtered);
   }
@@ -9691,6 +10299,171 @@ Notes: ${record.notes || 'No notes'}
     if (assignment.includes('GP')) return 'assignment-gp';
     if (assignment.includes('CPT')) return 'assignment-cpt';
     return 'assignment-default';
+  }
+
+  // ─── Requisitions / Petty Cash Methods ─────────────────────────
+
+  reqMonthName(month: number): string {
+    const names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return names[month] || '';
+  }
+
+  reqCurrentPeriodLabel(): string {
+    const p = this.reqPeriod();
+    if (!p) return '';
+    const [year, month] = p.split('-');
+    return `${this.reqMonthName(+month)} ${year}`;
+  }
+
+  private reqPeriodIndex(): number {
+    return this.reqPeriods().findIndex(p => `${p.year}-${p.month}` === this.reqPeriod());
+  }
+
+  // Periods come newest-first, so "Previous" (older) = index+1, "Next" (newer) = index-1
+  reqHasPrevPeriod(): boolean {
+    const i = this.reqPeriodIndex();
+    return i >= 0 && i < this.reqPeriods().length - 1;
+  }
+
+  reqHasNextPeriod(): boolean {
+    return this.reqPeriodIndex() > 0;
+  }
+
+  stepRequisitionPeriod(direction: number): void {
+    // direction -1 = older period, +1 = newer period
+    const periods = this.reqPeriods();
+    const i = this.reqPeriodIndex();
+    if (i < 0) return;
+    const target = direction < 0 ? i + 1 : i - 1;
+    if (target < 0 || target >= periods.length) return;
+    const p = periods[target];
+    this.reqPeriod.set(`${p.year}-${p.month}`);
+    this.loadRequisitions();
+  }
+
+  loadRequisitionPeriods(): void {
+    this.http.get<any[]>(`${this.apiUrl}/logistics/requisitions/periods`).subscribe({
+      next: (data) => {
+        this.reqPeriods.set(data || []);
+        if (data && data.length > 0 && !this.reqPeriod()) {
+          this.reqPeriod.set(`${data[0].year}-${data[0].month}`);
+        }
+        this.loadRequisitions();
+      },
+      error: (err) => {
+        console.error('Failed to load requisition periods:', err);
+        this.reqPeriods.set([]);
+      }
+    });
+  }
+
+  loadRequisitions(): void {
+    this.reqLoading.set(true);
+    const period = this.reqPeriod();
+    let params = '';
+    if (period) {
+      const [year, month] = period.split('-');
+      params = `?year=${year}&month=${month}`;
+    }
+    this.http.get<any[]>(`${this.apiUrl}/logistics/requisitions${params}`).subscribe({
+      next: (data) => {
+        this.requisitions.set(data || []);
+        this.reqLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load requisitions:', err);
+        this.requisitions.set([]);
+        this.reqLoading.set(false);
+      }
+    });
+    if (period) {
+      const [year, month] = period.split('-');
+      this.http.get<any>(`${this.apiUrl}/logistics/requisitions/summary?year=${year}&month=${month}`).subscribe({
+        next: (summary) => this.reqSummary.set(summary),
+        error: () => this.reqSummary.set(null)
+      });
+    } else {
+      this.reqSummary.set(null);
+    }
+  }
+
+  openRequisitionDialog(req?: any): void {
+    if (req) {
+      this.editingRequisition = req;
+      this.requisitionForm = {
+        rfNumber: req.rfNumber || '',
+        date: req.date ? new Date(req.date) : null,
+        paidTo: req.paidTo || '',
+        cellNumber: req.cellNumber || '',
+        amountEwallet: req.amountEwallet ?? null,
+        dieselAmount: req.dieselAmount ?? null,
+        reason: req.reason || '',
+        paymentMethod: req.paymentMethod || 'E-Wallet',
+        status: req.status || 'Active'
+      };
+    } else {
+      this.editingRequisition = null;
+      this.requisitionForm = {
+        rfNumber: '',
+        date: new Date(),
+        paidTo: '',
+        cellNumber: '',
+        amountEwallet: null,
+        dieselAmount: null,
+        reason: '',
+        paymentMethod: 'E-Wallet',
+        status: 'Active'
+      };
+    }
+    this.showRequisitionDialog = true;
+  }
+
+  closeRequisitionDialog(): void {
+    this.showRequisitionDialog = false;
+    this.editingRequisition = null;
+  }
+
+  saveRequisition(): void {
+    const f = this.requisitionForm;
+    const payload = {
+      rfNumber: f.rfNumber || null,
+      date: f.date ? new Date(f.date).toISOString() : null,
+      paidTo: f.paidTo,
+      cellNumber: f.cellNumber || null,
+      amountEwallet: f.amountEwallet ? Number(f.amountEwallet) : 0,
+      dieselAmount: f.dieselAmount ? Number(f.dieselAmount) : 0,
+      reason: f.reason || null,
+      paymentMethod: f.paymentMethod || 'E-Wallet',
+      status: f.status || 'Active'
+    };
+    const req$ = this.editingRequisition
+      ? this.http.put(`${this.apiUrl}/logistics/requisitions/${this.editingRequisition.id}`, payload)
+      : this.http.post(`${this.apiUrl}/logistics/requisitions`, payload);
+    req$.subscribe({
+      next: () => {
+        this.snackBar.open(this.editingRequisition ? 'Requisition updated' : 'Requisition created', 'Close', { duration: 2500 });
+        this.closeRequisitionDialog();
+        this.loadRequisitionPeriods();
+      },
+      error: (err) => {
+        console.error('Failed to save requisition:', err);
+        this.snackBar.open('Failed to save requisition', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  deleteRequisition(req: any): void {
+    if (!confirm(`Delete requisition${req.rfNumber ? ' RF ' + req.rfNumber : ''} for ${req.paidTo}?`)) return;
+    this.http.delete(`${this.apiUrl}/logistics/requisitions/${req.id}`).subscribe({
+      next: () => {
+        this.snackBar.open('Requisition deleted', 'Close', { duration: 2500 });
+        this.loadRequisitionPeriods();
+      },
+      error: (err) => {
+        console.error('Failed to delete requisition:', err);
+        this.snackBar.open('Failed to delete requisition', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   // ─── Sleep Out Methods ─────────────────────────────────────────
@@ -10099,7 +10872,34 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
-  // TFN Depots Methods
+  // Puma Garage Methods
+  loadPumaOrders(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/pumagarageorders`).subscribe({
+      next: (orders) => {
+        this.pumaOrders.set(orders);
+        this.pumaOrdersCount.set(orders.length);
+      },
+      error: (err) => {
+        console.error('Failed to load Puma Garage orders:', err);
+        this.pumaOrders.set([]);
+        this.pumaOrdersCount.set(0);
+      }
+    });
+  }
+
+  openPumaGarageDialog(): void {
+    const dialogRef = this.dialog.open(PumaGarageDialog, {
+      width: '95vw',
+      maxWidth: '1400px',
+      maxHeight: '90vh',
+      panelClass: 'puma-garage-dialog-panel',
+      data: { orders: this.pumaOrders(), apiUrl: environment.apiUrl }
+    });
+
+    dialogRef.afterClosed().subscribe(() => {
+      this.loadPumaOrders();
+    });
+  }
   loadTfnDepots(): void {
     this.http.get<any[]>(`${environment.apiUrl}/logistics/tfn/depots`).subscribe({
       next: (depots) => {
@@ -11836,9 +12636,19 @@ export class InvoiceDetailsDialog {
 
       <div class="map-content">
         <div class="vehicle-sidebar">
-          <h3>Vehicles ({{ data.vehicles.length }})</h3>
+          <h3>Vehicles ({{ filteredVehicles.length }}<span *ngIf="filteredVehicles.length !== data.vehicles.length"> of {{ data.vehicles.length }}</span>)</h3>
+          <div class="vehicle-search">
+            <mat-icon>search</mat-icon>
+            <input type="text" [(ngModel)]="vehicleSearch"
+                   placeholder="Search reg, driver, location..." aria-label="Search vehicles" />
+            @if (vehicleSearch) {
+              <button type="button" class="clear-search" (click)="vehicleSearch = ''" aria-label="Clear search">
+                <mat-icon>close</mat-icon>
+              </button>
+            }
+          </div>
           <div class="vehicle-list">
-            @for (vehicle of data.vehicles; track $index) {
+            @for (vehicle of filteredVehicles; track $index) {
               <div class="sidebar-vehicle" 
                    [class.selected]="selectedVehicle === vehicle"
                    [class.moving]="vehicle.speed && vehicle.speed > 0"
@@ -11859,6 +12669,12 @@ export class InvoiceDetailsDialog {
                   </span>
                   <span class="location">{{ vehicle.lastLocation || 'Unknown location' }}</span>
                 </div>
+              </div>
+            }
+            @if (filteredVehicles.length === 0) {
+              <div class="no-vehicles-found">
+                <mat-icon>search_off</mat-icon>
+                <span>No vehicles match “{{ vehicleSearch }}”</span>
               </div>
             }
           </div>
@@ -11990,6 +12806,35 @@ export class InvoiceDetailsDialog {
       font-weight: 600;
       color: #333;
     }
+
+    .vehicle-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .vehicle-search mat-icon {
+      font-size: 18px; width: 18px; height: 18px; color: #90a4ae; flex-shrink: 0;
+    }
+    .vehicle-search input {
+      flex: 1; border: none; outline: none; background: transparent;
+      font-size: 13px; color: #263238; min-width: 0;
+    }
+    .vehicle-search input::placeholder { color: #b0bec5; }
+    .vehicle-search .clear-search {
+      border: none; background: transparent; cursor: pointer; padding: 0;
+      display: flex; align-items: center; color: #90a4ae;
+    }
+    .vehicle-search .clear-search mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .vehicle-search .clear-search:hover { color: #546e7a; }
+
+    .no-vehicles-found {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 32px 16px; color: #90a4ae; text-align: center; font-size: 13px;
+    }
+    .no-vehicles-found mat-icon { font-size: 32px; width: 32px; height: 32px; opacity: .6; }
 
     .vehicle-list {
       flex: 1;
@@ -12157,9 +13002,23 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
   selectedVehicle: Vehicle | null = null;
   mapLoading = true;
   lastUpdate = new Date();
+  vehicleSearch = '';
+
+  /** Vehicles filtered by the sidebar search box (reg, driver, location). */
+  get filteredVehicles(): Vehicle[] {
+    const q = this.vehicleSearch.trim().toLowerCase();
+    if (!q) return this.data.vehicles;
+    return this.data.vehicles.filter(v =>
+      (v.registrationNumber || '').toLowerCase().includes(q) ||
+      (v.currentDriver || '').toLowerCase().includes(q) ||
+      (v.lastLocation || '').toLowerCase().includes(q)
+    );
+  }
   
   private map: google.maps.Map | null = null;
   private markers: google.maps.Marker[] = [];
+  private speedRings: google.maps.Marker[] = [];  // speedometer gauge rings behind vehicle markers
+  private readonly maxSpeedKmh = 120;             // full-scale of the gauge
   private infoWindow: google.maps.InfoWindow | null = null;
   private mapInitialized = false;
   private depotMarker: google.maps.Marker | null = null;
@@ -12257,6 +13116,8 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
 
     this.markers.forEach(m => m.setMap(null));
     this.markers = [];
+    this.speedRings.forEach(r => r.setMap(null));
+    this.speedRings = [];
     
     const bounds = new google.maps.LatLngBounds();
     let hasValidLocations = false;
@@ -12269,11 +13130,26 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
 
         const isMoving = vehicle.speed && vehicle.speed > 0;
         const isOffline = vehicle.status === 'offline';
-        
+
+        // Speedometer gauge ring drawn beneath the vehicle marker.
+        const ring = new google.maps.Marker({
+          position,
+          map: this.map,
+          clickable: false,
+          zIndex: 1,
+          icon: {
+            url: this.buildSpeedRingSvg(vehicle.speed || 0, isOffline),
+            scaledSize: new google.maps.Size(46, 46),
+            anchor: new google.maps.Point(23, 23)
+          }
+        });
+        this.speedRings.push(ring);
+
         const marker = new google.maps.Marker({
           position,
           map: this.map,
           title: vehicle.registrationNumber,
+          zIndex: 2,
           icon: {
             path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
             scale: isMoving ? 8 : 6,
@@ -12306,6 +13182,47 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       this.map.setZoom(14);
     }
   }
+
+  /**
+   * Builds a speedometer-style gauge ring as an SVG data-URL: a 270° track with
+   * a coloured arc that fills in proportion to speed (green → amber → red).
+   * Fixed pixel size so it reads clearly at any zoom for every vehicle.
+   */
+  private buildSpeedRingSvg(speedKmh: number, offline: boolean): string {
+    const size = 46, cx = 23, cy = 23, r = 18;
+    const startDeg = 135, sweep = 270;                 // gap at the bottom
+    const speed = Math.max(0, speedKmh || 0);
+    const frac = Math.min(speed / this.maxSpeedKmh, 1);
+    const endDeg = startDeg + sweep * frac;
+
+    let arcColor = '#22c55e';                          // green  ≤ 40
+    if (speed > 80) arcColor = '#ef4444';              // red    > 80
+    else if (speed > 40) arcColor = '#f59e0b';         // amber  40–80
+    if (offline) arcColor = '#94a3b8';
+
+    const polar = (deg: number) => {
+      const rad = (deg * Math.PI) / 180;
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    };
+    const arcPath = (a0: number, a1: number) => {
+      const s = polar(a0), e = polar(a1);
+      const large = (a1 - a0) > 180 ? 1 : 0;
+      return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+    };
+
+    const track = arcPath(startDeg, startDeg + sweep);
+    const fill = speed > 0 ? arcPath(startDeg, endDeg) : '';
+    const tip = polar(endDeg);
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <path d="${track}" fill="none" stroke="#0f172a" stroke-opacity="0.25" stroke-width="4" stroke-linecap="round"/>
+      ${fill ? `<path d="${fill}" fill="none" stroke="${arcColor}" stroke-width="4" stroke-linecap="round"/>` : ''}
+      ${speed > 0 ? `<circle cx="${tip.x.toFixed(2)}" cy="${tip.y.toFixed(2)}" r="2.6" fill="${arcColor}" stroke="#ffffff" stroke-width="1"/>` : ''}
+    </svg>`;
+
+    return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  }
+
 
   private showVehicleInfo(vehicle: Vehicle, marker: google.maps.Marker): void {
     if (!this.infoWindow || !this.map) return;
@@ -13804,16 +14721,8 @@ interface RouteEstimate {
                 <span class="meta-value">{{ tripSheet.vehicleRegNumber || tripSheet.vehicleRegistration || 'N/A' }}</span>
               </div>
               <div class="meta-item">
-                <label>SUBTOTAL:</label>
-                <span class="meta-value">R {{ tripSheet.totalValue | number:'1.2-2' }}</span>
-              </div>
-              <div class="meta-item">
-                <label>VAT (15%):</label>
-                <span class="meta-value">R {{ tripSheet.vatAmount | number:'1.2-2' }}</span>
-              </div>
-              <div class="meta-item">
                 <label>TOTAL:</label>
-                <span class="meta-value value">R {{ tripSheet.totalWithVat | number:'1.2-2' }}</span>
+                <span class="meta-value value">R {{ tripSheet.totalValue | number:'1.2-2' }}</span>
               </div>
             </div>
           </div>
@@ -13835,8 +14744,6 @@ interface RouteEstimate {
                   <th class="col-end">End</th>
                   <th class="col-km">KM</th>
                   <th class="col-value">Value</th>
-                  <th class="col-vat">VAT</th>
-                  <th class="col-total">Incl VAT</th>
                 </tr>
               </thead>
               <tbody>
@@ -13854,8 +14761,6 @@ interface RouteEstimate {
                     <td class="col-end editable"></td>
                     <td class="col-km editable"></td>
                     <td class="col-value">R {{ item.value | number:'1.2-2' }}</td>
-                    <td class="col-vat">R {{ (item.value || 0) * 0.15 | number:'1.2-2' }}</td>
-                    <td class="col-total">R {{ (item.value || 0) * 1.15 | number:'1.2-2' }}</td>
                   </tr>
                 }
                 @if (!tripSheet.lineItems || tripSheet.lineItems.length === 0) {
@@ -13875,8 +14780,6 @@ interface RouteEstimate {
                         <td class="col-end editable"></td>
                         <td class="col-km editable"></td>
                         <td class="col-value">R {{ com.totalPrice | number:'1.2-2' }}</td>
-                        <td class="col-vat">R {{ (com.totalPrice || 0) * 0.15 | number:'1.2-2' }}</td>
-                        <td class="col-total">R {{ (com.totalPrice || 0) * 1.15 | number:'1.2-2' }}</td>
                       </tr>
                     }
                   }
@@ -13896,19 +14799,15 @@ interface RouteEstimate {
                     <td class="col-end editable"></td>
                     <td class="col-km editable"></td>
                     <td class="col-value"></td>
-                    <td class="col-vat"></td>
-                    <td class="col-total"></td>
                   </tr>
                 }
               </tbody>
               <tfoot>
                 <tr class="totals-row">
-                  <td colspan="5" class="totals-label">SUBTOTAL</td>
+                  <td colspan="5" class="totals-label">TOTAL</td>
                   <td class="col-qty">{{ getTotalQty() }}</td>
                   <td colspan="5"></td>
-                  <td class="col-value">R {{ tripSheet.totalValue | number:'1.2-2' }}</td>
-                  <td class="col-vat">R {{ tripSheet.vatAmount | number:'1.2-2' }}</td>
-                  <td class="col-total total-value">R {{ tripSheet.totalWithVat | number:'1.2-2' }}</td>
+                  <td class="col-value total-value">R {{ tripSheet.totalValue | number:'1.2-2' }}</td>
                 </tr>
               </tfoot>
             </table>
@@ -14345,6 +15244,78 @@ export class TripSheetPreviewDialog implements OnInit {
 }
 
 // Sync Result Dialog Component
+@Component({
+  selector: 'app-maintenance-export-scope-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule],
+  template: `
+    <div class="export-scope-dialog">
+      <div class="dialog-header">
+        <mat-icon>file_download</mat-icon>
+        <h2>Export Maintenance to Excel</h2>
+      </div>
+      <div mat-dialog-content class="dialog-content">
+        <p>Choose what you would like to export:</p>
+        <button type="button" class="scope-option"
+                [class.disabled]="!data.hasActiveFilters"
+                [disabled]="!data.hasActiveFilters"
+                (click)="choose('filtered')">
+          <mat-icon>filter_alt</mat-icon>
+          <div class="scope-text">
+            <span class="scope-title">Filtered view</span>
+            <span class="scope-sub">
+              {{ data.hasActiveFilters ? (data.filteredCount + ' record(s) matching current filters') : 'No filters applied' }}
+            </span>
+          </div>
+        </button>
+        <button type="button" class="scope-option" (click)="choose('all')">
+          <mat-icon>list_alt</mat-icon>
+          <div class="scope-text">
+            <span class="scope-title">All records</span>
+            <span class="scope-sub">Export every maintenance record ({{ data.totalCount }})</span>
+          </div>
+        </button>
+      </div>
+      <div mat-dialog-actions align="end">
+        <button mat-button mat-dialog-close>Cancel</button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .export-scope-dialog { min-width: 360px; }
+    .dialog-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 24px; margin: -24px -24px 0 -24px;
+      background: #3949ab; color: white; border-radius: 4px 4px 0 0;
+    }
+    .dialog-header h2 { margin: 0; font-size: 18px; }
+    .dialog-content { padding-top: 20px; }
+    .dialog-content > p { margin: 0 0 12px; color: #555; font-size: 14px; }
+    .scope-option {
+      display: flex; align-items: center; gap: 14px; width: 100%;
+      text-align: left; padding: 14px 16px; margin-bottom: 10px;
+      border: 1px solid #d0d0d0; border-radius: 8px; background: #fafafa;
+      cursor: pointer; transition: all .15s ease;
+    }
+    .scope-option:hover:not(.disabled) { border-color: #3949ab; background: #eef1fb; }
+    .scope-option.disabled { opacity: .5; cursor: not-allowed; }
+    .scope-option mat-icon { color: #3949ab; font-size: 26px; width: 26px; height: 26px; }
+    .scope-text { display: flex; flex-direction: column; }
+    .scope-title { font-weight: 600; font-size: 14px; color: #222; }
+    .scope-sub { font-size: 12px; color: #777; }
+  `]
+})
+export class MaintenanceExportScopeDialog {
+  constructor(
+    public dialogRef: MatDialogRef<MaintenanceExportScopeDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: { hasActiveFilters: boolean; filteredCount: number; totalCount: number }
+  ) {}
+
+  choose(scope: 'all' | 'filtered'): void {
+    this.dialogRef.close(scope);
+  }
+}
+
 @Component({
   selector: 'app-sync-result-dialog',
   standalone: true,
@@ -17296,6 +18267,8 @@ export class AddressIssuesDialog {
 
   private http = inject(HttpClient);
   private snackBar = inject(MatSnackBar);
+  private wellyActivity = inject(WellyActivityService);
+  private wellyActivityId: number | null = null;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string },
@@ -17312,6 +18285,7 @@ export class AddressIssuesDialog {
     this.wellyLoading = true;
     this.showWellyReview = false;
     this.wellyFixes = [];
+    this.wellyActivityId = this.wellyActivity.start('Logistics: Welly Fix All addresses');
 
     // Send the customer IDs from the current filtered list
     const customerIds = this.filteredCustomers.map(c => c.id);
@@ -17330,11 +18304,13 @@ export class AddressIssuesDialog {
           `Welly found fixes for ${fixable} of ${this.wellyFixes.length} customers`,
           'Close', { duration: 4000 }
         );
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: (err) => {
         this.wellyLoading = false;
         console.error('Welly fix error:', err);
         this.snackBar.open('Welly could not analyze customers. Please try again.', 'Close', { duration: 3000 });
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }
@@ -19215,20 +20191,10 @@ export class AddDeliveryNoteDialog {
                       <span class="label">Est. Drive Time:</span>
                       <span class="value">{{ estimatedTime }}</span>
                     </div>
-                    <div class="summary-item">
-                      <mat-icon>receipt</mat-icon>
-                      <span class="label">Subtotal:</span>
-                      <span class="value">R {{ totalValue | number:'1.2-2' }}</span>
-                    </div>
-                    <div class="summary-item">
-                      <mat-icon>percent</mat-icon>
-                      <span class="label">VAT (15%):</span>
-                      <span class="value">R {{ totalValue * 0.15 | number:'1.2-2' }}</span>
-                    </div>
                     <div class="summary-item highlight">
                       <mat-icon>payments</mat-icon>
-                      <span class="label">Total Incl. VAT:</span>
-                      <span class="value">R {{ totalValue * 1.15 | number:'1.2-2' }}</span>
+                      <span class="label">Total:</span>
+                      <span class="value">R {{ totalValue | number:'1.2-2' }}</span>
                     </div>
                     @if (fuelEstimate > 0) {
                       <div class="summary-item">
@@ -19408,7 +20374,7 @@ export class AddDeliveryNoteDialog {
                             </div>
                           }
                         </div>
-                        <div class="stop-value">R {{ group.totalValue * 1.15 | number:'1.2-2' }}</div>
+                        <div class="stop-value">R {{ group.totalValue | number:'1.2-2' }}</div>
                       </div>
                     }
                   </div>
@@ -19456,7 +20422,7 @@ export class AddDeliveryNoteDialog {
                     <h4><mat-icon>route</mat-icon> Route Info</h4>
                     <p class="main-value">{{ selectedStops.length }} stops</p>
                     <p class="sub-value">{{ totalDistance | number:'1.0-0' }} km • {{ estimatedTime }}</p>
-                    <p class="sub-value">Total (incl. VAT): R {{ totalValue * 1.15 | number:'1.2-2' }}</p>
+                    <p class="sub-value">Total: R {{ totalValue | number:'1.2-2' }}</p>
                   </div>
                 </div>
 
@@ -23671,17 +24637,9 @@ export class TripsheetTypeDialog {
               <span class="label">Total Quantity:</span>
               <span class="value">{{ getTotalQuantity() }}</span>
             </div>
-            <div class="summary-item">
-              <span class="label">Subtotal:</span>
-              <span class="value">R {{ getTotalValue() | number:'1.2-2' }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="label">VAT (15%):</span>
-              <span class="value">R {{ getTotalValue() * 0.15 | number:'1.2-2' }}</span>
-            </div>
             <div class="summary-item highlight">
-              <span class="label">Total Incl. VAT:</span>
-              <span class="value">R {{ getTotalValue() * 1.15 | number:'1.2-2' }}</span>
+              <span class="label">Total:</span>
+              <span class="value">R {{ getTotalValue() | number:'1.2-2' }}</span>
             </div>
           </div>
         }
@@ -31882,11 +32840,14 @@ export class VehicleMaintenanceHistoryDialog {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatTooltipModule
+    MatProgressBarModule,
+    MatTooltipModule,
+    MatMenuModule
   ],
   template: `
     <div class="trip-history-dialog">
@@ -31894,7 +32855,7 @@ export class VehicleMaintenanceHistoryDialog {
         <div class="header-info">
           <h2>
             <mat-icon>timeline</mat-icon>
-            Today's Trip History — {{ data.vehicle.registrationNumber }}
+            Movement History — {{ data.vehicle.registrationNumber }}
           </h2>
           <div class="vehicle-meta">
             @if (data.vehicle.make) {
@@ -31906,17 +32867,40 @@ export class VehicleMaintenanceHistoryDialog {
                 {{ data.vehicle.currentDriver || data.vehicle.currentDriverName }}
               </span>
             }
-            <span class="meta-tag date-tag">
-              <mat-icon>calendar_today</mat-icon>
-              {{ todayDate }}
-            </span>
           </div>
         </div>
         <div class="header-actions">
+          <div class="date-nav">
+            <button mat-icon-button matTooltip="Previous day" (click)="changeDay(-1)" class="header-btn">
+              <mat-icon>chevron_left</mat-icon>
+            </button>
+            <input type="date" class="date-input" [ngModel]="selectedDate" (ngModelChange)="onDateChange($event)" [max]="maxDate" />
+            <button mat-icon-button matTooltip="Next day" (click)="changeDay(1)" class="header-btn" [disabled]="isToday">
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+            <button mat-stroked-button class="today-btn" (click)="goToToday()" [disabled]="isToday">Today</button>
+          </div>
+          <button mat-icon-button matTooltip="Refresh live from CarTrack" (click)="refreshFromCarTrack()" class="header-btn" [disabled]="refreshing || loading">
+            <mat-icon [class.spin]="refreshing">refresh</mat-icon>
+          </button>
           @if (trips.length > 0) {
-            <button mat-icon-button matTooltip="Export to Excel" (click)="exportToExcel()" class="header-btn">
+            <button mat-icon-button matTooltip="Export…" [matMenuTriggerFor]="exportMenu" class="header-btn">
               <mat-icon>download</mat-icon>
             </button>
+            <mat-menu #exportMenu="matMenu">
+              <button mat-menu-item (click)="exportToExcel()">
+                <mat-icon>today</mat-icon>
+                <span>Today's / selected day movements</span>
+              </button>
+              <button mat-menu-item (click)="exportDateRange()">
+                <mat-icon>date_range</mat-icon>
+                <span>Date range…</span>
+              </button>
+              <button mat-menu-item (click)="exportMonthlyKm()">
+                <mat-icon>insights</mat-icon>
+                <span>Vehicle km average (this month)</span>
+              </button>
+            </mat-menu>
           }
           <button mat-icon-button (click)="close()" class="header-btn">
             <mat-icon>close</mat-icon>
@@ -31925,25 +32909,52 @@ export class VehicleMaintenanceHistoryDialog {
       </div>
 
       @if (loading) {
+        <mat-progress-bar mode="indeterminate" class="top-progress"></mat-progress-bar>
         <div class="loading-center">
           <mat-spinner diameter="40"></mat-spinner>
-          <p>Loading trip history from CarTrack...</p>
+          <p>{{ loadingMessage }}</p>
         </div>
       } @else if (!isLinked) {
         <div class="empty-center">
           <mat-icon>link_off</mat-icon>
           <h3>Not Linked to CarTrack</h3>
-          <p>This vehicle is not linked to CarTrack. Link it first to view trip history.</p>
+          <p>This vehicle is not linked to CarTrack. Link it first to view movement history.</p>
         </div>
-      } @else if (trips.length === 0) {
-        <div class="empty-center">
-          <mat-icon>directions_car</mat-icon>
-          <h3>No Trips Today</h3>
-          <p>No trip data recorded for this vehicle today.</p>
-        </div>
+      } @else if (trips.length === 0 && fuelEvents.length === 0) {
+        @if (liveStatus?.isMoving) {
+          <div class="empty-center live">
+            <div class="live-pulse"><mat-icon>my_location</mat-icon></div>
+            <h3>On the move now</h3>
+            <p>
+              This vehicle is currently driving at <strong>{{ liveStatus.speed | number:'1.0-0' }} km/h</strong>{{ liveStatus.address ? ' near ' + liveStatus.address : '' }}.
+            </p>
+            <p class="live-note">
+              CarTrack only records a trip once it ends, so the current trip will appear here after the vehicle stops.
+              <span *ngIf="liveStatus.lastUpdate"> Last update {{ formatTime(liveStatus.lastUpdate) }}.</span>
+            </p>
+            <button mat-stroked-button (click)="loadTripHistory(true)" [disabled]="refreshing">
+              <mat-icon>refresh</mat-icon> Check for completed trips
+            </button>
+          </div>
+        } @else {
+          <div class="empty-center">
+            <mat-icon>directions_car</mat-icon>
+            <h3>No Movement</h3>
+            <p>No trip or fuel data recorded for this vehicle on {{ displayDate }}.</p>
+          </div>
+        }
       } @else {
+        @if (refreshing) {
+          <mat-progress-bar mode="indeterminate" class="top-progress"></mat-progress-bar>
+        }
         <!-- Summary Strip -->
         <div class="summary-strip">
+          @if (liveStatus?.isMoving) {
+            <div class="summary-chip live-chip">
+              <span class="dot"></span>
+              <span>LIVE · <strong>{{ liveStatus.speed | number:'1.0-0' }}</strong> km/h now</span>
+            </div>
+          }
           <div class="summary-chip distance">
             <mat-icon>straighten</mat-icon>
             <span><strong>{{ totalDistanceKm }}</strong> km</span>
@@ -31970,7 +32981,17 @@ export class VehicleMaintenanceHistoryDialog {
               <span><strong>{{ totalHarshEvents }}</strong> harsh events</span>
             </div>
           }
+          @if (fuelEvents.length > 0) {
+            <div class="summary-chip fuel">
+              <mat-icon>local_gas_station</mat-icon>
+              <span><strong>{{ fuelEvents.length }}</strong> fuel · {{ totalFuelLitres | number:'1.0-0' }}L · R{{ totalFuelAmount | number:'1.0-0' }}</span>
+            </div>
+          }
           <div class="export-btn-wrap">
+            <button mat-raised-button class="fuel-health-btn" (click)="openFuelHealth()" matTooltip="Fuel health & irregularity score">
+              <mat-icon>local_gas_station</mat-icon>
+              Fuel Health Score
+            </button>
             <button mat-raised-button class="export-btn" (click)="exportToExcel()">
               <mat-icon>download</mat-icon>
               Export
@@ -31982,6 +33003,27 @@ export class VehicleMaintenanceHistoryDialog {
         <div class="main-content">
           <!-- Trip List Sidebar -->
           <div class="trip-sidebar">
+            @if (fuelEvents.length > 0) {
+              <div class="sidebar-header fuel-header">
+                <mat-icon>local_gas_station</mat-icon> Refuelling ({{ fuelEvents.length }})
+              </div>
+              <div class="fuel-list">
+                @for (fuel of fuelEvents; track $index) {
+                  <div class="fuel-item">
+                    <div class="fuel-icon"><mat-icon>local_gas_station</mat-icon></div>
+                    <div class="fuel-details">
+                      <div class="fuel-time">{{ formatTime(fuel.timestamp) }}</div>
+                      <div class="fuel-loc">{{ fuel.depotName || fuel.depotAssignment || 'Fuel station' }}</div>
+                      <div class="fuel-stats">
+                        <span>{{ fuel.litres | number:'1.0-1' }} L</span>
+                        <span class="dot-sep">·</span>
+                        <span>R{{ fuel.amount | number:'1.2-2' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
             <div class="sidebar-header">
               <span>Trips</span>
             </div>
@@ -32069,6 +33111,15 @@ export class VehicleMaintenanceHistoryDialog {
 
     .header-btn { color: rgba(255,255,255,0.85); }
 
+    .header-btn .spin {
+      animation: mh-spin 1s linear infinite;
+    }
+
+    @keyframes mh-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
     .vehicle-meta {
       display: flex;
       gap: 6px;
@@ -32140,6 +33191,132 @@ export class VehicleMaintenanceHistoryDialog {
     .summary-chip.warning mat-icon { color: #ff8f00; }
     .summary-chip.warning { background: #fff8e1; border-color: #ffe082; }
     .summary-chip.distance { background: #e0f7fa; border-color: #80deea; }
+    .summary-chip.fuel { background: #e8f5e9; border-color: #a5d6a7; }
+    .summary-chip.fuel mat-icon { color: #2e7d32; }
+
+    /* Live "on the move now" styling */
+    .top-progress { position: sticky; top: 0; z-index: 5; }
+    .summary-chip.live-chip { background: #ffebee; border-color: #ef9a9a; color: #c62828; font-weight: 600; }
+    .summary-chip.live-chip .dot {
+      width: 9px; height: 9px; border-radius: 50%; background: #e53935; display: inline-block;
+      margin-right: 2px; animation: live-blink 1.1s ease-in-out infinite;
+    }
+    @keyframes live-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+    .empty-center.live h3 { color: #c62828; }
+    .empty-center.live .live-note { font-size: 12.5px; color: #777; max-width: 420px; }
+    .empty-center.live button { margin-top: 12px; }
+    .live-pulse {
+      width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: rgba(229,57,53,0.12); color: #e53935; margin-bottom: 8px;
+      animation: live-ring 1.6s ease-out infinite;
+    }
+    .live-pulse mat-icon { font-size: 32px; width: 32px; height: 32px; }
+    @keyframes live-ring {
+      0% { box-shadow: 0 0 0 0 rgba(229,57,53,0.35); }
+      100% { box-shadow: 0 0 0 18px rgba(229,57,53,0); }
+    }
+
+    /* Fuel-theft / anomaly banner */
+    .fuel-risk-banner {
+      margin: 8px 12px; padding: 10px 14px; background: #fff;
+      border: 1px solid #eee; border-left: 4px solid #d32f2f; border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .fuel-risk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .fuel-risk-head mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .fuel-risk-title { font-weight: 700; font-size: 14px; }
+    .fuel-risk-score { font-size: 12px; color: #777; }
+    .fuel-risk-econ { font-size: 12px; color: #555; margin-left: auto; background: #f5f5f5; padding: 2px 8px; border-radius: 10px; }
+    .fuel-risk-list { margin: 8px 0 0; padding: 0; list-style: none; }
+    .fuel-risk-list li { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; color: #444; padding: 3px 0; }
+    .fuel-risk-list li.high { color: #b71c1c; font-weight: 600; }
+    .fuel-risk-list li mat-icon { font-size: 16px; width: 16px; height: 16px; margin-top: 1px; color: #999; }
+    .fuel-risk-list li.high mat-icon { color: #d32f2f; }
+
+    /* Date navigation */
+    .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-right: 8px;
+    }
+
+    .date-input {
+      background: rgba(255,255,255,0.9);
+      border: none;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: #1a1a2e;
+      cursor: pointer;
+    }
+
+    .today-btn {
+      color: #fff !important;
+      border-color: rgba(255,255,255,0.6) !important;
+      font-size: 11px;
+      height: 28px;
+      line-height: 28px;
+      min-width: 0;
+      padding: 0 10px;
+    }
+
+    .today-btn:disabled {
+      opacity: 0.4;
+      color: rgba(255,255,255,0.5) !important;
+    }
+
+    /* Fuel section in sidebar */
+    .fuel-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #2e7d32 !important;
+      background: #f1f8e9 !important;
+    }
+
+    .fuel-header mat-icon {
+      font-size: 16px; width: 16px; height: 16px;
+    }
+
+    .fuel-list {
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .fuel-item {
+      display: flex;
+      gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      background: #fbfffb;
+    }
+
+    .fuel-icon {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: #2e7d32;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .fuel-icon mat-icon {
+      font-size: 16px; width: 16px; height: 16px;
+    }
+
+    .fuel-details { flex: 1; min-width: 0; }
+    .fuel-time { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+    .fuel-loc {
+      font-size: 11px; color: #666; margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fuel-stats {
+      display: flex; align-items: center; gap: 4px;
+      margin-top: 3px; font-size: 11px; color: #2e7d32; font-weight: 600;
+    }
 
     .summary-chip strong {
       font-weight: 700;
@@ -32148,6 +33325,14 @@ export class VehicleMaintenanceHistoryDialog {
 
     .export-btn-wrap {
       margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .fuel-health-btn {
+      background: #ef6c00 !important;
+      color: #fff !important;
+      font-size: 12px;
     }
 
     .export-btn {
@@ -32317,6 +33502,38 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
   todayDate = '';
   selectedTripIndex = -1;
 
+  // Fuel events for the selected day (from TFN)
+  fuelEvents: any[] = [];
+  totalFuelLitres = 0;
+  totalFuelAmount = 0;
+
+  // Live status for today (from CarTrack real-time feed) — shows in-progress movement
+  liveStatus: any = null;
+  loadingMessage = 'Loading movement history…';
+
+  // Fuel-theft / anomaly analysis (rolling window)
+  fuelAnalysis: any = null;
+  fuelAnalysisLoading = false;
+  fuelAnalysisDays = 30;
+
+  // Selected date (yyyy-MM-dd) — supports back-dating
+  selectedDate = '';
+  maxDate = '';
+
+  // Where the currently shown data came from: 'database' | 'cartrack-live' | 'cartrack-refresh'
+  dataSource = 'database';
+  refreshing = false;
+
+  get isToday(): boolean {
+    return this.selectedDate === this.maxDate;
+  }
+
+  get displayDate(): string {
+    if (!this.selectedDate) return '';
+    const d = new Date(this.selectedDate + 'T00:00:00');
+    return d.toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
   private map: google.maps.Map | null = null;
   private markers: google.maps.Marker[] = [];
   private polylines: google.maps.Polyline[] = [];
@@ -32325,11 +33542,15 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
   private mapInitialized = false;
 
   private http = inject(HttpClient);
+  private dialog = inject(MatDialog);
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: any,
     private dialogRef: MatDialogRef<TodayHistoryDialog>
   ) {
+    const today = new Date().toISOString().split('T')[0];
+    this.selectedDate = today;
+    this.maxDate = today;
     this.todayDate = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     this.loadTripHistory();
   }
@@ -32350,7 +33571,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
     this.polylines = [];
   }
 
-  loadTripHistory(): void {
+  loadTripHistory(refresh = false): void {
     const vehicle = this.data.vehicle;
 
     if (!vehicle.carTrackId && !vehicle.isLinkedToCarTrack) {
@@ -32360,27 +33581,124 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
     }
 
     const reg = vehicle.registrationNumber;
-    const today = new Date().toISOString().split('T')[0];
+    const targetDate = this.selectedDate;
+    if (refresh) { this.refreshing = true; this.loadingMessage = 'Syncing live data from CarTrack…'; }
+    else { this.loading = true; this.loadingMessage = 'Loading movement history…'; }
 
-    this.http.get<any>(`${this.data.apiUrl}/fleet/vehicles/${encodeURIComponent(reg)}/trip-history?date=${today}`).subscribe({
+    const url = `${this.data.apiUrl}/fleet/vehicles/${encodeURIComponent(reg)}/trip-history?date=${targetDate}&refresh=${refresh}`;
+    this.http.get<any>(url).subscribe({
       next: (response) => {
         this.trips = response.trips || [];
+        this.dataSource = response.source || 'database';
         this.totalDistanceKm = response.totalDistanceKm || 0;
         this.maxSpeed = response.maxSpeed || 0;
         this.totalHarshEvents = (response.totalHarshBraking || 0) + (response.totalHarshCornering || 0) + (response.totalHarshAcceleration || 0);
         this.totalDurationFormatted = this.formatDuration((response.totalDurationMinutes || 0) * 60);
         this.totalIdleFormatted = this.formatDuration((response.totalIdleMinutes || 0) * 60);
-        this.loading = false;
 
-        if (this.trips.length > 0) {
+        // Fuel events for the day (from TFN)
+        this.fuelEvents = response.fuelEvents || [];
+        this.totalFuelLitres = response.totalFuelLitres || 0;
+        this.totalFuelAmount = response.totalFuelAmount || 0;
+
+        // Live status (today) — vehicle may be mid-trip with no completed trips yet
+        this.liveStatus = response.liveStatus || null;
+
+        this.loading = false;
+        this.refreshing = false;
+
+        if (this.trips.length > 0 || this.fuelEvents.length > 0 || this.liveStatus?.isMoving) {
           setTimeout(() => this.initMap(), 100);
         }
       },
       error: (err) => {
-        console.error('Failed to load trip history:', err);
+        console.error('Failed to load movement history:', err);
         this.loading = false;
+        this.refreshing = false;
       }
     });
+  }
+
+  onDateChange(newDate: string): void {
+    if (!newDate) return;
+    // Guard against future dates
+    if (newDate > this.maxDate) newDate = this.maxDate;
+    this.selectedDate = newDate;
+    this.resetForReload();
+    this.loadTripHistory();
+  }
+
+  changeDay(delta: number): void {
+    const d = new Date(this.selectedDate + 'T00:00:00');
+    d.setDate(d.getDate() + delta);
+    const newDate = d.toISOString().split('T')[0];
+    if (newDate > this.maxDate) return;
+    this.selectedDate = newDate;
+    this.resetForReload();
+    this.loadTripHistory();
+  }
+
+  goToToday(): void {
+    if (this.isToday) return;
+    this.selectedDate = this.maxDate;
+    this.resetForReload();
+    this.loadTripHistory();
+  }
+
+  private resetForReload(): void {
+    this.clearMapOverlays();
+    this.mapInitialized = false;
+    this.map = null;
+    this.selectedTripIndex = -1;
+    this.trips = [];
+    this.fuelEvents = [];
+    this.liveStatus = null;
+  }
+
+  // Force a live pull from CarTrack for the selected day and persist it to our DB.
+  refreshFromCarTrack(): void {
+    if (this.refreshing) return;
+    this.resetForReload();
+    this.loadTripHistory(true);
+  }
+
+  // Rolling fuel-theft / anomaly analysis for this vehicle.
+  loadFuelAnalysis(): void {
+    const vehicle = this.data.vehicle;
+    const reg = vehicle?.registrationNumber;
+    if (!reg) return;
+    this.fuelAnalysisLoading = true;
+    const url = `${this.data.apiUrl}/fleet/vehicles/${encodeURIComponent(reg)}/fuel-analysis?days=${this.fuelAnalysisDays}`;
+    this.http.get<any>(url).subscribe({
+      next: (res) => { this.fuelAnalysis = res; this.fuelAnalysisLoading = false; },
+      error: (err) => { console.error('Fuel analysis failed:', err); this.fuelAnalysisLoading = false; }
+    });
+  }
+
+  // Open the detailed Fuel Health Score dialog (90-day window with per-fill breakdown).
+  openFuelHealth(): void {
+    const vehicle = this.data.vehicle;
+    this.dialog.open(FuelHealthDialog, {
+      width: '760px',
+      maxWidth: '95vw',
+      maxHeight: '90vh',
+      data: { vehicle, apiUrl: this.data.apiUrl }
+    });
+  }
+
+  get riskColor(): string {
+    const lvl = this.fuelAnalysis?.riskLevel;
+    if (lvl === 'high') return '#d32f2f';
+    if (lvl === 'watch') return '#f57c00';
+    return '#388e3c';
+  }
+
+  get riskLabel(): string {
+    const lvl = this.fuelAnalysis?.riskLevel;
+    if (lvl === 'high') return 'High risk';
+    if (lvl === 'watch') return 'Watch';
+    if (lvl === 'unknown') return 'No data';
+    return 'Normal';
   }
 
   private initMap(): void {
@@ -32532,6 +33850,12 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
         this.polylines.push(line);
       });
 
+      // Add fuel-station markers (placed at the vehicle's location at fill time)
+      this.plotFuelMarkers(bounds);
+
+      // Add a live marker if the vehicle is currently on the move
+      this.plotLiveMarker(bounds);
+
       if (pendingMarkers.length > 0) {
         this.map!.fitBounds(bounds, 60);
       }
@@ -32568,6 +33892,127 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
         );
       }, idx * 150);
     });
+  }
+
+  // Estimate the vehicle's lat/lng at a given time by interpolating the trip that
+  // was active then (or snapping to the nearest trip endpoint by time).
+  private estimateLocationAt(timeMs: number): { lat: number; lng: number } | null {
+    if (!this.trips || this.trips.length === 0) return null;
+
+    let best: { lat: number; lng: number } | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+
+    for (const t of this.trips) {
+      const s = Date.parse(t.startTimestamp);
+      const e = Date.parse(t.endTimestamp);
+      if (isNaN(s) || isNaN(e)) continue;
+
+      if (timeMs >= s && timeMs <= e && e > s && t.startLatitude && t.endLatitude) {
+        const f = (timeMs - s) / (e - s);
+        return {
+          lat: t.startLatitude + (t.endLatitude - t.startLatitude) * f,
+          lng: t.startLongitude + (t.endLongitude - t.startLongitude) * f
+        };
+      }
+
+      const gapS = Math.abs(timeMs - s);
+      const gapE = Math.abs(timeMs - e);
+      if (gapS < bestGap && t.startLatitude) { bestGap = gapS; best = { lat: t.startLatitude, lng: t.startLongitude }; }
+      if (gapE < bestGap && t.endLatitude) { bestGap = gapE; best = { lat: t.endLatitude, lng: t.endLongitude }; }
+    }
+    return best;
+  }
+
+  // Drop a fuel-pump marker for each refuelling event at the vehicle's estimated
+  // location at fill time, with litres/amount/time in the info window.
+  private plotFuelMarkers(bounds: google.maps.LatLngBounds): void {
+    if (!this.map || !this.fuelEvents || this.fuelEvents.length === 0) return;
+
+    this.fuelEvents.forEach((fuel) => {
+      const t = Date.parse(fuel.timestamp);
+      const pos = isNaN(t) ? null : this.estimateLocationAt(t);
+      if (!pos) return;
+
+      bounds.extend(pos);
+
+      const marker = new google.maps.Marker({
+        position: pos,
+        title: `Fuel: ${Number(fuel.litres).toFixed(0)}L`,
+        zIndex: 999,
+        icon: {
+          path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+          fillColor: '#2e7d32',
+          fillOpacity: 1,
+          strokeColor: '#fff',
+          strokeWeight: 2,
+          scale: 1.6,
+          anchor: new google.maps.Point(12, 22),
+          labelOrigin: new google.maps.Point(12, 9)
+        } as any,
+        label: { text: '\u26FD', color: '#fff', fontSize: '12px' }
+      });
+
+      marker.addListener('click', () => {
+        if (!this.infoWindow || !this.map) return;
+        const content = `
+          <div style="padding:12px;min-width:200px;">
+            <h3 style="margin:0 0 6px;font-size:15px;color:#2e7d32;">\u26FD Refuelling</h3>
+            <p style="margin:4px 0;font-size:13px;"><strong>${fuel.depotName || fuel.depotAssignment || 'Fuel station'}</strong></p>
+            <p style="margin:4px 0;font-size:12px;color:#666;"><strong>Time:</strong> ${this.formatTime(fuel.timestamp)}</p>
+            <hr style="border:none;border-top:1px solid #eee;margin:8px 0;">
+            <p style="margin:4px 0;font-size:12px;"><strong>Litres:</strong> ${Number(fuel.litres).toFixed(1)} L</p>
+            <p style="margin:4px 0;font-size:12px;"><strong>Amount:</strong> R${Number(fuel.amount).toFixed(2)}</p>
+          </div>`;
+        this.infoWindow.setContent(content);
+        this.infoWindow.open(this.map, marker);
+      });
+
+      marker.setMap(this.map);
+      this.markers.push(marker);
+    });
+  }
+
+  // Drops a pulsing "live" marker at the vehicle's current CarTrack position when it
+  // is on the move now. Complements completed trips already drawn on the map.
+  private plotLiveMarker(bounds: google.maps.LatLngBounds): void {
+    if (!this.map || !this.liveStatus || !this.liveStatus.isMoving) return;
+    const lat = Number(this.liveStatus.latitude);
+    const lng = Number(this.liveStatus.longitude);
+    if (!lat || !lng) return;
+
+    const pos = { lat, lng };
+    bounds.extend(pos);
+
+    const marker = new google.maps.Marker({
+      position: pos,
+      title: `Live: ${Number(this.liveStatus.speed).toFixed(0)} km/h`,
+      zIndex: 1000,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: '#e53935',
+        fillOpacity: 1,
+        strokeColor: '#fff',
+        strokeWeight: 3,
+        scale: 8
+      } as any
+    });
+
+    marker.addListener('click', () => {
+      if (!this.infoWindow || !this.map) return;
+      const content = `
+        <div style="padding:12px;min-width:200px;">
+          <h3 style="margin:0 0 6px;font-size:15px;color:#e53935;">\u25CF Live position</h3>
+          <p style="margin:4px 0;font-size:13px;"><strong>${this.liveStatus.address || 'On the move'}</strong></p>
+          <p style="margin:4px 0;font-size:12px;"><strong>Speed:</strong> ${Number(this.liveStatus.speed).toFixed(0)} km/h</p>
+          ${this.liveStatus.driverName ? `<p style="margin:4px 0;font-size:12px;"><strong>Driver:</strong> ${this.liveStatus.driverName}</p>` : ''}
+          ${this.liveStatus.lastUpdate ? `<p style="margin:4px 0;font-size:12px;color:#666;"><strong>Updated:</strong> ${this.formatTime(this.liveStatus.lastUpdate)}</p>` : ''}
+        </div>`;
+      this.infoWindow.setContent(content);
+      this.infoWindow.open(this.map, marker);
+    });
+
+    marker.setMap(this.map);
+    this.markers.push(marker);
   }
 
   private showStopInfo(trip: any, index: number, type: 'start' | 'end', marker: google.maps.Marker): void {
@@ -32632,7 +34077,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
 
   exportToExcel(): void {
     const vehicle = this.data.vehicle;
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.selectedDate;
 
     // Build CSV content
     const headers = ['Trip #', 'Start Time', 'End Time', 'Duration', 'From', 'To', 'Distance (km)', 'Max Speed (km/h)', 'Harsh Braking', 'Harsh Cornering', 'Harsh Acceleration', 'Idle Time (min)'];
@@ -32651,6 +34096,21 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
       Math.round(trip.idleTimeSeconds / 60)
     ]);
 
+    // Fuel events
+    if (this.fuelEvents.length > 0) {
+      rows.push([]);
+      rows.push(['Refuelling']);
+      rows.push(['Time', 'Location', 'Litres', 'Amount (R)']);
+      this.fuelEvents.forEach(f => {
+        rows.push([
+          f.timestamp || '',
+          (f.depotName || f.depotAssignment || 'Fuel station').replace(/,/g, ';'),
+          Number(f.litres).toFixed(1),
+          Number(f.amount).toFixed(2)
+        ]);
+      });
+    }
+
     // Summary row
     rows.push([]);
     rows.push(['Summary']);
@@ -32658,18 +34118,83 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
     rows.push(['Total Trips', this.trips.length]);
     rows.push(['Max Speed (km/h)', this.maxSpeed]);
     rows.push(['Total Harsh Events', this.totalHarshEvents]);
+    rows.push(['Total Fuel (L)', this.totalFuelLitres]);
+    rows.push(['Total Fuel Cost (R)', this.totalFuelAmount]);
     rows.push(['Vehicle', vehicle.registrationNumber]);
     rows.push(['Driver', vehicle.currentDriver || vehicle.currentDriverName || 'N/A']);
     rows.push(['Date', today]);
 
-    const csvContent = [headers.join(','), ...rows.map(r => (r as any[]).join(','))].join('\\n');
+    const allRows = [headers, ...rows];
+    const csvContent = allRows.map(r => (r as any[]).map(cell => {
+      const s = cell === null || cell === undefined ? '' : String(cell);
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(',')).join('\r\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `Trip_History_${vehicle.registrationNumber}_${today}.csv`;
+    link.download = `Movement_History_${vehicle.registrationNumber}_${today}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
+  }
+
+  // Prompt for a start/end date and export a daily km breakdown for that range.
+  exportDateRange(): void {
+    const today = this.selectedDate || this.maxDate;
+    const monthStart = today.substring(0, 8) + '01';
+    const from = window.prompt('Export FROM date (yyyy-MM-dd):', monthStart);
+    if (!from) return;
+    const to = window.prompt('Export TO date (yyyy-MM-dd):', today);
+    if (!to) return;
+    this.fetchKmSummaryAndExport(from, to, `Range_${from}_to_${to}`);
+  }
+
+  // Export this month's daily kms plus a worked-out monthly average.
+  exportMonthlyKm(): void {
+    const today = this.selectedDate || this.maxDate;
+    const monthStart = today.substring(0, 8) + '01';
+    this.fetchKmSummaryAndExport(monthStart, today, `KmAverage_${today.substring(0, 7)}`);
+  }
+
+  private fetchKmSummaryAndExport(from: string, to: string, suffix: string): void {
+    const vehicle = this.data.vehicle;
+    const reg = vehicle.registrationNumber;
+    const url = `${this.data.apiUrl}/fleet/vehicles/${encodeURIComponent(reg)}/km-summary?from=${from}&to=${to}`;
+    this.http.get<any>(url).subscribe({
+      next: (res) => {
+        const rows: any[] = [];
+        rows.push(['Vehicle', reg]);
+        rows.push(['Driver', vehicle.currentDriver || vehicle.currentDriverName || 'N/A']);
+        rows.push(['Period', `${res.from} to ${res.to}`]);
+        rows.push([]);
+        rows.push(['Date', 'Day', 'Distance (km)', 'Trips', 'Max Speed (km/h)']);
+        (res.days || []).forEach((d: any) => {
+          rows.push([d.date, d.dayOfWeek, d.km, d.trips, d.maxSpeed]);
+        });
+        rows.push([]);
+        rows.push(['Summary']);
+        rows.push(['Total distance (km)', res.totalKm]);
+        rows.push(['Calendar days in period', res.calendarDays]);
+        rows.push(['Days with movement', res.daysWithMovement]);
+        rows.push(['Average km / calendar day (month so far)', res.avgKmPerCalendarDay]);
+        rows.push(['Average km / active day', res.avgKmPerActiveDay]);
+
+        const csvContent = rows.map(r => (r as any[]).map(cell => {
+          const s = cell === null || cell === undefined ? '' : String(cell);
+          return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }).join(',')).join('\r\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Vehicle_${reg}_${suffix}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      },
+      error: (err) => {
+        console.error('Failed to build km summary:', err);
+        window.alert('Could not build the km summary. Please try again.');
+      }
+    });
   }
 
   formatTime(timestamp: string): string {
@@ -32694,4 +34219,286 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
   close(): void {
     this.dialogRef.close();
   }
+}
+
+// ==========================================
+// Fuel Health Score Dialog — per-fill irregularity analysis
+// ==========================================
+@Component({
+  selector: 'app-fuel-health-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+    MatProgressBarModule,
+    MatTooltipModule
+  ],
+  template: `
+    <div class="fh-dialog">
+      <div class="fh-header">
+        <div class="fh-title">
+          <mat-icon>local_gas_station</mat-icon>
+          <div>
+            <h2>Fuel Health Score</h2>
+            <span class="fh-sub">{{ data.vehicle?.registrationNumber }}<span *ngIf="data.vehicle?.make"> · {{ data.vehicle.make }} {{ data.vehicle.model }}</span></span>
+          </div>
+        </div>
+        <div class="fh-controls">
+          <select [(ngModel)]="days" (ngModelChange)="load()" class="fh-range">
+            <option [ngValue]="30">Last 30 days</option>
+            <option [ngValue]="60">Last 60 days</option>
+            <option [ngValue]="90">Last 90 days</option>
+            <option [ngValue]="180">Last 6 months</option>
+          </select>
+          <button mat-icon-button (click)="close()"><mat-icon>close</mat-icon></button>
+        </div>
+      </div>
+
+      @if (loading) {
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        <div class="fh-center"><mat-spinner diameter="40"></mat-spinner><p>Analysing fuel history…</p></div>
+      } @else if (!result) {
+        <div class="fh-center"><mat-icon>error_outline</mat-icon><p>Could not load fuel analysis.</p></div>
+      } @else {
+        <div class="fh-body">
+          <!-- Score gauge -->
+          <div class="fh-score-card" [style.borderColor]="scoreColor">
+            <div class="fh-gauge" [style.background]="gaugeGradient">
+              <div class="fh-gauge-inner">
+                <span class="fh-score" [style.color]="scoreColor">{{ result.riskScore }}</span>
+                <span class="fh-score-max">/100</span>
+              </div>
+            </div>
+            <div class="fh-score-label">
+              <span class="fh-badge" [style.background]="scoreColor">{{ riskLabel }}</span>
+              <p class="fh-score-desc">{{ scoreDescription }}</p>
+            </div>
+          </div>
+
+          <!-- Key stats -->
+          <div class="fh-stats">
+            <div class="fh-stat">
+              <span class="fh-stat-val">{{ result.totalDistanceKm | number:'1.0-0' }}</span>
+              <span class="fh-stat-lbl">km driven</span>
+            </div>
+            <div class="fh-stat">
+              <span class="fh-stat-val">{{ result.totalLitres | number:'1.0-0' }} L</span>
+              <span class="fh-stat-lbl">fuel drawn</span>
+            </div>
+            <div class="fh-stat">
+              <span class="fh-stat-val">{{ result.actualKmPerLitre ? (result.actualKmPerLitre | number:'1.1-1') : '—' }}</span>
+              <span class="fh-stat-lbl">actual km/L</span>
+            </div>
+            <div class="fh-stat">
+              <span class="fh-stat-val">{{ result.baselineKmPerLitre ? (result.baselineKmPerLitre | number:'1.1-1') : '—' }}</span>
+              <span class="fh-stat-lbl">baseline km/L<span *ngIf="result.baselineSource==='self-learned'"> (learned)</span></span>
+            </div>
+            <div class="fh-stat">
+              <span class="fh-stat-val">{{ result.tankSizeLitres ? (result.tankSizeLitres | number:'1.0-0') + ' L' : '—' }}</span>
+              <span class="fh-stat-lbl">tank size</span>
+            </div>
+            <div class="fh-stat">
+              <span class="fh-stat-val">{{ result.fillCount }}</span>
+              <span class="fh-stat-lbl">fill-ups</span>
+            </div>
+          </div>
+
+          <!-- Findings -->
+          @if (result.findings?.length) {
+            <div class="fh-section">
+              <h3><mat-icon>warning_amber</mat-icon> Irregularities found</h3>
+              <ul class="fh-findings">
+                @for (f of result.findings; track $index) {
+                  <li [class.high]="f.severity === 'high'">
+                    <mat-icon>{{ f.severity === 'high' ? 'priority_high' : 'info' }}</mat-icon>
+                    {{ f.message }}
+                  </li>
+                }
+              </ul>
+            </div>
+          } @else {
+            <div class="fh-ok"><mat-icon>check_circle</mat-icon> No irregularities detected in this period.</div>
+          }
+
+          <!-- Notes (data quality) -->
+          @if (result.notes?.length) {
+            <div class="fh-notes">
+              @for (n of result.notes; track $index) { <div><mat-icon>info</mat-icon> {{ n }}</div> }
+            </div>
+          }
+
+          <!-- Per-fill breakdown -->
+          <div class="fh-section">
+            <h3><mat-icon>format_list_bulleted</mat-icon> Fill-up history &amp; distance between fills</h3>
+            @if (result.fills?.length) {
+              <div class="fh-table-wrap">
+                <table class="fh-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Depot</th>
+                      <th class="num">Litres</th>
+                      <th class="num">Amount</th>
+                      <th class="num">km since last</th>
+                      <th class="num">Expected L</th>
+                      <th class="num">% of tank</th>
+                      <th>Flag</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (fill of result.fills; track $index) {
+                      <tr [class.flagged]="fill.flag" [class.flagged-high]="fill.severity === 'high'">
+                        <td>{{ fill.date | date:'d MMM yyyy' }}</td>
+                        <td>{{ fill.depotName || '—' }}</td>
+                        <td class="num">{{ fill.litres | number:'1.0-1' }}</td>
+                        <td class="num">R{{ fill.amount | number:'1.0-0' }}</td>
+                        <td class="num" [class.muted]="!fill.hasMovementData && $index > 0">
+                          {{ fill.kmSinceLastFill != null ? (fill.kmSinceLastFill | number:'1.0-0') : ($index === 0 ? '—' : 'no data') }}
+                        </td>
+                        <td class="num">{{ fill.expectedLitresForLeg != null ? (fill.expectedLitresForLeg | number:'1.0-1') : '—' }}</td>
+                        <td class="num" [class.over]="fill.fillVsTankPercent > 100">{{ fill.fillVsTankPercent != null ? fill.fillVsTankPercent + '%' : '—' }}</td>
+                        <td class="flag-cell">
+                          <span *ngIf="fill.flag" class="flag-pill" [class.high]="fill.severity === 'high'"><mat-icon>error</mat-icon> {{ fill.flag }}</span>
+                          <span *ngIf="!fill.flag && $index > 0 && fill.hasMovementData" class="ok-tick">✓</span>
+                          <span *ngIf="!fill.flag && (!fill.hasMovementData && $index > 0)" class="muted">—</span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            } @else {
+              <p class="fh-empty">No fill-ups recorded in this period.</p>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .fh-dialog { display: flex; flex-direction: column; background: #fff; }
+    .fh-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; background: linear-gradient(135deg, #e65100 0%, #ef6c00 100%); color: #fff;
+    }
+    .fh-title { display: flex; align-items: center; gap: 12px; }
+    .fh-title mat-icon { font-size: 30px; width: 30px; height: 30px; }
+    .fh-title h2 { margin: 0; font-size: 18px; }
+    .fh-sub { font-size: 12.5px; opacity: 0.9; }
+    .fh-controls { display: flex; align-items: center; gap: 6px; }
+    .fh-range { border: none; border-radius: 6px; padding: 6px 8px; font-size: 12.5px; }
+    .fh-center { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px; color: #777; }
+    .fh-center mat-icon { font-size: 40px; width: 40px; height: 40px; }
+    .fh-body { padding: 20px; overflow-y: auto; }
+
+    .fh-score-card {
+      display: flex; align-items: center; gap: 20px; padding: 16px; border: 2px solid #ccc;
+      border-radius: 12px; margin-bottom: 16px;
+    }
+    .fh-gauge {
+      width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .fh-gauge-inner {
+      width: 78px; height: 78px; border-radius: 50%; background: #fff; display: flex; align-items: baseline; justify-content: center; gap: 1px;
+    }
+    .fh-score { font-size: 30px; font-weight: 800; line-height: 1; }
+    .fh-score-max { font-size: 13px; color: #999; }
+    .fh-badge { color: #fff; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .fh-score-desc { margin: 8px 0 0; font-size: 13px; color: #555; }
+
+    .fh-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+    .fh-stat { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; text-align: center; }
+    .fh-stat-val { display: block; font-size: 18px; font-weight: 700; color: #1a1a2e; }
+    .fh-stat-lbl { font-size: 11.5px; color: #888; }
+
+    .fh-section { margin-bottom: 18px; }
+    .fh-section h3 { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #333; margin: 0 0 8px; }
+    .fh-section h3 mat-icon { font-size: 18px; width: 18px; height: 18px; color: #ef6c00; }
+    .fh-findings { list-style: none; margin: 0; padding: 0; }
+    .fh-findings li { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: #555; padding: 5px 0; }
+    .fh-findings li.high { color: #c62828; font-weight: 600; }
+    .fh-findings li mat-icon { font-size: 17px; width: 17px; height: 17px; color: #999; margin-top: 1px; }
+    .fh-findings li.high mat-icon { color: #d32f2f; }
+    .fh-ok { display: flex; align-items: center; gap: 8px; color: #2e7d32; font-size: 13.5px; background: #e8f5e9; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+    .fh-notes { background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
+    .fh-notes div { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8d6e00; padding: 2px 0; }
+    .fh-notes mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+    .fh-table-wrap { overflow-x: auto; border: 1px solid #eee; border-radius: 8px; }
+    .fh-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .fh-table th, .fh-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+    .fh-table th { background: #fafafa; font-weight: 600; color: #666; }
+    .fh-table td.num, .fh-table th.num { text-align: right; }
+    .fh-table td.over { color: #c62828; font-weight: 700; }
+    .fh-table td.muted, .fh-table .muted { color: #bbb; font-style: italic; }
+    .fh-table tr.flagged { background: #fff5f5; }
+    .fh-table tr.flagged-high { background: #ffebee; }
+    .flag-pill { display: inline-flex; align-items: center; gap: 4px; background: #fff3e0; color: #e65100; padding: 2px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600; }
+    .flag-pill.high { background: #ffebee; color: #c62828; }
+    .flag-pill mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .ok-tick { color: #2e7d32; font-weight: 700; }
+    .fh-empty { color: #999; font-size: 13px; }
+  `]
+})
+export class FuelHealthDialog {
+  days = 90;
+  loading = true;
+  result: any = null;
+
+  private http = inject(HttpClient);
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private dialogRef: MatDialogRef<FuelHealthDialog>
+  ) {
+    this.load();
+  }
+
+  load(): void {
+    const reg = this.data.vehicle?.registrationNumber;
+    if (!reg) { this.loading = false; return; }
+    this.loading = true;
+    const url = `${this.data.apiUrl}/fleet/vehicles/${encodeURIComponent(reg)}/fuel-analysis?days=${this.days}`;
+    this.http.get<any>(url).subscribe({
+      next: (res) => { this.result = res; this.loading = false; },
+      error: (err) => { console.error('Fuel health load failed:', err); this.loading = false; }
+    });
+  }
+
+  get scoreColor(): string {
+    const lvl = this.result?.riskLevel;
+    if (lvl === 'high') return '#d32f2f';
+    if (lvl === 'watch') return '#f57c00';
+    if (lvl === 'unknown') return '#9e9e9e';
+    return '#388e3c';
+  }
+
+  get gaugeGradient(): string {
+    const score = this.result?.riskScore || 0;
+    const c = this.scoreColor;
+    const deg = Math.round((score / 100) * 360);
+    return `conic-gradient(${c} ${deg}deg, #eeeeee ${deg}deg)`;
+  }
+
+  get riskLabel(): string {
+    const lvl = this.result?.riskLevel;
+    if (lvl === 'high') return 'High risk';
+    if (lvl === 'watch') return 'Watch';
+    if (lvl === 'unknown') return 'No data';
+    return 'Healthy';
+  }
+
+  get scoreDescription(): string {
+    const lvl = this.result?.riskLevel;
+    if (lvl === 'high') return 'Strong signs of fuel loss or a vehicle problem. Investigate the flagged fill-ups below.';
+    if (lvl === 'watch') return 'Some irregularities worth keeping an eye on.';
+    if (lvl === 'unknown') return 'Not enough data (tank size / expected economy) to score this vehicle.';
+    return 'Fuel usage lines up with distance travelled and tank capacity.';
+  }
+
+  close(): void { this.dialogRef.close(); }
 }

@@ -95,6 +95,9 @@ export class FinanceComponent implements OnInit {
   filteredInvoices: BookInvoice[] = [];
   departments: Department[] = [];
   loading = false;
+  commitmentsMonthly = 0;
+  creditorsTotal = 0;
+  debtorsTotal = 0;
   
   // Filters
   selectedDepartment: number | null = null;
@@ -131,6 +134,13 @@ export class FinanceComponent implements OnInit {
   stationeryFilter = 'all';
   stationeryCounts = { pending: 0, approved: 0, declined: 0, total: 0 };
 
+  // Requisitions (finance payment workflow: Requested / Paid / Rejected)
+  showRequisitionsPanel = false;
+  requisitions: any[] = [];
+  requisitionsLoading = false;
+  requisitionFilter = 'Requested';
+  requisitionCounts = { requested: 0, paid: 0, rejected: 0, total: 0 };
+
   selectedCompany = '';
   companyPassword = '';
   passwordError = '';
@@ -160,6 +170,7 @@ export class FinanceComponent implements OnInit {
     this.loadDepartments();
     this.loadStats();
     this.loadStationeryCounts();
+    this.loadRequisitionCounts();
   }
 
   loadDepartments(): void {
@@ -184,6 +195,15 @@ export class FinanceComponent implements OnInit {
     });
     
     this.loadInvoiceStats();
+
+    this.http.get<any>(`${environment.apiUrl}/finance/creditors/summary`).subscribe({
+      next: (s) => this.creditorsTotal = s?.totalPayable || 0,
+      error: () => {}
+    });
+    this.http.get<any>(`${environment.apiUrl}/finance/debtors/summary`).subscribe({
+      next: (s) => this.debtorsTotal = s?.totalReceivable || 0,
+      error: () => {}
+    });
   }
   
   loadInvoiceStats(): void {
@@ -198,6 +218,23 @@ export class FinanceComponent implements OnInit {
       },
       error: (err) => console.error('Error loading invoice stats:', err)
     });
+
+    this.http.get<any>(`${environment.apiUrl}/finance/recurring-payments/summary`).subscribe({
+      next: (s) => this.commitmentsMonthly = s?.monthlyTotal || 0,
+      error: () => {}
+    });
+  }
+
+  goToCommitments(): void {
+    this.router.navigate(['/finance/commitments']);
+  }
+
+  goToCreditors(): void {
+    this.router.navigate(['/finance/creditors']);
+  }
+
+  goToDebtors(): void {
+    this.router.navigate(['/finance/debtors']);
   }
 
   onDepartmentChange(): void {
@@ -261,7 +298,32 @@ export class FinanceComponent implements OnInit {
     const url = `${environment.apiUrl}/Books/${invoice.id}/download`;
     window.open(url, '_blank');
   }
-  
+
+  markPaid(invoice: BookInvoice): void {
+    const body = { paymentDate: new Date().toISOString() };
+    this.http.put<any>(`${environment.apiUrl}/Books/${invoice.id}/mark-paid`, body).subscribe({
+      next: () => {
+        invoice.status = 'Paid';
+        invoice.paymentDate = new Date();
+        this.snackBar.open(`Invoice ${invoice.invoiceNumber || ''} marked as paid`, 'Close', { duration: 2500 });
+        this.loadInvoiceStats();
+      },
+      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to mark as paid', 'Close', { duration: 4000 })
+    });
+  }
+
+  markUnpaid(invoice: BookInvoice): void {
+    this.http.put<any>(`${environment.apiUrl}/Books/${invoice.id}/mark-unpaid`, {}).subscribe({
+      next: () => {
+        invoice.status = 'Confirmed';
+        invoice.paymentDate = undefined;
+        this.snackBar.open(`Invoice ${invoice.invoiceNumber || ''} marked as unpaid`, 'Close', { duration: 2500 });
+        this.loadInvoiceStats();
+      },
+      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to mark as unpaid', 'Close', { duration: 4000 })
+    });
+  }
+
   viewInvoice(invoice: BookInvoice): void {
     const deptId = invoice.departmentId || this.selectedDepartment;
     const dept = this.departments.find(d => d.departmentId === deptId);
@@ -479,5 +541,51 @@ export class FinanceComponent implements OnInit {
 
   getQuoteUrl(id: number, n: number): string {
     return `${environment.apiUrl}/stationery-requests/${id}/quote/${n}`;
+  }
+
+  // ── Requisitions (finance payment workflow) ──────────────────────────────
+  loadRequisitionCounts(): void {
+    this.http.get<any>(`${environment.apiUrl}/finance/requisitions/summary`).subscribe({
+      next: c => this.requisitionCounts = {
+        requested: c?.requested || 0,
+        paid: c?.paid || 0,
+        rejected: c?.rejected || 0,
+        total: c?.total || 0
+      },
+      error: () => {}
+    });
+  }
+
+  toggleRequisitionsPanel(): void {
+    this.showRequisitionsPanel = !this.showRequisitionsPanel;
+    if (this.showRequisitionsPanel) this.loadRequisitions();
+  }
+
+  setRequisitionFilter(f: string): void {
+    this.requisitionFilter = f;
+    this.loadRequisitions();
+  }
+
+  loadRequisitions(): void {
+    this.requisitionsLoading = true;
+    const q = this.requisitionFilter !== 'all' ? `?status=${this.requisitionFilter}` : '';
+    this.http.get<any[]>(`${environment.apiUrl}/finance/requisitions${q}`).subscribe({
+      next: r => { this.requisitions = r || []; this.requisitionsLoading = false; },
+      error: () => { this.requisitionsLoading = false; }
+    });
+  }
+
+  setRequisitionStatus(req: any, status: 'Requested' | 'Paid' | 'Rejected'): void {
+    this.http.put(`${environment.apiUrl}/finance/requisitions/${req.id}/status`, { status }).subscribe({
+      next: () => {
+        req.financeStatus = status;
+        this.loadRequisitionCounts();
+        if (this.requisitionFilter !== 'all' && this.requisitionFilter !== status) {
+          this.requisitions = this.requisitions.filter(r => r.id !== req.id);
+        }
+        this.snackBar.open(`Requisition marked ${status}`, 'Close', { duration: 2000 });
+      },
+      error: () => this.snackBar.open('Failed to update requisition', 'Close', { duration: 2500 })
+    });
   }
 }

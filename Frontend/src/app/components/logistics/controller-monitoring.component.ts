@@ -188,7 +188,7 @@ interface Geofence {
               <mat-label>Registration</mat-label>
               <input matInput [(ngModel)]="archiveReg" placeholder="All vehicles">
             </mat-form-field>
-            <mat-slide-toggle [(ngModel)]="archiveCurfewOnly">Curfew only (18:00–06:00)</mat-slide-toggle>
+            <mat-slide-toggle [(ngModel)]="archiveCurfewOnly">Curfew only (18:00–05:00)</mat-slide-toggle>
             <button mat-raised-button color="primary" (click)="loadArchive()">
               <mat-icon>search</mat-icon> Load
             </button>
@@ -429,7 +429,7 @@ interface Geofence {
           <div class="tv-header">
             <div>
               <div class="tv-title"><mat-icon>local_shipping</mat-icon> {{ tripsDialogReg() }}</div>
-              <div class="tv-sub">{{ archiveDate | date:'EEE dd MMM yyyy' }} · {{ archiveCurfewOnly ? 'Curfew window (18:00–06:00)' : 'Full day' }}</div>
+              <div class="tv-sub">{{ archiveDate | date:'EEE dd MMM yyyy' }} · {{ archiveCurfewOnly ? 'Curfew window (18:00–05:00)' : 'Full day' }}</div>
             </div>
             <button mat-icon-button (click)="closeVehicleTrips()"><mat-icon>close</mat-icon></button>
           </div>
@@ -658,7 +658,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
   private readonly googleKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
 
   curfewStart = 18;
-  curfewEnd = 6;
+  curfewEnd = 5;
 
   loading = signal(false);
   vehicles = signal<WatchVehicle[]>([]);
@@ -676,6 +676,8 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
 
   private map: any;
   private markers = new Map<string, any>();
+  private speedRings = new Map<string, any>();  // speedometer gauge ring behind each vehicle dot
+  private readonly maxSpeedKmh = 120;           // full-scale of the gauge
 
   // archive
   archiveDate: Date = new Date();
@@ -965,9 +967,31 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
       if (!v.latitude || !v.longitude) continue;
       seen.add(v.vehicleId);
       const color = this.markerColor(v);
+
+      // ----- speedometer gauge ring (drawn beneath the dot) -----
+      const pos = { lat: v.latitude, lng: v.longitude };
+      const ringIcon = {
+        url: this.buildSpeedRingSvg(v),
+        scaledSize: new google.maps.Size(46, 46),
+        anchor: new google.maps.Point(23, 23)
+      };
+      let ring = this.speedRings.get(v.vehicleId);
+      if (ring) {
+        ring.setPosition(pos);
+        ring.setIcon(ringIcon);
+      } else {
+        ring = new google.maps.Marker({
+          position: pos, map: this.map, icon: ringIcon,
+          clickable: false, zIndex: 1
+        });
+        this.speedRings.set(v.vehicleId, ring);
+      }
+
       const icon = {
-        path: google.maps.SymbolPath.CIRCLE, scale: v.alert ? 9 : 7,
-        fillColor: color, fillOpacity: 1, strokeColor: '#0f172a', strokeWeight: 2
+        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+        scale: v.alert ? 8 : 6,
+        fillColor: color, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2,
+        rotation: v.isMoving ? (v.heading || 0) : 0
       };
       let m = this.markers.get(v.vehicleId);
       if (m) {
@@ -976,7 +1000,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
       } else {
         m = new google.maps.Marker({
           position: { lat: v.latitude, lng: v.longitude }, map: this.map, icon,
-          title: `${v.registration} — ${v.status}`
+          title: `${v.registration} — ${v.status}`, zIndex: 2
         });
         const info = new google.maps.InfoWindow();
         m.addListener('click', () => {
@@ -993,7 +1017,53 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
     for (const [id, m] of this.markers) {
       if (!seen.has(id)) { m.setMap(null); this.markers.delete(id); }
     }
+    for (const [id, r] of this.speedRings) {
+      if (!seen.has(id)) { r.setMap(null); this.speedRings.delete(id); }
+    }
   }
+
+  /**
+   * Builds a speedometer-style gauge ring as an SVG data-URL. A 270° track
+   * (opening at the bottom) sits around the vehicle dot; the coloured arc fills
+   * in proportion to speed (green → amber → red), giving an at-a-glance read of
+   * how fast each vehicle is going, at any zoom level.
+   */
+  private buildSpeedRingSvg(v: WatchVehicle): string {
+    const size = 46, cx = 23, cy = 23, r = 18;
+    const startDeg = 135, sweep = 270;                 // gap at the bottom
+    const speed = Math.max(0, v.speed || 0);
+    const frac = Math.min(speed / this.maxSpeedKmh, 1);
+    const endDeg = startDeg + sweep * frac;
+
+    // Arc colour by speed band (parked/offline vehicles show only the faint track).
+    let arcColor = '#22c55e';                          // green  ≤ 40
+    if (speed > 80) arcColor = '#ef4444';              // red    > 80
+    else if (speed > 40) arcColor = '#f59e0b';         // amber  40–80
+    if (v.alert) arcColor = '#ef4444';
+
+    const polar = (deg: number) => {
+      const rad = (deg * Math.PI) / 180;
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    };
+    const arcPath = (a0: number, a1: number) => {
+      const s = polar(a0), e = polar(a1);
+      const large = (a1 - a0) > 180 ? 1 : 0;
+      return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+    };
+
+    const track = arcPath(startDeg, startDeg + sweep);
+    const fill = speed > 0 ? arcPath(startDeg, endDeg) : '';
+    const tip = polar(endDeg);
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <path d="${track}" fill="none" stroke="#0f172a" stroke-opacity="0.25" stroke-width="4" stroke-linecap="round"/>
+      ${fill ? `<path d="${fill}" fill="none" stroke="${arcColor}" stroke-width="4" stroke-linecap="round"/>` : ''}
+      ${speed > 0 ? `<circle cx="${tip.x.toFixed(2)}" cy="${tip.y.toFixed(2)}" r="2.6" fill="${arcColor}" stroke="#ffffff" stroke-width="1"/>` : ''}
+    </svg>`;
+
+    return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  }
+
 
   focusVehicle(v: WatchVehicle): void {
     this.selected.set(v);
@@ -1147,7 +1217,11 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
       const marker = new google.maps.Marker({
         position: { lat: fp.latitude, lng: fp.longitude },
         map: this.map,
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#f59e0b', fillOpacity: 0.8, strokeColor: '#ffffff', strokeWeight: 2 },
+        icon: {
+          url: this.buildFuelPumpSvg(),
+          scaledSize: new google.maps.Size(28, 34),
+          anchor: new google.maps.Point(14, 32)
+        },
         title: `${fp.name} (${fp.brand || 'TFN'})`
       });
       const info = new google.maps.InfoWindow();
@@ -1168,6 +1242,27 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
     this.fuelingPointMarkers.forEach(m => m.setMap(null));
     this.fuelingPointMarkers = [];
   }
+
+  /**
+   * Builds a fuel-pump map pin as an SVG data-URL — a rounded amber teardrop
+   * pin with a white fuel-pump glyph, so stations read clearly instead of the
+   * old plain orange dots.
+   */
+  private buildFuelPumpSvg(): string {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">
+      <path d="M14 33 C14 33 25 20 25 12.5 A11 11 0 1 0 3 12.5 C3 20 14 33 14 33 Z"
+            fill="#f59e0b" stroke="#ffffff" stroke-width="1.5"/>
+      <g fill="#ffffff">
+        <rect x="8" y="6" width="7" height="12" rx="1.2"/>
+        <rect x="9.4" y="7.6" width="4.2" height="3.4" rx="0.6" fill="#f59e0b"/>
+        <path d="M15 8.5 l2.4 2.4 v5.1 a1.3 1.3 0 0 0 2.6 0 v-4.3 l-1.6 -1.6"
+              fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
+        <rect x="7.2" y="17.4" width="8.6" height="1.8" rx="0.9"/>
+      </g>
+    </svg>`;
+    return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  }
+
 
   // ---------- active load routes ----------
   toggleActiveLoads(): void {

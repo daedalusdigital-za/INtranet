@@ -370,3 +370,4 @@ C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\Bounc
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\MailKit.dll
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\MimeKit.dll
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\itext.bouncy-castle-adapter.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\XstReader.Api.dll

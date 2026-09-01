@@ -106,6 +106,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string LicenseType { get; set; } = string.Empty;
         public DateTime? LicenseExpiryDate { get; set; }
         public string? EmployeeNumber { get; set; }
+        public string? IdNumber { get; set; }
+        public string? PassportNumber { get; set; }
+        public string? Nationality { get; set; }
         public string? PhoneNumber { get; set; }
         public string? Email { get; set; }
         public string Status { get; set; } = string.Empty;
@@ -123,6 +126,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string LicenseType { get; set; } = string.Empty;
         public DateTime? LicenseExpiryDate { get; set; }
         public string? EmployeeNumber { get; set; }
+        public string? IdNumber { get; set; }
+        public string? PassportNumber { get; set; }
+        public string? Nationality { get; set; }
         public string? PhoneNumber { get; set; }
         public string? Email { get; set; }
         public string Status { get; set; } = string.Empty;
@@ -142,6 +148,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string LicenseType { get; set; } = string.Empty;
         public DateTime? LicenseExpiryDate { get; set; }
         public string? EmployeeNumber { get; set; }
+        public string? IdNumber { get; set; }
+        public string? PassportNumber { get; set; }
+        public string? Nationality { get; set; }
         public string? PhoneNumber { get; set; }
         public string? Email { get; set; }
         public DateTime? DateOfBirth { get; set; }
@@ -156,6 +165,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? LicenseType { get; set; }
         public DateTime? LicenseExpiryDate { get; set; }
         public string? EmployeeNumber { get; set; }
+        public string? IdNumber { get; set; }
+        public string? PassportNumber { get; set; }
+        public string? Nationality { get; set; }
         public string? PhoneNumber { get; set; }
         public string? Email { get; set; }
         public string? Status { get; set; }

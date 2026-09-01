@@ -38,6 +38,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] int? month,
             [FromQuery] int? year,
             [FromQuery] string? depotAssignment,
+            [FromQuery] string? source,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50)
         {
@@ -61,6 +62,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (!string.IsNullOrEmpty(depotAssignment))
                 query = query.Where(f => f.DepotAssignment != null && f.DepotAssignment.Contains(depotAssignment));
 
+            if (!string.IsNullOrEmpty(source))
+                query = query.Where(f => f.Source == source);
+
             var total = await query.CountAsync();
 
             var transactions = await query
@@ -79,6 +83,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     TransactionDate = f.TransactionDate,
                     AmountSpent = f.AmountSpent,
                     DepotAssignment = f.DepotAssignment,
+                    Source = f.Source,
                     ReportMonth = f.ReportMonth,
                     ReportYear = f.ReportYear,
                     Notes = f.Notes,

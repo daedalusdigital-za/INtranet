@@ -51,6 +51,10 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(100)]
         public string? DepotAssignment { get; set; }
 
+        /// <summary>Fuel source: "TFN" (TruckFuelNet) or "PUMA" (Puma Garage).</summary>
+        [MaxLength(20)]
+        public string Source { get; set; } = "TFN";
+
         // Report period tracking
         public int ReportMonth { get; set; }
         public int ReportYear { get; set; }

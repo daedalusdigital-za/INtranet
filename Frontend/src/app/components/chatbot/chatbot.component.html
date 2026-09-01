@@ -23,6 +23,34 @@
       </div>
     </div>
     <div class="chat-header-actions">
+      <button class="chat-action-btn" *ngIf="ttsSupported" (click)="toggleVoiceOutput()" [class.voice-active]="voiceEnabled" [title]="voiceEnabled ? 'Welly voice: ON (click to mute)' : 'Welly voice: OFF (click to hear replies)'">
+        <svg *ngIf="voiceEnabled" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+        <svg *ngIf="!voiceEnabled" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="23" y1="9" x2="17" y2="15"></line>
+          <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+      </button>
+      <button class="chat-action-btn" *ngIf="speechSupported" (click)="toggleConversationMode()" [class.voice-active]="conversationMode" [title]="conversationMode ? 'Hands-free conversation: ON' : 'Start hands-free conversation'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          <line x1="8" y1="10" x2="8" y2="12"></line>
+          <line x1="12" y1="8" x2="12" y2="14"></line>
+          <line x1="16" y1="10" x2="16" y2="12"></line>
+        </svg>
+      </button>
+      <button class="chat-action-btn" *ngIf="speechSupported && ttsSupported" (click)="startVoiceMode()" title="Voice conversation">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+      </button>
       <button class="chat-action-btn" (click)="minimizeChat()" *ngIf="!isMinimized" title="Minimize">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -108,6 +136,10 @@
         </button>
       </div>
       <div class="file-error" *ngIf="fileInputError">{{ fileInputError }}</div>
+      <div class="voice-status" *ngIf="isListening || interimTranscript">
+        <span class="voice-pulse"></span>
+        <span class="voice-status-text">{{ interimTranscript || 'Listening…' }}</span>
+      </div>
       <div class="input-wrapper">
         <button
           class="chat-attach-btn"
@@ -115,6 +147,19 @@
           title="Attach file (PDF, Excel, CSV)">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+          </svg>
+        </button>
+        <button
+          *ngIf="speechSupported"
+          class="chat-mic-btn"
+          [class.listening]="isListening"
+          (click)="toggleListening()"
+          [title]="isListening ? 'Stop listening' : 'Speak to Welly'">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
           </svg>
         </button>
         <input
@@ -136,5 +181,114 @@
         </button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- Voice Mode permission gate (asks before orb) -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="voice-permission-overlay" *ngIf="showVoicePermission">
+  <div class="voice-permission-card">
+    <div class="vp-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      </svg>
+    </div>
+    <h3>Talk with Welly</h3>
+    <p class="vp-sub">Welly needs access to your microphone to hear you. Pick a language and allow the mic when prompted.</p>
+
+    <label class="vp-label">Language</label>
+    <div class="vp-lang-group">
+      <button *ngFor="let l of voiceLangOptions"
+              class="vp-lang-btn"
+              [class.selected]="voiceLang === l.code"
+              (click)="voiceLang = l.code">
+        {{ l.label }}
+      </button>
+    </div>
+
+    <div class="vp-error" *ngIf="permissionError">{{ permissionError }}</div>
+
+    <div class="vp-actions">
+      <button class="vp-cancel" (click)="cancelVoicePermission()" [disabled]="permissionRequesting">Cancel</button>
+      <button class="vp-allow" (click)="confirmVoicePermission()" [disabled]="permissionRequesting">
+        <span *ngIf="!permissionRequesting">Allow microphone & start</span>
+        <span *ngIf="permissionRequesting">Requesting…</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- Immersive Voice Mode (ChatGPT-style overlay) -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="voice-mode-overlay" *ngIf="voiceModeActive" [attr.data-state]="voiceState">
+  <button class="voice-close-btn" (click)="exitVoiceMode()" title="Exit voice mode">
+    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  </button>
+
+  <div class="voice-mode-title">Welly</div>
+
+  <!-- Language switcher (mid-conversation) -->
+  <div class="voice-lang-switch">
+    <button *ngFor="let l of voiceLangOptions"
+            [class.active]="voiceLang === l.code"
+            (click)="setVoiceLang(l.code)">
+      {{ l.label }}
+    </button>
+  </div>
+
+  <!-- Animated orb -->
+  <div class="voice-orb-wrap" (click)="onVoiceOrbTap()" title="Tap to interrupt / talk">
+    <div class="voice-orb" [class.listening]="voiceState === 'listening'"
+                            [class.thinking]="voiceState === 'thinking'"
+                            [class.speaking]="voiceState === 'speaking'">
+      <div class="orb-core"></div>
+      <div class="orb-ring ring1"></div>
+      <div class="orb-ring ring2"></div>
+      <div class="orb-ring ring3"></div>
+    </div>
+  </div>
+
+  <!-- Status + live caption -->
+  <div class="voice-status-label">
+    <ng-container [ngSwitch]="voiceState">
+      <span *ngSwitchCase="'listening'">Listening…</span>
+      <span *ngSwitchCase="'thinking'">Welly is thinking…</span>
+      <span *ngSwitchCase="'speaking'">Welly is speaking…</span>
+      <span *ngSwitchDefault>Tap the orb to talk</span>
+    </ng-container>
+  </div>
+  <div class="voice-caption" *ngIf="voiceCaption">{{ voiceCaption }}</div>
+
+  <!-- Controls -->
+  <div class="voice-controls">
+    <button class="voice-ctrl-btn" [class.muted]="voiceMuted" (click)="toggleVoiceMute()" [title]="voiceMuted ? 'Unmute microphone' : 'Mute microphone'">
+      <svg *ngIf="!voiceMuted" xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      </svg>
+      <svg *ngIf="voiceMuted" xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      </svg>
+    </button>
+    <button class="voice-ctrl-btn end" (click)="exitVoiceMode()" title="End conversation">
+      <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
   </div>
 </div>

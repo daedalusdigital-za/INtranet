@@ -17,20 +17,46 @@ public class SalesReportImportService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<SalesReportImportService> _logger;
 
-    // Column indices based on expected Sage report format
-    private const int COL_YEAR = 0;
-    private const int COL_PERIOD = 1;
-    private const int COL_TYPE = 2;
-    private const int COL_DATE = 3;
-    private const int COL_TRANSACTION_NUMBER = 4;
-    private const int COL_SALESPERSON = 5;
-    private const int COL_CATEGORY = 6;
-    private const int COL_LOCATION = 7;
-    private const int COL_QUANTITY = 8;
-    private const int COL_SALES_AMOUNT = 9;
-    private const int COL_SALES_RETURNS = 10;
-    private const int COL_COST_OF_SALES = 11;
-    private const int COL_PERCENT = 12;
+    // Default column indices based on the classic Sage report format.
+    // These are the fallbacks; DetectColumns() may override them per-file.
+    private const int DEFAULT_COL_YEAR = 0;
+    private const int DEFAULT_COL_PERIOD = 1;
+    private const int DEFAULT_COL_TYPE = 2;
+    private const int DEFAULT_COL_DATE = 3;
+    private const int DEFAULT_COL_TRANSACTION_NUMBER = 4;
+    private const int DEFAULT_COL_SALESPERSON = 5;
+    private const int DEFAULT_COL_CATEGORY = 6;
+    private const int DEFAULT_COL_LOCATION = 7;
+    private const int DEFAULT_COL_QUANTITY = 8;
+    private const int DEFAULT_COL_SALES_AMOUNT = 9;
+    private const int DEFAULT_COL_SALES_RETURNS = 10;
+    private const int DEFAULT_COL_COST_OF_SALES = 11;
+    private const int DEFAULT_COL_PERCENT = 12;
+
+    // Active (possibly remapped) column indices used during parsing (0-based).
+    private int COL_YEAR = DEFAULT_COL_YEAR;
+    private int COL_PERIOD = DEFAULT_COL_PERIOD;
+    private int COL_TYPE = DEFAULT_COL_TYPE;
+    private int COL_DATE = DEFAULT_COL_DATE;
+    private int COL_TRANSACTION_NUMBER = DEFAULT_COL_TRANSACTION_NUMBER;
+    private int COL_SALESPERSON = DEFAULT_COL_SALESPERSON;
+    private int COL_CATEGORY = DEFAULT_COL_CATEGORY;
+    private int COL_LOCATION = DEFAULT_COL_LOCATION;
+    private int COL_QUANTITY = DEFAULT_COL_QUANTITY;
+    private int COL_SALES_AMOUNT = DEFAULT_COL_SALES_AMOUNT;
+    private int COL_SALES_RETURNS = DEFAULT_COL_SALES_RETURNS;
+    private int COL_COST_OF_SALES = DEFAULT_COL_COST_OF_SALES;
+    private int COL_PERCENT = DEFAULT_COL_PERCENT;
+
+    // Optional per-row customer columns (flat/non-hierarchical exports)
+    private int? _colCustomerNumber = null;
+    private int? _colCustomerName = null;
+    private int? _colOrderNumber = null;
+
+    // The 1-based worksheet row that holds the column headers (data starts after it)
+    private int _headerRowNumber = 1;
+    // True when the file is a "flat" export (customer on every row, no marker rows)
+    private bool _flatFormat = false;
     
     // Extended columns - detected from header row
     private int? _colProductCode = null;
@@ -94,31 +120,12 @@ public class SalesReportImportService
             _colProductCode = null;
             _colProductDescription = null;
             _lastUsedColumn = 12;
-            var headerRow = worksheet.Row(1);
-            var lastColUsed = headerRow.LastCellUsed()?.Address?.ColumnNumber ?? 13;
-            for (int col = 1; col <= lastColUsed; col++)
-            {
-                var headerText = headerRow.Cell(col).GetString()?.Trim().ToLower() ?? "";
-                if (headerText.Contains("product code") || headerText.Contains("productcode") || 
-                    headerText.Contains("stock code") || headerText.Contains("stockcode") ||
-                    headerText.Contains("item code") || headerText.Contains("itemcode"))
-                {
-                    _colProductCode = col - 1; // 0-indexed
-                    _logger.LogInformation("Detected product code column at index {Col}: {Header}", col, headerText);
-                }
-                else if (headerText.Contains("product desc") || headerText.Contains("productdesc") ||
-                         headerText.Contains("item desc") || headerText.Contains("itemdesc") ||
-                         headerText.Contains("stock desc") || headerText.Contains("stockdesc") ||
-                         headerText.Contains("description") || headerText.Contains("product name") ||
-                         headerText.Contains("item name") || headerText.Contains("stock item"))
-                {
-                    _colProductDescription = col - 1; // 0-indexed
-                    _logger.LogInformation("Detected product description column at index {Col}: {Header}", col, headerText);
-                }
-            }
-            if (lastColUsed > 13) _lastUsedColumn = lastColUsed - 1;
 
-            for (int rowIndex = 2; rowIndex <= lastRowUsed; rowIndex++)
+            // Detect the header row and map columns by name (flexible layout support).
+            var detection = DetectColumns(worksheet, lastRowUsed);
+            _logger.LogInformation("Column detection for {FileName}: {Summary}", fileName, detection.Summary);
+
+            for (int rowIndex = _headerRowNumber + 1; rowIndex <= lastRowUsed; rowIndex++)
             {
                 var row = worksheet.Row(rowIndex);
                 
@@ -177,12 +184,19 @@ public class SalesReportImportService
             // Validate we have meaningful data
             if (transactions.Count == 0)
             {
-                throw new InvalidOperationException("No valid transactions found in the file. Please check the file format.");
+                throw new InvalidOperationException(
+                    "No valid transactions found in the file. " +
+                    "A valid row needs a recognisable Date and an Invoice/Transaction number. " +
+                    detection.Summary +
+                    " If the columns above look wrong, the file layout may differ from what's expected " +
+                    "(check for extra title rows at the top, or renamed/re-ordered columns).");
             }
 
-            if (customerSet.Count == 0)
+            if (customerSet.Count == 0 && !_flatFormat)
             {
-                throw new InvalidOperationException("No customer headers found. Please ensure the file contains 'Customer Number:' rows.");
+                throw new InvalidOperationException(
+                    "No customer information found. For grouped Sage reports the file must contain 'Customer Number:' rows; " +
+                    "for flat reports include a Customer / Account column. " + detection.Summary);
             }
 
             // Check for duplicates in existing ImportedInvoices
@@ -345,6 +359,177 @@ public class SalesReportImportService
     }
 
     /// <summary>
+    /// Result of scanning a worksheet to locate the header row and map columns by name.
+    /// </summary>
+    private class ColumnDetectionResult
+    {
+        public string Summary { get; set; } = string.Empty;
+    }
+
+    private static readonly string[] DateAliases = { "date", "trans date", "transaction date", "inv date", "invoice date", "doc date", "document date" };
+    private static readonly string[] TxnAliases = { "invoice no", "invoice number", "inv no", "invno", "transaction number", "trans no", "transaction no", "document no", "doc no", "reference", "ref no" };
+    private static readonly string[] YearAliases = { "year", "yr" };
+    private static readonly string[] PeriodAliases = { "period", "prd", "prd." };
+    private static readonly string[] TypeAliases = { "type", "trans type", "transaction type", "doc type" };
+    private static readonly string[] SalespersonAliases = { "salesperson", "sales person", "rep", "sales rep", "agent" };
+    private static readonly string[] CategoryAliases = { "category", "cat", "item cat", "category code" };
+    private static readonly string[] LocationAliases = { "location", "loc", "warehouse", "store" };
+    private static readonly string[] QtyAliases = { "qty", "quantity", "qty sold", "units", "qty invoiced" };
+    private static readonly string[] SalesAliases = { "sales amnt", "sales amount", "sales", "amount", "net sales", "value", "line total", "ext price", "extended price", "total" };
+    private static readonly string[] ReturnsAliases = { "sales returns", "returns", "credit", "credits" };
+    private static readonly string[] CostAliases = { "cost of sales", "cost", "ext cost", "extended cost", "cost amount", "cost amnt" };
+    private static readonly string[] PercentAliases = { "percent", "%", "margin", "gp %", "gp%", "margin %" };
+    private static readonly string[] ProductCodeAliases = { "product code", "productcode", "stock code", "stockcode", "item code", "itemcode", "item", "sku", "product" };
+    private static readonly string[] ProductDescAliases = { "product desc", "productdesc", "item desc", "itemdesc", "stock desc", "stockdesc", "description", "desc", "product name", "item name", "stock item" };
+    private static readonly string[] CustNumberAliases = { "cust no", "customer no", "customer number", "custno", "account no", "account number", "acc no", "debtor", "debtor code" };
+    private static readonly string[] CustNameAliases = { "customer name", "cust name", "customer", "account name", "debtor name", "name" };
+    private static readonly string[] OrderNoAliases = { "order no", "order number", "ord no", "orderno", "customer order", "po no", "po number" };
+
+    private static bool MatchesAlias(string headerText, string[] aliases)
+    {
+        // Prefer exact match, then a whole-token contains to avoid false positives.
+        foreach (var a in aliases)
+        {
+            if (headerText == a) return true;
+        }
+        foreach (var a in aliases)
+        {
+            if (headerText.Contains(a)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Scans the first several rows to find the header row and map each known field to a
+    /// column index. Falls back to the classic fixed Sage layout if no header is recognised.
+    /// Sets the instance COL_* fields, _headerRowNumber, _flatFormat and product/customer columns.
+    /// </summary>
+    private ColumnDetectionResult DetectColumns(IXLWorksheet worksheet, int lastRowUsed)
+    {
+        int bestRow = -1;
+        int bestScore = 0;
+        var bestMap = new Dictionary<string, int>();
+
+        int scanLimit = Math.Min(15, lastRowUsed);
+        for (int r = 1; r <= scanLimit; r++)
+        {
+            var row = worksheet.Row(r);
+            int lastCol = row.LastCellUsed()?.Address?.ColumnNumber ?? 0;
+            if (lastCol == 0) continue;
+
+            var map = new Dictionary<string, int>();
+            for (int c = 1; c <= lastCol; c++)
+            {
+                var h = row.Cell(c).GetString()?.Trim().ToLowerInvariant() ?? "";
+                if (string.IsNullOrEmpty(h)) continue;
+                int idx = c - 1; // 0-based
+
+                void TryMap(string key, string[] aliases)
+                {
+                    if (!map.ContainsKey(key) && MatchesAlias(h, aliases)) map[key] = idx;
+                }
+
+                // Order matters: map the more specific fields before generic ones.
+                TryMap("date", DateAliases);
+                TryMap("txn", TxnAliases);
+                TryMap("custno", CustNumberAliases);
+                TryMap("custname", CustNameAliases);
+                TryMap("orderno", OrderNoAliases);
+                TryMap("productcode", ProductCodeAliases);
+                TryMap("productdesc", ProductDescAliases);
+                TryMap("year", YearAliases);
+                TryMap("period", PeriodAliases);
+                TryMap("type", TypeAliases);
+                TryMap("salesperson", SalespersonAliases);
+                TryMap("category", CategoryAliases);
+                TryMap("location", LocationAliases);
+                TryMap("qty", QtyAliases);
+                TryMap("returns", ReturnsAliases);
+                TryMap("cost", CostAliases);
+                TryMap("percent", PercentAliases);
+                TryMap("sales", SalesAliases);
+            }
+
+            // Score a candidate header row: the essential fields carry the most weight.
+            int score = 0;
+            if (map.ContainsKey("date")) score += 3;
+            if (map.ContainsKey("txn")) score += 3;
+            if (map.ContainsKey("sales")) score += 2;
+            if (map.ContainsKey("custname") || map.ContainsKey("custno")) score += 2;
+            if (map.ContainsKey("qty")) score += 1;
+            if (map.ContainsKey("productdesc")) score += 1;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestRow = r;
+                bestMap = map;
+            }
+        }
+
+        // Require the two essentials (date + transaction) to trust detection.
+        if (bestRow > 0 && bestMap.ContainsKey("date") && bestMap.ContainsKey("txn"))
+        {
+            _headerRowNumber = bestRow;
+            COL_DATE = bestMap["date"];
+            COL_TRANSACTION_NUMBER = bestMap["txn"];
+            if (bestMap.TryGetValue("year", out var vy)) COL_YEAR = vy;
+            if (bestMap.TryGetValue("period", out var vp)) COL_PERIOD = vp;
+            if (bestMap.TryGetValue("type", out var vt)) COL_TYPE = vt;
+            if (bestMap.TryGetValue("salesperson", out var vs)) COL_SALESPERSON = vs;
+            if (bestMap.TryGetValue("category", out var vc)) COL_CATEGORY = vc;
+            if (bestMap.TryGetValue("location", out var vl)) COL_LOCATION = vl;
+            if (bestMap.TryGetValue("qty", out var vq)) COL_QUANTITY = vq;
+            if (bestMap.TryGetValue("sales", out var vsa)) COL_SALES_AMOUNT = vsa;
+            if (bestMap.TryGetValue("returns", out var vr)) COL_SALES_RETURNS = vr;
+            if (bestMap.TryGetValue("cost", out var vco)) COL_COST_OF_SALES = vco;
+            if (bestMap.TryGetValue("percent", out var vpc)) COL_PERCENT = vpc;
+            if (bestMap.TryGetValue("productcode", out var vpcode)) _colProductCode = vpcode;
+            if (bestMap.TryGetValue("productdesc", out var vpdesc)) _colProductDescription = vpdesc;
+            if (bestMap.TryGetValue("custno", out var vcn)) _colCustomerNumber = vcn;
+            if (bestMap.TryGetValue("custname", out var vcnm)) _colCustomerName = vcnm;
+            if (bestMap.TryGetValue("orderno", out var von)) _colOrderNumber = von;
+
+            // Flat format = a customer column exists on each row (no "Customer Number:" markers needed).
+            _flatFormat = _colCustomerNumber.HasValue || _colCustomerName.HasValue;
+
+            var found = new List<string>();
+            void Note(string label, int idx) => found.Add($"{label}=col{idx + 1}");
+            Note("Date", COL_DATE);
+            Note("Invoice", COL_TRANSACTION_NUMBER);
+            if (bestMap.ContainsKey("sales")) Note("Sales", COL_SALES_AMOUNT);
+            if (_colCustomerName.HasValue) Note("Customer", _colCustomerName.Value);
+            else if (_colCustomerNumber.HasValue) Note("CustNo", _colCustomerNumber.Value);
+            if (_colProductDescription.HasValue) Note("Description", _colProductDescription.Value);
+            if (bestMap.ContainsKey("qty")) Note("Qty", COL_QUANTITY);
+
+            return new ColumnDetectionResult
+            {
+                Summary = $"Detected header on row {bestRow} ({(_flatFormat ? "flat" : "grouped")} format): {string.Join(", ", found)}."
+            };
+        }
+
+        // No recognisable header — fall back to the classic fixed Sage layout.
+        _headerRowNumber = 1;
+        _flatFormat = false;
+        var headerRow = worksheet.Row(1);
+        var lastColUsed = headerRow.LastCellUsed()?.Address?.ColumnNumber ?? 13;
+        for (int col = 1; col <= lastColUsed; col++)
+        {
+            var headerText = headerRow.Cell(col).GetString()?.Trim().ToLower() ?? "";
+            if (MatchesAlias(headerText, ProductCodeAliases)) _colProductCode = col - 1;
+            else if (MatchesAlias(headerText, ProductDescAliases)) _colProductDescription = col - 1;
+        }
+        if (lastColUsed > 13) _lastUsedColumn = lastColUsed - 1;
+
+        return new ColumnDetectionResult
+        {
+            Summary = "No named header recognised — assuming the classic Sage layout " +
+                      "(col4=Date, col5=Invoice No). Expected columns: Year, Period, Type, Date, Invoice No, Salesperson, Category, Location, Qty, Sales, Returns, Cost, %."
+        };
+    }
+
+    /// <summary>
     /// Process a single row using stateful parsing
     /// </summary>
     private SalesTransactionStaging? ProcessRow(
@@ -361,73 +546,95 @@ public class SalesReportImportService
         // Read the Year cell (first column) to determine row type
         var yearCell = row.Cell(COL_YEAR + 1).GetString()?.Trim() ?? "";
 
-        // Check for Customer Header Row
-        if (yearCell.Equals("Customer Number:", StringComparison.OrdinalIgnoreCase))
+        // ── Flat format: customer is on every row; no marker/product-header rows ──
+        if (_flatFormat)
         {
-            // Extract customer number from Period column and name from Date column
-            currentCustomerNumber = row.Cell(COL_PERIOD + 1).GetString()?.Trim();
-            currentCustomerName = row.Cell(COL_DATE + 1).GetString()?.Trim();
-            currentProductCode = null;  // Reset product context on new customer
-            currentProductDescription = null;
-            
-            _logger.LogDebug("Found customer header: {Number} - {Name}", currentCustomerNumber, currentCustomerName);
-            return null; // Header row, not a transaction
-        }
-
-        // Check for Customer Total Row
-        if (yearCell.Equals("Customer Total:", StringComparison.OrdinalIgnoreCase))
-        {
-            _logger.LogDebug("Found customer total for: {Number}", currentCustomerNumber);
-            currentCustomerNumber = null;
-            currentCustomerName = null;
-            currentProductCode = null;
-            currentProductDescription = null;
-            return null; // Total row, not a transaction
-        }
-
-        // Check for Total Sales Row
-        if (yearCell.StartsWith("Total Sales", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        // Check for Product Header Row: a row where Col1 has an alphanumeric product code
-        // (not a year number), and there's no valid date or transaction number.
-        // Sage format: Col1 = product code (e.g. RT4208001), Col2 = product description
-        if (!string.IsNullOrEmpty(yearCell) && !int.TryParse(yearCell, out _))
-        {
-            // Not a year number - could be a product header
-            var periodCell = row.Cell(COL_PERIOD + 1).GetString()?.Trim() ?? "";
-            var dateCellStr = row.Cell(COL_DATE + 1).GetString()?.Trim() ?? "";
-            var txnNumStr = row.Cell(COL_TRANSACTION_NUMBER + 1).GetString()?.Trim() ?? "";
-            
-            // Product header: has text in first column, possibly description in second,
-            // and no date or transaction number in their expected columns
-            bool hasDate = false;
-            if (row.Cell(COL_DATE + 1).DataType == XLDataType.DateTime) hasDate = true;
-            else if (DateTime.TryParse(dateCellStr, out _)) hasDate = true;
-            
-            if (!hasDate && string.IsNullOrEmpty(txnNumStr))
+            if (_colCustomerName.HasValue)
             {
-                // This is a product header row
-                currentProductCode = yearCell;
-                currentProductDescription = periodCell;
-                
-                // If description is empty, check if it spans across other cells
-                if (string.IsNullOrEmpty(currentProductDescription))
+                var nm = row.Cell(_colCustomerName.Value + 1).GetString()?.Trim();
+                if (!string.IsNullOrEmpty(nm)) currentCustomerName = nm;
+            }
+            if (_colCustomerNumber.HasValue)
+            {
+                var no = row.Cell(_colCustomerNumber.Value + 1).GetString()?.Trim();
+                if (!string.IsNullOrEmpty(no)) currentCustomerNumber = no;
+            }
+            // If only a name column exists, use the name as the customer key too.
+            if (string.IsNullOrEmpty(currentCustomerNumber) && !string.IsNullOrEmpty(currentCustomerName))
+            {
+                currentCustomerNumber = currentCustomerName;
+            }
+        }
+        else
+        {
+            // Check for Customer Header Row
+            if (yearCell.Equals("Customer Number:", StringComparison.OrdinalIgnoreCase))
+            {
+                // Extract customer number from Period column and name from Date column
+                currentCustomerNumber = row.Cell(COL_PERIOD + 1).GetString()?.Trim();
+                currentCustomerName = row.Cell(COL_DATE + 1).GetString()?.Trim();
+                currentProductCode = null;  // Reset product context on new customer
+                currentProductDescription = null;
+
+                _logger.LogDebug("Found customer header: {Number} - {Name}", currentCustomerNumber, currentCustomerName);
+                return null; // Header row, not a transaction
+            }
+
+            // Check for Customer Total Row
+            if (yearCell.Equals("Customer Total:", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug("Found customer total for: {Number}", currentCustomerNumber);
+                currentCustomerNumber = null;
+                currentCustomerName = null;
+                currentProductCode = null;
+                currentProductDescription = null;
+                return null; // Total row, not a transaction
+            }
+
+            // Check for Total Sales Row
+            if (yearCell.StartsWith("Total Sales", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            // Check for Product Header Row: a row where Col1 has an alphanumeric product code
+            // (not a year number), and there's no valid date or transaction number.
+            // Sage format: Col1 = product code (e.g. RT4208001), Col2 = product description
+            if (!string.IsNullOrEmpty(yearCell) && !int.TryParse(yearCell, out _))
+            {
+                // Not a year number - could be a product header
+                var periodCell = row.Cell(COL_PERIOD + 1).GetString()?.Trim() ?? "";
+                var dateCellStr2 = row.Cell(COL_DATE + 1).GetString()?.Trim() ?? "";
+                var txnNumStr = row.Cell(COL_TRANSACTION_NUMBER + 1).GetString()?.Trim() ?? "";
+
+                // Product header: has text in first column, possibly description in second,
+                // and no date or transaction number in their expected columns
+                bool hasDateHdr = false;
+                if (row.Cell(COL_DATE + 1).DataType == XLDataType.DateTime) hasDateHdr = true;
+                else if (DateTime.TryParse(dateCellStr2, out _)) hasDateHdr = true;
+
+                if (!hasDateHdr && string.IsNullOrEmpty(txnNumStr))
                 {
-                    var descParts = new List<string>();
-                    for (int c = COL_PERIOD + 1; c <= COL_PERCENT + 1; c++)
+                    // This is a product header row
+                    currentProductCode = yearCell;
+                    currentProductDescription = periodCell;
+
+                    // If description is empty, check if it spans across other cells
+                    if (string.IsNullOrEmpty(currentProductDescription))
                     {
-                        var cellVal = row.Cell(c).GetString()?.Trim();
-                        if (!string.IsNullOrEmpty(cellVal))
-                            descParts.Add(cellVal);
+                        var descParts = new List<string>();
+                        for (int c = COL_PERIOD + 1; c <= COL_PERCENT + 1; c++)
+                        {
+                            var cellVal = row.Cell(c).GetString()?.Trim();
+                            if (!string.IsNullOrEmpty(cellVal))
+                                descParts.Add(cellVal);
+                        }
+                        currentProductDescription = string.Join(" ", descParts);
                     }
-                    currentProductDescription = string.Join(" ", descParts);
+
+                    _logger.LogDebug("Found product header: {Code} - {Description}", currentProductCode, currentProductDescription);
+                    return null; // Product header row, not a transaction
                 }
-                
-                _logger.LogDebug("Found product header: {Code} - {Description}", currentProductCode, currentProductDescription);
-                return null; // Product header row, not a transaction
             }
         }
 
@@ -563,7 +770,25 @@ public class SalesReportImportService
             }
         }
 
+        // Defensively clamp string fields to their DB column limits so an unexpected
+        // column layout (e.g. a long value landing in a short column) can't crash the save.
+        transaction.CustomerNumber = Clamp(transaction.CustomerNumber, 50) ?? string.Empty;
+        transaction.CustomerName = Clamp(transaction.CustomerName, 255) ?? string.Empty;
+        transaction.Period = Clamp(transaction.Period, 10);
+        transaction.Type = Clamp(transaction.Type, 20);
+        transaction.TransactionNumber = Clamp(transaction.TransactionNumber, 50) ?? string.Empty;
+        transaction.ProductCode = Clamp(transaction.ProductCode, 100);
+        transaction.ProductDescription = Clamp(transaction.ProductDescription, 500);
+
         return transaction;
+    }
+
+    /// <summary>Trim a string to a maximum length, returning null for null/empty input.</summary>
+    private static string? Clamp(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        value = value.Trim();
+        return value.Length <= maxLength ? value : value.Substring(0, maxLength);
     }
 
     private int? ParseNullableInt(IXLCell cell, int rowIndex, string fieldName, List<SalesImportIssue> issues, Guid batchId)
@@ -764,19 +989,19 @@ public class SalesReportImportService
                 var invoice = new ImportedInvoice
                 {
                     SourceCompany = batch.SourceCompany,
-                    TransactionNumber = staging.TransactionNumber,
+                    TransactionNumber = Clamp(staging.TransactionNumber, 50) ?? string.Empty,
                     TransactionDate = staging.TransactionDate ?? DateTime.UtcNow,
-                    CustomerNumber = staging.CustomerNumber,
-                    CustomerName = staging.CustomerName,
+                    CustomerNumber = Clamp(staging.CustomerNumber, 50) ?? string.Empty,
+                    CustomerName = Clamp(staging.CustomerName, 200) ?? string.Empty,
                     Year = staging.Year ?? 0,
-                    Period = staging.Period ?? string.Empty,
-                    TransactionType = staging.Type ?? string.Empty,
-                    ProductCode = !string.IsNullOrEmpty(staging.ProductCode) 
+                    Period = Clamp(staging.Period, 10) ?? string.Empty,
+                    TransactionType = Clamp(staging.Type, 10) ?? string.Empty,
+                    ProductCode = Clamp(!string.IsNullOrEmpty(staging.ProductCode) 
                         ? staging.ProductCode 
-                        : (staging.Category.HasValue ? $"CAT-{staging.Category}" : string.Empty),
-                    ProductDescription = !string.IsNullOrEmpty(staging.ProductDescription) 
+                        : (staging.Category.HasValue ? $"CAT-{staging.Category}" : string.Empty), 50) ?? string.Empty,
+                    ProductDescription = Clamp(!string.IsNullOrEmpty(staging.ProductDescription) 
                         ? staging.ProductDescription 
-                        : string.Empty,
+                        : string.Empty, 500) ?? string.Empty,
                     SalesAmount = staging.SalesAmount ?? 0,
                     SalesReturns = staging.SalesReturns ?? 0,
                     CostOfSales = staging.CostOfSales ?? 0,
@@ -790,6 +1015,12 @@ public class SalesReportImportService
                 _context.ImportedInvoices.Add(invoice);
             }
 
+            // ── Link uploaded invoices to existing Sales History records ──
+            // Match by invoice number (+ company). Existing history rows get flagged as
+            // reconciled/linked; invoices not yet in history get a new header created so
+            // the upload actually feeds the Sales History tab.
+            var linkResult = await LinkToSalesHistoryAsync(stagingTransactions, batch, importId);
+
             // Update batch status
             batch.ParsingStatus = "Committed";
             batch.CommittedAt = DateTime.UtcNow;
@@ -797,14 +1028,16 @@ public class SalesReportImportService
             await _context.SaveChangesAsync();
 
             _logger.LogInformation(
-                "Import {ImportId} committed: {Count} transactions by user {UserId}",
-                importId, stagingTransactions.Count, userId);
+                "Import {ImportId} committed: {Count} transactions by user {UserId}. " +
+                "Sales History linked: {Linked} matched, {Created} created.",
+                importId, stagingTransactions.Count, userId, linkResult.Matched, linkResult.Created);
 
             return new SalesImportCommitResponse
             {
                 ImportId = importId,
                 Success = true,
-                Message = $"Successfully committed {stagingTransactions.Count} transactions.",
+                Message = $"Successfully committed {stagingTransactions.Count} transactions. " +
+                          $"Sales History: {linkResult.Matched} linked to existing invoices, {linkResult.Created} new invoices added.",
                 TransactionsCommitted = stagingTransactions.Count
             };
         }
@@ -818,6 +1051,96 @@ public class SalesReportImportService
                 Message = $"Failed to commit import: {ex.Message}"
             };
         }
+    }
+
+    /// <summary>
+    /// Link committed transactions to the Sales History tab: existing history invoices are
+    /// flagged as reconciled/linked, and invoices not yet present get a new history header
+    /// created (aggregated per invoice number). Matching is by InvoiceNumber + SourceCompany.
+    /// </summary>
+    private async Task<(int Matched, int Created)> LinkToSalesHistoryAsync(
+        List<SalesTransactionStaging> stagingTransactions,
+        SalesImportBatch batch,
+        Guid importId)
+    {
+        var company = batch.SourceCompany;
+        var hasCompany = !string.IsNullOrWhiteSpace(company);
+
+        // Aggregate the uploaded rows per invoice number (a detail file has many rows/invoice).
+        var perInvoice = stagingTransactions
+            .Where(t => !string.IsNullOrWhiteSpace(t.TransactionNumber))
+            .GroupBy(t => t.TransactionNumber.Trim())
+            .Select(g => new
+            {
+                InvoiceNumber = g.Key,
+                CustomerName = g.Select(x => x.CustomerName).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty,
+                CustomerNumber = g.Select(x => x.CustomerNumber).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)),
+                InvoiceDate = g.Where(x => x.TransactionDate.HasValue).Select(x => x.TransactionDate!.Value).DefaultIfEmpty(DateTime.UtcNow).Min(),
+                Location = g.Select(x => x.Period).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)),
+                SalesAmount = g.Sum(x => (x.SalesAmount ?? 0) - (x.SalesReturns ?? 0)),
+                TotalCost = g.Any(x => x.CostOfSales.HasValue) ? g.Sum(x => x.CostOfSales ?? 0) : (decimal?)null
+            })
+            .ToList();
+
+        if (perInvoice.Count == 0) return (0, 0);
+
+        var invoiceNumbers = perInvoice.Select(p => p.InvoiceNumber).ToList();
+
+        // Existing history headers for these invoices (same company when specified).
+        var existing = await _context.SalesHistoryRecords
+            .Where(r => invoiceNumbers.Contains(r.InvoiceNumber)
+                        && (!hasCompany || r.SourceCompany == company))
+            .ToListAsync();
+        var existingByInvoice = existing
+            .GroupBy(r => r.InvoiceNumber, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        int matched = 0, created = 0;
+
+        foreach (var inv in perInvoice)
+        {
+            if (existingByInvoice.TryGetValue(inv.InvoiceNumber, out var header))
+            {
+                // Existing history invoice — flag as reconciled/linked and enrich cost if missing.
+                header.IsReconciled = true;
+                if (!header.TotalCost.HasValue && inv.TotalCost.HasValue)
+                {
+                    header.TotalCost = inv.TotalCost;
+                    header.GrossProfit = header.SalesAmount - inv.TotalCost;
+                    header.MarginPercent = header.SalesAmount != 0
+                        ? Math.Round((header.SalesAmount - inv.TotalCost.Value) / header.SalesAmount * 100m, 4)
+                        : (decimal?)null;
+                }
+                matched++;
+            }
+            else
+            {
+                // Not in history yet — create a new header so the upload feeds the tab.
+                var gp = inv.TotalCost.HasValue ? inv.SalesAmount - inv.TotalCost : (decimal?)null;
+                _context.SalesHistoryRecords.Add(new SalesHistoryRecord
+                {
+                    CustomerName = Clamp(inv.CustomerName, 200) ?? string.Empty,
+                    CustomerNumber = Clamp(inv.CustomerNumber, 50),
+                    InvoiceNumber = Clamp(inv.InvoiceNumber, 50) ?? string.Empty,
+                    InvoiceDate = inv.InvoiceDate,
+                    Location = Clamp(inv.Location, 20),
+                    SalesAmount = inv.SalesAmount,
+                    TotalCost = inv.TotalCost,
+                    GrossProfit = gp,
+                    MarginPercent = (gp.HasValue && inv.SalesAmount != 0)
+                        ? Math.Round(gp.Value / inv.SalesAmount * 100m, 4)
+                        : (decimal?)null,
+                    HasLineDetail = false,
+                    SourceCompany = hasCompany ? company : null,
+                    ImportBatchId = importId.ToString(),
+                    SourceFileName = batch.SourceFileName,
+                    IsReconciled = true
+                });
+                created++;
+            }
+        }
+
+        return (matched, created);
     }
 
     /// <summary>

@@ -29,7 +29,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SystemLogsService, SystemLog } from '../../services/system-logs.service';
 import { AnnouncementHistoryService, Announcement } from '../../services/announcement-history.service';
 import { AuthService } from '../../services/auth.service';
-import { UserManagementService, User, Department, CreateUserDto, Permission, ModulePermission, OperatingCompany, ClockInEmployee } from '../../services/user-management.service';
+import { UserManagementService, User, Department, CreateUserDto, Permission, ModulePermission, OperatingCompany, ClockInEmployee, ClockInEmployeeRequest } from '../../services/user-management.service';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { environment } from '../../../environments/environment';
@@ -272,6 +272,12 @@ import * as XLSX from 'xlsx';
                       <button mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
                         <mat-icon>lock_reset</mat-icon>
                       </button>
+                      <button mat-icon-button matTooltip="Delete (deactivate if linked)" color="warn" (click)="deleteUser(user)">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Permanent delete (remove completely)" color="warn" (click)="deleteUser(user, true)">
+                        <mat-icon>delete_forever</mat-icon>
+                      </button>
                     </td>
                   </ng-container>
 
@@ -285,6 +291,120 @@ import * as XLSX from 'xlsx';
                   <mat-icon>people_outline</mat-icon>
                   <h3>No users found</h3>
                   <p>Try adjusting your search criteria</p>
+                </div>
+              }
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Clock-In Employees Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>fingerprint</mat-icon>
+            <span>Clock-In Employees</span>
+          </ng-template>
+
+          <div class="tab-content">
+            <div class="tab-toolbar">
+              <mat-form-field appearance="outline" class="search-field">
+                <mat-label>Search Employees</mat-label>
+                <mat-icon matPrefix>search</mat-icon>
+                <input matInput [(ngModel)]="clockInSearchQuery" placeholder="Search by name, ID or department">
+              </mat-form-field>
+              <button mat-raised-button color="primary" (click)="openClockInEmployeeForm()">
+                <mat-icon>person_add</mat-icon>
+                Add Employee
+              </button>
+            </div>
+
+            @if (showClockInForm) {
+              <div class="form-section" style="background:#f8f9ff;border:1px solid #e0e3ff;border-radius:12px;padding:20px;margin-bottom:20px;">
+                <h4 style="margin-top:0;">
+                  <mat-icon style="vertical-align:middle;">{{ editingClockInEmpId ? 'edit' : 'person_add' }}</mat-icon>
+                  {{ editingClockInEmpId ? 'Edit Clock-In Employee' : 'New Clock-In Employee' }}
+                </h4>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <mat-form-field appearance="outline">
+                    <mat-label>First Name</mat-label>
+                    <input matInput [(ngModel)]="clockInForm.name">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Last Name</mat-label>
+                    <input matInput [(ngModel)]="clockInForm.lastName">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>ID Number</mat-label>
+                    <input matInput [(ngModel)]="clockInForm.idNum">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Department</mat-label>
+                    <input matInput [(ngModel)]="clockInForm.department">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Job Title</mat-label>
+                    <input matInput [(ngModel)]="clockInForm.jobTitle">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Mobile Number</mat-label>
+                    <input matInput [(ngModel)]="clockInForm.mobileNo">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" style="grid-column:1 / -1;">
+                    <mat-label>Address</mat-label>
+                    <input matInput [(ngModel)]="clockInForm.address">
+                  </mat-form-field>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+                  <button mat-button (click)="cancelClockInEmployeeForm()">Cancel</button>
+                  <button mat-raised-button color="primary" (click)="saveClockInEmployee()" [disabled]="clockInSaving">
+                    <mat-icon>save</mat-icon>
+                    {{ editingClockInEmpId ? 'Update' : 'Create' }}
+                  </button>
+                </div>
+              </div>
+            }
+
+            <div class="table-container">
+              <table mat-table [dataSource]="filteredClockInEmployees">
+                <ng-container matColumnDef="empId">
+                  <th mat-header-cell *matHeaderCellDef>Emp ID</th>
+                  <td mat-cell *matCellDef="let e">{{ e.empId }}</td>
+                </ng-container>
+                <ng-container matColumnDef="name">
+                  <th mat-header-cell *matHeaderCellDef>Name</th>
+                  <td mat-cell *matCellDef="let e">{{ e.name }} {{ e.lastName }}</td>
+                </ng-container>
+                <ng-container matColumnDef="idNum">
+                  <th mat-header-cell *matHeaderCellDef>ID Number</th>
+                  <td mat-cell *matCellDef="let e">{{ e.idNum || '—' }}</td>
+                </ng-container>
+                <ng-container matColumnDef="department">
+                  <th mat-header-cell *matHeaderCellDef>Department</th>
+                  <td mat-cell *matCellDef="let e">{{ e.department || '—' }}</td>
+                </ng-container>
+                <ng-container matColumnDef="jobTitle">
+                  <th mat-header-cell *matHeaderCellDef>Job Title</th>
+                  <td mat-cell *matCellDef="let e">{{ e.jobTitle || '—' }}</td>
+                </ng-container>
+                <ng-container matColumnDef="actions">
+                  <th mat-header-cell *matHeaderCellDef>Actions</th>
+                  <td mat-cell *matCellDef="let e">
+                    <button mat-icon-button color="primary" (click)="openClockInEmployeeForm(e)" matTooltip="Edit">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                    <button mat-icon-button color="warn" (click)="deleteClockInEmployee(e)" matTooltip="Delete">
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="clockInColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: clockInColumns;"></tr>
+              </table>
+
+              @if (filteredClockInEmployees.length === 0) {
+                <div class="empty-state">
+                  <mat-icon>fingerprint</mat-icon>
+                  <h3>No clock-in employees found</h3>
+                  <p>Add an employee to the clock-in / main building register</p>
                 </div>
               }
             </div>
@@ -1128,8 +1248,12 @@ import * as XLSX from 'xlsx';
                   <td mat-cell *matCellDef="let a">{{a.locationName}}</td>
                 </ng-container>
                 <ng-container matColumnDef="assetCondition">
-                  <th mat-header-cell *matHeaderCellDef>Condition</th>
-                  <td mat-cell *matCellDef="let a">{{a.condition||'—'}}</td>
+                  <th mat-header-cell *matHeaderCellDef>Book Value</th>
+                  <td mat-cell *matCellDef="let a">{{ formatAssetValue(a.value) }}</td>
+                </ng-container>
+                <ng-container matColumnDef="assetMarketValue">
+                  <th mat-header-cell *matHeaderCellDef>Market Value</th>
+                  <td mat-cell *matCellDef="let a">{{ formatAssetValue(a.marketValue) }}</td>
                 </ng-container>
                 <ng-container matColumnDef="assetActions">
                   <th mat-header-cell *matHeaderCellDef></th>
@@ -1577,18 +1701,15 @@ import * as XLSX from 'xlsx';
                 </mat-select>
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Condition</mat-label>
-                <mat-select [(ngModel)]="assetForm.condition">
-                  <mat-option value="Good">Good</mat-option>
-                  <mat-option value="Fair">Fair</mat-option>
-                  <mat-option value="Poor">Poor</mat-option>
-                  <mat-option value="Not Assessed">Not Assessed</mat-option>
-                </mat-select>
+                <mat-label>Book Value (R)</mat-label>
+                <input matInput type="number" min="0" step="0.01" [(ngModel)]="assetForm.value" placeholder="0.00">
+                <span matPrefix>R&nbsp;</span>
               </mat-form-field>
             </div>
             <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Notes</mat-label>
-              <textarea matInput [(ngModel)]="assetForm.notes" rows="2"></textarea>
+              <mat-label>Market Value (R)</mat-label>
+              <input matInput type="number" min="0" step="0.01" [(ngModel)]="assetForm.marketValue" placeholder="0.00">
+              <span matPrefix>R&nbsp;</span>
             </mat-form-field>
           </div>
           <div class="dialog-actions">
@@ -3342,6 +3463,12 @@ export class SettingsComponent implements OnInit {
   departments: Department[] = [];
   companies: OperatingCompany[] = [];
   clockInEmployees: ClockInEmployee[] = [];
+  clockInColumns = ['empId', 'name', 'idNum', 'department', 'jobTitle', 'actions'];
+  clockInSearchQuery = '';
+  showClockInForm = false;
+  editingClockInEmpId: string | null = null;
+  clockInSaving = false;
+  clockInForm: ClockInEmployeeRequest = {};
   permissions: Permission[] = [];
   modulePermissions: ModulePermission[] = [];
   selectedPermissions: string[] = [];
@@ -3480,7 +3607,7 @@ export class SettingsComponent implements OnInit {
   assetMgmtSearch = '';
   assetMgmtRegion = '';
   assetRegionList: string[] = [];
-  assetMgmtColumns = ['assetCode', 'assetCategory', 'assetModel', 'assignedTo', 'assetLocation', 'assetCondition', 'assetActions'];
+  assetMgmtColumns = ['assetCode', 'assetCategory', 'assetModel', 'assignedTo', 'assetLocation', 'assetCondition', 'assetMarketValue', 'assetActions'];
   assetsMgmtPageSize = 25;
   assetsMgmtPageIndex = 0;
   assetLocations: any[] = [];
@@ -3700,6 +3827,84 @@ export class SettingsComponent implements OnInit {
     this.userService.getModulePermissions().subscribe(mods => this.modulePermissions = mods);
   }
 
+  // ---- Clock-In Employee management ----
+  get filteredClockInEmployees(): ClockInEmployee[] {
+    const q = this.clockInSearchQuery.trim().toLowerCase();
+    if (!q) return this.clockInEmployees;
+    return this.clockInEmployees.filter(e =>
+      `${e.name} ${e.lastName}`.toLowerCase().includes(q) ||
+      (e.empId || '').toLowerCase().includes(q) ||
+      (e.idNum || '').toLowerCase().includes(q) ||
+      (e.department || '').toLowerCase().includes(q) ||
+      (e.jobTitle || '').toLowerCase().includes(q)
+    );
+  }
+
+  openClockInEmployeeForm(emp?: ClockInEmployee): void {
+    if (emp) {
+      this.editingClockInEmpId = emp.empId;
+      this.clockInForm = {
+        empId: emp.empId,
+        name: emp.name,
+        lastName: emp.lastName,
+        idNum: emp.idNum,
+        department: emp.department,
+        jobTitle: emp.jobTitle,
+        address: emp.address,
+        mobileNo: emp.mobileNo
+      };
+    } else {
+      this.editingClockInEmpId = null;
+      this.clockInForm = {};
+    }
+    this.showClockInForm = true;
+  }
+
+  cancelClockInEmployeeForm(): void {
+    this.showClockInForm = false;
+    this.editingClockInEmpId = null;
+    this.clockInForm = {};
+  }
+
+  saveClockInEmployee(): void {
+    if (!this.clockInForm.name?.trim() && !this.clockInForm.lastName?.trim()) {
+      this.snackBar.open('Please enter a name', 'Close', { duration: 3000 });
+      return;
+    }
+    this.clockInSaving = true;
+    const done = () => {
+      this.clockInSaving = false;
+      this.cancelClockInEmployeeForm();
+      this.userService.getClockInEmployees().subscribe(employees => this.clockInEmployees = employees);
+    };
+    const fail = (err: any) => {
+      this.clockInSaving = false;
+      this.snackBar.open(err?.error?.message || 'Failed to save employee', 'Close', { duration: 4000 });
+    };
+    if (this.editingClockInEmpId) {
+      this.userService.updateClockInEmployee(this.editingClockInEmpId, this.clockInForm).subscribe({
+        next: () => { this.snackBar.open('Employee updated', 'Close', { duration: 2500 }); done(); },
+        error: fail
+      });
+    } else {
+      this.userService.createClockInEmployee(this.clockInForm).subscribe({
+        next: () => { this.snackBar.open('Employee added', 'Close', { duration: 2500 }); done(); },
+        error: fail
+      });
+    }
+  }
+
+  deleteClockInEmployee(emp: ClockInEmployee): void {
+    if (!confirm(`Delete clock-in employee "${emp.name} ${emp.lastName}"?`)) return;
+    this.userService.deleteClockInEmployee(emp.empId).subscribe({
+      next: (res: any) => {
+        this.snackBar.open(res?.message || 'Employee deleted', 'Close', { duration: 3000 });
+        this.userService.getClockInEmployees().subscribe(employees => this.clockInEmployees = employees);
+      },
+      error: (err) => this.snackBar.open(err?.error?.message || 'Failed to delete employee', 'Close', { duration: 4000 })
+    });
+  }
+
   searchUsers(): void {
     this.filteredUsers = this.userService.searchUsers(this.userSearchQuery, this.users);
   }
@@ -3909,6 +4114,27 @@ export class SettingsComponent implements OnInit {
       error: (err) => {
         console.error('Error toggling user status:', err);
         this.snackBar.open('Failed to update user status', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  deleteUser(user: User, permanent: boolean = false): void {
+    const name = `${user.name ?? ''} ${user.surname ?? ''}`.trim() || user.email;
+    const confirmed = permanent
+      ? window.confirm(`PERMANENTLY delete ${name}?\n\nThis removes the user completely and unlinks/removes all their historical references. This cannot be undone.`)
+      : window.confirm(`Delete ${name}? If they have linked records they'll be deactivated & anonymised instead.`);
+    if (!confirmed) { return; }
+
+    this.userService.deleteUser(user.userId, permanent).subscribe({
+      next: (res: any) => {
+        const msg = res?.message || 'User deleted successfully';
+        this.snackBar.open(msg, 'Close', { duration: res?.mode === 'deactivated' ? 6000 : 3000 });
+        this.loadUsers();
+        this.logAction('User Deleted', 'user', `Deleted user: ${user.email}`);
+      },
+      error: (err) => {
+        console.error('Error deleting user:', err);
+        this.snackBar.open(err.error?.message || 'Failed to delete user', 'Close', { duration: 4000 });
       }
     });
   }
@@ -5068,8 +5294,14 @@ export class SettingsComponent implements OnInit {
 
   openAddAssetDialog(): void {
     this.editingAsset = null;
-    this.assetForm = { assetCode: '', category: '', manufacturer: '', model: '', serialNumber: '', workstation: '', assignedTo: '', assignedToUserId: '', locationId: null, condition: 'Not Assessed', notes: '' };
+    this.assetForm = { assetCode: '', category: '', manufacturer: '', model: '', serialNumber: '', workstation: '', assignedTo: '', assignedToUserId: '', locationId: null, value: null, marketValue: null, notes: '' };
     this.showAssetDialog = true;
+  }
+
+  /** Format an asset's monetary value as South African Rand, or a dash when unset. */
+  formatAssetValue(v: any): string {
+    if (v === null || v === undefined || v === '' || isNaN(Number(v))) return '—';
+    return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', minimumFractionDigits: 2 }).format(Number(v));
   }
 
   openEditAssetDialog(a: any): void {
@@ -5102,7 +5334,8 @@ export class SettingsComponent implements OnInit {
       workstation: this.assetForm.workstation || null,
       assignedTo: this.assetForm.assignedTo || null,
       locationId: this.assetForm.locationId,
-      condition: this.assetForm.condition || 'Not Assessed',
+      value: (this.assetForm.value === '' || this.assetForm.value === null || this.assetForm.value === undefined) ? null : Number(this.assetForm.value),
+      marketValue: (this.assetForm.marketValue === '' || this.assetForm.marketValue === null || this.assetForm.marketValue === undefined) ? null : Number(this.assetForm.marketValue),
       notes: this.assetForm.notes || null
     };
     if (this.editingAsset) {

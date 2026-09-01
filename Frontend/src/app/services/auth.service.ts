@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { LoginRequest, LoginResponse, User } from '../models/models';
 import { environment } from '../../environments/environment';
 import { MODULE_KEYS, ModuleKey, MODULES, getPermissionModules } from '../core/modules.config';
+import { LoggingService } from './logging.service';
 
 // Re-export module types for backward compatibility
 export const MODULE_PERMISSIONS = MODULE_KEYS;
@@ -24,15 +25,21 @@ export class AuthService {
 
   constructor(
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    private logger: LoggingService
   ) {
     // Load user from local storage on init
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
-      const user = JSON.parse(storedUser);
-      this.currentUserSubject.next(user);
-      // Auto-refresh user data from server to get latest permissions
-      this.refreshUserData(user.userId);
+      try {
+        const user = JSON.parse(storedUser);
+        this.currentUserSubject.next(user);
+        // Auto-refresh user data from server to get latest permissions
+        this.refreshUserData(user.userId);
+      } catch (e) {
+        this.logger.error('AuthService', 'Failed to parse stored user', e);
+        localStorage.removeItem('currentUser');
+      }
     }
   }
 

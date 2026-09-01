@@ -13,15 +13,18 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         private readonly ApplicationDbContext _context;
         private readonly TfnSyncService _syncService;
+        private readonly TfnSyncStatus _syncStatus;
         private readonly ILogger<TfnController> _logger;
 
         public TfnController(
             ApplicationDbContext context,
             TfnSyncService syncService,
+            TfnSyncStatus syncStatus,
             ILogger<TfnController> logger)
         {
             _context = context;
             _syncService = syncService;
+            _syncStatus = syncStatus;
             _logger = logger;
         }
 
@@ -33,6 +36,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             {
                 _logger.LogInformation("Manual TFN sync triggered by user");
                 var result = await _syncService.SyncAllAsync();
+
+                if (result.HasError)
+                {
+                    _logger.LogWarning("Manual TFN sync completed with errors: {Error}", result.ErrorMessage);
+                }
+
                 return Ok(result);
             }
             catch (Exception ex)
@@ -40,6 +49,20 @@ namespace ProjectTracker.API.Controllers.Logistics
                 _logger.LogError(ex, "Error during TFN sync");
                 return StatusCode(500, new { error = "Failed to sync TFN data", details = ex.Message });
             }
+        }
+
+        // GET: api/logistics/tfn/sync-status
+        [HttpGet("sync-status")]
+        public ActionResult GetSyncStatus()
+        {
+            return Ok(new
+            {
+                LastSuccessfulSyncUtc = _syncStatus.LastSuccessfulSyncUtc,
+                LastAttemptUtc = _syncStatus.LastAttemptUtc,
+                LastRunHadError = _syncStatus.LastRunHadError,
+                LastErrorMessage = _syncStatus.LastErrorMessage,
+                LastOrdersSynced = _syncStatus.LastOrdersSynced
+            });
         }
 
         // POST: api/logistics/tfn/sync/vehicles
@@ -529,7 +552,15 @@ namespace ProjectTracker.API.Controllers.Logistics
                     },
                     RecentAnomalies = recentAnomalies,
                     LowBalanceVehicles = lowBalanceVehicles,
-                    TopConsumers = topConsumers
+                    TopConsumers = topConsumers,
+                    SyncStatus = new
+                    {
+                        LastSuccessfulSyncUtc = _syncStatus.LastSuccessfulSyncUtc,
+                        LastAttemptUtc = _syncStatus.LastAttemptUtc,
+                        LastRunHadError = _syncStatus.LastRunHadError,
+                        LastErrorMessage = _syncStatus.LastErrorMessage,
+                        LastOrdersSynced = _syncStatus.LastOrdersSynced
+                    }
                 };
 
                 return Ok(summary);

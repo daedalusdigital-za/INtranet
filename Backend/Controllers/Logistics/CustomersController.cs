@@ -97,6 +97,41 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(customer);
         }
 
+        /// <summary>
+        /// Lightweight feed of geocoded customers for plotting on maps.
+        /// Only returns active customers that have both Latitude and Longitude,
+        /// with just the fields needed for a map pin (id, name, code, coords, address).
+        /// </summary>
+        [HttpGet("map-points")]
+        public async Task<ActionResult<IEnumerable<CustomerMapPointDto>>> GetCustomerMapPoints(
+            [FromQuery] string? province = null)
+        {
+            var query = _context.LogisticsCustomers
+                .Where(c => c.Status == "Active" && c.Latitude != null && c.Longitude != null);
+
+            if (!string.IsNullOrEmpty(province))
+                query = query.Where(c => c.Province == province || c.DeliveryProvince == province);
+
+            var points = await query
+                .OrderBy(c => c.Name)
+                .Select(c => new CustomerMapPointDto
+                {
+                    Id = c.Id,
+                    CustomerCode = c.CustomerCode,
+                    Name = c.Name,
+                    Latitude = c.Latitude!.Value,
+                    Longitude = c.Longitude!.Value,
+                    Address = c.PhysicalAddress ?? c.Address ?? c.DeliveryAddress,
+                    City = c.City ?? c.DeliveryCity,
+                    Province = c.Province ?? c.DeliveryProvince,
+                    Phone = c.PhoneNumber,
+                    ContactPerson = c.ContactPerson
+                })
+                .ToListAsync();
+
+            return Ok(points);
+        }
+
         [HttpPost]
         public async Task<ActionResult<CustomerDto>> CreateCustomer(CreateCustomerDto dto)
         {
@@ -2212,5 +2247,22 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string? Address { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
+    }
+
+    /// <summary>
+    /// Lightweight customer record for plotting building pins on maps.
+    /// </summary>
+    public class CustomerMapPointDto
+    {
+        public int Id { get; set; }
+        public string? CustomerCode { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public string? Province { get; set; }
+        public string? Phone { get; set; }
+        public string? ContactPerson { get; set; }
     }
 }

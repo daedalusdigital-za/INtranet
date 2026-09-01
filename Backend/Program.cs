@@ -172,13 +172,34 @@ builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnTransa
 builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnAccountsClient>();
 builder.Services.AddHttpClient<ProjectTracker.API.Services.TFN.Clients.TfnDepotsClient>();
 builder.Services.AddScoped<ProjectTracker.API.Services.TFN.TfnSyncService>();
+// Tracks freshness/outcome of the last TFN sync for the dashboard (singleton so it survives across scoped sync runs)
+builder.Services.AddSingleton<ProjectTracker.API.Services.TFN.TfnSyncStatus>();
 // Periodically sync TFN fuel data (orders/transactions/etc.) so it doesn't go stale
 builder.Services.AddHostedService<ProjectTracker.API.Services.TFN.TfnSyncBackgroundService>();
+
+// Persist CarTrack movements daily into the DB so movement history is retained
+// permanently and can be back-dated (CarTrack only exposes a limited live window).
+builder.Services.AddScoped<ProjectTracker.API.Services.Logistics.IMovementHistoryPersistenceService, ProjectTracker.API.Services.Logistics.MovementHistoryPersistenceService>();
+builder.Services.AddSingleton<ProjectTracker.API.Services.Logistics.MovementBackfillStatus>();
+builder.Services.AddScoped<ProjectTracker.API.Services.Logistics.IFuelAnalysisService, ProjectTracker.API.Services.Logistics.FuelAnalysisService>();
+builder.Services.AddHostedService<ProjectTracker.API.Services.Logistics.MovementHistoryBackgroundService>();
+
+// Electronic signatures (reusable across modules) + requisition-invoice workflow
+builder.Services.AddScoped<ProjectTracker.API.Services.Signatures.ISignatureService, ProjectTracker.API.Services.Signatures.SignatureService>();
+
+// Always-on (24/7) fleet incident monitor — records speeding (all day, all cars),
+// curfew movement and warehouse geofence exits into the daily Reports log,
+// independently of whether anyone has the Controller / Open Map screen open.
+builder.Services.AddHostedService<ProjectTracker.API.Services.Logistics.IncidentMonitoringService>();
 
 // Add Knowledge Base Service (must be registered before LlamaAIService)
 builder.Services.AddSingleton<IKnowledgeBaseService, KnowledgeBaseService>();
 
-// Add LLaMA AI Service (singleton so model is loaded once)
+// Add Welly Memory Service (central task cache / long-term recall)
+builder.Services.AddSingleton<IWellyMemoryService, WellyMemoryService>();
+
+// Add Asset↔Invoice AI matching service
+builder.Services.AddScoped<IAssetInvoiceMatchingService, AssetInvoiceMatchingService>();// Add LLaMA AI Service (singleton so model is loaded once)
 builder.Services.AddSingleton<ILlamaAIService, LlamaAIService>();
 
 // Add Logistics AI Service for load/tripsheet querying
@@ -217,6 +238,11 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 
 // IMAP Email Search Service
 builder.Services.AddScoped<EmailSearchService>();
+
+// Persistent sales mailbox monitor (single login per mailbox + IMAP IDLE) —
+// avoids the repeated connect/login/logout churn that got the IP blacklisted.
+builder.Services.AddSingleton<ProjectTracker.API.Services.SalesMailboxMonitorService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectTracker.API.Services.SalesMailboxMonitorService>());
 
 // Add comprehensive AI Context Service for database access
 builder.Services.AddScoped<IAIContextService, AIContextService>();

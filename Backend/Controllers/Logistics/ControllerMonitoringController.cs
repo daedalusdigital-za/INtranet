@@ -28,7 +28,10 @@ namespace ProjectTracker.API.Controllers.Logistics
 
         // Default curfew window (local SAST). Vehicles should be parked between these hours.
         private const int DefaultCurfewStartHour = 18; // 6pm
-        private const int DefaultCurfewEndHour = 6;     // 6am
+        private const int DefaultCurfewEndHour = 5;     // 5am
+
+        // Speed (km/h) at or above which a vehicle is flagged as speeding.
+        private const double SpeedingThreshold = 90;
 
         public ControllerMonitoringController(
             ApplicationDbContext context,
@@ -126,6 +129,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                         alert = alert || true;
                     }
 
+                    // ── Incident recording is handled 24/7 by IncidentMonitoringService ──
+                    // (this endpoint only renders the live snapshot; recording here would
+                    //  duplicate rows and would only ever fire while a screen is open).
+
                     // Track and log warehouse geofence exits for vehicles that were inside before 18:00.
                     await TrackWarehouseGeofenceAsync(
                         reg,
@@ -138,7 +145,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                         outsideParking,
                         parkingZones.Count > 0,
                         nowSast,
-                        inCurfew);
+                        inCurfew,
+                        nearestDist == double.MaxValue ? (double?)null : nearestDist,
+                        v.Location?.Address);
 
                     vehicles.Add(new
                     {
@@ -160,6 +169,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                         lastUpdate = v.LastUpdate
                     });
                 }
+
+                // Persist any incidents queued during this snapshot.
+                try { await _context.SaveChangesAsync(); }
+                catch (Exception saveEx) { _logger.LogWarning(saveEx, "Failed to persist logistics incidents"); }
 
                 return Ok(new
                 {
@@ -199,7 +212,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             bool outsideParking,
             bool hasParkingZones,
             DateTime nowSast,
-            bool inCurfew)
+            bool inCurfew,
+            double? distanceMeters = null,
+            string? address = null)
         {
             if (!hasParkingZones || lat == 0 || lng == 0) return;
 
@@ -253,6 +268,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     state.BreachActive = true;
                     state.ExitAtSast = nowSast;
                     state.LastMovementLoggedAtUtc = null;
+
+                    // Note: the GeofenceExit incident row is recorded by IncidentMonitoringService
+                    // (24/7). Here we only write the live audit-log trail for the console.
 
                     await _auditLogService.LogAsync(
                         "Warehouse Geofence Exit",

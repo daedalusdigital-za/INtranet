@@ -1003,6 +1003,34 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 var result = await _geocodingService.GeocodeAddressAsync(searchQuery);
 
+                // Google can return status=OK with only a country-level match for vague
+                // queries (e.g. just a customer name). Those come back with no province and
+                // coordinates at the SA centroid. Treat them as NOT fixable so they aren't
+                // auto-approved and silently saved as empty/centroid values.
+                const double saCentroidLat = -30.559482;
+                const double saCentroidLng = 22.937506;
+                bool isCentroid = result.Latitude.HasValue && result.Longitude.HasValue &&
+                                  Math.Abs(result.Latitude.Value - saCentroidLat) < 0.01 &&
+                                  Math.Abs(result.Longitude.Value - saCentroidLng) < 0.01;
+                bool hasUsableLocation = result.Success &&
+                                         !string.IsNullOrWhiteSpace(result.Province) &&
+                                         !isCentroid;
+
+                if (!hasUsableLocation)
+                {
+                    suggestions.Add(new
+                    {
+                        customerId = customer.Id,
+                        customerCode = customer.CustomerCode,
+                        customerName = customer.Name,
+                        currentAddress = customer.PhysicalAddress ?? customer.DeliveryAddress ?? "",
+                        success = false,
+                        error = "Address too vague to locate — needs a street address / suburb before Welly can fix it"
+                    });
+                    await Task.Delay(50);
+                    continue;
+                }
+
                 suggestions.Add(new
                 {
                     customerId = customer.Id,
@@ -1047,14 +1075,40 @@ namespace ProjectTracker.API.Controllers.Logistics
                     continue;
                 }
 
-                customer.Province = fix.Province;
-                customer.City = fix.City;
-                customer.PostalCode = fix.PostalCode;
+                // Guard: never overwrite existing data with empty values, and never save
+                // the SA-centroid coordinates (they mean "couldn't locate"). This is what
+                // previously made fixes look like they "didn't save" — empty province +
+                // centroid left the customer flagged as an address issue.
+                const double saCentroidLat = -30.559482;
+                const double saCentroidLng = 22.937506;
+                bool fixIsCentroid = fix.Latitude.HasValue && fix.Longitude.HasValue &&
+                                     Math.Abs(fix.Latitude.Value - saCentroidLat) < 0.01 &&
+                                     Math.Abs(fix.Longitude.Value - saCentroidLng) < 0.01;
+
+                if (string.IsNullOrWhiteSpace(fix.Province) || fixIsCentroid)
+                {
+                    results.Add(new { customerId = fix.CustomerId, customerName = customer.Name, success = false, error = "Skipped — no usable location (would leave customer unresolved)" });
+                    failed++;
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(fix.Province))
+                {
+                    customer.Province = fix.Province;
+                    customer.DeliveryProvince = fix.Province;
+                }
+                if (!string.IsNullOrWhiteSpace(fix.City))
+                {
+                    customer.City = fix.City;
+                    customer.DeliveryCity = fix.City;
+                }
+                if (!string.IsNullOrWhiteSpace(fix.PostalCode))
+                {
+                    customer.PostalCode = fix.PostalCode;
+                    customer.DeliveryPostalCode = fix.PostalCode;
+                }
                 customer.Latitude = fix.Latitude;
                 customer.Longitude = fix.Longitude;
-                customer.DeliveryProvince = fix.Province;
-                customer.DeliveryCity = fix.City;
-                customer.DeliveryPostalCode = fix.PostalCode;
                 
                 // Also set address fields from formatted address if they're empty
                 if (!string.IsNullOrEmpty(fix.FormattedAddress))

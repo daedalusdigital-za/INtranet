@@ -592,5 +592,147 @@ namespace ProjectTracker.API.Controllers.Logistics
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 $"DailyDispatch_{date:yyyyMMdd}.xlsx");
         }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Security / Monitoring incident reports (Speeding, CurfewMovement, GeofenceExit)
+        // ─────────────────────────────────────────────────────────────────────
+
+        // GET: api/logistics/reports/incidents?date=2026-08-04
+        [HttpGet("incidents")]
+        public async Task<IActionResult> GetIncidents([FromQuery] DateTime? date, [FromQuery] string? type)
+        {
+            var day = (date ?? DateTime.UtcNow.AddHours(2)).Date;
+
+            var query = _context.LogisticsIncidents
+                .Where(i => i.IncidentDate == day);
+
+            if (!string.IsNullOrWhiteSpace(type) && type != "all")
+                query = query.Where(i => i.Type == type);
+
+            var incidents = await query
+                .OrderByDescending(i => i.OccurredAtSast)
+                .Select(i => new
+                {
+                    i.Id, i.Type, i.Severity, i.Registration, i.Driver,
+                    i.Latitude, i.Longitude, i.Address, i.Speed, i.Zone,
+                    i.DistanceMeters, i.DuringCurfew, i.Details,
+                    i.IncidentDate, i.OccurredAtSast
+                })
+                .ToListAsync();
+
+            var summary = new
+            {
+                total = incidents.Count,
+                speeding = incidents.Count(i => i.Type == "Speeding"),
+                curfewMovement = incidents.Count(i => i.Type == "CurfewMovement"),
+                geofenceExit = incidents.Count(i => i.Type == "GeofenceExit"),
+                vehiclesInvolved = incidents.Select(i => i.Registration).Distinct().Count()
+            };
+
+            var categories = new[]
+            {
+                new { key = "Speeding", label = "Speeding", items = incidents.Where(i => i.Type == "Speeding").Cast<object>().ToList() },
+                new { key = "CurfewMovement", label = "Curfew Movement", items = incidents.Where(i => i.Type == "CurfewMovement").Cast<object>().ToList() },
+                new { key = "GeofenceExit", label = "Geofence Exit", items = incidents.Where(i => i.Type == "GeofenceExit").Cast<object>().ToList() }
+            };
+
+            return Ok(new { date = day, summary, categories, incidents });
+        }
+
+        // GET: api/logistics/reports/incidents/dates → recent dates that have incidents (for a picker)
+        [HttpGet("incidents/dates")]
+        public async Task<IActionResult> GetIncidentDates()
+        {
+            var dates = await _context.LogisticsIncidents
+                .GroupBy(i => i.IncidentDate)
+                .Select(g => new { date = g.Key, count = g.Count() })
+                .OrderByDescending(x => x.date)
+                .Take(60)
+                .ToListAsync();
+            return Ok(dates);
+        }
+
+        // GET: api/logistics/reports/incidents/export?date=2026-08-04
+        [HttpGet("incidents/export")]
+        public async Task<IActionResult> ExportIncidents([FromQuery] DateTime? date)
+        {
+            var day = (date ?? DateTime.UtcNow.AddHours(2)).Date;
+
+            var incidents = await _context.LogisticsIncidents
+                .Where(i => i.IncidentDate == day)
+                .OrderBy(i => i.Type).ThenByDescending(i => i.OccurredAtSast)
+                .ToListAsync();
+
+            using var workbook = new XLWorkbook();
+
+            void BuildSheet(string name, string typeKey)
+            {
+                var ws = workbook.Worksheets.Add(name);
+                var headers = new[] { "Time", "Registration", "Driver", "Severity", "Speed (km/h)", "Zone", "Metres Outside", "During Curfew", "Address", "Details" };
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    var cell = ws.Cell(1, i + 1);
+                    cell.Value = headers[i];
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1e293b");
+                    cell.Style.Font.FontColor = XLColor.White;
+                }
+
+                int row = 2;
+                foreach (var i in incidents.Where(x => x.Type == typeKey))
+                {
+                    ws.Cell(row, 1).Value = i.OccurredAtSast.ToString("HH:mm:ss");
+                    ws.Cell(row, 2).Value = i.Registration;
+                    ws.Cell(row, 3).Value = i.Driver ?? "";
+                    ws.Cell(row, 4).Value = i.Severity;
+                    ws.Cell(row, 5).Value = i.Speed ?? 0;
+                    ws.Cell(row, 6).Value = i.Zone ?? "";
+                    ws.Cell(row, 7).Value = i.DistanceMeters ?? 0;
+                    ws.Cell(row, 8).Value = i.DuringCurfew ? "Yes" : "No";
+                    ws.Cell(row, 9).Value = i.Address ?? "";
+                    ws.Cell(row, 10).Value = i.Details ?? "";
+                    row++;
+                }
+                ws.Columns().AdjustToContents();
+            }
+
+            // Summary sheet
+            var summary = workbook.Worksheets.Add("Summary");
+            summary.Cell(1, 1).Value = $"Daily Incident Report — {day:dd MMMM yyyy}";
+            summary.Cell(1, 1).Style.Font.Bold = true;
+            summary.Cell(1, 1).Style.Font.FontSize = 14;
+            summary.Cell(3, 1).Value = "Category";
+            summary.Cell(3, 2).Value = "Count";
+            summary.Cell(3, 1).Style.Font.Bold = true;
+            summary.Cell(3, 2).Style.Font.Bold = true;
+            var cats = new[]
+            {
+                ("Speeding", incidents.Count(i => i.Type == "Speeding")),
+                ("Curfew Movement", incidents.Count(i => i.Type == "CurfewMovement")),
+                ("Geofence Exit", incidents.Count(i => i.Type == "GeofenceExit")),
+                ("TOTAL", incidents.Count)
+            };
+            int r = 4;
+            foreach (var (label, count) in cats)
+            {
+                summary.Cell(r, 1).Value = label;
+                summary.Cell(r, 2).Value = count;
+                if (label == "TOTAL") { summary.Cell(r, 1).Style.Font.Bold = true; summary.Cell(r, 2).Style.Font.Bold = true; }
+                r++;
+            }
+            summary.Columns().AdjustToContents();
+
+            BuildSheet("Speeding", "Speeding");
+            BuildSheet("Curfew Movement", "CurfewMovement");
+            BuildSheet("Geofence Exit", "GeofenceExit");
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            stream.Position = 0;
+
+            return File(stream.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"IncidentReport_{day:yyyyMMdd}.xlsx");
+        }
     }
 }

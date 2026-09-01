@@ -90,12 +90,25 @@ namespace ProjectTracker.API.Services.TFN
 
             var result = await syncService.SyncAllAsync();
 
-            _logger.LogInformation(
-                "TFN sync completed. Orders: {OrdersSynced}, FuelHistory: {FuelSynced}, Vehicles: {VehSynced}, Drivers: {DrvSynced}",
-                result.OrdersResult?.Synced ?? 0,
-                result.FuelHistoryResult?.Synced ?? 0,
-                result.VehiclesResult?.Synced ?? 0,
-                result.DriversResult?.Synced ?? 0);
+            if (result.HasError)
+            {
+                _logger.LogError(
+                    "TFN sync finished WITH ERRORS: {Error}. Orders: {OrdersSynced}, FuelHistory: {FuelSynced}, Vehicles: {VehSynced}, Drivers: {DrvSynced}",
+                    result.ErrorMessage,
+                    result.OrdersResult?.Synced ?? 0,
+                    result.FuelHistoryResult?.Synced ?? 0,
+                    result.VehiclesResult?.Synced ?? 0,
+                    result.DriversResult?.Synced ?? 0);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "TFN sync completed. Orders: {OrdersSynced}, FuelHistory: {FuelSynced}, Vehicles: {VehSynced}, Drivers: {DrvSynced}",
+                    result.OrdersResult?.Synced ?? 0,
+                    result.FuelHistoryResult?.Synced ?? 0,
+                    result.VehiclesResult?.Synced ?? 0,
+                    result.DriversResult?.Synced ?? 0);
+            }
         }
     }
 }

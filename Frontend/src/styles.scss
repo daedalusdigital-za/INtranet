@@ -213,6 +213,15 @@ mat-toolbar mat-icon {
   overflow: hidden;
 }
 
+/* Employee Directory dialog - full-height dark panel, no padding */
+.employee-directory-dialog .mat-mdc-dialog-container,
+.employee-directory-dialog .mat-mdc-dialog-surface {
+  padding: 0 !important;
+  background: #0f172a !important;
+  border-radius: 18px !important;
+  overflow: hidden;
+}
+
 /* Tender dialog panel - extra wide for forms */
 .tender-dialog-panel {
   max-width: 1600px !important;
@@ -248,4 +257,22 @@ mat-toolbar mat-icon {
 /* Hide Welly chatbot when artwork viewer is open */
 body.artwork-viewer-open app-chatbot {
   display: none !important;
+}
+
+/* Logistics Open Map dialog */
+.open-map-dialog-panel .mat-mdc-dialog-container {
+  padding: 0 !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+.open-map-dialog-panel .mat-mdc-dialog-surface {
+  padding: 0 !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45) !important;
+}
+.open-map-dialog-panel .mat-mdc-dialog-content {
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }

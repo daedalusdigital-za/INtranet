@@ -130,6 +130,8 @@ namespace ProjectTracker.API.Controllers
                         b.PaymentMethod,
                         b.PaymentReference,
                         b.Category,
+                        b.CompanyName,
+                        b.VehicleRegistration,
                         b.Description,
                         b.Notes,
                         b.FileName,
@@ -214,6 +216,68 @@ namespace ProjectTracker.API.Controllers
                 return StatusCode(500, new { error = "Failed to fetch summary" });
             }
         }
+
+        // ============================================================================
+        // POST: api/Books/reextract-text - Re-extract text from PDFs missing ExtractedText
+        // ============================================================================
+        [AllowAnonymous]
+        [HttpPost("reextract-text")]
+        public async Task<IActionResult> ReextractText()
+        {
+            try
+            {
+                var invoicesNeedingExtraction = await _context.BookInvoices
+                    .Where(b => (b.ExtractedText == null || b.ExtractedText == "") 
+                                && b.FilePath != null && b.FilePath != "")
+                    .ToListAsync();
+
+                int extracted = 0;
+                int failed = 0;
+                var results = new List<object>();
+
+                foreach (var invoice in invoicesNeedingExtraction)
+                {
+                    try
+                    {
+                        var text = ExtractTextFromPdf(invoice.FilePath!);
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            invoice.ExtractedText = text;
+                            invoice.UpdatedAt = DateTime.UtcNow;
+                            extracted++;
+                            results.Add(new { invoice.Id, invoice.SupplierName, invoice.InvoiceNumber, status = "extracted", chars = text.Length });
+                        }
+                        else
+                        {
+                            failed++;
+                            results.Add(new { invoice.Id, invoice.SupplierName, invoice.InvoiceNumber, status = "empty" });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failed++;
+                        results.Add(new { invoice.Id, invoice.SupplierName, invoice.InvoiceNumber, status = "error", error = ex.Message });
+                    }
+                }
+
+                if (extracted > 0)
+                    await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Re-extracted text: {Extracted} succeeded, {Failed} failed", extracted, failed);
+
+                return Ok(new { 
+                    message = $"Re-extracted text from {extracted} invoices, {failed} failed",
+                    extracted,
+                    failed,
+                    results
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error re-extracting text");
+                return StatusCode(500, new { error = "Failed to re-extract text" });
+            }
+        }
         
         // ============================================================================
         // GET: api/Books/all-invoices-summary - Get summary across all departments
@@ -230,10 +294,19 @@ namespace ProjectTracker.API.Controllers
                     totalCount = allInvoices.Count,
                     totalAmount = allInvoices.Sum(b => b.Total),
                     paidCount = allInvoices.Count(b => b.Status == "Paid" || b.PaymentDate.HasValue),
-                    unpaidCount = allInvoices.Count(b => b.Status != "Paid" && !b.PaymentDate.HasValue),
+                    paidAmount = allInvoices.Where(b => b.Status == "Paid" || b.PaymentDate.HasValue).Sum(b => b.Total),
+                    // Unpaid = confirmed/payment-requested invoices that still owe money.
+                    // Drafts (not yet reviewed) and Archived invoices are NOT counted as unpaid.
+                    unpaidCount = allInvoices.Count(b =>
+                        b.Status != "Paid" && !b.PaymentDate.HasValue &&
+                        b.Status != "Draft" && b.Status != "Archived"),
+                    unpaidAmount = allInvoices.Where(b =>
+                        b.Status != "Paid" && !b.PaymentDate.HasValue &&
+                        b.Status != "Draft" && b.Status != "Archived").Sum(b => b.Total),
                     pendingCount = allInvoices.Count(b => b.Status == "Pending"),
                     overdueCount = allInvoices.Count(b => b.Status == "Overdue"),
-                    submittedCount = allInvoices.Count(b => b.Status == "Submitted")
+                    submittedCount = allInvoices.Count(b => b.Status == "Submitted"),
+                    paymentRequestedCount = allInvoices.Count(b => b.Status == "Payment Requested")
                 };
 
                 return Ok(summary);
@@ -270,6 +343,8 @@ namespace ProjectTracker.API.Controllers
                         b.PaymentMethod,
                         b.PaymentReference,
                         b.Category,
+                        b.CompanyName,
+                        b.VehicleRegistration,
                         b.Description,
                         b.Notes,
                         b.FileName,
@@ -448,6 +523,7 @@ namespace ProjectTracker.API.Controllers
                 invoice.PaymentReference = request.PaymentReference;
                 invoice.Category = request.Category;
                 invoice.CompanyName = request.CompanyName;
+                invoice.VehicleRegistration = request.VehicleRegistration;
                 invoice.Description = request.Description;
                 invoice.Notes = request.Notes;
                 invoice.Status = "Confirmed";
@@ -502,6 +578,7 @@ namespace ProjectTracker.API.Controllers
                 invoice.PaymentReference = request.PaymentReference ?? invoice.PaymentReference;
                 invoice.Category = request.Category ?? invoice.Category;
                 invoice.CompanyName = request.CompanyName ?? invoice.CompanyName;
+                invoice.VehicleRegistration = request.VehicleRegistration ?? invoice.VehicleRegistration;
                 invoice.Description = request.Description ?? invoice.Description;
                 invoice.Notes = request.Notes ?? invoice.Notes;
                 invoice.UpdatedAt = DateTime.UtcNow;
@@ -543,6 +620,7 @@ namespace ProjectTracker.API.Controllers
                 invoice.PaymentReference = request.PaymentReference;
                 invoice.Category = request.Category;
                 invoice.CompanyName = request.CompanyName;
+                invoice.VehicleRegistration = request.VehicleRegistration;
                 invoice.Description = request.Description;
                 invoice.Notes = request.Notes;
                 invoice.Status = "Payment Requested";
@@ -617,6 +695,68 @@ namespace ProjectTracker.API.Controllers
                 return StatusCode(500, new { error = "Failed to restore invoice" });
             }
         }
+
+        // ============================================================================
+        // PUT: api/Books/{id}/mark-paid - Mark an invoice as Paid
+        // ============================================================================
+        [HttpPut("{id}/mark-paid")]
+        public async Task<IActionResult> MarkPaid(int id, [FromBody] MarkPaidRequest? request)
+        {
+            try
+            {
+                var invoice = await _context.BookInvoices.FindAsync(id);
+                if (invoice == null)
+                    return NotFound(new { error = "Invoice not found" });
+
+                invoice.Status = "Paid";
+                invoice.PaymentDate = request?.PaymentDate ?? DateTime.UtcNow;
+                if (!string.IsNullOrWhiteSpace(request?.PaymentMethod))
+                    invoice.PaymentMethod = request!.PaymentMethod;
+                if (!string.IsNullOrWhiteSpace(request?.PaymentReference))
+                    invoice.PaymentReference = request!.PaymentReference;
+                invoice.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Book invoice {Id} marked as paid", id);
+                return Ok(new { message = "Invoice marked as paid", invoice.Id, invoice.Status, invoice.PaymentDate });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking book invoice {Id} as paid", id);
+                return StatusCode(500, new { error = "Failed to mark invoice as paid" });
+            }
+        }
+
+        // ============================================================================
+        // PUT: api/Books/{id}/mark-unpaid - Revert an invoice to Confirmed (unpaid)
+        // ============================================================================
+        [HttpPut("{id}/mark-unpaid")]
+        public async Task<IActionResult> MarkUnpaid(int id)
+        {
+            try
+            {
+                var invoice = await _context.BookInvoices.FindAsync(id);
+                if (invoice == null)
+                    return NotFound(new { error = "Invoice not found" });
+
+                invoice.Status = "Confirmed";
+                invoice.PaymentDate = null;
+                invoice.PaymentReference = null;
+                invoice.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Book invoice {Id} reverted to unpaid", id);
+                return Ok(new { message = "Invoice marked as unpaid", invoice.Id, invoice.Status });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking book invoice {Id} as unpaid", id);
+                return StatusCode(500, new { error = "Failed to mark invoice as unpaid" });
+            }
+        }
+
 
         // ============================================================================
         // GET: api/Books/{id}/view - View PDF inline
@@ -718,21 +858,56 @@ namespace ProjectTracker.API.Controllers
 
         // ============================================================================
         // GET: api/Books/suppliers - Get distinct suppliers
+        // Combines suppliers already captured on invoices with the service providers
+        // recorded against fleet maintenance jobs, so Logistics books can pick from
+        // known workshops/vendors before any invoice has been uploaded.
         // ============================================================================
         [HttpGet("suppliers")]
         public async Task<IActionResult> GetSuppliers()
         {
-            var suppliers = await _context.BookInvoices
-                .Select(b => b.SupplierName)
+            var invoiceSuppliers = await _context.BookInvoices
+                .Where(b => b.SupplierName != null && b.SupplierName != "")
+                .Select(b => b.SupplierName!)
                 .Distinct()
-                .OrderBy(s => s)
                 .ToListAsync();
+
+            var maintenanceSuppliers = await _context.VehicleMaintenance
+                .Where(m => m.ServiceProvider != null && m.ServiceProvider != "")
+                .Select(m => m.ServiceProvider!)
+                .Distinct()
+                .ToListAsync();
+
+            var suppliers = invoiceSuppliers
+                .Concat(maintenanceSuppliers)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0)
+                .GroupBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             return Ok(suppliers);
         }
 
         // ============================================================================
-        // GET: api/Books/departments - Get all departments with book access
+        // GET: api/Books/vehicles - Get vehicle registrations for fleet-invoice linkage
+        // ============================================================================
+        [HttpGet("vehicles")]
+        public async Task<IActionResult> GetVehicles()
+        {
+            var vehicles = await _context.Vehicles
+                .Where(v => v.RegistrationNumber != null && v.RegistrationNumber != "")
+                .OrderBy(v => v.RegistrationNumber)
+                .Select(v => new
+                {
+                    registration = v.RegistrationNumber,
+                    make = v.Make,
+                    model = v.Model
+                })
+                .ToListAsync();
+
+            return Ok(vehicles);
+        }
         // ============================================================================
         [HttpGet("departments")]
         public async Task<IActionResult> GetDepartments()
@@ -1030,6 +1205,150 @@ namespace ProjectTracker.API.Controllers
         }
 
         // ============================================================================
+        // POST: api/Books/reimport-from-disk - Recover invoices from surviving PDF files
+        // Scans the Books storage folder and recreates BookInvoice DB records for any
+        // PDF files that are no longer present in the database (e.g. after data loss).
+        // Idempotent: files already represented in the DB (by hash or filename) are skipped.
+        // ============================================================================
+        [HttpPost("reimport-from-disk")]
+        public async Task<IActionResult> ReimportFromDisk([FromQuery] int departmentId = 14, [FromQuery] string status = "Draft")
+        {
+            try
+            {
+                if (!Directory.Exists(_storagePath))
+                    return NotFound(new { error = $"Storage folder not found: {_storagePath}" });
+
+                if (status != "Draft" && status != "Confirmed" && status != "Archived")
+                    status = "Draft";
+
+                // Load existing identifiers so we skip anything already in the DB
+                var existingHashes = await _context.BookInvoices
+                    .Where(b => b.FileHash != null)
+                    .Select(b => b.FileHash!)
+                    .ToListAsync();
+                var existingFileNames = await _context.BookInvoices
+                    .Select(b => b.FileName)
+                    .ToListAsync();
+                var existingHashSet = new HashSet<string>(existingHashes, StringComparer.OrdinalIgnoreCase);
+                var existingNameSet = new HashSet<string>(existingFileNames, StringComparer.OrdinalIgnoreCase);
+
+                var pdfFiles = Directory.GetFiles(_storagePath, "*.pdf", SearchOption.TopDirectoryOnly);
+
+                int imported = 0, skipped = 0, failed = 0;
+                var importedList = new List<object>();
+                var errors = new List<string>();
+                var now = DateTime.UtcNow;
+
+                // Current admin user info (for audit)
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? User.FindFirst("UserId")?.Value;
+                var userId = int.TryParse(userIdClaim, out var uid) ? uid : 0;
+                var userName = User.FindFirst(ClaimTypes.Name)?.Value
+                    ?? User.FindFirst("Name")?.Value ?? "System Re-import";
+
+                foreach (var filePath in pdfFiles)
+                {
+                    var fileName = Path.GetFileName(filePath);
+                    try
+                    {
+                        if (existingNameSet.Contains(fileName))
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        // Compute hash
+                        string fileHash;
+                        using (var sha256 = SHA256.Create())
+                        using (var hashStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                        {
+                            var hashBytes = await sha256.ComputeHashAsync(hashStream);
+                            fileHash = Convert.ToHexString(hashBytes);
+                        }
+
+                        if (existingHashSet.Contains(fileHash))
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        var fileInfo = new FileInfo(filePath);
+                        var extractedText = ExtractTextFromPdf(filePath);
+                        var parsed = ParseInvoiceData(extractedText);
+
+                        var invoice = new BookInvoice
+                        {
+                            DepartmentId = departmentId,
+                            SupplierName = parsed.SupplierName,
+                            InvoiceNumber = parsed.InvoiceNumber,
+                            InvoiceDate = parsed.InvoiceDate ?? fileInfo.LastWriteTimeUtc,
+                            Total = parsed.Total,
+                            VatAmount = parsed.VatAmount,
+                            SubTotal = parsed.SubTotal,
+                            FilePath = filePath,
+                            FileName = fileName,
+                            OriginalFileName = fileName,
+                            ContentType = "application/pdf",
+                            FileSize = fileInfo.Length,
+                            FileHash = fileHash,
+                            ExtractedText = extractedText,
+                            Status = status,
+                            UploadedByUserId = userId,
+                            UploadedByName = userName,
+                            CreatedAt = fileInfo.LastWriteTimeUtc,
+                            ConfirmedAt = status == "Confirmed" ? now : null,
+                            ConfirmedByUserId = status == "Confirmed" ? userId : null
+                        };
+
+                        _context.BookInvoices.Add(invoice);
+
+                        // Track in-memory so duplicate files within the same run are skipped
+                        existingHashSet.Add(fileHash);
+                        existingNameSet.Add(fileName);
+
+                        imported++;
+                        importedList.Add(new
+                        {
+                            fileName,
+                            parsed.SupplierName,
+                            parsed.InvoiceNumber,
+                            parsed.InvoiceDate,
+                            parsed.Total
+                        });
+                    }
+                    catch (Exception exFile)
+                    {
+                        failed++;
+                        errors.Add($"{fileName}: {exFile.Message}");
+                        _logger.LogWarning(exFile, "Failed to re-import book invoice file {File}", fileName);
+                    }
+                }
+
+                if (imported > 0)
+                    await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Books re-import complete: {Imported} imported, {Skipped} skipped, {Failed} failed", imported, skipped, failed);
+
+                return Ok(new
+                {
+                    totalFilesOnDisk = pdfFiles.Length,
+                    imported,
+                    skipped,
+                    failed,
+                    departmentId,
+                    status,
+                    errors,
+                    invoices = importedList
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during Books re-import from disk");
+                return StatusCode(500, new { error = "Failed to re-import invoices from disk", detail = ex.Message });
+            }
+        }
+
+        // ============================================================================
         // GET: api/Books/invoice-search - Autocomplete search for invoices
         // ============================================================================
         [HttpGet("invoice-search")]
@@ -1190,6 +1509,7 @@ namespace ProjectTracker.API.Controllers
         public string? PaymentReference { get; set; }
         public string? Category { get; set; }
         public string? CompanyName { get; set; }
+        public string? VehicleRegistration { get; set; }
         public string? Description { get; set; }
         public string? Notes { get; set; }
     }
@@ -1198,6 +1518,13 @@ namespace ProjectTracker.API.Controllers
     {
         public int DepartmentId { get; set; }
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class MarkPaidRequest
+    {
+        public DateTime? PaymentDate { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? PaymentReference { get; set; }
     }
 
     public class PaymentInquiryRequest

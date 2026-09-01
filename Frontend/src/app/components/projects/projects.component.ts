@@ -1710,30 +1710,54 @@ export class ProjectsComponent implements OnInit, OnDestroy {
             photoBase64: emp.photoBase64
           }));
 
-        // For demo: Use random employees for birthdays
-        const shuffled = [...employees].sort(() => 0.5 - Math.random());
-
-        // Today's birthdays (using random 2-3 employees)
-        this.todayBirthdays = shuffled.slice(0, 2).map(emp => ({
-          id: emp.employeeId,
-          name: emp.fullName,
-          department: emp.department,
-          photoBase64: emp.photoBase64
-        }));
-
-        // Upcoming birthdays (using random 4 employees)
+        // Birthdays computed from each employee's ACTUAL date of birth.
+        // Employees without a stored DOB are simply excluded (no fabricated data).
         const today = new Date();
-        this.upcomingBirthdays = shuffled.slice(2, 6).map((emp, index) => {
-          const futureDate = new Date(today);
-          futureDate.setDate(today.getDate() + index + 1);
-          return {
-            id: emp.employeeId,
-            name: emp.fullName,
-            department: emp.department,
-            date: this.formatUpcomingDate(futureDate),
-            photoBase64: emp.photoBase64
-          };
-        });
+        const todayMonth = today.getMonth();
+        const todayDay = today.getDate();
+
+        const withDob = employees
+          .map(emp => {
+            const raw = emp.dateOfBirth || emp.birthday || emp.dob;
+            if (!raw) return null;
+            const dob = new Date(raw);
+            if (isNaN(dob.getTime())) return null;
+            // Next occurrence of this birthday from today.
+            let next = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+            if (next < new Date(today.getFullYear(), todayMonth, todayDay)) {
+              next = new Date(today.getFullYear() + 1, dob.getMonth(), dob.getDate());
+            }
+            return { emp, dob, next };
+          })
+          .filter((x): x is { emp: any; dob: Date; next: Date } => x !== null);
+
+        // Today's birthdays: DOB month/day matches today.
+        this.todayBirthdays = withDob
+          .filter(x => x.dob.getMonth() === todayMonth && x.dob.getDate() === todayDay)
+          .map(x => ({
+            id: x.emp.employeeId,
+            name: x.emp.fullName,
+            department: x.emp.department,
+            photoBase64: x.emp.photoBase64
+          }));
+
+        // Upcoming birthdays: next 30 days (excluding today), soonest first.
+        const in30 = new Date(today);
+        in30.setDate(today.getDate() + 30);
+        this.upcomingBirthdays = withDob
+          .filter(x => {
+            const isToday = x.dob.getMonth() === todayMonth && x.dob.getDate() === todayDay;
+            return !isToday && x.next <= in30;
+          })
+          .sort((a, b) => a.next.getTime() - b.next.getTime())
+          .slice(0, 6)
+          .map(x => ({
+            id: x.emp.employeeId,
+            name: x.emp.fullName,
+            department: x.emp.department,
+            date: this.formatUpcomingDate(x.next),
+            photoBase64: x.emp.photoBase64
+          }));
       },
       error: (error) => {
         console.error('Error loading employees:', error);

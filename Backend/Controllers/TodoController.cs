@@ -6,6 +6,7 @@ using ProjectTracker.API.DTOs;
 using ProjectTracker.API.Models;
 using Microsoft.AspNetCore.SignalR;
 using ProjectTracker.API.Hubs;
+using System.Security.Claims;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -17,12 +18,14 @@ namespace ProjectTracker.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<TodoController> _logger;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly ProjectTracker.API.Services.INotificationBroadcaster _notifier;
 
-        public TodoController(ApplicationDbContext context, ILogger<TodoController> logger, IHubContext<ChatHub> hubContext)
+        public TodoController(ApplicationDbContext context, ILogger<TodoController> logger, IHubContext<ChatHub> hubContext, ProjectTracker.API.Services.INotificationBroadcaster notifier)
         {
             _context = context;
             _logger = logger;
             _hubContext = hubContext;
+            _notifier = notifier;
         }
 
         // GET: api/todo
@@ -187,6 +190,22 @@ namespace ProjectTracker.API.Controllers
                         AssignedByUserName = $"{task.CreatedByUser.Name} {task.CreatedByUser.Surname}",
                         notification.CreatedAt
                     });
+
+                // Also push to the Windows tray notifier (NotificationHub)
+                try
+                {
+                    await _notifier.NotifyUserAsync(task.AssignedToUserId, new ProjectTracker.API.Services.NotificationPayload
+                    {
+                        Type = "todo",
+                        Title = $"New task from {task.CreatedByUser.Name} {task.CreatedByUser.Surname}",
+                        Body = task.Title,
+                        Url = "/dashboard"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to push tray notification for todo {TaskId}", task.Id);
+                }
             }
 
             return CreatedAtAction(nameof(GetTask), new { id = task.Id }, MapToDto(task));
@@ -247,6 +266,22 @@ namespace ProjectTracker.API.Controllers
                             AssignedByUserName = $"{task.CreatedByUser.Name} {task.CreatedByUser.Surname}",
                             notification.CreatedAt
                         });
+
+                    // Also push to the Windows tray notifier (NotificationHub)
+                    try
+                    {
+                        await _notifier.NotifyUserAsync(task.AssignedToUserId, new ProjectTracker.API.Services.NotificationPayload
+                        {
+                            Type = "todo",
+                            Title = $"New task from {task.CreatedByUser.Name} {task.CreatedByUser.Surname}",
+                            Body = task.Title,
+                            Url = "/dashboard"
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to push tray notification for reassigned todo {TaskId}", task.Id);
+                    }
                 }
             }
 
@@ -459,7 +494,10 @@ namespace ProjectTracker.API.Controllers
 
         private int GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst("UserId")?.Value;
+            // JWT stores the user id in the NameIdentifier claim (see TokenService)
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue("sub")
+                ?? User.FindFirst("UserId")?.Value;
             if (int.TryParse(userIdClaim, out int userId))
             {
                 return userId;

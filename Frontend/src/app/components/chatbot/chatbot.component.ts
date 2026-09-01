@@ -14,6 +14,27 @@ interface ChatMessage {
   actionSuccess?: boolean;
 }
 
+// Minimal typings for the Web Speech API (not in default TS lib)
+interface ISpeechRecognition extends EventTarget {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+  onstart: (() => void) | null;
+}
+declare global {
+  interface Window {
+    SpeechRecognition?: { new (): ISpeechRecognition };
+    webkitSpeechRecognition?: { new (): ISpeechRecognition };
+  }
+}
+
 @Component({
   selector: 'app-chatbot',
   standalone: true,
@@ -32,6 +53,37 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   selectedFile: File | null = null;
   fileInputError = '';
   
+  // ── Voice (Web Speech API) ──────────────────────────────
+  speechSupported = false;
+  ttsSupported = false;
+  isListening = false;
+  isSpeaking = false;
+  voiceEnabled = false;        // read Welly's replies out loud
+  conversationMode = false;    // hands-free: auto re-open mic after Welly speaks
+  interimTranscript = '';
+  private recognition?: ISpeechRecognition;
+  private manualStop = false;
+
+  // ── Immersive Voice Mode (ChatGPT-style) ────────────────
+  voiceModeActive = false;
+  voiceState: 'idle' | 'listening' | 'thinking' | 'speaking' = 'idle';
+  voiceCaption = '';           // live caption text shown in the overlay
+  voiceMuted = false;          // mic muted in voice mode
+  private preferredVoice?: SpeechSynthesisVoice;
+  private silenceTimer?: any;
+
+  // ── Language selection & permission gate ────────────────
+  voiceLangOptions = [
+    { code: 'en-ZA', label: 'English' },
+    { code: 'af-ZA', label: 'Afrikaans' },
+    { code: 'zu-ZA', label: 'isiZulu' }
+  ];
+  voiceLang = 'en-ZA';
+  // Permission gate shown before the orb opens
+  showVoicePermission = false;
+  permissionRequesting = false;
+  permissionError = '';
+
   private chatSubscription?: Subscription;
   private actionSubscription?: Subscription;
   private readonly STORAGE_KEY = 'welly_chat_messages';
@@ -41,6 +93,8 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // Check if AI service is available
     this.checkServiceHealth();
+    // Set up voice capabilities
+    this.initVoice();
     // Restore previous messages from session, or show welcome if first time
     this.restoreMessages();
     // Subscribe to AI action results (ticket created, meeting scheduled, etc.)
@@ -52,6 +106,9 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.chatSubscription?.unsubscribe();
     this.actionSubscription?.unsubscribe();
+    clearTimeout(this.silenceTimer);
+    this.stopListening();
+    this.stopSpeaking();
   }
 
   private checkServiceHealth(): void {
@@ -188,6 +245,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       timestamp: new Date()
     });
     this.saveMessages();
+    this.speak(text);
   }
 
   private handleActionResult(action: ActionResult): void {
@@ -268,6 +326,378 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       event.preventDefault();
       this.sendMessage();
     }
+  }
+
+  // ═══════════════════════════════════════════
+  // Voice: Speech-to-Text (mic) & Text-to-Speech (speaker)
+  // ═══════════════════════════════════════════
+
+  private initVoice(): void {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    this.speechSupported = !!SR;
+    this.ttsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+    if (SR) {
+      this.recognition = new SR();
+      this.recognition.lang = this.voiceLang;
+      this.recognition.continuous = false;
+      this.recognition.interimResults = true;
+      this.recognition.maxAlternatives = 1;
+
+      this.recognition.onstart = () => {
+        this.isListening = true;
+        this.interimTranscript = '';
+      };
+
+      this.recognition.onresult = (event: any) => {
+        let interim = '';
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            final += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+        this.interimTranscript = interim;
+        if (final) {
+          this.userInput = (this.userInput ? this.userInput + ' ' : '') + final.trim();
+        }
+        // Live caption in immersive voice mode
+        if (this.voiceModeActive) {
+          this.voiceCaption = (this.userInput + ' ' + interim).trim();
+          // Reset the silence timer on every bit of speech; when the user
+          // pauses for ~1.2s we treat the turn as finished and send.
+          this.resetSilenceTimer();
+        }
+      };
+
+      this.recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        this.isListening = false;
+        this.interimTranscript = '';
+        if (this.voiceModeActive && event.error === 'not-allowed') {
+          this.voiceCaption = 'Microphone blocked. Please allow mic access.';
+        }
+      };
+
+      this.recognition.onend = () => {
+        this.isListening = false;
+        this.interimTranscript = '';
+        // Single-shot dictation mode: auto-send captured text
+        if (!this.manualStop && this.conversationMode && !this.voiceModeActive && this.userInput.trim()) {
+          this.sendMessage();
+        }
+        // Immersive voice mode
+        if (this.voiceModeActive && !this.manualStop) {
+          // Chrome auto-stops after a pause. If we captured any speech, treat
+          // this as the end of the user's turn and send it. Otherwise keep the
+          // mic "always on" by restarting recognition.
+          if (this.voiceState === 'listening') {
+            if (this.spokenText().trim()) {
+              this.finalizeVoiceTurn();
+            } else {
+              this.startRecognition();
+            }
+          }
+        }
+        this.manualStop = false;
+      };
+    }
+  }
+
+  private startRecognition(): void {
+    if (!this.recognition) return;
+    try { this.recognition.start(); } catch { /* already started */ }
+  }
+
+  /** Everything the user has said this turn (final + interim). */
+  private spokenText(): string {
+    return (this.userInput + ' ' + this.interimTranscript).trim();
+  }
+
+  /** End the current listening turn and send it to Welly. */
+  private finalizeVoiceTurn(): void {
+    clearTimeout(this.silenceTimer);
+    const text = this.spokenText();
+    if (!text) { this.startRecognition(); return; }
+    // Make sure the captured interim words become the message
+    this.userInput = text;
+    this.interimTranscript = '';
+    this.manualStop = true;
+    try { this.recognition?.stop(); } catch { }
+    this.voiceState = 'thinking';
+    this.voiceCaption = '';
+    this.sendMessage();
+  }
+
+  private resetSilenceTimer(): void {
+    clearTimeout(this.silenceTimer);
+    this.silenceTimer = setTimeout(() => {
+      // User paused — finish this turn and send to Welly (use interim too)
+      if (this.voiceModeActive && this.voiceState === 'listening' && this.spokenText()) {
+        this.finalizeVoiceTurn();
+      }
+    }, 1200);
+  }
+
+  /** Toggle the mic on/off for a single dictation */
+  toggleListening(): void {
+    if (!this.speechSupported || !this.recognition) return;
+    if (this.isListening) {
+      this.stopListening();
+    } else {
+      // Don't listen while Welly is talking
+      this.stopSpeaking();
+      this.startRecognition();
+    }
+  }
+
+  private stopListening(): void {
+    if (this.recognition && this.isListening) {
+      this.manualStop = true;
+      try { this.recognition.stop(); } catch { }
+    }
+  }
+
+  /** Toggle hands-free conversation mode (mic re-opens after Welly speaks) */
+  toggleConversationMode(): void {
+    this.conversationMode = !this.conversationMode;
+    if (this.conversationMode) {
+      this.voiceEnabled = true; // conversation needs spoken replies
+      if (!this.isListening) this.toggleListening();
+    } else {
+      this.stopListening();
+    }
+  }
+
+  /** Toggle whether Welly reads replies aloud */
+  toggleVoiceOutput(): void {
+    this.voiceEnabled = !this.voiceEnabled;
+    if (!this.voiceEnabled) {
+      this.stopSpeaking();
+      this.conversationMode = false;
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // Immersive Voice Mode (ChatGPT-style)
+  // ═══════════════════════════════════════════
+
+  /** Enter the full-screen hands-free voice conversation */
+  startVoiceMode(): void {
+    if (!this.speechSupported || !this.ttsSupported) return;
+    // Show the permission gate first — this lets the user pick a language and
+    // explicitly grant mic access before the orb opens.
+    this.permissionError = '';
+    this.permissionRequesting = false;
+    this.showVoicePermission = true;
+  }
+
+  /** Called from the permission gate: request mic access, then open the orb */
+  async confirmVoicePermission(): Promise<void> {
+    this.permissionError = '';
+
+    // Secure-context check: getUserMedia & SpeechRecognition require HTTPS
+    // (localhost is exempt). On a plain http:// LAN address the browser blocks
+    // the mic, so surface a clear message instead of failing silently.
+    const isSecure = window.isSecureContext ||
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1';
+
+    if (!isSecure) {
+      this.permissionError =
+        'Your browser blocks the microphone on insecure (http://) pages. ' +
+        'Ask IT to enable HTTPS, or in Chrome open chrome://flags/#unsafely-treat-insecure-origin-as-secure, ' +
+        'add this site’s address, and restart the browser.';
+      return;
+    }
+
+    this.permissionRequesting = true;
+    try {
+      // Explicitly prompt for mic access and immediately release the stream —
+      // we only need the permission grant; SpeechRecognition opens its own mic.
+      if (navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => t.stop());
+      }
+    } catch (err: any) {
+      this.permissionRequesting = false;
+      if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+        this.permissionError =
+          'Microphone permission was denied. Click the padlock/🎤 icon in the address bar, ' +
+          'allow the microphone for this site, then try again.';
+      } else if (err?.name === 'NotFoundError') {
+        this.permissionError = 'No microphone was found. Please connect a mic and try again.';
+      } else {
+        this.permissionError = 'Could not access the microphone. Please check your device settings.';
+      }
+      return;
+    }
+
+    this.permissionRequesting = false;
+    this.showVoicePermission = false;
+
+    // Apply chosen language to recognition
+    if (this.recognition) this.recognition.lang = this.voiceLang;
+
+    // Make sure the chat window is open so state is consistent
+    this.isOpen = true;
+    this.isMinimized = false;
+    this.voiceModeActive = true;
+    this.voiceEnabled = true;
+    this.voiceMuted = false;
+    this.userInput = '';
+    this.voiceCaption = '';
+    this.loadPreferredVoice();
+    this.beginListeningTurn();
+  }
+
+  /** Cancel the permission gate without entering voice mode */
+  cancelVoicePermission(): void {
+    this.showVoicePermission = false;
+    this.permissionError = '';
+    this.permissionRequesting = false;
+  }
+
+  /** Change language mid-conversation */
+  setVoiceLang(code: string): void {
+    this.voiceLang = code;
+    if (this.recognition) this.recognition.lang = code;
+    this.loadPreferredVoice();
+  }
+
+  /** Exit voice mode and return to the text chat */
+  exitVoiceMode(): void {
+    this.voiceModeActive = false;
+    this.voiceState = 'idle';
+    this.voiceCaption = '';
+    clearTimeout(this.silenceTimer);
+    this.manualStop = true;
+    try { this.recognition?.stop(); } catch { }
+    this.stopSpeaking();
+  }
+
+  /** Start a listening turn in voice mode */
+  private beginListeningTurn(): void {
+    if (!this.voiceModeActive || this.voiceMuted) return;
+    this.stopSpeaking();
+    this.userInput = '';
+    this.interimTranscript = '';
+    this.voiceCaption = '';
+    this.voiceState = 'listening';
+    this.manualStop = false;
+    this.startRecognition();
+  }
+
+  /** Tap the orb: barge-in — interrupt Welly and start listening again */
+  onVoiceOrbTap(): void {
+    if (this.voiceState === 'speaking') {
+      this.stopSpeaking();
+      this.beginListeningTurn();
+    } else if (this.voiceState === 'listening') {
+      // Force-send whatever we have so far
+      clearTimeout(this.silenceTimer);
+      if (this.spokenText()) {
+        this.finalizeVoiceTurn();
+      }
+    } else if (this.voiceState === 'idle' || this.voiceState === 'thinking') {
+      this.beginListeningTurn();
+    }
+  }
+
+  /** Mute/unmute the mic during voice mode */
+  toggleVoiceMute(): void {
+    this.voiceMuted = !this.voiceMuted;
+    if (this.voiceMuted) {
+      this.manualStop = true;
+      clearTimeout(this.silenceTimer);
+      try { this.recognition?.stop(); } catch { }
+      this.voiceState = 'idle';
+    } else {
+      this.beginListeningTurn();
+    }
+  }
+
+  private loadPreferredVoice(): void {
+    if (!this.ttsSupported) return;
+    const langPrefix = (this.voiceLang || 'en-ZA').split('-')[0]; // en / af / zu
+    const pick = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+      // 1) Exact language match (e.g. zu-ZA, af-ZA, en-ZA)
+      // 2) Same language prefix (zu*, af*, en*)
+      // 3) Fall back to a natural English voice
+      this.preferredVoice =
+        voices.find(v => v.lang.toLowerCase() === this.voiceLang.toLowerCase()) ||
+        voices.find(v => v.lang.toLowerCase().startsWith(langPrefix)) ||
+        voices.find(v => /en-ZA/i.test(v.lang)) ||
+        voices.find(v => /en-GB/i.test(v.lang) && /female|Google|Natural/i.test(v.name)) ||
+        voices.find(v => /en-GB/i.test(v.lang)) ||
+        voices.find(v => /Google US English/i.test(v.name)) ||
+        voices.find(v => /^en/i.test(v.lang)) ||
+        voices[0];
+    };
+    pick();
+    if (!this.preferredVoice) {
+      window.speechSynthesis.onvoiceschanged = () => pick();
+    }
+  }
+
+  private speak(text: string): void {
+    // In immersive voice mode we always speak, regardless of the toggle
+    if (!this.ttsSupported || (!this.voiceEnabled && !this.voiceModeActive) || !text) return;
+    // Strip markdown / emojis for cleaner speech
+    const clean = text
+      .replace(/[*_#`>]/g, '')
+      .replace(/\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, '')
+      .trim();
+    if (!clean) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(clean);
+    if (this.preferredVoice) utterance.voice = this.preferredVoice;
+    utterance.lang = this.preferredVoice?.lang || this.voiceLang || 'en-ZA';
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+    utterance.onstart = () => {
+      this.isSpeaking = true;
+      if (this.voiceModeActive) {
+        this.voiceState = 'speaking';
+        this.voiceCaption = clean;
+      }
+    };
+    utterance.onend = () => {
+      this.isSpeaking = false;
+      if (this.voiceModeActive) {
+        // Turn finished — automatically listen for the next thing the user says
+        this.voiceCaption = '';
+        if (!this.voiceMuted) {
+          setTimeout(() => this.beginListeningTurn(), 250);
+        } else {
+          this.voiceState = 'idle';
+        }
+      } else if (this.conversationMode && !this.isListening) {
+        // Legacy in-panel conversation mode
+        setTimeout(() => this.toggleListening(), 300);
+      }
+    };
+    utterance.onerror = () => {
+      this.isSpeaking = false;
+      if (this.voiceModeActive && !this.voiceMuted) {
+        setTimeout(() => this.beginListeningTurn(), 250);
+      }
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  stopSpeaking(): void {
+    if (this.ttsSupported) {
+      window.speechSynthesis.cancel();
+    }
+    this.isSpeaking = false;
   }
 
   onFileSelected(event: Event): void {

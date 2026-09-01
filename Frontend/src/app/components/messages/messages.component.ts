@@ -20,6 +20,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { Subscription, interval } from 'rxjs';
 import { MessageService, Conversation, Message, User, SendMessageRequest, MessageAttachment } from '../../services/message.service';
+import { WellyActivityService } from '../../services/welly-activity.service';
 import { UserSearchPopupComponent } from '../user-search-popup/user-search-popup.component';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
@@ -1715,7 +1716,8 @@ export class MessagesComponent implements OnInit, OnDestroy {
     private snackBar: MatSnackBar,
     private router: Router,
     private sanitizer: DomSanitizer,
-    private http: HttpClient
+    private http: HttpClient,
+    private wellyActivity: WellyActivityService
   ) {}
 
   ngOnInit(): void {
@@ -2344,6 +2346,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
   wellyLastAction = '';
   wellyActionLabel = '';
   wellyDraftPrompt = '';
+  private wellyActivityId: number | null = null;
 
   wellyDraftMessage(): void {
     this.wellyLastAction = 'draft';
@@ -2357,6 +2360,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
     if (!this.wellyDraftPrompt.trim()) return;
     this.wellyLoading = true;
     this.wellyActionLabel = 'Welly is drafting your message...';
+    this.wellyActivityId = this.wellyActivity.start('Messages: Drafting message');
 
     const context = this.selectedConversation
       ? `Conversation with: ${this.selectedConversation.participants?.map(p => p.fullName).join(', ') || 'colleague'}\n\n`
@@ -2369,10 +2373,12 @@ export class MessagesComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.wellyResult = res.result;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
         this.snackBar.open('Welly could not draft message. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }
@@ -2388,6 +2394,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
   submitWellyTranslate(language: string): void {
     this.wellyLoading = true;
     this.wellyActionLabel = `Welly is translating to ${language}...`;
+    this.wellyActivityId = this.wellyActivity.start(`Messages: Translating to ${language}`);
 
     this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'translate-message',
@@ -2397,10 +2404,12 @@ export class MessagesComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.wellyResult = res.result;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
         this.snackBar.open('Welly could not translate. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }
@@ -2412,6 +2421,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
     this.wellyLoading = true;
     this.wellyActionLabel = 'Welly is summarizing the conversation...';
     this.showWellyPanel = true;
+    this.wellyActivityId = this.wellyActivity.start('Messages: Summarizing conversation');
 
     const msgThread = this.messages.slice(-50).map(m =>
       `${m.senderFullName || m.senderName}: ${m.content}`
@@ -2424,10 +2434,12 @@ export class MessagesComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.wellyResult = res.result;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
         this.snackBar.open('Welly could not summarize. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }

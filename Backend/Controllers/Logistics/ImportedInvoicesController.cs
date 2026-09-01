@@ -33,6 +33,101 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Lightweight company performance summary for the Sales dashboard cards.
+        /// Computes today vs last-business-day vs month-to-date daily average per company
+        /// entirely server-side (only current-month rows are read), instead of shipping
+        /// thousands of invoices to the browser.
+        /// </summary>
+        [HttpGet("company-performance")]
+        public async Task<ActionResult<IEnumerable<object>>> GetCompanyPerformance()
+        {
+            // Business-day helpers (SA time is UTC+2; server may be UTC, so use local date logic)
+            var now = DateTime.Now;
+            DateTime today = now.Date;
+
+            DateTime CurrentBusinessDay(DateTime d)
+            {
+                // Weekend -> roll back to Friday
+                while (d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday)
+                    d = d.AddDays(-1);
+                return d;
+            }
+            DateTime LastBusinessDay(DateTime d)
+            {
+                var prev = d.AddDays(-1);
+                while (prev.DayOfWeek == DayOfWeek.Saturday || prev.DayOfWeek == DayOfWeek.Sunday)
+                    prev = prev.AddDays(-1);
+                return prev;
+            }
+
+            var currentBiz = CurrentBusinessDay(today);
+            var lastBiz = LastBusinessDay(currentBiz);
+            var monthStart = new DateTime(today.Year, today.Month, 1);
+
+            // Only read the rows we need: current month up to the current business day.
+            var rows = await _context.ImportedInvoices
+                .AsNoTracking()
+                .Where(i => i.TransactionDate >= monthStart && i.TransactionDate < currentBiz.AddDays(1))
+                .Select(i => new { i.SourceCompany, i.TransactionDate, i.SalesAmount })
+                .ToListAsync();
+
+            var companies = new[]
+            {
+                new { Code = "PMT", ShortName = "Promed" },
+                new { Code = "ACM", ShortName = "Access" },
+                new { Code = "PHT", ShortName = "Pharmatech" },
+                new { Code = "SBT", ShortName = "Sebenzani" },
+            };
+
+            var result = companies.Select(company =>
+            {
+                var companyRows = rows.Where(r => r.SourceCompany == company.Code).ToList();
+
+                var currentDayRows = companyRows.Where(r => r.TransactionDate.Date == currentBiz).ToList();
+                var lastDayRows = companyRows.Where(r => r.TransactionDate.Date == lastBiz).ToList();
+
+                var todaySales = currentDayRows.Sum(r => r.SalesAmount);
+                var yesterdaySales = lastDayRows.Sum(r => r.SalesAmount);
+
+                // Daily totals across the month (weekdays with data)
+                var dailyTotals = companyRows
+                    .GroupBy(r => r.TransactionDate.Date)
+                    .Select(g => g.Sum(r => r.SalesAmount))
+                    .Where(v => v > 0)
+                    .ToList();
+                var monthlyDailyAvg = dailyTotals.Count > 0 ? dailyTotals.Average() : 0m;
+
+                // Trend uses today's sales, else latest day with data
+                var trendSales = todaySales;
+                if (trendSales == 0 && companyRows.Count > 0)
+                {
+                    var latest = companyRows
+                        .GroupBy(r => r.TransactionDate.Date)
+                        .OrderByDescending(g => g.Key)
+                        .FirstOrDefault();
+                    if (latest != null) trendSales = latest.Sum(r => r.SalesAmount);
+                }
+
+                var percentChange = monthlyDailyAvg > 0
+                    ? (double)((trendSales - monthlyDailyAvg) / monthlyDailyAvg) * 100
+                    : trendSales > 0 ? 100 : 0;
+
+                return new
+                {
+                    companyCode = company.Code,
+                    todaySales,
+                    yesterdaySales,
+                    todayOrders = currentDayRows.Count,
+                    yesterdayOrders = lastDayRows.Count,
+                    percentChange,
+                    monthlyDailyAvg
+                };
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Get all imported invoices with optional filtering
         /// </summary>
         [HttpGet]
@@ -1223,6 +1318,15 @@ namespace ProjectTracker.API.Controllers.Logistics
                         invoice.DeliveryCity = city;
                         changed = true;
                     }
+
+                    // Always canonicalize the province label (KZN → KwaZulu-Natal, Oos-Kaap → Eastern Cape, etc.)
+                    var normalized = NormalizeProvince(invoice.DeliveryProvince);
+                    if (normalized != invoice.DeliveryProvince)
+                    {
+                        invoice.DeliveryProvince = normalized;
+                        changed = true;
+                    }
+
                     if (changed) updated++;
                 }
 
@@ -1356,6 +1460,59 @@ namespace ProjectTracker.API.Controllers.Logistics
                     invoice.DeliveryProvince = prov;
                 if (string.IsNullOrWhiteSpace(invoice.DeliveryCity))
                     invoice.DeliveryCity = city;
+            }
+
+            // Normalize province to a canonical full name (handles abbreviations & Afrikaans variants
+            // that may come from linked customer records, e.g. "KZN", "Oos-Kaap")
+            invoice.DeliveryProvince = NormalizeProvince(invoice.DeliveryProvince);
+        }
+
+        /// <summary>
+        /// Normalizes any province abbreviation or Afrikaans/alternate spelling to the canonical
+        /// full English name so grouping and reporting stay consistent.
+        /// </summary>
+        private static string? NormalizeProvince(string? province)
+        {
+            if (string.IsNullOrWhiteSpace(province)) return province;
+            var p = province.Trim();
+            switch (p.ToUpperInvariant())
+            {
+                case "KZN":
+                case "KWAZULU NATAL":
+                case "KWA-ZULU NATAL":
+                case "KWA-ZULU-NATAL":
+                    return "KwaZulu-Natal";
+                case "GP":
+                case "GAUNTENG":
+                case "GAUTENG PROVINCE":
+                    return "Gauteng";
+                case "EC":
+                case "OOS-KAAP":
+                case "OOS KAAP":
+                    return "Eastern Cape";
+                case "WC":
+                case "WES-KAAP":
+                case "WES KAAP":
+                    return "Western Cape";
+                case "NC":
+                case "NOORD-KAAP":
+                case "NOORD KAAP":
+                    return "Northern Cape";
+                case "FS":
+                case "VRYSTAAT":
+                    return "Free State";
+                case "LP":
+                case "LIMPOPO PROVINCE":
+                    return "Limpopo";
+                case "NW":
+                case "NOORDWES":
+                case "NORTH-WEST":
+                    return "North West";
+                case "MP":
+                case "MPUMALANGA PROVINCE":
+                    return "Mpumalanga";
+                default:
+                    return p; // already canonical (or an unknown value we leave untouched)
             }
         }
 

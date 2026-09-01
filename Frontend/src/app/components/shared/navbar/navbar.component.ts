@@ -14,6 +14,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService, MODULE_PERMISSIONS } from '../../../services/auth.service';
 import { MessageService, User, Conversation } from '../../../services/message.service';
 import { NotificationService, UnifiedNotification } from '../../../services/notification.service';
+import { WellyActivityService } from '../../../services/welly-activity.service';
 import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
 import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
 import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
@@ -98,7 +99,19 @@ import { Subscription } from 'rxjs';
 
       <span class="spacer"></span>
 
-      <!-- Messages Button -->
+      <!-- Global 'Welly is working…' indicator -->
+      @if (wellyActivity.isBusy()) {
+        <div class="welly-working" [matTooltip]="wellyTasksTooltip()" matTooltipClass="welly-tip">
+          <span class="ww-orb">
+            <mat-icon class="ww-spark">auto_awesome</mat-icon>
+          </span>
+          <span class="ww-label">Welly is working…</span>
+          @if (wellyActivity.count() > 1) {
+            <span class="ww-badge">{{ wellyActivity.count() }}</span>
+          }
+        </div>
+      }
+
       @if (hasPermission('messaging')) {
         <div class="dropdown-container">
           <button mat-icon-button 
@@ -279,9 +292,9 @@ import { Subscription } from 'rxjs';
           <mat-icon class="pm-icon-blue">person</mat-icon>
           <span>Profile</span>
         </button>
-        <button mat-menu-item class="pm-menu-item" routerLink="/emails">
-          <mat-icon class="pm-icon-teal">mail</mat-icon>
-          <span>Mailbox</span>
+        <button mat-menu-item class="pm-menu-item" routerLink="/archives">
+          <mat-icon class="pm-icon-teal">folder_zip</mat-icon>
+          <span>Archives</span>
         </button>
         @if (hasPermission('project_management')) {
           <button mat-menu-item class="pm-menu-item" routerLink="/departments">
@@ -388,6 +401,69 @@ import { Subscription } from 'rxjs';
 
     .spacer {
       flex: 1;
+    }
+
+    .welly-working {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px 4px 6px;
+      margin-right: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      cursor: default;
+      animation: ww-fade-in 0.25s ease;
+      white-space: nowrap;
+    }
+    .ww-orb {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #c4b5fd, #7c3aed);
+      box-shadow: 0 0 0 0 rgba(196, 181, 253, 0.7);
+      animation: ww-pulse 1.6s ease-in-out infinite;
+    }
+    .ww-spark {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      color: #fff;
+      animation: ww-spin 2.4s linear infinite;
+    }
+    .ww-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: 0.01em;
+    }
+    .ww-badge {
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: #fff;
+      color: #6d28d9;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    @keyframes ww-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(196, 181, 253, 0.7); }
+      70%  { box-shadow: 0 0 0 8px rgba(196, 181, 253, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(196, 181, 253, 0); }
+    }
+    @keyframes ww-spin { to { transform: rotate(360deg); } }
+    @keyframes ww-fade-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+    @media (max-width: 900px) {
+      .welly-working .ww-label { display: none; }
+      .welly-working { padding: 4px; }
     }
 
     .active-link {
@@ -1074,8 +1150,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private messageService: MessageService,
     private notificationService: NotificationService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    public wellyActivity: WellyActivityService
   ) {}
+
+  /** Tooltip listing every active Welly task. */
+  wellyTasksTooltip(): string {
+    const tasks = this.wellyActivity.tasks();
+    if (tasks.length === 0) return 'Welly is idle';
+    return tasks.map(t => '• ' + t.label).join('\n');
+  }
 
   /**
    * Check if user has permission to access a module

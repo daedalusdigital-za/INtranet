@@ -55,7 +55,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("admin", (string)null);
+                    b.ToTable("admin");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Announcement", b =>
@@ -100,7 +100,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("Announcements", (string)null);
+                    b.ToTable("Announcements");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.AnnouncementRead", b =>
@@ -126,7 +126,126 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AnnouncementReads", (string)null);
+                    b.ToTable("AnnouncementReads");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.AssetRegisterItem", b =>
+                {
+                    b.Property<int>("ItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ItemId"));
+
+                    b.Property<string>("AssetCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("AssignedTo")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("BookInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Condition")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InvoiceNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Manufacturer")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("MarketValue")
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OwnershipType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SerialNumber")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Specification")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("Value")
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("Workstation")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("ItemId");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("AssetRegisterItems");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.AssetRegisterLocation", b =>
+                {
+                    b.Property<int>("LocationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LocationId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SourceFile")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SubLocation")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("LocationId");
+
+                    b.ToTable("AssetRegisterLocations");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Attendance", b =>
@@ -178,7 +297,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("Attendances", (string)null);
+                    b.ToTable("Attendances");
 
                     b.HasData(
                         new
@@ -330,7 +449,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("AdminId");
 
-                    b.ToTable("AttendanceAdmins", (string)null);
+                    b.ToTable("AttendanceAdmins");
 
                     b.HasData(
                         new
@@ -420,7 +539,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("EmpID");
 
-                    b.ToTable("attendance", (string)null);
+                    b.ToTable("attendance");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.AuditLog", b =>
@@ -500,7 +619,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AuditLogs", (string)null);
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Board", b =>
@@ -543,7 +662,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("Boards", (string)null);
+                    b.ToTable("Boards");
 
                     b.HasData(
                         new
@@ -837,7 +956,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CompletedByUserId");
 
-                    b.ToTable("BoardChecklistItems", (string)null);
+                    b.ToTable("BoardChecklistItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.BoardMember", b =>
@@ -873,7 +992,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("BoardMembers", (string)null);
+                    b.ToTable("BoardMembers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.BookDepartmentAccess", b =>
@@ -907,7 +1026,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("BookDepartmentAccess", (string)null);
+                    b.ToTable("BookDepartmentAccess");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.BookInvoice", b =>
@@ -1031,6 +1150,10 @@ namespace ProjectTracker.API.Migrations
                     b.Property<decimal?>("VatAmount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("VehicleRegistration")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConfirmedByUserId");
@@ -1039,7 +1162,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UploadedByUserId");
 
-                    b.ToTable("BookInvoices", (string)null);
+                    b.ToTable("BookInvoices");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CallRecord", b =>
@@ -1163,7 +1286,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CallRecords", (string)null);
+                    b.ToTable("CallRecords");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Card", b =>
@@ -1217,7 +1340,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ListId");
 
-                    b.ToTable("Cards", (string)null);
+                    b.ToTable("Cards");
 
                     b.HasData(
                         new
@@ -1388,7 +1511,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UploadedByUserId");
 
-                    b.ToTable("CardAttachments", (string)null);
+                    b.ToTable("CardAttachments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CardComment", b =>
@@ -1422,7 +1545,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("CardComments", (string)null);
+                    b.ToTable("CardComments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.CollaborativeDocument", b =>
@@ -1466,7 +1589,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LastModifiedById");
 
-                    b.ToTable("CollaborativeDocuments", (string)null);
+                    b.ToTable("CollaborativeDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Conversation", b =>
@@ -1496,7 +1619,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("ConversationId");
 
-                    b.ToTable("Conversations", (string)null);
+                    b.ToTable("Conversations");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.ConversationParticipant", b =>
@@ -1534,7 +1657,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ConversationParticipants", (string)null);
+                    b.ToTable("ConversationParticipants");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Department", b =>
@@ -1562,7 +1685,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("DepartmentId");
 
-                    b.ToTable("Departments", (string)null);
+                    b.ToTable("Departments");
 
                     b.HasData(
                         new
@@ -1616,7 +1739,64 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("DocumentCollaborators", (string)null);
+                    b.ToTable("DocumentCollaborators");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.DocumentShare", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsFolder")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ShareWithDepartment")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ShareWithType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("ShareWithUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SharedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SharedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceDepartment")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SourcePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DocumentShares");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.DocumentSnapshot", b =>
@@ -1649,7 +1829,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.ToTable("DocumentSnapshots", (string)null);
+                    b.ToTable("DocumentSnapshots");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.EmailAccount", b =>
@@ -1689,7 +1869,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmailAccountId");
 
-                    b.ToTable("EmailAccounts", (string)null);
+                    b.ToTable("EmailAccounts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.EmpRegistration", b =>
@@ -1744,7 +1924,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmpId");
 
-                    b.ToTable("empregistration", (string)null);
+                    b.ToTable("empregistration");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Employee", b =>
@@ -1808,7 +1988,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("EmployeeId");
 
-                    b.ToTable("Employees", (string)null);
+                    b.ToTable("Employees");
 
                     b.HasData(
                         new
@@ -1973,6 +2153,132 @@ namespace ProjectTracker.API.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.ExpenseCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ExpenseCategories");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.ExpenseTrackerItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("BookInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Company")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InvoiceNumber")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("InvoicedTo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("ItemDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("PaidBy")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("ServicesRendered")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("VatAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookInvoiceId");
+
+                    b.ToTable("ExpenseTrackerItems");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Extension", b =>
                 {
                     b.Property<int>("ExtensionId")
@@ -2038,7 +2344,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Extensions", (string)null);
+                    b.ToTable("Extensions");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.Budget", b =>
@@ -2122,7 +2428,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Budgets", (string)null);
+                    b.ToTable("Budgets");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.BudgetLineItem", b =>
@@ -2163,7 +2469,64 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("BudgetLineItems", (string)null);
+                    b.ToTable("BudgetLineItems");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Finance.DebtorPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CustomerNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("PaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RecordedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("RecordedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceCompany")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DebtorPayments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.Expense", b =>
@@ -2283,7 +2646,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("Expenses", (string)null);
+                    b.ToTable("Expenses");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.FinanceCategory", b =>
@@ -2323,7 +2686,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FinanceCategories", (string)null);
+                    b.ToTable("FinanceCategories");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.Payment", b =>
@@ -2441,7 +2804,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("Payments", (string)null);
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.PurchaseOrder", b =>
@@ -2546,7 +2909,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("PurchaseOrders", (string)null);
+                    b.ToTable("PurchaseOrders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.PurchaseOrderItem", b =>
@@ -2589,7 +2952,93 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("PurchaseOrderItems", (string)null);
+                    b.ToTable("PurchaseOrderItems");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Finance.RecurringPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("DayOfMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Supplier")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.ToTable("RecurringPayments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.GovernmentContract", b =>
@@ -2659,7 +3108,331 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GovernmentContracts", (string)null);
+                    b.ToTable("GovernmentContracts");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrDisciplinaryCase", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPaidSuspension")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IssuedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("IssuedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("HrDisciplinaryCases");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrEmployee", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("BiometricEmpId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("ContractEndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DateOfBirth")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("DriverId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("EmergencyContactName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("EmergencyContactPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("EmployeeNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("HireDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IdNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Nationality")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PassportNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ProfilePhotoPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Site")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("HrEmployees");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrEmployeeDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OriginalFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UploadedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("UploadedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("HrEmployeeDocuments");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrRegisterEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EmployeeName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("RegisterDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Site")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SubmittedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("SubmittedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TimeIn")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TimeOut")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("HrRegisterEntries");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseChunk", b =>
@@ -2702,7 +3475,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.ToTable("KnowledgeBaseChunks", (string)null);
+                    b.ToTable("KnowledgeBaseChunks");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseDocument", b =>
@@ -2773,7 +3546,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KnowledgeBaseDocuments", (string)null);
+                    b.ToTable("KnowledgeBaseDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseIngestionLog", b =>
@@ -2812,7 +3585,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KnowledgeBaseIngestionLogs", (string)null);
+                    b.ToTable("KnowledgeBaseIngestionLogs");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.List", b =>
@@ -2844,7 +3617,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("BoardId");
 
-                    b.ToTable("Lists", (string)null);
+                    b.ToTable("Lists");
 
                     b.HasData(
                         new
@@ -2936,7 +3709,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("InventoryId");
 
-                    b.ToTable("Backorders", (string)null);
+                    b.ToTable("Backorders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.BuildingInventory", b =>
@@ -3007,7 +3780,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex(new[] { "BuildingId", "ItemCode" }, "UQ_BuildingInventory_Building_Item")
                         .IsUnique();
 
-                    b.ToTable("BuildingInventory", (string)null);
+                    b.ToTable("BuildingInventory");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Commodity", b =>
@@ -3066,7 +3839,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Commodities", (string)null);
+                    b.ToTable("Commodities");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Customer", b =>
@@ -3224,7 +3997,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LogisticsCustomers", (string)null);
+                    b.ToTable("LogisticsCustomers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.CustomerContract", b =>
@@ -3302,7 +4075,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerContracts", (string)null);
+                    b.ToTable("CustomerContracts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.CustomerDeliveryAddress", b =>
@@ -3392,7 +4165,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerDeliveryAddresses", (string)null);
+                    b.ToTable("CustomerDeliveryAddresses");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Driver", b =>
@@ -3425,6 +4198,10 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime?>("HireDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("IdNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -3443,6 +4220,14 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("Nationality")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PassportNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -3457,7 +4242,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Drivers", (string)null);
+                    b.ToTable("Drivers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.FuelTransaction", b =>
@@ -3507,6 +4292,15 @@ namespace ProjectTracker.API.Migrations
                     b.Property<int>("ReportYear")
                         .HasColumnType("int");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TfnTransactionId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime>("TransactionDate")
                         .HasColumnType("datetime2");
 
@@ -3517,7 +4311,64 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("FuelTransactions", (string)null);
+                    b.ToTable("FuelTransactions");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Geofence", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Latitude")
+                        .HasColumnType("decimal(10,7)");
+
+                    b.Property<decimal>("Longitude")
+                        .HasColumnType("decimal(10,7)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("RadiusMeters")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Region")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Geofences");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ImportBatch", b =>
@@ -3569,7 +4420,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportedByUserId");
 
-                    b.ToTable("ImportBatches", (string)null);
+                    b.ToTable("ImportBatches");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ImportedInvoice", b =>
@@ -3734,7 +4585,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("ImportedInvoices", (string)null);
+                    b.ToTable("ImportedInvoices");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Invoice", b =>
@@ -3808,7 +4659,7 @@ namespace ProjectTracker.API.Migrations
                         .IsUnique()
                         .HasFilter("[LoadId] IS NOT NULL");
 
-                    b.ToTable("Invoices", (string)null);
+                    b.ToTable("Invoices");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.InvoiceLineItem", b =>
@@ -3846,7 +4697,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("InvoiceId");
 
-                    b.ToTable("InvoiceLineItems", (string)null);
+                    b.ToTable("InvoiceLineItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Load", b =>
@@ -3981,7 +4832,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("Loads", (string)null);
+                    b.ToTable("Loads");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LoadItem", b =>
@@ -4024,7 +4875,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("LoadItems", (string)null);
+                    b.ToTable("LoadItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LoadStop", b =>
@@ -4132,7 +4983,75 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("LoadStops", (string)null);
+                    b.ToTable("LoadStops");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.LogisticsIncident", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(600)
+                        .HasColumnType("nvarchar(600)");
+
+                    b.Property<double?>("DistanceMeters")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Driver")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("DuringCurfew")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("IncidentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasColumnType("decimal(10,7)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasColumnType("decimal(10,7)");
+
+                    b.Property<DateTime>("OccurredAtSast")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Registration")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<double?>("Speed")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Zone")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LogisticsIncidents");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.MaintenanceAttachment", b =>
@@ -4178,7 +5097,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("MaintenanceRecordId");
 
-                    b.ToTable("MaintenanceAttachments", (string)null);
+                    b.ToTable("MaintenanceAttachments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.OrderCancellation", b =>
@@ -4286,7 +5205,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportedInvoiceId");
 
-                    b.ToTable("OrderCancellations", (string)null);
+                    b.ToTable("OrderCancellations");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PartDeliveryHistory", b =>
@@ -4340,7 +5259,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("PartDeliveryHistories", (string)null);
+                    b.ToTable("PartDeliveryHistories");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PodDocument", b =>
@@ -4418,7 +5337,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("DriverName", "DeliveryDate", "Region");
 
-                    b.ToTable("PodDocuments", (string)null);
+                    b.ToTable("PodDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PodDocumentInvoiceLink", b =>
@@ -4447,7 +5366,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("PodDocumentId", "InvoiceId")
                         .IsUnique();
 
-                    b.ToTable("PodDocumentInvoiceLinks", (string)null);
+                    b.ToTable("PodDocumentInvoiceLinks");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ProofOfDelivery", b =>
@@ -4513,7 +5432,312 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("LoadId")
                         .IsUnique();
 
-                    b.ToTable("ProofOfDeliveries", (string)null);
+                    b.ToTable("ProofOfDeliveries");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.PumaGarageOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Capacity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DriverName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<decimal?>("LitersFilled")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Period")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Registration")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("Value")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("VehicleType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PumaGarageOrders");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Requisition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AmountEwallet")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("CellNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("DieselAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("FinanceNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("FinanceStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("PaidDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaidTo")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("PeriodMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PeriodYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("RfNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Requisitions");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SalesHistoryLineItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CustomerNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("ExtCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ImportBatchId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("InvoiceDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ItemCategory")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ItemCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("RegCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("SalesAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("SalesHistoryRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceCompany")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceNumber");
+
+                    b.HasIndex("ItemCode");
+
+                    b.HasIndex("SalesHistoryRecordId");
+
+                    b.HasIndex("SourceCompany");
+
+                    b.ToTable("SalesHistoryLineItems");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SalesHistoryRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CustomerNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("GrossProfit")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("HasLineDetail")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ImportBatchId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("InvoiceDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsReconciled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal?>("MarginPercent")
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<string>("OrderNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("SalesAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ShipmentNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SourceCompany")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("SourceFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal?>("TotalCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerName");
+
+                    b.HasIndex("InvoiceDate");
+
+                    b.HasIndex("InvoiceNumber");
+
+                    b.HasIndex("SourceCompany");
+
+                    b.HasIndex("SourceCompany", "InvoiceDate");
+
+                    b.ToTable("SalesHistoryRecords");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ScrapRecord", b =>
@@ -4559,7 +5783,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("ScrapRecords", (string)null);
+                    b.ToTable("ScrapRecords");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SleepOut", b =>
@@ -4627,7 +5851,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadId");
 
-                    b.ToTable("SleepOuts", (string)null);
+                    b.ToTable("SleepOuts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockMovement", b =>
@@ -4694,7 +5918,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex(new[] { "ToBuildingId" }, "IX_StockMovements_ToBuildingId");
 
-                    b.ToTable("StockMovements", (string)null);
+                    b.ToTable("StockMovements");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StockTransfer", b =>
@@ -4762,7 +5986,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ToWarehouseId");
 
-                    b.ToTable("StockTransfers", (string)null);
+                    b.ToTable("StockTransfers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.StopCommodity", b =>
@@ -4824,7 +6048,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LoadStopId");
 
-                    b.ToTable("StopCommodities", (string)null);
+                    b.ToTable("StopCommodities");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnAccountBalance", b =>
@@ -4895,7 +6119,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnAccountBalances", (string)null);
+                    b.ToTable("TfnAccountBalances");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnDepot", b =>
@@ -4968,7 +6192,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TfnDepots", (string)null);
+                    b.ToTable("TfnDepots");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnOrder", b =>
@@ -5081,7 +6305,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnOrders", (string)null);
+                    b.ToTable("TfnOrders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.TFN.TfnTransaction", b =>
@@ -5193,7 +6417,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("TfnTransactions", (string)null);
+                    b.ToTable("TfnTransactions");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Vehicle", b =>
@@ -5340,7 +6564,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleTypeId");
 
-                    b.ToTable("Vehicles", (string)null);
+                    b.ToTable("Vehicles");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleMaintenance", b =>
@@ -5351,6 +6575,10 @@ namespace ProjectTracker.API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ActionOwner")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
                     b.Property<DateTime?>("CompletedDate")
                         .HasColumnType("datetime2");
 
@@ -5360,9 +6588,19 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DateStood")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("EstimatedCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Feedback")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("InvoiceReference")
                         .HasMaxLength(100)
@@ -5386,6 +6624,10 @@ namespace ProjectTracker.API.Migrations
                     b.Property<decimal?>("OdometerReading")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("Priority")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("ProofOfPaymentPath")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -5393,6 +6635,10 @@ namespace ProjectTracker.API.Migrations
                     b.Property<string>("ProofOfWorkPath")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Province")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime>("ScheduledDate")
                         .HasColumnType("datetime2");
@@ -5406,6 +6652,9 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<DateTime?>("TargetDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -5416,7 +6665,108 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("VehicleMaintenance", (string)null);
+                    b.ToTable("VehicleMaintenance");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleMovementHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("CartrackTripId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EndGeofence")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<double>("EndLatitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("EndLocation")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<double>("EndLongitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("EndTimestamp")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("HarshAccelerationEvents")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HarshBrakingEvents")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HarshCorneringEvents")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdleTimeSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<double>("MaxSpeed")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime>("MovementDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("RegistrationNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("StartGeofence")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<double>("StartLatitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("StartLocation")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<double>("StartLongitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("StartTimestamp")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<double>("TripDistance")
+                        .HasColumnType("float");
+
+                    b.Property<string>("TripDuration")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("TripDurationSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CartrackTripId")
+                        .IsUnique();
+
+                    b.HasIndex("RegistrationNumber", "MovementDate");
+
+                    b.HasIndex("VehicleId", "MovementDate");
+
+                    b.ToTable("VehicleMovementHistory");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleType", b =>
@@ -5454,7 +6804,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("VehicleTypes", (string)null);
+                    b.ToTable("VehicleTypes");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Warehouse", b =>
@@ -5527,7 +6877,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Warehouses", (string)null);
+                    b.ToTable("Warehouses");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseBuilding", b =>
@@ -5582,7 +6932,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("WarehouseBuildings", (string)null);
+                    b.ToTable("WarehouseBuildings");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseInventory", b =>
@@ -5630,7 +6980,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("WarehouseInventory", (string)null);
+                    b.ToTable("WarehouseInventory");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Meeting", b =>
@@ -5686,7 +7036,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("OrganizerId");
 
-                    b.ToTable("Meetings", (string)null);
+                    b.ToTable("Meetings");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MeetingAttendee", b =>
@@ -5720,7 +7070,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MeetingAttendees", (string)null);
+                    b.ToTable("MeetingAttendees");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MeetingNotification", b =>
@@ -5759,7 +7109,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MeetingNotifications", (string)null);
+                    b.ToTable("MeetingNotifications");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Message", b =>
@@ -5808,7 +7158,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("SenderId");
 
-                    b.ToTable("Messages", (string)null);
+                    b.ToTable("Messages");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MessageAttachment", b =>
@@ -5853,7 +7203,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("MessageId");
 
-                    b.ToTable("MessageAttachments", (string)null);
+                    b.ToTable("MessageAttachments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.MessageReadReceipt", b =>
@@ -5879,7 +7229,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MessageReadReceipts", (string)null);
+                    b.ToTable("MessageReadReceipts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.OperatingCompany", b =>
@@ -5929,7 +7279,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("OperatingCompanyId");
 
-                    b.ToTable("OperatingCompanies", (string)null);
+                    b.ToTable("OperatingCompanies");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CarTrackEntry", b =>
@@ -6001,7 +7351,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CarTrackEntries", (string)null);
+                    b.ToTable("CarTrackEntries");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CondomDeliveryRequest", b =>
@@ -6091,7 +7441,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CondomDeliveryRequests", (string)null);
+                    b.ToTable("CondomDeliveryRequests");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CondomProductionSchedule", b =>
@@ -6144,7 +7494,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CondomProductionSchedules", (string)null);
+                    b.ToTable("CondomProductionSchedules");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.CreditNoteAttachment", b =>
@@ -6188,7 +7538,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CreditNoteAttachments", (string)null);
+                    b.ToTable("CreditNoteAttachments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsCreditNote", b =>
@@ -6219,7 +7569,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsCreditNotes", (string)null);
+                    b.ToTable("PadsCreditNotes");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsInvoiceProcessed", b =>
@@ -6250,7 +7600,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsInvoicesProcessed", (string)null);
+                    b.ToTable("PadsInvoicesProcessed");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsStockDelivered", b =>
@@ -6292,7 +7642,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsStockDelivered", (string)null);
+                    b.ToTable("PadsStockDelivered");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsStockReceived", b =>
@@ -6366,7 +7716,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsStockReceived", (string)null);
+                    b.ToTable("PadsStockReceived");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.PadsWarehouseStock", b =>
@@ -6410,7 +7760,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PadsWarehouseStock", (string)null);
+                    b.ToTable("PadsWarehouseStock");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Projects.TrainingAttachment", b =>
@@ -6454,7 +7804,43 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TrainingAttachments", (string)null);
+                    b.ToTable("TrainingAttachments");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.RefreshToken", b =>
+                {
+                    b.Property<int>("RefreshTokenId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RefreshTokenId"));
+
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RefreshTokenId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.ReportCache", b =>
@@ -6520,7 +7906,162 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ReportType", "FromDate", "ToDate");
 
-                    b.ToTable("ReportCaches", (string)null);
+                    b.ToTable("ReportCaches");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Requisitions.RequisitionApprovalStep", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ActorName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ActorRole")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FromStage")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("RequisitionInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SignatureId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToStage")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequisitionInvoiceId");
+
+                    b.ToTable("RequisitionApprovalSteps");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Requisitions.RequisitionInvoice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("InvoiceDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InvoiceNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("PaidDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("ResumeStage")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Sage300Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("StageEnteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("VatAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReferenceNumber");
+
+                    b.HasIndex("Stage");
+
+                    b.HasIndex("State");
+
+                    b.ToTable("RequisitionInvoices");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportBatch", b =>
@@ -6576,7 +8117,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("ImportBatchId");
 
-                    b.ToTable("SalesImportBatches", (string)null);
+                    b.ToTable("SalesImportBatches");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportIssue", b =>
@@ -6615,7 +8156,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportBatchId");
 
-                    b.ToTable("SalesImportIssues", (string)null);
+                    b.ToTable("SalesImportIssues");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesTransactionStaging", b =>
@@ -6700,7 +8241,92 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ImportBatchId");
 
-                    b.ToTable("SalesTransactionStagings", (string)null);
+                    b.ToTable("SalesTransactionStagings");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Signatures.ElectronicSignature", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Context")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("EntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("PreviousSignatureId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("ReAuthenticated")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("SignatureImage")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("SignatureImageMimeType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("SignedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SignerEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SignerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SignerRole")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SignerUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.ToTable("ElectronicSignatures");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.StaffOperatingCompany", b =>
@@ -6740,7 +8366,7 @@ namespace ProjectTracker.API.Migrations
                     b.HasIndex("StaffMemberId", "OperatingCompanyId")
                         .IsUnique();
 
-                    b.ToTable("StaffOperatingCompanies", (string)null);
+                    b.ToTable("StaffOperatingCompanies");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SupportTicket", b =>
@@ -6819,7 +8445,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("SubmittedByUserId");
 
-                    b.ToTable("SupportTickets", (string)null);
+                    b.ToTable("SupportTickets");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ArtworkAnnotation", b =>
@@ -6867,7 +8493,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ArtworkFileId");
 
-                    b.ToTable("ArtworkAnnotations", (string)null);
+                    b.ToTable("ArtworkAnnotations");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ArtworkFile", b =>
@@ -6959,7 +8585,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("ArtworkFiles", (string)null);
+                    b.ToTable("ArtworkFiles");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ComplianceAlert", b =>
@@ -7009,7 +8635,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("ComplianceDocumentId");
 
-                    b.ToTable("ComplianceAlerts", (string)null);
+                    b.ToTable("ComplianceAlerts");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.ComplianceDocument", b =>
@@ -7087,7 +8713,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ComplianceDocuments", (string)null);
+                    b.ToTable("ComplianceDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.Tender", b =>
@@ -7238,7 +8864,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("Tenders", (string)null);
+                    b.ToTable("Tenders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderActivity", b =>
@@ -7280,7 +8906,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderActivities", (string)null);
+                    b.ToTable("TenderActivities");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderBOQItem", b =>
@@ -7333,7 +8959,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderBOQItems", (string)null);
+                    b.ToTable("TenderBOQItems");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderDocument", b =>
@@ -7393,7 +9019,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderDocuments", (string)null);
+                    b.ToTable("TenderDocuments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderKnowledgeBase", b =>
@@ -7469,7 +9095,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TenderKnowledgeBase", (string)null);
+                    b.ToTable("TenderKnowledgeBase");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderReminder", b =>
@@ -7525,7 +9151,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderReminders", (string)null);
+                    b.ToTable("TenderReminders");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Tenders.TenderTeamMember", b =>
@@ -7570,7 +9196,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TenderId");
 
-                    b.ToTable("TenderTeamMembers", (string)null);
+                    b.ToTable("TenderTeamMembers");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TicketComment", b =>
@@ -7606,7 +9232,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("TicketId");
 
-                    b.ToTable("TicketComments", (string)null);
+                    b.ToTable("TicketComments");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TodoNotification", b =>
@@ -7648,7 +9274,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("TodoNotifications", (string)null);
+                    b.ToTable("TodoNotifications");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.TodoTask", b =>
@@ -7719,7 +9345,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("TodoTasks", (string)null);
+                    b.ToTable("TodoTasks");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.User", b =>
@@ -7802,7 +9428,7 @@ namespace ProjectTracker.API.Migrations
 
                     b.HasIndex("LinkedEmpId");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
 
                     b.HasData(
                         new
@@ -7854,6 +9480,64 @@ namespace ProjectTracker.API.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.WellyMemory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EntityName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("FullContent")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Keywords")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("MemoryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MemoryType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WellyMemories");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Announcement", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.User", "CreatedByUser")
@@ -7882,6 +9566,17 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Announcement");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.AssetRegisterItem", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.AssetRegisterLocation", "Location")
+                        .WithMany("Items")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Location");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Attendance", b =>
@@ -8146,6 +9841,15 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Document");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.ExpenseTrackerItem", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.BookInvoice", "BookInvoice")
+                        .WithMany()
+                        .HasForeignKey("BookInvoiceId");
+
+                    b.Navigation("BookInvoice");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Extension", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Department", "Department")
@@ -8239,6 +9943,46 @@ namespace ProjectTracker.API.Migrations
                         .IsRequired();
 
                     b.Navigation("PurchaseOrder");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Finance.RecurringPayment", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId");
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrDisciplinaryCase", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Hr.HrEmployee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrEmployeeDocument", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Hr.HrEmployee", "Employee")
+                        .WithMany("Documents")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrRegisterEntry", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Hr.HrEmployee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId");
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseChunk", b =>
@@ -8582,6 +10326,15 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Load");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.SalesHistoryLineItem", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.SalesHistoryRecord", "SalesHistoryRecord")
+                        .WithMany()
+                        .HasForeignKey("SalesHistoryRecordId");
+
+                    b.Navigation("SalesHistoryRecord");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.ScrapRecord", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Logistics.Commodity", "Commodity")
@@ -8789,6 +10542,15 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Vehicle");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.Logistics.VehicleMovementHistory", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Logistics.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId");
+
+                    b.Navigation("Vehicle");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.WarehouseBuilding", b =>
                 {
                     b.HasOne("ProjectTracker.API.Models.Logistics.Warehouse", "Warehouse")
@@ -8922,6 +10684,28 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("Message");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.RefreshToken", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Requisitions.RequisitionApprovalStep", b =>
+                {
+                    b.HasOne("ProjectTracker.API.Models.Requisitions.RequisitionInvoice", "RequisitionInvoice")
+                        .WithMany("ApprovalSteps")
+                        .HasForeignKey("RequisitionInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RequisitionInvoice");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportIssue", b =>
@@ -9139,6 +10923,11 @@ namespace ProjectTracker.API.Migrations
                     b.Navigation("ReadByUsers");
                 });
 
+            modelBuilder.Entity("ProjectTracker.API.Models.AssetRegisterLocation", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("ProjectTracker.API.Models.Board", b =>
                 {
                     b.Navigation("ChecklistItems");
@@ -9194,6 +10983,11 @@ namespace ProjectTracker.API.Migrations
             modelBuilder.Entity("ProjectTracker.API.Models.Finance.PurchaseOrder", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Hr.HrEmployee", b =>
+                {
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.KnowledgeBaseDocument", b =>
@@ -9324,6 +11118,11 @@ namespace ProjectTracker.API.Migrations
             modelBuilder.Entity("ProjectTracker.API.Models.OperatingCompany", b =>
                 {
                     b.Navigation("StaffMappings");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.Requisitions.RequisitionInvoice", b =>
+                {
+                    b.Navigation("ApprovalSteps");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.SalesImportBatch", b =>

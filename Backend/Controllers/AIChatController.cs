@@ -28,6 +28,7 @@ namespace ProjectTracker.API.Controllers
         private readonly IConfiguration _configuration;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IReportCacheService _reportCacheService;
+        private readonly IWellyMemoryService _memoryService;
 
         public AIChatController(
             ILogger<AIChatController> logger, 
@@ -38,7 +39,8 @@ namespace ProjectTracker.API.Controllers
             IAIActionService actionService,
             IConfiguration configuration,
             IServiceScopeFactory scopeFactory,
-            IReportCacheService reportCacheService)
+            IReportCacheService reportCacheService,
+            IWellyMemoryService memoryService)
         {
             _logger = logger;
             _aiService = aiService;
@@ -49,6 +51,7 @@ namespace ProjectTracker.API.Controllers
             _configuration = configuration;
             _scopeFactory = scopeFactory;
             _reportCacheService = reportCacheService;
+            _memoryService = memoryService;
         }
 
         /// <summary>
@@ -1077,6 +1080,338 @@ Format with clear headings. Use ZAR for currency.";
         }
 
         /// <summary>
+        /// Analyze supplier invoices from the Books module with Welly
+        /// Extracts what you've been buying, spending patterns, frequency, etc.
+        /// </summary>
+        [HttpPost("analyze-supplier-invoices")]
+        public async Task<IActionResult> AnalyzeSupplierInvoices([FromBody] AnalyzeSupplierInvoicesRequest request)
+        {
+            try
+            {
+                var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
+                var useLocalLlm = localLlmEnabled && await _localLlmService.IsAvailableAsync();
+
+                if (!useLocalLlm)
+                    return StatusCode(503, new { error = "AI service is not available. Please try again later." });
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // Get confirmed invoices from this supplier (case-insensitive)
+                var invoices = await context.BookInvoices
+                    .Where(i => i.SupplierName.ToLower() == request.SupplierName.ToLower() && i.Status == "Confirmed")
+                    .OrderByDescending(i => i.InvoiceDate)
+                    .Take(request.Limit ?? 20)
+                    .ToListAsync();
+
+                if (!invoices.Any())
+                    return BadRequest(new { error = $"No confirmed invoices found for supplier '{request.SupplierName}'" });
+
+                // Build combined invoice content
+                var invoiceContent = new StringBuilder();
+                invoiceContent.AppendLine($"SUPPLIER INVOICES: {request.SupplierName}");
+                invoiceContent.AppendLine($"Total invoices analyzed: {invoices.Count}");
+                invoiceContent.AppendLine($"Date range: {invoices.Min(i => i.InvoiceDate):dd-MMM-yyyy} to {invoices.Max(i => i.InvoiceDate):dd-MMM-yyyy}");
+                invoiceContent.AppendLine($"Total spend: R{invoices.Sum(i => i.Total):N2}");
+                invoiceContent.AppendLine("\n════════════════════════════════════════\n");
+
+                int docCount = 0;
+                int totalChars = 0;
+                const int maxTotalChars = 12000;
+
+                foreach (var inv in invoices)
+                {
+                    var available = maxTotalChars - totalChars;
+                    if (available <= 200) break;
+
+                    var invText = new StringBuilder();
+                    invText.AppendLine($"\n📄 Invoice: {inv.InvoiceNumber} | Date: {inv.InvoiceDate:dd-MMM-yyyy}");
+                    invText.AppendLine($"   Total: R{inv.Total:N2} | Category: {inv.Category}");
+                    if (!string.IsNullOrWhiteSpace(inv.Description))
+                        invText.AppendLine($"   Description: {inv.Description}");
+                    if (!string.IsNullOrWhiteSpace(inv.ExtractedText))
+                    {
+                        var extracted = inv.ExtractedText;
+                        if (extracted.Length > available - 200)
+                            extracted = extracted[..(available - 200)] + "\n[...truncated...]";
+                        invText.AppendLine($"   Content: {extracted}");
+                    }
+
+                    var text = invText.ToString();
+                    invoiceContent.Append(text);
+                    totalChars += text.Length;
+                    docCount++;
+                }
+
+                invoiceContent.AppendLine($"\n\n[Analysis based on {docCount} invoice(s)]");
+
+                // Analysis prompt
+                string systemPrompt;
+                if (request.AnalysisType == "spending-summary")
+                {
+                    systemPrompt = @"You are Welly, an AI procurement analyst for ProMed Technologies. 
+You have been given extracted invoice data from a supplier. Your task is to provide a comprehensive spending analysis.
+
+Analyze the invoices and provide:
+
+1. **What We Buy From Them** — Identify the main categories/items purchased
+2. **Spending Breakdown** — By category, by month, or by product type
+3. **Spending Trends** — Are costs increasing or decreasing? Any patterns?
+4. **Frequent Items** — Items that appear in multiple invoices (good for negotiating volume discounts)
+5. **Average Invoice Value** — Single largest purchase, smallest, average
+6. **Recommendations** — Opportunities to reduce costs, negotiate better terms, or consolidate orders
+
+Use ZAR for currency. Be specific and cite actual invoice numbers/dates when possible.
+Format with clear headers and bullet points.";
+                }
+                else if (request.AnalysisType == "price-comparison")
+                {
+                    systemPrompt = @"You are Welly, a procurement specialist. Analyze these supplier invoices to identify:
+
+1. **Item Price Variance** — If the same item appears multiple times, are prices consistent?
+2. **Unit Cost Analysis** — Calculate or estimate per-unit costs where possible
+3. **Pricing Trends** — Are unit prices going up or down over time?
+4. **Volume Discounts** — Are there signs of volume-based pricing?
+5. **Outliers** — Any invoices with unusual prices or quantities?
+
+Format clearly with actionable insights.";
+                }
+                else if (request.AnalysisType == "hardware-breakdown")
+                {
+                    systemPrompt = @"You are Welly, a procurement data extractor for ProMed Technologies.
+You are given extracted text from a supplier's invoices. Your job is to extract EVERY hardware / physical product line item so it can be exported to a spreadsheet.
+
+Hardware = physical goods: laptops, desktops, monitors, printers, cables, routers, switches, hard drives, RAM, keyboards, mice, servers, UPS units, toner, networking gear, components, peripherals, etc. EXCLUDE pure services, labour, delivery fees, and software licences (unless bundled with hardware).
+
+Return your answer in TWO parts:
+
+PART 1 — A JSON array (and NOTHING else in this part) wrapped EXACTLY between the markers <ITEMS_JSON> and </ITEMS_JSON>. Each element must have these fields:
+{
+  ""item"": ""product description as written on the invoice"",
+  ""invoiceNumber"": ""the invoice number this line came from"",
+  ""date"": ""invoice date in yyyy-MM-dd if known, else empty string"",
+  ""quantity"": number (default 1 if not stated),
+  ""unitPrice"": number (ZAR, exclude currency symbols; estimate from lineTotal/quantity if only a total is shown),
+  ""lineTotal"": number (ZAR),
+  ""category"": ""short category e.g. Monitor, Laptop, Networking, Storage, Peripheral, Printer, Other""
+}
+Rules for PART 1:
+- Output ONLY valid JSON between the markers. No commentary, no trailing commas.
+- Use numbers (not strings) for quantity, unitPrice, lineTotal.
+- If a value is genuinely unknown, use 0.
+- Include one row PER line item PER invoice (do not merge duplicates across invoices).
+
+PART 2 — After </ITEMS_JSON>, write a short human-readable summary titled ""Hardware Purchase Breakdown"" with:
+- Total number of hardware line items and total hardware spend (ZAR)
+- Top 5 most expensive items
+- Any items purchased repeatedly (candidates for volume discounts)
+Keep PART 2 concise.";
+                }
+                else // default detailed analysis
+                {
+                    systemPrompt = @"You are Welly, an AI procurement analyst. Provide a detailed analysis of this supplier's invoices including:
+
+1. **Supplier Profile** — What type of supplier? What do they primarily supply?
+2. **Purchase History** — What's been bought, how often, in what quantities?
+3. **Cost Analysis** — Total spend, average invoice, cost per item (if determinable)
+4. **Key Items** — Top 5-10 most purchased or most expensive items
+5. **Spending Patterns** — Seasonal? Regular? Irregular?
+6. **Risk Assessment** — Any concerning patterns? Supply concentration risk?
+7. **Optimization Opportunities** — How could we negotiate better, consolidate orders, or find alternatives?
+
+Use actual data from the invoices. Include R currency. Be specific and actionable.";
+                }
+
+                var userMessage = $"Analyze supplier invoices:\n\n{invoiceContent}";
+                if (!string.IsNullOrWhiteSpace(request.UserQuestion))
+                    userMessage += $"\n\nUser Question: {request.UserQuestion}";
+
+                var analysis = await _localLlmService.AnalyzeDocumentAsync(systemPrompt, userMessage, HttpContext.RequestAborted);
+
+                // For hardware breakdown, extract the structured line items so the
+                // frontend can render a table and export to CSV/Excel.
+                List<HardwareLineItem>? lineItems = null;
+                if (request.AnalysisType == "hardware-breakdown")
+                {
+                    lineItems = ExtractHardwareLineItems(analysis);
+                    analysis = StripItemsJsonMarkers(analysis);
+                }
+
+                var totalSpend = invoices.Sum(i => i.Total);
+                var fromDate = invoices.Min(i => i.InvoiceDate);
+                var toDate = invoices.Max(i => i.InvoiceDate);
+
+                // Remember this analysis so Welly can recall it later in chat
+                try
+                {
+                    var userCtx = await GetCurrentUserContext();
+                    var summary = analysis.Length > 600 ? analysis[..600].TrimEnd() + "…" : analysis;
+                    var metadata = JsonSerializer.Serialize(new
+                    {
+                        supplier = request.SupplierName,
+                        invoicesAnalyzed = docCount,
+                        totalSpend,
+                        from = fromDate,
+                        to = toDate,
+                        analysisType = request.AnalysisType ?? "detailed"
+                    });
+
+                    await _memoryService.SaveMemoryAsync(
+                        memoryType: "supplier-analysis",
+                        title: $"Supplier analysis: {request.SupplierName}",
+                        summary: $"Analyzed {docCount} confirmed invoice(s) from {request.SupplierName} " +
+                                 $"({fromDate:dd MMM yyyy}–{toDate:dd MMM yyyy}), total spend R{totalSpend:N2}. " +
+                                 $"Type: {request.AnalysisType ?? "detailed"}. Key findings: {summary}",
+                        fullContent: analysis,
+                        entityName: request.SupplierName,
+                        keywords: $"supplier invoice spend procurement {request.SupplierName}",
+                        metadataJson: metadata,
+                        userId: userCtx?.UserId,
+                        userName: userCtx?.FullName,
+                        cancellationToken: HttpContext.RequestAborted);
+                }
+                catch (Exception memEx)
+                {
+                    _logger.LogWarning(memEx, "AnalyzeSupplierInvoices: failed to store Welly memory (non-fatal)");
+                }
+
+                return Ok(new
+                {
+                    supplier = request.SupplierName,
+                    invoicesAnalyzed = docCount,
+                    totalSpend,
+                    dateRange = new
+                    {
+                        from = fromDate,
+                        to = toDate
+                    },
+                    analysisType = request.AnalysisType,
+                    analysis = analysis,
+                    lineItems = lineItems
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, new { error = "Request was cancelled" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AnalyzeSupplierInvoices: Error analyzing supplier {Supplier}", request.SupplierName);
+                return StatusCode(500, new { error = "Failed to analyze invoices. Please try again." });
+            }
+        }
+
+        /// <summary>
+        /// List Welly's recent memories (central daily task cache).
+        /// Optionally filter by type (e.g. "supplier-analysis") or a specific day.
+        /// </summary>
+        [HttpGet("memory")]
+        public async Task<IActionResult> GetWellyMemories([FromQuery] int limit = 50, [FromQuery] string? type = null, [FromQuery] DateTime? day = null)
+        {
+            try
+            {
+                var memories = await _memoryService.GetRecentAsync(limit, type, day, HttpContext.RequestAborted);
+                var result = memories.Select(m => new
+                {
+                    m.Id,
+                    m.MemoryType,
+                    m.Title,
+                    m.EntityName,
+                    m.Summary,
+                    m.UserName,
+                    m.MemoryDate,
+                    m.CreatedAt
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GetWellyMemories: failed to list memories");
+                return StatusCode(500, new { error = "Failed to load Welly memories." });
+            }
+        }
+
+        /// <summary>
+        /// Get the full content of a single Welly memory.
+        /// </summary>
+        [HttpGet("memory/{id:int}")]
+        public async Task<IActionResult> GetWellyMemory(int id)
+        {
+            var memory = await _memoryService.GetByIdAsync(id, HttpContext.RequestAborted);
+            if (memory == null)
+                return NotFound(new { error = "Memory not found" });
+
+            return Ok(memory);
+        }
+
+        /// <summary>
+        /// Extract the JSON hardware line items that Welly emits between
+        /// &lt;ITEMS_JSON&gt; ... &lt;/ITEMS_JSON&gt; markers. Resilient to minor LLM formatting quirks.
+        /// </summary>
+        private List<HardwareLineItem>? ExtractHardwareLineItems(string analysis)
+        {
+            if (string.IsNullOrWhiteSpace(analysis)) return null;
+
+            try
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    analysis,
+                    @"<ITEMS_JSON>\s*(?<json>\[[\s\S]*?\])\s*</ITEMS_JSON>",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                string? json = match.Success ? match.Groups["json"].Value : null;
+
+                // Fallback: grab the first top-level JSON array in the text
+                if (json == null)
+                {
+                    var start = analysis.IndexOf('[');
+                    var end = analysis.LastIndexOf(']');
+                    if (start >= 0 && end > start)
+                        json = analysis.Substring(start, end - start + 1);
+                }
+
+                if (string.IsNullOrWhiteSpace(json)) return null;
+
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var items = JsonSerializer.Deserialize<List<HardwareLineItem>>(json, opts);
+                if (items == null) return null;
+
+                // Normalise: default quantity to 1, backfill unit price / line total when possible
+                foreach (var it in items)
+                {
+                    if (it.Quantity <= 0) it.Quantity = 1;
+                    if (it.UnitPrice <= 0 && it.LineTotal > 0 && it.Quantity > 0)
+                        it.UnitPrice = Math.Round(it.LineTotal / it.Quantity, 2);
+                    if (it.LineTotal <= 0 && it.UnitPrice > 0)
+                        it.LineTotal = Math.Round(it.UnitPrice * it.Quantity, 2);
+                    if (string.IsNullOrWhiteSpace(it.Category)) it.Category = "Other";
+                }
+
+                return items.Where(i => !string.IsNullOrWhiteSpace(i.Item)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ExtractHardwareLineItems: failed to parse line items JSON");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Remove the &lt;ITEMS_JSON&gt;...&lt;/ITEMS_JSON&gt; block from the analysis text
+        /// so the user only sees the readable summary (the JSON is returned separately).
+        /// </summary>
+        private string StripItemsJsonMarkers(string analysis)
+        {
+            if (string.IsNullOrWhiteSpace(analysis)) return analysis;
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(
+                analysis,
+                @"<ITEMS_JSON>[\s\S]*?</ITEMS_JSON>",
+                string.Empty,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return cleaned.Trim();
+        }
+
+        /// <summary>
         /// Extract text from a PDF file on disk
         /// </summary>
         private string ExtractTextFromPdfFile(string filePath)
@@ -1934,5 +2269,27 @@ Use ZAR (R) currency. Focus on actionable product insights.",
         public List<int>? DocumentIds { get; set; } // Specific docs to analyze; null = auto-select pricing docs
         public string AnalysisType { get; set; } = "analyze"; // analyze, extract-boq, pricing-review
         public string? UserQuestion { get; set; } // Optional question from user
+    }
+
+    public class AnalyzeSupplierInvoicesRequest
+    {
+        public string SupplierName { get; set; } = string.Empty;
+        public int? Limit { get; set; } // How many recent invoices to analyze (default 20)
+        public string AnalysisType { get; set; } = "detailed"; // detailed, spending-summary, price-comparison, hardware-breakdown
+        public string? UserQuestion { get; set; } // Optional specific question about this supplier
+    }
+
+    /// <summary>
+    /// A single hardware line item extracted from supplier invoices, for export.
+    /// </summary>
+    public class HardwareLineItem
+    {
+        public string Item { get; set; } = string.Empty;
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string Date { get; set; } = string.Empty;
+        public double Quantity { get; set; }
+        public double UnitPrice { get; set; }
+        public double LineTotal { get; set; }
+        public string Category { get; set; } = string.Empty;
     }
 }

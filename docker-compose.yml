@@ -48,9 +48,14 @@ services:
       - NasSettings__ShareName=WorkSpace
       - NasSettings__Username=Storage
       - NasSettings__Password=AccMed@2025
+      - Archives__Path=/app/archives
+      - Archives__Password=2630
       - Ollama__BaseUrl=http://host.docker.internal:11434
       - Ollama__Model=phi3:mini
       - Ollama__Enabled=false
+      # One-time historical movement-history backfill. Set Enabled=false after it completes.
+      - MovementHistory__Backfill__Enabled=true
+      - MovementHistory__Backfill__FromDate=2026-01-01
       - Claude__ApiKey=${CLAUDE_API_KEY:-}
       - Claude__Model=claude-sonnet-4-20250514
       - Claude__Enabled=true
@@ -68,6 +73,7 @@ services:
       - ./kb-docs:/app/kb-docs
       - ./ai-data:/app/ai-data
       - nas-documents:/app/documents
+      - nas-archives:/app/archives:ro
       - ./uploads:/app/uploads
       - C:\Users\Administrator\Documents\quotes:/app/quotes
       - ./downloads:/app/downloads
@@ -117,6 +123,9 @@ services:
     container_name: projecttracker-frontend
     ports:
       - "0.0.0.0:4200:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -138,6 +147,12 @@ volumes:
       type: cifs
       device: "//192.168.10.76/WorkSpace/IntranetDocuments"
       o: "username=Storage,password=AccMed@2025,vers=3.0,uid=1000,gid=1000"
+  nas-archives:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: "//192.168.10.76/WorkSpace/Archives"
+      o: "username=Storage,password=AccMed@2025,vers=3.0,uid=1000,gid=1000,ro"
 networks:
   projecttracker-network:
     driver: bridge

@@ -50,6 +50,10 @@ namespace ProjectTracker.API.Models
         [MaxLength(200)]
         public string? CompanyName { get; set; }
 
+        // Fleet linkage — vehicle registration this invoice relates to (Logistics books).
+        [MaxLength(50)]
+        public string? VehicleRegistration { get; set; }
+
         [MaxLength(1000)]
         public string? Description { get; set; }
 

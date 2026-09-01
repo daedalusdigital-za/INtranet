@@ -23,6 +23,44 @@ import { interval, Subscription, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
+import { EmployeeDirectoryComponent } from './employee-directory.component';
+import { DailyRegisterComponent } from './daily-register.component';
+
+interface HrAttentionItem { type: string; severity: string; icon: string; title: string; detail: string; count: number; action: string; }
+interface HrLeavePerson { name: string; department: string; leaveType: string; startDate?: string; endDate?: string; days?: number; }
+interface HrOverview {
+  generatedAt: string;
+  workforce: {
+    totalEmployees: number; terminatedCount?: number; newThisMonth: number; onLeaveToday: number; absentToday: number;
+    departments: number; byDepartment: { department: string; count: number }[];
+    bySite?: { site: string; count: number }[];
+    completenessRate: number; incompleteCount: number;
+    missingBreakdown: { mobile: number; department: number; jobTitle: number; idNumber?: number };
+  };
+  attendance: {
+    clockedInToday: number; notClockedIn: number; lateToday: number; attendanceRate: number;
+    earliestArrival: string | null; averageArrival: string | null;
+    lateArrivals: { empId: string; name: string; department: string; timeIn: string; lateMinutes: number }[];
+    byDepartment: { department: string; total: number; present: number; rate: number }[];
+    trend: { date: string; label: string; present: number; late: number }[];
+    holisticPresent?: number; manualPresent?: number; manualAbsent?: number; manualOnLeave?: number;
+  };
+  registers?: {
+    submittedSites: number; totalPresent: number; totalAbsent: number;
+    bySite: { site: string; total: number; present: number; absent: number }[];
+    missingSites: string[];
+  };
+  discipline?: {
+    activeCases: number; activeWarnings: number; activeSuspensions: number; openInvestigations: number; terminated?: number;
+  };
+  leave: {
+    pending: number; stalePending: number; onLeaveToday: number; upcoming: number;
+    byType: { type: string; count: number }[];
+    onLeaveNow: HrLeavePerson[]; upcomingList: HrLeavePerson[];
+  };
+  attention: HrAttentionItem[];
+}
+interface IncompleteRecord { empId: string; name: string; department: string; jobTitle: string; missing: string[]; }
 
 @Component({
   selector: 'app-people',
@@ -104,6 +142,311 @@ import { environment } from '../../../environments/environment';
             </div>
           </div>
         </div>
+
+        <!-- ============ HR COMMAND CENTRE ============ -->
+        <div class="command-centre">
+          @if (hrLoading && !hrOverview) {
+            <div class="cc-loading"><mat-spinner diameter="36"></mat-spinner><span>Loading HR command centre…</span></div>
+          } @else if (hrOverview) {
+            <!-- Directory launcher -->
+            <div class="dir-launch" (click)="openEmployeeDirectory()">
+              <div class="dl-left">
+                <div class="dl-icon"><mat-icon>badge</mat-icon></div>
+                <div class="dl-text">
+                  <span class="dl-title">Employee Directory</span>
+                  <span class="dl-sub">Search, view &amp; edit staff across all sites — Main Office, Security, factories, branches &amp; logistics — and store contracts &amp; documents</span>
+                </div>
+              </div>
+              <button mat-flat-button class="dl-btn"><mat-icon>arrow_forward</mat-icon> Open Directory</button>
+            </div>
+
+            <!-- Daily register launcher -->
+            <div class="dir-launch reg-launch" (click)="openDailyRegister()">
+              <div class="dl-left">
+                <div class="dl-icon reg"><mat-icon>fact_check</mat-icon></div>
+                <div class="dl-text">
+                  <span class="dl-title">Daily Attendance Register</span>
+                  <span class="dl-sub">Capture manual in/out registers for sites that don't clock in — Main Building, Security &amp; more — for a holistic attendance view</span>
+                </div>
+              </div>
+              <button mat-flat-button class="dl-btn"><mat-icon>edit_note</mat-icon> Capture Register</button>
+            </div>
+
+            <!-- Top KPI row -->
+            <div class="kpi-row">
+              <div class="kpi-card kpi-blue" (click)="openEmployeeDirectory()" matTooltip="Open the employee directory">
+                <div class="kpi-icon"><mat-icon>groups</mat-icon></div>
+                <div class="kpi-body">
+                  <span class="kpi-value">{{ hrOverview.workforce.totalEmployees }}</span>
+                  <span class="kpi-label">Active Employees</span>
+                </div>
+              </div>
+              <div class="kpi-card kpi-green" matTooltip="Clocked in today">
+                <div class="kpi-icon"><mat-icon>how_to_reg</mat-icon></div>
+                <div class="kpi-body">
+                  <span class="kpi-value">{{ hrOverview.attendance.clockedInToday }}<small>/{{ hrOverview.workforce.totalEmployees }}</small></span>
+                  <span class="kpi-label">Present Today ({{ hrOverview.attendance.attendanceRate }}%)</span>
+                </div>
+              </div>
+              <div class="kpi-card kpi-amber" (click)="openMainOfficeDialog()" matTooltip="Not clocked in">
+                <div class="kpi-icon"><mat-icon>person_off</mat-icon></div>
+                <div class="kpi-body">
+                  <span class="kpi-value">{{ hrOverview.attendance.notClockedIn }}</span>
+                  <span class="kpi-label">Absent Today</span>
+                </div>
+              </div>
+              <div class="kpi-card kpi-purple" (click)="openLeavePanel()" matTooltip="On approved leave today">
+                <div class="kpi-icon"><mat-icon>beach_access</mat-icon></div>
+                <div class="kpi-body">
+                  <span class="kpi-value">{{ hrOverview.leave.onLeaveToday }}</span>
+                  <span class="kpi-label">On Leave Today</span>
+                </div>
+              </div>
+              <div class="kpi-card kpi-rose" (click)="openLeavePanel()" matTooltip="Pending HR actions">
+                <div class="kpi-icon"><mat-icon>pending_actions</mat-icon></div>
+                <div class="kpi-body">
+                  <span class="kpi-value">{{ hrOverview.leave.pending }}</span>
+                  <span class="kpi-label">Pending Approvals</span>
+                </div>
+              </div>
+              <div class="kpi-card kpi-teal" matTooltip="New hires this month">
+                <div class="kpi-icon"><mat-icon>person_add</mat-icon></div>
+                <div class="kpi-body">
+                  <span class="kpi-value">{{ hrOverview.workforce.newThisMonth }}</span>
+                  <span class="kpi-label">New This Month</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Holistic attendance + discipline strip -->
+            <div class="holistic-strip">
+              <div class="hs-card hs-holistic" (click)="openDailyRegister()" matTooltip="Biometric clock-ins + manual registers">
+                <div class="hs-icon"><mat-icon>groups_2</mat-icon></div>
+                <div class="hs-body">
+                  <span class="hs-value">{{ hrOverview.attendance.holisticPresent ?? hrOverview.attendance.clockedInToday }}<small>/{{ hrOverview.workforce.totalEmployees }}</small></span>
+                  <span class="hs-label">Holistic Present</span>
+                  <span class="hs-sub">{{ hrOverview.attendance.clockedInToday }} clocked in · {{ hrOverview.attendance.manualPresent ?? 0 }} on register</span>
+                </div>
+              </div>
+              <div class="hs-card hs-registers" (click)="openDailyRegister()" matTooltip="Manual registers submitted today">
+                <div class="hs-icon"><mat-icon>fact_check</mat-icon></div>
+                <div class="hs-body">
+                  <span class="hs-value">{{ hrOverview.registers?.submittedSites ?? 0 }}</span>
+                  <span class="hs-label">Registers Submitted</span>
+                  @if (hrOverview.registers?.missingSites?.length) {
+                    <span class="hs-sub warn">Missing: {{ hrOverview.registers?.missingSites?.join(', ') }}</span>
+                  } @else {
+                    <span class="hs-sub">All sites reported</span>
+                  }
+                </div>
+              </div>
+              <div class="hs-card hs-warn" (click)="openEmployeeDirectory()" matTooltip="Active warnings on record">
+                <div class="hs-icon"><mat-icon>warning</mat-icon></div>
+                <div class="hs-body">
+                  <span class="hs-value">{{ hrOverview.discipline?.activeWarnings ?? 0 }}</span>
+                  <span class="hs-label">Active Warnings</span>
+                  <span class="hs-sub">{{ hrOverview.discipline?.openInvestigations ?? 0 }} investigation(s) open</span>
+                </div>
+              </div>
+              <div class="hs-card hs-suspend" (click)="openEmployeeDirectory()" matTooltip="Employees currently suspended">
+                <div class="hs-icon"><mat-icon>gavel</mat-icon></div>
+                <div class="hs-body">
+                  <span class="hs-value">{{ hrOverview.discipline?.activeSuspensions ?? 0 }}</span>
+                  <span class="hs-label">Suspended</span>
+                  <span class="hs-sub">{{ hrOverview.discipline?.activeCases ?? 0 }} active case(s)</span>
+                </div>
+              </div>
+              <div class="hs-card hs-terminated" (click)="openEmployeeDirectory()" matTooltip="Terminated employees">
+                <div class="hs-icon"><mat-icon>person_off</mat-icon></div>
+                <div class="hs-body">
+                  <span class="hs-value">{{ hrOverview.discipline?.terminated ?? 0 }}</span>
+                  <span class="hs-label">Terminated</span>
+                  <span class="hs-sub">{{ hrOverview.workforce.terminatedCount ?? 0 }} total exits</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Middle: attention centre + attendance -->
+            <div class="cc-grid">
+              <!-- Attention centre -->
+              <div class="cc-panel attention-panel">
+                <div class="cc-panel-head">
+                  <div class="cc-panel-title"><mat-icon>notifications_active</mat-icon><h3>HR Attention Centre</h3></div>
+                  <button mat-icon-button (click)="loadHrOverview()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
+                </div>
+                @if (hrOverview.attention.length === 0) {
+                  <div class="cc-empty"><mat-icon>task_alt</mat-icon><p>All clear — nothing needs attention right now.</p></div>
+                } @else {
+                  <div class="attention-list">
+                    @for (item of hrOverview.attention; track item.type) {
+                      <div class="attention-item sev-{{item.severity}}" (click)="onAttentionAction(item.action)">
+                        <div class="att-icon"><mat-icon>{{ item.icon }}</mat-icon></div>
+                        <div class="att-body">
+                          <div class="att-title">{{ item.title }}</div>
+                          <div class="att-detail">{{ item.detail }}</div>
+                        </div>
+                        <div class="att-side">
+                          <span class="sev-badge sev-{{item.severity}}">{{ severityLabel(item.severity) }}</span>
+                          <mat-icon class="att-go">chevron_right</mat-icon>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- Today's attendance -->
+              <div class="cc-panel">
+                <div class="cc-panel-head">
+                  <div class="cc-panel-title"><mat-icon>schedule</mat-icon><h3>Today's Attendance</h3></div>
+                </div>
+                <div class="att-mini-stats">
+                  <div class="mini-stat"><span class="ms-val ms-green">{{ hrOverview.attendance.clockedInToday }}</span><span class="ms-lbl">Clocked in</span></div>
+                  <div class="mini-stat"><span class="ms-val ms-amber">{{ hrOverview.attendance.lateToday }}</span><span class="ms-lbl">Late</span></div>
+                  <div class="mini-stat"><span class="ms-val ms-red">{{ hrOverview.attendance.notClockedIn }}</span><span class="ms-lbl">Absent</span></div>
+                  <div class="mini-stat"><span class="ms-val">{{ hrOverview.attendance.earliestArrival || '–' }}</span><span class="ms-lbl">Earliest</span></div>
+                  <div class="mini-stat"><span class="ms-val">{{ hrOverview.attendance.averageArrival || '–' }}</span><span class="ms-lbl">Average</span></div>
+                </div>
+
+                <!-- 7-day trend -->
+                <div class="trend-block">
+                  <div class="trend-title">Last 7 days</div>
+                  <div class="trend-bars">
+                    @for (d of hrOverview.attendance.trend; track d.date) {
+                      <div class="trend-col" [matTooltip]="d.label + ': ' + d.present + ' present, ' + d.late + ' late'">
+                        <div class="trend-bar" [style.height.%]="trendHeight(d.present)">
+                          <div class="trend-late" [style.height.%]="d.present > 0 ? (d.late / d.present * 100) : 0"></div>
+                        </div>
+                        <span class="trend-lbl">{{ d.label }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                @if (hrOverview.attendance.lateArrivals.length > 0) {
+                  <div class="late-list">
+                    <div class="late-list-title">Late arrivals today</div>
+                    @for (l of hrOverview.attendance.lateArrivals.slice(0, 5); track l.empId) {
+                      <div class="late-row">
+                        <span class="late-name">{{ l.name || l.empId }}</span>
+                        <span class="late-dept">{{ l.department }}</span>
+                        <span class="late-time">{{ l.timeIn }} <small>(+{{ l.lateMinutes }}m)</small></span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Bottom: workforce, records, leave -->
+            <div class="cc-grid-3">
+              <!-- Headcount by department -->
+              <div class="cc-panel">
+                <div class="cc-panel-head">
+                  <div class="cc-panel-title"><mat-icon>domain</mat-icon><h3>Headcount by Department</h3></div>
+                </div>
+                <div class="dept-bars">
+                  @for (dept of hrOverview.workforce.byDepartment.slice(0, 8); track dept.department) {
+                    <div class="dept-bar-row">
+                      <span class="dbr-name">{{ dept.department }}</span>
+                      <div class="dbr-track"><div class="dbr-fill" [style.width.%]="deptWidth(dept.count)"></div></div>
+                      <span class="dbr-count">{{ dept.count }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <!-- Records completeness -->
+              <div class="cc-panel">
+                <div class="cc-panel-head">
+                  <div class="cc-panel-title"><mat-icon>fact_check</mat-icon><h3>Records Completeness</h3></div>
+                </div>
+                <div class="completeness">
+                  <div class="comp-ring" [style.background]="completenessRing()">
+                    <div class="comp-inner"><span class="comp-pct">{{ hrOverview.workforce.completenessRate }}%</span><span class="comp-sub">complete</span></div>
+                  </div>
+                  <div class="comp-missing">
+                    <div class="comp-row"><mat-icon>phone</mat-icon><span>Mobile</span><b>{{ hrOverview.workforce.missingBreakdown.mobile }}</b></div>
+                    <div class="comp-row"><mat-icon>domain</mat-icon><span>Department</span><b>{{ hrOverview.workforce.missingBreakdown.department }}</b></div>
+                    <div class="comp-row"><mat-icon>work</mat-icon><span>Job title</span><b>{{ hrOverview.workforce.missingBreakdown.jobTitle }}</b></div>
+                    <div class="comp-row"><mat-icon>badge</mat-icon><span>ID Number</span><b>{{ hrOverview.workforce.missingBreakdown.idNumber }}</b></div>
+                  </div>
+                </div>
+                @if (hrOverview.workforce.incompleteCount > 0) {
+                  <button mat-stroked-button class="comp-btn" (click)="openRecordsPanel()">
+                    <mat-icon>list</mat-icon> View {{ hrOverview.workforce.incompleteCount }} incomplete record{{ hrOverview.workforce.incompleteCount === 1 ? '' : 's' }}
+                  </button>
+                }
+              </div>
+
+              <!-- Leave summary -->
+              <div class="cc-panel">
+                <div class="cc-panel-head">
+                  <div class="cc-panel-title"><mat-icon>event_note</mat-icon><h3>Leave</h3></div>
+                  <button mat-button class="cc-link" (click)="openLeavePanel()">Manage</button>
+                </div>
+                <div class="leave-mini">
+                  <div class="lm-stat"><span class="lm-val">{{ hrOverview.leave.pending }}</span><span class="lm-lbl">Pending</span></div>
+                  <div class="lm-stat"><span class="lm-val">{{ hrOverview.leave.onLeaveToday }}</span><span class="lm-lbl">Out today</span></div>
+                  <div class="lm-stat"><span class="lm-val">{{ hrOverview.leave.upcoming }}</span><span class="lm-lbl">Upcoming</span></div>
+                </div>
+                @if (hrOverview.leave.onLeaveNow.length > 0) {
+                  <div class="leave-sub-title">Currently on leave</div>
+                  @for (p of hrOverview.leave.onLeaveNow.slice(0, 4); track p.name) {
+                    <div class="leave-person">
+                      <div class="lp-avatar">{{ lrInitials(p.name) }}</div>
+                      <div class="lp-info"><span class="lp-name">{{ p.name }}</span><span class="lp-meta">{{ p.leaveType }} · until {{ p.endDate | date:'d MMM' }}</span></div>
+                    </div>
+                  }
+                }
+                @if (hrOverview.leave.upcomingList.length > 0) {
+                  <div class="leave-sub-title">Upcoming</div>
+                  @for (p of hrOverview.leave.upcomingList.slice(0, 4); track p.name + p.startDate) {
+                    <div class="leave-person">
+                      <div class="lp-avatar upcoming">{{ lrInitials(p.name) }}</div>
+                      <div class="lp-info"><span class="lp-name">{{ p.name }}</span><span class="lp-meta">{{ p.leaveType }} · {{ p.startDate | date:'d MMM' }} ({{ p.days }}d)</span></div>
+                    </div>
+                  }
+                }
+                @if (hrOverview.leave.onLeaveNow.length === 0 && hrOverview.leave.upcomingList.length === 0) {
+                  <div class="cc-empty small"><mat-icon>event_available</mat-icon><p>No current or upcoming leave.</p></div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (showRecordsPanel) {
+          <div class="records-overlay" (click)="showRecordsPanel = false">
+            <div class="records-panel" (click)="$event.stopPropagation()">
+              <div class="rp-head">
+                <div class="rp-title"><mat-icon>fact_check</mat-icon><h3>Incomplete Employee Records</h3></div>
+                <button mat-icon-button (click)="showRecordsPanel = false"><mat-icon>close</mat-icon></button>
+              </div>
+              @if (recordsLoading) {
+                <div class="cc-loading"><mat-spinner diameter="32"></mat-spinner></div>
+              } @else if (incompleteRecords.length === 0) {
+                <div class="cc-empty"><mat-icon>task_alt</mat-icon><p>All employee records are complete.</p></div>
+              } @else {
+                <div class="rp-list">
+                  @for (r of incompleteRecords; track r.empId) {
+                    <div class="rp-item">
+                      <div class="rp-info">
+                        <span class="rp-name">{{ r.name || r.empId }}</span>
+                        <span class="rp-dept">{{ r.department }}<span *ngIf="r.jobTitle"> · {{ r.jobTitle }}</span></span>
+                      </div>
+                      <div class="rp-missing">
+                        @for (m of r.missing; track m) {
+                          <span class="rp-tag">{{ m }}</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
 
         @if (showLeaveRequests) {
           <div class="leave-requests-panel">
@@ -2143,6 +2486,171 @@ import { environment } from '../../../environments/environment';
     .spacer {
       flex: 1 1 auto;
     }
+
+    /* ============ HR COMMAND CENTRE ============ */
+    .command-centre { max-width: 1400px; margin: 0 auto 40px; }
+    .cc-loading { display:flex; align-items:center; justify-content:center; gap:14px; padding:48px; color:#cbd5e1; }
+    .cc-loading span { font-size:14px; }
+
+    /* Directory launcher */
+    .dir-launch { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 22px; margin-bottom:20px;
+      border-radius:16px; cursor:pointer; background:linear-gradient(135deg,rgba(99,102,241,0.22),rgba(14,165,233,0.18));
+      border:1px solid rgba(129,140,248,0.35); transition:transform .18s ease, box-shadow .18s ease; }
+    .dir-launch:hover { transform:translateY(-2px); box-shadow:0 12px 30px rgba(0,0,0,0.28); }
+    .reg-launch { background:linear-gradient(135deg,#0e7490,#0891b2); }
+    .dl-icon.reg { background:rgba(255,255,255,0.18); }
+    .holistic-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin:0 0 20px; }
+    .hs-card { display:flex; align-items:center; gap:14px; padding:16px 18px; border-radius:14px; cursor:pointer; transition:transform .15s ease, box-shadow .15s ease; color:#fff; }
+    .hs-card:hover { transform:translateY(-2px); box-shadow:0 10px 26px rgba(0,0,0,0.25); }
+    .hs-holistic { background:linear-gradient(135deg,#0891b2,#0e7490); }
+    .hs-registers { background:linear-gradient(135deg,#4338ca,#4f46e5); }
+    .hs-warn { background:linear-gradient(135deg,#b45309,#d97706); }
+    .hs-suspend { background:linear-gradient(135deg,#b91c1c,#dc2626); }
+    .hs-terminated { background:linear-gradient(135deg,#4b5563,#6b7280); }
+    .hs-icon { width:46px; height:46px; border-radius:12px; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; }
+    .hs-icon mat-icon { font-size:26px; width:26px; height:26px; }
+    .hs-body { display:flex; flex-direction:column; }
+    .hs-value { font-size:26px; font-weight:700; line-height:1; }
+    .hs-value small { font-size:14px; opacity:.75; font-weight:500; }
+    .hs-label { font-size:13px; font-weight:600; margin-top:3px; }
+    .hs-sub { font-size:11px; opacity:.85; margin-top:2px; }
+    .hs-sub.warn { color:#fde68a; font-weight:600; }
+    @media (max-width:1100px) { .holistic-strip { grid-template-columns:repeat(2,1fr); } }
+    .dl-left { display:flex; align-items:center; gap:16px; min-width:0; }
+    .dl-icon { width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,#6366f1,#4f46e5); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .dl-icon mat-icon { color:#fff; font-size:28px; width:28px; height:28px; }
+    .dl-text { display:flex; flex-direction:column; min-width:0; }
+    .dl-title { font-size:17px; font-weight:800; color:#f8fafc; }
+    .dl-sub { font-size:12.5px; color:#c7d2fe; }
+    .dl-btn { background:#fff !important; color:#4f46e5 !important; font-weight:700 !important; flex-shrink:0; }
+
+    /* KPI row */
+    .kpi-row { display:grid; grid-template-columns:repeat(6,1fr); gap:16px; margin-bottom:20px; }
+    @media (max-width:1200px){ .kpi-row{ grid-template-columns:repeat(3,1fr); } }
+    @media (max-width:640px){ .kpi-row{ grid-template-columns:repeat(2,1fr); } }
+    .kpi-card { display:flex; align-items:center; gap:14px; padding:18px; border-radius:16px;
+      background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.09);
+      backdrop-filter:blur(10px); cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, border-color .18s; }
+    .kpi-card:hover { transform:translateY(-3px); box-shadow:0 12px 30px rgba(0,0,0,0.28); border-color:rgba(255,255,255,0.2); }
+    .kpi-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .kpi-icon mat-icon { color:#fff; font-size:26px; width:26px; height:26px; }
+    .kpi-body { display:flex; flex-direction:column; min-width:0; }
+    .kpi-value { font-size:26px; font-weight:800; color:#f8fafc; line-height:1.1; }
+    .kpi-value small { font-size:14px; font-weight:600; color:#94a3b8; }
+    .kpi-label { font-size:12px; color:#94a3b8; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-blue .kpi-icon{ background:linear-gradient(135deg,#3b82f6,#2563eb); }
+    .kpi-green .kpi-icon{ background:linear-gradient(135deg,#10b981,#059669); }
+    .kpi-amber .kpi-icon{ background:linear-gradient(135deg,#f59e0b,#d97706); }
+    .kpi-purple .kpi-icon{ background:linear-gradient(135deg,#8b5cf6,#7c3aed); }
+    .kpi-rose .kpi-icon{ background:linear-gradient(135deg,#f43f5e,#e11d48); }
+    .kpi-teal .kpi-icon{ background:linear-gradient(135deg,#14b8a6,#0d9488); }
+
+    /* Grids */
+    .cc-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin-bottom:16px; }
+    .cc-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:8px; }
+    @media (max-width:1100px){ .cc-grid, .cc-grid-3 { grid-template-columns:1fr; } }
+    .cc-panel { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+      border-radius:16px; padding:18px; backdrop-filter:blur(10px); }
+    .cc-panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .cc-panel-title { display:flex; align-items:center; gap:10px; }
+    .cc-panel-title mat-icon { color:#818cf8; }
+    .cc-panel-title h3 { margin:0; font-size:15px; font-weight:700; color:#e2e8f0; }
+    .cc-link { color:#818cf8; font-size:12px; min-width:0; }
+    .cc-empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:32px 16px; color:#94a3b8; text-align:center; }
+    .cc-empty mat-icon { font-size:36px; width:36px; height:36px; color:#34d399; }
+    .cc-empty.small { padding:18px; }
+    .cc-empty p { margin:0; font-size:13px; }
+
+    /* Attention centre */
+    .attention-list { display:flex; flex-direction:column; gap:10px; }
+    .attention-item { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px;
+      background:rgba(255,255,255,0.04); border-left:4px solid #64748b; cursor:pointer; transition:background .15s, transform .15s; }
+    .attention-item:hover { background:rgba(255,255,255,0.09); transform:translateX(2px); }
+    .att-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+      background:rgba(255,255,255,0.08); flex-shrink:0; }
+    .att-icon mat-icon { color:#e2e8f0; }
+    .att-body { flex:1; min-width:0; }
+    .att-title { font-size:13.5px; font-weight:600; color:#f1f5f9; }
+    .att-detail { font-size:12px; color:#94a3b8; margin-top:2px; }
+    .att-side { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    .att-go { color:#64748b; }
+    .sev-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:3px 8px; border-radius:20px; }
+    .attention-item.sev-overdue { border-left-color:#ef4444; }
+    .attention-item.sev-critical { border-left-color:#f97316; }
+    .attention-item.sev-due_soon { border-left-color:#eab308; }
+    .attention-item.sev-info { border-left-color:#38bdf8; }
+    .sev-badge.sev-overdue { background:rgba(239,68,68,0.18); color:#fca5a5; }
+    .sev-badge.sev-critical { background:rgba(249,115,22,0.18); color:#fdba74; }
+    .sev-badge.sev-due_soon { background:rgba(234,179,8,0.18); color:#fde047; }
+    .sev-badge.sev-info { background:rgba(56,189,248,0.18); color:#7dd3fc; }
+
+    /* Today's attendance */
+    .att-mini-stats { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:16px; }
+    .mini-stat { display:flex; flex-direction:column; align-items:center; padding:10px 4px; border-radius:10px; background:rgba(255,255,255,0.04); }
+    .ms-val { font-size:18px; font-weight:800; color:#e2e8f0; }
+    .ms-val.ms-green{ color:#34d399; } .ms-val.ms-amber{ color:#fbbf24; } .ms-val.ms-red{ color:#f87171; }
+    .ms-lbl { font-size:10.5px; color:#94a3b8; margin-top:2px; text-align:center; }
+    .trend-block { margin-bottom:14px; }
+    .trend-title, .late-list-title, .leave-sub-title { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:#94a3b8; margin-bottom:8px; font-weight:600; }
+    .trend-bars { display:flex; align-items:flex-end; gap:8px; height:90px; }
+    .trend-col { flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; }
+    .trend-bar { width:70%; min-height:4px; background:linear-gradient(180deg,#60a5fa,#3b82f6); border-radius:6px 6px 0 0; position:relative; display:flex; align-items:flex-start; overflow:hidden; }
+    .trend-late { width:100%; background:rgba(251,191,36,0.85); }
+    .trend-lbl { font-size:10px; color:#94a3b8; margin-top:5px; }
+    .late-list { border-top:1px solid rgba(255,255,255,0.07); padding-top:12px; }
+    .late-row { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:12.5px; }
+    .late-name { flex:1; color:#e2e8f0; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .late-dept { color:#94a3b8; font-size:11px; }
+    .late-time { color:#fbbf24; font-weight:600; }
+    .late-time small { color:#94a3b8; font-weight:400; }
+
+    /* Department bars */
+    .dept-bars { display:flex; flex-direction:column; gap:10px; }
+    .dept-bar-row { display:flex; align-items:center; gap:10px; }
+    .dbr-name { width:120px; font-size:12px; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .dbr-track { flex:1; height:10px; background:rgba(255,255,255,0.07); border-radius:6px; overflow:hidden; }
+    .dbr-fill { height:100%; background:linear-gradient(90deg,#6366f1,#818cf8); border-radius:6px; }
+    .dbr-count { width:32px; text-align:right; font-size:12px; font-weight:700; color:#e2e8f0; }
+
+    /* Completeness ring */
+    .completeness { display:flex; align-items:center; gap:18px; }
+    .comp-ring { width:96px; height:96px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .comp-inner { width:72px; height:72px; border-radius:50%; background:#0f172a; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .comp-pct { font-size:20px; font-weight:800; color:#f8fafc; }
+    .comp-sub { font-size:10px; color:#94a3b8; }
+    .comp-missing { flex:1; display:flex; flex-direction:column; gap:6px; }
+    .comp-row { display:flex; align-items:center; gap:8px; font-size:12.5px; color:#cbd5e1; }
+    .comp-row mat-icon { font-size:16px; width:16px; height:16px; color:#94a3b8; }
+    .comp-row span { flex:1; }
+    .comp-row b { color:#f1f5f9; }
+    .comp-btn { width:100%; margin-top:14px; color:#c7d2fe !important; border-color:rgba(199,210,254,0.4) !important; font-size:12.5px; }
+
+    /* Leave mini */
+    .leave-mini { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+    .lm-stat { display:flex; flex-direction:column; align-items:center; padding:10px; border-radius:10px; background:rgba(255,255,255,0.04); }
+    .lm-val { font-size:20px; font-weight:800; color:#e2e8f0; }
+    .lm-lbl { font-size:10.5px; color:#94a3b8; margin-top:2px; }
+    .leave-person { display:flex; align-items:center; gap:10px; padding:6px 0; }
+    .lp-avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#8b5cf6,#7c3aed); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .lp-avatar.upcoming { background:linear-gradient(135deg,#0ea5e9,#0284c7); }
+    .lp-info { display:flex; flex-direction:column; min-width:0; }
+    .lp-name { font-size:13px; color:#e2e8f0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lp-meta { font-size:11px; color:#94a3b8; }
+
+    /* Records overlay */
+    .records-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(2px); }
+    .records-panel { width:640px; max-width:100%; max-height:80vh; overflow:auto; background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:20px; }
+    .rp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .rp-title { display:flex; align-items:center; gap:10px; }
+    .rp-title mat-icon { color:#818cf8; }
+    .rp-title h3 { margin:0; font-size:16px; color:#e2e8f0; }
+    .rp-list { display:flex; flex-direction:column; gap:8px; }
+    .rp-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.04); }
+    .rp-info { display:flex; flex-direction:column; min-width:0; }
+    .rp-name { font-size:13.5px; font-weight:600; color:#f1f5f9; }
+    .rp-dept { font-size:11.5px; color:#94a3b8; }
+    .rp-missing { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+    .rp-tag { font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:20px; background:rgba(244,63,94,0.16); color:#fda4af; }
   `]
 })
 export class PeopleComponent implements OnInit, OnDestroy {
@@ -2223,6 +2731,15 @@ export class PeopleComponent implements OnInit, OnDestroy {
   pendingLeaveCount = 0;
   leaveCounts = { pending: 0, approved: 0, rejected: 0, total: 0 };
 
+  // HR Command Centre dashboard
+  hrOverview: HrOverview | null = null;
+  hrLoading = false;
+  showRecordsPanel = false;
+  recordsLoading = false;
+  incompleteRecords: IncompleteRecord[] = [];
+  private maxDeptCount = 1;
+  private maxTrendPresent = 1;
+
   // Location cards data
   locations = [
     { id: 'main-office', name: 'Main Office', icon: 'folder_special', description: 'Access employee attendance records and HR data', action: () => this.openMainOfficeDialog() },
@@ -2249,6 +2766,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadData();
     this.loadLeaveCounts();
+    this.loadHrOverview();
 
     // Auto-refresh every 10 minutes
     this.autoRefreshSubscription = interval(600000)
@@ -2468,6 +2986,84 @@ export class PeopleComponent implements OnInit, OnDestroy {
   lrInitials(name: string): string {
     if (!name) return '?';
     return name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
+  }
+
+  // ============ HR Command Centre ============
+  loadHrOverview(): void {
+    this.hrLoading = true;
+    this.http.get<HrOverview>(`${environment.apiUrl}/hr-dashboard/overview`, { headers: this.hrHeaders() }).subscribe({
+      next: (data) => {
+        this.hrOverview = data;
+        this.maxDeptCount = Math.max(1, ...data.workforce.byDepartment.map(d => d.count));
+        this.maxTrendPresent = Math.max(1, ...data.attendance.trend.map(t => t.present));
+        this.hrLoading = false;
+      },
+      error: (err) => { console.error('Error loading HR overview:', err); this.hrLoading = false; }
+    });
+  }
+
+  onAttentionAction(action: string): void {
+    if (action === 'leave') this.openLeavePanel();
+    else if (action === 'attendance') this.openMainOfficeDialog();
+    else if (action === 'records') this.openRecordsPanel();
+  }
+
+  openEmployeeDirectory(): void {
+    const ref = this.dialog.open(EmployeeDirectoryComponent, {
+      width: '95vw',
+      maxWidth: '1400px',
+      panelClass: 'employee-directory-dialog',
+      autoFocus: false
+    });
+    ref.afterClosed().subscribe(() => this.loadHrOverview());
+  }
+
+  openDailyRegister(): void {
+    const ref = this.dialog.open(DailyRegisterComponent, {
+      width: '95vw',
+      maxWidth: '1200px',
+      panelClass: 'employee-directory-dialog',
+      autoFocus: false
+    });
+    ref.afterClosed().subscribe(() => this.loadHrOverview());
+  }
+
+  openLeavePanel(): void {
+    this.showLeaveRequests = true;
+    this.loadLeaveRequests();
+  }
+
+  openRecordsPanel(): void {
+    this.showRecordsPanel = true;
+    this.recordsLoading = true;
+    this.http.get<IncompleteRecord[]>(`${environment.apiUrl}/hr-dashboard/incomplete-records`, { headers: this.hrHeaders() }).subscribe({
+      next: (r) => { this.incompleteRecords = r; this.recordsLoading = false; },
+      error: () => { this.recordsLoading = false; }
+    });
+  }
+
+  severityLabel(sev: string): string {
+    switch (sev) {
+      case 'overdue': return 'Overdue';
+      case 'critical': return 'Critical';
+      case 'due_soon': return 'Due soon';
+      default: return 'Info';
+    }
+  }
+
+  trendHeight(present: number): number {
+    return Math.max(6, Math.round((present / this.maxTrendPresent) * 100));
+  }
+
+  deptWidth(count: number): number {
+    return Math.max(4, Math.round((count / this.maxDeptCount) * 100));
+  }
+
+  completenessRing(): string {
+    const pct = this.hrOverview?.workforce.completenessRate ?? 0;
+    const deg = Math.round(pct * 3.6);
+    const colour = pct >= 90 ? '#34d399' : pct >= 70 ? '#fbbf24' : '#f87171';
+    return `conic-gradient(${colour} ${deg}deg, rgba(255,255,255,0.1) ${deg}deg)`;
   }
 
   openMainOfficeDialog(): void {

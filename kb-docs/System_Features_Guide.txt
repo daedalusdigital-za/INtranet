@@ -179,12 +179,20 @@ Welly is the AI assistant built into the ProMed Intranet. Welly appears as a cha
 - Get system overview statistics
 - Backup the database (admin)
 - Analyze uploaded documents (PDF, Excel, CSV)
+- Voice conversations: talk to Welly and have it speak back (English, Afrikaans, isiZulu)
 
 ### How to Use Welly
 1. Click the chat icon (bubble) in the bottom corner
 2. Type your question or request
 3. Welly responds with relevant information or performs actions
 4. Welly remembers context within a conversation session
+
+### Voice Mode (Talk to Welly)
+- Click the microphone icon in Welly's chat header to start a hands-free voice conversation
+- Choose a language (English, Afrikaans, isiZulu), allow microphone access, then speak naturally
+- Welly listens, thinks, and replies out loud; the microphone reopens automatically between turns
+- Tap the orb to interrupt Welly, Mute to pause, or Exit to return to text chat
+- Voice requires the HTTPS address (for example https://192.168.10.151) so the browser can use the microphone; on the first visit accept the one-time self-signed certificate warning
 
 ### Example Questions for Welly
 - "Who is on leave today?"

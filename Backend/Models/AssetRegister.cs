@@ -61,8 +61,22 @@ namespace ProjectTracker.API.Models
         [MaxLength(255)]
         public string? Specification { get; set; }
 
+        // ── Invoice linkage (links an asset to a Books BookInvoice) ──────────
+        [MaxLength(100)]
+        public string? InvoiceNumber { get; set; }
+
+        public int? BookInvoiceId { get; set; }
+
         [MaxLength(50)]
         public string? Condition { get; set; } = "Not Assessed";
+
+        // Monetary value of the asset (e.g. purchase/book value)
+        [Column(TypeName = "decimal(12,2)")]
+        public decimal? Value { get; set; }
+
+        // Current market value of the asset (for comparison against book value)
+        [Column(TypeName = "decimal(12,2)")]
+        public decimal? MarketValue { get; set; }
 
         [MaxLength(50)]
         public string? OwnershipType { get; set; } = "Assigned";

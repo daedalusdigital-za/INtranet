@@ -5,6 +5,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
 using ProjectTracker.API.Services;
+using ClosedXML.Excel;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
@@ -15,15 +16,27 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         private readonly ApplicationDbContext _context;
         private readonly ICarTrackService _carTrackService;
+        private readonly ProjectTracker.API.Services.Logistics.IMovementHistoryPersistenceService _movementHistory;
+        private readonly ProjectTracker.API.Services.Logistics.IFuelAnalysisService _fuelAnalysis;
+        private readonly ProjectTracker.API.Services.Logistics.MovementBackfillStatus _backfillStatus;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<FleetController> _logger;
 
         public FleetController(
             ApplicationDbContext context, 
             ICarTrackService carTrackService,
+            ProjectTracker.API.Services.Logistics.IMovementHistoryPersistenceService movementHistory,
+            ProjectTracker.API.Services.Logistics.IFuelAnalysisService fuelAnalysis,
+            ProjectTracker.API.Services.Logistics.MovementBackfillStatus backfillStatus,
+            IServiceScopeFactory scopeFactory,
             ILogger<FleetController> logger)
         {
             _context = context;
             _carTrackService = carTrackService;
+            _movementHistory = movementHistory;
+            _fuelAnalysis = fuelAnalysis;
+            _backfillStatus = backfillStatus;
+            _scopeFactory = scopeFactory;
             _logger = logger;
         }
 
@@ -399,9 +412,174 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
-        // GET: api/Fleet/vehicles/{registration}/trip-history?date=2026-04-07
+        // POST: api/Fleet/movement-history/backfill?from=2026-01-01&to=2026-08-18
+        // Kicks off a historical backfill in the background. Poll the status endpoint.
+        [HttpPost("movement-history/backfill")]
+        public IActionResult StartMovementBackfill([FromQuery] string? from, [FromQuery] string? to)
+        {
+            var start = DateTime.TryParse(from, out var f) ? f.Date : new DateTime(DateTime.UtcNow.Year, 1, 1);
+            var end = DateTime.TryParse(to, out var t) ? t.Date : DateTime.UtcNow.Date;
+            if (end > DateTime.UtcNow.Date) end = DateTime.UtcNow.Date;
+
+            if (!_backfillStatus.TryStart(start, end))
+                return Conflict(new { error = "A backfill is already running.", status = _backfillStatus.Snapshot() });
+
+            // Fire-and-forget on its own DI scope so the request can return immediately.
+            _ = Task.Run(async () =>
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var svc = scope.ServiceProvider.GetRequiredService<ProjectTracker.API.Services.Logistics.IMovementHistoryPersistenceService>();
+                try
+                {
+                    await svc.BackfillRangeAsync(start, end, _backfillStatus);
+                    _backfillStatus.Finish();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Movement backfill failed");
+                    _backfillStatus.Finish(ex.Message);
+                }
+            });
+
+            return Accepted(new { message = "Backfill started", status = _backfillStatus.Snapshot() });
+        }
+
+        // GET: api/Fleet/movement-history/backfill/status
+        [HttpGet("movement-history/backfill/status")]
+        public IActionResult GetMovementBackfillStatus() => Ok(_backfillStatus.Snapshot());
+
+        // GET: api/Fleet/fuel-analysis?days=30
+        // Fleet-wide fuel-theft / vehicle-anomaly scan.
+        [HttpGet("fuel-analysis")]
+        public async Task<IActionResult> GetFleetFuelAnalysis([FromQuery] int days = 30)
+        {
+            try
+            {
+                var results = await _fuelAnalysis.AnalyzeFleetAsync(days, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    days,
+                    generatedAtUtc = DateTime.UtcNow,
+                    highRisk = results.Count(r => r.RiskLevel == "high"),
+                    watch = results.Count(r => r.RiskLevel == "watch"),
+                    vehicles = results
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error running fleet fuel analysis");
+                return StatusCode(500, new { error = "Failed to run fuel analysis", message = ex.Message });
+            }
+        }
+
+        // GET: api/Fleet/vehicles/{registration}/fuel-analysis?days=30
+        [HttpGet("vehicles/{registration}/fuel-analysis")]
+        public async Task<IActionResult> GetVehicleFuelAnalysis(string registration, [FromQuery] int days = 30)
+        {
+            try
+            {
+                var norm = (registration ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
+                var vehicle = await _context.Vehicles
+                    .Select(v => new { v.Id, v.RegistrationNumber })
+                    .ToListAsync();
+                var match = vehicle.FirstOrDefault(v =>
+                    (v.RegistrationNumber ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant() == norm);
+                if (match == null)
+                    return NotFound(new { error = "Vehicle not found", registration });
+
+                var result = await _fuelAnalysis.AnalyzeVehicleAsync(match.Id, days, HttpContext.RequestAborted);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error running fuel analysis for {Reg}", registration);
+                return StatusCode(500, new { error = "Failed to run fuel analysis", message = ex.Message });
+            }
+        }
+
+        // GET: api/Fleet/fuel-analysis/export?days=30
+        // Export flagged fuel vehicles (high/watch risk) to Excel
+        [HttpGet("fuel-analysis/export")]
+        public async Task<IActionResult> ExportFuelAnalysisToExcel([FromQuery] int days = 30)
+        {
+            try
+            {
+                using var wb = new XLWorkbook();
+                var ws = wb.Worksheets.Add("Flagged Fuel Health");
+
+                // Title
+                ws.Cell(1, 1).Value = "ROCKET FREIGHT - FLAGGED FUEL HEALTH REPORT";
+                ws.Range(1, 1, 1, 7).Merge().Style
+                    .Font.SetBold().Font.SetFontSize(14)
+                    .Fill.SetBackgroundColor(XLColor.FromHtml("#ef4444"))
+                    .Font.SetFontColor(XLColor.White)
+                    .Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+
+                ws.Cell(2, 1).Value = $"Generated: {DateTime.Now:dd MMM yyyy HH:mm} | Analysis period: {days} days";
+                ws.Range(2, 1, 2, 7).Merge().Style.Font.SetItalic().Font.SetFontSize(11);
+
+                // Headers
+                int headerRow = 4;
+                var headers = new[] { "Registration", "Make/Model", "Risk Level", "Risk Score", "Total Fills", "Total Litres", "Key Findings" };
+                for (int c = 0; c < headers.Length; c++)
+                {
+                    var cell = ws.Cell(headerRow, c + 1);
+                    cell.Value = headers[c];
+                    cell.Style.Font.SetBold()
+                        .Fill.SetBackgroundColor(XLColor.FromHtml("#1e293b"))
+                        .Font.SetFontColor(XLColor.White)
+                        .Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                }
+
+                // Get flagged vehicles
+                var results = await _fuelAnalysis.AnalyzeFleetAsync(days, HttpContext.RequestAborted);
+                var flagged = results.Where(r => r.RiskLevel == "high" || r.RiskLevel == "watch").ToList();
+
+                int row = headerRow + 1;
+                foreach (var vehicle in flagged)
+                {
+                    ws.Cell(row, 1).Value = vehicle.Registration ?? "—";
+                    ws.Cell(row, 2).Value = $"{vehicle.Make ?? "N/A"} {vehicle.Model ?? ""}".Trim();
+                    ws.Cell(row, 3).Value = vehicle.RiskLevel ?? "Unknown";
+                    ws.Cell(row, 4).Value = vehicle.RiskScore;
+                    ws.Cell(row, 5).Value = vehicle.FillCount;
+                    ws.Cell(row, 6).Value = vehicle.TotalLitres;
+                    ws.Cell(row, 7).Value = string.Join("; ", vehicle.Findings.Take(3).Select(f => f.Message));
+
+                    // Risk color
+                    if (vehicle.RiskLevel == "high")
+                        ws.Cell(row, 3).Style.Fill.SetBackgroundColor(XLColor.FromHtml("#fee2e2")).Font.SetBold();
+                    else if (vehicle.RiskLevel == "watch")
+                        ws.Cell(row, 3).Style.Fill.SetBackgroundColor(XLColor.FromHtml("#fef3c7")).Font.SetBold();
+
+                    // Format numbers
+                    ws.Cell(row, 4).Style.NumberFormat.Format = "0";
+                    ws.Cell(row, 6).Style.NumberFormat.Format = "#,##0.00";
+
+                    row++;
+                }
+
+                // Auto-fit columns
+                for (int c = 1; c <= 7; c++)
+                    ws.Column(c).AdjustToContents();
+
+                using var ms = new MemoryStream();
+                wb.SaveAs(ms);
+                ms.Position = 0;
+
+                return File(ms.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"FlaggedFuelHealth_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting fuel analysis");
+                return StatusCode(500, new { error = "Failed to export fuel analysis", message = ex.Message });
+            }
+        }
+
+        // GET: api/Fleet/vehicles/{registration}/trip-history?date=2026-04-07&refresh=false
         [HttpGet("vehicles/{registration}/trip-history")]
-        public async Task<ActionResult<List<CarTrackTripData>>> GetVehicleTripHistory(string registration, [FromQuery] string? date)
+        public async Task<ActionResult<List<CarTrackTripData>>> GetVehicleTripHistory(string registration, [FromQuery] string? date, [FromQuery] bool refresh = false)
         {
             try
             {
@@ -411,8 +589,58 @@ namespace ProjectTracker.API.Controllers.Logistics
                     targetDate = parsed;
                 }
 
-                _logger.LogInformation("Fetching trip history for {Registration} on {Date}", registration, targetDate.ToString("yyyy-MM-dd"));
-                var trips = await _carTrackService.GetVehicleTripsAsync(registration, targetDate);
+                _logger.LogInformation("Fetching trip history for {Registration} on {Date} (refresh={Refresh})", registration, targetDate.ToString("yyyy-MM-dd"), refresh);
+
+                var isToday = targetDate.Date == DateTime.UtcNow.Date;
+                var dataSource = "database";
+                List<CarTrackTripData> trips;
+
+                // Resolve vehicle id once for persistence linkage
+                var vehicleId = await _context.Vehicles
+                    .Where(v => v.RegistrationNumber == registration)
+                    .Select(v => (int?)v.Id)
+                    .FirstOrDefaultAsync();
+
+                // 1) Serve from OUR database first — instant, no CarTrack dependency.
+                var saved = await _context.VehicleMovementHistory
+                    .Where(m => m.RegistrationNumber == registration && m.MovementDate == targetDate.Date)
+                    .OrderBy(m => m.StartTimestamp)
+                    .ToListAsync();
+
+                // 2) Only hit CarTrack when we have nothing saved, or the caller explicitly
+                //    asked to refresh today's live data. This keeps the dialog fast and
+                //    resilient when CarTrack is slow/unavailable.
+                var needLive = saved.Count == 0 || (isToday && refresh);
+
+                if (needLive)
+                {
+                    try
+                    {
+                        var live = await _carTrackService.GetVehicleTripsAsync(registration, targetDate);
+                        if (live.Count > 0)
+                        {
+                            try { await _movementHistory.PersistVehicleDayAsync(vehicleId, registration, targetDate.Date, live); }
+                            catch (Exception pex) { _logger.LogWarning(pex, "Failed to persist movement history for {Reg} on {Date}", registration, targetDate.ToString("yyyy-MM-dd")); }
+
+                            dataSource = saved.Count == 0 ? "cartrack-live" : "cartrack-refresh";
+                            trips = live;
+                        }
+                        else
+                        {
+                            trips = saved.Select(MapToTripData).ToList();
+                        }
+                    }
+                    catch (Exception cex)
+                    {
+                        // CarTrack failed — fall back to whatever we have saved.
+                        _logger.LogWarning(cex, "CarTrack live fetch failed for {Reg}; serving saved data", registration);
+                        trips = saved.Select(MapToTripData).ToList();
+                    }
+                }
+                else
+                {
+                    trips = saved.Select(MapToTripData).ToList();
+                }
 
                 // Calculate summary
                 var totalDistance = trips.Sum(t => t.TripDistance);
@@ -423,10 +651,87 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var totalHarshAcceleration = trips.Sum(t => t.HarshAccelerationEvents);
                 var totalIdleTime = trips.Sum(t => t.IdleTimeSeconds);
 
+                // Include any TFN fuel fills for this vehicle on the same day so the
+                // movement timeline shows refuelling events alongside trips.
+                var dayStart = targetDate.Date;
+                var dayEnd = dayStart.AddDays(1);
+                var normalizedReg = registration.Replace("-", "").Replace(" ", "").ToUpper();
+
+                var dayFuel = await _context.FuelTransactions
+                    .Where(f => f.TransactionDate >= dayStart.AddDays(-1) && f.TransactionDate < dayEnd.AddDays(1))
+                    .Select(f => new
+                    {
+                        f.RegistrationNumber,
+                        f.TransactionDate,
+                        f.LitresUsed,
+                        f.AmountSpent,
+                        f.DepotName,
+                        f.DepotAssignment,
+                        f.CardNumber,
+                        f.Notes
+                    })
+                    .ToListAsync();
+
+                var fuelEvents = dayFuel
+                    .Where(f => (f.RegistrationNumber ?? "").Replace("-", "").Replace(" ", "").ToUpper() == normalizedReg
+                                && f.TransactionDate.Date == targetDate.Date)
+                    .OrderBy(f => f.TransactionDate)
+                    .Select(f => new
+                    {
+                        timestamp = f.TransactionDate,
+                        litres = f.LitresUsed,
+                        amount = f.AmountSpent,
+                        depotName = f.DepotName,
+                        depotAssignment = f.DepotAssignment,
+                        cardNumber = f.CardNumber,
+                        notes = f.Notes
+                    })
+                    .ToList();
+
+                // Live status (today only): CarTrack's trip endpoint only returns COMPLETED
+                // trips, so a vehicle currently on a trip shows nothing here. Pull its live
+                // position/speed/ignition (same source as Fleet Live) so the UI can show an
+                // "in progress" indicator and drop a live marker even before the trip closes.
+                object? liveStatus = null;
+                if (isToday)
+                {
+                    try
+                    {
+                        var allLive = await _carTrackService.GetAllVehicleLocationsAsync();
+                        var lv = allLive.FirstOrDefault(v =>
+                            (v.RegistrationNumber ?? "").Replace("-", "").Replace(" ", "").ToUpper() == normalizedReg);
+                        if (lv != null)
+                        {
+                            var moving = lv.Speed > 0 ||
+                                string.Equals(lv.Status, "moving", StringComparison.OrdinalIgnoreCase);
+                            liveStatus = new
+                            {
+                                isMoving = moving,
+                                speed = Math.Round(lv.Speed, 1),
+                                heading = lv.Heading,
+                                status = lv.Status,
+                                latitude = lv.Location?.Latitude ?? 0,
+                                longitude = lv.Location?.Longitude ?? 0,
+                                address = lv.Location?.Address,
+                                driverName = lv.CurrentDriverName,
+                                lastUpdate = lv.LastUpdate,
+                                // True when the vehicle is active now but no completed trip
+                                // has landed in our data yet — the "moving but no history" case.
+                                inProgressNoTrips = moving && trips.Count == 0
+                            };
+                        }
+                    }
+                    catch (Exception lex)
+                    {
+                        _logger.LogWarning(lex, "Live status fetch failed for {Reg}", registration);
+                    }
+                }
+
                 return Ok(new
                 {
                     registration,
                     date = targetDate.ToString("yyyy-MM-dd"),
+                    source = dataSource,
                     tripCount = trips.Count,
                     totalDistanceKm = Math.Round(totalDistance / 1000.0, 2),
                     totalDurationMinutes = Math.Round(totalDuration / 60.0, 1),
@@ -435,6 +740,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                     totalHarshCornering,
                     totalHarshAcceleration,
                     totalIdleMinutes = Math.Round(totalIdleTime / 60.0, 1),
+                    fuelEventCount = fuelEvents.Count,
+                    totalFuelLitres = Math.Round(fuelEvents.Sum(f => (double)f.litres), 2),
+                    totalFuelAmount = Math.Round(fuelEvents.Sum(f => (double)f.amount), 2),
+                    fuelEvents,
+                    liveStatus,
                     trips
                 });
             }
@@ -444,6 +754,114 @@ namespace ProjectTracker.API.Controllers.Logistics
                 return StatusCode(500, new { error = "Failed to fetch trip history", message = ex.Message });
             }
         }
+
+        // GET: api/Fleet/vehicles/{registration}/km-summary?from=2026-08-01&to=2026-08-26
+        // Daily distance breakdown for a date range (defaults to current month-to-date),
+        // plus totals and a worked-out daily average. Served from our persisted movement
+        // history (fast, no CarTrack dependency).
+        [HttpGet("vehicles/{registration}/km-summary")]
+        public async Task<ActionResult> GetVehicleKmSummary(string registration, [FromQuery] string? from, [FromQuery] string? to)
+        {
+            try
+            {
+                var today = DateTime.Today;
+                var start = new DateTime(today.Year, today.Month, 1);
+                var end = today;
+
+                if (!string.IsNullOrEmpty(from) && DateTime.TryParse(from, out var pf)) start = pf.Date;
+                if (!string.IsNullOrEmpty(to) && DateTime.TryParse(to, out var pt)) end = pt.Date;
+                if (end < start) (start, end) = (end, start);
+
+                var rows = await _context.VehicleMovementHistory
+                    .Where(m => m.RegistrationNumber == registration
+                                && m.MovementDate >= start && m.MovementDate <= end)
+                    .GroupBy(m => m.MovementDate)
+                    .Select(g => new
+                    {
+                        date = g.Key,
+                        distanceMeters = g.Sum(x => x.TripDistance),
+                        trips = g.Count(),
+                        maxSpeed = g.Max(x => x.MaxSpeed)
+                    })
+                    .ToListAsync();
+
+                var byDate = rows.ToDictionary(r => r.date.Date);
+
+                // Emit every calendar day in the range so the export shows all days,
+                // including zero-movement days.
+                var days = new List<object>();
+                double totalKm = 0;
+                int daysWithMovement = 0;
+                for (var d = start; d <= end; d = d.AddDays(1))
+                {
+                    double km = 0; int trips = 0; double maxSpd = 0;
+                    if (byDate.TryGetValue(d.Date, out var r))
+                    {
+                        km = Math.Round(r.distanceMeters / 1000.0, 1);
+                        trips = r.trips;
+                        maxSpd = Math.Round(r.maxSpeed, 1);
+                        if (km > 0) daysWithMovement++;
+                    }
+                    totalKm += km;
+                    days.Add(new
+                    {
+                        date = d.ToString("yyyy-MM-dd"),
+                        dayOfWeek = d.ToString("ddd"),
+                        km,
+                        trips,
+                        maxSpeed = maxSpd
+                    });
+                }
+
+                var calendarDays = (end - start).Days + 1;
+                totalKm = Math.Round(totalKm, 1);
+
+                return Ok(new
+                {
+                    registration,
+                    from = start.ToString("yyyy-MM-dd"),
+                    to = end.ToString("yyyy-MM-dd"),
+                    totalKm,
+                    calendarDays,
+                    daysWithMovement,
+                    // Average across every calendar day in the range (month-so-far basis).
+                    avgKmPerCalendarDay = calendarDays > 0 ? Math.Round(totalKm / calendarDays, 1) : 0,
+                    // Average across only the days the vehicle actually moved.
+                    avgKmPerActiveDay = daysWithMovement > 0 ? Math.Round(totalKm / daysWithMovement, 1) : 0,
+                    days
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error building km summary for {Registration}", registration);
+                return StatusCode(500, new { error = "Failed to build km summary", message = ex.Message });
+            }
+        }
+
+        // Map a persisted movement row back to the CarTrackTripData shape the UI expects.
+        private static CarTrackTripData MapToTripData(Models.Logistics.VehicleMovementHistory m) => new()
+        {
+            TripId = m.CartrackTripId,
+            Registration = m.RegistrationNumber,
+            StartTimestamp = m.StartTimestamp,
+            EndTimestamp = m.EndTimestamp,
+            TripDuration = m.TripDuration,
+            TripDurationSeconds = m.TripDurationSeconds,
+            StartLocation = m.StartLocation,
+            EndLocation = m.EndLocation,
+            StartGeofence = m.StartGeofence,
+            EndGeofence = m.EndGeofence,
+            StartLatitude = m.StartLatitude,
+            StartLongitude = m.StartLongitude,
+            EndLatitude = m.EndLatitude,
+            EndLongitude = m.EndLongitude,
+            TripDistance = m.TripDistance,
+            MaxSpeed = m.MaxSpeed,
+            HarshBrakingEvents = m.HarshBrakingEvents,
+            HarshCorneringEvents = m.HarshCorneringEvents,
+            HarshAccelerationEvents = m.HarshAccelerationEvents,
+            IdleTimeSeconds = m.IdleTimeSeconds
+        };
 
         [HttpGet("vehicles/{id}")]
         public async Task<ActionResult<VehicleDto>> GetVehicle(int id)

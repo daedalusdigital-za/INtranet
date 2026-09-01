@@ -79,6 +79,13 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string Status { get; set; } = string.Empty;
         public string? Priority { get; set; }
         public string? AssignedTo { get; set; }
+        public string? ActionOwner { get; set; }
+        public string? Province { get; set; }
+        public string? Feedback { get; set; }
+        public decimal? EstimatedCost { get; set; }
+        public DateTime? DateStood { get; set; }
+        public DateTime? TargetDate { get; set; }
+        public int? DaysStanding { get; set; }
         public string? Notes { get; set; }
         public string? ProofOfWorkPath { get; set; }
         public string? ProofOfPaymentPath { get; set; }
@@ -99,6 +106,15 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? Notes { get; set; }
         public DateTime? NextServiceDate { get; set; }
         public decimal? NextServiceOdometer { get; set; }
+        // Fleet-repair tracking
+        public string? Priority { get; set; }
+        public string? ActionOwner { get; set; }
+        public string? Province { get; set; }
+        public string? Feedback { get; set; }
+        public decimal? EstimatedCost { get; set; }
+        public DateTime? DateStood { get; set; }
+        public DateTime? TargetDate { get; set; }
+        public string? Status { get; set; }
     }
 
     public class UpdateVehicleMaintenanceDto
@@ -111,6 +127,18 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? Notes { get; set; }
         public string? ProofOfWorkPath { get; set; }
         public string? ProofOfPaymentPath { get; set; }
+        // Fleet-repair tracking
+        public string? Priority { get; set; }
+        public string? ActionOwner { get; set; }
+        public string? Province { get; set; }
+        public string? Feedback { get; set; }
+        public decimal? EstimatedCost { get; set; }
+        public DateTime? DateStood { get; set; }
+        public DateTime? TargetDate { get; set; }
+        public string? MaintenanceType { get; set; }
+        public string? Description { get; set; }
+        public string? ServiceProvider { get; set; }
+        public DateTime? ScheduledDate { get; set; }
     }
 
     public class CompleteMaintenanceDto

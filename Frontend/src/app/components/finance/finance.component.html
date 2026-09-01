@@ -37,6 +37,28 @@
     </div>
   </div>
 
+  <!-- Creditors / Debtors split entry -->
+  <div class="split-grid animate-in delay-1">
+    <div class="split-card creditors" (click)="goToCreditors()">
+      <div class="split-icon"><mat-icon>call_made</mat-icon></div>
+      <div class="split-body">
+        <h2>Creditors</h2>
+        <p>Accounts Payable — what we owe</p>
+        <span class="split-value">{{ creditorsTotal | currency:'ZAR':'symbol':'1.0-0' }}</span>
+      </div>
+      <mat-icon class="split-arrow">arrow_forward</mat-icon>
+    </div>
+    <div class="split-card debtors" (click)="goToDebtors()">
+      <div class="split-icon"><mat-icon>call_received</mat-icon></div>
+      <div class="split-body">
+        <h2>Debtors</h2>
+        <p>Accounts Receivable — sales owed to us</p>
+        <span class="split-value">{{ debtorsTotal | currency:'ZAR':'symbol':'1.0-0' }}</span>
+      </div>
+      <mat-icon class="split-arrow">arrow_forward</mat-icon>
+    </div>
+  </div>
+
   <!-- Stats Cards -->
   <div class="stats-grid animate-in delay-1">
     <div class="stat-card-modern invoices-card-stat">
@@ -61,6 +83,19 @@
         <div class="stat-detail">
           <span class="stat-number">{{ stats.unpaidInvoices }}</span>
           <span class="stat-title">Unpaid Invoices</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card-modern paid-card-stat">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>task_alt</mat-icon>
+        </div>
+        <div class="stat-detail">
+          <span class="stat-number">{{ stats.paidInvoices }}</span>
+          <span class="stat-title">Paid Invoices</span>
         </div>
       </div>
     </div>
@@ -118,6 +153,34 @@
         <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
       </div>
     </div>
+
+    <div class="stat-card-modern" style="cursor:pointer" (click)="toggleRequisitionsPanel()">
+      <div class="stat-card-accent" style="background:linear-gradient(135deg,#7c3aed,#6d28d9)"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern" style="background:rgba(124,58,237,0.12);color:#7c3aed">
+          <mat-icon>request_quote</mat-icon>
+        </div>
+        <div class="stat-detail">
+          <span class="stat-number">{{requisitionCounts.requested}}</span>
+          <span class="stat-title">Requisitions</span>
+        </div>
+        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
+      </div>
+    </div>
+
+    <div class="stat-card-modern" style="cursor:pointer" (click)="goToCommitments()">
+      <div class="stat-card-accent" style="background:linear-gradient(135deg,#059669,#0d9488)"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern" style="background:rgba(5,150,105,0.12);color:#059669">
+          <mat-icon>event_repeat</mat-icon>
+        </div>
+        <div class="stat-detail">
+          <span class="stat-number">{{ commitmentsMonthly | currency:'ZAR':'symbol':'1.0-0' }}</span>
+          <span class="stat-title">Monthly Commitments</span>
+        </div>
+        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
+      </div>
+    </div>
   </div>
 
 @if (showStationeryPanel) {
@@ -167,6 +230,58 @@
                   <button mat-icon-button class="sp-approve" matTooltip="Approve" (click)="reviewStationery(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
                   <button mat-icon-button class="sp-decline" matTooltip="Decline" (click)="reviewStationery(req, 'Declined')"><mat-icon>cancel</mat-icon></button>
                 </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
+
+@if (showRequisitionsPanel) {
+  <div class="stationery-panel animate-in">
+    <div class="sp-header">
+      <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requisitions</h3></div>
+      <div class="sp-filters">
+        <button class="sp-filter sp-pending" [class.active]="requisitionFilter==='Requested'" (click)="setRequisitionFilter('Requested')">Requested ({{requisitionCounts.requested}})</button>
+        <button class="sp-filter sp-approved" [class.active]="requisitionFilter==='Paid'" (click)="setRequisitionFilter('Paid')">Paid ({{requisitionCounts.paid}})</button>
+        <button class="sp-filter sp-declined" [class.active]="requisitionFilter==='Rejected'" (click)="setRequisitionFilter('Rejected')">Rejected ({{requisitionCounts.rejected}})</button>
+        <button class="sp-filter" [class.active]="requisitionFilter==='all'" (click)="setRequisitionFilter('all')">All ({{requisitionCounts.total}})</button>
+      </div>
+      <button mat-icon-button (click)="showRequisitionsPanel=false"><mat-icon>close</mat-icon></button>
+    </div>
+    @if (requisitionsLoading) {
+      <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
+    } @else if (requisitions.length === 0) {
+      <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No requisitions</p></div>
+    } @else {
+      <div class="sp-list">
+        @for (r of requisitions; track r.id) {
+          <div class="sp-item" [class]="'sp-' + r.financeStatus.toLowerCase()">
+            <div class="sp-avatar">{{spInitials(r.paidTo)}}</div>
+            <div class="sp-info">
+              <div class="sp-name">{{r.paidTo || 'Unknown'}} <span class="sp-dept">{{r.department || 'Logistics'}}</span></div>
+              <div class="sp-items-text"><mat-icon>receipt_long</mat-icon> {{r.rfNumber ? 'RF ' + r.rfNumber : 'No RF'}} · {{r.total | currency:'ZAR':'symbol':'1.2-2'}}</div>
+              @if (r.reason) { <div class="sp-purpose">{{r.reason}}</div> }
+              <div class="sp-meta">
+                @if (r.paymentMethod) { <span class="sp-priority prio-normal">{{r.paymentMethod}}</span> }
+                <span class="sp-date">{{r.date | date:'d MMM yyyy'}}</span>
+              </div>
+              @if (r.financeNotes) { <div class="sp-rnote"><mat-icon>comment</mat-icon> {{r.financeNotes}}</div> }
+            </div>
+            <div class="sp-right">
+              <span class="sp-status" [class]="'spill-' + r.financeStatus.toLowerCase()">{{r.financeStatus}}</span>
+              @if (r.financeStatus !== 'Paid') {
+                <div class="sp-actions">
+                  <button mat-icon-button class="sp-approve" matTooltip="Mark Paid" (click)="setRequisitionStatus(r, 'Paid')"><mat-icon>check_circle</mat-icon></button>
+                  @if (r.financeStatus !== 'Rejected') {
+                    <button mat-icon-button class="sp-decline" matTooltip="Reject" (click)="setRequisitionStatus(r, 'Rejected')"><mat-icon>cancel</mat-icon></button>
+                  }
+                </div>
+              }
+              @if (r.financeStatus !== 'Requested') {
+                <button mat-icon-button matTooltip="Move back to Requested" (click)="setRequisitionStatus(r, 'Requested')"><mat-icon>undo</mat-icon></button>
               }
             </div>
           </div>
@@ -325,6 +440,15 @@
                   <button class="action-btn download" (click)="downloadInvoice(invoice)" matTooltip="Download">
                     <mat-icon>download</mat-icon>
                   </button>
+                  @if (invoice.status === 'Paid') {
+                    <button class="action-btn unpaid" (click)="markUnpaid(invoice)" matTooltip="Mark as Unpaid">
+                      <mat-icon>undo</mat-icon>
+                    </button>
+                  } @else if (invoice.status !== 'Draft' && invoice.status !== 'Archived') {
+                    <button class="action-btn paid" (click)="markPaid(invoice)" matTooltip="Mark as Paid">
+                      <mat-icon>paid</mat-icon>
+                    </button>
+                  }
                 </div>
               </td>
             </ng-container>

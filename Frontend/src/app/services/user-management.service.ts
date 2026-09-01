@@ -88,6 +88,19 @@ export interface ClockInEmployee {
   department?: string;
   jobTitle?: string;
   idNum?: string;
+  address?: string;
+  mobileNo?: string;
+}
+
+export interface ClockInEmployeeRequest {
+  empId?: string;
+  name?: string;
+  lastName?: string;
+  idNum?: string;
+  department?: string;
+  jobTitle?: string;
+  address?: string;
+  mobileNo?: string;
 }
 
 @Injectable({
@@ -153,8 +166,9 @@ export class UserManagementService {
   }
 
   // Delete user
-  deleteUser(id: number): Observable<any> {
-    return this.http.delete(`${this.apiUrl}/${id}`, { headers: this.getHeaders() }).pipe(
+  deleteUser(id: number, permanent: boolean = false): Observable<any> {
+    const url = permanent ? `${this.apiUrl}/${id}?permanent=true` : `${this.apiUrl}/${id}`;
+    return this.http.delete(url, { headers: this.getHeaders() }).pipe(
       tap(() => this.refreshUsers()),
       catchError(error => {
         console.error('Error deleting user:', error);
@@ -242,6 +256,18 @@ export class UserManagementService {
         return of([]);
       })
     );
+  }
+
+  createClockInEmployee(payload: ClockInEmployeeRequest): Observable<ClockInEmployee> {
+    return this.http.post<ClockInEmployee>(`${this.apiUrl}/clockin-employees`, payload, { headers: this.getHeaders() });
+  }
+
+  updateClockInEmployee(empId: string, payload: ClockInEmployeeRequest): Observable<ClockInEmployee> {
+    return this.http.put<ClockInEmployee>(`${this.apiUrl}/clockin-employees/${encodeURIComponent(empId)}`, payload, { headers: this.getHeaders() });
+  }
+
+  deleteClockInEmployee(empId: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/clockin-employees/${encodeURIComponent(empId)}`, { headers: this.getHeaders() });
   }
 
   // Search users

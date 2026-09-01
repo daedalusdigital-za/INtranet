@@ -1964,6 +1964,22 @@
             "rid": "win"
           }
         }
+      },
+      "XstReader.Api/1.0.6": {
+        "type": "package",
+        "dependencies": {
+          "System.Security.Cryptography.Pkcs": "6.0.1"
+        },
+        "compile": {
+          "lib/netstandard2.0/XstReader.Api.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/XstReader.Api.dll": {
+            "related": ".xml"
+          }
+        }
       }
     }
   },
@@ -5005,6 +5021,19 @@
         "system.windows.extensions.nuspec",
         "useSharedDesignerContext.txt"
       ]
+    },
+    "XstReader.Api/1.0.6": {
+      "sha512": "zfb/sOUvaQdA7QO0dJqw/SeH5O52H8llJacOyf6seAucDPiBLEnn0Jt79Uyy+ESHMh4d3hO5FGGQHoVcKS8ahg==",
+      "type": "package",
+      "path": "xstreader.api/1.0.6",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/XstReader.Api.dll",
+        "lib/netstandard2.0/XstReader.Api.xml",
+        "xstreader.api.1.0.6.nupkg.sha512",
+        "xstreader.api.nuspec"
+      ]
     }
   },
   "projectFileDependencyGroups": {
@@ -5018,6 +5047,7 @@
       "Microsoft.EntityFrameworkCore.Design >= 10.0.1",
       "Microsoft.EntityFrameworkCore.SqlServer >= 10.0.1",
       "Microsoft.EntityFrameworkCore.Tools >= 10.0.1",
+      "XstReader.Api >= 1.0.6",
       "itext7 >= 8.0.2",
       "itext7.bouncy-castle-adapter >= 9.5.0",
       "itext7.pdfhtml >= 6.3.1"
@@ -5111,6 +5141,10 @@
             "suppressParent": "All",
             "target": "Package",
             "version": "[10.0.1, )"
+          },
+          "XstReader.Api": {
+            "target": "Package",
+            "version": "[1.0.6, )"
           },
           "itext7": {
             "target": "Package",
@@ -5561,5 +5595,17 @@
         }
       }
     }
-  }
+  },
+  "logs": [
+    {
+      "code": "NU1903",
+      "level": "Warning",
+      "warningLevel": 1,
+      "message": "Package 'Microsoft.OpenApi' 2.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc",
+      "libraryId": "Microsoft.OpenApi",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    }
+  ]
 }

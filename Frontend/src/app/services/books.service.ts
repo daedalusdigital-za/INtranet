@@ -18,6 +18,7 @@ export interface BookInvoice {
   paymentReference?: string;
   category?: string;
   companyName?: string;
+  vehicleRegistration?: string;
   description?: string;
   notes?: string;
   fileName: string;
@@ -86,6 +87,7 @@ export interface ConfirmRequest {
   paymentReference?: string;
   category?: string;
   companyName?: string;
+  vehicleRegistration?: string;
   description?: string;
   notes?: string;
 }
@@ -189,5 +191,9 @@ export class BooksService {
 
   getSuppliers(): Observable<string[]> {
     return this.http.get<string[]>(`${this.apiUrl}/suppliers`);
+  }
+
+  getVehicles(): Observable<{ registration: string; make?: string; model?: string }[]> {
+    return this.http.get<{ registration: string; make?: string; model?: string }[]>(`${this.apiUrl}/vehicles`);
   }
 }

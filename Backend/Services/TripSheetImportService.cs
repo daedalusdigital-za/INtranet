@@ -244,13 +244,17 @@ public class TripSheetImportService
                     {
                         try
                         {
-                            // Create StopCommodity for the PDF
+                            // Create StopCommodity for the PDF.
+                            // Store the invoice number and value exactly as captured on the
+                            // trip sheet so multi-invoice stops and unmatched rows are never lost.
                             var commodity = new StopCommodity
                             {
                                 LoadStopId = stop.Id,
                                 Quantity = confirmation.Quantity ?? 1,
                                 UnitPrice = confirmation.SalesAmount ?? 0,
                                 TotalPrice = confirmation.SalesAmount ?? 0,
+                                InvoiceNumber = confirmation.InvoiceNumber,
+                                OrderNumber = confirmation.CustomerNumber,
                                 Comment = confirmation.ProductDescription ?? "Imported Item",
                                 CreatedAt = DateTime.UtcNow
                             };
@@ -276,7 +280,10 @@ public class TripSheetImportService
                                 ImportedAt = DateTime.UtcNow,
                                 ImportBatchId = request.BatchId,
                                 SourceSystem = $"TripSheet-{tripSheetNumber}",
-                                Status = "Assigned",
+                                // Not found in Sales at import time. Capture the sheet's values
+                                // as-is and flag as a Query so it can be re-imported from Sales later.
+                                Status = "Query",
+                                DeliveryNotes = "QUERY: Invoice not found in Sales at import. Values captured from trip sheet Excel - verify against Sales and re-import.",
                                 LoadId = load.Id,
                                 CustomerId = confirmation.ConfirmedCustomerId
                             };
@@ -338,10 +345,21 @@ public class TripSheetImportService
                                 }
                             }
 
-                            // Update stop with invoice number if we have one
-                            if (!string.IsNullOrEmpty(confirmation.InvoiceNumber) && string.IsNullOrEmpty(stop.InvoiceNumber))
+                            // Update stop with invoice number(s). A single delivery can carry
+                            // multiple invoices for the same customer, so collect all of them
+                            // (comma-separated, de-duplicated) instead of keeping only the first.
+                            if (!string.IsNullOrEmpty(confirmation.InvoiceNumber))
                             {
-                                stop.InvoiceNumber = confirmation.InvoiceNumber;
+                                var existingNos = (stop.InvoiceNumber ?? string.Empty)
+                                    .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(n => n.Trim())
+                                    .Where(n => !string.IsNullOrEmpty(n))
+                                    .ToList();
+                                if (!existingNos.Contains(confirmation.InvoiceNumber.Trim(), StringComparer.OrdinalIgnoreCase))
+                                {
+                                    existingNos.Add(confirmation.InvoiceNumber.Trim());
+                                    stop.InvoiceNumber = string.Join(", ", existingNos);
+                                }
                             }
 
                             successCount++;
@@ -565,6 +583,8 @@ public class TripSheetImportService
                     var cleanAmount = Regex.Replace(amountStr, @"[^\d.,\-]", "");
                     if (decimal.TryParse(cleanAmount, out decimal amount))
                     {
+                        // Store the value exactly as captured on the trip sheet (VAT-inclusive),
+                        // matching the sales invoice total.
                         dto.SalesAmount = amount;
                     }
                 }
@@ -621,6 +641,7 @@ public class TripSheetImportService
                         var cleanAmount = Regex.Replace(continuationAmountStr, @"[^\d.,\-]", "");
                         if (decimal.TryParse(cleanAmount, out decimal contAmount))
                         {
+                            // Store the value exactly as captured on the trip sheet (VAT-inclusive).
                             continuationDto.SalesAmount = contAmount;
                         }
                     }

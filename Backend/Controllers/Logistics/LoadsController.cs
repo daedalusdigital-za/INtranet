@@ -288,8 +288,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     foreach (var commodityDto in stopDto.Commodities)
                     {
                         // Use TotalPrice from DTO if provided (frontend sends salesAmount as totalPrice),
-                        // otherwise calculate from unitPrice * quantity
-                        var totalPrice = commodityDto.TotalPrice ?? ((commodityDto.UnitPrice ?? 0) * commodityDto.Quantity);
+                        // otherwise calculate from unitPrice * quantity. Values are stored exactly as
+                        // captured on the trip sheet (VAT-inclusive), matching the sales invoice.
+                        var unitPrice = commodityDto.UnitPrice;
+                        var totalPrice = commodityDto.TotalPrice.HasValue
+                            ? commodityDto.TotalPrice.Value
+                            : (unitPrice * commodityDto.Quantity);
 
                         // Use commodityName/code as comment if no explicit comment provided
                         var comment = commodityDto.Comment;
@@ -307,7 +311,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             ContractId = commodityDto.ContractId,
                             Quantity = commodityDto.Quantity,
                             UnitOfMeasure = commodityDto.UnitOfMeasure,
-                            UnitPrice = commodityDto.UnitPrice,
+                            UnitPrice = unitPrice,
                             TotalPrice = totalPrice,
                             Weight = commodityDto.Weight,
                             Volume = commodityDto.Volume,
@@ -539,7 +543,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                                 CommodityId = commDto.CommodityId,  // Nullable - imported invoices don't have Commodity FK
                                 Quantity = commDto.Quantity,
                                 UnitPrice = commDto.UnitPrice,
-                                TotalPrice = commDto.TotalPrice ?? (commDto.Quantity * (commDto.UnitPrice ?? 0)),
+                                TotalPrice = commDto.TotalPrice.HasValue
+                                    ? commDto.TotalPrice.Value
+                                    : (commDto.Quantity * commDto.UnitPrice),
                                 Weight = commDto.Weight,
                                 Volume = commDto.Volume,
                                 Comment = comment

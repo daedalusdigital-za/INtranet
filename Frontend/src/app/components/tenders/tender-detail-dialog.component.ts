@@ -22,6 +22,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatCardModule } from '@angular/material/card';
 import { TenderService, Tender, TenderDocument, TenderTeamMember, TenderBOQItem, TenderActivity } from '../../services/tender.service';
 import { AuthService } from '../../services/auth.service';
+import { WellyActivityService } from '../../services/welly-activity.service';
 import { environment } from '../../../environments/environment';
 
 interface DialogData {
@@ -1433,7 +1434,8 @@ export class TenderDetailDialogComponent {
     private tenderService: TenderService,
     private authService: AuthService,
     private snackBar: MatSnackBar,
-    private http: HttpClient
+    private http: HttpClient,
+    private wellyActivity: WellyActivityService
   ) {
     this.tenderForm = this.fb.group({
       tenderNumber: [data.tender?.tenderNumber || '', Validators.required],
@@ -1731,6 +1733,7 @@ export class TenderDetailDialogComponent {
   private wellyTimerInterval: any = null;
   private wellyProgressInterval: any = null;
   private wellyStartTime = 0;
+  private wellyActivityId: number | null = null;
 
   wellyDocumentAnalyze(analysisType: 'analyze' | 'pricing-review' | 'extract-boq'): void {
     if (!this.data.tender) return;
@@ -1749,6 +1752,8 @@ export class TenderDetailDialogComponent {
     const info = typeInfo[analysisType];
     this.wellyAnalysisInfo = { icon: info.icon, label: info.label };
     this.wellyLoadingMessage = info.loadMsg;
+
+    this.wellyActivityId = this.wellyActivity.start(`Tenders: ${info.label}`);
 
     // Start progress tracking
     this.startWellyProgress();
@@ -1771,12 +1776,14 @@ export class TenderDetailDialogComponent {
         if (analysisType === 'extract-boq') {
           this.parseExtractedBOQItems(res.result);
         }
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
         this.stopWellyProgress();
         this.snackBar.open('Welly could not analyze tender documents. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
         this.showWellyPanel = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }
@@ -1912,6 +1919,7 @@ export class TenderDetailDialogComponent {
     this.wellyExtractedItems = [];
     this.wellyAnalysisInfo = { icon: 'calculate', label: 'Quick BOQ Analysis' };
     this.wellyLoadingMessage = 'Welly is analyzing your BOQ items...';
+    this.wellyActivityId = this.wellyActivity.start('Tenders: Analyzing BOQ');
 
     const boqItems = this.data.tender.boqItems || [];
     const boqSummary = boqItems.map(item =>
@@ -1927,11 +1935,13 @@ export class TenderDetailDialogComponent {
       next: (res) => {
         this.wellyResult = res.result;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
         this.snackBar.open('Welly could not analyze BOQ. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
         this.showWellyPanel = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }
@@ -1944,6 +1954,7 @@ export class TenderDetailDialogComponent {
     this.wellyExtractedItems = [];
     this.wellyAnalysisInfo = { icon: 'verified', label: 'Compliance Check' };
     this.wellyLoadingMessage = 'Welly is checking tender compliance...';
+    this.wellyActivityId = this.wellyActivity.start('Tenders: Checking compliance');
 
     const docs = this.data.tender.documents || [];
     const docList = docs.map(d => `${d.documentType}: ${d.fileName} (v${d.version})`).join('\n');
@@ -1959,10 +1970,12 @@ export class TenderDetailDialogComponent {
       next: (res) => {
         this.wellyResult = res.result;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
         this.snackBar.open('Welly could not check compliance. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }

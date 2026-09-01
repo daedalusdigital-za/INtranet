@@ -23,6 +23,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { AuthService } from '../../services/auth.service';
+import { WellyActivityService } from '../../services/welly-activity.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
@@ -102,7 +103,10 @@ interface ComprehensiveAnalysisResponse {
     MatTooltipModule,
     MatProgressBarModule,
     NavbarComponent,
-    MatListModule
+    MatListModule,
+    FormsModule,
+    MatFormFieldModule,
+    MatInputModule
   ],
   template: `
     <app-navbar></app-navbar>
@@ -122,6 +126,16 @@ interface ComprehensiveAnalysisResponse {
             <button mat-raised-button (click)="clearSelection()">
               <mat-icon>arrow_back</mat-icon>
               Back to Warehouses
+            </button>
+          } @else if (showFulfillment) {
+            <button mat-raised-button (click)="closeFulfillment()">
+              <mat-icon>arrow_back</mat-icon>
+              Back to Warehouses
+            </button>
+          } @else {
+            <button mat-raised-button class="fulfillment-btn" (click)="openFulfillment()" matTooltip="Match invoices to current stock">
+              <mat-icon>fact_check</mat-icon>
+              Invoice Fulfillment
             </button>
           }
         </div>
@@ -298,6 +312,135 @@ interface ComprehensiveAnalysisResponse {
               }
             </div>
           </div>
+        </div>
+      } @else if (showFulfillment) {
+        <div class="fulfillment-view">
+          <div class="ff-header">
+            <div>
+              <h2>Invoice Fulfillment</h2>
+              <p class="ff-sub">Outstanding invoice demand matched against current stock (by product code)</p>
+            </div>
+            <mat-form-field appearance="outline" class="ff-search">
+              <mat-label>Search product code / description</mat-label>
+              <input matInput [(ngModel)]="ffSearch" (ngModelChange)="applyFfSearch()" placeholder="e.g. 4010239">
+              <mat-icon matSuffix>search</mat-icon>
+            </mat-form-field>
+          </div>
+
+          @if (ffLoading) {
+            <div class="ff-loading">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p>Matching invoices to stock...</p>
+            </div>
+          } @else if (ffAnalysis) {
+            <div class="ff-summary-grid">
+              <div class="ff-card ff-can">
+                <mat-icon>check_circle</mat-icon>
+                <div><span class="ff-val">{{ ffAnalysis.summary.fullyFulfillable | number }}</span><span class="ff-lbl">Fully Fulfillable</span></div>
+              </div>
+              <div class="ff-card ff-partial">
+                <mat-icon>hourglass_bottom</mat-icon>
+                <div><span class="ff-val">{{ ffAnalysis.summary.partiallyFulfillable | number }}</span><span class="ff-lbl">Partial</span></div>
+              </div>
+              <div class="ff-card ff-out">
+                <mat-icon>cancel</mat-icon>
+                <div><span class="ff-val">{{ ffAnalysis.summary.outOfStock | number }}</span><span class="ff-lbl">Out of Stock</span></div>
+              </div>
+              <div class="ff-card ff-total">
+                <mat-icon>inventory_2</mat-icon>
+                <div><span class="ff-val">{{ ffAnalysis.summary.totalProductCodes | number }}</span><span class="ff-lbl">Matched Codes</span></div>
+              </div>
+            </div>
+
+            <div class="ff-table-wrap">
+              <table class="ff-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Product Code</th>
+                    <th>Description</th>
+                    <th class="num">Demand</th>
+                    <th class="num">Available</th>
+                    <th class="num">Can Fulfill</th>
+                    <th class="num">Shortfall</th>
+                    <th class="num">Orders</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (line of ffFiltered; track line.productCode) {
+                    <tr class="ff-row" (click)="toggleInvoices(line)">
+                      <td class="expand-cell">
+                        <mat-icon>{{ ffExpanded === line.productCode ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                      </td>
+                      <td class="mono">{{ line.productCode }}</td>
+                      <td class="desc">{{ line.productDescription }}</td>
+                      <td class="num">{{ line.demandQty | number }}</td>
+                      <td class="num">{{ line.availableQty | number }}</td>
+                      <td class="num">{{ line.canFulfillQty | number }}</td>
+                      <td class="num" [class.short]="line.shortfallQty > 0">{{ line.shortfallQty | number }}</td>
+                      <td class="num">{{ line.orderLines | number }}</td>
+                      <td>
+                        <span class="ff-badge"
+                          [class.b-can]="line.status === 'CanFulfill'"
+                          [class.b-partial]="line.status === 'Partial'"
+                          [class.b-out]="line.status === 'OutOfStock'">
+                          {{ ffStatusLabel(line.status) }}
+                        </span>
+                      </td>
+                    </tr>
+                    @if (ffExpanded === line.productCode) {
+                      <tr class="ff-detail-row">
+                        <td colspan="9">
+                          @if (ffInvLoading) {
+                            <div class="ff-inv-loading"><mat-spinner diameter="24"></mat-spinner> Loading invoices...</div>
+                          } @else {
+                            <table class="ff-inv-table">
+                              <thead>
+                                <tr>
+                                  <th>Invoice #</th>
+                                  <th>Date</th>
+                                  <th>Customer</th>
+                                  <th class="num">Order Qty</th>
+                                  <th class="num">Can Fulfill</th>
+                                  <th class="num">Shortfall</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (inv of ffInvoices; track inv.id) {
+                                  <tr>
+                                    <td class="mono">{{ inv.invoiceNumber }}</td>
+                                    <td>{{ inv.invoiceDate | date:'yyyy-MM-dd' }}</td>
+                                    <td class="desc">{{ inv.customerName }}</td>
+                                    <td class="num">{{ inv.demandQty | number }}</td>
+                                    <td class="num">{{ inv.canFulfillQty | number }}</td>
+                                    <td class="num" [class.short]="inv.shortfallQty > 0">{{ inv.shortfallQty | number }}</td>
+                                    <td>
+                                      <span class="ff-badge"
+                                        [class.b-can]="inv.status === 'CanFulfill'"
+                                        [class.b-partial]="inv.status === 'Partial'"
+                                        [class.b-out]="inv.status === 'None'">
+                                        {{ inv.status === 'CanFulfill' ? 'Fulfillable' : (inv.status === 'Partial' ? 'Partial' : 'No Stock') }}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                } @empty {
+                                  <tr><td colspan="7" class="ff-empty">No invoices found for this product.</td></tr>
+                                }
+                              </tbody>
+                            </table>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  } @empty {
+                    <tr><td colspan="9" class="ff-empty">No matching invoice/stock lines found.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         </div>
       } @else if (warehouses.length === 0) {
         <div class="empty-state">
@@ -1409,6 +1552,87 @@ interface ComprehensiveAnalysisResponse {
     .welly-result-actions button mat-icon {
       margin-right: 4px;
     }
+
+    /* ===== Invoice Fulfillment ===== */
+    .fulfillment-btn {
+      background: #0d9488;
+      color: #fff;
+    }
+    .fulfillment-view { padding: 8px 0 40px; }
+    .ff-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .ff-header h2 { margin: 0; font-size: 22px; color: #1e293b; }
+    .ff-sub { margin: 4px 0 0; color: #64748b; font-size: 13px; }
+    .ff-search { min-width: 320px; }
+    .ff-loading {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 16px; padding: 60px 0; color: #64748b;
+    }
+    .ff-summary-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px; margin-bottom: 24px;
+    }
+    .ff-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px; border-radius: 14px; background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid #cbd5e1;
+    }
+    .ff-card mat-icon { font-size: 30px; height: 30px; width: 30px; }
+    .ff-card .ff-val { display: block; font-size: 24px; font-weight: 700; color: #1e293b; }
+    .ff-card .ff-lbl { display: block; font-size: 12px; color: #64748b; }
+    .ff-card.ff-can { border-left-color: #16a34a; }
+    .ff-card.ff-can mat-icon { color: #16a34a; }
+    .ff-card.ff-partial { border-left-color: #f59e0b; }
+    .ff-card.ff-partial mat-icon { color: #f59e0b; }
+    .ff-card.ff-out { border-left-color: #dc2626; }
+    .ff-card.ff-out mat-icon { color: #dc2626; }
+    .ff-card.ff-total { border-left-color: #0d9488; }
+    .ff-card.ff-total mat-icon { color: #0d9488; }
+
+    .ff-table-wrap {
+      background: #fff; border-radius: 14px; overflow: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .ff-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ff-table thead th {
+      text-align: left; padding: 12px 14px; background: #f8fafc;
+      color: #475569; font-weight: 600; border-bottom: 2px solid #e2e8f0;
+      position: sticky; top: 0; z-index: 1;
+    }
+    .ff-table th.num, .ff-table td.num { text-align: right; }
+    .ff-table tbody td {
+      padding: 10px 14px; border-bottom: 1px solid #f1f5f9; color: #334155;
+    }
+    .ff-table tbody tr:hover { background: #f8fafc; }
+    .ff-table td.mono { font-family: monospace; font-weight: 600; color: #0f172a; }
+    .ff-table td.desc { max-width: 320px; }
+    .ff-table td.num.short { color: #dc2626; font-weight: 600; }
+    .ff-empty { text-align: center; padding: 30px; color: #94a3b8; }
+    .ff-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; background: #e2e8f0; color: #475569;
+    }
+    .ff-badge.b-can { background: #dcfce7; color: #166534; }
+    .ff-badge.b-partial { background: #fef3c7; color: #92400e; }
+    .ff-badge.b-out { background: #fee2e2; color: #991b1b; }
+
+    .ff-row { cursor: pointer; }
+    .ff-row:hover { background: #f1f5f9; }
+    .expand-cell { width: 34px; text-align: center; color: #64748b; }
+    .expand-cell mat-icon { font-size: 20px; height: 20px; width: 20px; vertical-align: middle; }
+    .ff-detail-row > td { background: #f8fafc; padding: 8px 14px 16px 46px; }
+    .ff-inv-loading { display: flex; align-items: center; gap: 10px; padding: 14px; color: #64748b; }
+    .ff-inv-table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .ff-inv-table thead th { text-align: left; padding: 8px 12px; background: #eef2f7; color: #475569; font-weight: 600; }
+    .ff-inv-table th.num, .ff-inv-table td.num { text-align: right; }
+    .ff-inv-table tbody td { padding: 7px 12px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+    .ff-inv-table tbody tr:last-child td { border-bottom: none; }
   `]
 })
 export class StockManagementComponent implements OnInit {
@@ -1440,6 +1664,82 @@ export class StockManagementComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadWarehouses();
+  }
+
+  // ===== Invoice Fulfillment =====
+  showFulfillment = false;
+  ffLoading = false;
+  ffAnalysis: any = null;
+  ffFiltered: any[] = [];
+  ffSearch = '';
+  ffExpanded: string | null = null;
+  ffInvoices: any[] = [];
+  ffInvLoading = false;
+
+  openFulfillment(): void {
+    this.ffExpanded = null;
+    this.ffInvoices = [];
+    this.showFulfillment = true;
+    this.ffLoading = true;
+    this.ffAnalysis = null;
+    this.ffFiltered = [];
+    this.http.get<any>(`${environment.apiUrl}/stock-fulfillment/analysis?status=Pending&onlyMatched=true`).subscribe({
+      next: (data) => {
+        this.ffAnalysis = data;
+        this.ffFiltered = data.lines || [];
+        this.ffLoading = false;
+      },
+      error: (err) => {
+        console.error('Error loading fulfillment analysis:', err);
+        this.ffLoading = false;
+        this.snackBar.open('Failed to load fulfillment analysis', 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  closeFulfillment(): void {
+    this.showFulfillment = false;
+    this.ffSearch = '';
+  }
+
+  applyFfSearch(): void {
+    if (!this.ffAnalysis) { this.ffFiltered = []; return; }
+    const term = this.ffSearch.trim().toLowerCase();
+    if (!term) { this.ffFiltered = this.ffAnalysis.lines; return; }
+    this.ffFiltered = this.ffAnalysis.lines.filter((l: any) =>
+      (l.productCode || '').toLowerCase().includes(term) ||
+      (l.productDescription || '').toLowerCase().includes(term));
+  }
+
+  ffStatusLabel(status: string): string {
+    switch (status) {
+      case 'CanFulfill': return 'Fulfillable';
+      case 'Partial': return 'Partial';
+      case 'OutOfStock': return 'Out of Stock';
+      default: return status;
+    }
+  }
+
+  toggleInvoices(line: any): void {
+    if (this.ffExpanded === line.productCode) {
+      this.ffExpanded = null;
+      this.ffInvoices = [];
+      return;
+    }
+    this.ffExpanded = line.productCode;
+    this.ffInvoices = [];
+    this.ffInvLoading = true;
+    this.http.get<any>(`${environment.apiUrl}/stock-fulfillment/invoices/${encodeURIComponent(line.productCode)}?status=Pending`).subscribe({
+      next: (data) => {
+        this.ffInvoices = data.invoices || [];
+        this.ffInvLoading = false;
+      },
+      error: (err) => {
+        console.error('Error loading invoices for product:', err);
+        this.ffInvLoading = false;
+        this.snackBar.open('Failed to load invoices', 'Close', { duration: 4000 });
+      }
+    });
   }
 
   loadWarehouses(): void {
@@ -1626,6 +1926,8 @@ export class StockManagementComponent implements OnInit {
   wellySummary: StockAnalysisSummary | null = null;
   wellyCharts: ComprehensiveAnalysisResponse['charts'] | null = null;
   private chartInstances: Chart[] = [];
+  private wellyActivity = inject(WellyActivityService);
+  private wellyActivityId: number | null = null;
 
   wellyAnalyzeStock(): void {
     if (!this.selectedWarehouse) return;
@@ -1635,6 +1937,7 @@ export class StockManagementComponent implements OnInit {
     this.wellySummary = null;
     this.wellyCharts = null;
     this.destroyCharts();
+    this.wellyActivityId = this.wellyActivity.start(`Analyzing stock: ${this.selectedWarehouse.name}`);
 
     this.http.post<ComprehensiveAnalysisResponse>(
       `${environment.apiUrl}/aichat/welly-stock-comprehensive`,
@@ -1645,6 +1948,7 @@ export class StockManagementComponent implements OnInit {
         this.wellySummary = res.summary;
         this.wellyCharts = res.charts;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
 
         // Render charts after DOM updates
         setTimeout(() => this.renderWellyCharts(), 150);
@@ -1653,6 +1957,7 @@ export class StockManagementComponent implements OnInit {
         this.snackBar.open('Welly could not analyze stock. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
         this.showWellyPanel = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }
@@ -4393,11 +4698,12 @@ export class DispatchDialog implements OnInit {
       });
     }
     
-    // Populate available stock from SOH for this warehouse
+    // Available stock is not yet wired to a live SOH endpoint for this warehouse.
+    // Until that integration exists, treat the requested quantity as pickable rather
+    // than inventing random availability (which produced misleading fluctuating stock).
+    // TODO: Replace with a real SOH lookup per warehouse + item.
     items.forEach(item => {
-      // TODO: Query SOH for this warehouse and item
-      // For now, simulate availability
-      item.available = Math.floor(item.requested * (0.8 + Math.random() * 0.5));
+      item.available = item.requested;
       item.toPick = Math.min(item.toPick, item.available);
     });
     

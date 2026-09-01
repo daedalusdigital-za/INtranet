@@ -31,15 +31,16 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { environment } from '../../../environments/environment';
+import { WellyActivityService } from '../../services/welly-activity.service';
 import { PROMED_BACK_ORDERS, ACCESS_BACK_ORDERS, PHARMATECH_BACK_ORDERS, SEBENZANI_BACK_ORDERS, BackOrderItem } from './back-orders-data';
 import Chart from 'chart.js/auto';
 
 // Company definitions
 const COMPANIES = [
-  { code: 'PMT', name: 'Promed Technologies', shortName: 'Promed', color: '#1a237e' },
-  { code: 'ACM', name: 'Access Medical', shortName: 'Access', color: '#00695c' },
-  { code: 'PHT', name: 'Pharmatech', shortName: 'Pharmatech', color: '#c62828' },
-  { code: 'SBT', name: 'Sebenzani Trading', shortName: 'Sebenzani', color: '#6a1b9a' }
+  { code: 'PMT', name: 'Promed Technologies', shortName: 'Promed', color: '#1a237e', logo: 'logos/promed-round.png?v=4' },
+  { code: 'ACM', name: 'Access Medical', shortName: 'Access', color: '#00695c', logo: 'logos/access-round.png?v=4' },
+  { code: 'PHT', name: 'Pharmatech', shortName: 'Pharmatech', color: '#c62828', logo: 'logos/pharmatech-round.png?v=4' },
+  { code: 'SBT', name: 'Sebenzani Trading', shortName: 'Sebenzani', color: '#6a1b9a', logo: 'logos/sebenzani-round.png?v=4' }
 ];
 
 interface Company {
@@ -47,6 +48,48 @@ interface Company {
   name: string;
   shortName: string;
   color: string;
+  logo?: string;
+}
+
+interface SalesHistoryRow {
+  id: number;
+  customerName: string;
+  customerNumber?: string | null;
+  invoiceNumber: string;
+  shipmentNumber?: string | null;
+  orderNumber?: string | null;
+  invoiceDate: string;
+  location?: string | null;
+  salesAmount: number;
+  totalCost?: number | null;
+  grossProfit?: number | null;
+  marginPercent?: number | null;
+  hasLineDetail: boolean;
+  sourceCompany?: string | null;
+  isReconciled: boolean;
+}
+
+interface SalesHistoryLine {
+  id: number;
+  itemCode?: string | null;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  salesAmount: number;
+  unitCost: number;
+  extCost: number;
+  grossProfit: number;
+  marginPercent?: number | null;
+  itemCategory?: string | null;
+  source?: string | null;
+}
+
+interface SalesHistoryReconcile {
+  historyCount: number;
+  matchedCount: number;
+  missingCount: number;
+  missingAmount: number;
+  missingByMonth: { year: number; month: number; missingCount: number; missingAmount: number }[];
 }
 
 interface CompanySales {
@@ -741,11 +784,11 @@ interface SalesReportResponse {
           <span class="comparison-label">{{ lastBusinessDayLabel() }} → {{ currentBusinessDayLabel() }} · Trend vs MTD avg</span>
         </div>
         <div class="company-cards-grid">
-          @for (cs of companySalesData(); track cs.company.code) {
+          @for (cs of companyCards(); track cs.company.code) {
             <div class="modern-company-card" [style.--company-color]="cs.company.color" (click)="openCompanySalesDialog(cs.company)">
               <div class="company-card-header">
-                <div class="company-badge" [style.background]="cs.company.color">
-                  {{ cs.company.shortName.charAt(0) }}
+                <div class="company-badge">
+                  <img class="company-badge-logo" [src]="cs.company.logo" [alt]="cs.company.name" width="42" height="42" decoding="async" loading="lazy" />
                 </div>
                 <div class="company-title">
                   <span class="company-name">{{ cs.company.shortName }}</span>
@@ -842,7 +885,7 @@ interface SalesReportResponse {
 
       <!-- Main Content Tabs -->
       <mat-card class="main-content">
-        <mat-tab-group animationDuration="200ms" [(selectedIndex)]="selectedTab">
+        <mat-tab-group animationDuration="200ms" [(selectedIndex)]="selectedTab" (selectedIndexChange)="onSalesTabChange($event)">
           <!-- Incoming Order Emails Tab -->
           <mat-tab>
             <ng-template mat-tab-label>
@@ -1291,307 +1334,225 @@ interface SalesReportResponse {
             </div>
           </mat-tab>
 
-          <!-- POD Documents Tab -->
+          <!-- Sales History Tab -->
           <mat-tab>
             <ng-template mat-tab-label>
-              <mat-icon>verified</mat-icon>
-              <span>POD Documents</span>
-              @if (podTotalCount > 0) {
-                <span class="tab-badge">{{ podTotalCount }}</span>
+              <mat-icon>history</mat-icon>
+              <span>Sales History</span>
+              @if (salesHistoryTotalCount() > 0) {
+                <span class="tab-badge">{{ salesHistoryTotalCount() }}</span>
               }
             </ng-template>
-            <div class="tab-content">
-              <div class="pod-section">
-                <!-- POD Toolbar -->
-                <div class="pod-toolbar">
-                  <div class="pod-filters">
-                    <mat-form-field appearance="outline" class="pod-filter-field">
-                      <mat-label>Region</mat-label>
-                      <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="loadPodDocuments()">
-                        <mat-option value="">All Regions</mat-option>
-                        <mat-option value="GP">Gauteng (GP)</mat-option>
-                        <mat-option value="KZN">KwaZulu-Natal (KZN)</mat-option>
-                      </mat-select>
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline" class="pod-filter-field">
-                      <mat-label>Month</mat-label>
-                      <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="loadPodDocuments()">
-                        <mat-option value="">All Months</mat-option>
-                        <mat-option value="1-2026">January 2026</mat-option>
-                        <mat-option value="2-2026">February 2026</mat-option>
-                        <mat-option value="3-2026">March 2026</mat-option>
-                      </mat-select>
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline" class="pod-filter-field pod-driver-field">
-                      <mat-label>Driver</mat-label>
-                      <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="loadPodDocuments()">
-                        <mat-option value="">All Drivers</mat-option>
-                        @for (driver of podDriverList; track driver) {
-                          <mat-option [value]="driver">{{ driver }}</mat-option>
-                        }
-                      </mat-select>
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline" class="pod-filter-field">
-                      <mat-label>Link Status</mat-label>
-                      <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="loadPodDocuments()">
-                        <mat-option value="">All</mat-option>
-                        <mat-option value="linked">Linked</mat-option>
-                        <mat-option value="not-linked">Not Linked</mat-option>
-                      </mat-select>
-                    </mat-form-field>
-                  </div>
-
-                  <div class="pod-actions">
-                    <button mat-stroked-button class="pod-upload-btn" (click)="openSalesPodUploadDialog()">
-                      <mat-icon>upload_file</mat-icon> Upload POD
-                    </button>
-                    <div class="pod-view-toggle">
-                      <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
-                        <mat-icon>grid_view</mat-icon>
-                      </button>
-                      <button mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
-                        <mat-icon>view_list</mat-icon>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- POD Summary Stats -->
-                @if (podSummary) {
-                  <div class="pod-stats-row">
-                    <div class="pod-stat-chip">
-                      <mat-icon>folder</mat-icon>
-                      <span class="stat-num">{{ podSummary.total }}</span>
-                      <span class="stat-lbl">Total PODs</span>
-                    </div>
-                    <div class="pod-stat-chip linked-chip">
-                      <mat-icon>link</mat-icon>
-                      <span class="stat-num">{{ podSummary.linked || 0 }}</span>
-                      <span class="stat-lbl">Linked</span>
-                    </div>
-                    <div class="pod-stat-chip tripsheet-chip">
-                      <mat-icon>description</mat-icon>
-                      <span class="stat-num">{{ podSummary.linkedToTripsheet || 0 }}</span>
-                      <span class="stat-lbl">Tripsheets</span>
-                    </div>
-                    <div class="pod-stat-chip invoice-chip">
-                      <mat-icon>receipt</mat-icon>
-                      <span class="stat-num">{{ podSummary.linkedToInvoice || 0 }}</span>
-                      <span class="stat-lbl">Invoices</span>
-                    </div>
-                    <div class="pod-stat-chip unlinked-chip">
-                      <mat-icon>link_off</mat-icon>
-                      <span class="stat-num">{{ podSummary.unlinked || 0 }}</span>
-                      <span class="stat-lbl">Not Linked</span>
-                    </div>
-                    @for (r of podSummary.byRegion; track r.region) {
-                      <div class="pod-stat-chip region-chip">
-                        <mat-icon>location_on</mat-icon>
-                        <span class="stat-num">{{ r.count }}</span>
-                        <span class="stat-lbl">{{ r.region }}</span>
-                      </div>
-                    }
-                    <div class="pod-stat-chip drivers-chip">
-                      <mat-icon>people</mat-icon>
-                      <span class="stat-num">{{ podSummary.drivers?.length || 0 }}</span>
-                      <span class="stat-lbl">Drivers</span>
-                    </div>
-                  </div>
-                }
-
-                <!-- Loading State -->
-                @if (podLoading) {
-                  <div class="loading-state">
-                    <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
-                    <p>Loading POD documents...</p>
-                  </div>
-                } @else if (podDocuments.length === 0) {
-                  <div class="empty-state">
-                    <mat-icon>verified</mat-icon>
-                    <h3>No POD Documents Found</h3>
-                    <p>Adjust your filters or upload new POD documents</p>
-                  </div>
-                } @else {
-                  <!-- Grid View -->
-                  @if (podViewMode === 'grid') {
-                    <div class="pod-grid">
-                      @for (pod of podDocuments; track pod.id) {
-                        <mat-card class="pod-card" (click)="viewPodDocument(pod)">
-                          <div class="pod-card-header">
-                            <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
-                            <div class="pod-card-info">
-                              <span class="pod-driver">{{ pod.driverName }}</span>
-                              <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
-                            </div>
-                            <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId) ? 'linked' : 'not-linked'">
-                              <mat-icon>{{ (pod.loadId || pod.invoiceId) ? 'link' : 'link_off' }}</mat-icon>
-                              {{ pod.loadId ? 'Tripsheet' : pod.invoiceId ? 'Invoice' : 'Not Linked' }}
-                            </span>
-                            <span class="pod-region-badge" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
-                          </div>
-                          @if (pod.loadNumber) {
-                            <div class="pod-tripsheet-ref">
-                              <mat-icon>description</mat-icon>
-                              <span>{{ pod.loadNumber }}</span>
-                            </div>
-                          }
-                          @if (pod.invoiceNumber) {
-                            <div class="pod-tripsheet-ref invoice-ref">
-                              <mat-icon>receipt</mat-icon>
-                              <span>{{ pod.invoiceNumber }}</span>
-                            </div>
-                          }
-                          <div class="pod-card-meta">
-                            <span class="pod-filename" matTooltip="{{ pod.originalFileName }}">{{ pod.originalFileName || pod.fileName }}</span>
-                            <span class="pod-size">{{ formatPodFileSize(pod.fileSize) }}</span>
-                          </div>
-                          <div class="pod-card-actions">
-                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
-                              <mat-icon>visibility</mat-icon>
-                            </button>
-                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
-                              <mat-icon>download</mat-icon>
-                            </button>
-                            <button mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
-                              <mat-icon>more_vert</mat-icon>
-                            </button>
-                            <mat-menu #podActionMenu="matMenu" class="modern-menu">
-                              @if (!pod.loadId) {
-                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
-                                  <mat-icon>link</mat-icon> Link to Tripsheet
-                                </button>
-                              } @else {
-                                <button mat-menu-item (click)="delinkPod(pod)">
-                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
-                                </button>
-                              }
-                              @if (!pod.invoiceId) {
-                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
-                                  <mat-icon>receipt</mat-icon> Link to Invoice
-                                </button>
-                              } @else {
-                                <button mat-menu-item (click)="delinkInvoice(pod)">
-                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
-                                </button>
-                              }
-                              <button mat-menu-item (click)="openEditPodDialog(pod)">
-                                <mat-icon>edit</mat-icon> Edit Details
-                              </button>
-                            </mat-menu>
-                          </div>
-                        </mat-card>
-                      }
-                    </div>
-                  } @else {
-                    <!-- List View -->
-                    <div class="pod-list-container">
-                      <table mat-table [dataSource]="podDocuments" class="pod-table modern-table">
-                        <ng-container matColumnDef="driverName">
-                          <th mat-header-cell *matHeaderCellDef>Driver</th>
-                          <td mat-cell *matCellDef="let pod">{{ pod.driverName }}</td>
-                        </ng-container>
-                        <ng-container matColumnDef="deliveryDate">
-                          <th mat-header-cell *matHeaderCellDef>Date</th>
-                          <td mat-cell *matCellDef="let pod">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</td>
-                        </ng-container>
-                        <ng-container matColumnDef="region">
-                          <th mat-header-cell *matHeaderCellDef>Region</th>
-                          <td mat-cell *matCellDef="let pod">
-                            <span class="pod-region-badge small" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
-                          </td>
-                        </ng-container>
-                        <ng-container matColumnDef="linkStatus">
-                          <th mat-header-cell *matHeaderCellDef>Status</th>
-                          <td mat-cell *matCellDef="let pod">
-                            @if (pod.loadId) {
-                              <span class="pod-link-badge small linked">
-                                <mat-icon>link</mat-icon>
-                                {{ pod.loadNumber || 'Tripsheet' }}
-                              </span>
-                            } @else if (pod.invoiceId) {
-                              <span class="pod-link-badge small linked invoice">
-                                <mat-icon>receipt</mat-icon>
-                                {{ pod.invoiceNumber || 'Invoice' }}
-                              </span>
-                            } @else {
-                              <span class="pod-link-badge small not-linked">
-                                <mat-icon>link_off</mat-icon>
-                                Not Linked
-                              </span>
-                            }
-                          </td>
-                        </ng-container>
-                        <ng-container matColumnDef="fileName">
-                          <th mat-header-cell *matHeaderCellDef>File</th>
-                          <td mat-cell *matCellDef="let pod">{{ pod.originalFileName || pod.fileName }}</td>
-                        </ng-container>
-                        <ng-container matColumnDef="fileSize">
-                          <th mat-header-cell *matHeaderCellDef>Size</th>
-                          <td mat-cell *matCellDef="let pod">{{ formatPodFileSize(pod.fileSize) }}</td>
-                        </ng-container>
-                        <ng-container matColumnDef="actions">
-                          <th mat-header-cell *matHeaderCellDef>Actions</th>
-                          <td mat-cell *matCellDef="let pod">
-                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
-                              <mat-icon>visibility</mat-icon>
-                            </button>
-                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
-                              <mat-icon>download</mat-icon>
-                            </button>
-                            <button mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
-                              <mat-icon>more_vert</mat-icon>
-                            </button>
-                            <mat-menu #podListMenu="matMenu" class="modern-menu">
-                              @if (!pod.loadId) {
-                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
-                                  <mat-icon>link</mat-icon> Link to Tripsheet
-                                </button>
-                              } @else {
-                                <button mat-menu-item (click)="delinkPod(pod)">
-                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
-                                </button>
-                              }
-                              @if (!pod.invoiceId) {
-                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
-                                  <mat-icon>receipt</mat-icon> Link to Invoice
-                                </button>
-                              } @else {
-                                <button mat-menu-item (click)="delinkInvoice(pod)">
-                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
-                                </button>
-                              }
-                              <button mat-menu-item (click)="openEditPodDialog(pod)">
-                                <mat-icon>edit</mat-icon> Edit Details
-                              </button>
-                            </mat-menu>
-                          </td>
-                        </ng-container>
-                        <tr mat-header-row *matHeaderRowDef="podTableColumns"></tr>
-                        <tr mat-row *matRowDef="let row; columns: podTableColumns;" class="clickable-row" (click)="viewPodDocument(row)"></tr>
-                      </table>
-                    </div>
-                  }
-
-                  <!-- Pagination -->
-                  @if (podTotalCount > podPageSize) {
-                    <div class="pod-pagination">
-                      <span class="pod-page-info">Showing {{ (podCurrentPage - 1) * podPageSize + 1 }} - {{ Math.min(podCurrentPage * podPageSize, podTotalCount) }} of {{ podTotalCount }}</span>
-                      <div class="pod-page-btns">
-                        <button mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
-                          <mat-icon>chevron_left</mat-icon>
-                        </button>
-                        <span class="page-num">Page {{ podCurrentPage }}</span>
-                        <button mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
-                          <mat-icon>chevron_right</mat-icon>
-                        </button>
-                      </div>
-                    </div>
-                  }
+            <div class="tab-content sales-history-tab">
+              <!-- Company selector chips -->
+              <div class="sh-company-bar">
+                <button class="sh-company-chip" [class.active]="salesHistoryCompany() === ''"
+                        (click)="salesHistoryCompany.set(''); onSalesHistoryFilterChange()">
+                  <mat-icon>apps</mat-icon> All Companies
+                </button>
+                @for (c of companies; track c.code) {
+                  <button class="sh-company-chip sh-company-chip--logo" [class.active]="salesHistoryCompany() === c.code"
+                          [style.--chip-color]="c.color"
+                          (click)="salesHistoryCompany.set(c.code); onSalesHistoryFilterChange()">
+                    <img class="sh-chip-logo" [src]="c.logo" [alt]="c.name" width="32" height="32" decoding="async" loading="lazy" />
+                    <span class="sh-chip-label">{{ c.shortName }}</span>
+                  </button>
                 }
               </div>
+
+              <!-- Toolbar -->
+              <div class="sh-toolbar">
+                <mat-form-field appearance="outline" class="sh-search">
+                  <mat-label>Search customer, invoice, order or shipment</mat-label>
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [value]="salesHistorySearch()" (input)="salesHistorySearch.set($any($event.target).value); onSalesHistoryFilterChange()">
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sh-date">
+                  <mat-label>From</mat-label>
+                  <input matInput [matDatepicker]="shFromPicker" [(ngModel)]="salesHistoryFromDate" (dateChange)="onSalesHistoryFilterChange()">
+                  <mat-datepicker-toggle matSuffix [for]="shFromPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #shFromPicker></mat-datepicker>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sh-date">
+                  <mat-label>To</mat-label>
+                  <input matInput [matDatepicker]="shToPicker" [(ngModel)]="salesHistoryToDate" (dateChange)="onSalesHistoryFilterChange()">
+                  <mat-datepicker-toggle matSuffix [for]="shToPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #shToPicker></mat-datepicker>
+                </mat-form-field>
+                <button mat-stroked-button class="sh-btn" (click)="clearSalesHistoryFilters()">
+                  <mat-icon>clear</mat-icon> Clear
+                </button>
+                <button mat-stroked-button class="sh-btn sh-toggle-btn" [class.active]="salesHistoryDetailedOnly()"
+                        (click)="toggleSalesHistoryDetailedOnly()"
+                        matTooltip="Show only invoices that have product descriptions">
+                  <mat-icon>inventory_2</mat-icon> Products only
+                </button>
+                <button mat-stroked-button class="sh-btn" (click)="runSalesHistoryReconcile()">
+                  <mat-icon>fact_check</mat-icon> Reconcile
+                </button>
+              </div>
+
+              <!-- KPI summary -->
+              <div class="sh-kpi-grid">
+                <div class="sh-kpi kpi-sales">
+                  <div class="sh-kpi-icon"><mat-icon>payments</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value">R {{ formatCurrencyFull(salesHistoryTotalAmount()) }}</span>
+                    <span class="sh-kpi-label">Total Sales</span>
+                  </div>
+                </div>
+                <div class="sh-kpi kpi-inv">
+                  <div class="sh-kpi-icon"><mat-icon>receipt_long</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value">{{ salesHistoryInvoiceCount() | number }}</span>
+                    <span class="sh-kpi-label">Invoices &middot; {{ salesHistoryDetailedCount() | number }} with detail</span>
+                  </div>
+                </div>
+                <div class="sh-kpi kpi-cust">
+                  <div class="sh-kpi-icon"><mat-icon>groups</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value">{{ salesHistoryCustomerCount() | number }}</span>
+                    <span class="sh-kpi-label">Customers</span>
+                  </div>
+                </div>
+                <div class="sh-kpi kpi-date">
+                  <div class="sh-kpi-icon"><mat-icon>date_range</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value sh-kpi-date-val">{{ salesHistoryDateRangeLabel() }}</span>
+                    <span class="sh-kpi-label">Date Range</span>
+                  </div>
+                </div>
+              </div>
+
+              @if (salesHistoryReconcile()) {
+                <div class="reconcile-banner">
+                  <mat-icon>fact_check</mat-icon>
+                  <span>Reconciliation: <strong>{{ salesHistoryReconcile()!.matchedCount | number }}</strong> matched,
+                    <strong>{{ salesHistoryReconcile()!.missingCount | number }}</strong> missing from live sales
+                    (R {{ formatCurrencyFull(salesHistoryReconcile()!.missingAmount) }})</span>
+                  <button mat-icon-button (click)="salesHistoryReconcile.set(null)"><mat-icon>close</mat-icon></button>
+                </div>
+              }
+
+              @if (salesHistoryLoading()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="40"></mat-spinner>
+                  <p>Loading sales history...</p>
+                </div>
+              } @else if (salesHistoryRecords().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>history</mat-icon>
+                  <h3>No Sales History Found</h3>
+                  <p>Import a sales report to populate historical invoices, or adjust your filters.</p>
+                </div>
+              } @else {
+                <div class="sh-table-wrap">
+                  <table class="sh-table">
+                    <thead>
+                      <tr>
+                        <th class="sh-expand-col"></th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Invoice No</th>
+                        <th>Order No</th>
+                        <th>Company</th>
+                        <th class="right-align">Sales</th>
+                        <th class="center-align">Live</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of salesHistoryRecords(); track row.id) {
+                        <tr class="sh-row" [class.expandable]="row.hasLineDetail"
+                            [class.expanded]="salesHistoryExpandedId() === row.id"
+                            (click)="toggleSalesHistoryLines(row)">
+                          <td class="sh-expand-col">
+                            @if (row.hasLineDetail) {
+                              <mat-icon class="sh-expand-icon">{{ salesHistoryExpandedId() === row.id ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                            }
+                          </td>
+                          <td class="sh-nowrap">{{ row.invoiceDate | date:'dd MMM yyyy' }}</td>
+                          <td class="sh-customer">{{ row.customerName }}</td>
+                          <td class="mono">{{ row.invoiceNumber }}
+                            @if (row.hasLineDetail) {
+                              <span class="sh-products-pill"><mat-icon>inventory_2</mat-icon> products</span>
+                            }
+                          </td>
+                          <td class="mono sh-muted">{{ row.orderNumber || '—' }}</td>
+                          <td>
+                            @if (getCompanyLogo(row.sourceCompany || '')) {
+                              <img class="sh-company-logo" [src]="getCompanyLogo(row.sourceCompany || '')"
+                                   [alt]="getCompanyName(row.sourceCompany || '')" width="28" height="28"
+                                   decoding="async"
+                                   [matTooltip]="getCompanyName(row.sourceCompany || '')" loading="lazy" />
+                            } @else if (row.sourceCompany) {
+                              <span class="sh-company-tag" [style.--chip-color]="getCompanyColor(row.sourceCompany || '')">
+                                {{ getCompanyShortName(row.sourceCompany || '') }}
+                              </span>
+                            } @else {
+                              <span class="sh-muted">—</span>
+                            }
+                          </td>
+                          <td class="right-align sh-amount">R {{ formatCurrencyFull(row.salesAmount) }}</td>
+                          <td class="center-align">
+                            @if (row.isReconciled) {
+                              <mat-icon class="ok-icon" matTooltip="Matched in live sales">check_circle</mat-icon>
+                            } @else {
+                              <mat-icon class="warn-icon" matTooltip="Not in live sales">remove_circle_outline</mat-icon>
+                            }
+                          </td>
+                        </tr>
+                        @if (salesHistoryExpandedId() === row.id) {
+                          <tr class="sh-detail-row">
+                            <td colspan="8">
+                              @if (salesHistoryLinesLoading()) {
+                                <div class="sh-detail-loading"><mat-spinner diameter="24"></mat-spinner> Loading product detail…</div>
+                              } @else if (salesHistoryLines().length === 0) {
+                                <div class="sh-detail-empty">No product-level detail available for this invoice.</div>
+                              } @else {
+                                <div class="sh-detail-title"><mat-icon>inventory_2</mat-icon> Product Breakdown — {{ row.invoiceNumber }}</div>
+                                <table class="sh-detail-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Item Code</th>
+                                      <th>Product Description</th>
+                                      <th class="right-align">Qty</th>
+                                      <th class="right-align">Unit Price</th>
+                                      <th class="right-align">Sales</th>
+                                      <th class="center-align">Source</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    @for (line of salesHistoryLines(); track line.id) {
+                                      <tr>
+                                        <td class="mono">{{ line.itemCode || '—' }}</td>
+                                        <td class="sh-desc">{{ line.description || '—' }}</td>
+                                        <td class="right-align">{{ line.quantity | number:'1.0-2' }}</td>
+                                        <td class="right-align">R {{ formatCurrencyFull(line.unitPrice) }}</td>
+                                        <td class="right-align sh-amount">R {{ formatCurrencyFull(line.salesAmount) }}</td>
+                                        <td class="center-align">
+                                          <span class="sh-src-tag" [class.src-live]="line.source === 'Live Sales'">{{ line.source }}</span>
+                                        </td>
+                                      </tr>
+                                    }
+                                  </tbody>
+                                </table>
+                              }
+                            </td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                <mat-paginator
+                  [length]="salesHistoryTotalCount()"
+                  [pageSize]="salesHistoryPageSize()"
+                  [pageIndex]="salesHistoryPageIndex()"
+                  [pageSizeOptions]="[25, 50, 100, 200]"
+                  (page)="onSalesHistoryPageChange($event)"
+                  showFirstLastButtons>
+                </mat-paginator>
+              }
             </div>
           </mat-tab>
 
@@ -1749,6 +1710,319 @@ interface SalesReportResponse {
                   <p>No back order data available for {{ activeBackOrderTab() | titlecase }} yet</p>
                 </div>
               }
+            </div>
+          </mat-tab>
+
+          <!-- POD Documents Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>verified</mat-icon>
+              <span>POD Documents</span>
+              @if (podTotalCount > 0) {
+                <span class="tab-badge">{{ podTotalCount }}</span>
+              }
+            </ng-template>
+            <div class="tab-content">
+              <div class="pod-section">
+                <!-- POD Toolbar -->
+                <div class="pod-toolbar">
+                  <div class="pod-filters">
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Region</mat-label>
+                      <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Regions</mat-option>
+                        <mat-option value="GP">Gauteng (GP)</mat-option>
+                        <mat-option value="KZN">KwaZulu-Natal (KZN)</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Month</mat-label>
+                      <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Months</mat-option>
+                        <mat-option value="1-2026">January 2026</mat-option>
+                        <mat-option value="2-2026">February 2026</mat-option>
+                        <mat-option value="3-2026">March 2026</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field pod-driver-field">
+                      <mat-label>Driver</mat-label>
+                      <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Drivers</mat-option>
+                        @for (driver of podDriverList; track driver) {
+                          <mat-option [value]="driver">{{ driver }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Link Status</mat-label>
+                      <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All</mat-option>
+                        <mat-option value="linked">Linked</mat-option>
+                        <mat-option value="not-linked">Not Linked</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+
+                  <div class="pod-actions">
+                    <button mat-stroked-button class="pod-welly-btn" (click)="wellyScanAllUnlinked()" matTooltip="Welly reads invoice numbers off unlinked POD images and auto-links exact matches">
+                      <mat-icon>auto_awesome</mat-icon> Welly: Scan Unlinked
+                    </button>
+                    <button mat-stroked-button class="pod-upload-btn" (click)="openSalesPodUploadDialog()">
+                      <mat-icon>upload_file</mat-icon> Upload POD
+                    </button>
+                    <div class="pod-view-toggle">
+                      <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
+                        <mat-icon>grid_view</mat-icon>
+                      </button>
+                      <button mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
+                        <mat-icon>view_list</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- POD Summary Stats -->
+                @if (podSummary) {
+                  <div class="pod-stats-row">
+                    <div class="pod-stat-chip">
+                      <mat-icon>folder</mat-icon>
+                      <span class="stat-num">{{ podSummary.total }}</span>
+                      <span class="stat-lbl">Total PODs</span>
+                    </div>
+                    <div class="pod-stat-chip linked-chip">
+                      <mat-icon>link</mat-icon>
+                      <span class="stat-num">{{ podSummary.linked || 0 }}</span>
+                      <span class="stat-lbl">Linked</span>
+                    </div>
+                    <div class="pod-stat-chip tripsheet-chip">
+                      <mat-icon>description</mat-icon>
+                      <span class="stat-num">{{ podSummary.linkedToTripsheet || 0 }}</span>
+                      <span class="stat-lbl">Tripsheets</span>
+                    </div>
+                    <div class="pod-stat-chip invoice-chip">
+                      <mat-icon>receipt</mat-icon>
+                      <span class="stat-num">{{ podSummary.linkedToInvoice || 0 }}</span>
+                      <span class="stat-lbl">Invoices</span>
+                    </div>
+                    <div class="pod-stat-chip unlinked-chip">
+                      <mat-icon>link_off</mat-icon>
+                      <span class="stat-num">{{ podSummary.unlinked || 0 }}</span>
+                      <span class="stat-lbl">Not Linked</span>
+                    </div>
+                    @for (r of podSummary.byRegion; track r.region) {
+                      <div class="pod-stat-chip region-chip">
+                        <mat-icon>location_on</mat-icon>
+                        <span class="stat-num">{{ r.count }}</span>
+                        <span class="stat-lbl">{{ r.region }}</span>
+                      </div>
+                    }
+                    <div class="pod-stat-chip drivers-chip">
+                      <mat-icon>people</mat-icon>
+                      <span class="stat-num">{{ podSummary.drivers?.length || 0 }}</span>
+                      <span class="stat-lbl">Drivers</span>
+                    </div>
+                  </div>
+                }
+
+                <!-- Loading State -->
+                @if (podLoading) {
+                  <div class="loading-state">
+                    <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+                    <p>Loading POD documents...</p>
+                  </div>
+                } @else if (podDocuments.length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>verified</mat-icon>
+                    <h3>No POD Documents Found</h3>
+                    <p>Adjust your filters or upload new POD documents</p>
+                  </div>
+                } @else {
+                  <!-- Grid View -->
+                  @if (podViewMode === 'grid') {
+                    <div class="pod-grid">
+                      @for (pod of podDocuments; track pod.id) {
+                        <mat-card class="pod-card" (click)="viewPodDocument(pod)">
+                          <div class="pod-card-header">
+                            <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
+                            <div class="pod-card-info">
+                              <span class="pod-driver">{{ pod.driverName }}</span>
+                              <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
+                            </div>
+                            <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId) ? 'linked' : 'not-linked'">
+                              <mat-icon>{{ (pod.loadId || pod.invoiceId) ? 'link' : 'link_off' }}</mat-icon>
+                              {{ pod.loadId ? 'Tripsheet' : pod.invoiceId ? 'Invoice' : 'Not Linked' }}
+                            </span>
+                            <span class="pod-region-badge" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                          </div>
+                          @if (pod.loadNumber) {
+                            <div class="pod-tripsheet-ref">
+                              <mat-icon>description</mat-icon>
+                              <span>{{ pod.loadNumber }}</span>
+                            </div>
+                          }
+                          @if (pod.invoiceNumber) {
+                            <div class="pod-tripsheet-ref invoice-ref">
+                              <mat-icon>receipt</mat-icon>
+                              <span>{{ pod.invoiceNumber }}</span>
+                            </div>
+                          }
+                          <div class="pod-card-meta">
+                            <span class="pod-filename" matTooltip="{{ pod.originalFileName }}">{{ pod.originalFileName || pod.fileName }}</span>
+                            <span class="pod-size">{{ formatPodFileSize(pod.fileSize) }}</span>
+                          </div>
+                          <div class="pod-card-actions">
+                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                              <mat-icon>download</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #podActionMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item (click)="wellyScanPod(pod)">
+                                <mat-icon>auto_awesome</mat-icon> Welly: Scan for Invoice #s
+                              </button>
+                              @if (!pod.loadId) {
+                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
+                                  <mat-icon>link</mat-icon> Link to Tripsheet
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkPod(pod)">
+                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                </button>
+                              }
+                              @if (!pod.invoiceId) {
+                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
+                                  <mat-icon>receipt</mat-icon> Link to Invoice
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkInvoice(pod)">
+                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                </button>
+                              }
+                              <button mat-menu-item (click)="openEditPodDialog(pod)">
+                                <mat-icon>edit</mat-icon> Edit Details
+                              </button>
+                            </mat-menu>
+                          </div>
+                        </mat-card>
+                      }
+                    </div>
+                  } @else {
+                    <!-- List View -->
+                    <div class="pod-list-container">
+                      <table mat-table [dataSource]="podDocuments" class="pod-table modern-table">
+                        <ng-container matColumnDef="driverName">
+                          <th mat-header-cell *matHeaderCellDef>Driver</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.driverName }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="deliveryDate">
+                          <th mat-header-cell *matHeaderCellDef>Date</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="region">
+                          <th mat-header-cell *matHeaderCellDef>Region</th>
+                          <td mat-cell *matCellDef="let pod">
+                            <span class="pod-region-badge small" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="linkStatus">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let pod">
+                            @if (pod.loadId) {
+                              <span class="pod-link-badge small linked">
+                                <mat-icon>link</mat-icon>
+                                {{ pod.loadNumber || 'Tripsheet' }}
+                              </span>
+                            } @else if (pod.invoiceId) {
+                              <span class="pod-link-badge small linked invoice">
+                                <mat-icon>receipt</mat-icon>
+                                {{ pod.invoiceNumber || 'Invoice' }}
+                              </span>
+                            } @else {
+                              <span class="pod-link-badge small not-linked">
+                                <mat-icon>link_off</mat-icon>
+                                Not Linked
+                              </span>
+                            }
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="fileName">
+                          <th mat-header-cell *matHeaderCellDef>File</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.originalFileName || pod.fileName }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="fileSize">
+                          <th mat-header-cell *matHeaderCellDef>Size</th>
+                          <td mat-cell *matCellDef="let pod">{{ formatPodFileSize(pod.fileSize) }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="actions">
+                          <th mat-header-cell *matHeaderCellDef>Actions</th>
+                          <td mat-cell *matCellDef="let pod">
+                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                              <mat-icon>download</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #podListMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item (click)="wellyScanPod(pod)">
+                                <mat-icon>auto_awesome</mat-icon> Welly: Scan for Invoice #s
+                              </button>
+                              @if (!pod.loadId) {
+                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
+                                  <mat-icon>link</mat-icon> Link to Tripsheet
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkPod(pod)">
+                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                </button>
+                              }
+                              @if (!pod.invoiceId) {
+                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
+                                  <mat-icon>receipt</mat-icon> Link to Invoice
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkInvoice(pod)">
+                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                </button>
+                              }
+                              <button mat-menu-item (click)="openEditPodDialog(pod)">
+                                <mat-icon>edit</mat-icon> Edit Details
+                              </button>
+                            </mat-menu>
+                          </td>
+                        </ng-container>
+                        <tr mat-header-row *matHeaderRowDef="podTableColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: podTableColumns;" class="clickable-row" (click)="viewPodDocument(row)"></tr>
+                      </table>
+                    </div>
+                  }
+
+                  <!-- Pagination -->
+                  @if (podTotalCount > podPageSize) {
+                    <div class="pod-pagination">
+                      <span class="pod-page-info">Showing {{ (podCurrentPage - 1) * podPageSize + 1 }} - {{ Math.min(podCurrentPage * podPageSize, podTotalCount) }} of {{ podTotalCount }}</span>
+                      <div class="pod-page-btns">
+                        <button mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
+                          <mat-icon>chevron_left</mat-icon>
+                        </button>
+                        <span class="page-num">Page {{ podCurrentPage }}</span>
+                        <button mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
+                          <mat-icon>chevron_right</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+              </div>
             </div>
           </mat-tab>
 
@@ -2645,6 +2919,121 @@ interface SalesReportResponse {
               <button mat-raised-button color="primary" (click)="verifyPodUploadPassword()">
                 <mat-icon>lock_open</mat-icon> Verify
               </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Welly POD OCR suggestion panel -->
+      @if (showWellyPodPanel) {
+        <div class="welly-pod-overlay" (click)="closeWellyPodPanel()">
+          <div class="welly-pod-card" (click)="$event.stopPropagation()">
+            <div class="welly-pod-header">
+              <mat-icon class="welly-spark">auto_awesome</mat-icon>
+              <div class="welly-pod-title">
+                <h3>{{ wellyPodBatchMode ? 'Welly — Scanning Unlinked PODs' : 'Welly — Scan POD for Invoices' }}</h3>
+                @if (wellyPodCurrent) {
+                  <span class="welly-pod-sub">{{ wellyPodCurrent.driverName }} · {{ wellyPodCurrent.deliveryDate | date:'dd MMM yyyy' }} · {{ wellyPodCurrent.region }}</span>
+                }
+              </div>
+              <button mat-icon-button (click)="closeWellyPodPanel()" [disabled]="wellyPodScanning || wellyPodLinking">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            @if (wellyPodScanning) {
+              <div class="welly-pod-progress">
+                <mat-progress-bar mode="determinate" [value]="wellyPodProgress"></mat-progress-bar>
+                <p class="welly-pod-status"><mat-icon class="spin">sync</mat-icon> {{ wellyPodStatus }}</p>
+              </div>
+            } @else {
+              <p class="welly-pod-status">{{ wellyPodStatus }}</p>
+            }
+
+            <!-- Batch results -->
+            @if (wellyPodBatchMode) {
+              @if (wellyPodBatchResults.length > 0) {
+                <div class="welly-pod-batch-list">
+                  @for (r of wellyPodBatchResults; track r.pod.id) {
+                    <div class="welly-batch-row" [class.linked]="r.linked > 0">
+                      <mat-icon>{{ r.linked > 0 ? 'check_circle' : (r.found > 0 ? 'help' : 'remove_circle_outline') }}</mat-icon>
+                      <span class="wb-driver">{{ r.pod.driverName }}</span>
+                      <span class="wb-date">{{ r.pod.deliveryDate | date:'dd MMM' }}</span>
+                      <span class="wb-result">
+                        @if (r.linked > 0) { Linked {{ r.linked }} }
+                        @else if (r.found > 0) { {{ r.found }} found (needs review) }
+                        @else { No match }
+                      </span>
+                    </div>
+                  }
+                </div>
+              }
+            } @else {
+              <!-- Single-POD suggestion list -->
+              @if (!wellyPodScanning && wellyPodMatches.length > 0) {
+                <div class="welly-pod-matches">
+                  @for (m of wellyPodMatches; track m.id) {
+                    <label class="welly-match-row" [class.exact]="m.readExactly" [class.already]="m.alreadyLinked">
+                      <mat-checkbox [(ngModel)]="m.approved" [disabled]="m.alreadyLinked"></mat-checkbox>
+                      <div class="welly-match-main">
+                        <span class="wm-inv">{{ m.transactionNumber }}</span>
+                        <span class="wm-cust">{{ m.customerName }}</span>
+                      </div>
+                      <div class="welly-match-tags">
+                        @if (m.readExactly) {
+                          <span class="wm-tag exact"><mat-icon>verified</mat-icon> Exact read</span>
+                        } @else {
+                          <span class="wm-tag fuzzy"><mat-icon>auto_fix_high</mat-icon> Auto-corrected</span>
+                        }
+                        @if (m.alreadyLinked) {
+                          <span class="wm-tag already">Already linked</span>
+                        }
+                        <span class="wm-amount">R{{ formatCurrency(m.salesAmount) }}</span>
+                      </div>
+                    </label>
+                  }
+                </div>
+              }
+
+              @if (!wellyPodScanning && wellyPodUnmatched.length > 0) {
+                <div class="welly-pod-unmatched">
+                  <mat-icon>info</mat-icon>
+                  <span>Couldn't match: {{ wellyPodUnmatched.join(', ') }}</span>
+                </div>
+              }
+
+              <!-- Nothing matched: show what Welly actually read so you can see why -->
+              @if (!wellyPodScanning && wellyPodMatches.length === 0) {
+                <div class="welly-pod-debug">
+                  @if (wellyPodCandidatesFound.length > 0) {
+                    <p class="wd-line"><mat-icon>search</mat-icon> Numbers Welly spotted: <b>{{ wellyPodCandidatesFound.join(', ') }}</b> — none exist in the invoice database.</p>
+                  } @else {
+                    <p class="wd-line"><mat-icon>visibility_off</mat-icon> Welly couldn't spot any invoice numbers in the text{{ wellyPodPageCount ? ' (read ' + wellyPodPageCount + ' page' + (wellyPodPageCount === 1 ? '' : 's') + ')' : '' }}.</p>
+                  }
+                  <button mat-button class="wd-toggle" (click)="wellyPodShowDebug = !wellyPodShowDebug">
+                    <mat-icon>{{ wellyPodShowDebug ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    {{ wellyPodShowDebug ? 'Hide' : 'Show' }} what Welly read
+                  </button>
+                  @if (wellyPodShowDebug) {
+                    <pre class="wd-text">{{ wellyPodOcrText || '(no text extracted)' }}</pre>
+                  }
+                  <p class="wd-hint">If you can see the invoice number but Welly can't, the scan may be low-resolution. You can still link it manually below.</p>
+                  <button mat-stroked-button class="wd-manual" (click)="openLinkInvoiceDialog(wellyPodCurrent)">
+                    <mat-icon>receipt</mat-icon> Link invoice manually
+                  </button>
+                </div>
+              }
+            }
+
+            <div class="welly-pod-actions">
+              <button mat-stroked-button (click)="closeWellyPodPanel()" [disabled]="wellyPodScanning || wellyPodLinking">Close</button>
+              @if (!wellyPodBatchMode && wellyPodMatches.length > 0) {
+                <button mat-raised-button color="primary" (click)="applyWellyPodLinks()"
+                        [disabled]="wellyPodScanning || wellyPodLinking || wellyPodApprovedCount() === 0">
+                  <mat-icon>link</mat-icon>
+                  {{ wellyPodLinking ? 'Linking…' : 'Link ' + wellyPodApprovedCount() + ' Invoice(s)' }}
+                </button>
+              }
             </div>
           </div>
         </div>
@@ -3869,17 +4258,22 @@ interface SalesReportResponse {
     }
 
     .company-badge {
-      width: 42px;
-      height: 42px;
-      border-radius: 11px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 18px;
-      font-weight: 700;
+      overflow: hidden;
+      background: #fff;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
       transition: transform 0.2s ease;
+    }
+    .company-badge-logo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
     }
 
     .modern-company-card:hover .company-badge {
@@ -4775,6 +5169,13 @@ interface SalesReportResponse {
       color: white !important;
       font-size: 11px !important;
       font-weight: 500 !important;
+    }
+
+    /* Force white text on the Material chip's inner label so it stays readable on dark company colors */
+    .company-chip .mdc-evolution-chip__text-label,
+    .company-chip .mat-mdc-chip-action-label,
+    .company-chip .mdc-evolution-chip__action {
+      color: white !important;
     }
 
     .customer-name-cell .name {
@@ -7032,12 +7433,241 @@ interface SalesReportResponse {
     .pwd-input { width: 100%; margin-bottom: 16px; }
     .pwd-actions { display: flex; gap: 12px; justify-content: center; }
     .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
+
+    /* ── Welly POD OCR panel ─────────────────────────────── */
+    .welly-pod-overlay {
+      position: fixed; inset: 0; z-index: 1200;
+      background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .welly-pod-card {
+      background: #1e293b; color: #e2e8f0; border-radius: 16px;
+      width: 100%; max-width: 640px; max-height: 86vh; overflow-y: auto;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5); border: 1px solid rgba(148,163,184,0.18);
+    }
+    .welly-pod-header {
+      display: flex; align-items: center; gap: 12px; padding: 18px 20px;
+      border-bottom: 1px solid rgba(148,163,184,0.15); position: sticky; top: 0;
+      background: #1e293b; z-index: 1;
+    }
+    .welly-pod-header .welly-spark { color: #a855f7; font-size: 28px; width: 28px; height: 28px; }
+    .welly-pod-title { flex: 1; }
+    .welly-pod-title h3 { margin: 0; font-size: 17px; font-weight: 600; color: #f1f5f9; }
+    .welly-pod-sub { font-size: 12px; color: #94a3b8; }
+    .welly-pod-progress { padding: 16px 20px; }
+    .welly-pod-status {
+      display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+      font-size: 14px; color: #cbd5e1; margin: 0;
+    }
+    .welly-pod-status .spin { animation: welly-spin 1.1s linear infinite; color: #a855f7; }
+    @keyframes welly-spin { to { transform: rotate(360deg); } }
+    .welly-pod-matches { padding: 6px 16px 10px; display: flex; flex-direction: column; gap: 8px; }
+    .welly-match-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+      background: rgba(51,65,85,0.5); border-radius: 10px; cursor: pointer;
+      border: 1px solid transparent; transition: all .15s;
+    }
+    .welly-match-row.exact { border-color: rgba(34,197,94,0.4); }
+    .welly-match-row.already { opacity: 0.55; }
+    .welly-match-row:hover { background: rgba(51,65,85,0.8); }
+    .welly-match-main { flex: 1; display: flex; flex-direction: column; }
+    .wm-inv { font-weight: 600; color: #f1f5f9; font-size: 14px; }
+    .wm-cust { font-size: 12px; color: #94a3b8; }
+    .welly-match-tags { display: flex; align-items: center; gap: 8px; }
+    .wm-tag {
+      display: inline-flex; align-items: center; gap: 3px; font-size: 11px;
+      padding: 2px 8px; border-radius: 20px; font-weight: 500;
+    }
+    .wm-tag mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .wm-tag.exact { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .wm-tag.fuzzy { background: rgba(234,179,8,0.2); color: #facc15; }
+    .wm-tag.already { background: rgba(148,163,184,0.2); color: #cbd5e1; }
+    .wm-amount { font-size: 12px; color: #cbd5e1; font-weight: 600; min-width: 70px; text-align: right; }
+    .welly-pod-unmatched {
+      display: flex; align-items: center; gap: 8px; margin: 4px 20px 10px;
+      padding: 8px 12px; background: rgba(234,179,8,0.12); border-radius: 8px;
+      font-size: 12px; color: #fde68a;
+    }
+    .welly-pod-unmatched mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .welly-pod-batch-list { padding: 6px 16px 10px; display: flex; flex-direction: column; gap: 4px; }
+    .welly-batch-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      background: rgba(51,65,85,0.4); border-radius: 8px; font-size: 13px;
+    }
+    .welly-batch-row.linked { background: rgba(34,197,94,0.12); }
+    .welly-batch-row mat-icon { font-size: 18px; width: 18px; height: 18px; color: #94a3b8; }
+    .welly-batch-row.linked mat-icon { color: #4ade80; }
+    .welly-batch-row .wb-driver { font-weight: 500; color: #e2e8f0; flex: 1; }
+    .welly-batch-row .wb-date { color: #94a3b8; }
+    .welly-batch-row .wb-result { color: #cbd5e1; min-width: 120px; text-align: right; }
+    .welly-pod-actions {
+      display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px;
+      border-top: 1px solid rgba(148,163,184,0.15); position: sticky; bottom: 0; background: #1e293b;
+    }
+    .pod-welly-btn {
+      color: #a855f7 !important; border-color: rgba(168,85,247,0.5) !important;
+    }
+    .welly-pod-debug { padding: 6px 20px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .welly-pod-debug .wd-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e1; margin: 0; }
+    .welly-pod-debug .wd-line mat-icon { font-size: 18px; width: 18px; height: 18px; color: #94a3b8; }
+    .welly-pod-debug .wd-line b { color: #fde68a; }
+    .welly-pod-debug .wd-toggle { align-self: flex-start; color: #a855f7 !important; }
+    .welly-pod-debug .wd-text {
+      max-height: 200px; overflow: auto; background: #0f172a; color: #94a3b8;
+      font-size: 11px; padding: 10px; border-radius: 8px; white-space: pre-wrap;
+      border: 1px solid rgba(148,163,184,0.15); margin: 0;
+    }
+    .welly-pod-debug .wd-hint { font-size: 12px; color: #94a3b8; margin: 0; }
+    .welly-pod-debug .wd-manual { align-self: flex-start; color: #60a5fa !important; border-color: rgba(96,165,250,0.4) !important; }
+
+    /* ─── Sales History tab ─────────────────────────────────────────── */
+    .sales-history-tab { padding: 4px 2px 24px; }
+    .sh-company-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
+    .sh-company-chip {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
+      border: 1.5px solid #e2e8f0; background: #fff; border-radius: 999px;
+      font-size: 13px; font-weight: 600; color: #475569; cursor: pointer;
+      transition: all .18s ease;
+    }
+    .sh-company-chip mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .sh-company-chip:hover { border-color: #cbd5e1; background: #f8fafc; transform: translateY(-1px); }
+    .sh-company-chip.active {
+      border-color: var(--chip-color, #1a237e); color: var(--chip-color, #1a237e);
+      background: color-mix(in srgb, var(--chip-color, #1a237e) 8%, #fff);
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .sh-chip-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+    /* Logo-based company chips (round brand logos) */
+    .sh-company-chip--logo { padding: 6px 14px 6px 8px; gap: 8px; }
+    .sh-chip-logo {
+      width: 30px; height: 30px; object-fit: contain; object-position: center;
+      display: block; filter: grayscale(30%); opacity: .82; transition: all .18s ease;
+    }
+    .sh-company-chip--logo:hover .sh-chip-logo { filter: grayscale(0%); opacity: 1; }
+    .sh-company-chip--logo.active { background: #fff; }
+    .sh-company-chip--logo.active .sh-chip-logo { filter: none; opacity: 1; }
+    .sh-chip-label { font-size: 12.5px; font-weight: 600; color: #475569; }
+    .sh-company-chip--logo.active .sh-chip-label { color: var(--chip-color, #1a237e); }
+    /* Row-level company logo */
+    .sh-company-logo {
+      width: 28px; height: 28px; object-fit: contain; object-position: center;
+      display: inline-block; vertical-align: middle;
+    }
+
+    .sh-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .sh-toolbar .sh-search { flex: 1 1 340px; min-width: 260px; }
+    .sh-toolbar .sh-date { width: 150px; }
+    .sh-toolbar .mat-mdc-form-field { margin-bottom: -18px; }
+    .sh-btn { height: 40px; border-radius: 10px !important; }
+    .sh-toggle-btn.active {
+      background: #1a237e !important; color: #fff !important; border-color: #1a237e !important;
+    }
+    .sh-products-pill {
+      display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;
+      background: #e0f2fe; color: #0369a1; font-size: 10.5px; font-weight: 600;
+      padding: 1px 7px 1px 5px; border-radius: 999px; vertical-align: middle; text-transform: none;
+    }
+    .sh-products-pill mat-icon { font-size: 13px; width: 13px; height: 13px; }
+
+    .sh-kpi-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px; margin-bottom: 20px;
+    }
+    .sh-kpi {
+      display: flex; align-items: center; gap: 14px; padding: 16px 18px;
+      background: #fff; border: 1px solid #eef2f7; border-radius: 16px;
+      box-shadow: 0 1px 3px rgba(15,23,42,.04); position: relative; overflow: hidden;
+    }
+    .sh-kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+    .sh-kpi.kpi-sales::before { background: #1a237e; }
+    .sh-kpi.kpi-gp::before { background: #059669; }
+    .sh-kpi.kpi-inv::before { background: #0284c7; }
+    .sh-kpi.kpi-cust::before { background: #7c3aed; }
+    .sh-kpi.kpi-date::before { background: #d97706; }
+    .sh-kpi-icon {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; background: #f1f5f9;
+    }
+    .sh-kpi-icon mat-icon { font-size: 24px; width: 24px; height: 24px; }
+    .kpi-sales .sh-kpi-icon { background: #e8eaf6; color: #1a237e; }
+    .kpi-gp .sh-kpi-icon { background: #d1fae5; color: #059669; }
+    .kpi-inv .sh-kpi-icon { background: #e0f2fe; color: #0284c7; }
+    .kpi-cust .sh-kpi-icon { background: #ede9fe; color: #7c3aed; }
+    .kpi-date .sh-kpi-icon { background: #fef3c7; color: #d97706; }
+    .sh-kpi-body { display: flex; flex-direction: column; min-width: 0; }
+    .sh-kpi-value { font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1.2; white-space: nowrap; }
+    .sh-kpi-date-val { font-size: 15px; }
+    .sh-kpi-label { font-size: 12px; color: #64748b; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+    .sh-kpi-chip { background: #d1fae5; color: #047857; font-weight: 700; padding: 1px 7px; border-radius: 999px; font-size: 11px; }
+
+    .reconcile-banner {
+      display: flex; align-items: center; gap: 10px; padding: 12px 16px; margin-bottom: 16px;
+      background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; color: #1e40af; font-size: 14px;
+    }
+    .reconcile-banner mat-icon { color: #2563eb; }
+    .reconcile-banner span { flex: 1; }
+
+    .sh-table-wrap {
+      border: 1px solid #eef2f7; border-radius: 16px; overflow: auto;
+      background: #fff; box-shadow: 0 1px 3px rgba(15,23,42,.04);
+    }
+    .sh-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .sh-table thead th {
+      position: sticky; top: 0; z-index: 1; background: #f8fafc; color: #475569;
+      font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em;
+      padding: 12px 14px; text-align: left; border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+    }
+    .sh-table tbody td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
+    .sh-row { transition: background .12s ease; }
+    .sh-row.expandable { cursor: pointer; }
+    .sh-row.expandable:hover { background: #f8fafc; }
+    .sh-row.expanded { background: #eff6ff; }
+    .sh-row.expanded td { border-bottom-color: transparent; }
+    .sh-expand-col { width: 34px; text-align: center; padding-right: 0 !important; }
+    .sh-expand-icon { color: #94a3b8; font-size: 20px; width: 20px; height: 20px; }
+    .sh-nowrap { white-space: nowrap; }
+    .sh-customer { font-weight: 600; color: #1e293b; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sh-table .mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 12.5px; color: #475569; }
+    .sh-muted { color: #94a3b8; }
+    .sh-amount { font-weight: 600; color: #0f172a; white-space: nowrap; }
+    .sh-gp { font-weight: 600; color: #059669; white-space: nowrap; }
+    .right-align { text-align: right; }
+    .center-align { text-align: center; }
+    .sh-company-tag {
+      display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+      color: var(--chip-color, #607d8b);
+      background: color-mix(in srgb, var(--chip-color, #607d8b) 12%, #fff);
+      border: 1px solid color-mix(in srgb, var(--chip-color, #607d8b) 25%, #fff);
+    }
+    .sh-margin-badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+    .sh-margin-badge.margin-high { background: #d1fae5; color: #047857; }
+    .sh-margin-badge.margin-mid { background: #fef3c7; color: #b45309; }
+    .sh-margin-badge.margin-low { background: #fee2e2; color: #b91c1c; }
+    .sh-table .ok-icon { color: #10b981; font-size: 20px; width: 20px; height: 20px; }
+    .sh-table .warn-icon { color: #cbd5e1; font-size: 20px; width: 20px; height: 20px; }
+
+    .sh-detail-row td { padding: 0 !important; background: #f8fafc; }
+    .sh-detail-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1e293b; padding: 14px 18px 8px; font-size: 13px; }
+    .sh-detail-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: #64748b; }
+    .sh-detail-loading, .sh-detail-empty { display: flex; align-items: center; gap: 10px; padding: 18px; color: #64748b; font-size: 13px; }
+    .sh-detail-table { width: 100%; border-collapse: collapse; margin: 0 0 12px; }
+    .sh-detail-table thead th {
+      background: #eef2f7; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+      font-weight: 600; padding: 8px 14px; text-align: left; border-bottom: 1px solid #e2e8f0;
+    }
+    .sh-detail-table tbody td { padding: 8px 14px; border-bottom: 1px solid #eef2f7; font-size: 12.5px; color: #475569; }
+    .sh-detail-table tbody tr:last-child td { border-bottom: none; }
+    .sh-detail-table .sh-desc { font-weight: 600; color: #1e293b; }
+    .sh-src-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; background: #ede9fe; color: #6d28d9; }
+    .sh-src-tag.src-live { background: #dcfce7; color: #15803d; }
   `]
 })
 export class SalesDashboardComponent implements OnInit {
   private http = inject(HttpClient);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
+  private wellyActivity = inject(WellyActivityService);
   private apiUrl = environment.apiUrl;
 
   // Companies
@@ -7046,10 +7676,46 @@ export class SalesDashboardComponent implements OnInit {
   // Tab state
   selectedTab = 0;
 
+  // ── Sales History tab state ──────────────────────────────────────────────
+  salesHistoryRecords = signal<SalesHistoryRow[]>([]);
+  salesHistoryLoading = signal<boolean>(false);
+  salesHistorySearch = signal<string>('');
+  salesHistoryCompany = signal<string>('');
+  salesHistoryDetailedOnly = signal<boolean>(false);
+  salesHistoryFromDate: Date | null = null;
+  salesHistoryToDate: Date | null = null;
+  salesHistoryTotalCount = signal<number>(0);
+  salesHistoryTotalAmount = signal<number>(0);
+  salesHistoryTotalGrossProfit = signal<number>(0);
+  salesHistoryAvgMargin = signal<number | null>(null);
+  salesHistoryDetailedCount = signal<number>(0);
+  salesHistoryCustomerCount = signal<number>(0);
+  salesHistoryInvoiceCount = signal<number>(0);
+  salesHistoryDateMin = signal<string | null>(null);
+  salesHistoryDateMax = signal<string | null>(null);
+  salesHistoryPageIndex = signal<number>(0);
+  salesHistoryPageSize = signal<number>(50);
+  salesHistoryLoaded = false;
+  salesHistoryReconcile = signal<SalesHistoryReconcile | null>(null);
+  salesHistoryExpandedId = signal<number | null>(null);
+  salesHistoryLines = signal<SalesHistoryLine[]>([]);
+  salesHistoryLinesLoading = signal<boolean>(false);
+  private salesHistorySearchTimer: any = null;
+
+  salesHistoryDateRangeLabel = computed(() => {
+    const min = this.salesHistoryDateMin();
+    const max = this.salesHistoryDateMax();
+    if (!min || !max) return '—';
+    const fmt = (s: string) => new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: '2-digit' });
+    return `${fmt(min)} → ${fmt(max)}`;
+  });
+
   // Data signals
   customers = signal<Customer[]>([]);
   invoices = signal<Invoice[]>([]);
   orders = signal<Order[]>([]);
+  // Server-computed company performance cards (lightweight; avoids loading all invoices to render the top cards)
+  companyPerfServer = signal<CompanySales[] | null>(null);
   incomingEmails = signal<IncomingOrderEmail[]>([]);
   emailAccounts = signal<string[]>([]);
   selectedEmailAccounts = signal<string[]>([]);
@@ -7091,6 +7757,7 @@ export class SalesDashboardComponent implements OnInit {
 
   // Total counts from API headers (for accurate stats)
   totalCustomerCount = 0;
+  totalInvoiceCount = 0;
 
   // Filter signals
   customerSearch = signal('');
@@ -7123,6 +7790,25 @@ export class SalesDashboardComponent implements OnInit {
   podPasswordInput = '';
   podPasswordError = '';
   private readonly POD_UPLOAD_PASSWORD = '1234';
+
+  // ── Welly POD OCR scan ────────────────────────────────────────────
+  showWellyPodPanel = false;
+  wellyPodScanning = false;
+  wellyPodStatus = '';
+  wellyPodProgress = 0;
+  wellyPodCurrent: any = null;          // the POD being scanned
+  wellyPodMatches: any[] = [];          // suggested invoice matches (with .approved flag)
+  wellyPodUnmatched: string[] = [];     // OCR tokens that didn't resolve
+  wellyPodOcrText = '';                  // raw OCR text (for visibility when nothing matches)
+  wellyPodEmbeddedText = '';             // embedded PDF text layer (digital PDFs)
+  wellyPodPageCount = 0;
+  wellyPodCandidatesFound: string[] = [];// invoice-number-looking tokens Welly extracted
+  wellyPodShowDebug = false;
+  wellyPodLinking = false;
+  wellyPodBatchMode = false;            // true when scanning all unlinked
+  wellyPodBatchQueue: any[] = [];
+  wellyPodBatchResults: { pod: any; linked: number; found: number }[] = [];
+  private wellyPodActivityId: number | null = null;
 
   // Selected items
   selectedCustomer = signal<Customer | null>(null);
@@ -7504,7 +8190,17 @@ export class SalesDashboardComponent implements OnInit {
 
   // Company sales comparison - Last Business Day vs Current Business Day
   // Trend % compares the most recent day with data against the current month's daily average
-  companySalesData = computed(() => {
+  //
+  // Cards prefer the lightweight server-computed summary (companyPerfServer). The client-side
+  // computation below is kept as a fallback for when the full invoices array is already loaded
+  // (e.g. after opening a data-heavy tab) or if the summary endpoint fails.
+  companyCards = computed<CompanySales[]>(() => {
+    const server = this.companyPerfServer();
+    if (server && server.length) return server;
+    return this.companySalesDataClient();
+  });
+
+  companySalesDataClient = computed(() => {
     const invoices = this.invoices();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -7653,12 +8349,43 @@ export class SalesDashboardComponent implements OnInit {
 
   loadDashboardData(): void {
     this.loadCustomers();
-    this.loadInvoices();
+    this.loadCompanyPerformance();
     this.loadOrders();
     this.loadEmailAccounts();
     this.loadPodDocuments();
     this.loadPodSummary();
+    // Defer the heavy full-invoice load (up to 10k rows) so the dashboard paints and
+    // becomes interactive immediately. The top Company Performance cards are driven by the
+    // lightweight server summary above; the full array is only needed by data-heavy tabs.
+    setTimeout(() => this.loadInvoices(), 400);
     // Stats are now calculated reactively when data loads
+  }
+
+  /** Load the lightweight server-computed company performance summary for the top cards. */
+  loadCompanyPerformance(): void {
+    this.http.get<any[]>(`${this.apiUrl}/logistics/importedinvoices/company-performance`).subscribe({
+      next: (rows) => {
+        const cards: CompanySales[] = this.companies.map(company => {
+          const r = (rows || []).find(x => x.companyCode === company.code);
+          return {
+            company,
+            todaySales: r?.todaySales ?? 0,
+            yesterdaySales: r?.yesterdaySales ?? 0,
+            todayOrders: r?.todayOrders ?? 0,
+            yesterdayOrders: r?.yesterdayOrders ?? 0,
+            percentChange: r?.percentChange ?? 0,
+            monthlyDailyAvg: r?.monthlyDailyAvg ?? 0
+          } as CompanySales;
+        });
+        this.companyPerfServer.set(cards);
+        this.checkInitialLoadComplete();
+      },
+      error: (err) => {
+        // Silent fallback: cards will use the client-side computation once invoices load.
+        console.warn('Company performance summary failed; falling back to client calc', err);
+        this.checkInitialLoadComplete();
+      }
+    });
   }
 
   loadCustomers(): void {
@@ -7687,14 +8414,14 @@ export class SalesDashboardComponent implements OnInit {
     this.http.get<Invoice[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=10000`, { observe: 'response' }).subscribe({
       next: (response) => {
         this.invoices.set(response.body || []);
+        const invTotal = parseInt(response.headers.get('X-Total-Count') || '0', 10);
+        this.totalInvoiceCount = invTotal;
         this.loadingInvoices.set(false);
         this.updateStats();
-        this.checkInitialLoadComplete();
       },
       error: (err) => {
         console.error('Failed to load invoices:', err);
         this.loadingInvoices.set(false);
-        this.checkInitialLoadComplete();
         this.snackBar.open('Failed to load invoices', 'Close', { duration: 3000 });
       }
     });
@@ -7757,7 +8484,7 @@ export class SalesDashboardComponent implements OnInit {
       // Use totalCustomerCount from API header for accurate total, fallback to loaded customers length
       totalCustomers: this.totalCustomerCount > 0 ? this.totalCustomerCount : customers.length,
       activeCustomers: customers.filter(c => c.status === 'Active').length,
-      totalInvoices: invoices.length,
+      totalInvoices: this.totalInvoiceCount > 0 ? this.totalInvoiceCount : invoices.length,
       pendingInvoices: invoices.filter(i => i.status === 'Pending').length,
       totalRevenue: invoices.reduce((sum, i) => sum + (i.salesAmount || 0), 0),
       monthlyRevenue: invoices
@@ -8948,19 +9675,157 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   // Company helper methods
+  private findCompany(companyCode: string) {
+    if (!companyCode) return undefined;
+    const key = companyCode.trim().toLowerCase();
+    return this.companies.find(c =>
+      c.code.toLowerCase() === key ||
+      c.name.toLowerCase() === key ||
+      c.shortName.toLowerCase() === key);
+  }
+
   getCompanyColor(companyCode: string): string {
-    const company = this.companies.find(c => c.code === companyCode);
-    return company?.color || '#666';
+    return this.findCompany(companyCode)?.color || '#666';
   }
 
   getCompanyShortName(companyCode: string): string {
-    const company = this.companies.find(c => c.code === companyCode);
-    return company?.shortName || companyCode;
+    return this.findCompany(companyCode)?.shortName || companyCode;
   }
 
   getCompanyName(companyCode: string): string {
-    const company = this.companies.find(c => c.code === companyCode);
-    return company?.name || companyCode;
+    return this.findCompany(companyCode)?.name || companyCode;
+  }
+
+  /** Logo path for a company code/name, or null when unknown (fall back to text tag). */
+  getCompanyLogo(companyCode: string): string | null {
+    return this.findCompany(companyCode)?.logo || null;
+  }
+
+  // ── Sales History tab ────────────────────────────────────────────────────
+  loadSalesHistory(): void {
+    this.salesHistoryLoading.set(true);
+    let params = `page=${this.salesHistoryPageIndex() + 1}&pageSize=${this.salesHistoryPageSize()}`;
+    const search = this.salesHistorySearch().trim();
+    const company = this.salesHistoryCompany();
+    if (search) params += `&search=${encodeURIComponent(search)}`;
+    if (company) params += `&company=${encodeURIComponent(company)}`;
+    if (this.salesHistoryDetailedOnly()) params += `&detailedOnly=true`;
+    if (this.salesHistoryFromDate) params += `&fromDate=${this.toIsoDate(this.salesHistoryFromDate)}`;
+    if (this.salesHistoryToDate) params += `&toDate=${this.toIsoDate(this.salesHistoryToDate)}`;
+
+    this.http.get<any>(`${this.apiUrl}/logistics/saleshistory?${params}`).subscribe({
+      next: (res) => {
+        this.salesHistoryRecords.set(res.items || []);
+        this.salesHistoryTotalCount.set(res.totalCount || 0);
+        this.salesHistoryTotalAmount.set(res.totalAmount || 0);
+        this.salesHistoryTotalGrossProfit.set(res.totalGrossProfit || 0);
+        this.salesHistoryAvgMargin.set(res.avgMarginPercent ?? null);
+        this.salesHistoryDetailedCount.set(res.detailedCount || 0);
+        this.salesHistoryCustomerCount.set(res.customerCount || 0);
+        this.salesHistoryInvoiceCount.set(res.invoiceCount || 0);
+        this.salesHistoryDateMin.set(res.dateMin || null);
+        this.salesHistoryDateMax.set(res.dateMax || null);
+        this.salesHistoryExpandedId.set(null);
+        this.salesHistoryLoading.set(false);
+        this.salesHistoryLoaded = true;
+      },
+      error: (err) => {
+        console.error('Failed to load sales history', err);
+        this.salesHistoryLoading.set(false);
+        this.snackBar.open('Failed to load sales history', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  private toIsoDate(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  onSalesHistoryFilterChange(): void {
+    if (this.salesHistorySearchTimer) clearTimeout(this.salesHistorySearchTimer);
+    this.salesHistorySearchTimer = setTimeout(() => {
+      this.salesHistoryPageIndex.set(0);
+      this.loadSalesHistory();
+    }, 350);
+  }
+
+  clearSalesHistoryFilters(): void {
+    this.salesHistorySearch.set('');
+    this.salesHistoryCompany.set('');
+    this.salesHistoryDetailedOnly.set(false);
+    this.salesHistoryFromDate = null;
+    this.salesHistoryToDate = null;
+    this.salesHistoryPageIndex.set(0);
+    this.loadSalesHistory();
+  }
+
+  toggleSalesHistoryDetailedOnly(): void {
+    this.salesHistoryDetailedOnly.set(!this.salesHistoryDetailedOnly());
+    this.salesHistoryPageIndex.set(0);
+    this.loadSalesHistory();
+  }
+
+  onSalesHistoryPageChange(event: PageEvent): void {
+    this.salesHistoryPageIndex.set(event.pageIndex);
+    this.salesHistoryPageSize.set(event.pageSize);
+    this.loadSalesHistory();
+  }
+
+  toggleSalesHistoryLines(row: SalesHistoryRow): void {
+    if (this.salesHistoryExpandedId() === row.id) {
+      this.salesHistoryExpandedId.set(null);
+      this.salesHistoryLines.set([]);
+      return;
+    }
+    if (!row.hasLineDetail) return;
+    this.salesHistoryExpandedId.set(row.id);
+    this.salesHistoryLines.set([]);
+    this.salesHistoryLinesLoading.set(true);
+    this.http.get<SalesHistoryLine[]>(`${this.apiUrl}/logistics/saleshistory/${row.id}/lines`).subscribe({
+      next: (lines) => {
+        this.salesHistoryLines.set(lines || []);
+        this.salesHistoryLinesLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load line items', err);
+        this.salesHistoryLinesLoading.set(false);
+        this.snackBar.open('Failed to load product detail', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  salesHistoryMarginClass(margin?: number | null): string {
+    if (margin == null) return '';
+    if (margin >= 25) return 'margin-high';
+    if (margin >= 12) return 'margin-mid';
+    return 'margin-low';
+  }
+
+  runSalesHistoryReconcile(): void {
+    const company = this.salesHistoryCompany();
+    const q = company ? `?company=${encodeURIComponent(company)}` : '';
+    this.http.get<any>(`${this.apiUrl}/logistics/saleshistory/reconcile${q}`).subscribe({
+      next: (res) => {
+        this.salesHistoryReconcile.set({
+          historyCount: res.historyCount,
+          matchedCount: res.matchedCount,
+          missingCount: res.missingCount,
+          missingAmount: res.missingAmount,
+          missingByMonth: res.missingByMonth || []
+        });
+      },
+      error: (err) => {
+        console.error('Reconcile failed', err);
+        this.snackBar.open('Reconciliation failed', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  onSalesTabChange(index: number): void {
+    // Sales History is tab index 3 — lazy load on first view
+    if (index === 3 && !this.salesHistoryLoaded) {
+      this.loadSalesHistory();
+    }
   }
 
   // Company Sales Dialog Methods
@@ -9993,6 +10858,272 @@ export class SalesDashboardComponent implements OnInit {
       },
       error: () => this.snackBar.open('Failed to search invoices', 'Close', { duration: 3000 })
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Welly POD OCR — scan a POD image, read invoice numbers, suggest links
+  // ═══════════════════════════════════════════════════════════════════
+
+  /** Scan a single POD document with Welly OCR and show suggested invoice links. */
+  async wellyScanPod(pod: any): Promise<void> {
+    this.wellyPodBatchMode = false;
+    this.wellyPodCurrent = pod;
+    this.wellyPodMatches = [];
+    this.wellyPodUnmatched = [];
+    this.wellyPodOcrText = '';
+    this.wellyPodEmbeddedText = '';
+    this.wellyPodCandidatesFound = [];
+    this.wellyPodShowDebug = false;
+    this.showWellyPodPanel = true;
+    this.wellyPodScanning = true;
+    this.wellyPodProgress = 0;
+    this.wellyPodStatus = 'Fetching document…';
+    this.wellyPodActivityId = this.wellyActivity.start(`Welly: scanning POD (${pod.driverName})`);
+
+    try {
+      const candidates = await this.ocrExtractInvoiceNumbers(pod);
+      if (candidates.length === 0) {
+        this.wellyPodStatus = 'No invoice numbers found on this document.';
+        this.wellyPodScanning = false;
+        this.finishWellyPodActivity();
+        return;
+      }
+
+      this.wellyPodStatus = 'Matching against invoices…';
+      const res: any = await this.http
+        .post(`${this.apiUrl}/PodDocuments/match-invoice-numbers`, { candidates })
+        .toPromise();
+
+      this.wellyPodMatches = (res?.matches || []).map((m: any) => ({ ...m, approved: !m.alreadyLinked }));
+      this.wellyPodUnmatched = res?.unmatched || [];
+      this.wellyPodStatus = this.wellyPodMatches.length > 0
+        ? `Welly found ${this.wellyPodMatches.length} invoice${this.wellyPodMatches.length === 1 ? '' : 's'} on this POD.`
+        : 'Read some text, but none matched a known invoice number.';
+    } catch (err) {
+      console.error('Welly POD scan error:', err);
+      this.wellyPodStatus = 'Welly could not read this document. Try a clearer scan.';
+    } finally {
+      this.wellyPodScanning = false;
+      this.finishWellyPodActivity();
+    }
+  }
+
+  /** Download the POD, render to images if needed, and OCR out IN###### tokens. */
+  private async ocrExtractInvoiceNumbers(pod: any): Promise<string[]> {
+    // 1. Fetch the file as a blob
+    const blob: Blob = await this.http
+      .get(`${this.apiUrl}/PodDocuments/${pod.id}/view`, { responseType: 'blob' })
+      .toPromise() as Blob;
+
+    const contentType = pod.contentType || blob.type || '';
+    const imageSources: (string | Blob)[] = [];
+
+    if (contentType.includes('pdf') || (pod.fileName || '').toLowerCase().endsWith('.pdf')) {
+      this.wellyPodStatus = 'Rendering PDF pages…';
+      const pages = await this.renderPdfToImages(blob);
+      imageSources.push(...pages);
+    } else {
+      imageSources.push(blob);
+    }
+
+    if (imageSources.length === 0) return [];
+
+    // 2. OCR each page
+    this.wellyPodStatus = 'Loading OCR engine…';
+    const { createWorker } = await import('tesseract.js');
+    let currentPage = 0;
+    const totalPages = imageSources.length;
+    const worker = await createWorker('eng', undefined, {
+      logger: (m: any) => {
+        if (m.status === 'recognizing text') {
+          this.wellyPodProgress = Math.round(((currentPage + m.progress) / totalPages) * 100);
+        }
+      }
+    });
+
+    let fullText = '';
+    for (let i = 0; i < totalPages; i++) {
+      currentPage = i;
+      this.wellyPodStatus = totalPages > 1 ? `Reading page ${i + 1} of ${totalPages}…` : 'Reading document…';
+      const result = await worker.recognize(imageSources[i] as any);
+      fullText += '\n' + (result.data.text || '');
+    }
+    await worker.terminate();
+
+    // Combine OCR text with any embedded PDF text layer (digital PDFs carry real text).
+    const combined = ((this.wellyPodEmbeddedText || '') + '\n' + fullText).trim();
+
+    // Keep the raw text + page count for debugging/visibility in the panel.
+    this.wellyPodOcrText = combined;
+    this.wellyPodPageCount = totalPages;
+
+    // 3. Extract invoice-number tokens. Your invoices are IN######, but OCR is noisy:
+    //    - the "IN" prefix letters can be misread (I↔1↔l, N↔M↔H)
+    //    - digits can be letters (O↔0, S↔5, etc.) — backend corrects those
+    //    - there may be spaces/dashes between the prefix and the digits
+    const tokens = new Set<string>();
+    const upper = combined.toUpperCase();
+
+    // Pattern A: IN-ish prefix followed by 5-8 digit-or-confusable chars.
+    const rxPrefixed = /\b[I1L][NMH][\s.\-:]?[0-9OQDILSBZGT]{5,8}\b/g;
+    // Pattern B: the literal word/label "INV" or "INVOICE" then a number.
+    const rxLabeled = /INV(?:OICE)?[\s.#:\-]*([0-9OQDILSBZGT]{5,8})/g;
+    // Pattern C: a bare 6-digit run (fallback — backend still validates it exists as IN######).
+    const rxBare = /\b([0-9]{6})\b/g;
+
+    let m: RegExpExecArray | null;
+    while ((m = rxPrefixed.exec(upper)) !== null) tokens.add(m[0].replace(/[\s.\-:]/g, ''));
+    while ((m = rxLabeled.exec(upper)) !== null) tokens.add('IN' + m[1].replace(/[\s.\-:]/g, ''));
+    while ((m = rxBare.exec(upper)) !== null) tokens.add('IN' + m[1]);
+
+    const list = Array.from(tokens);
+    this.wellyPodCandidatesFound = list;
+    return list;
+  }
+
+  /** Render a PDF blob to an array of PNG data URLs using pdfjs. */
+  private async renderPdfToImages(blob: Blob): Promise<string[]> {
+    const pdfjsLib: any = await import('pdfjs-dist');
+    // Use the locally-bundled worker (copied via angular.json assets) so it works offline / on
+    // networks where the CDN is blocked.
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+    } catch { /* worker may already be set */ }
+
+    const data = new Uint8Array(await blob.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const images: string[] = [];
+    const maxPages = Math.min(pdf.numPages, 12); // cap for performance
+
+    // First, try to harvest any embedded (selectable) text layer — digital PDFs carry the
+    // invoice number as real text, which is far more reliable than OCR-ing a rasterized page.
+    let embedded = '';
+    for (let p = 1; p <= maxPages; p++) {
+      try {
+        const page = await pdf.getPage(p);
+        const tc = await page.getTextContent();
+        embedded += ' ' + tc.items.map((it: any) => it.str || '').join(' ');
+      } catch { /* ignore */ }
+    }
+    this.wellyPodEmbeddedText = embedded.trim();
+
+    for (let p = 1; p <= maxPages; p++) {
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d')!;
+      // CRITICAL: paint the canvas white first. The default canvas is transparent, so a
+      // vector/text PDF renders black text on a transparent background — Tesseract then reads
+      // the transparent area as black and sees nothing. A white fill makes text OCR-able.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport, background: 'rgba(255,255,255,1)' } as any).promise;
+      images.push(canvas.toDataURL('image/png'));
+    }
+    return images;
+  }
+
+  wellyPodApprovedCount(): number {
+    return this.wellyPodMatches.filter(m => m.approved).length;
+  }
+
+  /** Apply the approved suggested links to the current POD. */
+  applyWellyPodLinks(): void {
+    const approved = this.wellyPodMatches.filter(m => m.approved).map(m => m.id);
+    if (approved.length === 0 || !this.wellyPodCurrent) {
+      this.snackBar.open('No invoices selected to link', 'Close', { duration: 2500 });
+      return;
+    }
+    this.wellyPodLinking = true;
+    this.http.put(`${this.apiUrl}/PodDocuments/${this.wellyPodCurrent.id}/link-invoices`, { invoiceIds: approved })
+      .subscribe({
+        next: (res: any) => {
+          this.wellyPodLinking = false;
+          this.showWellyPodPanel = false;
+          this.loadPodDocuments();
+          this.loadPodSummary();
+          this.snackBar.open(
+            `✅ Welly linked ${res?.linkedInvoiceCount ?? approved.length} invoice(s) to this POD → marked Delivered`,
+            'Close', { duration: 4000 });
+        },
+        error: () => {
+          this.wellyPodLinking = false;
+          this.snackBar.open('Failed to link invoices', 'Close', { duration: 3000 });
+        }
+      });
+  }
+
+  closeWellyPodPanel(): void {
+    if (this.wellyPodScanning || this.wellyPodLinking) return;
+    this.showWellyPodPanel = false;
+    this.wellyPodCurrent = null;
+    this.wellyPodMatches = [];
+    this.wellyPodUnmatched = [];
+  }
+
+  /** Scan every currently-listed unlinked POD, auto-linking high-confidence exact reads. */
+  async wellyScanAllUnlinked(): Promise<void> {
+    const queue = this.podDocuments.filter(p => !p.loadId && !p.invoiceId &&
+      ((p.contentType || '').includes('image') || (p.contentType || '').includes('pdf') ||
+       /\.(pdf|jpe?g|png)$/i.test(p.fileName || '')));
+    if (queue.length === 0) {
+      this.snackBar.open('No unlinked image/PDF PODs in the current list to scan', 'Close', { duration: 3000 });
+      return;
+    }
+    if (!confirm(`Welly will scan ${queue.length} unlinked POD(s) and auto-link exact invoice-number matches. Continue?`)) return;
+
+    this.wellyPodBatchMode = true;
+    this.wellyPodBatchQueue = queue;
+    this.wellyPodBatchResults = [];
+    this.showWellyPodPanel = true;
+    this.wellyPodScanning = true;
+    this.wellyPodActivityId = this.wellyActivity.start(`Welly: scanning ${queue.length} PODs`);
+
+    let totalLinked = 0;
+    for (let i = 0; i < queue.length; i++) {
+      const pod = queue[i];
+      this.wellyPodCurrent = pod;
+      this.wellyPodProgress = 0;
+      this.wellyPodStatus = `POD ${i + 1} of ${queue.length}: ${pod.driverName}`;
+      try {
+        const candidates = await this.ocrExtractInvoiceNumbers(pod);
+        let linked = 0;
+        let found = 0;
+        if (candidates.length > 0) {
+          const res: any = await this.http
+            .post(`${this.apiUrl}/PodDocuments/match-invoice-numbers`, { candidates })
+            .toPromise();
+          const exact = (res?.matches || []).filter((m: any) => m.readExactly && !m.alreadyLinked);
+          found = (res?.matches || []).length;
+          if (exact.length > 0) {
+            await this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/link-invoices`,
+              { invoiceIds: exact.map((m: any) => m.id) }).toPromise();
+            linked = exact.length;
+            totalLinked += linked;
+          }
+        }
+        this.wellyPodBatchResults.push({ pod, linked, found });
+      } catch (err) {
+        console.error('Batch scan error for POD', pod.id, err);
+        this.wellyPodBatchResults.push({ pod, linked: 0, found: 0 });
+      }
+    }
+
+    this.wellyPodScanning = false;
+    this.finishWellyPodActivity();
+    this.loadPodDocuments();
+    this.loadPodSummary();
+    this.wellyPodStatus = `Done — auto-linked ${totalLinked} invoice(s) across ${queue.length} POD(s).`;
+    this.snackBar.open(this.wellyPodStatus, 'Close', { duration: 5000 });
+  }
+
+  private finishWellyPodActivity(): void {
+    if (this.wellyPodActivityId !== null) {
+      this.wellyActivity.stop(this.wellyPodActivityId);
+      this.wellyPodActivityId = null;
+    }
   }
 
   delinkInvoice(pod: any): void {

@@ -18,6 +18,40 @@ Welly is the AI assistant built into the ProMed Technologies Intranet. Welly is 
 - Clear your session to start fresh if needed
 - Each session maintains conversation history
 
+### Talking to Welly (Voice Mode)
+Welly can listen to you and speak back — a hands-free voice conversation similar to ChatGPT's voice mode.
+
+How to start a voice conversation:
+1. Open Welly (chat bubble in the bottom-right corner)
+2. Click the microphone icon in the chat header
+3. A permission card appears — choose your language, then click "Allow microphone & start"
+4. Allow microphone access when the browser prompts you (first time only)
+5. A full-screen voice screen opens with an animated orb
+
+How the voice conversation flows (fully hands-free):
+- Speak naturally — the orb glows GREEN and shows live captions of your words ("Listening…")
+- Pause for about a second — the orb turns PURPLE while Welly thinks ("Welly is thinking…")
+- Welly answers out loud — the orb turns BLUE and pulses ("Welly is speaking…")
+- The microphone reopens automatically so you can just keep talking — no buttons needed
+
+Voice mode controls:
+- Tap the orb while Welly is speaking to interrupt (barge-in) and start talking again
+- Mute button — pause the microphone without leaving voice mode
+- Language pills at the top — switch between English, Afrikaans, and isiZulu mid-conversation
+- Exit (X) — return to the normal text chat; the whole conversation is saved in the transcript
+
+Voice languages supported: English (en-ZA), Afrikaans (af-ZA), isiZulu (zu-ZA).
+
+There are also simpler voice controls in the normal text chat:
+- Microphone button in the input bar — dictate a single message (speech-to-text)
+- Speaker toggle in the header — have Welly read its replies aloud (text-to-speech)
+
+Important note about voice access:
+- Voice requires a secure connection. Use the HTTPS address (for example https://192.168.10.151) so the browser allows microphone access.
+- On the plain http:// address, browsers block the microphone. If the mic is blocked, open the HTTPS address instead.
+- The first HTTPS visit may show a one-time "connection is not private" warning (self-signed certificate on the local network) — click Advanced and Proceed to continue.
+- Voice runs entirely in your browser and on the local server. No audio leaves the company network.
+
 ## Welly's Capabilities
 
 ### 1. Answering Questions
@@ -98,6 +132,15 @@ Upload documents for AI analysis:
 - CSV files (data imports)
 Welly will read and summarize the document content, answer questions about it.
 
+### 17. Voice Conversations (Talk to Welly)
+Have a hands-free spoken conversation with Welly:
+- Click the microphone icon in the chat header to start voice mode
+- Speak naturally; Welly transcribes your speech, thinks, and replies out loud
+- Supports English, Afrikaans, and isiZulu
+- Tap the orb to interrupt Welly; use Mute to pause; Exit to return to text chat
+- Requires the HTTPS address so the browser can access the microphone
+See "Talking to Welly (Voice Mode)" above for full details.
+
 ## Knowledge Base Search
 
 Welly has access to a knowledge base of company documents and guides:
@@ -153,3 +196,21 @@ A: Welly is an AI assistant and may occasionally make mistakes. Always verify cr
 
 Q: Can Welly help with logistics?
 A: Yes, Welly has full access to logistics data including loads, tripsheets, drivers, vehicles, customers, and can perform logistics actions like creating tripsheets and tracking vehicles.
+
+Q: Can I talk to Welly with my voice?
+A: Yes. Click the microphone icon in Welly's chat header to open Voice Mode. Choose a language, allow microphone access, then speak naturally — Welly listens and replies out loud, hands-free.
+
+Q: What languages can Welly speak and understand?
+A: English, Afrikaans, and isiZulu. You can switch languages using the pills at the top of the voice screen, even mid-conversation.
+
+Q: The microphone doesn't work / voice mode won't hear me. What do I do?
+A: Make sure you are using the HTTPS address (for example https://192.168.10.151). Browsers block the microphone on plain http:// pages. Also allow microphone access when prompted (click the padlock or microphone icon in the address bar and set the microphone to Allow), then try again.
+
+Q: Why does the HTTPS address show a security warning?
+A: The intranet uses a self-signed certificate on the local network, so browsers show a one-time "connection is not private" warning. Click Advanced and then Proceed. This is expected and safe on the company network.
+
+Q: Is voice private?
+A: Yes. Speech recognition and speech playback run in your browser, and Welly's answers come from the local AI model on the company server. No audio leaves the company network.
+
+Q: How do I interrupt Welly while it is speaking?
+A: Tap the glowing orb on the voice screen to interrupt (barge-in) and start talking again immediately. Use the Mute button to pause the microphone, or Exit to return to the text chat.

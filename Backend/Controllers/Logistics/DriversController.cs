@@ -34,6 +34,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     LicenseType = d.LicenseType,
                     LicenseExpiryDate = d.LicenseExpiryDate,
                     EmployeeNumber = d.EmployeeNumber,
+                    IdNumber = d.IdNumber,
+                    PassportNumber = d.PassportNumber,
+                    Nationality = d.Nationality,
                     PhoneNumber = d.PhoneNumber,
                     Email = d.Email,
                     Status = d.Status,
@@ -59,6 +62,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     LicenseType = d.LicenseType,
                     LicenseExpiryDate = d.LicenseExpiryDate,
                     EmployeeNumber = d.EmployeeNumber,
+                    IdNumber = d.IdNumber,
+                    PassportNumber = d.PassportNumber,
+                    Nationality = d.Nationality,
                     PhoneNumber = d.PhoneNumber,
                     Email = d.Email,
                     Status = d.Status,
@@ -84,6 +90,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 LicenseType = dto.LicenseType,
                 LicenseExpiryDate = dto.LicenseExpiryDate,
                 EmployeeNumber = dto.EmployeeNumber,
+                IdNumber = dto.IdNumber,
+                PassportNumber = dto.PassportNumber,
+                Nationality = dto.Nationality ?? "South African",
                 PhoneNumber = dto.PhoneNumber,
                 Email = dto.Email,
                 DateOfBirth = dto.DateOfBirth,
@@ -103,6 +112,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 LicenseType = driver.LicenseType,
                 LicenseExpiryDate = driver.LicenseExpiryDate,
                 EmployeeNumber = driver.EmployeeNumber,
+                IdNumber = driver.IdNumber,
+                PassportNumber = driver.PassportNumber,
+                Nationality = driver.Nationality,
                 PhoneNumber = driver.PhoneNumber,
                 Email = driver.Email,
                 Status = driver.Status,
@@ -124,6 +136,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.LicenseType != null) driver.LicenseType = dto.LicenseType;
             if (dto.LicenseExpiryDate.HasValue) driver.LicenseExpiryDate = dto.LicenseExpiryDate;
             if (dto.EmployeeNumber != null) driver.EmployeeNumber = dto.EmployeeNumber;
+            if (dto.IdNumber != null) driver.IdNumber = dto.IdNumber;
+            if (dto.PassportNumber != null) driver.PassportNumber = dto.PassportNumber;
+            if (dto.Nationality != null) driver.Nationality = dto.Nationality;
             if (dto.PhoneNumber != null) driver.PhoneNumber = dto.PhoneNumber;
             if (dto.Email != null) driver.Email = dto.Email;
             if (dto.Status != null) driver.Status = dto.Status;
@@ -186,6 +201,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                         LicenseType = d.LicenseType,
                         LicenseExpiryDate = d.LicenseExpiryDate,
                         EmployeeNumber = d.EmployeeNumber,
+                        IdNumber = d.IdNumber,
+                        PassportNumber = d.PassportNumber,
+                        Nationality = d.Nationality,
                         PhoneNumber = d.PhoneNumber,
                         Email = d.Email,
                         Status = d.Status,

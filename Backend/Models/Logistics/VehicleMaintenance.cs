@@ -37,7 +37,34 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(1000)]
         public string? Notes { get; set; }
 
-    // File attachments
+        // ---- Fleet-repair / breakdown tracking (Rocket Freight style) ----
+
+        /// <summary>Low | Medium | High | Critical.</summary>
+        [MaxLength(20)]
+        public string? Priority { get; set; }
+
+        /// <summary>Person/role responsible for the next action (e.g. Workshop, Management, Insurance).</summary>
+        [MaxLength(150)]
+        public string? ActionOwner { get; set; }
+
+        /// <summary>Province/region the vehicle is standing in. Falls back to the vehicle's province.</summary>
+        [MaxLength(100)]
+        public string? Province { get; set; }
+
+        /// <summary>Running commentary / latest feedback, distinct from the original issue.</summary>
+        [MaxLength(2000)]
+        public string? Feedback { get; set; }
+
+        /// <summary>Quoted / estimated cost before the job is done (actual goes in <see cref="Cost"/>).</summary>
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? EstimatedCost { get; set; }
+
+        /// <summary>Date the vehicle went off-road / stood. Used to compute days-standing.</summary>
+        public DateTime? DateStood { get; set; }
+
+        /// <summary>Target date to have the vehicle back in service.</summary>
+        public DateTime? TargetDate { get; set; }
+
     [MaxLength(500)]
     public string? ProofOfWorkPath { get; set; }
     

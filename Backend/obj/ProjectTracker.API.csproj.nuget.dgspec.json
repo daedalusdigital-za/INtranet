@@ -89,6 +89,10 @@
               "target": "Package",
               "version": "[10.0.1, )"
             },
+            "XstReader.Api": {
+              "target": "Package",
+              "version": "[1.0.6, )"
+            },
             "itext7": {
               "target": "Package",
               "version": "[8.0.2, )"

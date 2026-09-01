@@ -24,6 +24,12 @@ interface Driver {
   licenseExpiryDate?: string;
   hireDate?: string;
   status: string;
+  idNumber?: string;
+  passportNumber?: string;
+  nationality?: string;
+  employeeNumber?: string;
+  dateOfBirth?: string;
+  phoneNumber?: string;
   totalTrips?: number;
   totalKmDriven?: number;
 }
@@ -180,36 +186,84 @@ interface Driver {
               </mat-form-field>
 
               <mat-form-field appearance="outline">
+                <mat-label>Last Name</mat-label>
+                <input matInput formControlName="lastName">
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Nationality</mat-label>
+                <mat-select formControlName="nationality">
+                  <mat-option value="South African">South African</mat-option>
+                  <mat-option value="Mozambican">Mozambican</mat-option>
+                  <mat-option value="Zimbabwean">Zimbabwean</mat-option>
+                  <mat-option value="Malawian">Malawian</mat-option>
+                  <mat-option value="Swazi">Swazi</mat-option>
+                  <mat-option value="Lesotho">Lesotho</mat-option>
+                  <mat-option value="Zambian">Zambian</mat-option>
+                  <mat-option value="Tanzanian">Tanzanian</mat-option>
+                  <mat-option value="Other">Other</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>{{ driverForm.get('nationality')?.value === 'South African' ? 'SA ID Number (13 digits)' : 'National ID Number' }}</mat-label>
+                <input matInput formControlName="idNumber">
+              </mat-form-field>
+            </div>
+
+            <div class="form-row" *ngIf="driverForm.get('nationality')?.value !== 'South African'">
+              <mat-form-field appearance="outline">
+                <mat-label>Passport Number</mat-label>
+                <input matInput formControlName="passportNumber">
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline">
                 <mat-label>License Number</mat-label>
                 <input matInput formControlName="licenseNumber" required>
                 <mat-error *ngIf="driverForm.get('licenseNumber')?.hasError('required')">
                   License number is required
                 </mat-error>
               </mat-form-field>
-            </div>
 
-            <div class="form-row">
               <mat-form-field appearance="outline">
                 <mat-label>License Type</mat-label>
                 <mat-select formControlName="licenseType" required>
-                  <mat-option value="Code 8">Code 8</mat-option>
-                  <mat-option value="Code 10">Code 10</mat-option>
-                  <mat-option value="Code 14">Code 14</mat-option>
+                  <mat-option value="B Code 8">B Code 8</mat-option>
+                  <mat-option value="C1 Code 10">C1 Code 10</mat-option>
+                  <mat-option value="EC Code 14">EC Code 14</mat-option>
                 </mat-select>
                 <mat-error *ngIf="driverForm.get('licenseType')?.hasError('required')">
                   License type is required
                 </mat-error>
               </mat-form-field>
+            </div>
 
+            <div class="form-row">
               <mat-form-field appearance="outline">
                 <mat-label>License Expiry Date</mat-label>
                 <input matInput [matDatepicker]="expiryPicker" formControlName="licenseExpiryDate">
                 <mat-datepicker-toggle matSuffix [for]="expiryPicker"></mat-datepicker-toggle>
                 <mat-datepicker #expiryPicker></mat-datepicker>
               </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Date of Birth</mat-label>
+                <input matInput [matDatepicker]="dobPicker" formControlName="dateOfBirth">
+                <mat-datepicker-toggle matSuffix [for]="dobPicker"></mat-datepicker-toggle>
+                <mat-datepicker #dobPicker></mat-datepicker>
+              </mat-form-field>
             </div>
 
             <div class="form-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Phone Number</mat-label>
+                <input matInput formControlName="phoneNumber">
+              </mat-form-field>
+
               <mat-form-field appearance="outline">
                 <mat-label>Hire Date</mat-label>
                 <input matInput [matDatepicker]="hirePicker" formControlName="hireDate">
@@ -747,9 +801,15 @@ export class DriversDialogComponent implements OnInit {
   constructor() {
     this.driverForm = this.fb.group({
       firstName: ['', Validators.required],
+      lastName: [''],
       licenseNumber: ['', Validators.required],
       licenseType: ['', Validators.required],
       licenseExpiryDate: [null],
+      nationality: ['South African'],
+      idNumber: [''],
+      passportNumber: [''],
+      phoneNumber: [''],
+      dateOfBirth: [null],
       hireDate: [null]
     });
   }
@@ -764,7 +824,13 @@ export class DriversDialogComponent implements OnInit {
     // Use the new endpoint that includes stats
     this.http.get<Driver[]>(`${environment.apiUrl}/logistics/drivers/with-stats`).subscribe({
       next: (data) => {
-        this.drivers = data;
+        this.drivers = data.sort((a, b) => {
+          // Active first, inactive last
+          const aActive = a.status?.toLowerCase() === 'active' ? 0 : 1;
+          const bActive = b.status?.toLowerCase() === 'active' ? 0 : 1;
+          if (aActive !== bActive) return aActive - bActive;
+          return (a.firstName || '').localeCompare(b.firstName || '');
+        });
         this.isLoading = false;
       },
       error: (error) => {
@@ -849,9 +915,15 @@ export class DriversDialogComponent implements OnInit {
     this.viewingDriver = null;
     this.driverForm.patchValue({
       firstName: driver.firstName,
+      lastName: driver.lastName || '',
       licenseNumber: driver.licenseNumber,
       licenseType: driver.licenseType,
       licenseExpiryDate: driver.licenseExpiryDate ? new Date(driver.licenseExpiryDate) : null,
+      nationality: driver.nationality || 'South African',
+      idNumber: driver.idNumber || '',
+      passportNumber: driver.passportNumber || '',
+      phoneNumber: driver.phoneNumber || '',
+      dateOfBirth: driver.dateOfBirth ? new Date(driver.dateOfBirth) : null,
       hireDate: driver.hireDate ? new Date(driver.hireDate) : null
     });
   }

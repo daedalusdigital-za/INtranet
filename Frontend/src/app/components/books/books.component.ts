@@ -1,6 +1,7 @@
 import { Component, OnInit, Inject } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatCardModule } from '@angular/material/card';
@@ -24,6 +25,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { BooksService, BookInvoice, BooksSummary, UploadResponse, ConfirmRequest } from '../../services/books.service';
+import { environment } from '../../../environments/environment';
+import { WellyActivityService } from '../../services/welly-activity.service';
 
 @Component({
   selector: 'app-books',
@@ -120,6 +123,9 @@ import { BooksService, BookInvoice, BooksSummary, UploadResponse, ConfirmRequest
             <span class="sc-total">{{ s.total | currency:'ZAR':'symbol-narrow':'1.0-0' }}</span>
             <button class="sc-upload-btn" matTooltip="Upload invoice for {{ s.supplier }}" (click)="uploadForSupplier(s.supplier, $event)">
               <mat-icon>add_circle</mat-icon>
+            </button>
+            <button class="sc-upload-btn" matTooltip="Analyze with Welly" (click)="analyzeSupplier(s.supplier); $event.stopPropagation()" title="Ask Welly about this supplier's spending">
+              <mat-icon>psychology</mat-icon>
             </button>
           </div>
         </div>
@@ -250,6 +256,10 @@ import { BooksService, BookInvoice, BooksSummary, UploadResponse, ConfirmRequest
               <div class="detail-row" *ngIf="inv.category">
                 <mat-icon>label</mat-icon>
                 <span>{{ inv.category }}</span>
+              </div>
+              <div class="detail-row" *ngIf="inv.vehicleRegistration">
+                <mat-icon>local_shipping</mat-icon>
+                <span>{{ inv.vehicleRegistration }}</span>
               </div>
               <div class="detail-row" *ngIf="inv.companyName">
                 <mat-icon>business</mat-icon>
@@ -668,7 +678,7 @@ export class BooksComponent implements OnInit {
       width: '700px',
       maxWidth: '95vw',
       disableClose: true,
-      data: { invoice: uploadData, isNew: true }
+      data: { invoice: uploadData, isNew: true, departmentId: this.departmentId }
     });
     ref.afterClosed().subscribe((result) => {
       if (result === true) {
@@ -695,7 +705,7 @@ export class BooksComponent implements OnInit {
           width: '700px',
           maxWidth: '95vw',
           disableClose: true,
-          data: { invoice: full, isNew: false }
+          data: { invoice: full, isNew: false, departmentId: this.departmentId }
         });
         ref.afterClosed().subscribe((confirmed) => {
           if (confirmed === true) {
@@ -718,7 +728,7 @@ export class BooksComponent implements OnInit {
         const ref = this.dialog.open(ConfirmBookInvoiceDialog, {
           width: '700px',
           maxWidth: '95vw',
-          data: { invoice: full, isNew: false, editMode: true }
+          data: { invoice: full, isNew: false, editMode: true, departmentId: this.departmentId }
         });
         ref.afterClosed().subscribe((updated) => {
           if (updated) {
@@ -786,6 +796,15 @@ export class BooksComponent implements OnInit {
         this.snackBar.open('Invoice deleted', 'Close', { duration: 3000 });
       },
       error: () => this.snackBar.open('Failed to delete', 'Close', { duration: 3000 })
+    });
+  }
+
+  analyzeSupplier(supplierName: string): void {
+    const ref = this.dialog.open(SupplierAnalysisDialog, {
+      width: '900px',
+      maxWidth: '98vw',
+      maxHeight: '90vh',
+      data: { supplier: supplierName, departmentId: this.departmentId }
     });
   }
 }
@@ -1060,6 +1079,14 @@ export class UploadBookInvoiceDialog {
             <option value="Services">Services</option>
             <option value="Maintenance">Maintenance</option>
             <option value="Fuel">Fuel</option>
+            <option value="Tyres">Tyres</option>
+            <option value="Panel &amp; Body">Panel &amp; Body</option>
+            <option value="Towing">Towing</option>
+            <option value="Parts &amp; Spares">Parts &amp; Spares</option>
+            <option value="Auto Electrical">Auto Electrical</option>
+            <option value="Licensing &amp; Permits">Licensing &amp; Permits</option>
+            <option value="Tolls">Tolls</option>
+            <option value="Roadworthy">Roadworthy</option>
             <option value="Utilities">Utilities</option>
             <option value="IT & Software">IT & Software</option>
             <option value="Marketing">Marketing</option>
@@ -1084,6 +1111,16 @@ export class UploadBookInvoiceDialog {
             <option value="Promed Pharmatech">Promed Pharmatech</option>
             <option value="Access Medical">Access Medical</option>
             <option value="Sebenzani Trading">Sebenzani Trading</option>
+          </select>
+        </div>
+
+        <div class="form-group" *ngIf="isLogistics">
+          <label>Vehicle</label>
+          <select [(ngModel)]="form.vehicleRegistration" class="form-input">
+            <option value="">No vehicle / general</option>
+            <option *ngFor="let v of vehicles" [value]="v.registration">
+              {{ v.registration }}<ng-container *ngIf="v.make || v.model"> — {{ v.make }} {{ v.model }}</ng-container>
+            </option>
           </select>
         </div>
 
@@ -1172,7 +1209,13 @@ export class ConfirmBookInvoiceDialog {
   showExtractedText = false;
   allSuppliers: string[] = [];
   filteredSuppliers: string[] = [];
+  vehicles: { registration: string; make?: string; model?: string }[] = [];
   deleting = false;
+  departmentId = 0;
+
+  get isLogistics(): boolean {
+    return this.departmentId === 32;
+  }
 
   constructor(
     public dialogRef: MatDialogRef<ConfirmBookInvoiceDialog>,
@@ -1183,6 +1226,7 @@ export class ConfirmBookInvoiceDialog {
     this.isNew = data.isNew || false;
     this.editMode = data.editMode || false;
     this.invoiceId = inv.id;
+    this.departmentId = data.departmentId || 0;
     this.extractedPreview = inv.extractedText || '';
 
     // Load existing suppliers for autocomplete
@@ -1191,6 +1235,12 @@ export class ConfirmBookInvoiceDialog {
         this.allSuppliers = suppliers.filter(s => s && s !== 'Unknown Supplier');
         this.filteredSuppliers = [];
       }
+    });
+
+    // Load fleet vehicles (used for Logistics invoice-to-vehicle linkage)
+    this.booksService.getVehicles().subscribe({
+      next: (vehicles) => { this.vehicles = vehicles || []; },
+      error: () => { this.vehicles = []; }
     });
 
     this.form = {
@@ -1207,6 +1257,7 @@ export class ConfirmBookInvoiceDialog {
       paymentReference: inv.paymentReference || '',
       category: inv.category || '',
       companyName: inv.companyName || '',
+      vehicleRegistration: inv.vehicleRegistration || '',
       description: inv.description || '',
       notes: inv.notes || ''
     };
@@ -1296,5 +1347,318 @@ export class ConfirmBookInvoiceDialog {
         this.saving = false;
       }
     });
+  }
+}
+
+// ============================================================================
+// Supplier Analysis Dialog (uses Welly AI)
+// ============================================================================
+@Component({
+  selector: 'supplier-analysis-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatFormFieldModule, MatSelectModule, MatInputModule, FormsModule],
+  template: `
+    <div class="analysis-dialog">
+      <div class="dialog-header">
+        <h2><mat-icon>assessment</mat-icon> Supplier Invoice Analysis</h2>
+        <p>Welly is analyzing invoices from <strong>{{ data.supplier }}</strong></p>
+      </div>
+
+      @if (!analyzed) {
+        <div class="analysis-form">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Analysis Type</mat-label>
+            <mat-select [(ngModel)]="analysisType">
+              <mat-option value="detailed">Detailed Analysis (What, How Much, Trends)</mat-option>
+              <mat-option value="spending-summary">Spending Summary (Quick Overview)</mat-option>
+              <mat-option value="price-comparison">Price Comparison (Cost per Item)</mat-option>
+              <mat-option value="hardware-breakdown">Hardware Purchase Breakdown (Exportable Table)</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Limit (optional)</mat-label>
+            <mat-select [(ngModel)]="limit">
+              <mat-option [value]="10">Last 10 invoices</mat-option>
+              <mat-option [value]="20">Last 20 invoices</mat-option>
+              <mat-option [value]="50">Last 50 invoices</mat-option>
+              <mat-option [value]="null">All invoices</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Ask Welly Something (optional)</mat-label>
+            <textarea matInput [(ngModel)]="userQuestion" rows="2" placeholder="e.g., What's our biggest spending category?"></textarea>
+          </mat-form-field>
+
+          <div class="dialog-actions">
+            <button mat-button (click)="dialogRef.close()">Cancel</button>
+            <button mat-raised-button color="primary" (click)="analyzeSupplier()" [disabled]="analyzing">
+              @if (analyzing) {
+                <mat-spinner diameter="20"></mat-spinner>
+                <span>Analyzing...</span>
+              } @else {
+                <mat-icon>psychology</mat-icon> <span>Analyze with Welly</span>
+              }
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (analyzing) {
+        <div class="analyzing-state">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Welly is analyzing supplier invoices...</p>
+          <p class="detail">Extracting items, costs, and patterns · {{ elapsed }}s elapsed</p>
+        </div>
+      }
+
+      @if (analyzed && analysis) {
+        <div class="analysis-results">
+          <div class="result-header">
+            <h3>Analysis Results</h3>
+            <p class="meta">
+              {{ invoiceCount }} invoices analyzed | Total spend: <strong>R{{ totalSpend | number:'1.2-2' }}</strong>
+            </p>
+          </div>
+
+          @if (lineItems && lineItems.length) {
+            <div class="hardware-table-wrap">
+              <div class="table-toolbar">
+                <span class="item-count">{{ lineItems.length }} hardware line item(s) &middot; Total: <strong>R{{ lineItemsTotal | number:'1.2-2' }}</strong></span>
+                <button mat-stroked-button color="primary" (click)="exportCsv()">
+                  <mat-icon>download</mat-icon> Export to Excel (CSV)
+                </button>
+              </div>
+              <div class="hardware-table-scroll">
+                <table class="hardware-table">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Category</th>
+                      <th>Invoice #</th>
+                      <th>Date</th>
+                      <th class="num">Qty</th>
+                      <th class="num">Unit Price</th>
+                      <th class="num">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of lineItems; track $index) {
+                      <tr>
+                        <td>{{ item.item }}</td>
+                        <td>{{ item.category }}</td>
+                        <td>{{ item.invoiceNumber }}</td>
+                        <td>{{ item.date }}</td>
+                        <td class="num">{{ item.quantity }}</td>
+                        <td class="num">R{{ item.unitPrice | number:'1.2-2' }}</td>
+                        <td class="num">R{{ item.lineTotal | number:'1.2-2' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colspan="6" class="num"><strong>Total</strong></td>
+                      <td class="num"><strong>R{{ lineItemsTotal | number:'1.2-2' }}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          }
+
+          <div class="analysis-content">
+            {{ analysis }}
+          </div>
+          <div class="dialog-actions">
+            <button mat-button (click)="copyToClipboard()">
+              <mat-icon>content_copy</mat-icon> Copy
+            </button>
+            <button mat-raised-button color="primary" (click)="dialogRef.close()">Close</button>
+          </div>
+        </div>
+      }
+
+      @if (error) {
+        <div class="error-state">
+          <mat-icon>error_outline</mat-icon>
+          <p>{{ error }}</p>
+          <button mat-raised-button color="primary" (click)="dialogRef.close()">Close</button>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .analysis-dialog { display: flex; flex-direction: column; gap: 20px; padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .dialog-header { text-align: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; }
+    .dialog-header h2 { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 4px; font-size: 20px; }
+    .dialog-header p { margin: 0; color: #6b7280; font-size: 14px; }
+
+    .analysis-form { display: flex; flex-direction: column; gap: 16px; }
+    .full-width { width: 100%; }
+
+    .analyzing-state, .error-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 20px; text-align: center; }
+    .analyzing-state p { margin: 0; color: #4b5563; }
+    .analyzing-state .detail { color: #9ca3af; font-size: 12px; }
+
+    .analysis-results { display: flex; flex-direction: column; gap: 16px; }
+    .result-header { border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; }
+    .result-header h3 { margin: 0 0 4px; font-size: 18px; }
+    .result-header .meta { margin: 0; color: #6b7280; font-size: 13px; }
+
+    .analysis-content { 
+      background: #f9fafb; 
+      border: 1px solid #e5e7eb; 
+      border-radius: 8px; 
+      padding: 16px; 
+      line-height: 1.6; 
+      color: #374151; 
+      font-size: 14px; 
+      white-space: pre-wrap; 
+      word-break: break-word;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .error-state { color: #dc2626; }
+    .error-state mat-icon { font-size: 40px; width: 40px; height: 40px; }
+
+    .hardware-table-wrap { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; }
+    .table-toolbar .item-count { font-size: 13px; color: #374151; }
+    .hardware-table-scroll { max-height: 340px; overflow: auto; }
+    .hardware-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .hardware-table th, .hardware-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eef2f7; white-space: nowrap; }
+    .hardware-table th { position: sticky; top: 0; background: #ffffff; z-index: 1; font-weight: 600; color: #4b5563; }
+    .hardware-table td.num, .hardware-table th.num { text-align: right; }
+    .hardware-table tbody tr:hover { background: #f9fafb; }
+    .hardware-table tfoot td { background: #f3f4f6; border-top: 2px solid #e5e7eb; }
+
+    .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
+    mat-form-field { display: block; }
+  `]
+})
+export class SupplierAnalysisDialog {
+  analyzing = false;
+  analyzed = false;
+  analysis: string | null = null;
+  error: string | null = null;
+  analysisType = 'detailed';
+  limit: number | null = 20;
+  userQuestion = '';
+  invoiceCount = 0;
+  totalSpend = 0;
+  elapsed = 0;
+  private timerId: any = null;
+  lineItems: Array<{ item: string; invoiceNumber: string; date: string; quantity: number; unitPrice: number; lineTotal: number; category: string; }> | null = null;
+
+  get lineItemsTotal(): number {
+    return (this.lineItems || []).reduce((sum, i) => sum + (i.lineTotal || 0), 0);
+  }
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: { supplier: string; departmentId: number },
+    public dialogRef: MatDialogRef<SupplierAnalysisDialog>,
+    private http: HttpClient,
+    private snackBar: MatSnackBar,
+    private wellyActivity: WellyActivityService
+  ) {}
+
+  analyzeSupplier(): void {
+    this.analyzing = true;
+    this.error = null;
+    this.analysis = null;
+    this.elapsed = 0;
+    const started = Date.now();
+    this.timerId = setInterval(() => { this.elapsed = Math.floor((Date.now() - started) / 1000); }, 1000);
+    const activityId = this.wellyActivity.start(`Analyzing invoices: ${this.data.supplier}`);
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      this.error = 'No authentication token found. Please log in again.';
+      this.analyzing = false;
+      this.snackBar.open(this.error, 'Close', { duration: 5000 });
+      return;
+    }
+
+    const payload = {
+      supplierName: this.data.supplier,
+      limit: this.limit,
+      analysisType: this.analysisType,
+      userQuestion: this.userQuestion || undefined
+    };
+
+    console.log('Sending supplier analysis request:', payload);
+    this.http.post<any>(`${environment.apiUrl}/aichat/analyze-supplier-invoices`, payload).subscribe({
+      next: (response: any) => {
+        this.analyzing = false;
+        this.stopTimer();
+        this.wellyActivity.stop(activityId);
+        this.analyzed = true;
+        this.analysis = response.analysis || '';
+        this.invoiceCount = response.invoicesAnalyzed || 0;
+        this.totalSpend = response.totalSpend || 0;
+        this.lineItems = response.lineItems || null;
+        console.log('Analysis received:', response);
+      },
+      error: (err: any) => {
+        this.analyzing = false;
+        this.stopTimer();
+        this.wellyActivity.stop(activityId);
+        const errorMsg = err.error?.error || err.statusText || 'Failed to analyze invoices. Please try again.';
+        this.error = errorMsg;
+        console.error('Analysis error:', err);
+        this.snackBar.open(this.error || 'Error', 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  private stopTimer(): void {
+    if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+  }
+
+  copyToClipboard(): void {
+    if (this.analysis) {
+      navigator.clipboard.writeText(this.analysis);
+      this.snackBar.open('Analysis copied to clipboard', 'Close', { duration: 2000 });
+    }
+  }
+
+  exportCsv(): void {
+    if (!this.lineItems || !this.lineItems.length) {
+      this.snackBar.open('No line items to export', 'Close', { duration: 2000 });
+      return;
+    }
+
+    const esc = (v: any): string => {
+      const s = (v ?? '').toString();
+      // Quote fields containing commas, quotes or newlines; double up embedded quotes
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+
+    const headers = ['Item', 'Category', 'Invoice Number', 'Date', 'Quantity', 'Unit Price (R)', 'Line Total (R)'];
+    const rows = this.lineItems.map(i => [
+      esc(i.item), esc(i.category), esc(i.invoiceNumber), esc(i.date),
+      i.quantity, (i.unitPrice ?? 0).toFixed(2), (i.lineTotal ?? 0).toFixed(2)
+    ].join(','));
+
+    const totalRow = ['', '', '', '', '', 'TOTAL', this.lineItemsTotal.toFixed(2)].join(',');
+    const csv = [headers.join(','), ...rows, totalRow].join('\r\n');
+
+    // Prepend BOM so Excel opens UTF-8 correctly
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const safeSupplier = (this.data.supplier || 'supplier').replace(/[^a-z0-9]+/gi, '_');
+    const stamp = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hardware_breakdown_${safeSupplier}_${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    this.snackBar.open('Hardware breakdown exported', 'Close', { duration: 2500 });
   }
 }

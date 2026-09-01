@@ -919,6 +919,146 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Welly OCR support: take a list of raw invoice-number candidates extracted from a POD
+        /// image via OCR and return the invoices that actually exist in the system.
+        /// Handles common OCR digit mis-reads (O↔0, I/l↔1, S↔5, B↔8, Z↔2) and validates each
+        /// corrected candidate against ImportedInvoices.TransactionNumber (format: IN######).
+        /// </summary>
+        [HttpPost("match-invoice-numbers")]
+        public async Task<IActionResult> MatchInvoiceNumbers([FromBody] MatchInvoiceNumbersRequest request)
+        {
+            if (request?.Candidates == null || request.Candidates.Count == 0)
+                return Ok(new { matches = new List<object>(), unmatched = new List<string>() });
+
+            // Build the set of normalized candidate keys → keep the original OCR text for display.
+            var candidateMap = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var raw in request.Candidates)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                foreach (var normalized in NormalizeInvoiceCandidate(raw))
+                {
+                    if (!candidateMap.TryGetValue(normalized, out var originals))
+                    {
+                        originals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        candidateMap[normalized] = originals;
+                    }
+                    originals.Add(raw.Trim());
+                }
+            }
+
+            if (candidateMap.Count == 0)
+                return Ok(new { matches = new List<object>(), unmatched = request.Candidates });
+
+            var keys = candidateMap.Keys.ToList();
+
+            var found = await _context.ImportedInvoices
+                .Where(i => keys.Contains(i.TransactionNumber))
+                .Select(i => new
+                {
+                    i.Id,
+                    i.TransactionNumber,
+                    i.CustomerName,
+                    i.ProductDescription,
+                    i.Quantity,
+                    i.SalesAmount,
+                    i.Status,
+                    i.TransactionDate
+                })
+                .ToListAsync();
+
+            var foundIds = found.Select(f => f.Id).ToList();
+            var linkedInvoiceIds = new HashSet<int>(await _context.PodDocumentInvoiceLinks
+                .Where(l => foundIds.Contains(l.InvoiceId))
+                .Select(l => l.InvoiceId)
+                .ToListAsync());
+
+            var matchedKeys = new HashSet<string>(found.Select(f => f.TransactionNumber), StringComparer.OrdinalIgnoreCase);
+
+            var matches = found.Select(f => new
+            {
+                f.Id,
+                f.TransactionNumber,
+                f.CustomerName,
+                f.ProductDescription,
+                f.Quantity,
+                f.SalesAmount,
+                f.Status,
+                f.TransactionDate,
+                AlreadyLinked = linkedInvoiceIds.Contains(f.Id),
+                // Was the DB value read verbatim from the image, or did we auto-correct OCR errors?
+                ReadExactly = candidateMap.TryGetValue(f.TransactionNumber, out var origs) &&
+                              origs.Any(o => string.Equals(o.Replace(" ", "").Replace("-", ""),
+                                                           f.TransactionNumber, StringComparison.OrdinalIgnoreCase)),
+                OcrText = candidateMap.TryGetValue(f.TransactionNumber, out var o2) ? o2.First() : f.TransactionNumber
+            }).ToList();
+
+            var unmatched = candidateMap
+                .Where(kv => !matchedKeys.Contains(kv.Key))
+                .SelectMany(kv => kv.Value)
+                .Distinct()
+                .ToList();
+
+            return Ok(new { matches, unmatched });
+        }
+
+        /// <summary>
+        /// Produces one or more candidate invoice numbers (format IN######) from a raw OCR token,
+        /// applying common OCR character-confusion corrections.
+        /// </summary>
+        private static IEnumerable<string> NormalizeInvoiceCandidate(string raw)
+        {
+            var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Strip spaces/dashes and uppercase.
+            var cleaned = raw.Trim().ToUpperInvariant().Replace(" ", "").Replace("-", "");
+            if (cleaned.Length < 3) return results;
+
+            // Ensure it starts with the IN prefix — OCR may read I/1/l and N/M loosely.
+            if (!cleaned.StartsWith("IN"))
+            {
+                // Try to salvage a prefix like "1N", "Iated"→no; only accept if 2nd char is N-ish.
+                if (cleaned.Length >= 2 && (cleaned[0] == 'I' || cleaned[0] == '1' || cleaned[0] == 'L') &&
+                    (cleaned[1] == 'N' || cleaned[1] == 'M' || cleaned[1] == 'H'))
+                {
+                    cleaned = "IN" + cleaned.Substring(2);
+                }
+                else
+                {
+                    return results;
+                }
+            }
+
+            var digitsPart = cleaned.Substring(2);
+
+            // Map letters that OCR commonly confuses with digits.
+            var mapped = new string(digitsPart.Select(c => c switch
+            {
+                'O' or 'Q' or 'D' => '0',
+                'I' or 'L' => '1',
+                'Z' => '2',
+                'S' => '5',
+                'B' => '8',
+                'G' => '6',
+                'T' => '7',
+                _ => c
+            }).ToArray());
+
+            // Keep only if the mapped body is all digits and 6 long (your invoice format).
+            var digitsOnly = new string(mapped.Where(char.IsDigit).ToArray());
+            if (digitsOnly.Length == 6)
+            {
+                results.Add("IN" + digitsOnly);
+            }
+            else if (digitsOnly.Length > 6)
+            {
+                // OCR sometimes glues extra chars — try the first 6 digits.
+                results.Add("IN" + digitsOnly.Substring(0, 6));
+            }
+
+            return results;
+        }
+
+        /// <summary>
         /// Delete a POD document
         /// </summary>
         [HttpDelete("{id}")]
@@ -1077,5 +1217,11 @@ namespace ProjectTracker.API.Controllers.Logistics
     public class LinkPodInvoicesRequest
     {
         public List<int> InvoiceIds { get; set; } = new();
+    }
+
+    public class MatchInvoiceNumbersRequest
+    {
+        /// <summary>Raw invoice-number tokens extracted from a POD image via OCR.</summary>
+        public List<string> Candidates { get; set; } = new();
     }
 }

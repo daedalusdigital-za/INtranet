@@ -1,0 +1,169 @@
+<app-navbar></app-navbar>
+<div class="archives-root">
+
+  <!-- LOCK SCREEN -->
+  @if (view() === 'locked') {
+    <div class="lock-screen">
+      <div class="lock-card">
+        <div class="lock-icon">🔒</div>
+        <h1>Email Archives</h1>
+        <p>Enter the archives password to continue.</p>
+        <input type="password" [(ngModel)]="passwordModel" (keyup.enter)="unlock()"
+               placeholder="Password" autofocus />
+        @if (unlockError()) { <div class="err">{{ unlockError() }}</div> }
+        <button class="primary" (click)="unlock()" [disabled]="loading()">
+          {{ loading() ? 'Checking…' : 'Unlock' }}
+        </button>
+        @if (loading()) { <div class="progress-bar slim"><span></span></div> }
+      </div>
+    </div>
+  }
+
+  <!-- COMPANY PICKER -->
+  @if (view() === 'companies') {
+    <div class="picker">
+      <div class="picker-head">
+        <h1>Choose a Company</h1>
+        <span class="hint">Select which company's mail archives to browse.</span>
+      </div>
+      @if (error()) { <div class="err">{{ error() }}</div> }
+      <div class="grid">
+        @for (c of companies(); track c.key) {
+          <button class="card company" [class.disabled]="!c.exists" (click)="pickCompany(c)">
+            <div class="card-icon">🏢</div>
+            <div class="card-title">{{ c.label }}</div>
+            <div class="card-sub">{{ c.exists ? c.archiveCount + ' archive(s)' : 'unavailable' }}</div>
+          </button>
+        }
+      </div>
+      @if (loading()) {
+        <div class="progress-block">
+          <div class="progress-bar"><span></span></div>
+          <div class="progress-text">Loading…</div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ARCHIVE (PST) PICKER -->
+  @if (view() === 'files') {
+    <div class="picker">
+      <div class="picker-head">
+        <button class="back" (click)="backToCompanies()">← Companies</button>
+        <h1>{{ selectedCompany()?.label }} — Archives</h1>
+        <span class="hint">Pick an archive to load. Large archives may take a moment to open.</span>
+      </div>
+      @if (error()) { <div class="err">{{ error() }}</div> }
+      <div class="file-list">
+        @for (f of files(); track f.relativePath) {
+          <button class="file-row" (click)="pickFile(f)">
+            <span class="fi">📦</span>
+            <span class="fname">{{ f.relativePath }}</span>
+            <span class="fsize">{{ formatSize(f.sizeBytes) }}</span>
+          </button>
+        }
+        @if (!files().length && !loading()) { <div class="empty">No archives found for this company.</div> }
+      </div>
+      @if (loading()) {
+        <div class="progress-block">
+          <div class="progress-bar"><span></span></div>
+          <div class="progress-text">Opening archive… large mailboxes can take a minute to index.</div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- BROWSE -->
+  @if (view() === 'browse') {
+    <div class="browse">
+      @if (loading()) { <div class="top-bar"><span></span></div> }
+      <!-- Folder tree -->
+      <aside class="tree">
+        <button class="back" (click)="backToFiles()">← Archives</button>
+        <div class="tree-title">{{ selectedFile()?.name }}</div>
+        <ng-container *ngTemplateOutlet="folderTpl; context: { $implicit: folders(), depth: 0 }"></ng-container>
+      </aside>
+
+      <!-- Message list -->
+      <section class="list">
+        <div class="list-head">
+          <input [(ngModel)]="searchModel" (keyup.enter)="doSearch()" placeholder="Search subject / from / to…" />
+          <button (click)="doSearch()">Search</button>
+        </div>
+        @if (messages(); as mp) {
+          <div class="msg-rows">
+            @for (m of mp.items; track m.index) {
+              <button class="msg-row" [class.active]="selectedMessage()?.index === m.index"
+                      [class.unread]="!m.isRead" (click)="openMessage(m)">
+                <div class="msg-from">{{ m.from || '—' }}</div>
+                <div class="msg-subject">
+                  {{ m.subject }}
+                  @if (m.hasAttachments) { <span class="clip">📎</span> }
+                </div>
+                <div class="msg-date">{{ m.date ? (m.date | date:'yyyy-MM-dd HH:mm') : '' }}</div>
+              </button>
+            }
+            @if (!mp.items.length) { <div class="empty">No messages in this folder.</div> }
+          </div>
+          <div class="pager">
+            <button (click)="prevPage()" [disabled]="page() <= 1">‹ Prev</button>
+            <span>Page {{ mp.page }} / {{ mp.totalPages || 1 }} · {{ mp.total }} msgs</span>
+            <button (click)="nextPage()" [disabled]="page() >= mp.totalPages">Next ›</button>
+          </div>
+        } @else if (!loading()) {
+          <div class="empty">Select a folder.</div>
+        }
+      </section>
+
+      <!-- Reading pane -->
+      <section class="reader">
+        @if (selectedMessage(); as d) {
+          <div class="rd-head">
+            <h2>{{ d.subject }}</h2>
+            <div class="rd-meta"><b>From:</b> {{ d.from }}</div>
+            <div class="rd-meta"><b>To:</b> {{ d.to }}</div>
+            @if (d.cc) { <div class="rd-meta"><b>Cc:</b> {{ d.cc }}</div> }
+            <div class="rd-meta"><b>Date:</b> {{ d.date ? (d.date | date:'medium') : '' }}</div>
+            @if (d.attachments?.length) {
+              <div class="rd-atts">
+                @for (a of d.attachments; track a.attIndex) {
+                  <button class="att" (click)="openAttachment(a)" title="Open / download">
+                    📎 {{ a.fileName }} ({{ formatSize(a.size) }})
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          <div class="rd-body">
+            @if (d.htmlBody) {
+              <iframe [srcdoc]="d.htmlBody" sandbox=""></iframe>
+            } @else {
+              <pre>{{ d.textBody }}</pre>
+            }
+          </div>
+        } @else {
+          <div class="empty">Select a message to read.</div>
+        }
+      </section>
+    </div>
+  }
+
+  @if (loading() && view() === 'browse') {
+    <div class="floating-loader"><span class="spinner"></span> Loading…</div>
+  }
+
+  <!-- Recursive folder template -->
+  <ng-template #folderTpl let-nodes let-depth="depth">
+    @for (n of nodes; track n.path) {
+      <button class="tree-node" [class.active]="selectedFolder()?.path === n.path"
+              [style.paddingLeft.px]="12 + depth * 14" (click)="pickFolder(n)">
+        <span class="tn-name">{{ n.name }}</span>
+        @if (n.count > 0) { <span class="tn-count">{{ n.count }}</span> }
+      </button>
+      @if (n.children?.length) {
+        <ng-container *ngTemplateOutlet="folderTpl; context: { $implicit: n.children, depth: depth + 1 }"></ng-container>
+      }
+    }
+  </ng-template>
+
+</div>

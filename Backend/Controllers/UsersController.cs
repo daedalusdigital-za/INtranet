@@ -66,6 +66,8 @@ namespace ProjectTracker.API.Controllers
                 LinkedEmployeeName = u.LinkedEmployee != null ? $"{u.LinkedEmployee.Name} {u.LinkedEmployee.LastName}" : null,
                 Birthday = u.Birthday,
                 PrimaryExtension = u.Extensions.FirstOrDefault(e => e.IsPrimary && e.IsActive)?.ExtensionNumber 
+                    ?? u.Extensions.FirstOrDefault(e => e.IsActive)?.ExtensionNumber,
+                ExtensionNumber = u.Extensions.FirstOrDefault(e => e.IsPrimary && e.IsActive)?.ExtensionNumber 
                     ?? u.Extensions.FirstOrDefault(e => e.IsActive)?.ExtensionNumber
             }).ToList();
 
@@ -149,11 +151,139 @@ namespace ProjectTracker.API.Controllers
                     LastName = e.LastName ?? "",
                     Department = e.Department,
                     JobTitle = e.JobTitle,
-                    IdNum = e.IdNum
+                    IdNum = e.IdNum,
+                    Address = e.Address,
+                    MobileNo = e.MobileNo
                 })
                 .ToListAsync();
 
             return Ok(employees);
+        }
+
+        // GET: api/users/clockin-employees/{empId}
+        [HttpGet("clockin-employees/{empId}")]
+        public async Task<ActionResult<ClockInEmployeeDto>> GetClockInEmployee(string empId)
+        {
+            var e = await _context.EmpRegistrations.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.EmpId == empId);
+            if (e == null) return NotFound(new { message = "Clock-in employee not found" });
+
+            return Ok(new ClockInEmployeeDto
+            {
+                EmpId = e.EmpId,
+                Name = e.Name ?? "",
+                LastName = e.LastName ?? "",
+                Department = e.Department,
+                JobTitle = e.JobTitle,
+                IdNum = e.IdNum,
+                Address = e.Address,
+                MobileNo = e.MobileNo
+            });
+        }
+
+        // POST: api/users/clockin-employees
+        [HttpPost("clockin-employees")]
+        public async Task<ActionResult<ClockInEmployeeDto>> CreateClockInEmployee([FromBody] ClockInEmployeeRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name) && string.IsNullOrWhiteSpace(request.LastName))
+                return BadRequest(new { message = "A name is required" });
+
+            var empId = string.IsNullOrWhiteSpace(request.EmpId)
+                ? await GenerateNextEmpIdAsync()
+                : request.EmpId.Trim();
+
+            if (await _context.EmpRegistrations.AnyAsync(x => x.EmpId == empId))
+                return Conflict(new { message = $"Employee ID '{empId}' already exists" });
+
+            var entity = new EmpRegistration
+            {
+                EmpId = empId,
+                Name = request.Name?.Trim(),
+                LastName = request.LastName?.Trim(),
+                IdNum = request.IdNum?.Trim(),
+                Department = request.Department?.Trim(),
+                JobTitle = request.JobTitle?.Trim(),
+                Address = request.Address?.Trim(),
+                MobileNo = request.MobileNo?.Trim(),
+                Date = DateTime.UtcNow
+            };
+
+            _context.EmpRegistrations.Add(entity);
+            await _context.SaveChangesAsync();
+
+            return Ok(new ClockInEmployeeDto
+            {
+                EmpId = entity.EmpId,
+                Name = entity.Name ?? "",
+                LastName = entity.LastName ?? "",
+                Department = entity.Department,
+                JobTitle = entity.JobTitle,
+                IdNum = entity.IdNum,
+                Address = entity.Address,
+                MobileNo = entity.MobileNo
+            });
+        }
+
+        // PUT: api/users/clockin-employees/{empId}
+        [HttpPut("clockin-employees/{empId}")]
+        public async Task<ActionResult<ClockInEmployeeDto>> UpdateClockInEmployee(string empId, [FromBody] ClockInEmployeeRequest request)
+        {
+            var entity = await _context.EmpRegistrations.FirstOrDefaultAsync(x => x.EmpId == empId);
+            if (entity == null) return NotFound(new { message = "Clock-in employee not found" });
+
+            entity.Name = request.Name?.Trim();
+            entity.LastName = request.LastName?.Trim();
+            entity.IdNum = request.IdNum?.Trim();
+            entity.Department = request.Department?.Trim();
+            entity.JobTitle = request.JobTitle?.Trim();
+            entity.Address = request.Address?.Trim();
+            entity.MobileNo = request.MobileNo?.Trim();
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new ClockInEmployeeDto
+            {
+                EmpId = entity.EmpId,
+                Name = entity.Name ?? "",
+                LastName = entity.LastName ?? "",
+                Department = entity.Department,
+                JobTitle = entity.JobTitle,
+                IdNum = entity.IdNum,
+                Address = entity.Address,
+                MobileNo = entity.MobileNo
+            });
+        }
+
+        // DELETE: api/users/clockin-employees/{empId}
+        [HttpDelete("clockin-employees/{empId}")]
+        public async Task<IActionResult> DeleteClockInEmployee(string empId)
+        {
+            var entity = await _context.EmpRegistrations.FirstOrDefaultAsync(x => x.EmpId == empId);
+            if (entity == null) return NotFound(new { message = "Clock-in employee not found" });
+
+            var hasAttendance = await _context.AttendanceRecords.AnyAsync(a => a.EmpID == empId);
+            if (hasAttendance)
+                return BadRequest(new { message = "Cannot delete: this employee has attendance records. Consider keeping them for history." });
+
+            _context.EmpRegistrations.Remove(entity);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Clock-in employee deleted" });
+        }
+
+        // Generates the next numeric employee id (max existing numeric + 1)
+        private async Task<string> GenerateNextEmpIdAsync()
+        {
+            var ids = await _context.EmpRegistrations
+                .Select(e => e.EmpId)
+                .ToListAsync();
+
+            int max = 0;
+            foreach (var id in ids)
+            {
+                if (int.TryParse(id, out var n) && n > max) max = n;
+            }
+            return (max + 1).ToString();
         }
 
         // GET: api/users/birthdays
@@ -376,32 +506,193 @@ namespace ProjectTracker.API.Controllers
 
         // DELETE: api/users/{id}
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteUser(int id)
+        public async Task<IActionResult> DeleteUser(int id, [FromQuery] bool permanent = false)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users
+                .Include(u => u.Extensions)
+                .FirstOrDefaultAsync(u => u.UserId == id);
 
             if (user == null)
             {
                 return NotFound(new { message = "User not found" });
             }
 
-            // Soft delete - just mark as inactive
-            // user.IsActive = false;
-            // await _context.SaveChangesAsync();
+            var displayName = $"{user.Name} {user.Surname}".Trim();
+            if (string.IsNullOrWhiteSpace(displayName)) displayName = user.Email;
 
-            // Hard delete
-            _context.Users.Remove(user);
+            // Remove owned child records that would otherwise block deletion.
+            if (user.Extensions != null && user.Extensions.Any())
+                _context.Extensions.RemoveRange(user.Extensions);
+
+            var companyAssignments = await _context.StaffOperatingCompanies
+                .Where(soc => soc.StaffMemberId == id)
+                .ToListAsync();
+            if (companyAssignments.Any())
+                _context.StaffOperatingCompanies.RemoveRange(companyAssignments);
+
+            var refreshTokens = await _context.RefreshTokens
+                .Where(rt => rt.UserId == id)
+                .ToListAsync();
+            if (refreshTokens.Any())
+                _context.RefreshTokens.RemoveRange(refreshTokens);
+
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("User deleted: {UserId} ({Email})", id, user.Email);
+            try
+            {
+                // Attempt a true hard delete first (works for users with no historical references).
+                _context.ChangeTracker.Clear();
+                var fresh = await _context.Users.FindAsync(id);
+                if (fresh != null)
+                {
+                    _context.Users.Remove(fresh);
+                    await _context.SaveChangesAsync();
+                }
 
-            // Audit log
-            _auditLogService.SetHttpContext(HttpContext);
-            await _auditLogService.LogAsync("User Deleted", "user", "User", id, 
-                $"Deleted user: {user.Name} {user.Surname} ({user.Email})", null, "warning");
+                _logger.LogInformation("User deleted: {UserId} ({Email})", id, user.Email);
 
-            return Ok(new { message = "User deleted successfully" });
+                _auditLogService.SetHttpContext(HttpContext);
+                await _auditLogService.LogAsync("User Deleted", "user", "User", id,
+                    $"Deleted user: {displayName} ({user.Email})", null, "warning");
+
+                return Ok(new { message = "User deleted successfully", mode = "deleted" });
+            }
+            catch (DbUpdateException)
+            {
+                _context.ChangeTracker.Clear();
+
+                if (permanent)
+                {
+                    // FORCE / PERMANENT DELETE: the user is referenced by historical records.
+                    // Generically detach every foreign key that points at the Users table —
+                    // nulling nullable columns and deleting rows whose FK is required — then
+                    // remove the user row for good. This is wrapped in a transaction so it is
+                    // all-or-nothing.
+                    try
+                    {
+                        await ForceDeleteUserAsync(id);
+
+                        _logger.LogWarning("User PERMANENTLY deleted (force): {UserId}", id);
+                        _auditLogService.SetHttpContext(HttpContext);
+                        await _auditLogService.LogAsync("User Permanently Deleted", "user", "User", id,
+                            $"Permanently deleted user {displayName} ({user.Email}) including linked references.",
+                            null, "warning");
+
+                        return Ok(new { message = "User permanently deleted (including linked records).", mode = "deleted" });
+                    }
+                    catch (Exception fex)
+                    {
+                        _logger.LogError(fex, "Force delete failed for user {UserId}", id);
+                        return StatusCode(500, new { message = "Could not permanently delete this user: " + fex.Message, mode = "error" });
+                    }
+                }
+
+                // The user is referenced by historical records (tasks, tenders, loads, audit logs,
+                // invoices, etc.) that must be preserved for referential integrity. A hard delete is
+                // not possible, so fall back to a soft delete: deactivate the account and anonymise
+                // the email/name so it disappears from active use and the email address is freed.
+                var target = await _context.Users.FindAsync(id);
+                if (target == null)
+                    return NotFound(new { message = "User not found" });
+
+                var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+                target.IsActive = false;
+                target.Email = $"deleted+{id}.{stamp}@deleted.local";
+                target.PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N"));
+                target.LinkedEmpId = null;
+                target.Permissions = null;
+                target.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogWarning("User soft-deleted (referenced by historical records): {UserId}", id);
+
+                _auditLogService.SetHttpContext(HttpContext);
+                await _auditLogService.LogAsync("User Deleted (Deactivated)", "user", "User", id,
+                    $"User {displayName} had linked records and was deactivated & anonymised instead of hard-deleted.",
+                    null, "warning");
+
+                return Ok(new
+                {
+                    message = "User had linked records (tasks, tenders, invoices, etc.) so was deactivated and anonymised instead of permanently deleted. Use \"Permanent delete\" to remove completely.",
+                    mode = "deactivated"
+                });
+            }
         }
+
+        // Generically removes every foreign-key reference to a user across the whole database,
+        // then deletes the user row. Nullable FK columns are set to NULL (record kept, un-linked);
+        // required FK columns cause the owning row to be deleted. Runs inside a single transaction.
+        private async Task ForceDeleteUserAsync(int userId)
+        {
+            var conn = _context.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+
+            // Discover all FK columns that reference the Users table.
+            var refs = new List<(string Table, string Column, bool Nullable)>();
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+                    SELECT
+                        OBJECT_SCHEMA_NAME(fk.parent_object_id) AS SchemaName,
+                        OBJECT_NAME(fk.parent_object_id)        AS TableName,
+                        COL_NAME(fkc.parent_object_id, fkc.parent_column_id) AS ColumnName,
+                        c.is_nullable AS IsNullable
+                    FROM sys.foreign_keys fk
+                    JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+                    JOIN sys.columns c ON c.object_id = fkc.parent_object_id AND c.column_id = fkc.parent_column_id
+                    WHERE fk.referenced_object_id = OBJECT_ID('dbo.Users');";
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var schema = reader.GetString(0);
+                    var table = reader.GetString(1);
+                    var column = reader.GetString(2);
+                    var nullable = reader.GetBoolean(3);
+                    refs.Add(($"[{schema}].[{table}]", column, nullable));
+                }
+            }
+
+            using var tx = await conn.BeginTransactionAsync();
+            try
+            {
+                // Multiple passes so that rows deleted because of a required FK also clear
+                // any secondary references before the user row itself is removed.
+                foreach (var r in refs)
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.Transaction = tx as System.Data.Common.DbTransaction;
+                    cmd.CommandText = r.Nullable
+                        ? $"UPDATE {r.Table} SET [{r.Column}] = NULL WHERE [{r.Column}] = @id;"
+                        : $"DELETE FROM {r.Table} WHERE [{r.Column}] = @id;";
+                    var p = cmd.CreateParameter();
+                    p.ParameterName = "@id";
+                    p.Value = userId;
+                    cmd.Parameters.Add(p);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                using (var del = conn.CreateCommand())
+                {
+                    del.Transaction = tx as System.Data.Common.DbTransaction;
+                    del.CommandText = "DELETE FROM [dbo].[Users] WHERE [UserId] = @id;";
+                    var p = del.CreateParameter();
+                    p.ParameterName = "@id";
+                    p.Value = userId;
+                    del.Parameters.Add(p);
+                    await del.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
 
         // POST: api/users/{id}/reset-password
         [HttpPost("{id}/reset-password")]
@@ -534,6 +825,8 @@ namespace ProjectTracker.API.Controllers
         public string? LinkedEmployeeName { get; set; }
         public DateTime? Birthday { get; set; }
         public string? PrimaryExtension { get; set; }
+        /// <summary>Alias of PrimaryExtension so edit forms (which read extensionNumber) populate correctly.</summary>
+        public string? ExtensionNumber { get; set; }
     }
 
     public class UserDetailDto
@@ -622,7 +915,21 @@ namespace ProjectTracker.API.Controllers
         public string? Department { get; set; }
         public string? JobTitle { get; set; }
         public string? IdNum { get; set; }
+        public string? Address { get; set; }
+        public string? MobileNo { get; set; }
         public string FullName => $"{Name} {LastName}".Trim();
+    }
+
+    public class ClockInEmployeeRequest
+    {
+        public string? EmpId { get; set; }
+        public string? Name { get; set; }
+        public string? LastName { get; set; }
+        public string? IdNum { get; set; }
+        public string? Department { get; set; }
+        public string? JobTitle { get; set; }
+        public string? Address { get; set; }
+        public string? MobileNo { get; set; }
     }
 
     public class UserBirthdayDto

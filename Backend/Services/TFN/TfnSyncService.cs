@@ -18,6 +18,7 @@ namespace ProjectTracker.API.Services.TFN
         private readonly TfnTransactionsClient _transactionsClient;
         private readonly TfnAccountsClient _accountsClient;
         private readonly TfnDepotsClient _depotsClient;
+        private readonly TfnSyncStatus _syncStatus;
         private readonly ILogger<TfnSyncService> _logger;
 
         public TfnSyncService(
@@ -28,6 +29,7 @@ namespace ProjectTracker.API.Services.TFN
             TfnTransactionsClient transactionsClient,
             TfnAccountsClient accountsClient,
             TfnDepotsClient depotsClient,
+            TfnSyncStatus syncStatus,
             ILogger<TfnSyncService> logger)
         {
             _context = context;
@@ -37,6 +39,7 @@ namespace ProjectTracker.API.Services.TFN
             _transactionsClient = transactionsClient;
             _accountsClient = accountsClient;
             _depotsClient = depotsClient;
+            _syncStatus = syncStatus;
             _logger = logger;
         }
 
@@ -63,8 +66,33 @@ namespace ProjectTracker.API.Services.TFN
                 // History accumulates permanently (TFN only keeps a 14-day window).
                 result.FuelHistoryResult = await SyncFuelHistoryFromOrdersAsync();
 
+                // Roll up any per-step errors into the aggregate result so a failing
+                // step (e.g. orders) doesn't silently succeed at the top level.
+                var stepErrors = new (string Step, string? Error)[]
+                {
+                    ("Depots", result.DepotsResult.ErrorMessage),
+                    ("Vehicles", result.VehiclesResult.ErrorMessage),
+                    ("Drivers", result.DriversResult.ErrorMessage),
+                    ("Orders", result.OrdersResult.ErrorMessage),
+                    ("Transactions", result.TransactionsResult.ErrorMessage),
+                    ("Balances", result.BalancesResult.ErrorMessage),
+                    ("FuelHistory", result.FuelHistoryResult.ErrorMessage)
+                }
+                .Where(s => !string.IsNullOrEmpty(s.Error))
+                .Select(s => $"{s.Step}: {s.Error}")
+                .ToList();
+
+                if (stepErrors.Count > 0)
+                {
+                    result.HasError = true;
+                    result.ErrorMessage = string.Join("; ", stepErrors);
+                    _logger.LogWarning("TFN sync completed with errors: {Errors}", result.ErrorMessage);
+                }
+
                 _logger.LogInformation("TFN sync completed. Vehicles: {Vehicles}, Drivers: {Drivers}, Orders: {Orders}, Transactions: {Transactions}",
                     result.VehiclesResult.Synced, result.DriversResult.Synced, result.OrdersResult.Synced, result.TransactionsResult.Synced);
+
+                _syncStatus.RecordResult(result.HasError, result.ErrorMessage, result.OrdersResult.Synced);
 
                 return result;
             }
@@ -73,6 +101,7 @@ namespace ProjectTracker.API.Services.TFN
                 _logger.LogError(ex, "Error during TFN sync");
                 result.HasError = true;
                 result.ErrorMessage = ex.Message;
+                _syncStatus.RecordResult(true, ex.Message, result.OrdersResult?.Synced ?? 0);
                 return result;
             }
         }

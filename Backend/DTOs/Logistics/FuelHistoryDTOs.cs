@@ -12,6 +12,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public DateTime TransactionDate { get; set; }
         public decimal AmountSpent { get; set; }
         public string? DepotAssignment { get; set; }
+        public string Source { get; set; } = "TFN";
         public int ReportMonth { get; set; }
         public int ReportYear { get; set; }
         public string? Notes { get; set; }

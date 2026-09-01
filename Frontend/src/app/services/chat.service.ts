@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { WellyActivityService } from './welly-activity.service';
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -31,7 +32,7 @@ export class ChatService {
   private actionSubject = new Subject<ActionResult>();
   public actionResults$ = this.actionSubject.asObservable();
 
-  constructor(private router: Router) {
+  constructor(private router: Router, private wellyActivity: WellyActivityService) {
     // Try to restore session from storage
     this.sessionId = sessionStorage.getItem('welly_session_id');
   }
@@ -174,6 +175,7 @@ export class ChatService {
    * Stream chat response using session-based endpoint with server-side memory
    */
   private async streamChatWithSession(userMessage: string, subject: Subject<string>): Promise<void> {
+    const activityId = this.wellyActivity.start('Answering your chat message');
     try {
       const response = await fetch(`${this.apiUrl}/chat/session`, {
         method: 'POST',
@@ -251,6 +253,8 @@ export class ChatService {
     } catch (error) {
       console.error('Chat error:', error);
       subject.error('Failed to connect to AI service. Please try again.');
+    } finally {
+      this.wellyActivity.stop(activityId);
     }
   }
 

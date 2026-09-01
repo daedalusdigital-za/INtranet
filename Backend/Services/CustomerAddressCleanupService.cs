@@ -50,9 +50,10 @@ namespace ProjectTracker.API.Services
         {
             var result = new CleanupResult();
 
-            // Get customers that need address cleanup (missing province or city)
+            // Get customers that need address cleanup (missing province, city, or coordinates)
             var customersQuery = _context.LogisticsCustomers
-                .Where(c => c.Province == null || c.City == null || c.Province == "" || c.City == "");
+                .Where(c => c.Province == null || c.City == null || c.Province == "" || c.City == ""
+                         || c.Latitude == null || c.Longitude == null);
 
             if (batchSize.HasValue)
             {
@@ -107,6 +108,16 @@ namespace ProjectTracker.API.Services
                                   ?? GetAddressComponent(geoResult, "neighborhood");
                         var formattedAddress = geoResult.GetProperty("formatted_address").GetString();
 
+                        // Extract GPS coordinates so the customer can be plotted on maps.
+                        double? lat = null, lng = null;
+                        try
+                        {
+                            var loc = geoResult.GetProperty("geometry").GetProperty("location");
+                            lat = loc.GetProperty("lat").GetDouble();
+                            lng = loc.GetProperty("lng").GetDouble();
+                        }
+                        catch { }
+
                         updateResult.Province = province;
                         updateResult.City = city;
                         updateResult.NewAddress = formattedAddress;
@@ -121,6 +132,14 @@ namespace ProjectTracker.API.Services
                             customer.DeliveryProvince = province;
                             customer.DeliveryCity = city;
                             customer.DeliveryPostalCode = postalCode;
+
+                            if (lat.HasValue && lng.HasValue)
+                            {
+                                customer.Latitude = lat;
+                                customer.Longitude = lng;
+                                customer.AddressVerified = true;
+                                customer.AddressVerifiedAt = DateTime.UtcNow;
+                            }
 
                             // Build new address lines
                             var addressLines = new List<string>();

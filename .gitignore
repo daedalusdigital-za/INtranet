@@ -139,3 +139,10 @@ _sigtest/
 downloads/
 attachments/
 
+# ===================
+# Secrets & one-off dev artifacts (must never be committed)
+# ===================
+login.json
+Backend/runlog.txt
+*.csx
+

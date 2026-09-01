@@ -197,12 +197,50 @@
     box-shadow: 0 20px 40px rgba(0,0,0,.3);
   }
 }
+
+// Creditors / Debtors split entry cards
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.split-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 26px;
+  border-radius: 18px;
+  cursor: pointer;
+  color: #fff;
+  overflow: hidden;
+  transition: all .3s cubic-bezier(.4,0,.2,1);
+  &:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,.35); }
+  &.creditors { background: linear-gradient(135deg, #dc2626, #b91c1c); }
+  &.debtors   { background: linear-gradient(135deg, #059669, #047857); }
+
+  .split-icon {
+    width: 60px; height: 60px; border-radius: 16px;
+    background: rgba(255,255,255,.18);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    mat-icon { font-size: 32px; width: 32px; height: 32px; color: #fff; }
+  }
+  .split-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .split-body h2 { margin: 0; font-size: 22px; font-weight: 700; }
+  .split-body p { margin: 0; font-size: 13px; color: rgba(255,255,255,.85); }
+  .split-value { margin-top: 6px; font-size: 26px; font-weight: 800; }
+  .split-arrow { color: rgba(255,255,255,.6); }
+}
+
 .stat-card-accent {
   height: 3px;
   width: 100%;
 }
 .invoices-card-stat  .stat-card-accent { background: linear-gradient(90deg, #6366f1, #818cf8); }
 .unpaid-card-stat    .stat-card-accent { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+.paid-card-stat      .stat-card-accent { background: linear-gradient(90deg, #10b981, #34d399); }
 .expenses-card-stat  .stat-card-accent { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
 .payments-card-stat  .stat-card-accent { background: linear-gradient(90deg, #10b981, #34d399); }
 .submitted-card-stat .stat-card-accent { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
@@ -224,6 +262,7 @@
 }
 .invoices-card-stat  .stat-icon-modern { background: linear-gradient(135deg, #6366f1, #818cf8); }
 .unpaid-card-stat    .stat-icon-modern { background: linear-gradient(135deg, #f43f5e, #fb7185); }
+.paid-card-stat      .stat-icon-modern { background: linear-gradient(135deg, #10b981, #34d399); }
 .expenses-card-stat  .stat-icon-modern { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
 .payments-card-stat  .stat-icon-modern { background: linear-gradient(135deg, #10b981, #34d399); }
 .submitted-card-stat .stat-icon-modern { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
@@ -601,6 +640,16 @@
     background: rgba(14,165,233,.12);
     color: #38bdf8;
     &:hover { background: rgba(14,165,233,.25); transform: scale(1.1); }
+  }
+  &.paid {
+    background: rgba(16,185,129,.12);
+    color: #34d399;
+    &:hover { background: rgba(16,185,129,.25); transform: scale(1.1); }
+  }
+  &.unpaid {
+    background: rgba(245,158,11,.12);
+    color: #fbbf24;
+    &:hover { background: rgba(245,158,11,.25); transform: scale(1.1); }
   }
 }
 
@@ -1407,6 +1456,9 @@
 .sp-pending { border-left:4px solid #f59e0b; }
 .sp-approved { border-left:4px solid #10b981; }
 .sp-declined { border-left:4px solid #ef4444; }
+.sp-requested { border-left:4px solid #f59e0b; }
+.sp-paid { border-left:4px solid #10b981; }
+.sp-rejected { border-left:4px solid #ef4444; }
 .sp-avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#ff9800,#f57c00); color:white; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .sp-info { flex:1; min-width:0; }
 .sp-name { font-weight:700; color:#111827; font-size:14px; }
@@ -1427,6 +1479,9 @@
 .spill-pending { background:#fff3cd; color:#856404; }
 .spill-approved { background:#d1fae5; color:#065f46; }
 .spill-declined { background:#fee2e2; color:#991b1b; }
+.spill-requested { background:#fff3cd; color:#856404; }
+.spill-paid { background:#d1fae5; color:#065f46; }
+.spill-rejected { background:#fee2e2; color:#991b1b; }
 .sp-actions { display:flex; gap:2px; }
 .sp-approve { color:#10b981 !important; }
 .sp-decline { color:#ef4444 !important; }

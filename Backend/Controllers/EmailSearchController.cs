@@ -14,15 +14,18 @@ namespace ProjectTracker.API.Controllers
         private readonly EmailSearchService _emailSearchService;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<EmailSearchController> _logger;
+        private readonly SalesMailboxMonitorService _monitor;
 
         public EmailSearchController(
             EmailSearchService emailSearchService,
             ApplicationDbContext context,
-            ILogger<EmailSearchController> logger)
+            ILogger<EmailSearchController> logger,
+            SalesMailboxMonitorService monitor)
         {
             _emailSearchService = emailSearchService;
             _context = context;
             _logger = logger;
+            _monitor = monitor;
         }
 
         /// <summary>
@@ -147,6 +150,23 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
+                var accountList = string.IsNullOrWhiteSpace(accounts)
+                    ? null
+                    : accounts.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(a => a.Trim()).ToList();
+
+                // Serve from the persistent IDLE monitor's in-memory cache. This performs
+                // NO new IMAP login — the monitor already stays logged in per mailbox —
+                // so refreshing the dashboard can no longer trigger provider blacklisting.
+                if (_monitor.IsReady)
+                {
+                    var cached = _monitor.GetCachedOrders(accountList, keyword ?? "order")
+                        .Take(maxResults)
+                        .ToList();
+                    return Ok(cached);
+                }
+
+                // Fallback (monitor still warming up on a cold start): do a one-off search.
+                _logger.LogInformation("Sales monitor not ready yet; falling back to one-off IMAP search.");
                 var request = new EmailSearchRequest
                 {
                     SubjectKeyword = keyword ?? "order",
@@ -154,14 +174,8 @@ namespace ProjectTracker.API.Controllers
                     DateTo = DateTime.Today.AddDays(1),
                     MaxResults = maxResults
                 };
-
-                if (!string.IsNullOrWhiteSpace(accounts))
-                {
-                    request.AccountEmails = accounts
-                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(a => a.Trim())
-                        .ToList();
-                }
+                if (accountList != null)
+                    request.AccountEmails = accountList;
 
                 var results = await _emailSearchService.SearchIncomingOrdersAsync(request);
                 return Ok(results);
@@ -171,6 +185,15 @@ namespace ProjectTracker.API.Controllers
                 _logger.LogError(ex, "Failed to search incoming order emails");
                 return StatusCode(500, new { message = "Failed to search emails. Please try again." });
             }
+        }
+
+        /// <summary>
+        /// Diagnostics: connection status of the persistent sales mailbox monitor.
+        /// </summary>
+        [HttpGet("monitor-status")]
+        public ActionResult<object> GetMonitorStatus()
+        {
+            return Ok(new { ready = _monitor.IsReady, mailboxes = _monitor.GetStatus() });
         }
 
         /// <summary>

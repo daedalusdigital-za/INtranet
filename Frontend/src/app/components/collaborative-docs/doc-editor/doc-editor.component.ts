@@ -18,6 +18,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { Subscription, debounceTime, Subject } from 'rxjs';
 import { CollaborativeDocsService } from '../../../services/collaborative-docs.service';
 import { AuthService } from '../../../services/auth.service';
+import { WellyActivityService } from '../../../services/welly-activity.service';
 import { DocumentDetail, UserPresence } from '../../../models/collaborative-doc.model';
 import { environment } from '../../../../environments/environment';
 
@@ -1977,6 +1978,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   // Welly AI Assist
   showWellyPanel = false;
   wellyLoading = false;
+  private wellyActivityId: number | null = null;
   wellyResult = '';
   wellyLastAction = '';
   wellyActionLabel = '';
@@ -2004,7 +2006,8 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     private docsService: CollaborativeDocsService,
     private authService: AuthService,
     private snackBar: MatSnackBar,
-    private http: HttpClient
+    private http: HttpClient,
+    private wellyActivity: WellyActivityService
   ) {}
 
   /** Safe base64 encode that won't overflow the call stack on large Uint8Arrays */
@@ -2929,6 +2932,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   wellyComposeEmail(): void {
     if (this.emailComposing) return;
     this.emailComposing = true;
+    const composeActivityId = this.wellyActivity.start('Docs: Composing email');
 
     const docTitle = this.documentTitle || 'Document';
     const prompt = this.emailBody.trim()
@@ -2942,10 +2946,12 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       next: (res) => {
         this.emailBody = res.result;
         this.emailComposing = false;
+        this.wellyActivity.stop(composeActivityId);
       },
       error: () => {
         this.snackBar.open('Welly could not compose the email. Please write it manually.', 'Close', { duration: 3000 });
         this.emailComposing = false;
+        this.wellyActivity.stop(composeActivityId);
       }
     });
   }
@@ -3029,6 +3035,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       action === 'translate' ? `translating to ${targetLanguage}` : 'processing';
 
     this.wellyLoading = true;
+    this.wellyActivityId = this.wellyActivity.start(`Docs: ${this.wellyActionLabel}`);
 
     this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: action,
@@ -3038,12 +3045,14 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       next: (res) => {
         this.wellyResult = res.result;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: (err) => {
         console.error('Welly assist error:', err);
         this.snackBar.open('Welly could not process your request. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
         this.showWellyPanel = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }
@@ -3052,6 +3061,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this.wellyGeneratePrompt.trim()) return;
     this.wellyLoading = true;
     this.wellyActionLabel = 'generating content';
+    this.wellyActivityId = this.wellyActivity.start('Docs: Generating content');
 
     this.http.post<{ result: string }>(`${environment.apiUrl}/aichat/welly-assist`, {
       assistType: 'generate',
@@ -3060,11 +3070,13 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       next: (res) => {
         this.wellyResult = res.result;
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: (err) => {
         console.error('Welly generate error:', err);
         this.snackBar.open('Welly could not generate content. Please try again.', 'Close', { duration: 3000 });
         this.wellyLoading = false;
+        if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
   }

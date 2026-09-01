@@ -192,10 +192,13 @@ export const MODULES: ModuleConfig[] = [
     showInDashboard: true,
     subRoutes: [
       { path: '/finance', name: 'Dashboard', icon: 'dashboard' },
+      { path: '/finance/creditors', name: 'Creditors', icon: 'call_made' },
+      { path: '/finance/debtors', name: 'Debtors', icon: 'call_received' },
       { path: '/finance/budgets', name: 'Budgets', icon: 'account_balance_wallet' },
       { path: '/finance/expenses', name: 'Expenses', icon: 'receipt' },
       { path: '/finance/purchase-orders', name: 'Purchase Orders', icon: 'shopping_cart' },
       { path: '/finance/payments', name: 'Payments', icon: 'payment' },
+      { path: '/finance/commitments', name: 'Monthly Commitments', icon: 'event_repeat' },
       { path: '/finance/categories', name: 'Categories', icon: 'category' }
     ]
   },
@@ -375,6 +378,14 @@ export function getModuleRoutes(): Routes {
       data: { module: 'documents' } 
     },
     
+    // Logistics — standalone Open Map page (opened in its own tab from the map dialog)
+    {
+      path: 'logistics/open-map',
+      loadComponent: () => import('../components/logistics/open-map-page.component').then(m => m.OpenMapPageComponent),
+      canActivate: [authGuard, moduleGuard],
+      data: { module: 'logistics' }
+    },
+
     // Logistics Module
     { 
       path: 'logistics', 
@@ -382,7 +393,7 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'logistics' } 
     },
-    
+
     // Tenders Module
     { 
       path: 'tenders', 
@@ -395,6 +406,18 @@ export function getModuleRoutes(): Routes {
     { 
       path: 'finance', 
       loadComponent: () => import('../components/finance/finance.component').then(m => m.FinanceComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/creditors', 
+      loadComponent: () => import('../components/finance/creditors/creditors.component').then(m => m.CreditorsComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/debtors', 
+      loadComponent: () => import('../components/finance/debtors/debtors.component').then(m => m.DebtorsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
@@ -425,6 +448,12 @@ export function getModuleRoutes(): Routes {
     { 
       path: 'finance/categories', 
       loadComponent: () => import('../components/finance/categories/categories.component').then(m => m.CategoriesComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'finance' }
+    },
+    { 
+      path: 'finance/commitments', 
+      loadComponent: () => import('../components/finance/commitments/commitments.component').then(m => m.CommitmentsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
@@ -460,6 +489,13 @@ export function getModuleRoutes(): Routes {
     {
       path: 'emails',
       loadComponent: () => import('../components/email-viewer/email-viewer.component').then(m => m.EmailViewerComponent),
+      canActivate: [authGuard]
+    },
+
+    // Archives (NAS PST email archives)
+    {
+      path: 'archives',
+      loadComponent: () => import('../components/archives/archives.component').then(m => m.ArchivesComponent),
       canActivate: [authGuard]
     },
     

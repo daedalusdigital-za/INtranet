@@ -41,6 +41,12 @@ namespace ProjectTracker.API.Data
         public DbSet<AssetRegisterItem> AssetRegisterItems { get; set; }
         public DbSet<AttendanceRecord> AttendanceRecords { get; set; }
 
+        // HR — unified employee registry (all sites) + document/contract store
+        public DbSet<ProjectTracker.API.Models.Hr.HrEmployee> HrEmployees { get; set; }
+        public DbSet<ProjectTracker.API.Models.Hr.HrEmployeeDocument> HrEmployeeDocuments { get; set; }
+        public DbSet<ProjectTracker.API.Models.Hr.HrRegisterEntry> HrRegisterEntries { get; set; }
+        public DbSet<ProjectTracker.API.Models.Hr.HrDisciplinaryCase> HrDisciplinaryCases { get; set; }
+
         // Support Ticket System
         public DbSet<SupportTicket> SupportTickets { get; set; }
         public DbSet<TicketComment> TicketComments { get; set; }
@@ -56,6 +62,9 @@ namespace ProjectTracker.API.Data
         public DbSet<KnowledgeBaseDocument> KnowledgeBaseDocuments { get; set; }
         public DbSet<KnowledgeBaseChunk> KnowledgeBaseChunks { get; set; }
         public DbSet<KnowledgeBaseIngestionLog> KnowledgeBaseIngestionLogs { get; set; }
+
+        // Welly Memory (central task cache / long-term memory)
+        public DbSet<WellyMemory> WellyMemories { get; set; }
 
         // Operating Companies
         public DbSet<OperatingCompany> OperatingCompanies { get; set; }
@@ -104,13 +113,19 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.CustomerDeliveryAddress> CustomerDeliveryAddresses { get; set; }
         public DbSet<Models.Logistics.ImportedInvoice> ImportedInvoices { get; set; }
         public DbSet<Models.Logistics.ImportBatch> ImportBatches { get; set; }
+        public DbSet<Models.Logistics.SalesHistoryRecord> SalesHistoryRecords { get; set; }
+        public DbSet<Models.Logistics.SalesHistoryLineItem> SalesHistoryLineItems { get; set; }
         public DbSet<Models.Logistics.SleepOut> SleepOuts { get; set; }
+        public DbSet<Models.Logistics.PumaGarageOrder> PumaGarageOrders { get; set; }
+        public DbSet<Models.Logistics.Requisition> Requisitions { get; set; }
         public DbSet<Models.Logistics.PartDeliveryHistory> PartDeliveryHistories { get; set; }
         public DbSet<Models.Logistics.FuelTransaction> FuelTransactions { get; set; }
+        public DbSet<Models.Logistics.VehicleMovementHistory> VehicleMovementHistory { get; set; }
         public DbSet<Models.Logistics.OrderCancellation> OrderCancellations { get; set; }
         public DbSet<Models.Logistics.PodDocument> PodDocuments { get; set; }
         public DbSet<Models.Logistics.PodDocumentInvoiceLink> PodDocumentInvoiceLinks { get; set; }
         public DbSet<Models.Logistics.Geofence> Geofences { get; set; }
+        public DbSet<Models.Logistics.LogisticsIncident> LogisticsIncidents { get; set; }
 
         // Sales Import System
         public DbSet<SalesImportBatch> SalesImportBatches { get; set; }
@@ -193,10 +208,42 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Finance.PurchaseOrder> PurchaseOrders { get; set; }
         public DbSet<Models.Finance.PurchaseOrderItem> PurchaseOrderItems { get; set; }
         public DbSet<Models.Finance.Payment> Payments { get; set; }
+        public DbSet<Models.Finance.RecurringPayment> RecurringPayments { get; set; }
+        public DbSet<Models.Finance.DebtorPayment> DebtorPayments { get; set; }
 
+        // Requisition Invoice Workflow + generic electronic signatures
+        public DbSet<Models.Requisitions.RequisitionInvoice> RequisitionInvoices { get; set; }
+        public DbSet<Models.Requisitions.RequisitionApprovalStep> RequisitionApprovalSteps { get; set; }
+        public DbSet<Models.Signatures.ElectronicSignature> ElectronicSignatures { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Vehicle movement history: fast lookups by vehicle/day and idempotent upserts by CarTrack trip id
+            modelBuilder.Entity<Models.Logistics.VehicleMovementHistory>(e =>
+            {
+                e.HasIndex(x => new { x.VehicleId, x.MovementDate });
+                e.HasIndex(x => new { x.RegistrationNumber, x.MovementDate });
+                e.HasIndex(x => x.CartrackTripId).IsUnique();
+            });
+
+            // Requisition invoice workflow indexes + cascade of history rows
+            modelBuilder.Entity<Models.Requisitions.RequisitionInvoice>(e =>
+            {
+                e.HasIndex(x => x.Stage);
+                e.HasIndex(x => x.State);
+                e.HasIndex(x => x.ReferenceNumber);
+                e.HasMany(x => x.ApprovalSteps)
+                    .WithOne(s => s.RequisitionInvoice!)
+                    .HasForeignKey(s => s.RequisitionInvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Generic electronic signatures: fast lookup by the entity they belong to
+            modelBuilder.Entity<Models.Signatures.ElectronicSignature>(e =>
+            {
+                e.HasIndex(x => new { x.EntityType, x.EntityId });
+            });
 
             // Configure biometric system relationships
             modelBuilder.Entity<AttendanceRecord>()
@@ -758,6 +805,25 @@ namespace ProjectTracker.API.Data
                 entity.HasIndex(e => e.Region);
                 entity.HasIndex(e => e.DriverId);
                 entity.HasIndex(e => new { e.DriverName, e.DeliveryDate, e.Region });
+            });
+
+            // SalesHistoryRecord - historical sales ledger for the Sales History tab
+            modelBuilder.Entity<Models.Logistics.SalesHistoryRecord>(entity =>
+            {
+                entity.HasIndex(e => e.InvoiceDate);
+                entity.HasIndex(e => e.InvoiceNumber);
+                entity.HasIndex(e => e.CustomerName);
+                entity.HasIndex(e => e.SourceCompany);
+                entity.HasIndex(e => new { e.SourceCompany, e.InvoiceDate });
+            });
+
+            // SalesHistoryLineItem - detailed product lines enriching the ledger
+            modelBuilder.Entity<Models.Logistics.SalesHistoryLineItem>(entity =>
+            {
+                entity.HasIndex(e => e.InvoiceNumber);
+                entity.HasIndex(e => e.ItemCode);
+                entity.HasIndex(e => e.SalesHistoryRecordId);
+                entity.HasIndex(e => e.SourceCompany);
             });
 
             modelBuilder.Entity<Models.Logistics.PodDocumentInvoiceLink>(entity =>

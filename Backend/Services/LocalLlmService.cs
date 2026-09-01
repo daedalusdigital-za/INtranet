@@ -161,6 +161,25 @@ Be concise, professional, and friendly. Use the provided database context when a
                     }
                 }
 
+                // 3. Welly Memory recall (past tasks/analyses Welly has performed)
+                var memoryBudget = maxContextChars - sb.Length;
+                if (memoryBudget > 400)
+                {
+                    var memoryService = scope.ServiceProvider.GetService<IWellyMemoryService>();
+                    if (memoryService != null)
+                    {
+                        var memoryContext = await memoryService.GetContextForQueryAsync(query, topK: 3);
+                        if (!string.IsNullOrEmpty(memoryContext))
+                        {
+                            if (memoryContext.Length > memoryBudget)
+                                memoryContext = memoryContext.Substring(0, memoryBudget - 40) + "\n[memory truncated]";
+                            if (sb.Length > 0) sb.AppendLine();
+                            sb.Append(memoryContext);
+                            _logger.LogInformation("LocalLLM: Welly memory context {Length} chars", memoryContext.Length);
+                        }
+                    }
+                }
+
                 if (sb.Length > 0)
                 {
                     _logger.LogInformation("LocalLLM: Total context {Length} chars (~{Tokens} tokens)", 
