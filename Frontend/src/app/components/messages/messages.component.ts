@@ -1538,14 +1538,14 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 
     /* Welly Message Assistant Styles */
     .welly-msg-btn .welly-sparkle-icon {
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
 
     .welly-msg-btn:hover {
-      background: rgba(102, 126, 234, 0.1);
+      background: rgba(37, 99, 235, 0.1);
     }
 
     .welly-panel-overlay {
@@ -1578,7 +1578,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
 
@@ -1663,7 +1663,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     }
 
     .welly-draft-form textarea:focus {
-      border-color: #667eea;
+      border-color: #2563eb;
     }
 
     .welly-draft-form-actions {

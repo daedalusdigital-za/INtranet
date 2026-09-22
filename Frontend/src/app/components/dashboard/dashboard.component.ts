@@ -607,7 +607,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       display: flex;
       align-items: center;
@@ -618,7 +618,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .avatar-small:nth-child(2) {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
     }
 
     .avatar-small:nth-child(3) {
@@ -1101,8 +1101,7 @@ export class DashboardComponent implements OnInit {
         this.loading = false;
       },
       error: (error) => {
-        console.error('Error loading boards:', error);
-        this.initializeProjects(); // Fallback to mock data
+        this.initializeProjects(); // Show empty state on failure
         this.loading = false;
       }
     });
@@ -1135,155 +1134,10 @@ export class DashboardComponent implements OnInit {
   }
 
   initializeProjects(): void {
-    // Mock project data with enhanced features
-    this.projects = [
-      {
-        id: 1,
-        name: 'E-Commerce Platform',
-        description: 'Building new online shopping platform',
-        type: 'software',
-        workflow: 'In Progress',
-        status: 'on-track',
-        progress: 65,
-        teamSize: 8,
-        budgetUsed: 58,
-        daysRemaining: 45,
-        milestonesCompleted: 4,
-        totalMilestones: 6,
-        team: ['John D', 'Sarah M', 'Mike Chen', 'Lisa Wang'],
-        startDate: '2025-01-15',
-        endDate: '2025-12-30',
-        departmentId: 1
-      },
-      {
-        id: 2,
-        name: 'Network Upgrade',
-        description: 'Modernizing IT infrastructure',
-        type: 'infrastructure',
-        workflow: 'Testing',
-        status: 'on-track',
-        progress: 78,
-        teamSize: 5,
-        budgetUsed: 82,
-        daysRemaining: 15,
-        milestonesCompleted: 5,
-        totalMilestones: 6,
-        team: ['Tom Hardy', 'Emma Watson', 'Chris Evans'],
-        startDate: '2025-02-01',
-        endDate: '2025-11-25',
-        departmentId: 2
-      },
-      {
-        id: 3,
-        name: 'Brand Refresh Campaign',
-        description: 'Complete brand identity redesign',
-        type: 'marketing',
-        workflow: 'Planning',
-        status: 'on-track',
-        progress: 25,
-        teamSize: 6,
-        budgetUsed: 15,
-        daysRemaining: 90,
-        milestonesCompleted: 1,
-        totalMilestones: 5,
-        team: ['Anna Lee', 'Bob Smith', 'Carol Davis'],
-        startDate: '2025-10-01',
-        endDate: '2026-02-28',
-        departmentId: 3
-      },
-      {
-        id: 4,
-        name: 'AI Research Project',
-        description: 'Developing machine learning models',
-        type: 'research',
-        workflow: 'In Progress',
-        status: 'at-risk',
-        progress: 42,
-        teamSize: 10,
-        budgetUsed: 68,
-        daysRemaining: 60,
-        milestonesCompleted: 3,
-        totalMilestones: 8,
-        team: ['Dr. Smith', 'Jane Foster', 'Peter Parker', 'Tony Stark'],
-        startDate: '2025-03-01',
-        endDate: '2026-01-10',
-        departmentId: 4
-      },
-      {
-        id: 5,
-        name: 'Supply Chain Optimization',
-        description: 'Streamlining logistics operations',
-        type: 'operations',
-        workflow: 'Testing',
-        status: 'on-track',
-        progress: 92,
-        teamSize: 7,
-        budgetUsed: 95,
-        daysRemaining: 8,
-        milestonesCompleted: 6,
-        totalMilestones: 6,
-        team: ['David Lee', 'Emily Brown', 'Frank Miller'],
-        startDate: '2025-04-01',
-        endDate: '2025-11-18',
-        departmentId: 5
-      },
-      {
-        id: 6,
-        name: 'Mobile App Development',
-        description: 'iOS and Android native apps',
-        type: 'software',
-        workflow: 'In Progress',
-        status: 'delayed',
-        progress: 38,
-        teamSize: 9,
-        budgetUsed: 72,
-        daysRemaining: 75,
-        milestonesCompleted: 2,
-        totalMilestones: 7,
-        team: ['Alex Johnson', 'Maria Garcia', 'Sam Wilson', 'Nina Patel'],
-        startDate: '2025-05-01',
-        endDate: '2026-01-25',
-        departmentId: 1
-      },
-      {
-        id: 7,
-        name: 'Data Center Migration',
-        description: 'Moving to cloud infrastructure',
-        type: 'infrastructure',
-        workflow: 'Planning',
-        status: 'on-track',
-        progress: 18,
-        teamSize: 12,
-        budgetUsed: 22,
-        daysRemaining: 120,
-        milestonesCompleted: 1,
-        totalMilestones: 9,
-        team: ['Kevin Hart', 'Rachel Green', 'Ross Geller'],
-        startDate: '2025-11-01',
-        endDate: '2026-03-31',
-        departmentId: 2
-      },
-      {
-        id: 8,
-        name: 'Customer Loyalty Program',
-        description: 'Rewards and engagement platform',
-        type: 'marketing',
-        workflow: 'Completed',
-        status: 'on-track',
-        progress: 100,
-        teamSize: 4,
-        budgetUsed: 98,
-        daysRemaining: 0,
-        milestonesCompleted: 4,
-        totalMilestones: 4,
-        team: ['Monica Bing', 'Chandler Bing'],
-        startDate: '2025-01-01',
-        endDate: '2025-10-15',
-        departmentId: 3
-      }
-    ];
-
-    this.filteredProjects = [...this.projects];
+    // On API failure, show an empty state instead of fabricated demo projects.
+    // Never present invented data as if it were real.
+    this.projects = [];
+    this.filteredProjects = [];
   }
 
   filterProjects(): void {
@@ -1305,8 +1159,8 @@ export class DashboardComponent implements OnInit {
 
   getProjectTypeColor(type: string): string {
     const colors: any = {
-      'software': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      'infrastructure': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      'software': 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
+      'infrastructure': 'linear-gradient(135deg, #60a5fa 0%, #f5576c 100%)',
       'marketing': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       'research': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
       'operations': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'

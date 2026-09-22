@@ -135,6 +135,10 @@ export class MessageService {
   private userOnlineSubject = new Subject<{ userId: number; isOnline: boolean }>();
   public userOnline$ = this.userOnlineSubject.asObservable();
 
+  // Attention pulse: emits the conversationId of a bubble that should shake/glow
+  private bubbleAttentionSubject = new Subject<number>();
+  public bubbleAttention$ = this.bubbleAttentionSubject.asObservable();
+
   constructor(
     private http: HttpClient,
     private notificationService: NotificationService
@@ -269,11 +273,13 @@ export class MessageService {
   // Chat bubble management
   openChatBubble(conversation: Conversation): void {
     const currentChats = this.activeChatBubblesSubject.value;
-    if (!currentChats.find((c: Conversation) => c.conversationId === conversation.conversationId)) {
-      // Keep max 3 chat bubbles open
-      const updatedChats = [...currentChats, conversation].slice(-3);
-      this.activeChatBubblesSubject.next(updatedChats);
+    // If this chat is already open, keep only it (bring to front / avoid duplicates)
+    if (currentChats.find((c: Conversation) => c.conversationId === conversation.conversationId)) {
+      this.activeChatBubblesSubject.next([conversation]);
+      return;
     }
+    // Single-bubble mode: opening a chat closes any other open bubbles to avoid conflicts
+    this.activeChatBubblesSubject.next([conversation]);
   }
 
   closeChatBubble(conversationId: number): void {
@@ -373,6 +379,8 @@ export class MessageService {
           message.content
         );
         this.notificationService.incrementUnreadCount();
+        // Trigger the mini chat-bubble attention pulse (shake + red glow)
+        this.bubbleAttentionSubject.next(message.conversationId);
       }
     });
 

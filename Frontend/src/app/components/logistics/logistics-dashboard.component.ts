@@ -1,6 +1,6 @@
 import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject, Injector, inject, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -42,6 +42,7 @@ import { PumaGarageDialog } from './puma-garage-dialog.component';
 import { OpenMapComponent } from './open-map.component';
 import { OpenMapDialogComponent } from './open-map-dialog.component';
 import { LogisticsReportsComponent } from './logistics-reports.component';
+import { AssetTrackingService, ResolveResult } from '../../services/asset-tracking.service';
 
 interface DashboardStats {
   activeLoads: number;
@@ -245,24 +246,25 @@ interface DeliveryRequestSummary {
           </div>
         </div>
         <div class="header-stats-row">
-          <div class="mini-stat">
-            <mat-icon>local_shipping</mat-icon>
-            <span class="mini-value">{{ stats().totalVehicles }}</span>
-            <span class="mini-label">Total Fleet</span>
-          </div>
-          <div class="mini-stat">
-            <mat-icon>people</mat-icon>
-            <span class="mini-value">{{ stats().totalDrivers }}</span>
-            <span class="mini-label">Drivers</span>
-          </div>
-          <div class="mini-stat">
-            <mat-icon>route</mat-icon>
-            <span class="mini-value">{{ stats().activeLoads }}</span>
-            <span class="mini-label">Active Routes</span>
+          <div class="barcode-search" [class.busy]="barcodeBusy()">
+            <mat-icon>qr_code_scanner</mat-icon>
+            <input type="text" [(ngModel)]="barcodeQuery" placeholder="Enter barcode number…"
+                   (keyup.enter)="lookupBarcode()" aria-label="Barcode lookup" />
+            @if (barcodeBusy()) {
+              <mat-icon class="spin">progress_activity</mat-icon>
+            } @else {
+              <button class="barcode-go" (click)="lookupBarcode()" matTooltip="Look up barcode">
+                <mat-icon>search</mat-icon>
+              </button>
+            }
           </div>
           <button class="open-map-btn" (click)="openLiveMap()" matTooltip="Open the live fleet map">
             <mat-icon>map</mat-icon>
             <span>Open Map</span>
+          </button>
+          <button class="open-map-btn scan-track-btn" (click)="openScanTrack()" matTooltip="Barcode / QR asset & consignment tracking">
+            <mat-icon>qr_code_scanner</mat-icon>
+            <span>Scan &amp; Track</span>
           </button>
         </div>
       </div>
@@ -844,6 +846,7 @@ interface DeliveryRequestSummary {
                         <mat-option value="all">All Types</mat-option>
                         <mat-option value="scheduled">Scheduled Service</mat-option>
                         <mat-option value="repair">Repair</mat-option>
+                        <mat-option value="spares">Spares</mat-option>
                         <mat-option value="license">License</mat-option>
                         <mat-option value="inspection">Inspection</mat-option>
                         <mat-option value="other">Other</mat-option>
@@ -1905,6 +1908,9 @@ interface DeliveryRequestSummary {
                     <div class="pod-actions">
                       <button mat-stroked-button class="pod-upload-btn" (click)="openPodUploadDialog()">
                         <mat-icon>upload_file</mat-icon> Upload POD
+                      </button>
+                      <button mat-stroked-button class="pod-reconcile-btn" (click)="reconcilePodTripsheets()" [disabled]="podReconciling" matTooltip="Auto-link PODs to tripsheets that share the same invoices">
+                        <mat-icon>{{ podReconciling ? 'hourglass_empty' : 'sync' }}</mat-icon> {{ podReconciling ? 'Linking…' : 'Reconcile → Tripsheets' }}
                       </button>
                       <div class="pod-view-toggle">
                         <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
@@ -2974,41 +2980,47 @@ interface DeliveryRequestSummary {
       height: 20px;
     }
 
-    .mini-stat {
-      display: flex;
+    .barcode-search {
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.08);
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.14);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
-      padding: 12px 20px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      padding: 6px 8px 6px 14px;
       border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      transition: transform 0.25s, background 0.25s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-
-    .mini-stat:hover {
-      transform: translateY(-3px);
-      background: rgba(255, 255, 255, 0.13);
+    .barcode-search:focus-within {
+      border-color: rgba(255, 255, 255, 0.7);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
     }
-
-    .mini-stat mat-icon {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
+    .barcode-search > mat-icon {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 20px; width: 20px; height: 20px;
     }
-
-    .mini-value {
-      font-size: 20px;
-      font-weight: 700;
-      color: white;
+    .barcode-search input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      width: 190px;
+      font-family: 'Courier New', monospace;
     }
-
-    .mini-label {
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.8);
+    .barcode-search input::placeholder { color: rgba(255, 255, 255, 0.7); font-family: inherit; font-weight: 500; }
+    .barcode-go {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: #fff; color: #2563eb; border: none;
+      width: 34px; height: 34px; border-radius: 12px; cursor: pointer;
+      transition: filter 0.2s, transform 0.2s;
     }
+    .barcode-go:hover { filter: brightness(0.95); transform: translateY(-1px); }
+    .barcode-go mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .barcode-search .spin { color: #fff; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Modern Stats Grid */
     .modern-stats-grid {
@@ -3079,10 +3091,10 @@ interface DeliveryRequestSummary {
       color: white;
     }
 
-    .stat-icon-wrapper.loads { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stat-icon-wrapper.loads { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
     .stat-icon-wrapper.address { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
     .stat-icon-wrapper.incoming-requests { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); }
-    .stat-icon-wrapper.tfn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stat-icon-wrapper.tfn { background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%); }
     .stat-icon-wrapper.puma { background: linear-gradient(135deg, #d32f2f 0%, #ff6d00 100%); }
 
     .stat-content {
@@ -3177,8 +3189,8 @@ interface DeliveryRequestSummary {
       color: white;
     }
 
-    .stat-icon-mini.vehicles { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .stat-icon-mini.drivers { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stat-icon-mini.vehicles { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
+    .stat-icon-mini.drivers { background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%); }
     .stat-icon-mini.reports { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
     .stat-icon-mini.depots { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
     .stat-icon-mini.incoming-requests { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); }
@@ -3380,16 +3392,16 @@ interface DeliveryRequestSummary {
       color: white;
     }
 
-    .stat-icon.loads { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .stat-icon.loads { background: linear-gradient(135deg, #2563eb, #1e40af); }
     .stat-icon.transit { background: linear-gradient(135deg, #4facfe, #00f2fe); }
     .stat-icon.delivered { background: linear-gradient(135deg, #11998e, #38ef7d); }
     .stat-icon.incoming-requests { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
     .stat-icon.pending { background: linear-gradient(135deg, #fa709a, #fee140); }
-    .stat-icon.tfn-orders { background: linear-gradient(135deg, #f093fb, #f5576c); }
-    .stat-icon.vehicles { background: linear-gradient(135deg, #667eea, #764ba2); }
-    .stat-icon.drivers { background: linear-gradient(135deg, #f093fb, #f5576c); }
+    .stat-icon.tfn-orders { background: linear-gradient(135deg, #60a5fa, #f5576c); }
+    .stat-icon.vehicles { background: linear-gradient(135deg, #2563eb, #1e40af); }
+    .stat-icon.drivers { background: linear-gradient(135deg, #60a5fa, #f5576c); }
     .stat-icon.maintenance { background: linear-gradient(135deg, #ff9800, #f57c00); }
-    .stat-icon.reports { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .stat-icon.reports { background: linear-gradient(135deg, #2563eb, #1e40af); }
     .stat-icon.stock { background: linear-gradient(135deg, #fa709a, #fee140); }
     .stat-icon.depots { background: linear-gradient(135deg, #11998e, #38ef7d); }
     .stat-icon.postoffice { background: linear-gradient(135deg, #4facfe, #00f2fe); }
@@ -3879,6 +3891,7 @@ interface DeliveryRequestSummary {
 
     .maintenance-type-badge.scheduled { background: #e3f2fd; color: #1565c0; }
     .maintenance-type-badge.repair { background: #fff3e0; color: #e65100; }
+    .maintenance-type-badge.spares { background: #e8f5e9; color: #2e7d32; }
     .maintenance-type-badge.license { background: #f3e5f5; color: #7b1fa2; }
     .maintenance-type-badge.inspection { background: #e0f7fa; color: #00838f; }
     .maintenance-type-badge.other { background: #eceff1; color: #455a64; }
@@ -4052,7 +4065,7 @@ interface DeliveryRequestSummary {
       justify-content: space-between;
       align-items: center;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
 
@@ -4104,8 +4117,8 @@ interface DeliveryRequestSummary {
     }
 
     .upload-dropzone.drag-over {
-      border-color: #667eea;
-      background: rgba(102, 126, 234, 0.06);
+      border-color: #2563eb;
+      background: rgba(37, 99, 235, 0.06);
     }
 
     .upload-dropzone mat-icon {
@@ -4192,7 +4205,7 @@ interface DeliveryRequestSummary {
     }
 
     .file-icon {
-      color: #667eea;
+      color: #2563eb;
       font-size: 24px;
       width: 24px;
       height: 24px;
@@ -6734,6 +6747,15 @@ interface DeliveryRequestSummary {
       }
     }
 
+    .pod-reconcile-btn {
+      border-radius: 8px !important;
+      color: #1e90ff;
+
+      mat-icon {
+        margin-right: 4px;
+      }
+    }
+
     .pod-view-toggle {
       display: flex;
       background: #f0f0f0;
@@ -7255,6 +7277,7 @@ export class LogisticsDashboardComponent implements OnInit {
   podLinkFilter = '';
   podDriverList: string[] = [];
   podViewMode = 'grid';
+  podReconciling = false;
   podCurrentPage = 1;
   podPageSize = 50;
   podTotalCount = 0;
@@ -7272,6 +7295,40 @@ export class LogisticsDashboardComponent implements OnInit {
     private dialog: MatDialog,
     private snackBar: MatSnackBar
   ) {}
+
+  private readonly router = inject(Router);
+  private readonly assetTracking = inject(AssetTrackingService);
+
+  // Quick barcode lookup (header search bar)
+  barcodeQuery = '';
+  readonly barcodeBusy = signal(false);
+
+  /** Look up a barcode number and pop up the linked tripsheet / item / active load. */
+  lookupBarcode(): void {
+    const code = (this.barcodeQuery || '').trim();
+    if (!code) return;
+    this.barcodeBusy.set(true);
+    this.assetTracking.resolve(code, true).subscribe({
+      next: (res) => {
+        this.barcodeBusy.set(false);
+        this.dialog.open(BarcodeLookupDialog, {
+          width: '560px',
+          maxWidth: '94vw',
+          panelClass: 'barcode-lookup-panel',
+          data: res
+        });
+      },
+      error: () => {
+        this.barcodeBusy.set(false);
+        this.snackBar.open('Barcode lookup failed. Check your connection.', 'Dismiss', { duration: 4000 });
+      }
+    });
+  }
+
+  /** Navigate to the Scan & Track (barcode / QR) page. */
+  openScanTrack(): void {
+    this.router.navigate(['/logistics/scan']);
+  }
 
   /** Open the live fleet map in a large dialog (map's own Maximize still works). */
   openLiveMap(): void {
@@ -7399,7 +7456,9 @@ export class LogisticsDashboardComponent implements OnInit {
   }
 
   loadCustomers(): void {
-    this.http.get<any[]>(`${this.apiUrl}/logistics/customers`).subscribe({
+    // Load ALL customers (not just the default first 50) so trip-sheet address
+    // matching can resolve any customer from the database.
+    this.http.get<any[]>(`${this.apiUrl}/logistics/customers?pageSize=100000`).subscribe({
       next: (customers) => {
         this.customers.set(customers);
       },
@@ -8127,8 +8186,17 @@ Notes: ${record.notes || 'No notes'}
           registrationNumber: v.registrationNumber,
           type: v.vehicleTypeName || 'Truck',
           vehicleTypeName: v.vehicleTypeName,
+          vehicleTypeId: v.vehicleTypeId,
+          // Core details needed by the edit dialog to populate correctly
+          make: v.make,
+          model: v.model,
+          year: v.year,
+          color: v.color,
+          vinNumber: v.vinNumber,
+          currentOdometer: v.currentOdometer,
           status: v.status,
           currentDriver: v.currentDriverName || '',
+          currentDriverId: v.currentDriverId,
           currentDriverName: v.currentDriverName,
           // Live tracking data from CarTrack
           lastLocation: v.lastLocation || 'Unknown',
@@ -8138,7 +8206,8 @@ Notes: ${record.notes || 'No notes'}
           heading: v.heading,
           lastUpdate: v.lastUpdate,
           liveStatus: v.liveStatus || 'offline',
-          fuelLevel: 50,
+          // Real fuel level only if the tracking provider supplies one (no fake default)
+          fuelLevel: v.fuelLevel ?? null,
           fuelCapacity: v.fuelCapacity,
           // CarTrack integration
           carTrackId: v.carTrackId,
@@ -8233,35 +8302,25 @@ Notes: ${record.notes || 'No notes'}
   }
 
   loadSampleData(): void {
-    // Sample data for demo
+    // NOTE: On API failure we intentionally show an empty/zeroed state rather than
+    // fabricated demo data. Never present invented numbers as if they were real.
     this.stats.set({
-      activeLoads: 12,
-      inTransit: 5,
-      delivered: 8,
-      pending: 4,
-      totalVehicles: 15,
-      availableVehicles: 6,
-      totalDrivers: 12,
-      availableDrivers: 4,
-      vehiclesInMaintenance: 2,
-      upcomingMaintenance: 3,
-      pendingInvoices: 15,
-      overdueInvoices: 3
+      activeLoads: 0,
+      inTransit: 0,
+      delivered: 0,
+      pending: 0,
+      totalVehicles: 0,
+      availableVehicles: 0,
+      totalDrivers: 0,
+      availableDrivers: 0,
+      vehiclesInMaintenance: 0,
+      upcomingMaintenance: 0,
+      pendingInvoices: 0,
+      overdueInvoices: 0
     });
 
-    this.activeLoads.set([
-      { id: 1, loadNumber: 'LD-2026-001', customerName: 'ABC Logistics', origin: 'Johannesburg', destination: 'Cape Town', status: 'InTransit', vehicleRegistration: 'GP 123-456', driverName: 'John Smith', scheduledDate: new Date(new Date().setDate(new Date().getDate() - 2)), scheduledDelivery: new Date(), progress: 65 },
-      { id: 2, loadNumber: 'LD-2026-002', customerName: 'XYZ Transport', origin: 'Durban', destination: 'Pretoria', status: 'Pending', vehicleRegistration: '', driverName: '', scheduledDate: new Date(), scheduledDelivery: new Date(), progress: 0 },
-      { id: 3, loadNumber: 'LD-2026-003', customerName: 'FastFreight', origin: 'Port Elizabeth', destination: 'Johannesburg', status: 'InTransit', vehicleRegistration: 'GP 789-012', driverName: 'Mike Johnson', scheduledDate: new Date(new Date().setDate(new Date().getDate() + 1)), scheduledDelivery: new Date(), progress: 35 },
-    ]);
-
-    this.vehicles.set([
-      { id: 1, registrationNumber: 'GP 123-456', type: 'Flatbed Truck', status: 'OnDuty', currentDriver: 'John Smith', lastLocation: 'N1 Highway', fuelLevel: 75 },
-      { id: 2, registrationNumber: 'GP 789-012', type: '10-Ton Truck', status: 'OnDuty', currentDriver: 'Mike Johnson', lastLocation: 'N2 Highway', fuelLevel: 45 },
-      { id: 3, registrationNumber: 'GP 345-678', type: 'Delivery Van', status: 'Available', currentDriver: '', lastLocation: 'Johannesburg Depot', fuelLevel: 90 },
-      { id: 4, registrationNumber: 'GP 901-234', type: 'Refrigerated Truck', status: 'Maintenance', currentDriver: '', lastLocation: 'Workshop', fuelLevel: 20 },
-    ]);
-
+    this.activeLoads.set([]);
+    this.vehicles.set([]);
     this.loading.set(false);
   }
 
@@ -9200,8 +9259,8 @@ Notes: ${record.notes || 'No notes'}
           case 'import':
             this.openImportTripsheetDialog();
             break;
-          case 'automatic':
-            this.openCreateTripsheetDialog();
+          case 'pad':
+            this.openImportTripsheetDialog(true);
             break;
           case 'manual':
             this.openManualTripsheetDialog();
@@ -9351,13 +9410,14 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
-  openImportTripsheetDialog(): void {
+  openImportTripsheetDialog(padMode: boolean = false): void {
     const dialogRef = this.dialog.open(ImportTripsheetDialog, {
       width: '900px',
       maxWidth: '95vw',
       panelClass: 'import-tripsheet-dialog-panel',
       data: {
-        apiUrl: this.apiUrl
+        apiUrl: this.apiUrl,
+        padMode
       }
     });
 
@@ -10699,6 +10759,29 @@ Notes: ${record.notes || 'No notes'}
         this.podDriverList = (summary.drivers || []).map((d: any) => d.driverName).sort();
       },
       error: (err) => console.error('Failed to load POD summary:', err)
+    });
+  }
+
+  reconcilePodTripsheets(): void {
+    this.podReconciling = true;
+    this.http.post<any>(`${this.apiUrl}/PodDocuments/reconcile-tripsheets`, {}).subscribe({
+      next: (res) => {
+        this.podReconciling = false;
+        const linked = res?.podsLinked ?? 0;
+        const examined = res?.podsExamined ?? 0;
+        this.snackBar.open(
+          res?.message || `Linked ${linked} POD(s) to tripsheets (examined ${examined})`,
+          'Close',
+          { duration: 6000 }
+        );
+        this.loadPodDocuments();
+        this.loadPodSummary();
+      },
+      error: (err) => {
+        this.podReconciling = false;
+        console.error('Failed to reconcile PODs to tripsheets:', err);
+        this.snackBar.open('Failed to reconcile PODs to tripsheets', 'Close', { duration: 5000 });
+      }
     });
   }
 
@@ -15686,7 +15769,7 @@ export class SyncResultDialogComponent {
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       border-radius: 8px;
       margin-bottom: 24px;
@@ -16132,7 +16215,7 @@ export class SuggestedTripsDialog implements OnInit {
     .header-left { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
     .header-icon-wrap {
       width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #f5576c, #f093fb); box-shadow: 0 4px 15px rgba(245,87,108,0.4);
+      background: linear-gradient(135deg, #f5576c, #60a5fa); box-shadow: 0 4px 15px rgba(245,87,108,0.4);
     }
     .header-icon-wrap mat-icon { font-size: 26px; width: 26px; height: 26px; }
     .header-text h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
@@ -16192,7 +16275,7 @@ export class SuggestedTripsDialog implements OnInit {
       color: #666; transition: all 0.2s; font-weight: 500;
     }
     .chip:hover { border-color: #f5576c; color: #f5576c; }
-    .chip.active { background: linear-gradient(135deg, #f5576c, #f093fb); color: white; border-color: transparent; box-shadow: 0 2px 8px rgba(245,87,108,0.3); }
+    .chip.active { background: linear-gradient(135deg, #f5576c, #60a5fa); color: white; border-color: transparent; box-shadow: 0 2px 8px rgba(245,87,108,0.3); }
     .chip.active .chip-count { background: rgba(255,255,255,0.25); color: white; }
     .chip-count {
       font-size: 11px; background: #f0f0f0; padding: 1px 7px; border-radius: 10px;
@@ -16217,7 +16300,7 @@ export class SuggestedTripsDialog implements OnInit {
     }
     .order-card::before {
       content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-      background: linear-gradient(90deg, #f5576c, #f093fb); opacity: 0; transition: opacity 0.25s;
+      background: linear-gradient(90deg, #f5576c, #60a5fa); opacity: 0; transition: opacity 0.25s;
     }
     .order-card:hover {
       transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.08);
@@ -16611,7 +16694,7 @@ export class TfnOrdersListDialog {
       justify-content: space-between;
       align-items: center;
       padding: 20px 32px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       color: white;
       margin: -24px -24px 0 -24px;
     }
@@ -16682,7 +16765,7 @@ export class TfnOrdersListDialog {
       font-size: 16px;
     }
     .section h4 mat-icon {
-      color: #667eea;
+      color: #2563eb;
     }
     .info-grid {
       display: grid;
@@ -16729,8 +16812,8 @@ export class TfnOrdersListDialog {
       justify-content: center;
       color: white;
     }
-    .stat-circle.allocated { background: linear-gradient(135deg, #667eea, #764ba2); }
-    .stat-circle.used { background: linear-gradient(135deg, #f093fb, #f5576c); }
+    .stat-circle.allocated { background: linear-gradient(135deg, #2563eb, #1e40af); }
+    .stat-circle.used { background: linear-gradient(135deg, #60a5fa, #f5576c); }
     .stat-circle.remaining { background: linear-gradient(135deg, #11998e, #38ef7d); }
     .stat-circle .value {
       font-size: 22px;
@@ -16766,7 +16849,7 @@ export class TfnOrdersListDialog {
         display: none !important;
       }
       .dialog-header {
-        background: #667eea !important;
+        background: #2563eb !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -16841,10 +16924,10 @@ export class TfnOrderDetailsDialog {
             text-align: center;
             margin-bottom: 30px;
             padding-bottom: 20px;
-            border-bottom: 2px solid #667eea;
+            border-bottom: 2px solid #2563eb;
           }
           .print-header h1 {
-            color: #667eea;
+            color: #2563eb;
             margin: 0 0 8px 0;
           }
           .print-header p {
@@ -16879,7 +16962,7 @@ export class TfnOrderDetailsDialog {
           }
           .section h3 {
             margin: 0 0 15px 0;
-            color: #667eea;
+            color: #2563eb;
             font-size: 16px;
             border-bottom: 1px solid #e0e0e0;
             padding-bottom: 8px;
@@ -16914,7 +16997,7 @@ export class TfnOrderDetailsDialog {
           .fuel-item .value {
             font-size: 28px;
             font-weight: bold;
-            color: #667eea;
+            color: #2563eb;
           }
           .fuel-item .label {
             font-size: 12px;
@@ -17854,7 +17937,7 @@ interface CustomerAddressIssue {
       justify-content: space-between;
       padding: 16px 24px;
       border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
     .dialog-header h2 {
@@ -17940,8 +18023,8 @@ interface CustomerAddressIssue {
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .customer-card.editing {
-      border-color: #667eea;
-      box-shadow: 0 2px 12px rgba(102, 126, 234, 0.2);
+      border-color: #2563eb;
+      box-shadow: 0 2px 12px rgba(37, 99, 235, 0.2);
     }
     .customer-header {
       display: flex;
@@ -17956,7 +18039,7 @@ interface CustomerAddressIssue {
     }
     .customer-code {
       font-weight: 600;
-      color: #667eea;
+      color: #2563eb;
       background: #f0f2ff;
       padding: 2px 8px;
       border-radius: 4px;
@@ -17995,7 +18078,7 @@ interface CustomerAddressIssue {
       color: #333;
     }
     .address-line mat-icon {
-      color: #667eea;
+      color: #2563eb;
       font-size: 18px;
       width: 18px;
       height: 18px;
@@ -18071,17 +18154,17 @@ interface CustomerAddressIssue {
       padding: 8px 20px;
       border: none;
       border-radius: 24px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       color: white;
       font-weight: 600;
       font-size: 13px;
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     }
     .welly-fix-btn:hover:not(:disabled) {
       transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
     }
     .welly-fix-btn:disabled {
       opacity: 0.7;
@@ -18089,7 +18172,7 @@ interface CustomerAddressIssue {
     }
     .welly-review-panel {
       background: #f8f6ff;
-      border: 2px solid #667eea;
+      border: 2px solid #2563eb;
       border-radius: 12px;
       padding: 20px;
       margin-bottom: 16px;
@@ -18172,7 +18255,7 @@ interface CustomerAddressIssue {
     }
     .welly-review-name .code {
       font-size: 11px;
-      color: #667eea;
+      color: #2563eb;
       background: #f0f2ff;
       padding: 1px 6px;
       border-radius: 4px;
@@ -18189,7 +18272,7 @@ interface CustomerAddressIssue {
       font-size: 16px;
       width: 16px;
       height: 16px;
-      color: #667eea;
+      color: #2563eb;
     }
     .welly-review-details {
       display: flex;
@@ -18844,7 +18927,7 @@ export class AddressIssuesDialog {
       align-items: center;
       gap: 16px;
       padding: 12px 16px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       border-radius: 8px;
       margin-bottom: 16px;
       flex-wrap: wrap;
@@ -18913,7 +18996,7 @@ export class AddressIssuesDialog {
     }
     .route-info-panel h4 {
       margin: 0 0 12px 0;
-      color: #667eea;
+      color: #2563eb;
       font-size: 16px;
     }
     .route-info-panel p {
@@ -20262,6 +20345,10 @@ export class AddDeliveryNoteDialog {
                         }
                         {{ matchingAddresses ? 'Matching...' : 'AI Address Match' }}
                       </button>
+                      <button mat-stroked-button color="primary" (click)="matchAddressesFromDatabase()" matTooltip="Fill missing delivery addresses from the customer database">
+                        <mat-icon>contacts</mat-icon>
+                        Match from Customer DB
+                      </button>
                       <button mat-stroked-button color="primary" (click)="geocodeAllStops()" [disabled]="geocodingAllStops" matTooltip="Geocode all stops missing coordinates">
                         @if (geocodingAllStops) {
                           <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
@@ -20274,7 +20361,7 @@ export class AddDeliveryNoteDialog {
                   </div>
                   <div class="stops-list">
                     @for (group of groupedStops; track $index; let i = $index) {
-                      <div class="stop-item" [class.missing-coords]="!group.latitude || !group.longitude" [class.collapsed]="group.isCollapsed && group.latitude && group.longitude">
+                      <div class="stop-item" [class.missing-coords]="!isStopResolved(group)" [class.collapsed]="group.isCollapsed && isStopResolved(group)">
                         <div class="stop-number">{{ i + 1 }}</div>
                         <div class="stop-details">
                           <div class="stop-header" (click)="toggleStopCollapse(group)">
@@ -20287,15 +20374,35 @@ export class AddDeliveryNoteDialog {
                               }
                             </div>
                             <div class="stop-status">
-                              @if (group.latitude && group.longitude) {
+                              @if (isStopResolved(group)) {
                                 <mat-icon class="coord-icon success" matTooltip="Coordinates: {{ group.latitude }}, {{ group.longitude }}">location_on</mat-icon>
+                              } @else if (group.addressApproximate) {
+                                <mat-icon class="coord-icon warning" matTooltip="Address too vague — enter a full street address">wrong_location</mat-icon>
+                              } @else if (isBlankAddress(group.deliveryAddress)) {
+                                <mat-icon class="coord-icon warning" matTooltip="Delivery address missing — match from customer DB or enter it">location_off</mat-icon>
                               } @else {
-                                <mat-icon class="coord-icon warning" matTooltip="Missing coordinates - enter address">location_off</mat-icon>
+                                <mat-icon class="coord-icon warning" matTooltip="Missing coordinates - geocode this address">location_off</mat-icon>
                               }
                               <mat-icon class="collapse-icon">{{ group.isCollapsed ? 'expand_more' : 'expand_less' }}</mat-icon>
                             </div>
                           </div>
-                          @if (!group.isCollapsed || !group.latitude || !group.longitude) {
+                          @if (!group.isCollapsed || !isStopResolved(group)) {
+                            @if (group.addressApproximate) {
+                              <div class="address-warning-banner">
+                                <mat-icon>wrong_location</mat-icon>
+                                <span>This address only matched a general area (not a real delivery point). Enter a full street address so it can be placed on the map.</span>
+                              </div>
+                            } @else if (isBlankAddress(group.deliveryAddress)) {
+                              <div class="address-warning-banner missing">
+                                <mat-icon>location_off</mat-icon>
+                                <span><strong>Delivery address missing.</strong> Click <em>"Match from Customer DB"</em> above to pull it from the customer record, or enter it manually below.</span>
+                              </div>
+                            } @else if (group.addressFromCustomerDb) {
+                              <div class="address-info-banner">
+                                <mat-icon>contacts</mat-icon>
+                                <span>Address filled from the customer database — verify it's correct.</span>
+                              </div>
+                            }
                             <!-- Saved Addresses Dropdown -->
                             @if (getSavedAddresses(group).length > 0) {
                               <div class="saved-addresses-row">
@@ -20382,11 +20489,19 @@ export class AddDeliveryNoteDialog {
               }
             </div>
 
+            @if (routeStepBlockReason()) {
+              <div class="route-block-reason">
+                <mat-icon>error_outline</mat-icon>
+                <span>{{ routeStepBlockReason() }}</span>
+              </div>
+            }
+
             <div class="step-actions">
               <button mat-button matStepperPrevious>
                 <mat-icon>arrow_back</mat-icon> Back
               </button>
-              <button mat-raised-button color="primary" matStepperNext [disabled]="!selectedWarehouse">
+              <button mat-raised-button color="primary" matStepperNext [disabled]="!canProceedToReview()"
+                      [matTooltip]="routeStepBlockReason()">
                 Next <mat-icon>arrow_forward</mat-icon>
               </button>
             </div>
@@ -20458,27 +20573,53 @@ export class AddDeliveryNoteDialog {
               <button mat-button matStepperPrevious>
                 <mat-icon>arrow_back</mat-icon> Back
               </button>
-              <div class="action-buttons">
-                <button mat-raised-button (click)="previewPdf()" [disabled]="creating">
-                  <mat-icon>preview</mat-icon> Preview PDF
-                </button>
-                <button mat-raised-button color="accent" (click)="createAndEmail()" [disabled]="creating">
-                  @if (creating) {
-                    <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
-                  } @else {
-                    <mat-icon>email</mat-icon>
-                  }
-                  {{ creating ? 'Sending...' : (data.isEditMode ? 'Update & Email' : 'Create & Email') }}
-                </button>
-                <button mat-raised-button color="primary" (click)="createTripsheet()" [disabled]="creating">
-                  @if (creating) {
-                    <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
-                  } @else {
-                    <mat-icon>{{ data.isEditMode ? 'save' : 'check' }}</mat-icon>
-                  }
-                  {{ creating ? (data.isEditMode ? 'Updating...' : 'Creating...') : (data.isEditMode ? 'Update & Download' : 'Create & Download') }}
-                </button>
-              </div>
+              @if (data.salesMode) {
+                <div class="action-buttons">
+                  <button mat-raised-button (click)="previewPdf()" [disabled]="creating">
+                    <mat-icon>preview</mat-icon> Preview PDF
+                  </button>
+                  <button mat-raised-button color="accent" (click)="createTripsheet(true)" [disabled]="creating"
+                          matTooltip="Generate the trip sheet and email the signer to sign it off">
+                    @if (creating) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>drive_file_rename_outline</mat-icon>
+                    }
+                    {{ creating ? 'Generating...' : 'Generate & Send to Sign' }}
+                  </button>
+                  <button mat-raised-button color="primary" (click)="createTripsheet(false)" [disabled]="creating"
+                          matTooltip="Generate the trip sheet and route it straight to the approver">
+                    @if (creating) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>how_to_reg</mat-icon>
+                    }
+                    {{ creating ? 'Generating...' : 'Generate & Wait for Approval' }}
+                  </button>
+                </div>
+              } @else {
+                <div class="action-buttons">
+                  <button mat-raised-button (click)="previewPdf()" [disabled]="creating">
+                    <mat-icon>preview</mat-icon> Preview PDF
+                  </button>
+                  <button mat-raised-button color="accent" (click)="createAndEmail()" [disabled]="creating">
+                    @if (creating) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>email</mat-icon>
+                    }
+                    {{ creating ? 'Sending...' : (data.isEditMode ? 'Update & Email' : 'Create & Email') }}
+                  </button>
+                  <button mat-raised-button color="primary" (click)="createTripsheet()" [disabled]="creating">
+                    @if (creating) {
+                      <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>{{ data.isEditMode ? 'save' : 'check' }}</mat-icon>
+                    }
+                    {{ creating ? (data.isEditMode ? 'Updating...' : 'Creating...') : (data.isEditMode ? 'Update & Download' : 'Create & Download') }}
+                  </button>
+                </div>
+              }
             </div>
           </mat-step>
         </mat-stepper>
@@ -20502,7 +20643,7 @@ export class AddDeliveryNoteDialog {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       gap: 16px;
@@ -20695,7 +20836,7 @@ export class AddDeliveryNoteDialog {
       background: #e3f2fd;
     }
     .invoice-item.selected {
-      border-color: #667eea;
+      border-color: #2563eb;
       background: #ede7f6;
     }
     .invoice-info {
@@ -20770,7 +20911,7 @@ export class AddDeliveryNoteDialog {
       color: #4caf50;
     }
     .add-icon {
-      color: #667eea;
+      color: #2563eb;
       opacity: 0;
       transition: opacity 0.2s;
     }
@@ -20785,7 +20926,7 @@ export class AddDeliveryNoteDialog {
       background: white;
       border-radius: 8px;
       margin-bottom: 8px;
-      border-left: 4px solid #667eea;
+      border-left: 4px solid #2563eb;
     }
     .stop-drag-handle {
       cursor: move;
@@ -20795,7 +20936,7 @@ export class AddDeliveryNoteDialog {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: #667eea;
+      background: #2563eb;
       color: white;
       display: flex;
       align-items: center;
@@ -20851,7 +20992,7 @@ export class AddDeliveryNoteDialog {
     }
     .add-btn .add-icon {
       opacity: 1 !important;
-      color: #667eea;
+      color: #2563eb;
     }
     .invoice-item .quantity {
       font-size: 11px;
@@ -21063,7 +21204,7 @@ export class AddDeliveryNoteDialog {
       background: #4caf50;
     }
     .legend-item .marker.stop {
-      background: #667eea;
+      background: #2563eb;
     }
     .legend-item .marker.depot {
       background: #ff9800;
@@ -21154,7 +21295,7 @@ export class AddDeliveryNoteDialog {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       color: white;
       display: flex;
       align-items: center;
@@ -21275,6 +21416,67 @@ export class AddDeliveryNoteDialog {
       color: #666;
       margin-top: 6px;
     }
+    .address-warning-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff3e0;
+      border: 1px solid #ffb74d;
+      color: #e65100;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 8px 0;
+      font-size: 12.5px;
+    }
+    .address-warning-banner mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #f57c00;
+    }
+    .address-warning-banner.missing {
+      background: #ffebee;
+      border-color: #ef9a9a;
+      color: #c62828;
+    }
+    .address-warning-banner.missing mat-icon { color: #e53935; }
+    .address-info-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      color: #1565c0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 8px 0;
+      font-size: 12.5px;
+    }
+    .address-info-banner mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #1976d2;
+    }
+    .route-block-reason {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #ffebee;
+      border: 1px solid #ef9a9a;
+      color: #c62828;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 12px 0 4px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .route-block-reason mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #e53935;
+    }
     .stop-location-info mat-icon {
       font-size: 14px;
       width: 14px;
@@ -21365,7 +21567,7 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 12px 0;
-      color: #667eea;
+      color: #2563eb;
       font-size: 14px;
     }
     .review-card .main-value {
@@ -21480,7 +21682,7 @@ export class AddDeliveryNoteDialog {
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: #667eea;
+      background: #2563eb;
       color: white;
     }
     .matrix-header h4 {
@@ -21731,7 +21933,16 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       preScheduledDate?: Date,
       preSpecialInstructions?: string,
       preTotalDistance?: number,
-      preEstimatedTime?: string
+      preEstimatedTime?: string,
+      // Sales mode — create a Sales Trip Sheet pending two-person approval instead of a live load
+      salesMode?: boolean,
+      routeArea?: string,
+      createdByName?: string | null,
+      signerUserId?: number | null,
+      signerName?: string | null,
+      approverUserId?: number | null,
+      approverName?: string | null,
+      isManualTripsheet?: boolean
     },
     private dialogRef: MatDialogRef<CreateTripsheetDialog>,
     private injector: Injector,
@@ -21980,9 +22191,20 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           c.name === invoice.customerName
         );
         
-        let searchQuery = invoice.customerName + ' South Africa';
-        if (customer?.addressLines?.length) {
+        // Prefer the address actually parsed/entered on the invoice/stop (imported rows),
+        // then a matched customer's saved address, and only fall back to the customer name.
+        const ownAddress = (invoice.deliveryAddress || invoice.address || '').trim();
+        let searchQuery: string;
+        if (ownAddress) {
+          const parts = [ownAddress, invoice.city, invoice.province].filter(Boolean).join(', ');
+          searchQuery = parts + ', South Africa';
+        } else if (customer?.addressLines?.length) {
           searchQuery = customer.addressLines.join(', ') + ', South Africa';
+        } else if ((invoice.customerName || '').trim() && invoice.customerName !== 'Unknown Customer') {
+          searchQuery = invoice.customerName + ' South Africa';
+        } else {
+          // Nothing to geocode reliably — skip so we don't drop a pin on the country centroid
+          return;
         }
         
         try {
@@ -21994,6 +22216,20 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           if (data.status === 'OK' && data.results?.length > 0) {
             const result = data.results[0];
             const addressComponents = result.address_components || [];
+
+            // Reject coarse matches (country/province centroid or APPROXIMATE precision):
+            // these are NOT real delivery points and must not be shown as "located".
+            const topTypes: string[] = result.types || [];
+            const locationType: string = result.geometry?.location_type || '';
+            const coarseOnly = topTypes.length > 0 && topTypes.every((t: string) =>
+              ['country', 'administrative_area_level_1', 'administrative_area_level_2', 'political'].includes(t));
+            const isApproximate = locationType === 'APPROXIMATE' || coarseOnly ||
+              /^south africa$/i.test((result.formatted_address || '').trim());
+            if (isApproximate) {
+              // Leave invoice without coordinates so the UI flags it as needing an address.
+              invoice.addressApproximate = true;
+              return;
+            }
             
             // Extract coordinates from geocoding result
             const location = result.geometry?.location;
@@ -22001,6 +22237,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
               invoice.latitude = location.lat;
               invoice.longitude = location.lng;
               invoice.formattedAddress = result.formatted_address;
+              invoice.addressApproximate = false;
             }
             
             // Find province from address components
@@ -22399,17 +22636,49 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         group.invoices.push(stop);
         group.totalValue += stop.salesAmount || stop.totalAmount || 0;
       } else {
+        // Resolve a usable delivery address. If the imported/parsed row has no real
+        // address (blank, "Unknown", or just "South Africa"), pull it straight from
+        // the customer database so routing has a proper street address to work with.
+        let addr = (stop.deliveryAddress || stop.address || '').trim();
+        let lat = stop.latitude;
+        let lng = stop.longitude;
+        let city = stop.city;
+        let province = stop.province;
+        if (this.isBlankAddress(addr)) {
+          const resolved = this.resolveAddressFromCustomer(stop);
+          if (resolved) {
+            addr = resolved.address || addr;
+            city = city || resolved.city;
+            province = province || resolved.province;
+            if ((!lat || !lng) && resolved.latitude && resolved.longitude) {
+              lat = resolved.latitude;
+              lng = resolved.longitude;
+            }
+            // Propagate back onto the stop so save/geocode use the resolved address too
+            stop.deliveryAddress = addr;
+            stop.address = addr;
+            stop.city = city;
+            stop.province = province;
+            if (resolved.latitude && resolved.longitude) {
+              stop.latitude = lat;
+              stop.longitude = lng;
+            }
+            stop.addressFromCustomerDb = true;
+          }
+        }
+
         groups.set(key, {
           customerName: stop.customerName,
           customerNumber: stop.customerNumber,
-          deliveryAddress: stop.deliveryAddress || stop.address || '',
-          latitude: stop.latitude,
-          longitude: stop.longitude,
-          city: stop.city,
-          province: stop.province,
+          deliveryAddress: this.isBlankAddress(addr) ? '' : addr,
+          latitude: lat,
+          longitude: lng,
+          city: city,
+          province: province,
+          addressFromCustomerDb: stop.addressFromCustomerDb || false,
           invoices: [stop],
           totalValue: stop.salesAmount || stop.totalAmount || 0,
-          isCollapsed: !!(stop.latitude && stop.longitude) // Auto-collapse if has coordinates
+          isCollapsed: !!(lat && lng && !this.isBlankAddress(addr)) // Auto-collapse only when address is real
         });
       }
     });
@@ -22419,6 +22688,97 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     if (this.groupedStops.length > 0) {
       this.loadSavedAddressesForCustomers();
     }
+  }
+
+  /** True when an address string is empty or just a country/placeholder (not a real delivery point). */
+  isBlankAddress(addr: string | null | undefined): boolean {
+    const a = (addr || '').toString().trim();
+    if (!a) return true;
+    if (/^south africa$/i.test(a)) return true;
+    if (/^(unknown|n\/?a|none|-)$/i.test(a)) return true;
+    return false;
+  }
+
+  /** Find the matching customer in the loaded customer database for a stop. */
+  private findCustomerForStop(stop: any): any {
+    const customers = this.data.customers || [];
+    if (!customers.length) return null;
+    const num = (stop.customerNumber || '').toString().trim().toLowerCase();
+    const name = (stop.customerName || '').toString().trim().toLowerCase();
+
+    if (num) {
+      const byCode = customers.find((c: any) =>
+        (c.customerCode || '').toString().trim().toLowerCase() === num);
+      if (byCode) return byCode;
+    }
+    if (name) {
+      const byName = customers.find((c: any) =>
+        (c.name || '').toString().trim().toLowerCase() === name);
+      if (byName) return byName;
+      // Fuzzy contains match as a fallback
+      const fuzzy = customers.find((c: any) => {
+        const cn = (c.name || '').toString().trim().toLowerCase();
+        return cn && (cn.includes(name) || name.includes(cn));
+      });
+      if (fuzzy) return fuzzy;
+    }
+    return null;
+  }
+
+  /** Pull a usable delivery address (and coords) for a stop from the customer database. */
+  private resolveAddressFromCustomer(stop: any): { address: string; city?: string; province?: string; latitude?: number; longitude?: number } | null {
+    const c = this.findCustomerForStop(stop);
+    if (!c) return null;
+
+    const candidates = [
+      c.deliveryAddress,
+      c.physicalAddress,
+      c.address,
+      (c.addressLines && c.addressLines.length ? c.addressLines.join(', ') : '')
+    ];
+    const address = (candidates.find((a: string) => !this.isBlankAddress(a)) || '').toString().trim();
+
+    // If the customer already has coordinates we can use them even if the text is thin
+    const hasCoords = !!(c.latitude && c.longitude);
+    if (this.isBlankAddress(address) && !hasCoords) return null;
+
+    return {
+      address,
+      city: c.deliveryCity || c.city,
+      province: c.deliveryProvince || c.province,
+      latitude: c.latitude,
+      longitude: c.longitude
+    };
+  }
+
+  /**
+   * Fill any missing delivery addresses from the customer database, then geocode
+   * whatever was resolved. This is the explicit "Match from Customer DB" action.
+   */
+  async matchAddressesFromDatabase(): Promise<void> {
+    const before = this.groupedStops.filter(g => this.isBlankAddress(g.deliveryAddress)).length;
+
+    if (!(this.data.customers && this.data.customers.length)) {
+      this.snackBar.open('Customer database is still loading — please try again in a moment.', 'Close', { duration: 3500 });
+      return;
+    }
+
+    // Re-run grouping which now resolves addresses (and coords) from the customer DB
+    this.updateGroupedStops();
+
+    const after = this.groupedStops.filter(g => this.isBlankAddress(g.deliveryAddress)).length;
+    const matched = Math.max(0, before - after);
+
+    if (matched > 0) {
+      this.snackBar.open(`Matched ${matched} address${matched === 1 ? '' : 'es'} from the customer database.`, 'Close', { duration: 3500 });
+      // Geocode the newly-filled stops that still need coordinates
+      await this.geocodeAllStops();
+    } else if (after > 0) {
+      this.snackBar.open(`${after} stop${after === 1 ? '' : 's'} could not be matched — no address on file. Please enter them manually.`, 'Close', { duration: 5000 });
+    } else {
+      this.snackBar.open('All stops already have a delivery address.', 'Close', { duration: 3000 });
+    }
+    this.updateRouteMap();
   }
 
   // Toggle collapse state of a stop
@@ -23045,7 +23405,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
           scale: 14,
-          fillColor: '#667eea',
+          fillColor: '#2563eb',
           fillOpacity: 1,
           strokeColor: 'white',
           strokeWeight: 2
@@ -23063,7 +23423,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         map: this.map,
         suppressMarkers: true, // We already have our own markers
         polylineOptions: {
-          strokeColor: '#667eea',
+          strokeColor: '#2563eb',
           strokeOpacity: 0.8,
           strokeWeight: 5
         }
@@ -23095,7 +23455,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       this.routePolyline = new google.maps.Polyline({
         path: path,
         geodesic: true,
-        strokeColor: '#667eea',
+        strokeColor: '#2563eb',
         strokeOpacity: 0.8,
         strokeWeight: 4,
         map: this.map
@@ -23108,13 +23468,54 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   // Check if stops have coordinates
   stopsHaveCoords(): boolean {
     if (this.groupedStops.length === 0) return false;
-    return this.groupedStops.some(s => s.latitude && s.longitude);
+    return this.groupedStops.some(s => this.isStopResolved(s));
   }
 
   // Get count of stops with coordinates
   getStopsWithCoords(): number {
-    return this.groupedStops.filter(s => s.latitude && s.longitude).length;
+    return this.groupedStops.filter(s => this.isStopResolved(s)).length;
   }
+
+  // A stop is only "green"/resolved when it has a real (non-blank) address AND
+  // real coordinates that are not an approximate (country/area centroid) match.
+  isStopResolved(group: any): boolean {
+    if (!group) return false;
+    if (this.isBlankAddress(group.deliveryAddress)) return false;
+    if (group.addressApproximate) return false;
+    return !!(group.latitude && group.longitude);
+  }
+
+  // Every delivery stop must be fully resolved before routing can continue.
+  allStopsResolved(): boolean {
+    return this.groupedStops.length > 0 && this.groupedStops.every(s => this.isStopResolved(s));
+  }
+
+  // Gate for leaving the Route Details step. Driver + vehicle are mandatory,
+  // a valid scheduled date is required, and every stop must be resolved.
+  canProceedToReview(): boolean {
+    return !this.routeStepBlockReason();
+  }
+
+  // Returns a human-readable reason the routing step is blocked, or '' if OK.
+  routeStepBlockReason(): string {
+    if (!this.selectedWarehouse) return 'Select a pickup warehouse to continue.';
+    if (!this.selectedDriver) return 'Assign a driver \u2014 a trip sheet cannot leave a driver unassigned.';
+    if (!this.selectedVehicle) return 'Assign a vehicle \u2014 a trip sheet cannot leave a vehicle unassigned.';
+    if (!this.isScheduledDateValid()) return 'Choose a valid scheduled date.';
+    if (this.groupedStops.length === 0) return 'Add at least one delivery stop.';
+    const unresolved = this.groupedStops.filter(s => !this.isStopResolved(s)).length;
+    if (unresolved > 0) {
+      return `${unresolved} stop${unresolved > 1 ? 's' : ''} still need a valid delivery address. Use "Match from Customer DB", pick a Google suggestion, or fix the address (shown in red).`;
+    }
+    return '';
+  }
+
+  // Validate the scheduled date is a real, parseable date.
+  isScheduledDateValid(): boolean {
+    const d = this.scheduledDate ? new Date(this.scheduledDate) : null;
+    return !!(d && !isNaN(d.getTime()));
+  }
+
 
   // Handle stop address change - NOT USED with autocomplete
   onStopAddressChanged(stop: any): void {
@@ -23243,11 +23644,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       params: { address }
     }).subscribe({
       next: (result) => {
-        if (result.latitude && result.longitude) {
+        if (result.latitude && result.longitude && !result.isApproximate) {
           group.latitude = result.latitude;
           group.longitude = result.longitude;
           group.city = result.city;
           group.province = result.province;
+          group.addressApproximate = false;
           group.isCollapsed = true; // Collapse after successful geocoding
           
           // Update all invoices in this group with coordinates
@@ -23273,7 +23675,15 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           
           this.updateRouteMap();
         } else {
-          console.warn('No coordinates in geocode result');
+          // Address only resolved to a country/province centroid — NOT a real delivery point.
+          // Clear any coordinates so the stop is clearly flagged as needing a proper address.
+          group.latitude = null;
+          group.longitude = null;
+          group.addressApproximate = true;
+          group.isCollapsed = false;
+          this.snackBar.open(
+            `"${group.customerName}" — that address is too vague to place on the map. Please enter a full street address.`,
+            'OK', { duration: 5000 });
         }
         this.geocodingStop = null;
       },
@@ -23285,13 +23695,16 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   }
 
   geocodeStopAddress(stop: any): void {
-    if (!stop.deliveryAddress) {
-      console.warn('No address to geocode');
+    const raw = (stop.deliveryAddress || stop.address || '').trim();
+    // Ignore empty or country-only addresses so we don't pin the centre of South Africa
+    if (!raw || /^south africa$/i.test(raw)) {
+      console.warn('No usable street address to geocode for stop', stop.customerName || stop.companyName);
       return;
     }
 
     this.geocodingStop = stop;
-    const address = stop.deliveryAddress + ', South Africa';
+    const parts = [raw, stop.city, stop.province].filter(Boolean).join(', ');
+    const address = parts + ', South Africa';
     this.http.get<any>(`${this.data.apiUrl}/logistics/googlemaps/geocode`, {
       params: { address }
     }).subscribe({
@@ -23330,11 +23743,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           params: { address }
         }).toPromise();
 
-        if (result?.latitude && result?.longitude) {
+        if (result?.latitude && result?.longitude && !result.isApproximate) {
           group.latitude = result.latitude;
           group.longitude = result.longitude;
           group.city = result.city;
           group.province = result.province;
+          group.addressApproximate = false;
           group.isCollapsed = true;
           
           // Update all invoices in this group
@@ -23347,6 +23761,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
               stop.longitude = result.longitude;
             }
           });
+        } else if (result?.isApproximate) {
+          // Coarse match — flag it, don't pretend it's located
+          group.latitude = null;
+          group.longitude = null;
+          group.addressApproximate = true;
+          group.isCollapsed = false;
         }
       } catch (err) {
         console.error('Failed to geocode group:', group.customerName, err);
@@ -23872,7 +24292,15 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     }
   }
 
-  createTripsheet(): void {
+  createTripsheet(sendToSign: boolean = false): void {
+    // Hard guard: never allow generating a trip sheet with missing driver/vehicle,
+    // an invalid date, or unresolved delivery addresses.
+    const blockReason = this.routeStepBlockReason();
+    if (blockReason) {
+      this.snackBar.open(blockReason, 'Close', { duration: 5000 });
+      return;
+    }
+
     this.creating = true;
     
     // Save all delivery addresses for future use
@@ -23880,6 +24308,58 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     
     // Use groupedStops (grouped by customer) instead of raw selectedStops
     const stopsToUse = this.groupedStops.length > 0 ? this.groupedStops : this.selectedStops;
+
+    // --- Sales mode: create a Sales Trip Sheet pending two-person approval instead of a live load ---
+    if (this.data?.salesMode) {
+      const lines: any[] = [];
+      stopsToUse.forEach((stop: any) => {
+        const invoices = stop.invoices && stop.invoices.length ? stop.invoices : [stop];
+        invoices.forEach((inv: any) => {
+          lines.push({
+            customerName: stop.customerName || stop.companyName || inv.customerName || null,
+            invoiceNumber: stop.transactionNumber || inv.transactionNumber || inv.invoiceNumber || null,
+            address: stop.deliveryAddress || stop.address || inv.deliveryAddress || null,
+            city: stop.city || inv.city || null,
+            province: stop.province || inv.province || null,
+            contactPerson: stop.contactPerson || inv.contactPerson || null,
+            contactPhone: stop.contactPhone || inv.contactPhone || null,
+            productDescription: inv.productDescription || stop.productDescription || null,
+            quantity: Number(inv.quantity ?? stop.quantity ?? 0) || 0,
+            value: Number(inv.salesAmount ?? stop.salesAmount ?? 0) || 0
+          });
+        });
+      });
+
+      const salesPayload: any = {
+        warehouseCode: this.selectedWarehouse?.code || this.selectedWarehouse?.name || null,
+        warehouseId: this.selectedWarehouse?.id || null,
+        routeArea: this.data.routeArea || (this.selectedProvince !== 'all' ? this.selectedProvince : null),
+        scheduledDate: this.scheduledDate ? new Date(this.scheduledDate).toISOString() : null,
+        notes: this.specialInstructions || null,
+        estimatedDistance: this.totalDistance || null,
+        driverName: this.selectedDriver ? `${this.selectedDriver.firstName || ''} ${this.selectedDriver.lastName || ''}`.trim() : null,
+        vehicleRegistration: this.selectedVehicle?.registrationNumber || null,
+        createdByName: this.data.createdByName || null,
+        signerUserId: this.data.signerUserId ?? null,
+        signerName: this.data.signerName || null,
+        approverUserId: this.data.approverUserId ?? null,
+        approverName: this.data.approverName || null,
+        sendToSign: !!sendToSign,
+        lines
+      };
+
+      this.http.post(`${environment.apiUrl}/logistics/sales-tripsheets`, salesPayload).subscribe({
+        next: () => {
+          this.creating = false;
+          this.dialogRef.close({ created: true, salesMode: true, sentToSign: !!sendToSign });
+        },
+        error: (err) => {
+          this.creating = false;
+          this.snackBar.open('Failed to create trip sheet: ' + (err.error?.error || err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 5000 });
+        }
+      });
+      return;
+    }
     
     // Determine if this is an update or create
     // IMPORTANT: Also check draftId - if auto-save created a draft, update it instead of creating a duplicate
@@ -24264,12 +24744,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
             <p>Upload an Excel file with invoice and delivery data</p>
           </div>
           
-          <div class="type-card" (click)="selectType('automatic')" matTooltip="Create trip sheet from pending system invoices">
+          <div class="type-card" (click)="selectType('pad')" matTooltip="Import a Pad Tripsheet Excel as-is, then enter addresses and driver manually">
             <div class="type-icon automatic">
-              <mat-icon>auto_awesome</mat-icon>
+              <mat-icon>menstrual_health</mat-icon>
             </div>
-            <h3>Automatic Tripsheet</h3>
-            <p>Link to pending invoices from the TFN system</p>
+            <h3>Pad Tripsheet</h3>
+            <p>Import a sanitary-pad tripsheet as-is &mdash; no invoice/customer linking. Add addresses &amp; driver after import</p>
           </div>
           
           <div class="type-card" (click)="selectType('manual')" matTooltip="Manually enter invoice and delivery details">
@@ -24450,7 +24930,7 @@ export class TripsheetTypeDialog {
     public dialogRef: MatDialogRef<TripsheetTypeDialog>
   ) {}
 
-  selectType(type: 'import' | 'automatic' | 'manual' | 'transfer' | 'welly' | 'welly-suggests'): void {
+  selectType(type: 'import' | 'pad' | 'manual' | 'transfer' | 'welly' | 'welly-suggests'): void {
     this.dialogRef.close({ type });
   }
 }
@@ -24655,6 +25135,7 @@ export class TripsheetTypeDialog {
         <button mat-button mat-dialog-close>Cancel</button>
         <button mat-raised-button color="primary" 
                 (click)="createTripsheet()" 
+                [matTooltip]="validationReason()"
                 [disabled]="creating || !isValid()">
           @if (creating) {
             <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
@@ -24835,6 +25316,7 @@ export class ManualTripsheetDialog {
 
   constructor(
     private http: HttpClient,
+    private snackBar: MatSnackBar,
     public dialogRef: MatDialogRef<ManualTripsheetDialog>,
     @Inject(MAT_DIALOG_DATA) public data: {
       drivers: any[],
@@ -24966,13 +25448,30 @@ export class ManualTripsheetDialog {
   }
 
   isValid(): boolean {
-    return this.selectedWarehouse && 
-           this.lineItems.length > 0 && 
-           this.lineItems.some(item => item.customerName || item.invoiceNumber);
+    return !this.validationReason();
+  }
+
+  // Human-readable reason the manual trip sheet cannot be created yet.
+  validationReason(): string {
+    if (!this.selectedWarehouse) return 'Select a pickup warehouse.';
+    if (this.lineItems.length === 0 || !this.lineItems.some(item => item.customerName || item.invoiceNumber)) {
+      return 'Add at least one line item with a customer or invoice number.';
+    }
+    if (!this.selectedDriver) return 'Assign a driver \u2014 a trip sheet cannot leave a driver unassigned.';
+    if (!this.selectedVehicle) return 'Assign a vehicle \u2014 a trip sheet cannot leave a vehicle unassigned.';
+    const d = this.scheduledDate ? new Date(this.scheduledDate) : null;
+    if (!d || isNaN(d.getTime())) return 'Choose a valid scheduled date.';
+    const missingAddr = this.lineItems.filter(item => (item.customerName || item.invoiceNumber) && !((item.deliveryAddress || '').toString().trim())).length;
+    if (missingAddr > 0) return `${missingAddr} line item${missingAddr > 1 ? 's' : ''} still need a delivery address.`;
+    return '';
   }
 
   createTripsheet(): void {
-    if (!this.isValid()) return;
+    const reason = this.validationReason();
+    if (reason) {
+      this.snackBar.open(reason, 'Close', { duration: 5000 });
+      return;
+    }
     
     this.creating = true;
     
@@ -25638,8 +26137,8 @@ export class InternalTransferDialog {
   ],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon>upload_file</mat-icon>
-      Import Tripsheet from Excel
+      <mat-icon>{{ data.padMode ? 'menstrual_health' : 'upload_file' }}</mat-icon>
+      {{ data.padMode ? 'Import Pad Tripsheet from Excel' : 'Import Tripsheet from Excel' }}
     </h2>
     <mat-dialog-content>
       <div class="import-container">
@@ -26299,7 +26798,7 @@ export class ImportTripsheetDialog {
   constructor(
     private http: HttpClient,
     public dialogRef: MatDialogRef<ImportTripsheetDialog>,
-    @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string }
+    @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string; padMode?: boolean }
   ) {}
 
   onDragOver(event: DragEvent): void {
@@ -26369,7 +26868,9 @@ export class ImportTripsheetDialog {
     const formData = new FormData();
     formData.append('file', this.selectedFile);
     
-    this.http.post<any>(`${this.data.apiUrl}/logistics/tripsheet/preview-import`, formData).subscribe({
+    const url = `${this.data.apiUrl}/logistics/tripsheet/preview-import` +
+      (this.data.padMode ? '?skipMatching=true' : '');
+    this.http.post<any>(url, formData).subscribe({
       next: (response) => {
         this.previewResponse = response;
         // Initialize selectedCustomerId for partial matches
@@ -26409,6 +26910,8 @@ export class ImportTripsheetDialog {
 
   // Check if this is a manual tripsheet (no matched invoices found in system)
   isManualTripsheet(): boolean {
+    // Pad Tripsheets are always treated as manual (imported as-is, addresses entered later)
+    if (this.data.padMode) return true;
     if (!this.previewResponse) return false;
     // Manual tripsheet if no matched invoices AND we have unmatched rows
     return this.previewResponse.matchedCount === 0 && 
@@ -26439,7 +26942,7 @@ export class ImportTripsheetDialog {
         netSales: row.data?.salesAmount || 0,
         totalAmount: row.data?.salesAmount || 0,
         status: 'Pending',
-        matchedCustomerId: row.selectedCustomerId || row.matchedCustomerId,
+        matchedCustomerId: this.data.padMode ? undefined : (row.selectedCustomerId || row.matchedCustomerId),
         contactPerson: row.data?.contactPerson,
         contactPhone: row.data?.contactPhone,
         // Source tracking
@@ -26512,6 +27015,7 @@ export class ImportTripsheetDialog {
           <mat-select [(ngModel)]="formData.maintenanceType" name="maintenanceType" required>
             <mat-option value="scheduled">Scheduled Service</mat-option>
             <mat-option value="repair">Repair</mat-option>
+            <mat-option value="spares">Spares</mat-option>
             <mat-option value="license">License Renewal</mat-option>
             <mat-option value="inspection">Inspection/Roadworthy</mat-option>
             <mat-option value="other">Other</mat-option>
@@ -26762,10 +27266,9 @@ export class AddMaintenanceDialog implements OnInit {
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Vehicle Type</mat-label>
           <mat-select [(ngModel)]="formData.vehicleTypeId" name="vehicleTypeId" [disabled]="data.mode === 'view'">
-            <mat-option [value]="1">Truck</mat-option>
-            <mat-option [value]="2">Van</mat-option>
-            <mat-option [value]="3">Car</mat-option>
-            <mat-option [value]="4">Motorcycle</mat-option>
+            @for (vt of vehicleTypes; track vt.id) {
+              <mat-option [value]="vt.id">{{ vt.name }}</mat-option>
+            }
           </mat-select>
         </mat-form-field>
 
@@ -26878,6 +27381,7 @@ export class AddMaintenanceDialog implements OnInit {
 })
 export class VehicleDialogComponent {
   formData: any = {};
+  vehicleTypes: { id: number; name: string }[] = [];
   
   constructor(
     public dialogRef: MatDialogRef<VehicleDialogComponent>,
@@ -26889,6 +27393,22 @@ export class VehicleDialogComponent {
     } else {
       this.formData = { status: 'Available', vehicleTypeId: 1 };
     }
+    this.loadVehicleTypes();
+  }
+
+  loadVehicleTypes(): void {
+    const apiUrl = environment.apiUrl;
+    this.http.get<{ id: number; name: string }[]>(`${apiUrl}/fleet/vehicle-types`).subscribe({
+      next: (types) => { this.vehicleTypes = types || []; },
+      error: (err) => {
+        console.error('Error loading vehicle types:', err);
+        // Fallback so the dropdown is never empty
+        this.vehicleTypes = [
+          { id: 1, name: 'Truck' }, { id: 2, name: 'Van' },
+          { id: 3, name: 'Car' }, { id: 4, name: 'Motorcycle' }
+        ];
+      }
+    });
   }
 
   isValid(): boolean {
@@ -26901,7 +27421,7 @@ export class VehicleDialogComponent {
 
   onSubmit(): void {
     if (this.isValid()) {
-      const apiUrl = 'http://192.168.10.151:5143/api';
+      const apiUrl = environment.apiUrl;
       if (this.data.mode === 'add') {
         this.http.post(`${apiUrl}/fleet/vehicles`, this.formData).subscribe({
           next: () => this.dialogRef.close(true),
@@ -27003,7 +27523,7 @@ export class AssignDriverDialogComponent implements OnInit {
   }
 
   loadDrivers(): void {
-    const apiUrl = 'http://192.168.10.151:5143/api';
+    const apiUrl = environment.apiUrl;
     this.http.get<any[]>(`${apiUrl}/logistics/drivers`).subscribe({
       next: (drivers) => this.drivers = drivers,
       error: () => this.drivers = []
@@ -27015,7 +27535,7 @@ export class AssignDriverDialogComponent implements OnInit {
   }
 
   onSubmit(): void {
-    const apiUrl = 'http://192.168.10.151:5143/api';
+    const apiUrl = environment.apiUrl;
     this.http.post(`${apiUrl}/fleet/vehicles/${this.data.vehicle.id}/assign-driver`, {
       driverId: this.selectedDriverId
     }).subscribe({
@@ -27131,7 +27651,7 @@ export class LinkVehicleDialogComponent implements OnInit {
   }
 
   loadAvailableItems(): void {
-    const apiUrl = 'http://192.168.10.151:5143/api';
+    const apiUrl = environment.apiUrl;
     const endpoint = this.data.type === 'cartrack' 
       ? `${apiUrl}/cartrack/vehicles/unlinked`
       : `${apiUrl}/logistics/tfn/vehicles/unlinked`;
@@ -27153,7 +27673,7 @@ export class LinkVehicleDialogComponent implements OnInit {
   }
 
   onSubmit(): void {
-    const apiUrl = 'http://192.168.10.151:5143/api';
+    const apiUrl = environment.apiUrl;
     const externalId = this.selectedExternalId || this.manualId;
     
     const endpoint = this.data.type === 'cartrack'
@@ -28198,7 +28718,7 @@ export class ViewLoadDetailsDialog {
       gap: 8px;
       margin: 0;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
 
@@ -28267,7 +28787,7 @@ export class ViewLoadDetailsDialog {
       margin-bottom: 8px;
       background: #f9f9f9;
       border-radius: 8px;
-      border-left: 4px solid #667eea;
+      border-left: 4px solid #2563eb;
     }
 
     .stop-number {
@@ -28276,7 +28796,7 @@ export class ViewLoadDetailsDialog {
       justify-content: center;
       width: 32px;
       height: 32px;
-      background: #667eea;
+      background: #2563eb;
       color: white;
       border-radius: 50%;
       font-weight: bold;
@@ -28396,7 +28916,7 @@ export class ViewRouteMapDialog implements OnInit {
   };
 
   polylineOptions: google.maps.PolylineOptions = {
-    strokeColor: '#667eea',
+    strokeColor: '#2563eb',
     strokeOpacity: 0.8,
     strokeWeight: 4,
   };
@@ -34498,6 +35018,151 @@ export class FuelHealthDialog {
     if (lvl === 'watch') return 'Some irregularities worth keeping an eye on.';
     if (lvl === 'unknown') return 'Not enough data (tank size / expected economy) to score this vehicle.';
     return 'Fuel usage lines up with distance travelled and tank capacity.';
+  }
+
+  close(): void { this.dialogRef.close(); }
+}
+
+/**
+ * Quick barcode lookup pop-up — shows the tripsheet(s), stock item, invoices,
+ * asset and recent scans linked to a scanned/typed barcode number.
+ */
+@Component({
+  selector: 'app-barcode-lookup-dialog',
+  standalone: true,
+  imports: [CommonModule, MatIconModule, MatDialogModule, MatButtonModule],
+  template: `
+  <div class="bl">
+    <div class="bl__head">
+      <mat-icon>qr_code_scanner</mat-icon>
+      <div class="bl__title">
+        <h2>Barcode lookup</h2>
+        <span class="bl__code">{{ data.code }}</span>
+      </div>
+      <button class="bl__x" (click)="close()"><mat-icon>close</mat-icon></button>
+    </div>
+
+    <div class="bl__body">
+      @if (!data.found) {
+        <div class="bl__empty">
+          <mat-icon>help_outline</mat-icon>
+          <p>{{ data.message || 'This barcode is not linked to anything yet.' }}</p>
+        </div>
+      }
+
+      @if (data.tag) {
+        <div class="bl__block">
+          <div class="bl__bt"><mat-icon>sell</mat-icon> Tag</div>
+          <div class="bl__kv"><span>Type</span><b>{{ data.tag.tagType }}</b></div>
+          @if (data.tag.label) { <div class="bl__kv"><span>Label</span><b>{{ data.tag.label }}</b></div> }
+          <div class="bl__kv"><span>Status</span><b>{{ data.tag.status }}</b></div>
+        </div>
+      }
+
+      @if (data.tripSheets?.length) {
+        <div class="bl__block">
+          <div class="bl__bt"><mat-icon>local_shipping</mat-icon> Active loads / tripsheets ({{ data.tripSheets.length }})</div>
+          @for (l of data.tripSheets; track l.id) {
+            <div class="bl__row" (click)="openLoad(l.id)">
+              <div>
+                <b>{{ l.loadNumber }}</b>
+                <div class="bl__sub">{{ l.customerName || 'No customer' }}@if (l.driver) { · {{ l.driver }} }@if (l.vehicle) { · {{ l.vehicle }} }</div>
+              </div>
+              <span class="bl__chip">{{ l.status }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      @if (data.inventory?.length) {
+        <div class="bl__block">
+          <div class="bl__bt"><mat-icon>inventory_2</mat-icon> Live stock</div>
+          @for (b of data.inventory; track b.id) {
+            <div class="bl__row">
+              <div><b>{{ b.itemCode }}</b><div class="bl__sub">{{ b.itemDescription || 'No description' }} · {{ b.uom }}</div></div>
+              <div class="bl__qty"><b>{{ b.quantityOnHand }}</b><span>on hand</span></div>
+            </div>
+          }
+        </div>
+      }
+
+      @if (data.invoices?.length) {
+        <div class="bl__block">
+          <div class="bl__bt"><mat-icon>receipt_long</mat-icon> Invoices ({{ data.invoices.length }})</div>
+          @for (i of data.invoices; track i.id) {
+            <div class="bl__row">
+              <div><b>{{ i.transactionNumber }}</b><div class="bl__sub">{{ i.customerName }} · {{ i.productDescription }} · Qty {{ i.quantity }}</div></div>
+              <span class="bl__chip">{{ i.status }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      @if (data.asset) {
+        <div class="bl__block">
+          <div class="bl__bt"><mat-icon>chair</mat-icon> Fixed asset</div>
+          <div class="bl__kv"><span>Code</span><b>{{ data.asset.assetCode || '—' }}</b></div>
+          <div class="bl__kv"><span>Category</span><b>{{ data.asset.category }}</b></div>
+          @if (data.asset.assignedTo) { <div class="bl__kv"><span>Assigned to</span><b>{{ data.asset.assignedTo }}</b></div> }
+        </div>
+      }
+
+      @if (data.recentScans?.length) {
+        <div class="bl__block">
+          <div class="bl__bt"><mat-icon>history</mat-icon> Recent scans</div>
+          @for (s of data.recentScans; track s.id) {
+            <div class="bl__scan"><mat-icon>bolt</mat-icon><div><b>{{ s.action }}</b> — {{ s.scannedByName || 'Unknown' }}<div class="bl__sub">{{ s.scannedAt | date:'d MMM, HH:mm' }}</div></div></div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="bl__foot">
+      <button mat-stroked-button (click)="openScanPage()"><mat-icon>open_in_new</mat-icon> Full Scan &amp; Track</button>
+      <button mat-flat-button color="primary" (click)="close()">Close</button>
+    </div>
+  </div>
+  `,
+  styles: [`
+    .bl { display:flex; flex-direction:column; max-height:82vh; }
+    .bl__head { display:flex; align-items:center; gap:12px; padding:18px 20px; background:linear-gradient(135deg,#4f46e5,#6366f1); color:#fff; }
+    .bl__head > mat-icon { font-size:30px; width:30px; height:30px; }
+    .bl__title h2 { margin:0; font-size:1.1rem; }
+    .bl__code { font-family:monospace; font-size:0.8rem; opacity:0.9; }
+    .bl__x { margin-left:auto; background:rgba(255,255,255,0.15); border:none; color:#fff; width:34px; height:34px; border-radius:10px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+    .bl__body { padding:16px 20px; overflow:auto; display:flex; flex-direction:column; gap:14px; }
+    .bl__empty { text-align:center; color:#94a3b8; padding:24px; }
+    .bl__empty mat-icon { font-size:44px; width:44px; height:44px; }
+    .bl__block { border:1px solid #e2e8f0; border-radius:12px; padding:12px; }
+    .bl__bt { display:flex; align-items:center; gap:6px; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; font-weight:700; margin-bottom:8px; }
+    .bl__bt mat-icon { font-size:16px; width:16px; height:16px; color:#4f46e5; }
+    .bl__kv { display:flex; justify-content:space-between; font-size:0.84rem; padding:3px 0; }
+    .bl__kv span { color:#64748b; }
+    .bl__row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-top:1px dashed #e2e8f0; }
+    .bl__row:first-of-type { border-top:none; }
+    .bl__sub { font-size:0.74rem; color:#64748b; margin-top:2px; }
+    .bl__qty { text-align:right; } .bl__qty b { font-size:1.05rem; } .bl__qty span { display:block; font-size:0.66rem; color:#64748b; }
+    .bl__chip { font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:#eef0f6; color:#475569; text-transform:capitalize; }
+    .bl__scan { display:flex; gap:8px; align-items:center; padding:5px 0; font-size:0.82rem; }
+    .bl__scan mat-icon { font-size:17px; width:17px; height:17px; color:#4f46e5; }
+    .bl__foot { display:flex; justify-content:flex-end; gap:8px; padding:14px 20px; border-top:1px solid #e2e8f0; }
+  `]
+})
+export class BarcodeLookupDialog {
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: ResolveResult,
+    private dialogRef: MatDialogRef<BarcodeLookupDialog>,
+    private router: Router
+  ) {}
+
+  openLoad(loadId: number): void {
+    this.dialogRef.close();
+    this.router.navigate(['/logistics'], { queryParams: { loadId } });
+  }
+
+  openScanPage(): void {
+    this.dialogRef.close();
+    this.router.navigate(['/logistics/scan']);
   }
 
   close(): void { this.dialogRef.close(); }

@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -23,6 +24,8 @@ import { RequestDialogComponent } from '../request-dialog/request-dialog.compone
 import { AssetRegisterDialogComponent } from '../../asset-register/asset-register-dialog.component';
 import { AnnouncementDialogComponent } from '../announcement-dialog/announcement-dialog.component';
 import { BooksDepartmentDialogComponent } from '../../books-department-dialog/books-department-dialog.component';
+import { IHatePdfDialogComponent } from '../../i-hate-pdf/i-hate-pdf-dialog.component';
+import { UploaderDialogComponent } from '../../uploader/uploader-dialog.component';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -30,6 +33,7 @@ import { Subscription } from 'rxjs';
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     RouterModule,
     MatToolbarModule,
     MatButtonModule,
@@ -64,6 +68,16 @@ import { Subscription } from 'rxjs';
           <mat-icon>local_shipping</mat-icon> Logistics
         </button>
       }
+      @if (hasPermission('finance')) {
+        <button mat-button routerLink="/finance" routerLinkActive="active-link">
+          <mat-icon>account_balance</mat-icon> Finance
+        </button>
+      }
+      @if (hasPermission('stock_management')) {
+        <button mat-button routerLink="/stock-management" routerLinkActive="active-link">
+          <mat-icon>inventory</mat-icon> Stock Management
+        </button>
+      }
       @if (hasPermission('tenders')) {
         <button mat-button routerLink="/tenders" routerLinkActive="active-link">
           <mat-icon>gavel</mat-icon> Tenders
@@ -74,17 +88,19 @@ import { Subscription } from 'rxjs';
           <mat-icon>people</mat-icon> Human Resource
         </button>
       }
-      @if (hasPermission('stock_management')) {
-        <button mat-button routerLink="/stock-management" routerLinkActive="active-link">
-          <mat-icon>inventory</mat-icon> Stock Management
+      @if (hasPermission('company_projects')) {
+        <button mat-button routerLink="/company-projects" routerLinkActive="active-link">
+          <mat-icon>assignment</mat-icon> Projects
         </button>
       }
-      <button mat-button routerLink="/company-projects" routerLinkActive="active-link">
-        <mat-icon>assignment</mat-icon> Projects
-      </button>
+      @if (hasPermission('management')) {
+        <button mat-button routerLink="/management" routerLinkActive="active-link">
+          <mat-icon>insights</mat-icon> Management
+        </button>
+      }
       @if (hasPermission('documents')) {
         <button mat-button routerLink="/documents" routerLinkActive="active-link">
-          <mat-icon>folder</mat-icon> Documents
+          <mat-icon>folder</mat-icon> Portal
         </button>
       }
       @if (hasPermission('support_tickets')) {
@@ -92,19 +108,21 @@ import { Subscription } from 'rxjs';
           <mat-icon>support_agent</mat-icon> Support Ticket
         </button>
       }
-      @if (hasPermission('finance')) {
-        <button mat-button routerLink="/finance" routerLinkActive="active-link">
-          <mat-icon>account_balance</mat-icon> Finance
-        </button>
-      }
 
       <span class="spacer"></span>
 
       <!-- Paperless off-canvas drawer launchers (available in every module) -->
-      <button mat-icon-button matTooltip="Paperless — left panel" (click)="paperless.toggle('left')">
-        <mat-icon>menu_open</mat-icon>
-      </button>
-      <button mat-icon-button matTooltip="Paperless — right panel" (click)="paperless.toggle('right')">
+      <div class="paperless-search" [class.busy]="paperless.searching()">
+        <mat-icon>qr_code_scanner</mat-icon>
+        <input type="text" [(ngModel)]="paperlessSearch"
+               (keyup.enter)="runPaperlessSearch()"
+               placeholder="Invoice / item / barcode…"
+               aria-label="Paperless lookup" />
+        <button mat-icon-button matTooltip="Look up" (click)="runPaperlessSearch()">
+          <mat-icon>search</mat-icon>
+        </button>
+      </div>
+      <button mat-icon-button matTooltip="Paperless — controller" (click)="paperless.toggle('right')">
         <mat-icon>description</mat-icon>
       </button>
 
@@ -325,6 +343,10 @@ import { Subscription } from 'rxjs';
           <mat-icon class="pm-icon-purple">menu_book</mat-icon>
           <span>Books</span>
         </button>
+        <button mat-menu-item class="pm-menu-item" (click)="openUploaderDialog()">
+          <mat-icon class="pm-icon-blue">cloud_upload</mat-icon>
+          <span>Uploader</span>
+        </button>
         <button mat-menu-item class="pm-menu-item" (click)="downloadNotifier()">
           <mat-icon class="pm-icon-blue">download</mat-icon>
           <span>Download</span>
@@ -333,9 +355,9 @@ import { Subscription } from 'rxjs';
           <mat-icon class="pm-icon-amber">assignment</mat-icon>
           <span>Request</span>
         </button>
-        <button mat-menu-item class="pm-menu-item" (click)="openAssetRegisterDialog()">
-          <mat-icon class="pm-icon-teal">inventory_2</mat-icon>
-          <span>Asset Register</span>
+        <button mat-menu-item class="pm-menu-item" (click)="openIHatePdfDialog()">
+          <mat-icon class="pm-icon-red">picture_as_pdf</mat-icon>
+          <span>I Hate PDF</span>
         </button>
         @if (isAdmin()) {
           <div class="pm-divider"></div>
@@ -410,6 +432,42 @@ import { Subscription } from 'rxjs';
 
     .spacer {
       flex: 1;
+    }
+
+    /* Paperless invoice / item / barcode lookup box */
+    .paperless-search {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      padding: 2px 4px 2px 12px;
+      margin-right: 6px;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .paperless-search:focus-within {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.7);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+    }
+    .paperless-search > mat-icon {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 20px; width: 20px; height: 20px;
+    }
+    .paperless-search input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      width: 170px;
+    }
+    .paperless-search input::placeholder { color: rgba(255, 255, 255, 0.7); }
+    .paperless-search.busy { opacity: 0.75; }
+    @media (max-width: 1100px) {
+      .paperless-search input { width: 110px; }
     }
 
     .welly-working {
@@ -498,7 +556,7 @@ import { Subscription } from 'rxjs';
       background: linear-gradient(180deg, #1a1f2e 0%, #151922 100%);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 16px;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 40px rgba(102, 126, 234, 0.08);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 40px rgba(37, 99, 235, 0.08);
       overflow: hidden;
       backdrop-filter: blur(24px);
       animation: ddSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -517,7 +575,7 @@ import { Subscription } from 'rxjs';
       justify-content: space-between;
       align-items: center;
       padding: 14px 16px;
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.08) 100%);
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(30, 64, 175, 0.08) 100%);
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       flex-shrink: 0;
     }
@@ -529,7 +587,7 @@ import { Subscription } from 'rxjs';
     }
 
     .dd-header-icon {
-      color: #667eea;
+      color: #2563eb;
       font-size: 22px;
       width: 22px;
       height: 22px;
@@ -544,7 +602,7 @@ import { Subscription } from 'rxjs';
     }
 
     .dd-count-badge {
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       color: white;
       font-size: 10px;
       font-weight: 700;
@@ -565,8 +623,8 @@ import { Subscription } from 'rxjs';
       display: flex;
       align-items: center;
       gap: 4px;
-      background: rgba(102, 126, 234, 0.15);
-      border: 1px solid rgba(102, 126, 234, 0.25);
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(37, 99, 235, 0.25);
       color: #90a4f7;
       border-radius: 8px;
       padding: 4px 10px;
@@ -583,7 +641,7 @@ import { Subscription } from 'rxjs';
     }
 
     .dd-mark-read-btn:hover {
-      background: rgba(102, 126, 234, 0.25);
+      background: rgba(37, 99, 235, 0.25);
       color: white;
     }
 
@@ -631,7 +689,7 @@ import { Subscription } from 'rxjs';
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      background: rgba(102, 126, 234, 0.1);
+      background: rgba(37, 99, 235, 0.1);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -642,7 +700,7 @@ import { Subscription } from 'rxjs';
       font-size: 28px;
       width: 28px;
       height: 28px;
-      color: rgba(102, 126, 234, 0.6);
+      color: rgba(37, 99, 235, 0.6);
     }
 
     .dd-empty p {
@@ -732,8 +790,8 @@ import { Subscription } from 'rxjs';
     }
 
     .msg-avatar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      box-shadow: 0 3px 10px rgba(37, 99, 235, 0.3);
     }
 
     .msg-avatar mat-icon {
@@ -747,12 +805,12 @@ import { Subscription } from 'rxjs';
 
     /* ---- Notification items ---- */
     .notif-item.unread {
-      background: rgba(102, 126, 234, 0.06);
-      border-left: 3px solid #667eea;
+      background: rgba(37, 99, 235, 0.06);
+      border-left: 3px solid #2563eb;
     }
 
     .notif-item.unread:hover {
-      background: rgba(102, 126, 234, 0.1);
+      background: rgba(37, 99, 235, 0.1);
     }
 
     .notif-icon-wrapper {
@@ -925,7 +983,7 @@ import { Subscription } from 'rxjs';
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
 
@@ -937,7 +995,7 @@ import { Subscription } from 'rxjs';
 
     .dd-footer-btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
     }
 
     .dd-footer-secondary {
@@ -969,7 +1027,7 @@ import { Subscription } from 'rxjs';
       width: 34px;
       height: 34px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -984,7 +1042,7 @@ import { Subscription } from 'rxjs';
     .profile-trigger:hover .profile-avatar-btn {
       border-color: rgba(255,255,255,0.7);
       transform: scale(1.08);
-      box-shadow: 0 0 12px rgba(102, 126, 234, 0.5);
+      box-shadow: 0 0 12px rgba(37, 99, 235, 0.5);
     }
 
     /* =========== Profile Menu Panel (::ng-deep for overlay) =========== */
@@ -992,7 +1050,7 @@ import { Subscription } from 'rxjs';
       background: linear-gradient(180deg, #1a1f2e 0%, #151922 100%) !important;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 16px !important;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 40px rgba(102, 126, 234, 0.1) !important;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 40px rgba(37, 99, 235, 0.1) !important;
       padding: 6px 0 !important;
       min-width: 260px !important;
       overflow: hidden;
@@ -1023,11 +1081,11 @@ import { Subscription } from 'rxjs';
       height: 42px;
       min-width: 42px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
     }
 
     ::ng-deep .profile-menu-panel .pm-avatar span {
@@ -1150,7 +1208,10 @@ export class NavbarComponent implements OnInit, OnDestroy {
   notifications: UnifiedNotification[] = [];
   notificationsLoading: boolean = false;
   respondingTo: string | null = null;
-  
+
+  /** Paperless controller lookup box (invoice / item / barcode). */
+  paperlessSearch = '';
+
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -1163,6 +1224,13 @@ export class NavbarComponent implements OnInit, OnDestroy {
     public wellyActivity: WellyActivityService,
     public paperless: PaperlessService
   ) {}
+
+  /** Run the Paperless invoice / item / barcode lookup from the navbar. */
+  runPaperlessSearch(): void {
+    const q = (this.paperlessSearch || '').trim();
+    if (!q) return;
+    this.paperless.search(q);
+  }
 
   /** Tooltip listing every active Welly task. */
   wellyTasksTooltip(): string {
@@ -1204,10 +1272,31 @@ export class NavbarComponent implements OnInit, OnDestroy {
       this.activeChatBubbles = chats;
     });
 
+    // Auto-pop a mini chat bubble when a new message arrives from someone else
+    this.subscriptions.push(
+      this.messageService.newMessage$.subscribe((message) => {
+        if (!message || message.senderId === this.currentUserId) return;
+        // If this conversation isn't already the open bubble, fetch it and open it
+        const alreadyOpen = this.activeChatBubbles.some(
+          c => c.conversationId === message.conversationId
+        );
+        if (!alreadyOpen) {
+          this.messageService.getConversation(message.conversationId, this.currentUserId)
+            .subscribe({
+              next: (conv) => this.messageService.openChatBubble(conv),
+              error: () => {}
+            });
+        }
+      })
+    );
+
     // Support deep-links from the desktop notifier, e.g. /dashboard?open=todo
     this.route.queryParams.subscribe(params => {
       if (params['open'] === 'todo') {
         setTimeout(() => this.openTodoDialog(), 300);
+      }
+      if (params['open'] === 'paperless') {
+        setTimeout(() => this.paperless.open('right'), 300);
       }
     });
   }
@@ -1443,6 +1532,24 @@ export class NavbarComponent implements OnInit, OnDestroy {
     this.dialog.open(BooksDepartmentDialogComponent, {
       width: '500px',
       maxWidth: '95vw',
+      panelClass: 'centered-dialog'
+    });
+  }
+
+  openIHatePdfDialog(): void {
+    this.dialog.open(IHatePdfDialogComponent, {
+      width: '960px',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
+      panelClass: 'ihp-dialog-panel'
+    });
+  }
+
+  openUploaderDialog(): void {
+    this.dialog.open(UploaderDialogComponent, {
+      width: '760px',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
       panelClass: 'centered-dialog'
     });
   }

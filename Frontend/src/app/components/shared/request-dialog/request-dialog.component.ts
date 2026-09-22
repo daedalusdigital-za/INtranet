@@ -18,6 +18,7 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormControl } 
 import { LeaveRequestDialogComponent } from '../leave-request-dialog/leave-request-dialog.component';
 import { PayslipRequestDialogComponent } from '../payslip-request-dialog/payslip-request-dialog.component';
 import { PrivateMeetingRequestDialogComponent } from '../private-meeting-request-dialog/private-meeting-request-dialog.component';
+import { FinanceMenuComponent } from '../finance-request-dialog/finance-request-dialog.component';
 import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -194,8 +195,8 @@ export class RequestDialogComponent {
     
     switch (category.type) {
       case 'finance':
-        this.dialog.open(FinanceInquiryDialogComponent, {
-          width: '600px',
+        this.dialog.open(FinanceMenuComponent, {
+          width: '480px',
           autoFocus: false,
           panelClass: 'no-scroll-dialog'
         });
@@ -583,7 +584,22 @@ interface UserOption {
   styles: [`
     .meeting-dialog {
       width: 100%;
+      color: #1f2430;
     }
+    /* Ensure form inputs are always dark-on-light regardless of global theme */
+    .meeting-dialog ::ng-deep .mat-mdc-form-field { color: #1f2430; }
+    .meeting-dialog ::ng-deep input.mat-mdc-input-element,
+    .meeting-dialog ::ng-deep textarea.mat-mdc-input-element { color: #1f2430 !important; caret-color: #1f2430; }
+    .meeting-dialog ::ng-deep .mat-mdc-select-value,
+    .meeting-dialog ::ng-deep .mat-mdc-select-value-text { color: #1f2430 !important; }
+    .meeting-dialog ::ng-deep .mat-mdc-form-field-infix input::placeholder,
+    .meeting-dialog ::ng-deep .mat-mdc-form-field-infix textarea::placeholder { color: #9aa0ab !important; }
+    .meeting-dialog ::ng-deep .mdc-floating-label,
+    .meeting-dialog ::ng-deep .mat-mdc-form-field-label,
+    .meeting-dialog ::ng-deep .mdc-text-field__affix { color: #5b6270 !important; }
+    .meeting-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__leading,
+    .meeting-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__notch,
+    .meeting-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__trailing { border-color: #c7ccd6; }
 
     .dialog-header {
       display: flex;
@@ -678,7 +694,7 @@ interface UserOption {
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       color: white;
       display: flex;
       align-items: center;
@@ -719,7 +735,7 @@ interface UserOption {
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       color: white;
       display: flex;
       align-items: center;

@@ -371,3 +371,5 @@ C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\MailK
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\MimeKit.dll
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\itext.bouncy-castle-adapter.dll
 C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\XstReader.Api.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\QRCoder.dll
+C:\Users\Administrator\Documents\GitHub\INtranet\Backend\bin\Debug\net10.0\ExcelDataReader.dll

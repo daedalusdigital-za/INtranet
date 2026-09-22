@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { MessageService, Conversation, Message, Participant, MessageAttachment } from '../../services/message.service';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 import { environment } from '../../../environments/environment';
@@ -29,8 +30,11 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   isSending = false;
   selectedFile: File | null = null;
   showEmojiPicker = false;
-  
+  attention = false;
+
   private refreshInterval: any;
+  private attentionSub?: Subscription;
+  private attentionTimeout: any;
 
   constructor(private messageService: MessageService) {}
 
@@ -42,12 +46,32 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
         this.loadNewMessages();
       }
     }, 5000);
+
+    // Shake + red glow when a new message arrives for this conversation
+    this.attentionSub = this.messageService.bubbleAttention$.subscribe((conversationId) => {
+      if (conversationId === this.conversation?.conversationId) {
+        this.triggerAttention();
+      }
+    });
+  }
+
+  triggerAttention(): void {
+    // Make sure the bubble is visible, then pulse
+    this.isMinimized = false;
+    this.attention = false;
+    // Restart the animation on repeated messages
+    setTimeout(() => { this.attention = true; }, 20);
+    if (this.attentionTimeout) clearTimeout(this.attentionTimeout);
+    this.attentionTimeout = setTimeout(() => { this.attention = false; }, 1600);
+    this.loadNewMessages();
   }
 
   ngOnDestroy(): void {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
+    if (this.attentionTimeout) clearTimeout(this.attentionTimeout);
+    this.attentionSub?.unsubscribe();
   }
 
   getOtherParticipant(): Participant | undefined {

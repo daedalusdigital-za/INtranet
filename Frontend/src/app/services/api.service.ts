@@ -25,6 +25,15 @@ export class ApiService {
     return this.http.post<Department>(`${this.apiUrl}/departments`, department);
   }
 
+  // Profile
+  updateProfile(userId: number, payload: { name?: string; surname?: string; title?: string; departmentId?: number; profilePictureUrl?: string }): Observable<any> {
+    return this.http.put(`${this.apiUrl}/profile/${userId}`, payload);
+  }
+
+  changePassword(userId: number, payload: { currentPassword: string; newPassword: string }): Observable<any> {
+    return this.http.post(`${this.apiUrl}/profile/${userId}/change-password`, payload);
+  }
+
   // Boards
   getAllBoards(): Observable<Board[]> {
     return this.http.get<Board[]>(`${this.apiUrl}/boards`);

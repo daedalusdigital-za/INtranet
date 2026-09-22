@@ -394,6 +394,9 @@ namespace ProjectTracker.API.Services
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                // Retroactively link any existing PODs whose invoices are on this tripsheet.
+                await PodTripsheetLinker.LinkForLoadsAsync(db, new[] { load.Id });
+
                 _logger.LogInformation(
                     "AI TripSheet: Created {TripSheetNumber} with {InvoiceCount} invoices, {StopCount} stops, value R{Value} for {User}",
                     tripSheetNumber, invoices.Count, customerGroups.Count, totalValue, user.FullName);

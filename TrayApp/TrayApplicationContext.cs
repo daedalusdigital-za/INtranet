@@ -212,9 +212,10 @@ public class TrayApplicationContext : ApplicationContext
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Intranet", null, (s, e) => OpenIntranet(null));
-        menu.Items.Add("Open Messages", null, (s, e) => OpenIntranet("/messages"));
-        menu.Items.Add("Open Todo", null, (s, e) => OpenIntranet("/dashboard?open=todo"));
-        menu.Items.Add("Open Calendar", null, (s, e) => OpenIntranet("/calendar"));
+        menu.Items.Add("Chat", null, (s, e) => OpenIntranet("/messages"));
+        menu.Items.Add("Docx", null, (s, e) => OpenIntranet("/docs"));
+        menu.Items.Add("My Tasks", null, (s, e) => OpenIntranet("/dashboard?open=todo"));
+        menu.Items.Add("Paperless Workflow", null, (s, e) => OpenIntranet("/dashboard?open=paperless"));
         menu.Items.Add(new ToolStripSeparator());
 
         var autostart = new ToolStripMenuItem("Start with Windows")

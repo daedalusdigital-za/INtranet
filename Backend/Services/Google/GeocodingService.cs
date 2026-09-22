@@ -37,6 +37,18 @@ namespace ProjectTracker.API.Services.Google
             public string? PlaceId { get; set; }
             public string? Error { get; set; }
             public AddressComponent[] RawComponents { get; set; } = Array.Empty<AddressComponent>();
+            /// <summary>Google location_type: ROOFTOP, RANGE_INTERPOLATED, GEOMETRIC_CENTER, APPROXIMATE.</summary>
+            public string? LocationType { get; set; }
+            /// <summary>Google partial_match flag — the geocoder had to guess.</summary>
+            public bool PartialMatch { get; set; }
+            /// <summary>The top-level result types (e.g. street_address, locality, country).</summary>
+            public string[] ResultTypes { get; set; } = Array.Empty<string>();
+            /// <summary>
+            /// True when the match is too coarse to trust as a real delivery point
+            /// (country/province-level, or an APPROXIMATE location_type). Callers should
+            /// treat this as "address not resolved" rather than a valid pin.
+            /// </summary>
+            public bool IsApproximate { get; set; }
         }
 
         public class AddressComponent
@@ -111,6 +123,22 @@ namespace ProjectTracker.API.Services.Google
                     PlaceId = result.GetProperty("place_id").GetString()
                 };
 
+                // Capture match precision so callers can reject coarse (country/province) hits
+                if (result.GetProperty("geometry").TryGetProperty("location_type", out var locType))
+                {
+                    geocodingResult.LocationType = locType.GetString();
+                }
+                if (result.TryGetProperty("partial_match", out var partial))
+                {
+                    geocodingResult.PartialMatch = partial.GetBoolean();
+                }
+                if (result.TryGetProperty("types", out var topTypes))
+                {
+                    geocodingResult.ResultTypes = topTypes.EnumerateArray()
+                        .Select(t => t.GetString() ?? "")
+                        .ToArray();
+                }
+
                 // Parse address components
                 var components = result.GetProperty("address_components");
                 var componentsList = new List<AddressComponent>();
@@ -150,8 +178,21 @@ namespace ProjectTracker.API.Services.Google
 
                 geocodingResult.RawComponents = componentsList.ToArray();
 
-                _logger.LogInformation("Geocoded '{Address}' -> {Province}, {City}", 
-                    address, geocodingResult.Province, geocodingResult.City);
+                // Decide whether this match is too coarse to be a real delivery point.
+                // Coarse = APPROXIMATE precision, OR the top-level result is only a
+                // country/province/region/locality boundary rather than an actual address/point.
+                var coarseTypes = new[] { "country", "administrative_area_level_1", "administrative_area_level_2", "political" };
+                var hasPreciseType = geocodingResult.ResultTypes.Any(t =>
+                    t is "street_address" or "premise" or "subpremise" or "route" or
+                    "street_number" or "point_of_interest" or "establishment" or "plus_code");
+                var isCountryOnly = string.Equals(geocodingResult.Country, geocodingResult.FormattedAddress, StringComparison.OrdinalIgnoreCase);
+                geocodingResult.IsApproximate =
+                    string.Equals(geocodingResult.LocationType, "APPROXIMATE", StringComparison.OrdinalIgnoreCase)
+                    || isCountryOnly
+                    || (!hasPreciseType && geocodingResult.ResultTypes.All(t => coarseTypes.Contains(t)) && geocodingResult.ResultTypes.Length > 0);
+
+                _logger.LogInformation("Geocoded '{Address}' -> {Province}, {City} (type={LocationType}, approx={Approx})", 
+                    address, geocodingResult.Province, geocodingResult.City, geocodingResult.LocationType, geocodingResult.IsApproximate);
 
                 return geocodingResult;
             }

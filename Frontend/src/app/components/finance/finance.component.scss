@@ -152,7 +152,7 @@
   align-items: center;
   justify-content: center;
   mat-icon { font-size: 22px; width: 22px; height: 22px; color: #fff; }
-  &.invoices-kpi { background: linear-gradient(135deg, #6366f1, #818cf8); }
+  &.invoices-kpi { background: linear-gradient(135deg, #6366f1, #60a5fa); }
   &.amount-kpi   { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
 }
 .kpi-data {
@@ -238,7 +238,7 @@
   height: 3px;
   width: 100%;
 }
-.invoices-card-stat  .stat-card-accent { background: linear-gradient(90deg, #6366f1, #818cf8); }
+.invoices-card-stat  .stat-card-accent { background: linear-gradient(90deg, #6366f1, #60a5fa); }
 .unpaid-card-stat    .stat-card-accent { background: linear-gradient(90deg, #f43f5e, #fb7185); }
 .paid-card-stat      .stat-card-accent { background: linear-gradient(90deg, #10b981, #34d399); }
 .expenses-card-stat  .stat-card-accent { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
@@ -260,7 +260,7 @@
   justify-content: center;
   mat-icon { font-size: 26px; width: 26px; height: 26px; color: #fff; }
 }
-.invoices-card-stat  .stat-icon-modern { background: linear-gradient(135deg, #6366f1, #818cf8); }
+.invoices-card-stat  .stat-icon-modern { background: linear-gradient(135deg, #6366f1, #60a5fa); }
 .unpaid-card-stat    .stat-icon-modern { background: linear-gradient(135deg, #f43f5e, #fb7185); }
 .paid-card-stat      .stat-icon-modern { background: linear-gradient(135deg, #10b981, #34d399); }
 .expenses-card-stat  .stat-icon-modern { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
@@ -313,7 +313,7 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #6366f1, #60a5fa);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -528,7 +528,7 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #6366f1, #60a5fa);
   color: white;
   display: flex;
   align-items: center;
@@ -740,7 +740,7 @@
 .empty-state.welcome .empty-icon {
   background: rgba(99,102,241,.1);
   border-color: rgba(99,102,241,.2);
-  mat-icon { color: #818cf8; }
+  mat-icon { color: #60a5fa; }
 }
 
 // ============================================================
@@ -794,7 +794,7 @@
   justify-content: center;
   flex-shrink: 0;
   mat-icon { font-size: 22px; width: 22px; height: 22px; color: #fff; }
-  &.invoices-action   { background: linear-gradient(135deg, #6366f1, #818cf8); }
+  &.invoices-action   { background: linear-gradient(135deg, #6366f1, #60a5fa); }
   &.expenses-action   { background: linear-gradient(135deg, #f43f5e, #fb7185); }
   &.po-action         { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
   &.payments-action   { background: linear-gradient(135deg, #10b981, #34d399); }
@@ -987,7 +987,7 @@
   width: 48px;
   height: 48px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #6366f1, #60a5fa);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1203,7 +1203,7 @@
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #6366f1, #60a5fa);
   color: #fff;
   display: flex;
   align-items: center;

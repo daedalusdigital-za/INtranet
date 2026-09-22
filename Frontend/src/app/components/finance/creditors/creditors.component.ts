@@ -184,7 +184,7 @@ interface BreakdownResp { total: number; groups: BreakdownGroup[]; }
     .cr-card { background:#fff; border-radius:14px; padding:18px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:all .2s; box-shadow:0 2px 8px rgba(0,0,0,.1); }
     .cr-card:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.15); }
     .cr-card > mat-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:24px; color:#fff; }
-    .cr-card.invoices > mat-icon { background:linear-gradient(135deg,#6366f1,#818cf8); }
+    .cr-card.invoices > mat-icon { background:linear-gradient(135deg,#6366f1,#60a5fa); }
     .cr-card.commitments > mat-icon { background:linear-gradient(135deg,#059669,#0d9488); }
     .cr-card.requisitions > mat-icon { background:linear-gradient(135deg,#f59e0b,#d97706); }
     .cr-card.expenses > mat-icon { background:linear-gradient(135deg,#0ea5e9,#38bdf8); }

@@ -13,7 +13,7 @@
 ></div>
 
 <!-- ============================================================ -->
-<!-- RIGHT slide-over panel — controller / navigation rail        -->
+<!-- RIGHT slide-over panel — controller / workflow rail          -->
 <!-- ============================================================ -->
 <aside
   class="paperless-panel paperless-panel--right"
@@ -24,8 +24,8 @@
 >
   <header class="paperless-panel__header">
     <div class="paperless-panel__title">
-      <span class="paperless-panel__glyph material-icons">inventory_2</span>
-      <span>Paperless</span>
+      <span class="paperless-panel__glyph material-icons">workspaces</span>
+      <span>Paperless <em class="paperless-panel__sub">workflow</em></span>
     </div>
     <div class="paperless-panel__header-actions">
       <button type="button" class="paperless-icon-btn" (click)="toggleRightExpanded()"
@@ -41,24 +41,141 @@
   <!-- Overall status strip -->
   <div class="pl-status-strip">
     <div class="pl-mini-stat">
-      <span class="pl-mini-stat__val">{{ paperless.documents().length }}</span>
+      <span class="pl-mini-stat__val">{{ paperless.topLevelDocuments().length }}</span>
       <span class="pl-mini-stat__lbl">Docs</span>
     </div>
     <div class="pl-mini-stat">
-      <span class="pl-mini-stat__val">{{ paperless.pipelineCount() }}</span>
-      <span class="pl-mini-stat__lbl">Pipeline</span>
+      <span class="pl-mini-stat__val">{{ paperless.draftCount() }}</span>
+      <span class="pl-mini-stat__lbl">Drafts</span>
     </div>
     <div class="pl-mini-stat">
       <span class="pl-mini-stat__val">{{ paperless.awaitingCount() }}</span>
-      <span class="pl-mini-stat__lbl">Awaiting</span>
+      <span class="pl-mini-stat__lbl">In flight</span>
     </div>
     <div class="pl-mini-stat pl-mini-stat--overall">
-      <span class="pl-mini-stat__val">{{ paperless.overallProgress() }}%</span>
-      <span class="pl-mini-stat__lbl">Overall</span>
+      <span class="pl-mini-stat__val">{{ paperless.completedCount() }}</span>
+      <span class="pl-mini-stat__lbl">Done</span>
     </div>
   </div>
 
   <div class="paperless-panel__body">
+    <!-- Invoice / item / barcode lookup -->
+    <div class="pl-search">
+      <span class="material-icons pl-search__icon">qr_code_scanner</span>
+      <input type="text" class="pl-search__input" [(ngModel)]="panelSearch"
+             (keyup.enter)="runPanelSearch()"
+             placeholder="Invoice number, item code or barcode…" />
+      @if (paperless.searchQuery()) {
+        <button class="pl-search__clear" (click)="clearSearch()" title="Clear">
+          <span class="material-icons">close</span>
+        </button>
+      }
+      <button class="pl-search__go" (click)="runPanelSearch()" title="Look up">
+        <span class="material-icons">search</span>
+      </button>
+    </div>
+
+    <!-- Lookup results -->
+    @if (paperless.searchQuery()) {
+      <div class="pl-results">
+        <div class="pl-results__head">
+          <span class="material-icons">travel_explore</span>
+          <span>Results for <b>{{ paperless.searchQuery() }}</b></span>
+        </div>
+
+        @if (paperless.searching()) {
+          <div class="pl-results__state">
+            <span class="material-icons pl-spin">progress_activity</span> Searching…
+          </div>
+        } @else if (paperless.searchError()) {
+          <div class="pl-results__state pl-results__state--warn">
+            <span class="material-icons">error_outline</span> {{ paperless.searchError() }}
+          </div>
+        } @else {
+          @if (paperless.searchResult(); as res) {
+          @if (!res.found && !res.tripSheets.length && !res.invoices.length && !res.pods.length && !res.inventory.length && !res.asset && !res.commodity) {
+            <div class="pl-results__state">
+              <span class="material-icons">search_off</span>
+              {{ res.message || 'Nothing found for that code.' }}
+            </div>
+          }
+
+          <!-- Tripsheets -->
+          @for (l of res.tripSheets; track l.id) {
+            <button class="pl-result" (click)="previewTripsheet(l)">
+              <span class="pl-result__ico material-icons">local_shipping</span>
+              <span class="pl-result__body">
+                <span class="pl-result__title">{{ l.loadNumber }}</span>
+                <span class="pl-result__sub">{{ l.customerName || 'No customer' }}@if (l.status) { · {{ l.status }} }</span>
+              </span>
+              <span class="pl-result__go material-icons">visibility</span>
+            </button>
+          }
+
+          <!-- Invoices -->
+          @for (i of res.invoices; track i.id) {
+            <button class="pl-result" (click)="previewInvoice(i)">
+              <span class="pl-result__ico material-icons">receipt_long</span>
+              <span class="pl-result__body">
+                <span class="pl-result__title">{{ i.transactionNumber }}</span>
+                <span class="pl-result__sub">{{ i.customerName }}@if (i.productDescription) { · {{ i.productDescription }} }</span>
+              </span>
+              <span class="pl-result__go material-icons">visibility</span>
+            </button>
+          }
+
+          <!-- PODs (proof of delivery) -->
+          @for (p of res.pods; track p.id) {
+            <button class="pl-result" (click)="previewPod(p)">
+              <span class="pl-result__ico material-icons">local_shipping</span>
+              <span class="pl-result__body">
+                <span class="pl-result__title">{{ p.podNumber || ('POD' + p.id) }}</span>
+                <span class="pl-result__sub">{{ p.driverName || 'POD' }}@if (p.deliveryDate) { · {{ p.deliveryDate | date:'dd MMM yyyy' }} }@if (p.region) { · {{ p.region }} }</span>
+              </span>
+              <span class="pl-result__go material-icons">visibility</span>
+            </button>
+          }
+
+          <!-- Stock -->
+          @for (b of res.inventory; track b.id) {
+            <button class="pl-result" (click)="previewStock(b)">
+              <span class="pl-result__ico material-icons">inventory_2</span>
+              <span class="pl-result__body">
+                <span class="pl-result__title">{{ b.itemCode }}</span>
+                <span class="pl-result__sub">{{ b.itemDescription || 'Stock item' }} · {{ b.quantityOnHand }} on hand</span>
+              </span>
+              <span class="pl-result__go material-icons">visibility</span>
+            </button>
+          }
+
+          <!-- Asset -->
+          @if (res.asset; as a) {
+            <button class="pl-result" (click)="previewAsset(a)">
+              <span class="pl-result__ico material-icons">chair</span>
+              <span class="pl-result__body">
+                <span class="pl-result__title">{{ a.assetCode || a.category || 'Asset' }}</span>
+                <span class="pl-result__sub">{{ a.category }}@if (a.assignedTo) { · {{ a.assignedTo }} }</span>
+              </span>
+              <span class="pl-result__go material-icons">visibility</span>
+            </button>
+          }
+
+          <!-- Commodity -->
+          @if (res.commodity; as c) {
+            <button class="pl-result" (click)="previewCommodity(c)">
+              <span class="pl-result__ico material-icons">category</span>
+              <span class="pl-result__body">
+                <span class="pl-result__title">{{ c.name }}</span>
+                <span class="pl-result__sub">{{ c.category || 'Commodity' }}</span>
+              </span>
+              <span class="pl-result__go material-icons">visibility</span>
+            </button>
+          }
+          }
+        }
+      </div>
+    }
+
     <!-- Upload zone -->
     <label
       class="pl-upload"
@@ -86,73 +203,301 @@
       </div>
     }
 
+    <!-- Shared / assigned to me (in-app inbox) -->
+    @if (paperless.inboxCount() > 0) {
+      <div class="pl-inbox">
+        <div class="pl-inbox__head">
+          <span class="material-icons">inbox</span>
+          <span>Shared with me</span>
+          <span class="pl-inbox__badge">{{ paperless.inboxCount() }}</span>
+          @if (paperless.inboxPending().length > 0) {
+            <span class="pl-inbox__pending">{{ paperless.inboxPending().length }} need action</span>
+          }
+        </div>
+        @for (i of paperless.inbox(); track i.id) {
+          <button class="pl-inbox__item"
+                  [class.pl-inbox__item--action]="i.myState !== 'signed' && i.myState !== 'approved' && (i.myRole === 'signer' || i.myRole === 'approver')"
+                  (click)="openInboxItem(i)" [title]="i.name">
+            <span class="material-icons pl-inbox__icon">{{ fileKindIcon(i.mime) }}</span>
+            <span class="pl-inbox__body">
+              <span class="pl-inbox__name">{{ i.name }}</span>
+              <span class="pl-inbox__meta">
+                @if (i.myRole) { <span class="pl-inbox__role">{{ roleLabel(i.myRole) }}</span> }
+                @if (i.createdBy) { <span class="pl-inbox__from">from {{ i.createdBy }}</span> }
+              </span>
+            </span>
+            @if (i.myState === 'signed' || i.myState === 'approved') {
+              <span class="material-icons pl-inbox__done">check_circle</span>
+            }
+          </button>
+        }
+      </div>
+    }
+
     <!-- Document list -->
     <div class="pl-doc-list">
-      @for (d of paperless.documents(); track d.id) {
-        <div class="pl-doc">
-          <!-- progress ring -->
-          <div class="pl-doc__ring">
-            <svg viewBox="0 0 40 40" width="40" height="40">
-              <circle class="pl-ring-bg" cx="20" cy="20" r="16"></circle>
-              <circle class="pl-ring-fg" cx="20" cy="20" r="16"
-                      [style.stroke]="statusColour(d.status)"
-                      [style.stroke-dasharray]="ringCirc"
-                      [style.stroke-dashoffset]="ringOffset(d.progress)"></circle>
-            </svg>
-            <span class="material-icons pl-doc__type">{{ fileIcon(d.mime) }}</span>
-          </div>
-
-          <div class="pl-doc__main">
-            <div class="pl-doc__name" [title]="d.name">{{ d.name }}</div>
-            <div class="pl-doc__meta">
-              <span class="pl-chip" [style.background]="statusColour(d.status) + '22'"
-                    [style.color]="statusColour(d.status)">{{ statusLabel(d.status) }}</span>
-              <span class="pl-doc__size">{{ humanSize(d.sizeBytes) }}</span>
+      @for (d of paperless.topLevelDocuments(); track d.id) {        <div class="pl-doc" [class.pl-doc--open]="isExpanded(d.id)" [class.pl-doc--stacked]="stackCount(d) > 0">
+          <div class="pl-doc__top">
+            <!-- progress ring (turns red when the document has a stack) -->
+            <div class="pl-doc__ring">
+              <svg viewBox="0 0 40 40" width="44" height="44">
+                <circle class="pl-ring-bg" cx="20" cy="20" r="16"></circle>
+                <circle class="pl-ring-fg" cx="20" cy="20" r="16"
+                        [style.stroke]="stackCount(d) > 0 ? '#e11d48' : statusColour(d.status)"
+                        [style.stroke-dasharray]="ringCirc"
+                        [style.stroke-dashoffset]="ringOffset(d.progress)"></circle>
+              </svg>
+              <span class="material-icons pl-doc__type">{{ fileIcon(d.mime) }}</span>
+              @if (stackCount(d) > 0) {
+                <span class="pl-doc__stack-badge" [title]="stackCount(d) + ' stacked document(s)'">{{ stackCount(d) }}</span>
+              }
             </div>
 
-            <!-- shares / receipt notifications -->
-            @if (d.shares.length) {
-              <div class="pl-shares">
-                @for (sh of d.shares; track sh.recipient) {
-                  <div class="pl-share">
-                    <span class="material-icons pl-share__icon"
-                          [class.pl-share__icon--ok]="sh.acknowledged">
-                      {{ sh.acknowledged ? 'mark_email_read' : 'schedule_send' }}
-                    </span>
-                    <span class="pl-share__to">{{ sh.recipient }}</span>
-                    @if (!sh.acknowledged) {
-                      <button class="pl-link" (click)="ack(d.id, sh.recipient)">mark received</button>
-                    } @else {
-                      <span class="pl-share__done">received</span>
-                    }
-                  </div>
+            <div class="pl-doc__main">
+              <div class="pl-doc__name" [title]="d.name">{{ d.name }}</div>
+              <div class="pl-doc__meta">
+                <span class="pl-chip" [style.background]="statusColour(d.status) + '1f'"
+                      [style.color]="statusColour(d.status)">
+                  <span class="material-icons">{{ statusIcon(d.status) }}</span>
+                  {{ statusLabel(d.status) }}
+                </span>
+                <span class="pl-doc__size">{{ humanSize(d.sizeBytes) }}</span>
+                @if (d.category) {
+                  <span class="pl-chip pl-chip--cat" [title]="'Workflow: ' + categoryLabel(d.category)">
+                    <span class="material-icons">{{ categoryIcon(d.category) }}</span>
+                    {{ categoryLabel(d.category) }}
+                  </span>
+                }
+                @if (stackCount(d) > 0) {
+                  <span class="pl-chip pl-chip--stack" title="This document has stacked supporting files">
+                    <span class="material-icons">layers</span> {{ stackCount(d) }} stacked
+                  </span>
                 }
               </div>
-            }
-
-            <!-- share input -->
-            <div class="pl-share-row">
-              <input class="pl-input" type="text" placeholder="Share to (name / email)"
-                     [(ngModel)]="shareInputs[d.id]"
-                     (keyup.enter)="shareDoc(d)" />
-              <button class="pl-btn pl-btn--primary" (click)="shareDoc(d)">
-                <span class="material-icons">send</span>
-              </button>
+              <!-- recipient avatars summary -->
+              @if (d.recipients.length) {
+                <div class="pl-recip-strip">
+                  @for (r of d.recipients; track r.id) {
+                    <span class="pl-avatar" [style.background]="recipStateColour(r.state)"
+                          [title]="r.name + ' · ' + roleLabel(r.role) + ' · ' + r.state">
+                      {{ r.name.charAt(0).toUpperCase() }}
+                    </span>
+                  }
+                </div>
+              }
             </div>
 
-            <!-- actions -->
-            <div class="pl-doc__actions">
-              <button class="pl-btn" (click)="openDoc(d)">
-                <span class="material-icons">open_in_new</span> Open
-              </button>
-              <button class="pl-btn" (click)="advance(d)" title="Advance status">
-                <span class="material-icons">arrow_forward</span>
-              </button>
-              <button class="pl-btn pl-btn--danger" (click)="remove(d)" title="Remove">
-                <span class="material-icons">delete</span>
-              </button>
-            </div>
+            <button class="pl-expand-btn" (click)="toggleExpanded(d.id)"
+                    [attr.aria-label]="isExpanded(d.id) ? 'Collapse' : 'Expand workflow'">
+              <span class="material-icons">{{ isExpanded(d.id) ? 'expand_less' : 'expand_more' }}</span>
+            </button>
           </div>
+
+          <!-- Quick actions -->
+          <div class="pl-doc__actions">
+            <button class="pl-btn" (click)="openDoc(d)">
+              <span class="material-icons">open_in_new</span> Open
+            </button>
+            <button class="pl-btn" (click)="rename(d)" title="Rename document">
+              <span class="material-icons">edit</span> Rename
+            </button>
+            @if (canSend(d)) {
+              <button class="pl-btn pl-btn--primary" (click)="send(d)">
+                <span class="material-icons">send</span> Send
+              </button>
+            }
+            @if (isLive(d)) {
+              <button class="pl-btn pl-btn--ghost" (click)="cancel(d)" title="Cancel workflow">
+                <span class="material-icons">block</span>
+              </button>
+            }
+            <button class="pl-btn" (click)="openShare(d)" title="Share with colleagues">
+              <span class="material-icons">share</span> Share
+            </button>
+            <button class="pl-btn pl-btn--danger" (click)="remove(d)" title="Remove">
+              <span class="material-icons">delete</span>
+            </button>
+          </div>
+
+          <!-- ── Expanded workflow builder ─────────────────────── -->
+          @if (isExpanded(d.id)) {
+            <div class="pl-workflow">
+
+              <!-- Routing selector -->
+              @if (d.status === 'draft') {
+                <div class="pl-routing">
+                  <span class="pl-routing__lbl">Routing</span>
+                  <div class="pl-seg">
+                    <button [class.pl-seg--on]="d.routing==='sequential'"
+                            (click)="setRouting(d, 'sequential')">
+                      <span class="material-icons">low_priority</span> Sequential
+                    </button>
+                    <button [class.pl-seg--on]="d.routing==='parallel'"
+                            (click)="setRouting(d, 'parallel')">
+                      <span class="material-icons">groups</span> Parallel
+                    </button>
+                  </div>
+                </div>
+              }
+
+              <!-- Recipient list -->
+              <div class="pl-recips">
+                <div class="pl-recips__head">
+                  <span class="material-icons">group</span> Recipients
+                </div>
+                @for (r of d.recipients; track r.id) {
+                  <div class="pl-recip" [class.pl-recip--active]="isActive(d, r)">
+                    <span class="pl-recip__order">{{ d.routing === 'sequential' ? r.order : '•' }}</span>
+                    <span class="pl-avatar pl-avatar--lg" [style.background]="recipStateColour(r.state)">
+                      {{ r.name.charAt(0).toUpperCase() }}
+                    </span>
+                    <div class="pl-recip__info">
+                      <div class="pl-recip__name">{{ r.name }}</div>
+                      <div class="pl-recip__role">
+                        <span class="material-icons">{{ roleIcon(r.role) }}</span> {{ roleLabel(r.role) }}
+                        <span class="pl-recip__state" [style.color]="recipStateColour(r.state)">
+                          · <span class="material-icons">{{ recipStateIcon(r.state) }}</span> {{ r.state }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="pl-recip__ops">
+                      @if (d.status === 'draft') {
+                        <button class="pl-icon-mini" (click)="moveRecipient(d, r.id, -1)" title="Move up">
+                          <span class="material-icons">arrow_upward</span>
+                        </button>
+                        <button class="pl-icon-mini" (click)="moveRecipient(d, r.id, 1)" title="Move down">
+                          <span class="material-icons">arrow_downward</span>
+                        </button>
+                        <button class="pl-icon-mini pl-icon-mini--danger" (click)="removeRecipient(d, r.id)" title="Remove">
+                          <span class="material-icons">close</span>
+                        </button>
+                      } @else if (isActive(d, r)) {
+                        <button class="pl-icon-mini pl-icon-mini--ok" (click)="markActed(d, r)"
+                                [title]="r.role === 'signer' ? 'Mark signed' : r.role === 'approver' ? 'Mark approved' : 'Mark viewed'">
+                          <span class="material-icons">check</span>
+                        </button>
+                        <button class="pl-icon-mini pl-icon-mini--danger" (click)="markDeclined(d, r)" title="Decline">
+                          <span class="material-icons">block</span>
+                        </button>
+                        <button class="pl-icon-mini" (click)="remind(d, r)" title="Send reminder">
+                          <span class="material-icons">notifications_active</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                } @empty {
+                  <div class="pl-recips__empty">No recipients yet — add a signer or approver below.</div>
+                }
+              </div>
+
+              <!-- Add recipient (allowed at any active workflow stage) -->
+              @if (canAddRecipients(d)) {
+                <div class="pl-add-recip">
+                  <div class="pl-role-seg">
+                    <button [class.pl-role-seg--on]="(recipRole[d.id]||'signer')==='signer'"
+                            (click)="setRole(d.id, 'signer')" title="Signer">
+                      <span class="material-icons">draw</span>
+                    </button>
+                    <button [class.pl-role-seg--on]="recipRole[d.id]==='approver'"
+                            (click)="setRole(d.id, 'approver')" title="Approver">
+                      <span class="material-icons">thumb_up</span>
+                    </button>
+                    <button [class.pl-role-seg--on]="recipRole[d.id]==='viewer'"
+                            (click)="setRole(d.id, 'viewer')" title="Viewer">
+                      <span class="material-icons">visibility</span>
+                    </button>
+                  </div>
+                  <div class="pl-recip-search">
+                    <input class="pl-input" type="text" placeholder="Search people by name or email…"
+                           [(ngModel)]="recipName[d.id]" (ngModelChange)="onRecipInput(d)"
+                           (keyup.enter)="addRecipient(d)" autocomplete="off" />
+                    @if ((recipSuggestions[d.id] || []).length) {
+                      <div class="pl-recip-suggest">
+                        @for (u of recipSuggestions[d.id]; track u.id) {
+                          <button class="pl-recip-suggest__item" (click)="pickRecipUser(d, u)">
+                            <span class="pl-avatar">{{ u.name.charAt(0).toUpperCase() }}</span>
+                            <span class="pl-recip-suggest__text">
+                              <span class="pl-recip-suggest__name">{{ u.name }}</span>
+                              <span class="pl-recip-suggest__mail">{{ u.email }}{{ u.title ? ' · ' + u.title : '' }}</span>
+                            </span>
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                  <button class="pl-btn pl-btn--primary" (click)="addRecipient(d)">
+                    <span class="material-icons">person_add</span>
+                  </button>
+                </div>
+                <input class="pl-input pl-input--full" type="email" placeholder="Email (auto-filled when you pick a person)"
+                       [(ngModel)]="recipEmail[d.id]" />
+              }
+
+              <!-- Stacked supporting documents -->
+              <div class="pl-stack">
+                <div class="pl-stack__head">
+                  <span class="material-icons">layers</span> Stacked documents
+                  @if (stackCount(d)) { <span class="pl-stack__count">{{ stackCount(d) }}</span> }
+                </div>
+                @for (child of stackChildren(d); track child.id) {
+                  <div class="pl-stack-item">
+                    <span class="pl-stack-item__ico material-icons">{{ child.stackKind ? stackKindIcon(child.stackKind) : fileIcon(child.mime) }}</span>
+                    <div class="pl-stack-item__body">
+                      <div class="pl-stack-item__name" [title]="child.name">{{ child.name }}</div>
+                      <div class="pl-stack-item__meta">
+                        {{ child.stackKind ? stackKindLabel(child.stackKind) : 'File' }} · {{ humanSize(child.sizeBytes) }}
+                        @if (child.signatures.length) { · <span class="material-icons pl-stack-item__ok">draw</span> signed }
+                        @if (paperless.stackCount(child.id)) { · <span class="material-icons">layers</span> {{ paperless.stackCount(child.id) }} }
+                      </div>
+                    </div>
+                    <button class="pl-icon-mini pl-icon-mini--primary" (click)="openStackChild(child.id)" title="Open, sign, annotate or stack more">
+                      <span class="material-icons">open_in_new</span>
+                    </button>
+                    <a class="pl-icon-mini" [href]="child.dataUrl" [download]="child.name" title="Download">
+                      <span class="material-icons">download</span>
+                    </a>
+                    <button class="pl-icon-mini pl-icon-mini--danger" (click)="removeStackChild(child.id)" title="Remove">
+                      <span class="material-icons">close</span>
+                    </button>
+                  </div>
+                } @empty {
+                  <div class="pl-recips__empty">Attach a GRV, PO, POD, invoice and more to keep everything together.</div>
+                }
+                <div class="pl-stack__add">
+                  <select class="pl-input" [(ngModel)]="docStackKind[d.id]">
+                    @for (k of stackKinds; track k) {
+                      <option [value]="k">{{ stackKindLabel(k) }}</option>
+                    }
+                  </select>
+                  <label class="pl-btn pl-btn--primary">
+                    <span class="material-icons">upload_file</span> Add to stack
+                    <input type="file" hidden multiple
+                           accept=".pdf,image/*,.doc,.docx,.xlsx,.xls"
+                           (change)="addStackToDoc(d, docStackKind[d.id] || 'ProofOfDelivery', $event)" />
+                  </label>
+                </div>
+              </div>
+
+              <!-- Activity trail -->
+              <div class="pl-activity">
+                <div class="pl-activity__head">
+                  <span class="material-icons">history</span> Activity
+                </div>
+                <div class="pl-timeline">
+                  @for (a of d.activity.slice().reverse(); track a.id) {
+                    <div class="pl-tl-item">
+                      <span class="pl-tl-dot"><span class="material-icons">{{ activityIcon(a.type) }}</span></span>
+                      <div class="pl-tl-body">
+                        <div class="pl-tl-detail">{{ a.detail }}</div>
+                        <div class="pl-tl-time">{{ a.at | date:'d MMM, HH:mm' }}</div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
         </div>
       } @empty {
         <div class="pl-empty">
@@ -175,20 +520,43 @@
 >
   <header class="paperless-panel__header">
     <div class="paperless-panel__title">
-      <span class="paperless-panel__glyph material-icons">description</span>
-      <span class="pl-viewer-name">{{ doc()?.name || 'Document viewer' }}</span>
+      <span class="paperless-panel__glyph material-icons">{{ preview() ? preview()!.icon : 'description' }}</span>
+      <div class="pl-viewer-titlebox">
+        @if (parentOf(); as parent) {
+          <button class="pl-breadcrumb" (click)="openStackChild(parent.id)" title="Back to parent document">
+            <span class="material-icons">subdirectory_arrow_left</span> {{ parent.name }}
+          </button>
+        }
+        <span class="pl-viewer-name">
+          @if (doc()?.stackKind; as sk) {
+            <span class="pl-chip pl-chip--stack"><span class="material-icons">{{ stackKindIcon(sk) }}</span> {{ stackKindLabel(sk) }}</span>
+          }
+          {{ preview()?.title || doc()?.name || 'Document viewer' }}
+        </span>
+      </div>
     </div>
 
     <div class="pl-viewer-tools">
-      <button class="pl-tool" [class.pl-tool--on]="tool()==='annotate'" (click)="setTool('annotate')">
-        <span class="material-icons">edit_note</span> Annotate
-      </button>
-      <button class="pl-tool" [class.pl-tool--on]="tool()==='sign'" (click)="setTool('sign')">
-        <span class="material-icons">draw</span> Sign
-      </button>
-      @if (tool()==='annotate') {
-        <input type="color" class="pl-colour" [ngModel]="annotationColour()"
-               (ngModelChange)="annotationColour.set($event)" title="Annotation colour" />
+      @if (!preview()) {
+        <button class="pl-tool" [class.pl-tool--on]="tool()==='annotate'" (click)="setTool('annotate')">
+          <span class="material-icons">edit_note</span> Annotate
+        </button>
+        <button class="pl-tool" [class.pl-tool--on]="tool()==='stack'" (click)="setTool('stack')">
+          <span class="material-icons">layers</span> Stack
+        </button>
+        <button class="pl-tool" [class.pl-tool--on]="tool()==='sign'" (click)="setTool('sign')">
+          <span class="material-icons">draw</span> Sign
+        </button>
+        <button class="pl-tool" (click)="rotate(-90)" title="Rotate left">
+          <span class="material-icons">rotate_left</span>
+        </button>
+        <button class="pl-tool" (click)="rotate(90)" title="Rotate right">
+          <span class="material-icons">rotate_right</span>
+        </button>
+        @if (tool()==='annotate') {
+          <input type="color" class="pl-colour" [ngModel]="annotationColour()"
+                 (ngModelChange)="annotationColour.set($event)" title="Annotation colour" />
+        }
       }
       <button type="button" class="paperless-icon-btn" (click)="close('left')" aria-label="Close">
         <span class="material-icons">chevron_left</span>
@@ -197,16 +565,112 @@
   </header>
 
   <div class="paperless-panel__body pl-viewer-body">
-    @if (doc(); as d) {
+    @if (preview(); as p) {
+      <!-- ── Read-only search-result preview ─────────────────── -->
+      <div class="pl-preview">
+        <div class="pl-preview__card">
+          <div class="pl-preview__head" [ngClass]="'pl-preview__head--' + p.kind">
+            <span class="material-icons">{{ p.icon }}</span>
+            <div class="pl-preview__headtext">
+              <div class="pl-preview__title">{{ p.title }}</div>
+              @if (p.subtitle) { <div class="pl-preview__sub">{{ p.subtitle }}</div> }
+            </div>
+            @if (p.status) { <span class="pl-preview__status">{{ p.status }}</span> }
+          </div>
+          <div class="pl-preview__fields">
+            @for (f of p.fields; track f.label) {
+              <div class="pl-preview__row">
+                <span class="pl-preview__lbl">{{ f.label }}</span>
+                <span class="pl-preview__val">{{ f.value }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (p.kind === 'tripsheet') {
+          <div class="pl-preview__pdf">
+            @if (paperless.previewLoading()) {
+              <div class="pl-empty">
+                <span class="material-icons pl-spin">progress_activity</span>
+                <p>Loading tripsheet…</p>
+              </div>
+            } @else {
+              @if (previewPdfUrl(); as url) {
+              <iframe [src]="url" class="pl-page__pdf" title="Tripsheet"></iframe>
+              } @else {
+              <div class="pl-empty">
+                <span class="material-icons">visibility_off</span>
+                <p>Tripsheet preview unavailable.</p>
+              </div>
+              }
+            }
+          </div>
+        }
+
+        @if (p.kind === 'pod') {
+          <div class="pl-preview__pdf">
+            @if (paperless.previewLoading()) {
+              <div class="pl-empty">
+                <span class="material-icons pl-spin">progress_activity</span>
+                <p>Loading POD…</p>
+              </div>
+            } @else {
+              @if (previewPdfUrl(); as url) {
+              <iframe [src]="url" class="pl-page__pdf" title="POD"></iframe>
+              } @else {
+              <div class="pl-empty">
+                <span class="material-icons">visibility_off</span>
+                <p>POD preview unavailable.</p>
+              </div>
+              }
+            }
+          </div>
+        }
+      </div>
+    } @else {
+      @if (doc(); as d) {
+      <div class="pl-viewer-main">
+        <!-- Slim side-nav of stacked documents. Green = signed. -->
+        @if (hasFilmstrip(d)) {
+          <aside class="pl-filmstrip">
+            @for (f of filmstripDocs(d); track f.id) {
+              <button class="pl-filmstrip__item"
+                      [class.pl-filmstrip__item--current]="isCurrentDoc(f)"
+                      [class.pl-filmstrip__item--signed]="isDocSigned(f)"
+                      (click)="openStackChild(f.id)"
+                      [title]="f.name">
+                <span class="material-icons pl-filmstrip__icon">{{ fileKindIcon(f.mime) }}</span>
+                <span class="pl-filmstrip__name">{{ f.name }}</span>
+                @if (isDocSigned(f)) {
+                  <span class="material-icons pl-filmstrip__badge">verified</span>
+                } @else if (f.parentId) {
+                  <span class="pl-filmstrip__kind">{{ stackKindLabel(f.stackKind || 'ProofOfDelivery') }}</span>
+                }
+              </button>
+            }
+          </aside>
+        }
       <div class="pl-stage">
-        <!-- The page: click to drop annotations when the tool is active -->
+        <!-- The page: an overlay above the iframe catches annotate clicks and
+             hosts pins/signatures so they render above the PDF. -->
         <div class="pl-page"
              [class.pl-page--annotating]="tool()==='annotate'"
-             (click)="onPageClick($event)">
+             [class.pl-page--rot90]="isImage() && rotation()===90"
+             [class.pl-page--rot180]="isImage() && rotation()===180"
+             [class.pl-page--rot270]="isImage() && rotation()===270"
+             [style.transform]="isImage() ? ('rotate(' + rotation() + 'deg)') : null">
           @if (isImage()) {
             <img [src]="d.dataUrl" [alt]="d.name" class="pl-page__media" />
           } @else if (isPdf()) {
-            <iframe [src]="pdfUrl()" class="pl-page__pdf" title="PDF"></iframe>
+            <!-- PDF rendered as scrollable canvases so the annotation overlay
+                 stays anchored to the page while scrolling (an iframe scrolls
+                 internally and detaches the overlay). -->
+            <div #pdfHost class="pl-page__pdf-pages"></div>
+            @if (pdfRendering()) {
+              <div class="pl-page__pdf-loading">
+                <span class="material-icons pl-spin">progress_activity</span> Rendering…
+              </div>
+            }
           } @else {
             <div class="pl-page__unsupported">
               <span class="material-icons">visibility_off</span>
@@ -217,33 +681,40 @@
             </div>
           }
 
-          <!-- annotation pins -->
-          @for (a of d.annotations; track a.id) {
-            <div class="pl-pin" [style.left.%]="a.xPct" [style.top.%]="a.yPct"
-                 [style.--pin]="a.colour">
-              <span class="pl-pin__dot"></span>
-              <div class="pl-pin__bubble">
-                <span>{{ a.text }}</span>
-                <button class="pl-pin__del" (click)="deleteAnnotation(a.id); $event.stopPropagation()">
-                  <span class="material-icons">close</span>
-                </button>
-              </div>
-            </div>
-          }
+          <!-- Interaction overlay (above the iframe) -->
+          <div class="pl-overlay"
+               [class.pl-overlay--active]="tool()==='annotate'"
+               (click)="onPageClick($event)">
 
-          <!-- placed signatures -->
-          @for (s of d.signatures; track s.id) {
-            <div class="pl-sig" [style.left.%]="s.xPct" [style.top.%]="s.yPct">
-              <img [src]="s.dataUrl" alt="signature" />
-              <div class="pl-sig__meta">
-                {{ s.signedBy }} · {{ s.signedAt | date:'d MMM y, HH:mm' }}
-                <button class="pl-pin__del" (click)="deleteSignature(s.id)">
-                  <span class="material-icons">close</span>
-                </button>
+            <!-- annotation pins -->
+            @for (a of d.annotations; track a.id) {
+              <div class="pl-pin" [style.left.%]="a.xPct" [style.top.%]="a.yPct"
+                   [style.--pin]="a.colour">
+                <span class="pl-pin__dot"></span>
+                <div class="pl-pin__bubble">
+                  <span>{{ a.text }}</span>
+                  <button class="pl-pin__del" (click)="deleteAnnotation(a.id); $event.stopPropagation()">
+                    <span class="material-icons">close</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          }
+            }
+
+            <!-- placed signatures -->
+            @for (s of d.signatures; track s.id) {
+              <div class="pl-sig" [style.left.%]="s.xPct" [style.top.%]="s.yPct">
+                <img [src]="s.dataUrl" alt="signature" />
+                <div class="pl-sig__meta">
+                  {{ s.signedBy }} · {{ s.signedAt | date:'d MMM y, HH:mm' }}
+                  <button class="pl-pin__del" (click)="deleteSignature(s.id); $event.stopPropagation()">
+                    <span class="material-icons">close</span>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
         </div>
+      </div>
       </div>
 
       <!-- Signature pad drawer -->
@@ -251,30 +722,227 @@
         <div class="pl-sign-dock">
           <div class="pl-sign-dock__head">
             <span class="material-icons">draw</span>
-            <span>Draw your signature</span>
+            <span>Add your signature</span>
           </div>
-          <canvas #sigPad class="pl-sign-pad"
-                  (mousedown)="padDown($event)" (mousemove)="padMove($event)"
-                  (mouseup)="padUp()" (mouseleave)="padUp()"
-                  (touchstart)="padDown($event)" (touchmove)="padMove($event)"
-                  (touchend)="padUp()"></canvas>
+
+          <!-- Mode selector: draw / upload / saved -->
+          <div class="pl-sign-modes">
+            <button [class.pl-sign-modes--on]="sigMode()==='draw'" (click)="setSigMode('draw')">
+              <span class="material-icons">gesture</span> Draw
+            </button>
+            <button [class.pl-sign-modes--on]="sigMode()==='upload'" (click)="setSigMode('upload')">
+              <span class="material-icons">image</span> Upload
+            </button>
+            <button [class.pl-sign-modes--on]="sigMode()==='saved'" (click)="setSigMode('saved')"
+                    [disabled]="!savedSig()">
+              <span class="material-icons">bookmark</span> Saved
+            </button>
+          </div>
+
+          @if (sigMode()==='draw') {
+            <canvas #sigPad class="pl-sign-pad"
+                    (mousedown)="padDown($event)" (mousemove)="padMove($event)"
+                    (mouseup)="padUp()" (mouseleave)="padUp()"
+                    (touchstart)="padDown($event)" (touchmove)="padMove($event)"
+                    (touchend)="padUp()"></canvas>
+          } @else if (sigMode()==='upload') {
+            <div class="pl-sign-upload">
+              @if (uploadedSig(); as u) {
+                <img [src]="u" class="pl-sign-preview" alt="signature preview" />
+              } @else {
+                <div class="pl-sign-upload__empty">
+                  <span class="material-icons">upload</span>
+                  <p>Upload a PNG/JPG of your signature (transparent PNG works best).</p>
+                </div>
+              }
+              <button class="pl-btn" (click)="triggerSigUpload()">
+                <span class="material-icons">image</span> Choose image
+              </button>
+              <input #sigUpload type="file" hidden accept="image/png,image/jpeg,image/webp"
+                     (change)="onSigPicked($event)" />
+            </div>
+          } @else {
+            <div class="pl-sign-upload">
+              @if (savedSig(); as s) {
+                <img [src]="s" class="pl-sign-preview" alt="saved signature" />
+              }
+              <button class="pl-btn pl-btn--ghost" (click)="clearSavedSig()">
+                <span class="material-icons">delete</span> Remove saved
+              </button>
+            </div>
+          }
+
+          @if (sigMode()!=='saved') {
+            <label class="pl-sign-remember">
+              <input type="checkbox" [(ngModel)]="rememberSig" />
+              Remember this as my default signature
+            </label>
+          }
+
           <div class="pl-sign-dock__row">
             <input class="pl-input" type="text" placeholder="Signed by" [(ngModel)]="signBy" />
-            <button class="pl-btn" (click)="clearPad()">
-              <span class="material-icons">refresh</span> Clear
-            </button>
+            @if (sigMode()==='draw') {
+              <button class="pl-btn" (click)="clearPad()">
+                <span class="material-icons">refresh</span> Clear
+              </button>
+            }
             <button class="pl-btn pl-btn--primary" (click)="applySignature()">
               <span class="material-icons">check</span> Apply
             </button>
           </div>
-          <p class="pl-sign-dock__hint">The signature is stamped onto the document and marks it Signed.</p>
+          <p class="pl-sign-dock__hint">Signing as a listed recipient advances the workflow automatically.</p>
         </div>
       }
-    } @else {
+
+      <!-- Stack dock: attach supporting documents to this file -->
+      @if (tool()==='stack') {
+        <div class="pl-sign-dock pl-stack-dock">
+          <div class="pl-sign-dock__head">
+            <span class="material-icons">layers</span>
+            <span>Stack a supporting document</span>
+          </div>
+          <div class="pl-stack-picker">
+            <select class="pl-input" [(ngModel)]="stackKind">
+              @for (k of stackKinds; track k) {
+                <option [value]="k">{{ stackKindLabel(k) }}</option>
+              }
+            </select>
+            <button class="pl-btn pl-btn--primary" (click)="triggerStackPicker()">
+              <span class="material-icons">upload_file</span> Add file
+            </button>
+            <input #stackInput type="file" hidden multiple
+                   accept=".pdf,image/*,.doc,.docx,.xlsx,.xls"
+                   (change)="onStackPicked($event)" />
+          </div>
+
+          @if (stackChildren().length) {
+            <div class="pl-stack-list">
+              @for (child of stackChildren(); track child.id) {
+                <div class="pl-stack-item">
+                  <span class="pl-stack-item__ico material-icons">{{ child.stackKind ? stackKindIcon(child.stackKind) : fileIcon(child.mime) }}</span>
+                  <div class="pl-stack-item__body">
+                    <div class="pl-stack-item__name" [title]="child.name">{{ child.name }}</div>
+                    <div class="pl-stack-item__meta">
+                      {{ child.stackKind ? stackKindLabel(child.stackKind) : 'File' }} · {{ humanSize(child.sizeBytes) }}
+                      @if (child.signatures.length) { · <span class="material-icons pl-stack-item__ok">draw</span> signed }
+                      @if (paperless.stackCount(child.id)) { · <span class="material-icons">layers</span> {{ paperless.stackCount(child.id) }} }
+                    </div>
+                  </div>
+                  <button class="pl-icon-mini pl-icon-mini--primary" (click)="openStackChild(child.id)" title="Open, sign, annotate or stack more">
+                    <span class="material-icons">open_in_new</span>
+                  </button>
+                  <a class="pl-icon-mini" [href]="child.dataUrl" [download]="child.name" title="Download">
+                    <span class="material-icons">download</span>
+                  </a>
+                  <button class="pl-icon-mini pl-icon-mini--danger" (click)="removeStackChild(child.id)" title="Remove">
+                    <span class="material-icons">close</span>
+                  </button>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="pl-sign-dock__hint">No supporting documents stacked yet. Pick a type and add a file.</p>
+          }
+        </div>
+      }
+      } @else {
       <div class="pl-empty pl-empty--big">
         <span class="material-icons">description</span>
         <p>Open a document from the Paperless controller to view, annotate and sign it.</p>
       </div>
+      }
     }
   </div>
 </aside>
+
+<!-- ── Share dialog ─────────────────────────────────────────── -->
+@if (shareOpen()) {
+  <div class="pl-share-backdrop" (click)="closeShare()"></div>
+  <div class="pl-share" role="dialog" aria-label="Share document">
+    <div class="pl-share__head">
+      <span class="material-icons">share</span>
+      <div class="pl-share__headtext">
+        <div class="pl-share__title">Share document</div>
+        <div class="pl-share__sub" [title]="shareDoc?.name">{{ shareDoc?.name }}</div>
+      </div>
+      <button class="paperless-icon-btn" (click)="closeShare()" aria-label="Close">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+
+    <div class="pl-share__body">
+      <input class="pl-input pl-input--full" type="text" placeholder="Search people by name or email…"
+             [(ngModel)]="shareQuery" (ngModelChange)="onShareInput()" autocomplete="off" />
+
+      @if (shareSelected.length) {
+        <div class="pl-share__chips">
+          @for (u of shareSelected; track u.id) {
+            <span class="pl-share-chip">
+              {{ u.name }}
+              <button (click)="toggleShareUser(u)"><span class="material-icons">close</span></button>
+            </span>
+          }
+        </div>
+      }
+
+      <div class="pl-share__list">
+        @for (u of shareResults(); track u.id) {
+          <button class="pl-share-user" [class.pl-share-user--on]="isShareSelected(u)"
+                  (click)="toggleShareUser(u)" [disabled]="!u.email">
+            <span class="pl-avatar">{{ u.name.charAt(0).toUpperCase() }}</span>
+            <span class="pl-share-user__text">
+              <span class="pl-share-user__name">{{ u.name }}</span>
+              <span class="pl-share-user__mail">{{ u.email || 'No email on file' }}{{ u.title ? ' · ' + u.title : '' }}</span>
+            </span>
+            @if (isShareSelected(u)) { <span class="material-icons pl-share-user__tick">check_circle</span> }
+          </button>
+        } @empty {
+          <div class="pl-recips__empty">No matching people.</div>
+        }
+      </div>
+
+      <textarea class="pl-input pl-input--full" rows="2" placeholder="Add a short message (optional)…"
+                [(ngModel)]="shareMessage"></textarea>
+    </div>
+
+    <div class="pl-share__foot">
+      <button class="pl-btn" (click)="closeShare()">Cancel</button>
+      <button class="pl-btn pl-btn--primary" (click)="doShare()" [disabled]="sharing() || !shareSelected.length">
+        <span class="material-icons">{{ sharing() ? 'progress_activity' : 'send' }}</span>
+        {{ sharing() ? 'Sharing…' : 'Share & notify' }}
+      </button>
+    </div>
+  </div>
+}
+
+<!-- ── Workflow category picker ─────────────────────────────── -->
+<!-- Shown before every upload / link so the user classifies the workflow. -->
+@if (catPickerOpen()) {
+  <div class="pl-share-backdrop" (click)="cancelCategory()"></div>
+  <div class="pl-catpick" role="dialog" aria-label="Choose workflow category">
+    <div class="pl-catpick__head">
+      <div class="pl-catpick__headtext">
+        <div class="pl-catpick__title">What kind of workflow is this?</div>
+        <div class="pl-catpick__sub" [title]="catPickerSubject()">
+          {{ catPickerSubject() || 'Select a category to continue' }}
+        </div>
+      </div>
+      <button class="pl-icon-btn" (click)="cancelCategory()" title="Cancel">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+
+    <div class="pl-catpick__grid">
+      @for (c of categories; track c.value) {
+        <button class="pl-cat-card" (click)="chooseCategory(c.value)">
+          <span class="pl-cat-card__icon material-icons">{{ c.icon }}</span>
+          <span class="pl-cat-card__label">{{ c.label }}</span>
+        </button>
+      }
+    </div>
+
+    <div class="pl-catpick__foot">
+      <button class="pl-btn" (click)="cancelCategory()">Cancel</button>
+    </div>
+  </div>
+}

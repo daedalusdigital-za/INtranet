@@ -6,6 +6,8 @@ namespace ProjectTracker.API.DTOs
         public string Title { get; set; } = string.Empty;
         public string? Description { get; set; }
         public bool IsPublic { get; set; } = false;
+        // "doc" (rich text) or "sheet" (spreadsheet)
+        public string DocumentType { get; set; } = "doc";
     }
 
     public class UpdateDocumentDto
@@ -38,6 +40,7 @@ namespace ProjectTracker.API.DTOs
         public string CreatedByName { get; set; } = string.Empty;
         public string? LastModifiedByName { get; set; }
         public bool IsPublic { get; set; }
+        public string DocumentType { get; set; } = "doc";
         public string UserRole { get; set; } = string.Empty;
         public int CollaboratorCount { get; set; }
     }
@@ -52,6 +55,7 @@ namespace ProjectTracker.API.DTOs
         public int CreatedById { get; set; }
         public string CreatedByName { get; set; } = string.Empty;
         public bool IsPublic { get; set; }
+        public string DocumentType { get; set; } = "doc";
         public string? YjsState { get; set; }
         public int Version { get; set; }
         public List<CollaboratorDto> Collaborators { get; set; } = new();

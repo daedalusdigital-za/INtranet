@@ -366,11 +366,11 @@ interface User {
                 <mat-label>Category</mat-label>
                 <mat-select formControlName="category">
                   <mat-option value="">None</mat-option>
-                  <mat-option value="Work">🏢 Work</mat-option>
-                  <mat-option value="Meeting">📅 Meeting</mat-option>
-                  <mat-option value="Follow-up">📞 Follow-up</mat-option>
-                  <mat-option value="Project">📊 Project</mat-option>
-                  <mat-option value="Personal">👤 Personal</mat-option>
+                  <mat-option value="Work">Work</mat-option>
+                  <mat-option value="Meeting">Meeting</mat-option>
+                  <mat-option value="Follow-up">Follow-up</mat-option>
+                  <mat-option value="Project">Project</mat-option>
+                  <mat-option value="Personal">Personal</mat-option>
                 </mat-select>
                 <mat-icon matPrefix>category</mat-icon>
               </mat-form-field>
@@ -444,7 +444,7 @@ interface User {
 
     /* Modern Gradient Header */
     .dialog-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #60a5fa 100%);
       padding: 24px 32px;
       display: flex;
       align-items: center;
@@ -577,9 +577,9 @@ interface User {
     }
 
     .tab-btn.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
     }
 
     .tab-btn mat-icon {
@@ -644,12 +644,12 @@ interface User {
     }
 
     .filter-chip:hover {
-      border-color: #667eea;
-      color: #667eea;
+      border-color: #2563eb;
+      color: #2563eb;
     }
 
     .filter-chip.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       border-color: transparent;
       color: white;
     }
@@ -889,12 +889,12 @@ interface User {
       width: 80px;
       height: 80px;
       border-radius: 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 24px;
-      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 10px 30px rgba(37, 99, 235, 0.3);
     }
 
     .empty-icon.assigned {
@@ -954,7 +954,7 @@ interface User {
       font-size: 28px;
       width: 28px;
       height: 28px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .form-header h3 {
@@ -1007,7 +1007,7 @@ interface User {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       border-radius: 24px;
       font-size: 14px;
@@ -1048,8 +1048,8 @@ interface User {
     }
 
     .create-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
     }
 
     /* Notifications */
@@ -1066,7 +1066,7 @@ interface User {
     }
 
     .mark-read-btn {
-      color: #667eea;
+      color: #2563eb;
     }
 
     .notifications-list {
@@ -1093,8 +1093,8 @@ interface User {
     }
 
     .notification-card.unread {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-      border-color: rgba(102, 126, 234, 0.3);
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(30, 64, 175, 0.05) 100%);
+      border-color: rgba(37, 99, 235, 0.3);
     }
 
     .notification-icon {
@@ -1144,8 +1144,8 @@ interface User {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.5);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.5);
     }
 
     /* Scrollbar */

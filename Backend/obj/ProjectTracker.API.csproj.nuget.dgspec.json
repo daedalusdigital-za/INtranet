@@ -63,6 +63,10 @@
               "target": "Package",
               "version": "[7.0.0, )"
             },
+            "ExcelDataReader": {
+              "target": "Package",
+              "version": "[3.7.0, )"
+            },
             "MailKit": {
               "target": "Package",
               "version": "[4.17.0, )"
@@ -88,6 +92,10 @@
               "suppressParent": "All",
               "target": "Package",
               "version": "[10.0.1, )"
+            },
+            "QRCoder": {
+              "target": "Package",
+              "version": "[1.6.0, )"
             },
             "XstReader.Api": {
               "target": "Package",

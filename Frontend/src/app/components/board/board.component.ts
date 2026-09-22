@@ -73,7 +73,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #boardActionsMenu="matMenu">
-                  <button mat-menu-item (click)="editBoard()">
+                  <!-- Edit Board / View Reports hidden until implemented -->
+                  <button mat-menu-item (click)="editBoard()" style="display:none">
                     <mat-icon>edit</mat-icon>
                     <span>Edit Board</span>
                   </button>
@@ -81,7 +82,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
                     <mat-icon>person_add</mat-icon>
                     <span>Manage Team</span>
                   </button>
-                  <button mat-menu-item (click)="viewReports()">
+                  <button mat-menu-item (click)="viewReports()" style="display:none">
                     <mat-icon>assessment</mat-icon>
                     <span>View Reports</span>
                   </button>
@@ -955,7 +956,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       font-size: 16px;
       width: 16px;
       height: 16px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .card-footer {

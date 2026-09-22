@@ -139,9 +139,11 @@ Be concise, professional, and friendly. Use the provided database context when a
                 }
 
                 // 2. Knowledge base document search (policies, procedures, guides)
-                // Only add KB if we have budget remaining
+                // Only add KB if we have budget remaining AND the message looks like a
+                // real question — skip greetings/small-talk so Welly doesn't recite its
+                // own capability guides during normal conversation.
                 var remainingBudget = maxContextChars - sb.Length;
-                if (remainingBudget > 500)
+                if (remainingBudget > 500 && ShouldSearchKnowledgeBase(query))
                 {
                     var kbService = scope.ServiceProvider.GetService<IKnowledgeBaseService>();
                     if (kbService != null)
@@ -196,6 +198,34 @@ Be concise, professional, and friendly. Use the provided database context when a
         }
 
 
+
+        /// <summary>
+        /// Decide whether a message warrants a knowledge-base lookup. Greetings,
+        /// thanks, and very short small-talk are skipped so Welly doesn't recite
+        /// its own capability guides during ordinary conversation.
+        /// </summary>
+        private static bool ShouldSearchKnowledgeBase(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return false;
+            var q = query.Trim().ToLowerInvariant();
+
+            // Too short to be a real question (e.g. "hi", "ok", "cool").
+            var wordCount = q.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            if (q.Length < 12 && wordCount <= 2) return false;
+
+            // Pure greeting / small-talk openers.
+            string[] smallTalk =
+            {
+                "hi", "hey", "hello", "howzit", "yo", "sup", "good morning",
+                "good afternoon", "good evening", "morning", "afternoon", "evening",
+                "how are you", "how's it going", "hows it going", "thanks", "thank you",
+                "thx", "ok", "okay", "cool", "nice", "great", "lol", "haha",
+                "bye", "goodbye", "cheers", "no", "yes", "yep", "nope"
+            };
+            if (smallTalk.Any(s => q == s || q == s + "!" || q == s + ".")) return false;
+
+            return true;
+        }
 
         /// <summary>
         /// Build a user identity block to inject into the system prompt
@@ -463,13 +493,13 @@ Be concise, professional, and friendly. Use the provided database context when a
             // Add page awareness to system prompt
             if (!string.IsNullOrEmpty(pageContext))
             {
-                systemContent += $"\n## Current Page\nThe user is currently viewing the **{GetPageLabel(pageContext)}** page (route: {pageContext}). Prioritize information relevant to this page when answering.\n";
+                systemContent += $"\n## Current Page (context only)\nThe user is currently on the **{GetPageLabel(pageContext)}** page. This is background awareness only — do NOT bring up the page unless the user's message is clearly about it.\n";
             }
 
             // Add visible page content so Welly can see what the user sees
             if (!string.IsNullOrEmpty(pageContent))
             {
-                systemContent += $"\n## Visible Page Content\nBelow is a summary of what is currently visible on the user's screen. Use this to answer questions like 'what's on this page', 'how do I...', or 'explain this'.\n```\n{pageContent}\n```\n";
+                systemContent += $"\n## Visible Page Content (reference ONLY when asked)\nThis is a snapshot of what is on the user's screen. Use it ONLY when the user explicitly asks about the current page/screen (e.g. \"what's on this page\", \"explain this\", \"how do I do this here\"). For all other messages, hold a normal conversation and do NOT mention or quote this content.\n```\n{pageContent}\n```\n";
             }
 
             var dbContext = await GetContextForQueryAsync(userMessage, pageContext);

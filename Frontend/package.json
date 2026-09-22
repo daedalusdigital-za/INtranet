@@ -5,8 +5,10 @@
     "ng": "ng",
     "start": "ng serve --host 0.0.0.0",
     "build": "ng build",
+    "build:prod": "ng build --configuration=production",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "deploy:frontend": "ng build --configuration=production && cd .. && docker compose build frontend && docker compose up -d --force-recreate frontend"
   },
   "private": true,
   "dependencies": {
@@ -36,9 +38,12 @@
     "@types/three": "^0.182.0",
     "chart.js": "^4.5.1",
     "html2canvas": "^1.4.1",
+    "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.0",
     "mammoth": "^1.11.0",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.9.155",
+    "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
     "tesseract.js": "^5.1.1",
     "three": "^0.182.0",
@@ -52,6 +57,7 @@
     "@angular-devkit/build-angular": "^18.2.20",
     "@angular/cli": "^18.2.20",
     "@angular/compiler-cli": "^18.2.0",
+    "@types/qrcode": "^1.5.6",
     "typescript": "~5.5.2"
   }
 }

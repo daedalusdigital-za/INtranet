@@ -15,7 +15,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       // Requests to the School Delivery integration authenticate against an
       // EXTERNAL system. Their 401/403 responses must NOT sign the user out of
       // the intranet — let the calling component handle those itself.
-      const isExternalIntegration = req.url.includes('/schooldelivery');
+      // The Archives module is gated by its OWN shared password (sent via the
+      // X-Archive-Password header), so its 401/403s are "wrong archive
+      // password", NOT an expired intranet session — they must not log the
+      // user out either.
+      const isExternalIntegration =
+        req.url.includes('/schooldelivery') ||
+        req.url.includes('/archives');
 
       if (error.status === 0) {
         // Network error - server unreachable

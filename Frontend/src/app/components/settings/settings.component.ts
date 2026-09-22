@@ -33,6 +33,7 @@ import { UserManagementService, User, Department, CreateUserDto, Permission, Mod
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { environment } from '../../../environments/environment';
+import { PodUploaderComponent } from './pod-uploader.component';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -65,7 +66,8 @@ import * as XLSX from 'xlsx';
     MatDatepickerModule,
     MatNativeDateModule,
     MatMenuModule,
-    NavbarComponent
+    NavbarComponent,
+    PodUploaderComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -81,6 +83,17 @@ import * as XLSX from 'xlsx';
       </div>
 
       <mat-tab-group class="settings-tabs" animationDuration="200ms">
+        <!-- POD Uploader Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>fact_check</mat-icon>
+            <span>POD Uploader</span>
+          </ng-template>
+          <div class="tab-content">
+            <app-pod-uploader></app-pod-uploader>
+          </div>
+        </mat-tab>
+
         <!-- Announcements Tab -->
         <mat-tab>
           <ng-template mat-tab-label>

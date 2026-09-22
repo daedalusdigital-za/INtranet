@@ -591,7 +591,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
 
     .folder-btn {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%) !important;
       color: white !important;
       font-weight: 500 !important;
     }

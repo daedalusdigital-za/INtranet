@@ -1277,7 +1277,7 @@ import { Awareness } from 'y-protocols/awareness';
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #667eea;
+      color: #2563eb;
       animation: pulse 2s ease-in-out infinite;
     }
 
@@ -1303,7 +1303,7 @@ import { Awareness } from 'y-protocols/awareness';
 
     .ocr-progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #667eea, #764ba2);
+      background: linear-gradient(90deg, #2563eb, #1e40af);
       border-radius: 3px;
       transition: width 0.3s ease;
     }
@@ -1577,7 +1577,7 @@ import { Awareness } from 'y-protocols/awareness';
 
     /* Welly AI Assist Styles */
     .welly-group .welly-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       border-radius: 8px;
       transition: all 0.3s ease;
@@ -1585,7 +1585,7 @@ import { Awareness } from 'y-protocols/awareness';
 
     .welly-group .welly-btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
 
     .welly-group .welly-icon {
@@ -1622,7 +1622,7 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
 
@@ -1709,7 +1709,7 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .welly-generate-form textarea:focus {
-      border-color: #667eea;
+      border-color: #2563eb;
     }
 
     /* Email Dialog */
@@ -1823,7 +1823,7 @@ import { Awareness } from 'y-protocols/awareness';
       padding: 5px 12px;
       border: 1px solid #e0e0e0;
       border-radius: 20px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
       color: white;
       font-size: 12px;
       font-weight: 500;
@@ -1833,7 +1833,7 @@ import { Awareness } from 'y-protocols/awareness';
 
     .welly-compose-btn:hover:not(:disabled) {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
 
     .welly-compose-btn:disabled {
@@ -2183,6 +2183,27 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Initial word count
     this.updateWordCount();
+
+    // If this doc was just created via the list-page Import button, seed its content.
+    this.applyImportSeedIfAny();
+  }
+
+  /** Seed a freshly-created document from a file imported on the list page. */
+  private applyImportSeedIfAny(): void {
+    try {
+      const key = `collab-import-doc-${this.documentId}`;
+      const html = sessionStorage.getItem(key);
+      if (!html) return;
+      sessionStorage.removeItem(key);
+      // Small delay so the collaboration binding is fully wired before we set content.
+      setTimeout(() => {
+        try {
+          this.editor?.chain().focus().setContent(html).run();
+          this.autosaveSubject.next();
+          this.snackBar.open('Imported file content', 'Close', { duration: 3000 });
+        } catch { /* ignore */ }
+      }, 200);
+    } catch { /* ignore malformed seed */ }
   }
 
   private async setupRealTimeSync(): Promise<void> {

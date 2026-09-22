@@ -391,7 +391,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
     /* Header */
     .books-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .header-left { display: flex; align-items: center; gap: 16px; }
-    .header-icon-wrap { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(102,126,234,0.4); }
+    .header-icon-wrap { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #2563eb, #1e40af); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(37,99,235,0.4); }
     .header-icon { color: white; font-size: 28px; width: 28px; height: 28px; }
     .books-header h1 { margin: 0; font-size: 28px; font-weight: 700; color: #ffffff; }
     .subtitle { margin: 2px 0 0; color: rgba(255,255,255,0.85); font-size: 14px; }
@@ -419,12 +419,12 @@ import { WellyActivityService } from '../../services/welly-activity.service';
     .section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(255,255,255,0.8); }
     .supplier-chips { display: flex; gap: 10px; flex-wrap: wrap; }
     .supplier-chip { background: rgba(255,255,255,0.95); border: 1.5px solid rgba(255,255,255,0.3); border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(10px); }
-    .supplier-chip:hover { border-color: #667eea; background: #f5f3ff; }
-    .supplier-chip.active { border-color: #667eea; background: #667eea; }
+    .supplier-chip:hover { border-color: #2563eb; background: #f5f3ff; }
+    .supplier-chip.active { border-color: #2563eb; background: #2563eb; }
     .supplier-chip.active .sc-name, .supplier-chip.active .sc-total { color: white; }
     .supplier-chip.active .sc-count { background: rgba(255,255,255,0.25); color: white; }
     .sc-upload-btn { background: none; border: none; cursor: pointer; padding: 0; margin-left: 4px; display: flex; align-items: center; opacity: 0; transition: opacity 0.2s; }
-    .sc-upload-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #667eea; }
+    .sc-upload-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #2563eb; }
     .supplier-chip:hover .sc-upload-btn { opacity: 1; }
     .supplier-chip.active .sc-upload-btn mat-icon { color: white; }
     .sc-name { font-weight: 600; font-size: 13px; color: #374151; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -436,11 +436,11 @@ import { WellyActivityService } from '../../services/welly-activity.service';
     .search-box { position: relative; flex: 1; min-width: 200px; }
     .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 20px; }
     .search-input { width: 100%; padding: 10px 36px 10px 40px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; background: #f9fafb; }
-    .search-input:focus { border-color: #667eea; background: white; }
+    .search-input:focus { border-color: #2563eb; background: white; }
     .clear-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
     .filter-chips { display: flex; gap: 6px; }
     .filter-chips button { border-radius: 20px; font-size: 12px; height: 34px; border-color: #e5e7eb; }
-    .filter-chips button.active-filter { background: #667eea; color: white; border-color: #667eea; }
+    .filter-chips button.active-filter { background: #2563eb; color: white; border-color: #2563eb; }
     .chip-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; vertical-align: middle; }
     .confirmed-icon { color: #00897b; }
     .payment-requested-icon { color: #e65100; }
@@ -449,10 +449,10 @@ import { WellyActivityService } from '../../services/welly-activity.service';
     .active-filter .chip-icon { color: white !important; }
     .filter-selects { display: flex; gap: 8px; }
     .filter-select { padding: 8px 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 13px; background: #f9fafb; outline: none; cursor: pointer; }
-    .filter-select:focus { border-color: #667eea; }
+    .filter-select:focus { border-color: #2563eb; }
     .view-toggle { display: flex; gap: 2px; margin-left: auto; }
     .view-toggle button { color: #9ca3af; }
-    .view-toggle .active-view { color: #667eea; background: #f0edff; }
+    .view-toggle .active-view { color: #2563eb; background: #f0edff; }
 
     /* Loading / Empty */
     .loading-container { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 60px; color: rgba(255,255,255,0.85); }
@@ -504,7 +504,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
     .no-data { color: #d1d5db; }
     .action-btns { display: flex; align-items: center; gap: 2px; }
     .action-btns button { color: #6b7280; }
-    .action-btns button:hover { color: #667eea; }
+    .action-btns button:hover { color: #2563eb; }
 
     /* Pagination */
     .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 20px; }
@@ -864,12 +864,12 @@ export class BooksComponent implements OnInit {
   styles: [`
     .upload-dialog { padding: 28px; }
     .dialog-header { text-align: center; margin-bottom: 24px; }
-    .dialog-header-icon { font-size: 40px; width: 40px; height: 40px; color: #667eea; }
+    .dialog-header-icon { font-size: 40px; width: 40px; height: 40px; color: #2563eb; }
     .dialog-header h2 { margin: 8px 0 4px; font-size: 22px; font-weight: 700; color: #1a1a2e; }
     .dialog-header p { margin: 0; color: #6b7280; font-size: 14px; }
 
     .drop-zone { border: 2px dashed #d1d5db; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f9fafb; }
-    .drop-zone:hover, .drop-zone.drag-over { border-color: #667eea; background: #f5f3ff; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #2563eb; background: #f5f3ff; }
     .drop-zone.has-file { border-color: #4ade80; background: #f0fdf4; border-style: solid; }
     .drop-content { display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .drop-icon { font-size: 48px; width: 48px; height: 48px; color: #ef4444; }
@@ -998,7 +998,7 @@ export class UploadBookInvoiceDialog {
           <input type="text" [(ngModel)]="form.supplierName" class="form-input" [class.highlight]="isNew && form.supplierName === 'Unknown Supplier'" placeholder="Start typing supplier name..." (input)="filterSuppliers()" [matAutocomplete]="supplierAuto" autocomplete="off">
           <mat-autocomplete #supplierAuto="matAutocomplete" (optionSelected)="onSupplierSelected($event)" class="supplier-autocomplete-panel">
             <mat-option *ngFor="let s of filteredSuppliers" [value]="s">
-              <mat-icon style="font-size:18px;width:18px;height:18px;color:#667eea;margin-right:8px;">store</mat-icon>
+              <mat-icon style="font-size:18px;width:18px;height:18px;color:#2563eb;margin-right:8px;">store</mat-icon>
               {{ s }}
             </mat-option>
           </mat-autocomplete>
@@ -1159,7 +1159,7 @@ export class UploadBookInvoiceDialog {
   styles: [`
     .confirm-dialog { padding: 28px; max-height: 85vh; overflow-y: auto; }
     .dialog-header { text-align: center; margin-bottom: 20px; }
-    .header-icon { font-size: 40px; width: 40px; height: 40px; color: #667eea; }
+    .header-icon { font-size: 40px; width: 40px; height: 40px; color: #2563eb; }
     .header-icon.edit-icon { color: #ef6c00; }
     .dialog-header h2 { margin: 8px 0 4px; font-size: 22px; font-weight: 700; color: #1a1a2e; }
     .dialog-header p { margin: 0; color: #6b7280; font-size: 14px; }
@@ -1172,7 +1172,7 @@ export class UploadBookInvoiceDialog {
     .form-group.full-width { grid-column: 1 / -1; }
     .form-group label { font-size: 12px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: .3px; }
     .form-input { padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; background: #f9fafb; font-family: inherit; }
-    .form-input:focus { border-color: #667eea; background: white; }
+    .form-input:focus { border-color: #2563eb; background: white; }
     .form-input.highlight { border-color: #f59e0b; background: #fffbeb; }
     .form-input.textarea { resize: vertical; min-height: 60px; }
     .amount-input-wrap { position: relative; display: flex; align-items: center; }
@@ -1183,7 +1183,7 @@ export class UploadBookInvoiceDialog {
 
     .extracted-preview { margin-bottom: 16px; }
     .preview-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: #6b7280; padding: 8px 0; }
-    .preview-toggle:hover { color: #667eea; }
+    .preview-toggle:hover { color: #2563eb; }
     .preview-text { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; font-size: 12px; color: #6b7280; max-height: 150px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
 
     .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; border-top: 1px solid #f3f4f6; }
@@ -1589,7 +1589,6 @@ export class SupplierAnalysisDialog {
       userQuestion: this.userQuestion || undefined
     };
 
-    console.log('Sending supplier analysis request:', payload);
     this.http.post<any>(`${environment.apiUrl}/aichat/analyze-supplier-invoices`, payload).subscribe({
       next: (response: any) => {
         this.analyzing = false;
@@ -1600,7 +1599,6 @@ export class SupplierAnalysisDialog {
         this.invoiceCount = response.invoicesAnalyzed || 0;
         this.totalSpend = response.totalSpend || 0;
         this.lineItems = response.lineItems || null;
-        console.log('Analysis received:', response);
       },
       error: (err: any) => {
         this.analyzing = false;

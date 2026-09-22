@@ -138,6 +138,56 @@ services:
           memory: 256m
           cpus: '1.0'
 
+  # Read-only MCP connector that exposes logistics data to Claude (Team).
+  mcp-logistics:
+    build:
+      context: ./mcp-logistics
+      dockerfile: Dockerfile
+    container_name: projecttracker-mcp-logistics
+    environment:
+      - PORT=8080
+      - PUBLIC_URL=${MCP_PUBLIC_URL:-}
+      - ACCESS_PASSWORD=${MCP_ACCESS_PASSWORD:-change-me-please}
+      - DB_SERVER=database
+      - DB_PORT=1433
+      - DB_NAME=ProjectTrackerDB
+      - DB_USER=${MCP_DB_USER:-mcp_readonly}
+      - DB_PASSWORD=${MCP_DB_PASSWORD:-McpR3ad0nly@2026!}
+      # Root the POD/tripsheet files are stored under, so get_pod_file can read them.
+      - DOCS_ROOT=/app/documents
+    volumes:
+      # Read-only access to the document store so the connector can serve POD PDFs.
+      - nas-documents:/app/documents:ro
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - projecttracker-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.5'
+
+  # Cloudflare Tunnel. Two modes:
+  #  • Quick Tunnel (testing, random URL, no account):
+  #      command: tunnel --no-autoupdate --url http://mcp-logistics:8080
+  #  • Named Tunnel (stable URL, needs a domain on Cloudflare + token):
+  #      set MCP_TUNNEL_TOKEN in .env and use the command below.
+  # Read the random URL (quick mode) from: docker compose logs mcp-cloudflared
+  mcp-cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: projecttracker-mcp-tunnel
+    command: ${MCP_TUNNEL_CMD:-tunnel --no-autoupdate --url http://mcp-logistics:8080}
+    environment:
+      - TUNNEL_TOKEN=${MCP_TUNNEL_TOKEN:-}
+    depends_on:
+      - mcp-logistics
+    networks:
+      - projecttracker-network
+    restart: unless-stopped
+
 volumes:
   sql-data:
     driver: local

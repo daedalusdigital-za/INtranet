@@ -39,7 +39,6 @@ $Models = @{
         ThreadsBatch = 24       # All physical cores across both sockets
         ExtraArgs   = @("--reasoning-format", "deepseek", "--reasoning", "off")
     }
-    }
     "deep" = @{
         Name        = "DeepSeek-R1-Distill-Qwen 14B (Q4_K_M)"
         Path        = "C:\Models\DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"

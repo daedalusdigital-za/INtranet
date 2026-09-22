@@ -417,7 +417,7 @@ interface HrCase {
     .dir-header { display:flex; align-items:center; justify-content:space-between; padding:18px 24px; border-bottom:1px solid rgba(255,255,255,0.08);
       background:linear-gradient(135deg,#1e1b4b,#0f172a); }
     .dir-title { display:flex; align-items:center; gap:14px; }
-    .dir-title mat-icon { font-size:30px; width:30px; height:30px; color:#818cf8; }
+    .dir-title mat-icon { font-size:30px; width:30px; height:30px; color:#60a5fa; }
     .dir-title h2 { margin:0; font-size:20px; font-weight:800; }
     .dir-sub { font-size:12px; color:#94a3b8; }
     .dir-header-actions { display:flex; align-items:center; gap:10px; }
@@ -494,7 +494,7 @@ interface HrCase {
 
     .docs-card { display:flex; flex-direction:column; }
     .docs-head h3 { margin:0 0 14px; font-size:15px; display:flex; align-items:center; gap:8px; color:#e2e8f0; }
-    .docs-head mat-icon { color:#818cf8; }
+    .docs-head mat-icon { color:#60a5fa; }
     .docs-hint, .docs-empty { color:#94a3b8; font-size:13px; display:flex; align-items:center; gap:8px; padding:16px; }
     .upload-box { background:rgba(255,255,255,0.04); border:1px dashed rgba(255,255,255,0.15); border-radius:12px; padding:12px; margin-bottom:14px; }
     .up-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }

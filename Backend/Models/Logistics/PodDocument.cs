@@ -13,6 +13,13 @@ namespace ProjectTracker.API.Models.Logistics
         [Key]
         public int Id { get; set; }
 
+        /// <summary>
+        /// Human-readable, barcode-friendly POD identifier (auto-generated on save),
+        /// e.g. "POD000123". Used in place of the driver as the primary POD reference.
+        /// </summary>
+        [MaxLength(30)]
+        public string? PodNumber { get; set; }
+
         // Driver link (optional - matched by name)
         public int? DriverId { get; set; }
 

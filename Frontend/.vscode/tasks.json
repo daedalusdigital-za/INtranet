@@ -37,6 +37,14 @@
           }
         }
       }
+    },
+    {
+      "label": "Deploy Frontend (build + docker)",
+      "detail": "Production build, then rebuild & recreate the frontend Docker container.",
+      "type": "npm",
+      "script": "deploy:frontend",
+      "problemMatcher": ["$tsc"],
+      "group": "build"
     }
   ]
 }

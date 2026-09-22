@@ -60,6 +60,18 @@ export interface AnnouncementData {
   isRead: boolean;
 }
 
+/** A Paperless workflow notification (added / signed / approved / completed). */
+export interface PaperlessNotificationData {
+  id: number;
+  documentId: string;
+  documentName: string;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: Date;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -388,9 +400,13 @@ export class NotificationService {
       announcements: this.http.get<AnnouncementData[]>(
         `${environment.apiUrl}/announcements?activeOnly=true&limit=20`,
         { headers: this.getHeaders() }
+      ).pipe(catchError(() => of([]))),
+      paperless: this.http.get<PaperlessNotificationData[]>(
+        `${environment.apiUrl}/Paperless/notifications?limit=50`,
+        { headers: this.getHeaders() }
       ).pipe(catchError(() => of([])))
     }).subscribe({
-      next: ({ meetings, announcements }) => {
+      next: ({ meetings, announcements, paperless }) => {
         const unifiedNotifications: UnifiedNotification[] = [];
 
         // Convert meeting notifications
@@ -434,6 +450,21 @@ export class NotificationService {
           }
         });
 
+        // Convert Paperless workflow notifications
+        paperless.forEach((p: PaperlessNotificationData) => {
+          unifiedNotifications.push({
+            id: `paperless-${p.id}`,
+            type: 'system',
+            icon: this.getPaperlessIcon(p.type),
+            iconClass: p.isRead ? 'icon-info' : 'icon-primary',
+            title: p.title || 'Paperless',
+            message: p.body,
+            timestamp: new Date(p.createdAt),
+            isRead: p.isRead,
+            data: p
+          });
+        });
+
         // Sort by timestamp (newest first)
         unifiedNotifications.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
@@ -457,8 +488,7 @@ export class NotificationService {
       case 'Invitation': return 'event';
       case 'Reminder': return 'alarm';
       case 'Cancelled': return 'event_busy';
-      case 'Updated': return 'update';
-      case 'Response': return 'how_to_reg';
+      case 'Updated': return 'update';      case 'Response': return 'how_to_reg';
       default: return 'event';
     }
   }
@@ -471,6 +501,18 @@ export class NotificationService {
       case 'Updated': return 'icon-info';
       case 'Response': return 'icon-success';
       default: return 'icon-info';
+    }
+  }
+
+  private getPaperlessIcon(type: string): string {
+    switch ((type || '').toLowerCase()) {
+      case 'added': return 'assignment_ind';
+      case 'signed': return 'draw';
+      case 'approved': return 'thumb_up';
+      case 'declined': return 'cancel';
+      case 'completed': return 'verified';
+      case 'shared': return 'share';
+      default: return 'description';
     }
   }
 
@@ -513,6 +555,18 @@ export class NotificationService {
         }
       }
 
+      // Handle Paperless workflow notification
+      if (notification.id.startsWith('paperless-')) {
+        const pid = notification.data?.id;
+        if (pid) {
+          this.http.post<void>(
+            `${environment.apiUrl}/Paperless/notifications/${pid}/read`,
+            {},
+            { headers: this.getHeaders() }
+          ).subscribe();
+        }
+      }
+
       // Update local state
       notification.isRead = true;
       this.notificationsSubject.next([...notifications]);
@@ -543,6 +597,13 @@ export class NotificationService {
           ).subscribe();
         }
       });
+
+    // Mark all Paperless notifications as read
+    this.http.post<void>(
+      `${environment.apiUrl}/Paperless/notifications/read-all`,
+      {},
+      { headers: this.getHeaders() }
+    ).pipe(catchError(() => of(null))).subscribe();
 
     // Update local state
     notifications.forEach(n => n.isRead = true);

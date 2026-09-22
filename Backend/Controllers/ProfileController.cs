@@ -76,6 +76,10 @@ namespace ProjectTracker.API.Controllers
             if (!string.IsNullOrEmpty(dto.ProfilePictureUrl))
                 user.ProfilePictureUrl = dto.ProfilePictureUrl;
 
+            // Department can be changed (0 or null clears it)
+            if (dto.DepartmentId.HasValue)
+                user.DepartmentId = dto.DepartmentId.Value > 0 ? dto.DepartmentId.Value : null;
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Profile updated for user {UserId}", userId);

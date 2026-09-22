@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -22,7 +22,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
-import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../models/models';
+import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } from '../../models/models';
 
 @Component({
   selector: 'app-profile',
@@ -72,13 +72,17 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
             <!-- Profile Card -->
             <mat-card class="profile-card">
               <div class="profile-photo-section">
-                <div class="profile-photo">
+                <div class="profile-photo" (click)="triggerPhotoSelect()" title="Click to change photo">
                   <img *ngIf="user.profilePictureUrl" [src]="user.profilePictureUrl" alt="Profile Photo">
                   <mat-icon *ngIf="!user.profilePictureUrl" class="default-avatar">account_circle</mat-icon>
+                  <div class="photo-overlay">
+                    <mat-icon>{{ uploadingPhoto ? 'hourglass_top' : 'camera_alt' }}</mat-icon>
+                  </div>
                 </div>
-                <button mat-stroked-button color="primary" class="change-photo-btn">
+                <input #photoInput type="file" accept="image/*" hidden (change)="onPhotoSelected($event)">
+                <button mat-stroked-button color="primary" class="change-photo-btn" (click)="triggerPhotoSelect()" [disabled]="uploadingPhoto">
                   <mat-icon>camera_alt</mat-icon>
-                  Change Photo
+                  {{ uploadingPhoto ? 'Uploading...' : 'Change Photo' }}
                 </button>
               </div>
 
@@ -117,7 +121,12 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
                     <mat-icon>work</mat-icon>
                     <span>Job Title</span>
                   </div>
-                  <div class="info-value">{{ user.title || 'Not Set' }}</div>
+                  <div class="info-value" *ngIf="!editingDetails">{{ user.title || 'Not Set' }}</div>
+                  <div class="info-value" *ngIf="editingDetails">
+                    <mat-form-field appearance="outline" class="edit-field">
+                      <input matInput [(ngModel)]="editTitle" placeholder="Job title">
+                    </mat-form-field>
+                  </div>
                 </div>
 
                 <div class="info-row">
@@ -125,7 +134,15 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
                     <mat-icon>business</mat-icon>
                     <span>Department</span>
                   </div>
-                  <div class="info-value">{{ user.departmentName || 'Not Assigned' }}</div>
+                  <div class="info-value" *ngIf="!editingDetails">{{ user.departmentName || 'Not Assigned' }}</div>
+                  <div class="info-value" *ngIf="editingDetails">
+                    <mat-form-field appearance="outline" class="edit-field">
+                      <mat-select [(ngModel)]="editDepartmentId" placeholder="Select department">
+                        <mat-option [value]="null">Not Assigned</mat-option>
+                        <mat-option *ngFor="let d of departments" [value]="d.departmentId">{{ d.name }}</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
                 </div>
 
                 <div class="info-row">
@@ -167,14 +184,55 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
               <h3>Account Actions</h3>
               <mat-divider></mat-divider>
               <div class="actions-list">
-                <button mat-stroked-button class="action-button" (click)="changePassword()">
+                <!-- Edit details toggle -->
+                <ng-container *ngIf="!editingDetails">
+                  <button mat-stroked-button class="action-button" (click)="startEditDetails()">
+                    <mat-icon>edit</mat-icon>
+                    Edit Job Title & Department
+                  </button>
+                </ng-container>
+                <ng-container *ngIf="editingDetails">
+                  <button mat-flat-button color="primary" class="action-button" (click)="saveDetails()" [disabled]="savingDetails">
+                    <mat-icon>save</mat-icon>
+                    {{ savingDetails ? 'Saving...' : 'Save Changes' }}
+                  </button>
+                  <button mat-stroked-button class="action-button" (click)="cancelEditDetails()" [disabled]="savingDetails">
+                    <mat-icon>close</mat-icon>
+                    Cancel
+                  </button>
+                </ng-container>
+
+                <!-- Change password toggle -->
+                <button mat-stroked-button class="action-button" (click)="togglePasswordForm()" *ngIf="!showPasswordForm">
                   <mat-icon>lock</mat-icon>
                   Change Password
                 </button>
-                <button mat-stroked-button class="action-button" (click)="editProfile()">
-                  <mat-icon>edit</mat-icon>
-                  Edit Profile
-                </button>
+
+                <div class="password-form" *ngIf="showPasswordForm">
+                  <mat-form-field appearance="outline" class="pw-field">
+                    <mat-label>Current Password</mat-label>
+                    <input matInput type="password" [(ngModel)]="currentPassword" autocomplete="current-password">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="pw-field">
+                    <mat-label>New Password</mat-label>
+                    <input matInput type="password" [(ngModel)]="newPassword" autocomplete="new-password">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="pw-field">
+                    <mat-label>Confirm New Password</mat-label>
+                    <input matInput type="password" [(ngModel)]="confirmPassword" autocomplete="new-password">
+                  </mat-form-field>
+                  <div class="pw-actions">
+                    <button mat-flat-button color="primary" (click)="submitPasswordChange()" [disabled]="savingPassword">
+                      <mat-icon>check</mat-icon>
+                      {{ savingPassword ? 'Updating...' : 'Update Password' }}
+                    </button>
+                    <button mat-stroked-button (click)="togglePasswordForm()" [disabled]="savingPassword">
+                      <mat-icon>close</mat-icon>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+
                 <button mat-stroked-button class="action-button logout" (click)="logout()">
                   <mat-icon>logout</mat-icon>
                   Logout
@@ -275,12 +333,56 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
       height: 150px;
       border-radius: 50%;
       overflow: hidden;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 16px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      position: relative;
+      cursor: pointer;
+    }
+
+    .photo-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.45);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .photo-overlay mat-icon {
+      color: #fff;
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+    }
+
+    .profile-photo:hover .photo-overlay {
+      opacity: 1;
+    }
+
+    .edit-field {
+      width: 220px;
+    }
+
+    .password-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 0;
+    }
+
+    .pw-field {
+      width: 100%;
+    }
+
+    .pw-actions {
+      display: flex;
+      gap: 12px;
     }
 
     .profile-photo img {
@@ -326,7 +428,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     }
 
     .info-label mat-icon {
-      color: #667eea;
+      color: #2563eb;
     }
 
     .info-value {
@@ -402,11 +504,11 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
     .lc-icon-wrap {
       width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(118,75,162,0.12));
+      background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(30,64,175,0.12));
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(102,126,234,0.15);
+      box-shadow: 0 4px 20px rgba(37,99,235,0.15);
     }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #667eea; }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #2563eb; }
     .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
     @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
     .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
@@ -414,7 +516,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
     .lc-progress-fill {
       height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #667eea, #818cf8, #764ba2);
+      background: linear-gradient(90deg, #2563eb, #60a5fa, #1e40af);
       background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
       transition: width 0.15s ease-out; position: relative;
     }
@@ -425,7 +527,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
     .lc-progress-message { color: #64748b; font-weight: 500; }
-    .lc-progress-pct { color: #667eea; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .lc-progress-pct { color: #2563eb; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
     .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
     .lc-step {
       display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -439,12 +541,12 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
       transition: background 0.3s ease, box-shadow 0.3s ease;
     }
     .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 2px 10px rgba(102,126,234,0.3); }
+    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #2563eb, #1e40af); box-shadow: 0 2px 10px rgba(37,99,235,0.3); }
     .lc-step.active .lc-step-dot mat-icon { color: #fff; }
     .lc-step.done .lc-step-dot { background: #dcfce7; }
     .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
     .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #667eea; }
+    .lc-step.active .lc-step-label { color: #2563eb; }
     .lc-step.done .lc-step-label { color: #16a34a; }
 
     @media (max-width: 600px) {
@@ -464,7 +566,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     }
 
     .badge {
-      background: #667eea;
+      background: #2563eb;
       color: white;
       border-radius: 12px;
       padding: 2px 8px;
@@ -605,7 +707,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .extension-details {
@@ -626,7 +728,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     .extension-number .value {
       font-size: 48px;
       font-weight: 600;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .extension-status {
@@ -674,7 +776,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
     }
 
     .extension-info-grid .info-item mat-icon {
-      color: #667eea;
+      color: #2563eb;
       margin-top: 2px;
     }
 
@@ -742,6 +844,25 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus } from '../../m
 export class ProfileComponent implements OnInit, OnDestroy {
   user: User | null = null;
   selectedTab = 0;
+
+  @ViewChild('photoInput') photoInput!: ElementRef<HTMLInputElement>;
+
+  // Profile picture upload
+  uploadingPhoto = false;
+
+  // Edit job title & department
+  editingDetails = false;
+  savingDetails = false;
+  editTitle = '';
+  editDepartmentId: number | null = null;
+  departments: Department[] = [];
+
+  // Change password
+  showPasswordForm = false;
+  savingPassword = false;
+  currentPassword = '';
+  newPassword = '';
+  confirmPassword = '';
   
   // Call History
   callHistory: CdrRecord[] = [];
@@ -792,6 +913,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
     
     this.loadCallHistory();
     this.loadExtension();
+    this.loadDepartments();
   }
 
   ngOnDestroy(): void {
@@ -1007,11 +1129,188 @@ export class ProfileComponent implements OnInit, OnDestroy {
   }
 
   changePassword(): void {
-    this.snackBar.open('Password change feature coming soon!', 'Close', { duration: 3000 });
+    this.togglePasswordForm();
   }
 
   editProfile(): void {
-    this.snackBar.open('Edit profile feature coming soon!', 'Close', { duration: 3000 });
+    this.startEditDetails();
+  }
+
+  // ── Departments ──
+  loadDepartments(): void {
+    this.subscriptions.add(
+      this.apiService.getDepartments().subscribe({
+        next: (depts) => { this.departments = depts || []; },
+        error: (err) => { console.error('Failed to load departments:', err); }
+      })
+    );
+  }
+
+  // ── Profile picture upload ──
+  triggerPhotoSelect(): void {
+    if (this.uploadingPhoto) return;
+    this.photoInput?.nativeElement?.click();
+  }
+
+  onPhotoSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      this.snackBar.open('Please select an image file.', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.uploadingPhoto = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize to a max of 256px (keeps data URL small) and export as JPEG.
+        const maxSize = 256;
+        let { width, height } = img;
+        if (width > height && width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          this.uploadingPhoto = false;
+          this.snackBar.open('Could not process image.', 'Close', { duration: 3000 });
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        this.savePhoto(dataUrl);
+      };
+      img.onerror = () => {
+        this.uploadingPhoto = false;
+        this.snackBar.open('Could not read image.', 'Close', { duration: 3000 });
+      };
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => {
+      this.uploadingPhoto = false;
+      this.snackBar.open('Could not read file.', 'Close', { duration: 3000 });
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input so the same file can be re-selected later
+    input.value = '';
+  }
+
+  private savePhoto(dataUrl: string): void {
+    if (!this.user) { this.uploadingPhoto = false; return; }
+    this.subscriptions.add(
+      this.apiService.updateProfile(this.user.userId, { profilePictureUrl: dataUrl }).subscribe({
+        next: () => {
+          if (this.user) {
+            this.user.profilePictureUrl = dataUrl;
+          }
+          this.authService.refreshUserData(this.user!.userId);
+          this.uploadingPhoto = false;
+          this.snackBar.open('Profile picture updated!', 'Close', { duration: 3000 });
+        },
+        error: (err) => {
+          console.error('Failed to update photo:', err);
+          this.uploadingPhoto = false;
+          this.snackBar.open('Failed to update profile picture.', 'Close', { duration: 4000 });
+        }
+      })
+    );
+  }
+
+  // ── Edit job title & department ──
+  startEditDetails(): void {
+    this.editTitle = this.user?.title || '';
+    this.editDepartmentId = this.user?.departmentId ?? null;
+    this.editingDetails = true;
+  }
+
+  cancelEditDetails(): void {
+    this.editingDetails = false;
+  }
+
+  saveDetails(): void {
+    if (!this.user) return;
+    this.savingDetails = true;
+    this.subscriptions.add(
+      this.apiService.updateProfile(this.user.userId, {
+        title: this.editTitle,
+        departmentId: this.editDepartmentId ?? 0
+      }).subscribe({
+        next: () => {
+          if (this.user) {
+            this.user.title = this.editTitle;
+            this.user.departmentId = this.editDepartmentId ?? undefined;
+            const dept = this.departments.find(d => d.departmentId === this.editDepartmentId);
+            this.user.departmentName = dept ? dept.name : undefined;
+          }
+          this.authService.refreshUserData(this.user!.userId);
+          this.savingDetails = false;
+          this.editingDetails = false;
+          this.snackBar.open('Profile updated!', 'Close', { duration: 3000 });
+        },
+        error: (err) => {
+          console.error('Failed to update profile:', err);
+          this.savingDetails = false;
+          this.snackBar.open('Failed to update profile.', 'Close', { duration: 4000 });
+        }
+      })
+    );
+  }
+
+  // ── Change password ──
+  togglePasswordForm(): void {
+    this.showPasswordForm = !this.showPasswordForm;
+    this.currentPassword = '';
+    this.newPassword = '';
+    this.confirmPassword = '';
+  }
+
+  submitPasswordChange(): void {
+    if (!this.user) return;
+    if (!this.currentPassword || !this.newPassword) {
+      this.snackBar.open('Please fill in all password fields.', 'Close', { duration: 3000 });
+      return;
+    }
+    if (this.newPassword.length < 4) {
+      this.snackBar.open('New password must be at least 4 characters.', 'Close', { duration: 3000 });
+      return;
+    }
+    if (this.newPassword !== this.confirmPassword) {
+      this.snackBar.open('New passwords do not match.', 'Close', { duration: 3000 });
+      return;
+    }
+    this.savingPassword = true;
+    this.subscriptions.add(
+      this.apiService.changePassword(this.user.userId, {
+        currentPassword: this.currentPassword,
+        newPassword: this.newPassword
+      }).subscribe({
+        next: () => {
+          this.savingPassword = false;
+          this.showPasswordForm = false;
+          this.currentPassword = '';
+          this.newPassword = '';
+          this.confirmPassword = '';
+          this.snackBar.open('Password changed successfully!', 'Close', { duration: 3000 });
+        },
+        error: (err) => {
+          console.error('Failed to change password:', err);
+          this.savingPassword = false;
+          const msg = err?.error?.message || 'Failed to change password.';
+          this.snackBar.open(msg, 'Close', { duration: 4000 });
+        }
+      })
+    );
   }
 
   logout(): void {

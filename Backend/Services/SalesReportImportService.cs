@@ -69,6 +69,95 @@ public class SalesReportImportService
         _logger = logger;
     }
 
+    // Ensures the code-page encodings required by ExcelDataReader (for legacy .xls) are registered once.
+    private static bool _encodingRegistered = false;
+
+    /// <summary>
+    /// Opens an uploaded spreadsheet as a ClosedXML workbook regardless of format.
+    /// Modern .xlsx (OOXML) files are opened directly. Legacy .xls files (Excel 97-2003,
+    /// OLE2 / BIFF8 binary format) are NOT supported by ClosedXML, so they are read with
+    /// ExcelDataReader and rebuilt into an in-memory .xlsx workbook, preserving cell value
+    /// types (dates/numbers/strings) so the downstream parser behaves identically.
+    /// </summary>
+    private XLWorkbook OpenExcelWorkbook(Stream fileStream, string fileName)
+    {
+        // Buffer the stream so we can inspect the file signature and re-read it.
+        var buffer = new MemoryStream();
+        fileStream.CopyTo(buffer);
+        buffer.Position = 0;
+
+        // Detect the legacy OLE2 compound-document signature (real .xls files).
+        bool isLegacyXls = false;
+        if (buffer.Length >= 8)
+        {
+            var sig = new byte[8];
+            buffer.Read(sig, 0, 8);
+            buffer.Position = 0;
+            isLegacyXls = sig[0] == 0xD0 && sig[1] == 0xCF && sig[2] == 0x11 && sig[3] == 0xE0
+                       && sig[4] == 0xA1 && sig[5] == 0xB1 && sig[6] == 0x1A && sig[7] == 0xE1;
+        }
+
+        if (!isLegacyXls)
+        {
+            // Modern .xlsx (ZIP/OOXML) — ClosedXML reads it directly.
+            return new XLWorkbook(buffer);
+        }
+
+        _logger.LogInformation("Detected legacy .xls (BIFF8) file '{FileName}'; converting to .xlsx for parsing.", fileName);
+
+        if (!_encodingRegistered)
+        {
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            _encodingRegistered = true;
+        }
+
+        var wb = new XLWorkbook();
+        try
+        {
+            using var reader = ExcelDataReader.ExcelReaderFactory.CreateReader(buffer);
+            var sheetIndex = 0;
+            do
+            {
+                sheetIndex++;
+                var sheetName = string.IsNullOrWhiteSpace(reader.Name) ? $"Sheet{sheetIndex}" : reader.Name;
+                // ClosedXML sheet names must be <= 31 chars and unique.
+                if (sheetName.Length > 31) sheetName = sheetName.Substring(0, 31);
+                if (wb.Worksheets.Contains(sheetName)) sheetName = $"Sheet{sheetIndex}";
+                var ws = wb.AddWorksheet(sheetName);
+
+                var rowNum = 0;
+                while (reader.Read())
+                {
+                    rowNum++;
+                    for (var c = 0; c < reader.FieldCount; c++)
+                    {
+                        var val = reader.GetValue(c);
+                        if (val == null) continue;
+                        var cell = ws.Cell(rowNum, c + 1);
+                        switch (val)
+                        {
+                            case DateTime dt: cell.SetValue(dt); break;
+                            case double d: cell.SetValue(d); break;
+                            case decimal m: cell.SetValue(m); break;
+                            case int i: cell.SetValue(i); break;
+                            case long l: cell.SetValue(l); break;
+                            case bool b: cell.SetValue(b); break;
+                            default: cell.SetValue(val.ToString() ?? string.Empty); break;
+                        }
+                    }
+                }
+            } while (reader.NextResult());
+        }
+        catch (Exception ex)
+        {
+            wb.Dispose();
+            throw new InvalidOperationException(
+                $"Failed to read legacy .xls file '{fileName}'. It may be corrupt or password-protected. ({ex.Message})", ex);
+        }
+
+        return wb;
+    }
+
     /// <summary>
     /// Parse and store a sales report file
     /// </summary>
@@ -94,7 +183,7 @@ public class SalesReportImportService
 
         try
         {
-            using var workbook = new XLWorkbook(fileStream);
+            using var workbook = OpenExcelWorkbook(fileStream, fileName);
             var worksheet = workbook.Worksheets.First();
             
             // Validate worksheet has data
@@ -484,6 +573,16 @@ public class SalesReportImportService
             if (bestMap.TryGetValue("returns", out var vr)) COL_SALES_RETURNS = vr;
             if (bestMap.TryGetValue("cost", out var vco)) COL_COST_OF_SALES = vco;
             if (bestMap.TryGetValue("percent", out var vpc)) COL_PERCENT = vpc;
+
+            // CRITICAL: once we trust the detected header, any optional numeric column that was
+            // NOT actually found must be marked absent (-1) rather than left on its fixed default
+            // index. Otherwise a leftover default (e.g. Returns=10) can collide with a real
+            // detected column (e.g. Sales detected at 10) and read the SAME cell — which made
+            // SalesAmount == SalesReturns, netting sales to R0.00.
+            if (!bestMap.ContainsKey("qty")) COL_QUANTITY = -1;
+            if (!bestMap.ContainsKey("returns")) COL_SALES_RETURNS = -1;
+            if (!bestMap.ContainsKey("cost")) COL_COST_OF_SALES = -1;
+            if (!bestMap.ContainsKey("percent")) COL_PERCENT = -1;
             if (bestMap.TryGetValue("productcode", out var vpcode)) _colProductCode = vpcode;
             if (bestMap.TryGetValue("productdesc", out var vpdesc)) _colProductDescription = vpdesc;
             if (bestMap.TryGetValue("custno", out var vcn)) _colCustomerNumber = vcn;
@@ -715,11 +814,11 @@ public class SalesReportImportService
         transaction.Salesperson = ParseNullableInt(row.Cell(COL_SALESPERSON + 1), rowIndex, "Salesperson", issues, batchId);
         transaction.Category = ParseNullableInt(row.Cell(COL_CATEGORY + 1), rowIndex, "Category", issues, batchId);
         transaction.Location = ParseNullableInt(row.Cell(COL_LOCATION + 1), rowIndex, "Location", issues, batchId);
-        transaction.Quantity = ParseNullableDecimal(row.Cell(COL_QUANTITY + 1), rowIndex, "Quantity", issues, batchId);
-        transaction.SalesAmount = ParseNullableDecimal(row.Cell(COL_SALES_AMOUNT + 1), rowIndex, "SalesAmount", issues, batchId);
-        transaction.SalesReturns = ParseNullableDecimal(row.Cell(COL_SALES_RETURNS + 1), rowIndex, "SalesReturns", issues, batchId);
-        transaction.CostOfSales = ParseNullableDecimal(row.Cell(COL_COST_OF_SALES + 1), rowIndex, "CostOfSales", issues, batchId);
-        transaction.Percent = ParseNullableDecimal(row.Cell(COL_PERCENT + 1), rowIndex, "Percent", issues, batchId);
+        transaction.Quantity = COL_QUANTITY >= 0 ? ParseNullableDecimal(row.Cell(COL_QUANTITY + 1), rowIndex, "Quantity", issues, batchId) : null;
+        transaction.SalesAmount = COL_SALES_AMOUNT >= 0 ? ParseNullableDecimal(row.Cell(COL_SALES_AMOUNT + 1), rowIndex, "SalesAmount", issues, batchId) : null;
+        transaction.SalesReturns = COL_SALES_RETURNS >= 0 ? ParseNullableDecimal(row.Cell(COL_SALES_RETURNS + 1), rowIndex, "SalesReturns", issues, batchId) : null;
+        transaction.CostOfSales = COL_COST_OF_SALES >= 0 ? ParseNullableDecimal(row.Cell(COL_COST_OF_SALES + 1), rowIndex, "CostOfSales", issues, batchId) : null;
+        transaction.Percent = COL_PERCENT >= 0 ? ParseNullableDecimal(row.Cell(COL_PERCENT + 1), rowIndex, "Percent", issues, batchId) : null;
 
         // Mark if this transaction has any issues
         transaction.HasIssues = issues.Any(i => i.RowIndex == rowIndex);
@@ -1103,6 +1202,23 @@ public class SalesReportImportService
             {
                 // Existing history invoice — flag as reconciled/linked and enrich cost if missing.
                 header.IsReconciled = true;
+
+                // Repair a wrong/zero sales value: if the freshly-parsed amount is non-zero and
+                // differs from what's stored (e.g. an old import saved R0.00), refresh it and
+                // recompute the derived profit/margin.
+                if (inv.SalesAmount != 0m && header.SalesAmount != inv.SalesAmount)
+                {
+                    header.SalesAmount = inv.SalesAmount;
+                    var cost = inv.TotalCost ?? header.TotalCost;
+                    if (cost.HasValue)
+                    {
+                        header.GrossProfit = header.SalesAmount - cost.Value;
+                        header.MarginPercent = header.SalesAmount != 0
+                            ? Math.Round((header.SalesAmount - cost.Value) / header.SalesAmount * 100m, 4)
+                            : (decimal?)null;
+                    }
+                }
+
                 if (!header.TotalCost.HasValue && inv.TotalCost.HasValue)
                 {
                     header.TotalCost = inv.TotalCost;

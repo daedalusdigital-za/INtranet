@@ -7,15 +7,42 @@
   &.minimized {
     bottom: 20px;
   }
+
+  // Attention pulse: shake + red glow when a new message arrives
+  &.attention {
+    animation: bubble-shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+
+    .chat-window,
+    .bubble-icon {
+      animation: bubble-glow 1.6s ease-out;
+      border: 2px solid #ef4444;
+      border-radius: 12px;
+    }
+  }
 }
+
+@keyframes bubble-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-8px); }
+  40%, 60% { transform: translateX(8px); }
+}
+
+@keyframes bubble-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9); }
+  40%  { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  60%  { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  100% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+}
+
 
 // Minimized Bubble Icon
 .bubble-icon {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -25,7 +52,7 @@
   
   &:hover {
     transform: scale(1.1);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
   }
   
   .avatar {
@@ -96,7 +123,7 @@
 
 // Chat Header
 .chat-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   color: white;
   padding: 12px 16px;
   display: flex;
@@ -201,7 +228,7 @@
     width: 30px;
     height: 30px;
     border: 3px solid #e5e7eb;
-    border-top-color: #667eea;
+    border-top-color: #2563eb;
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
@@ -237,7 +264,7 @@
     justify-content: flex-end;
     
     .message-bubble {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       border-radius: 16px 16px 4px 16px;
       
@@ -316,7 +343,7 @@
     gap: 8px;
     
     i {
-      color: #667eea;
+      color: #2563eb;
       font-size: 18px;
     }
     
@@ -366,7 +393,7 @@
     width: 36px;
     height: 36px;
     border: none;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
     color: white;
     border-radius: 50%;
     cursor: pointer;
@@ -374,11 +401,11 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     
     &:hover {
       transform: scale(1.05);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
     }
     
     i {
@@ -396,7 +423,7 @@
     transition: border-color 0.2s;
     
     &:focus {
-      border-color: #667eea;
+      border-color: #2563eb;
     }
     
     &::placeholder {
@@ -412,7 +439,7 @@
     width: 36px;
     height: 36px;
     border: none;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
     color: white;
     border-radius: 50%;
     cursor: pointer;
@@ -420,11 +447,11 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     
     &:hover:not(:disabled) {
       transform: scale(1.05);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
     }
     
     &:disabled {
@@ -500,8 +527,8 @@
 
 .emoji-btn {
   &.active {
-    color: #667eea;
-    background: rgba(102, 126, 234, 0.1);
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.1);
     border-radius: 50%;
   }
 }
@@ -589,7 +616,7 @@
   
   .file-icon {
     font-size: 24px;
-    color: #667eea;
+    color: #2563eb;
   }
   
   .file-details {
@@ -616,7 +643,7 @@
     width: 28px;
     height: 28px;
     border: none;
-    background: #667eea;
+    background: #2563eb;
     color: white;
     border-radius: 50%;
     cursor: pointer;

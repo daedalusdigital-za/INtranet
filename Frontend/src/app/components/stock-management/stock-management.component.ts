@@ -25,6 +25,8 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { AuthService } from '../../services/auth.service';
 import { WellyActivityService } from '../../services/welly-activity.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { EmptyStateComponent } from '../shared/ui/empty-state.component';
+import { LoadingComponent } from '../shared/ui/loading.component';
 import { environment } from '../../../environments/environment';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import Chart from 'chart.js/auto';
@@ -103,6 +105,8 @@ interface ComprehensiveAnalysisResponse {
     MatTooltipModule,
     MatProgressBarModule,
     NavbarComponent,
+    EmptyStateComponent,
+    LoadingComponent,
     MatListModule,
     FormsModule,
     MatFormFieldModule,
@@ -113,9 +117,12 @@ interface ComprehensiveAnalysisResponse {
 
     <div class="container">
       <div class="page-header">
-        <div class="header-text">
-          <h1>Stock Management</h1>
-          <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name : 'Select a warehouse to begin' }}</p>
+        <div class="header-lead">
+          <mat-icon class="header-icon">inventory_2</mat-icon>
+          <div class="header-text">
+            <h1>Stock Management</h1>
+            <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name : 'Select a warehouse to begin' }}</p>
+          </div>
         </div>
         <div class="header-actions">
           @if (selectedWarehouse) {
@@ -143,7 +150,8 @@ interface ComprehensiveAnalysisResponse {
 
       @if (selectedWarehouse && !showInventorySubmenu) {
         <div class="operations-grid">
-          <div class="operation-block depot-block" (click)="selectOperation('inventory')">
+          <div class="operation-block depot-block" (click)="selectOperation('inventory')"
+               role="button" tabindex="0" (keydown.enter)="selectOperation('inventory')" aria-label="Inventory Management">
             <div class="block-icon">
               <mat-icon>inventory_2</mat-icon>
             </div>
@@ -166,7 +174,8 @@ interface ComprehensiveAnalysisResponse {
             </div>
           </div>
 
-          <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')">
+          <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')"
+               role="button" tabindex="0" (keydown.enter)="selectOperation('dispatch')" aria-label="Order Accept and Dispatch">
             <div class="block-icon">
               <mat-icon>local_shipping</mat-icon>
             </div>
@@ -443,15 +452,14 @@ interface ComprehensiveAnalysisResponse {
           }
         </div>
       } @else if (warehouses.length === 0) {
-        <div class="empty-state">
-          <mat-icon>warehouse</mat-icon>
-          <h3>No Warehouses Found</h3>
-          <p>No warehouses have been configured yet.</p>
-        </div>
+        <app-empty-state icon="warehouse" title="No Warehouses Found"
+          message="No warehouses have been configured yet."></app-empty-state>
       } @else if (!selectedWarehouse) {
         <div class="warehouses-grid">
           @for (warehouse of warehouses; track warehouse.id) {
-            <div class="warehouse-card-modern warehouse-{{ warehouse.id }}" (click)="selectWarehouse(warehouse)">
+            <div class="warehouse-card-modern warehouse-{{ warehouse.id }}" (click)="selectWarehouse(warehouse)"
+                 role="button" tabindex="0" (keydown.enter)="selectWarehouse(warehouse)" (keydown.space)="selectWarehouse(warehouse)"
+                 [attr.aria-label]="'Open warehouse ' + warehouse.name">
               <div class="warehouse-gradient-bg"></div>
               <div class="warehouse-content">
                 <div class="warehouse-header">
@@ -633,15 +641,15 @@ interface ComprehensiveAnalysisResponse {
       display: block;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 45%, #1e40af 100%);
       background-attachment: fixed;
       overflow-x: hidden;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --accent: #2563eb;
+      --accent2: #1e40af;
+      --accent-soft: #eff6ff;
     }
 
     .spacer {
@@ -649,8 +657,8 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .container {
-      padding: 80px;
-      max-width: 1400px;
+      padding: 24px 24px 64px;
+      max-width: 1280px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
     }
@@ -659,8 +667,25 @@ interface ComprehensiveAnalysisResponse {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 32px;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
     }
+
+    .header-icon {
+      font-size: 34px;
+      width: 34px;
+      height: 34px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 14px;
+      padding: 8px;
+      box-sizing: content-box;
+      flex-shrink: 0;
+    }
+
+    .header-lead { display: flex; align-items: center; gap: 14px; }
 
     .header-text {
       text-align: left;
@@ -676,37 +701,41 @@ interface ComprehensiveAnalysisResponse {
     }
 
     h1 {
-      color: white;
-      font-size: 2.5rem;
-      font-weight: 600;
-      margin-bottom: 8px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+      color: #ffffff;
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin: 0 0 2px;
     }
 
     .subtitle {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 1.1rem;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 0.8rem;
       margin: 0;
     }
 
     .warehouses-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 32px;
+      gap: 20px;
       margin-bottom: 32px;
+    }
+
+    @media (max-width: 820px) {
+      .warehouses-grid { grid-template-columns: 1fr; }
     }
 
     .warehouse-card-modern {
       position: relative;
-      border-radius: 20px;
-      padding: 32px;
+      border-radius: 16px;
+      padding: 24px;
       cursor: pointer;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
       overflow: hidden;
-      min-height: 380px;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      background: #ffffff;
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.05);
     }
 
     .warehouse-gradient-bg {
@@ -714,60 +743,22 @@ interface ComprehensiveAnalysisResponse {
       top: 0;
       left: 0;
       right: 0;
-      bottom: 0;
-      opacity: 1;
-      transition: opacity 0.4s ease;
+      height: 4px;
       z-index: 0;
+      background: var(--accent);
     }
 
-    .warehouse-card-modern.warehouse-1 .warehouse-gradient-bg {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-
-    .warehouse-card-modern.warehouse-2 .warehouse-gradient-bg {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    }
-
-    .warehouse-card-modern.warehouse-3 .warehouse-gradient-bg {
-      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    }
-
-    .warehouse-card-modern.warehouse-4 .warehouse-gradient-bg {
-      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-    }
-
-    .warehouse-card-modern.warehouse-5 .warehouse-gradient-bg {
-      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-    }
-
-    .warehouse-card-modern.warehouse-6 .warehouse-gradient-bg {
-      background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
-    }
-
-    .warehouse-card-modern::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(255, 255, 255, 0.05);
-      opacity: 0;
-      transition: opacity 0.4s ease;
-      z-index: 1;
-    }
+    .warehouse-card-modern.warehouse-1 .warehouse-gradient-bg { background: #4f46e5; }
+    .warehouse-card-modern.warehouse-2 .warehouse-gradient-bg { background: #0ea5e9; }
+    .warehouse-card-modern.warehouse-3 .warehouse-gradient-bg { background: #10b981; }
+    .warehouse-card-modern.warehouse-4 .warehouse-gradient-bg { background: #f59e0b; }
+    .warehouse-card-modern.warehouse-5 .warehouse-gradient-bg { background: #ec4899; }
+    .warehouse-card-modern.warehouse-6 .warehouse-gradient-bg { background: #8b5cf6; }
 
     .warehouse-card-modern:hover {
-      transform: translateY(-12px) scale(1.02);
-      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.3);
-    }
-
-    .warehouse-card-modern:hover::before {
-      opacity: 1;
-    }
-
-    .warehouse-card-modern:hover .warehouse-icon-modern {
-      transform: scale(1.1) rotate(5deg);
+      transform: translateY(-3px);
+      border-color: #cbd5e1;
+      box-shadow: 0 12px 28px rgba(16, 24, 40, 0.10);
     }
 
     .warehouse-content {
@@ -776,35 +767,32 @@ interface ComprehensiveAnalysisResponse {
       display: flex;
       flex-direction: column;
       height: 100%;
-      color: white;
+      color: var(--ink);
     }
 
     .warehouse-header {
       display: flex;
       align-items: flex-start;
-      gap: 20px;
-      margin-bottom: 28px;
+      gap: 16px;
+      margin-bottom: 20px;
     }
 
     .warehouse-icon-modern {
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      width: 70px;
-      height: 70px;
+      background: var(--accent-soft);
+      border-radius: 12px;
+      width: 52px;
+      height: 52px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     }
 
     .warehouse-icon-modern mat-icon {
-      color: white;
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
+      color: var(--accent);
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
     }
 
     .warehouse-title-section {
@@ -812,58 +800,51 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .warehouse-title-section h2 {
-      font-size: 1.8rem;
+      font-size: 1.2rem;
       font-weight: 700;
-      margin: 0 0 8px 0;
-      color: white;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      margin: 0 0 4px 0;
+      color: var(--ink);
+      letter-spacing: -0.01em;
     }
 
     .warehouse-location {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       margin: 0;
-      color: rgba(255, 255, 255, 0.95);
-      font-size: 1rem;
+      color: var(--muted);
+      font-size: 0.86rem;
       font-weight: 500;
     }
 
     .warehouse-location mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
     }
 
     .warehouse-stats-modern {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 12px;
+      margin-bottom: 18px;
     }
 
     .stat-modern {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 14px;
-      padding: 18px;
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 14px;
       display: flex;
       align-items: center;
-      gap: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      transition: all 0.3s ease;
-    }
-
-    .stat-modern:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: translateY(-2px);
+      gap: 12px;
+      border: 1px solid var(--line);
     }
 
     .stat-icon-wrapper {
-      background: rgba(255, 255, 255, 0.25);
-      border-radius: 10px;
-      width: 48px;
-      height: 48px;
+      background: var(--accent-soft);
+      border-radius: 9px;
+      width: 40px;
+      height: 40px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -871,10 +852,10 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .stat-icon-wrapper mat-icon {
-      color: white;
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      color: var(--accent);
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
     }
 
     .stat-details {
@@ -882,26 +863,24 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .stat-modern .stat-value {
-      font-size: 1.5rem;
-      font-weight: 800;
-      color: white;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--ink);
       line-height: 1.2;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     }
 
     .stat-modern .stat-label {
-      font-size: 0.85rem;
-      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.75rem;
+      color: var(--muted);
       margin-top: 2px;
       font-weight: 500;
     }
 
     .warehouse-capacity-modern {
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 14px;
-      padding: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
       margin-bottom: auto;
     }
 
@@ -909,36 +888,35 @@ interface ComprehensiveAnalysisResponse {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .capacity-title {
-      font-size: 0.95rem;
+      font-size: 0.82rem;
       font-weight: 600;
-      color: white;
+      color: var(--muted);
     }
 
     .capacity-percentage {
-      font-size: 1.3rem;
-      font-weight: 800;
-      color: white;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--ink);
     }
 
     .warehouse-progress-bar {
-      height: 12px;
-      border-radius: 6px;
-      margin-bottom: 10px;
+      height: 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
       overflow: hidden;
-      background: rgba(0, 0, 0, 0.2) !important;
+      background: #e5e7eb !important;
     }
 
     .warehouse-progress-bar ::ng-deep .mdc-linear-progress__bar-inner {
-      border-top-width: 12px;
+      border-top-width: 8px;
     }
 
     .warehouse-progress-bar ::ng-deep .mdc-linear-progress__buffer-bar {
-      background-color: rgba(0, 0, 0, 0.2) !important;
+      background-color: #e5e7eb !important;
     }
 
     .warehouse-progress-bar ::ng-deep .mdc-linear-progress__bar {
@@ -946,42 +924,38 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .capacity-info {
-      font-size: 0.85rem;
-      color: rgba(255, 255, 255, 0.9);
-      text-align: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: right;
       font-weight: 500;
     }
 
     .warehouse-footer {
-      margin-top: 24px;
-      padding-top: 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
     }
 
     .view-operations-btn {
       width: 100%;
-      background: rgba(255, 255, 255, 0.25) !important;
-      backdrop-filter: blur(10px);
+      background: var(--accent) !important;
       color: white !important;
       font-weight: 600 !important;
-      font-size: 1rem !important;
-      padding: 14px 24px !important;
-      border-radius: 12px !important;
-      border: 2px solid rgba(255, 255, 255, 0.4) !important;
-      transition: all 0.3s ease !important;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      font-size: 0.9rem !important;
+      padding: 11px 20px !important;
+      border-radius: 10px !important;
+      border: none !important;
+      transition: background 0.2s ease, box-shadow 0.2s ease !important;
+      letter-spacing: 0;
     }
 
     .view-operations-btn:hover {
-      background: rgba(255, 255, 255, 0.4) !important;
-      border-color: rgba(255, 255, 255, 0.6) !important;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
+      background: #4338ca !important;
+      box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28) !important;
     }
 
     .view-operations-btn mat-icon {
-      margin-left: 8px;
+      margin-left: 6px;
     }
 
     .loading-state {
@@ -1046,36 +1020,41 @@ interface ComprehensiveAnalysisResponse {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 80px;
-      background: rgba(255, 255, 255, 0.1);
+      padding: 72px;
+      background: #ffffff;
+      border: 1px solid var(--line);
       border-radius: 16px;
-      color: white;
+      color: var(--ink);
     }
 
     .empty-state mat-icon {
-      font-size: 72px;
-      width: 72px;
-      height: 72px;
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
       margin-bottom: 16px;
-      opacity: 0.8;
+      color: #cbd5e1;
     }
 
     .empty-state h3 {
-      font-size: 1.5rem;
+      font-size: 1.3rem;
       margin: 0 0 8px 0;
     }
 
     .empty-state p {
-      opacity: 0.8;
+      color: var(--muted);
       margin: 0;
     }
 
     .operations-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 32px;
+      gap: 20px;
       margin-bottom: 32px;
-      animation: slideUp 0.4s ease-out;
+      animation: slideUp 0.35s ease-out;
+    }
+
+    @media (max-width: 820px) {
+      .operations-grid { grid-template-columns: 1fr; }
     }
 
     @keyframes slideUp {
@@ -1092,82 +1071,66 @@ interface ComprehensiveAnalysisResponse {
     .operation-block {
       position: relative;
       cursor: pointer;
-      padding: 32px 24px 24px 24px;
+      padding: 24px 22px;
       border-radius: 16px;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      text-align: center;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      text-align: left;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      min-height: 280px;
-      background: white;
-    }
-
-    .operation-block::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
-      opacity: 0;
-      transition: opacity 0.3s ease;
+      align-items: flex-start;
+      gap: 8px;
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.05);
+      background: #ffffff;
     }
 
     .operation-block:hover {
-      transform: translateY(-8px) scale(1.02);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
-    }
-
-    .operation-block:hover::before {
-      opacity: 1;
+      transform: translateY(-3px);
+      border-color: #cbd5e1;
+      box-shadow: 0 12px 28px rgba(16, 24, 40, 0.10);
     }
 
     .operation-block:active {
-      transform: translateY(-4px) scale(0.98);
+      transform: translateY(-1px);
     }
 
     .block-icon {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.9);
-      margin-bottom: 8px;
-      transition: all 0.3s ease;
+      background: var(--accent-soft);
+      margin-bottom: 6px;
+      transition: transform 0.2s ease;
     }
 
     .operation-block:hover .block-icon {
-      transform: scale(1.1) rotate(5deg);
-      background: white;
+      transform: translateY(-1px);
     }
 
     .block-icon mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: var(--accent);
     }
 
     .operation-block h3 {
       margin: 0;
-      font-size: 1.1rem;
+      font-size: 1.02rem;
       font-weight: 700;
-      color: white;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      color: var(--ink);
+      letter-spacing: -0.01em;
       z-index: 1;
     }
 
     .operation-block p {
       margin: 0;
       font-size: 0.85rem;
-      color: rgba(255, 255, 255, 0.95);
+      color: var(--muted);
       font-weight: 500;
       z-index: 1;
     }
@@ -1176,7 +1139,7 @@ interface ComprehensiveAnalysisResponse {
       width: 100%;
       margin-top: auto;
       padding-top: 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      border-top: 1px solid var(--line);
       z-index: 1;
     }
 
@@ -1188,14 +1151,14 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .stat-label {
-      font-size: 0.75rem;
-      color: rgba(255, 255, 255, 0.85);
+      font-size: 0.78rem;
+      color: var(--muted);
       font-weight: 500;
     }
 
     .stat-value {
       font-size: 0.9rem;
-      color: white;
+      color: var(--ink);
       font-weight: 700;
     }
 
@@ -1203,132 +1166,90 @@ interface ComprehensiveAnalysisResponse {
       height: 6px;
       border-radius: 3px;
       margin-top: 12px;
-      background: rgba(255, 255, 255, 0.2) !important;
+      background: #e5e7eb !important;
     }
 
     .operation-progress ::ng-deep .mdc-linear-progress__bar-inner {
       border-top-width: 6px;
-      background-color: rgba(255, 255, 255, 0.9) !important;
     }
 
     .operation-progress ::ng-deep .mdc-linear-progress__buffer-bar {
-      background-color: rgba(255, 255, 255, 0.2) !important;
+      background-color: #e5e7eb !important;
     }
 
     .operation-btn {
       width: 100%;
-      margin-top: 12px;
-      background: rgba(255, 255, 255, 0.25) !important;
-      backdrop-filter: blur(10px);
-      color: white !important;
+      margin-top: 14px;
+      background: #f8fafc !important;
+      color: var(--accent) !important;
       font-weight: 600 !important;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      transition: all 0.3s ease;
-      padding: 10px 16px !important;
+      border: 1px solid var(--line) !important;
+      transition: background 0.2s ease, border-color 0.2s ease;
+      padding: 9px 16px !important;
     }
 
     .operation-btn:hover {
-      background: rgba(255, 255, 255, 0.35) !important;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      background: var(--accent-soft) !important;
+      border-color: #c7d2fe !important;
     }
 
     .operation-btn mat-icon {
-      margin-right: 8px;
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
+      margin-right: 6px;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
 
-    .depot-block {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
+    .depot-block .block-icon { background: #eef2ff; }
+    .depot-block .block-icon mat-icon { color: #4f46e5; }
 
-    .depot-block .block-icon mat-icon {
-      color: #667eea;
-    }
+    .dispatch-block .block-icon { background: #ecfeff; }
+    .dispatch-block .block-icon mat-icon { color: #0891b2; }
 
-    .dispatch-block {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    }
+    .transfer-block .block-icon { background: #eff6ff; }
+    .transfer-block .block-icon mat-icon { color: #2563eb; }
 
-    .dispatch-block .block-icon mat-icon {
-      color: #f5576c;
-    }
+    .grv-block .block-icon { background: #ecfdf5; }
+    .grv-block .block-icon mat-icon { color: #059669; }
 
-    .transfer-block {
-      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    }
+    .inventory-block .block-icon { background: #eef2ff; }
+    .inventory-block .block-icon mat-icon { color: #4f46e5; }
 
-    .transfer-block .block-icon mat-icon {
-      color: #4facfe;
-    }
+    .scrap-block .block-icon { background: #fef2f2; }
+    .scrap-block .block-icon mat-icon { color: #dc2626; }
 
-    .grv-block {
-      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-    }
+    .stocktake-block .block-icon { background: #fdf2f8; }
+    .stocktake-block .block-icon mat-icon { color: #db2777; }
 
-    .grv-block .block-icon mat-icon {
-      color: #43e97b;
-    }
-
-    .inventory-block {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-
-    .inventory-block .block-icon mat-icon {
-      color: #667eea;
-    }
-
-    .scrap-block {
-      background: linear-gradient(135deg, #fc6767 0%, #ec008c 100%);
-    }
-
-    .scrap-block .block-icon mat-icon {
-      color: #fc6767;
-    }
-
-    .stocktake-block {
-      background: linear-gradient(135deg, #f77062 0%, #fe5196 100%);
-    }
-
-    .stocktake-block .block-icon mat-icon {
-      color: #f77062;
-    }
-
-    .repack-block {
-      background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%);
-    }
-
-    .repack-block .block-icon mat-icon {
-      color: #d57eeb;
-    }
+    .repack-block .block-icon { background: #f5f3ff; }
+    .repack-block .block-icon mat-icon { color: #7c3aed; }
 
     .submenu-header {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       margin-bottom: 24px;
-      padding: 16px;
-      background: rgba(255, 255, 255, 0.1);
+      padding: 12px 16px;
+      background: #ffffff;
+      border: 1px solid var(--line);
       border-radius: 12px;
       animation: slideUp 0.3s ease-out;
     }
 
     .submenu-header button {
-      color: white;
+      color: var(--ink);
     }
 
     .submenu-header h2 {
       margin: 0;
-      color: white;
-      font-size: 1.5rem;
-      font-weight: 600;
+      color: var(--ink);
+      font-size: 1.2rem;
+      font-weight: 700;
     }
 
     /* Welly Stock Analysis Styles */
     .welly-stock-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
       color: white !important;
       border: none !important;
       transition: all 0.3s ease;
@@ -1336,7 +1257,7 @@ interface ComprehensiveAnalysisResponse {
 
     .welly-stock-btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
 
     .welly-stock-btn .welly-sparkle {
@@ -1381,7 +1302,7 @@ interface ComprehensiveAnalysisResponse {
       align-items: center;
       justify-content: space-between;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
 
@@ -1440,11 +1361,11 @@ interface ComprehensiveAnalysisResponse {
       align-items: center;
       gap: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-      border-left: 4px solid #667eea;
+      border-left: 4px solid #2563eb;
     }
 
-    .welly-summary-card.card-stock { border-left-color: #667eea; }
-    .welly-summary-card.card-stock .summary-icon { color: #667eea; }
+    .welly-summary-card.card-stock { border-left-color: #2563eb; }
+    .welly-summary-card.card-stock .summary-icon { color: #2563eb; }
     .welly-summary-card.card-value { border-left-color: #43a047; }
     .welly-summary-card.card-value .summary-icon { color: #43a047; }
     .welly-summary-card.card-alert { border-left-color: #ef5350; }
@@ -1526,7 +1447,7 @@ interface ComprehensiveAnalysisResponse {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .welly-result-text {
@@ -1558,7 +1479,7 @@ interface ComprehensiveAnalysisResponse {
       background: #0d9488;
       color: #fff;
     }
-    .fulfillment-view { padding: 8px 0 40px; }
+    .fulfillment-view { padding: 24px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.05); }
     .ff-header {
       display: flex;
       justify-content: space-between;
@@ -1973,7 +1894,7 @@ export class StockManagementComponent implements OnInit {
   }
 
   private readonly chartColors = [
-    '#667eea', '#764ba2', '#43a047', '#ff9800', '#ef5350',
+    '#2563eb', '#1e40af', '#43a047', '#ff9800', '#ef5350',
     '#26a69a', '#7e57c2', '#5c6bc0', '#ec407a', '#66bb6a',
     '#ffa726', '#42a5f5', '#ab47bc', '#26c6da', '#8d6e63'
   ];
@@ -2177,7 +2098,7 @@ export class StockManagementComponent implements OnInit {
         <!-- Summary Stats -->
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);">
               <mat-icon>inventory_2</mat-icon>
             </div>
             <div class="stat-info">
@@ -2186,7 +2107,7 @@ export class StockManagementComponent implements OnInit {
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);">
               <mat-icon>category</mat-icon>
             </div>
             <div class="stat-info">
@@ -2562,7 +2483,7 @@ export class StockManagementComponent implements OnInit {
       justify-content: space-between;
       align-items: flex-start;
       padding: 32px 32px 24px 32px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       border-radius: 12px 12px 0 0;
@@ -2800,7 +2721,7 @@ export class StockManagementComponent implements OnInit {
     }
 
     .table-section h3 mat-icon {
-      color: #667eea;
+      color: #2563eb;
       font-size: 28px;
       width: 28px;
       height: 28px;
@@ -2849,7 +2770,7 @@ export class StockManagementComponent implements OnInit {
     }
 
     .search-field ::ng-deep .mat-mdc-form-field-focus-overlay {
-      background: rgba(102, 126, 234, 0.05);
+      background: rgba(37, 99, 235, 0.05);
     }
 
     .modern-table {
@@ -2858,7 +2779,7 @@ export class StockManagementComponent implements OnInit {
     }
 
     .modern-table th {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       font-weight: 700;
       font-size: 0.875rem;
@@ -2880,7 +2801,7 @@ export class StockManagementComponent implements OnInit {
     .table-row:hover {
       background: linear-gradient(90deg, #f8f9ff 0%, #fff 100%);
       transform: scale(1.01);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
     }
 
     .item-name {
@@ -2925,7 +2846,7 @@ export class StockManagementComponent implements OnInit {
     .total-value {
       font-weight: 700;
       font-size: 1.1rem;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .status-chip {
@@ -3017,12 +2938,12 @@ export class StockManagementComponent implements OnInit {
     }
 
     .grv-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
       color: white !important;
     }
 
     .transfer-btn {
-      background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%) !important;
+      background: linear-gradient(135deg, #f5576c 0%, #60a5fa 100%) !important;
       color: white !important;
     }
 
@@ -3138,7 +3059,7 @@ export class StockManagementComponent implements OnInit {
       align-items: center;
       padding: 24px;
       border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       border-radius: 16px 16px 0 0;
     }
@@ -3205,8 +3126,8 @@ export class StockManagementComponent implements OnInit {
     }
 
     .item-row:hover {
-      border-color: #667eea;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+      border-color: #2563eb;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
     }
 
     .item-info {
@@ -3282,7 +3203,7 @@ export class StockManagementComponent implements OnInit {
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .warehouse-select {
@@ -3322,12 +3243,12 @@ export class StockManagementComponent implements OnInit {
     }
 
     ::-webkit-scrollbar-thumb {
-      background: #667eea;
+      background: #2563eb;
       border-radius: 10px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #764ba2;
+      background: #1e40af;
     }
   `]
 })
@@ -3653,7 +3574,7 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
 
   getCategoryColor(category: string): string {
     const colors: any = {
-      'Access': '#667eea',
+      'Access': '#2563eb',
       'ProMed': '#f5576c',
       'Promed': '#f5576c',
       'SEB': '#43e97b',
@@ -3762,7 +3683,8 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
             <p>View inventory & stock levels</p>
           </div>
 
-          <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')">
+          <!-- Order Accept & Dispatch hidden until implemented -->
+          <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')" style="display:none">
             <div class="block-icon">
               <mat-icon>local_shipping</mat-icon>
             </div>
@@ -3799,7 +3721,7 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
       justify-content: space-between;
       align-items: center;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       border-radius: 4px 4px 0 0;
@@ -3825,19 +3747,19 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
       gap: 8px;
       margin: 0 0 24px 0;
       padding: 12px 16px;
-      background: rgba(102, 126, 234, 0.08);
+      background: rgba(37, 99, 235, 0.08);
       border-radius: 12px;
-      color: #667eea;
+      color: #2563eb;
       font-size: 0.95rem;
       font-weight: 500;
-      border: 1px solid rgba(102, 126, 234, 0.2);
+      border: 1px solid rgba(37, 99, 235, 0.2);
     }
 
     .warehouse-info mat-icon {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .operations-grid {
@@ -3930,15 +3852,15 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
     }
 
     .depot-block {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
     }
 
     .depot-block .block-icon mat-icon {
-      color: #667eea;
+      color: #2563eb;
     }
 
     .dispatch-block {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
     }
 
     .dispatch-block .block-icon mat-icon {
@@ -4275,7 +4197,7 @@ export class WarehouseOperationsDialog {
       justify-content: space-between;
       align-items: center;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
       color: white;
       margin: -24px -24px 0 -24px;
     }
@@ -4330,7 +4252,7 @@ export class WarehouseOperationsDialog {
       gap: 12px;
       padding: 16px;
       background: rgba(240, 147, 251, 0.1);
-      border-left: 4px solid #f093fb;
+      border-left: 4px solid #60a5fa;
       border-radius: 8px;
       margin-bottom: 24px;
       color: #f5576c;
@@ -4369,7 +4291,7 @@ export class WarehouseOperationsDialog {
     }
 
     .tripsheet-card.expanded {
-      border-color: #f093fb;
+      border-color: #60a5fa;
       box-shadow: 0 4px 16px rgba(240, 147, 251, 0.2);
     }
 
@@ -4470,7 +4392,7 @@ export class WarehouseOperationsDialog {
     }
 
     .items-table th {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
       color: white;
       padding: 12px;
       text-align: left;
@@ -4503,7 +4425,7 @@ export class WarehouseOperationsDialog {
 
     .pick-input:focus {
       outline: none;
-      border-color: #f093fb;
+      border-color: #60a5fa;
     }
 
     .status-badge {

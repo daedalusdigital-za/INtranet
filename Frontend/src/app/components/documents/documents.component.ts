@@ -41,7 +41,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
               <mat-icon>folder_special</mat-icon>
             </div>
             <div class="title-text">
-              <h1>Document Management</h1>
+              <h1>Portal Management</h1>
               <p class="subtitle">Access departmental document hubs securely</p>
             </div>
           </div>
@@ -553,7 +553,8 @@ export class DocumentsComponent implements OnInit {
     { name: 'Stock', icon: 'inventory_2', documentCount: -1 },
     { name: 'Logistics', icon: 'local_shipping', documentCount: -1 },
     { name: 'Finance', icon: 'account_balance', documentCount: -1 },
-    { name: 'Managers', icon: 'supervisor_account', documentCount: -1 }
+    { name: 'Managers', icon: 'supervisor_account', documentCount: -1 },
+    { name: 'Paperless', icon: 'draw', documentCount: -1 }
   ];
 
   constructor(

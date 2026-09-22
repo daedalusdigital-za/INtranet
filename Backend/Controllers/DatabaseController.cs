@@ -82,7 +82,7 @@ namespace ProjectTracker.API.Controllers
                 {
                     var sizeQuery = @"
                         SELECT 
-                            SUM(size * 8.0 / 1024) AS SizeMB
+                            SUM(size * 8.0 / 1024) AS Value
                         FROM sys.database_files";
                     
                     var size = await _context.Database

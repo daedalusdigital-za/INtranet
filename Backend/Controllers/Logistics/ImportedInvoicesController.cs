@@ -376,11 +376,26 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             _context.ImportBatches.Add(importBatch);
 
+            // Tracks invoice numbers already added during THIS batch so that duplicate
+            // rows within the same payload are skipped too. The DB AnyAsync check below
+            // can't see same-batch additions because they haven't been saved yet.
+            var seenInBatch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var invoiceDto in dto.Invoices)
             {
                 try
                 {
-                    // Check for duplicates
+                    var txnKey = (invoiceDto.TransactionNumber ?? string.Empty).Trim();
+
+                    // Skip duplicates already queued earlier in THIS batch
+                    if (!string.IsNullOrEmpty(txnKey) && !seenInBatch.Add(txnKey))
+                    {
+                        result.Errors.Add($"Invoice {invoiceDto.TransactionNumber} appears more than once in this file - duplicate skipped");
+                        result.FailedRecords++;
+                        continue;
+                    }
+
+                    // Check for duplicates already in the database
                     var exists = await _context.ImportedInvoices
                         .AnyAsync(i => i.TransactionNumber == invoiceDto.TransactionNumber);
 
@@ -1129,6 +1144,9 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             _logger.LogInformation("Created trip sheet {LoadNumber} from {Count} invoices (Priority: {Priority})",
                 loadNumber, invoices.Count, load.Priority);
+
+            // Retroactively link any existing PODs whose invoices are on this new tripsheet.
+            await PodTripsheetLinker.LinkForLoadsAsync(_context, new[] { load.Id });
 
             return Ok(new
             {

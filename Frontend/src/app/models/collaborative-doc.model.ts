@@ -8,6 +8,7 @@ export interface CollaborativeDocument {
   createdByName: string;
   lastModifiedByName?: string;
   isPublic: boolean;
+  documentType?: string; // 'doc' | 'sheet'
   userRole: string;
   collaboratorCount: number;
 }
@@ -21,6 +22,7 @@ export interface DocumentDetail {
   createdById: number;
   createdByName: string;
   isPublic: boolean;
+  documentType?: string; // 'doc' | 'sheet'
   yjsState?: string;
   version: number;
   collaborators: Collaborator[];
@@ -47,6 +49,7 @@ export interface CreateDocumentDto {
   title: string;
   description?: string;
   isPublic?: boolean;
+  documentType?: string; // 'doc' | 'sheet'
 }
 
 export interface UpdateDocumentDto {

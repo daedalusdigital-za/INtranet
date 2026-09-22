@@ -100,6 +100,8 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.LoadItem> LoadItems { get; set; }
         public DbSet<Models.Logistics.LoadStop> LoadStops { get; set; }
         public DbSet<Models.Logistics.StopCommodity> StopCommodities { get; set; }
+        public DbSet<Models.Logistics.SalesTripSheet> SalesTripSheets { get; set; }
+        public DbSet<Models.Logistics.SalesTripSheetLine> SalesTripSheetLines { get; set; }
         public DbSet<Models.Logistics.WarehouseInventory> WarehouseInventory { get; set; }
         public DbSet<Models.Logistics.StockTransfer> StockTransfers { get; set; }
         public DbSet<Models.Logistics.Backorder> Backorders { get; set; }
@@ -126,6 +128,13 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.PodDocumentInvoiceLink> PodDocumentInvoiceLinks { get; set; }
         public DbSet<Models.Logistics.Geofence> Geofences { get; set; }
         public DbSet<Models.Logistics.LogisticsIncident> LogisticsIncidents { get; set; }
+
+        // Paperless document workflow (shared, server-side store)
+        public DbSet<Models.Paperless.PaperlessDocument> PaperlessDocuments { get; set; }
+        public DbSet<Models.Paperless.PaperlessNotification> PaperlessNotifications { get; set; }
+        // Barcode / QR asset & consignment tracking
+        public DbSet<Models.Logistics.AssetTag> AssetTags { get; set; }
+        public DbSet<Models.Logistics.ScanEvent> ScanEvents { get; set; }
 
         // Sales Import System
         public DbSet<SalesImportBatch> SalesImportBatches { get; set; }
@@ -830,17 +839,25 @@ namespace ProjectTracker.API.Data
             {
                 entity.HasIndex(e => e.PodDocumentId);
                 entity.HasIndex(e => e.InvoiceId);
-                entity.HasIndex(e => new { e.PodDocumentId, e.InvoiceId }).IsUnique();
+                entity.HasIndex(e => e.InvoiceNumber);
+                // Only enforce uniqueness for MATCHED links (InvoiceId not null).
+                // Unmatched/pending links (null InvoiceId) can repeat freely.
+                entity.HasIndex(e => new { e.PodDocumentId, e.InvoiceId })
+                    .IsUnique()
+                    .HasFilter("[InvoiceId] IS NOT NULL");
 
                 entity.HasOne(e => e.PodDocument)
                     .WithMany(p => p.InvoiceLinks)
                     .HasForeignKey(e => e.PodDocumentId)
                     .OnDelete(DeleteBehavior.Cascade);
 
+                // InvoiceId is optional. If the invoice is later deleted, keep the link
+                // (and its InvoiceNumber) but null the FK — the tag history is preserved.
                 entity.HasOne(e => e.Invoice)
                     .WithMany(i => i.PodDocumentLinks)
                     .HasForeignKey(e => e.InvoiceId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
             // Finance Module Relationships

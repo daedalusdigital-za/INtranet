@@ -1226,7 +1226,7 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     /* Location-specific icon colors */
     .icon-container[data-location="main-office"] { background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%); }
     .icon-container[data-location="condom-factory"] { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4); }
-    .icon-container[data-location="sanitary-pads"] { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); box-shadow: 0 8px 24px rgba(240, 147, 251, 0.4); }
+    .icon-container[data-location="sanitary-pads"] { background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%); box-shadow: 0 8px 24px rgba(240, 147, 251, 0.4); }
     .icon-container[data-location="new-road"] { background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); box-shadow: 0 8px 24px rgba(255, 167, 38, 0.4); }
     .icon-container[data-location="cape-town"] { background: linear-gradient(135deg, #26a69a 0%, #00897b 100%); box-shadow: 0 8px 24px rgba(38, 166, 154, 0.4); }
     .icon-container[data-location="brionkhorspruit"] { background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%); box-shadow: 0 8px 24px rgba(124, 77, 255, 0.4); }
@@ -2553,9 +2553,9 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
       border-radius:16px; padding:18px; backdrop-filter:blur(10px); }
     .cc-panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
     .cc-panel-title { display:flex; align-items:center; gap:10px; }
-    .cc-panel-title mat-icon { color:#818cf8; }
+    .cc-panel-title mat-icon { color:#60a5fa; }
     .cc-panel-title h3 { margin:0; font-size:15px; font-weight:700; color:#e2e8f0; }
-    .cc-link { color:#818cf8; font-size:12px; min-width:0; }
+    .cc-link { color:#60a5fa; font-size:12px; min-width:0; }
     .cc-empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:32px 16px; color:#94a3b8; text-align:center; }
     .cc-empty mat-icon { font-size:36px; width:36px; height:36px; color:#34d399; }
     .cc-empty.small { padding:18px; }
@@ -2609,7 +2609,7 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     .dept-bar-row { display:flex; align-items:center; gap:10px; }
     .dbr-name { width:120px; font-size:12px; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .dbr-track { flex:1; height:10px; background:rgba(255,255,255,0.07); border-radius:6px; overflow:hidden; }
-    .dbr-fill { height:100%; background:linear-gradient(90deg,#6366f1,#818cf8); border-radius:6px; }
+    .dbr-fill { height:100%; background:linear-gradient(90deg,#6366f1,#60a5fa); border-radius:6px; }
     .dbr-count { width:32px; text-align:right; font-size:12px; font-weight:700; color:#e2e8f0; }
 
     /* Completeness ring */
@@ -2642,7 +2642,7 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     .records-panel { width:640px; max-width:100%; max-height:80vh; overflow:auto; background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:20px; }
     .rp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
     .rp-title { display:flex; align-items:center; gap:10px; }
-    .rp-title mat-icon { color:#818cf8; }
+    .rp-title mat-icon { color:#60a5fa; }
     .rp-title h3 { margin:0; font-size:16px; color:#e2e8f0; }
     .rp-list { display:flex; flex-direction:column; gap:8px; }
     .rp-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.04); }
@@ -3909,7 +3909,7 @@ export class CondomFactoryPasswordDialogComponent {
   `,
   styles: [`
     .dialog-container {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
       border-radius: 16px;
       padding: 32px;
       min-width: 350px;

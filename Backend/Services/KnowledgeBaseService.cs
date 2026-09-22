@@ -321,8 +321,9 @@ namespace ProjectTracker.API.Services
             }
 
             var sb = new StringBuilder();
-            sb.AppendLine("--- KNOWLEDGE BASE ---");
-            
+            sb.AppendLine("--- KNOWLEDGE BASE (reference material — do NOT read aloud or copy verbatim) ---");
+            sb.AppendLine("Use the notes below ONLY if they directly answer the user's question. Answer briefly in your own words (1-3 sentences). Never recite or list this material unprompted.");
+
             foreach (var result in relevant)
             {
                 sb.AppendLine($"[{result.FileName}] {result.Content}");

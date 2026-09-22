@@ -48,7 +48,7 @@ import { environment } from '../../../environments/environment';
         <!-- Company Announcements -->
         <mat-card class="widget announcement-widget">
           <mat-card-header>
-            <div class="widget-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="widget-icon" style="background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);">
               <mat-icon>campaign</mat-icon>
             </div>
             <mat-card-title>Company Announcements</mat-card-title>
@@ -498,7 +498,7 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       padding: 16px 20px;
       border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
     }
 
     .messages-header h3 {
@@ -561,7 +561,7 @@ import { environment } from '../../../environments/environment';
       width: 48px;
       height: 48px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -592,7 +592,7 @@ import { environment } from '../../../environments/environment';
     }
 
     .unread-badge {
-      background: #667eea;
+      background: #2563eb;
       color: white;
       font-size: 11px;
       font-weight: 600;
@@ -726,7 +726,7 @@ import { environment } from '../../../environments/environment';
       top: 0;
       bottom: 0;
       width: 5px;
-      background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
       transition: width 0.3s;
     }
 
@@ -751,7 +751,7 @@ import { environment } from '../../../environments/environment';
     .announcement-item:hover {
       transform: translateY(-4px);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-      border-color: rgba(102, 126, 234, 0.3);
+      border-color: rgba(37, 99, 235, 0.3);
     }
 
     .announcement-item:hover::before {
@@ -765,9 +765,9 @@ import { environment } from '../../../environments/environment';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     }
 
     .announcement-icon-badge mat-icon {
@@ -906,7 +906,7 @@ import { environment } from '../../../environments/environment';
 
     .section-label.late {
       color: #f5576c;
-      border-bottom: 2px solid #f093fb;
+      border-bottom: 2px solid #60a5fa;
     }
 
     .section-label mat-icon {
@@ -946,16 +946,16 @@ import { environment } from '../../../environments/environment';
       width: 50px;
       height: 50px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
       flex-shrink: 0;
     }
 
     .bird-photo.late {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
       box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
     }
 
@@ -1010,11 +1010,11 @@ import { environment } from '../../../environments/environment';
       height: 100px;
       margin: 0 auto 16px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
     }
 
     .earliest-photo mat-icon {
@@ -1034,7 +1034,7 @@ import { environment } from '../../../environments/environment';
     /* Hero Card (Rotating Welcome/Birthday) */
     .hero-card {
       grid-column: span 1;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       min-height: 220px;
       display: flex;
@@ -2052,7 +2052,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       align-items: center;
       padding: 16px 24px;
       border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       margin: -24px -24px 0 -24px;
     }
@@ -2213,7 +2213,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
     .back-button {
       margin-bottom: 16px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .detail-header {
@@ -2250,7 +2250,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .detail-content {

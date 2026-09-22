@@ -1,0 +1,26 @@
+{
+  "name": "intranet-mcp-logistics",
+  "version": "1.0.0",
+  "description": "Remote MCP server exposing read-only Rocket Freight logistics data to Claude (Team) as a custom connector.",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsc -w -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mssql": "^11.0.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  }
+}

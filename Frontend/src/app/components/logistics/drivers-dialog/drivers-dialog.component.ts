@@ -430,7 +430,7 @@ interface Driver {
         align-items: center;
         gap: 12px;
         padding: 16px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
         border-radius: 12px;
         color: white;
 
@@ -462,7 +462,7 @@ interface Driver {
         }
 
         &:nth-child(3) {
-          background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+          background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
         }
 
         &:nth-child(4) {
@@ -543,7 +543,7 @@ interface Driver {
               font-size: 28px;
               width: 28px;
               height: 28px;
-              color: #667eea;
+              color: #2563eb;
             }
 
             .stat-info {
@@ -708,7 +708,7 @@ interface Driver {
 
             &.trips {
               background: rgba(103, 126, 234, 0.15);
-              color: #667eea;
+              color: #2563eb;
             }
 
             &.km {

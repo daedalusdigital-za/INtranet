@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
@@ -87,6 +88,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Select(p => new
                 {
                     p.Id,
+                    p.PodNumber,
                     p.DriverId,
                     p.DriverName,
                     p.DeliveryDate,
@@ -276,11 +278,13 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 _context.PodDocuments.Add(pod);
                 await _context.SaveChangesAsync();
+                await AssignPodNumberAsync(pod);
 
                 return Ok(new
                 {
                     message = "POD uploaded successfully",
                     pod.Id,
+                    pod.PodNumber,
                     pod.FileName,
                     pod.DriverName,
                     pod.DeliveryDate,
@@ -295,13 +299,213 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
-        /// Reconcile the PodDocuments table with the physical files that already live
-        /// in the POD-Documents storage folder. Unlike bulk-import this does NOT copy
-        /// files (they are already in place) - it just registers any file that isn't
-        /// yet in the database. Filenames are expected in the normalized convention
-        /// "{REGION}_{DRIVER}_{yyyyMMdd}.ext" (e.g. GP_BONGINKOSI-LINDO_20260311.pdf),
-        /// with a fallback to the messy date/driver parsers used by bulk-import.
+        /// Upload a POD document and, in the same request, tag it with the invoice
+        /// numbers it covers (typed in by the user — no driver required). Each invoice
+        /// number is resolved against ImportedInvoices (with OCR-style tolerance) and
+        /// linked via PodDocumentInvoiceLink. Designed for the Admin Center multi-POD
+        /// uploader, which loops one call per file.
         /// </summary>
+        [HttpPost("upload-with-invoices")]
+        public async Task<IActionResult> UploadWithInvoices(
+            [FromForm] IFormFile file,
+            [FromForm] string invoiceNumbers,
+            [FromForm] string? region,
+            [FromForm] DateTime? deliveryDate,
+            [FromForm] string? notes)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded");
+
+            var allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".xlsx", ".xls", ".zip" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+                return BadRequest("Invalid file type");
+
+            if (file.Length > 20 * 1024 * 1024) // 20MB max
+                return BadRequest("File size exceeds 20MB limit");
+
+            // Split the typed invoice numbers on comma / newline / semicolon / whitespace.
+            var rawTokens = (invoiceNumbers ?? string.Empty)
+                .Split(new[] { ',', ';', '\n', '\r', '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            try
+            {
+                // Resolve invoice-number tokens → invoices (OCR-tolerant normalisation).
+                var candidateMap = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var raw in rawTokens)
+                {
+                    foreach (var normalized in NormalizeInvoiceCandidate(raw))
+                    {
+                        if (!candidateMap.TryGetValue(normalized, out var origs))
+                        {
+                            origs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            candidateMap[normalized] = origs;
+                        }
+                        origs.Add(raw);
+                    }
+                }
+
+                var keys = candidateMap.Keys.ToList();
+                var matchedInvoices = keys.Count > 0
+                    ? await _context.ImportedInvoices.Where(i => keys.Contains(i.TransactionNumber)).ToListAsync()
+                    : new List<Models.Logistics.ImportedInvoice>();
+
+                var matchedKeys = new HashSet<string>(matchedInvoices.Select(i => i.TransactionNumber), StringComparer.OrdinalIgnoreCase);
+                var unmatched = candidateMap
+                    .Where(kv => !matchedKeys.Contains(kv.Key))
+                    .SelectMany(kv => kv.Value)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                // Detect a possible re-upload: an existing POD with the same original
+                // file name. We DON'T block it (staff legitimately re-upload/replace),
+                // but we flag it so the UI can alert the user.
+                var duplicateOf = await _context.PodDocuments
+                    .Where(p => p.OriginalFileName == file.FileName)
+                    .OrderByDescending(p => p.UploadedAt)
+                    .Select(p => new { p.Id, p.PodNumber, p.OriginalFileName, p.UploadedAt, p.DeliveryDate })
+                    .FirstOrDefaultAsync();
+
+                // Save the file.
+                Directory.CreateDirectory(_storagePath);
+                var effectiveRegion = string.IsNullOrWhiteSpace(region) ? "POD" : region.ToUpper().Trim();
+                var effectiveDate = (deliveryDate ?? DateTime.UtcNow).Date;
+                var fileName = $"{effectiveRegion}_INV_{effectiveDate:yyyyMMdd}_{DateTime.UtcNow:HHmmssfff}{extension}";
+                var filePath = Path.Combine(_storagePath, fileName);
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var pod = new PodDocument
+                {
+                    DriverId = null,
+                    DriverName = string.Empty,
+                    DeliveryDate = effectiveDate,
+                    Region = effectiveRegion,
+                    FilePath = filePath,
+                    FileName = fileName,
+                    OriginalFileName = file.FileName,
+                    ContentType = GetContentType(filePath),
+                    FileSize = file.Length,
+                    Notes = notes,
+                    UploadedAt = DateTime.UtcNow
+                };
+                _context.PodDocuments.Add(pod);
+                await _context.SaveChangesAsync();
+                await AssignPodNumberAsync(pod);
+
+                // Link BOTH matched and unmatched invoice numbers. Unmatched numbers are
+                // stored with a null InvoiceId so they can be reconciled once the invoice
+                // importer catches up — the POD is never blocked on a missing invoice.
+                string? loadNumber = null;
+
+                var links = new List<PodDocumentInvoiceLink>();
+                links.AddRange(matchedInvoices.Select(i => new PodDocumentInvoiceLink
+                {
+                    PodDocumentId = pod.Id,
+                    InvoiceId = i.Id,
+                    InvoiceNumber = i.TransactionNumber,
+                    LinkedAt = DateTime.UtcNow
+                }));
+                links.AddRange(unmatched.Select(num => new PodDocumentInvoiceLink
+                {
+                    PodDocumentId = pod.Id,
+                    InvoiceId = null,
+                    InvoiceNumber = num,
+                    LinkedAt = DateTime.UtcNow
+                }));
+                if (links.Count > 0)
+                    _context.PodDocumentInvoiceLinks.AddRange(links);
+
+                if (matchedInvoices.Count > 0)
+                {
+                    foreach (var invoice in matchedInvoices)
+                    {
+                        invoice.Status = "Delivered";
+                        invoice.LastDeliveryDate = pod.DeliveryDate;
+                    }
+
+                    // Auto-link to a tripsheet if any invoice belongs to one.
+                    var loadId = matchedInvoices.Select(i => i.LoadId).FirstOrDefault(x => x.HasValue);
+                    if (loadId.HasValue)
+                    {
+                        pod.LoadId = loadId.Value;
+                        var load = await _context.Loads.FindAsync(loadId.Value);
+                        loadNumber = load?.LoadNumber;
+                    }
+
+                    pod.InvoiceId = matchedInvoices.First().Id; // legacy compatibility
+                }
+
+                if (links.Count > 0 || matchedInvoices.Count > 0)
+                    await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = $"POD uploaded and linked to {matchedInvoices.Count} invoice(s)"
+                        + (unmatched.Count > 0 ? $", {unmatched.Count} pending (not yet imported)" : "")
+                        + (loadNumber != null ? $" · tripsheet {loadNumber}" : "")
+                        + (duplicateOf != null ? $" · ⚠ possible duplicate of {duplicateOf.PodNumber}" : ""),
+                    pod.Id,
+                    pod.PodNumber,
+                    pod.FileName,
+                    pod.OriginalFileName,
+                    pod.DeliveryDate,
+                    loadNumber,
+                    matchedInvoiceNumbers = matchedInvoices.Select(i => i.TransactionNumber).OrderBy(n => n).ToList(),
+                    unmatchedInvoiceNumbers = unmatched,
+                    isDuplicate = duplicateOf != null,
+                    duplicateOf
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading POD with invoices");
+                return StatusCode(500, $"Error uploading POD: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Check whether any of the supplied original file names have already been
+        /// uploaded as a POD. Lets the uploader UI warn the user about a re-upload
+        /// BEFORE they commit. Returns the matching existing POD(s) per file name.
+        /// </summary>
+        [HttpPost("check-duplicates")]
+        public async Task<IActionResult> CheckDuplicates([FromBody] CheckDuplicatesRequest request)
+        {
+            if (request?.FileNames == null || request.FileNames.Count == 0)
+                return Ok(new { duplicates = new List<object>() });
+
+            var names = request.FileNames
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var existing = await _context.PodDocuments
+                .Where(p => p.OriginalFileName != null && names.Contains(p.OriginalFileName))
+                .OrderByDescending(p => p.UploadedAt)
+                .Select(p => new { p.Id, p.PodNumber, p.OriginalFileName, p.UploadedAt, p.DeliveryDate })
+                .ToListAsync();
+
+            var duplicates = existing
+                .GroupBy(p => p.OriginalFileName, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new
+                {
+                    fileName = g.Key,
+                    count = g.Count(),
+                    mostRecent = g.First()
+                })
+                .ToList();
+
+            return Ok(new { duplicates });
+        }
+
+        /// <summary>
+
         [HttpPost("scan-storage")]
         public async Task<IActionResult> ScanStorage()
         {
@@ -392,6 +596,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             await _context.SaveChangesAsync();
+            await BackfillPodNumbersAsync();
 
             return Ok(new
             {
@@ -562,6 +767,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             await _context.SaveChangesAsync();
+            await BackfillPodNumbersAsync();
 
             return Ok(new
             {
@@ -698,6 +904,29 @@ namespace ProjectTracker.API.Controllers.Logistics
                 pod.Region,
                 pod.Notes,
                 pod.LoadId
+            });
+        }
+
+        /// <summary>
+        /// Retroactively link existing PODs to tripsheets by the invoices they share.
+        /// For every POD with no tripsheet link, if any of its tagged invoices now
+        /// sits on a tripsheet (Invoice.LoadId), the POD is linked to that tripsheet.
+        /// Safe to run repeatedly. Use this to back-fill the historical backlog.
+        /// </summary>
+        [HttpPost("reconcile-tripsheets")]
+        public async Task<IActionResult> ReconcileTripsheets()
+        {
+            var result = await PodTripsheetLinker.ReconcileAllAsync(_context);
+            _logger.LogInformation(
+                "POD→tripsheet reconciliation: examined {Examined}, linked {Linked}",
+                result.PodsExamined, result.PodsLinked);
+
+            return Ok(new
+            {
+                message = $"Linked {result.PodsLinked} POD(s) to tripsheets (examined {result.PodsExamined}).",
+                podsExamined = result.PodsExamined,
+                podsLinked = result.PodsLinked,
+                links = result.Links
             });
         }
 
@@ -968,8 +1197,8 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             var foundIds = found.Select(f => f.Id).ToList();
             var linkedInvoiceIds = new HashSet<int>(await _context.PodDocumentInvoiceLinks
-                .Where(l => foundIds.Contains(l.InvoiceId))
-                .Select(l => l.InvoiceId)
+                .Where(l => l.InvoiceId != null && foundIds.Contains(l.InvoiceId.Value))
+                .Select(l => l.InvoiceId!.Value)
                 .ToListAsync());
 
             var matchedKeys = new HashSet<string>(found.Select(f => f.TransactionNumber), StringComparer.OrdinalIgnoreCase);
@@ -1175,6 +1404,33 @@ namespace ProjectTracker.API.Controllers.Logistics
             return string.IsNullOrEmpty(name) ? "Unknown" : name;
         }
 
+        /// <summary>
+        /// Assign a human-readable, barcode-friendly POD number if one is not set.
+        /// Uses the auto-increment Id (guaranteed unique) e.g. "POD000123".
+        /// Call AFTER the entity has been saved so pod.Id is populated.
+        /// </summary>
+        private async Task AssignPodNumberAsync(PodDocument pod)
+        {
+            if (!string.IsNullOrWhiteSpace(pod.PodNumber)) return;
+            pod.PodNumber = $"POD{pod.Id:D6}";
+            await _context.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Assign POD numbers to any documents that don't yet have one (used after
+        /// batch imports and to backfill legacy rows).
+        /// </summary>
+        private async Task BackfillPodNumbersAsync()
+        {
+            var missing = await _context.PodDocuments
+                .Where(p => p.PodNumber == null || p.PodNumber == "")
+                .ToListAsync();
+            if (missing.Count == 0) return;
+            foreach (var pod in missing)
+                pod.PodNumber = $"POD{pod.Id:D6}";
+            await _context.SaveChangesAsync();
+        }
+
         private string GetContentType(string filePath)
         {
             var extension = Path.GetExtension(filePath).ToLowerInvariant();
@@ -1223,5 +1479,11 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         /// <summary>Raw invoice-number tokens extracted from a POD image via OCR.</summary>
         public List<string> Candidates { get; set; } = new();
+    }
+
+    public class CheckDuplicatesRequest
+    {
+        /// <summary>Original file names the user is about to upload.</summary>
+        public List<string> FileNames { get; set; } = new();
     }
 }

@@ -1164,6 +1164,8 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpGet("vehicle-types")]
         public async Task<ActionResult<IEnumerable<VehicleTypeDto>>> GetVehicleTypes()
         {
+            await EnsureDefaultVehicleTypesAsync();
+
             var types = await _context.VehicleTypes
                 .Select(vt => new VehicleTypeDto
                 {
@@ -1177,6 +1179,60 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .ToListAsync();
 
             return Ok(types);
+        }
+
+        /// <summary>
+        /// Make sure the standard set of vehicle types exists so the fleet UI
+        /// always has selectable options with valid FK ids. Adds any missing
+        /// entries (including "Truck (Hours)" and "Trailer") without touching
+        /// existing rows.
+        /// </summary>
+        private async Task EnsureDefaultVehicleTypesAsync()
+        {
+            var defaults = new (string Name, string Description, string FuelType)[]
+            {
+                ("Truck", "Standard delivery truck (km-based)", "Diesel"),
+                ("Van", "Panel/delivery van", "Diesel"),
+                ("Car", "Passenger/pool car", "Petrol"),
+                ("Motorcycle", "Motorcycle / scooter", "Petrol"),
+                ("Truck-Horse", "Truck-horse / tractor unit (pulls a trailer)", "Diesel"),
+                ("Trailer", "Towed trailer unit", "None")
+            };
+
+            var existing = await _context.VehicleTypes
+                .Select(vt => vt.Name)
+                .ToListAsync();
+            var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+
+            var toAdd = defaults
+                .Where(d => !existingSet.Contains(d.Name))
+                .Select(d => new VehicleType
+                {
+                    Name = d.Name,
+                    Description = d.Description,
+                    FuelType = d.FuelType
+                })
+                .ToList();
+
+            if (toAdd.Count > 0)
+            {
+                _context.VehicleTypes.AddRange(toAdd);
+                await _context.SaveChangesAsync();
+            }
+
+            // Remove a previously mis-seeded "Truck (Hours)" type if it exists and
+            // isn't referenced by any vehicle.
+            var stale = await _context.VehicleTypes
+                .FirstOrDefaultAsync(vt => vt.Name == "Truck (Hours)");
+            if (stale != null)
+            {
+                var inUse = await _context.Vehicles.AnyAsync(v => v.VehicleTypeId == stale.Id);
+                if (!inUse)
+                {
+                    _context.VehicleTypes.Remove(stale);
+                    await _context.SaveChangesAsync();
+                }
+            }
         }
 
         [HttpPost("vehicle-types")]

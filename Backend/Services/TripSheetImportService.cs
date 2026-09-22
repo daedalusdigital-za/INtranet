@@ -43,7 +43,8 @@ public class TripSheetImportService
     public async Task<TripSheetImportPreviewResponse> ParseAndPreviewAsync(
         Stream fileStream, 
         string fileName,
-        string? sheetName = null)
+        string? sheetName = null,
+        bool skipMatching = false)
     {
         var response = new TripSheetImportPreviewResponse
         {
@@ -74,8 +75,15 @@ public class TripSheetImportService
 
             response.SheetName = worksheet.Name;
 
-            // Clean and parse the worksheet
-            var extractedRows = ExtractDeliveryRows(worksheet, fileName);
+            // Clean and parse the worksheet. For Pad Tripsheets (skipMatching) we relax the
+            // invoice-number detection so non-standard references like "PIN056" are still
+            // treated as line items instead of being ignored.
+            var extractedRows = ExtractDeliveryRows(worksheet, fileName, skipMatching);
+
+            // Collapse multiple line-item rows that share the same invoice number into a
+            // single preview row. A single invoice can span several Excel rows (one per
+            // product); previewing each separately made the same invoice appear duplicated.
+            extractedRows = MergeRowsByInvoice(extractedRows);
             response.TotalRowsExtracted = extractedRows.Count;
 
             // Load existing data for matching
@@ -98,10 +106,20 @@ public class TripSheetImportService
                 // Validate required fields
                 ValidateRow(previewRow);
 
-                // If no hard errors, attempt matching
+                // If no hard errors, attempt matching. For Pad Tripsheets we import the
+                // rows exactly as-is (no invoice-number or customer linking to our DB);
+                // every valid row is treated as Unmatched so the user supplies the
+                // customer/address manually after import.
                 if (previewRow.Status != ImportRowStatus.Error)
                 {
-                    await MatchRowAsync(previewRow, existingCustomers, existingInvoices);
+                    if (skipMatching)
+                    {
+                        previewRow.Status = ImportRowStatus.Unmatched;
+                    }
+                    else
+                    {
+                        await MatchRowAsync(previewRow, existingCustomers, existingInvoices);
+                    }
                 }
 
                 response.Rows.Add(previewRow);
@@ -205,6 +223,13 @@ public class TripSheetImportService
             decimal totalDistance = 0;
             decimal totalValue = 0;
 
+            // Tracks invoices already created OR linked during THIS import batch,
+            // keyed by normalized invoice number. Prevents duplicate ImportedInvoice
+            // rows when the same invoice number appears on multiple Excel rows
+            // (one invoice = many product line items) — the DB dedup query alone
+            // can't catch these because same-batch additions aren't saved yet.
+            var processedInvoices = new Dictionary<string, ImportedInvoice>(StringComparer.OrdinalIgnoreCase);
+
             // Group confirmations by customer/address to create stops
             var stopGroups = request.Confirmations
                 .GroupBy(c => new { 
@@ -302,46 +327,73 @@ public class TripSheetImportService
                                     {
                                         existingInvoice.CustomerId = confirmation.ConfirmedCustomerId;
                                     }
+                                    if (!string.IsNullOrEmpty(confirmation.InvoiceNumber))
+                                    {
+                                        processedInvoices[NormalizeInvoiceNumber(confirmation.InvoiceNumber)] = existingInvoice;
+                                    }
                                 }
                             }
                             else
                             {
                                 // Try to find existing invoice by TransactionNumber before creating a duplicate
                                 ImportedInvoice? existingByTxn = null;
-                                if (!string.IsNullOrEmpty(confirmation.InvoiceNumber))
-                                {
-                                    var normalizedInvoiceNo = NormalizeInvoiceNumber(confirmation.InvoiceNumber);
-                                    existingByTxn = await _context.ImportedInvoices
-                                        .FirstOrDefaultAsync(i => i.LoadId == null && 
-                                            i.TransactionNumber == confirmation.InvoiceNumber);
-                                    
-                                    // If exact match not found, try normalized match
-                                    if (existingByTxn == null)
-                                    {
-                                        var candidates = await _context.ImportedInvoices
-                                            .Where(i => i.LoadId == null)
-                                            .ToListAsync();
-                                        existingByTxn = candidates
-                                            .FirstOrDefault(i => NormalizeInvoiceNumber(i.TransactionNumber) == normalizedInvoiceNo);
-                                    }
-                                }
+                                var normalizedInvoiceNo = string.IsNullOrEmpty(confirmation.InvoiceNumber)
+                                    ? null
+                                    : NormalizeInvoiceNumber(confirmation.InvoiceNumber);
 
-                                if (existingByTxn != null)
+                                // 1) Have we already created/linked this invoice earlier in THIS batch?
+                                //    (EF's DB query below won't see un-saved same-batch additions.)
+                                if (normalizedInvoiceNo != null &&
+                                    processedInvoices.TryGetValue(normalizedInvoiceNo, out var alreadyInBatch))
                                 {
-                                    // Update existing invoice instead of creating duplicate
-                                    existingByTxn.LoadId = load.Id;
-                                    existingByTxn.Status = "Assigned";
-                                    existingByTxn.UpdatedAt = DateTime.UtcNow;
-                                    if (confirmation.ConfirmedCustomerId.HasValue)
-                                    {
-                                        existingByTxn.CustomerId = confirmation.ConfirmedCustomerId;
-                                    }
-                                    _logger.LogInformation("Linked existing invoice {TransactionNumber} to load {LoadId} by TransactionNumber match",
-                                        existingByTxn.TransactionNumber, load.Id);
+                                    // Same invoice, another line item — fold value into the existing
+                                    // invoice instead of creating a duplicate row.
+                                    alreadyInBatch.LoadId = load.Id;
+                                    alreadyInBatch.Status = alreadyInBatch.Status == "Query" ? "Query" : "Assigned";
+                                    alreadyInBatch.Quantity += confirmation.Quantity ?? 0;
+                                    alreadyInBatch.SalesAmount += confirmation.SalesAmount ?? 0;
+                                    alreadyInBatch.UpdatedAt = DateTime.UtcNow;
+                                    _logger.LogInformation(
+                                        "Merged duplicate line for invoice {TransactionNumber} within batch (load {LoadId})",
+                                        alreadyInBatch.TransactionNumber, load.Id);
                                 }
                                 else
                                 {
-                                    _context.ImportedInvoices.Add(invoice);
+                                    if (!string.IsNullOrEmpty(confirmation.InvoiceNumber))
+                                    {
+                                        // Match any prior ImportedInvoice with this number — whether or
+                                        // not it's already on a load — so re-imports never duplicate.
+                                        existingByTxn = await _context.ImportedInvoices
+                                            .FirstOrDefaultAsync(i => i.TransactionNumber == confirmation.InvoiceNumber);
+
+                                        // If exact match not found, try normalized match
+                                        if (existingByTxn == null && normalizedInvoiceNo != null)
+                                        {
+                                            var candidates = await _context.ImportedInvoices.ToListAsync();
+                                            existingByTxn = candidates
+                                                .FirstOrDefault(i => NormalizeInvoiceNumber(i.TransactionNumber) == normalizedInvoiceNo);
+                                        }
+                                    }
+
+                                    if (existingByTxn != null)
+                                    {
+                                        // Update existing invoice instead of creating duplicate
+                                        existingByTxn.LoadId = load.Id;
+                                        existingByTxn.Status = "Assigned";
+                                        existingByTxn.UpdatedAt = DateTime.UtcNow;
+                                        if (confirmation.ConfirmedCustomerId.HasValue)
+                                        {
+                                            existingByTxn.CustomerId = confirmation.ConfirmedCustomerId;
+                                        }
+                                        _logger.LogInformation("Linked existing invoice {TransactionNumber} to load {LoadId} by TransactionNumber match",
+                                            existingByTxn.TransactionNumber, load.Id);
+                                        if (normalizedInvoiceNo != null) processedInvoices[normalizedInvoiceNo] = existingByTxn;
+                                    }
+                                    else
+                                    {
+                                        _context.ImportedInvoices.Add(invoice);
+                                        if (normalizedInvoiceNo != null) processedInvoices[normalizedInvoiceNo] = invoice;
+                                    }
                                 }
                             }
 
@@ -391,6 +443,9 @@ public class TripSheetImportService
                 _logger.LogInformation("Post-commit sync: linked {Count} additional invoices to load {LoadNumber}",
                     syncedCount, tripSheetNumber);
             }
+
+            // Retroactively link any existing PODs whose invoices are on this tripsheet.
+            await PodTripsheetLinker.LinkForLoadsAsync(_context, new[] { load.Id });
 
             response.TripSheetNumber = tripSheetNumber;
             response.LoadId = load.Id;
@@ -499,7 +554,84 @@ public class TripSheetImportService
         return lastRow < 2 || lastCol < 2;
     }
 
-    private List<TripSheetImportRowDto> ExtractDeliveryRows(IXLWorksheet worksheet, string fileName)
+    /// <summary>
+    /// Collapse extracted rows that share the same invoice number into a single row.
+    /// One invoice can span several Excel rows (one per product line item); we sum the
+    /// quantities and amounts and combine the product descriptions so the preview and
+    /// commit both treat it as one delivery/invoice — no duplicates.
+    /// Rows without an invoice number are left as-is (can't be safely merged).
+    /// </summary>
+    private List<TripSheetImportRowDto> MergeRowsByInvoice(List<TripSheetImportRowDto> rows)
+    {
+        if (rows == null || rows.Count == 0) return rows ?? new List<TripSheetImportRowDto>();
+
+        var merged = new List<TripSheetImportRowDto>();
+        var byInvoice = new Dictionary<string, TripSheetImportRowDto>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            var key = string.IsNullOrWhiteSpace(row.InvoiceNumber)
+                ? null
+                : NormalizeInvoiceNumber(row.InvoiceNumber);
+
+            // No invoice number → can't merge safely, keep as its own row.
+            if (key == null)
+            {
+                merged.Add(row);
+                continue;
+            }
+
+            if (byInvoice.TryGetValue(key, out var existing))
+            {
+                // Fold this line item into the already-seen invoice row.
+                existing.Quantity = (existing.Quantity ?? 0) + (row.Quantity ?? 0);
+                existing.SalesAmount = (existing.SalesAmount ?? 0) + (row.SalesAmount ?? 0);
+
+                // Combine distinct product descriptions.
+                if (!string.IsNullOrWhiteSpace(row.ProductDescription))
+                {
+                    var parts = (existing.ProductDescription ?? string.Empty)
+                        .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(p => p.Trim())
+                        .Where(p => p.Length > 0)
+                        .ToList();
+                    var incoming = row.ProductDescription.Trim();
+                    if (!parts.Contains(incoming, StringComparer.OrdinalIgnoreCase))
+                    {
+                        parts.Add(incoming);
+                        existing.ProductDescription = string.Join("; ", parts);
+                    }
+                }
+
+                // Backfill any customer/address details missing on the first row.
+                existing.CustomerName ??= row.CustomerName;
+                existing.CustomerNumber ??= row.CustomerNumber;
+                existing.DeliveryAddress ??= row.DeliveryAddress;
+                existing.City ??= row.City;
+                existing.Province ??= row.Province;
+                existing.PostalCode ??= row.PostalCode;
+                existing.ContactPerson ??= row.ContactPerson;
+                existing.ContactPhone ??= row.ContactPhone;
+                existing.ContactEmail ??= row.ContactEmail;
+            }
+            else
+            {
+                byInvoice[key] = row;
+                merged.Add(row);
+            }
+        }
+
+        if (merged.Count != rows.Count)
+        {
+            _logger.LogInformation(
+                "Merged {Original} extracted rows into {Merged} unique invoices for preview",
+                rows.Count, merged.Count);
+        }
+
+        return merged;
+    }
+
+    private List<TripSheetImportRowDto> ExtractDeliveryRows(IXLWorksheet worksheet, string fileName, bool relaxedInvoiceDetection = false)
     {
         var rows = new List<TripSheetImportRowDto>();
         
@@ -543,8 +675,13 @@ public class TripSheetImportService
             var customerName = GetCellValue(row, columnMap, "CustomerName");
             var address = GetCellValue(row, columnMap, "DeliveryAddress");
             
-            // Check if this is an invoice row (has invoice number matching pattern)
-            var isInvoiceRow = !string.IsNullOrEmpty(invoiceNumber) && InvoicePattern.IsMatch(invoiceNumber.Trim());
+            // Check if this is an invoice row (has invoice number matching pattern).
+            // In relaxed (Pad Tripsheet) mode, accept ANY non-empty, non-label reference
+            // (e.g. "PIN056") so custom numbering schemes are imported as-is.
+            var isInvoiceRow = !string.IsNullOrEmpty(invoiceNumber) &&
+                (relaxedInvoiceDetection
+                    ? !IsLabelRow(invoiceNumber.Trim())
+                    : InvoicePattern.IsMatch(invoiceNumber.Trim()));
             
             if (isInvoiceRow)
             {
@@ -733,11 +870,24 @@ public class TripSheetImportService
 
     private bool IsFooterRow(IXLRow row, int lastCol)
     {
-        var rowText = string.Join(" ",
-            Enumerable.Range(1, Math.Min(lastCol, 10))
-                .Select(c => row.Cell(c).GetValue<string>()?.ToUpper() ?? "")
-                .Where(s => !string.IsNullOrEmpty(s)));
+        // Examine each cell individually so we can catch a standalone summary/total
+        // cell (e.g. a "Total" label sitting near the end of the row above the grand
+        // total value). Substring matching on the whole row would miss "Total" and
+        // could also mis-fire on product descriptions, so we check per-cell.
+        var cellValues = Enumerable.Range(1, Math.Min(lastCol, 12))
+            .Select(c => (row.Cell(c).GetValue<string>() ?? string.Empty).Trim().ToUpper())
+            .Where(s => !string.IsNullOrEmpty(s))
+            .ToList();
 
+        // Standalone total/summary label in any cell → this is a footer/summary row.
+        if (cellValues.Any(v =>
+                v == "TOTAL" || v == "TOTALS" || v == "SUBTOTAL" || v == "SUB TOTAL" ||
+                v == "GRAND TOTAL" || v.StartsWith("TOTAL ") || v.StartsWith("TOTAL:")))
+        {
+            return true;
+        }
+
+        var rowText = string.Join(" ", cellValues);
         return FooterMarkers.Any(marker => rowText.Contains(marker));
     }
 

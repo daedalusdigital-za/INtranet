@@ -223,14 +223,13 @@ namespace ProjectTracker.API.Services
             {
                 return AnalyzeDocument(input);
             }
-            
-            // Try knowledge base first
-            var kbResponse = await GetKnowledgeBaseResponseAsync(input);
-            if (!string.IsNullOrEmpty(kbResponse))
-            {
-                return kbResponse;
-            }
-            
+
+            // NOTE: We deliberately do NOT dump raw knowledge-base articles here.
+            // This rule-based service is only a last-resort fallback used when the
+            // main LLM is unavailable; reciting KB documents verbatim (with the
+            // "From the Knowledge Base" / "Source" / "Next steps" wrapper) made
+            // Welly read out its own capability guides during normal conversation.
+            // Instead we answer with the friendly rule-based patterns below.
             return GetResponse(input);
         }
 

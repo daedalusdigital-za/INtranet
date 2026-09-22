@@ -1241,7 +1241,7 @@ export class CalendarComponent implements OnInit {
       justify-content: space-between;
       align-items: flex-start;
       padding: 32px 32px 24px 32px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       border-radius: 12px 12px 0 0;
@@ -1324,14 +1324,14 @@ export class CalendarComponent implements OnInit {
       align-items: center;
       gap: 12px;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+      background: linear-gradient(135deg, #2563eb15 0%, #1e40af15 100%);
       border-radius: 12px;
       margin-bottom: 24px;
-      border-left: 4px solid #667eea;
+      border-left: 4px solid #2563eb;
     }
 
     .events-count mat-icon {
-      color: #667eea;
+      color: #2563eb;
       font-size: 24px;
       width: 24px;
       height: 24px;
@@ -1500,16 +1500,16 @@ export class CalendarComponent implements OnInit {
       height: 48px;
       font-weight: 700;
       font-size: 1rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
       transition: all 0.3s ease;
     }
 
     .modern-close-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 8px 30px rgba(37, 99, 235, 0.4);
     }
 
     .modern-close-btn mat-icon {

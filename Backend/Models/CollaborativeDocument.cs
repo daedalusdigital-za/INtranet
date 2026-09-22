@@ -15,6 +15,11 @@ namespace ProjectTracker.API.Models
         [MaxLength(500)]
         public string? Description { get; set; }
 
+        // Discriminates the editor surface: "doc" (rich text) or "sheet" (spreadsheet)
+        [Required]
+        [MaxLength(20)]
+        public string DocumentType { get; set; } = "doc";
+
         [Required]
         public int CreatedById { get; set; }
 

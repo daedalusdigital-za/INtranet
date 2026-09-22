@@ -563,7 +563,7 @@ interface Geofence {
     .bv-reg { font-weight:700; color:#f1f5f9; }
     .bv-stats { display:flex; gap:12px; font-size:.8rem; color:#60a5fa; margin:4px 0; }
     .bv-times { font-size:.72rem; color:#cbd5e1; }
-    .bv-cta { display:flex; align-items:center; gap:4px; font-size:.72rem; color:#818cf8; margin-top:6px; }
+    .bv-cta { display:flex; align-items:center; gap:4px; font-size:.72rem; color:#60a5fa; margin-top:6px; }
     .bv-cta mat-icon { font-size:15px; width:15px; height:15px; }
     .hist-table { width:100%; border-collapse:collapse; font-size:.8rem; background:#0b1220; border-radius:10px; overflow:hidden; }
     .hist-table th { text-align:left; padding:10px 8px; color:#e2e8f0; font-weight:700; background:#1e293b; border-bottom:1px solid rgba(148,163,184,.3); position:sticky; top:0; }
@@ -591,7 +591,7 @@ interface Geofence {
     .zone-form h4 { margin:0 0 12px; color:#f1f5f9; }
     .zf-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
     .zf-slider { display:flex; align-items:center; gap:12px; margin:4px 2px 2px; }
-    .zf-slider input[type=range] { flex:1; accent-color:#818cf8; height:4px; }
+    .zf-slider input[type=range] { flex:1; accent-color:#60a5fa; height:4px; }
     .zf-slbl { font-size:.78rem; color:#cbd5e1; width:40px; }
     .zf-sval { font-size:.82rem; color:#f1f5f9; font-weight:700; width:70px; text-align:right; }
     .zf-actions { display:flex; align-items:center; gap:12px; margin-top:10px; }
@@ -603,7 +603,7 @@ interface Geofence {
     .tv-dialog { width:min(1000px,96vw); max-height:90vh; display:flex; flex-direction:column; background:linear-gradient(160deg,#0f172a,#1e1b4b); border:1px solid rgba(148,163,184,.2); border-radius:18px; box-shadow:0 24px 60px rgba(0,0,0,.5); overflow:hidden; }
     .tv-header { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid rgba(148,163,184,.15); }
     .tv-title { display:flex; align-items:center; gap:10px; font-size:1.3rem; font-weight:700; color:#f1f5f9; }
-    .tv-title mat-icon { color:#818cf8; }
+    .tv-title mat-icon { color:#60a5fa; }
     .tv-sub { font-size:.8rem; color:#94a3b8; margin-top:2px; }
     .tv-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; padding:16px 22px; }
     .tvs-card { background:rgba(15,23,42,.6); border:1px solid rgba(148,163,184,.15); border-radius:12px; padding:12px; text-align:center; }

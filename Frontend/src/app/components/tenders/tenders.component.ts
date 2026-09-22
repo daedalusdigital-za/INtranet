@@ -2533,7 +2533,7 @@ interface ArtworkFile {
       border-radius: 12px;
     }
     .reminder-count-badge {
-      background: #667eea;
+      background: #2563eb;
       color: white;
       border-radius: 12px;
       padding: 2px 8px;
@@ -2614,7 +2614,7 @@ interface ArtworkFile {
     }
     .reminder-emails {
       font-size: 11px;
-      color: #667eea;
+      color: #2563eb;
       display: flex;
       align-items: center;
       gap: 4px;
@@ -2681,7 +2681,7 @@ interface ArtworkFile {
       align-items: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
       border-radius: 16px 16px 0 0;
     }

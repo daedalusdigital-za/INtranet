@@ -38,7 +38,8 @@ namespace ProjectTracker.API.Controllers
             { "Stock", new[] { "Admin", "Stock", "Warehouse", "Manager" } },
             { "Logistics", new[] { "Admin", "Logistics", "Driver", "Manager" } },
             { "Finance", new[] { "Admin", "Finance", "Manager" } },
-            { "Managers", new[] { "Admin", "Manager" } }
+            { "Managers", new[] { "Admin", "Manager" } },
+            { "Paperless", new[] { "Admin", "Manager", "IT", "Marketing", "Sales", "CallCenter", "Production", "HR", "Stock", "Warehouse", "Logistics", "Driver", "Finance", "ProjectManager" } }
         };
 
         public DocumentsController(ILogger<DocumentsController> logger, IConfiguration configuration, IMemoryCache cache, ApplicationDbContext db)
@@ -51,7 +52,7 @@ namespace ProjectTracker.API.Controllers
 
             // Load department passwords from configuration (DocumentPasswords section)
             var depts = new[] { "IT", "Marketing", "Tender", "Projects", "Sales", "Call Center",
-                                "Production", "Human Resource", "Stock", "Logistics", "Finance", "Managers" };
+                                "Production", "Human Resource", "Stock", "Logistics", "Finance", "Managers", "Paperless" };
             _departmentPasswords = depts.ToDictionary(
                 d => d,
                 d => configuration[$"DocumentPasswords:{d}"] ?? configuration["DocumentPasswords:Default"] ?? "0000"
@@ -965,6 +966,7 @@ namespace ProjectTracker.API.Controllers
             "Logistics" => "local_shipping",
             "Finance" => "account_balance",
             "Managers" => "supervisor_account",
+            "Paperless" => "description",
             _ => "folder"
         };
 

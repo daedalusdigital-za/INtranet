@@ -60,6 +60,7 @@ namespace ProjectTracker.API.Controllers
                     CreatedByName = d.CreatedBy != null ? d.CreatedBy.FullName : "Unknown",
                     LastModifiedByName = d.LastModifiedBy != null ? d.LastModifiedBy.FullName : null,
                     IsPublic = d.IsPublic,
+                    DocumentType = d.DocumentType,
                     UserRole = d.CreatedById == userId ? "owner" :
                         d.Collaborators.FirstOrDefault(c => c.UserId == userId) != null ?
                         d.Collaborators.First(c => c.UserId == userId).Role : "viewer",
@@ -107,6 +108,7 @@ namespace ProjectTracker.API.Controllers
                 CreatedById = document.CreatedById,
                 CreatedByName = document.CreatedBy?.FullName ?? "Unknown",
                 IsPublic = document.IsPublic,
+                DocumentType = document.DocumentType,
                 YjsState = latestSnapshot?.YjsState,
                 Version = latestSnapshot?.Version ?? 0,
                 Collaborators = document.Collaborators.Select(c => new CollaboratorDto
@@ -134,6 +136,7 @@ namespace ProjectTracker.API.Controllers
                 Title = dto.Title,
                 Description = dto.Description,
                 IsPublic = dto.IsPublic,
+                DocumentType = dto.DocumentType == "sheet" ? "sheet" : "doc",
                 CreatedById = userId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -164,6 +167,7 @@ namespace ProjectTracker.API.Controllers
                 UpdatedAt = document.UpdatedAt,
                 CreatedById = document.CreatedById,
                 IsPublic = document.IsPublic,
+                DocumentType = document.DocumentType,
                 Version = 0,
                 Collaborators = new List<CollaboratorDto>()
             });

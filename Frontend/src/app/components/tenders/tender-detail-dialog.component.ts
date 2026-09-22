@@ -619,7 +619,7 @@ interface DialogData {
                   <div class="welly-result-text" [innerHTML]="formatWellyResult(wellyResult)"></div>
                   @if (wellyExtractedItems.length > 0) {
                     <div class="welly-extracted-boq">
-                      <h4>📋 Extracted BOQ Items ({{ wellyExtractedItems.length }})</h4>
+                      <h4>Extracted BOQ Items ({{ wellyExtractedItems.length }})</h4>
                       <div class="extracted-items-list">
                         @for (item of wellyExtractedItems; track item.lineNumber) {
                           <div class="extracted-item">
@@ -1069,13 +1069,13 @@ interface DialogData {
 
     /* Welly BOQ Analysis Styles */
     .welly-boq-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
       color: white !important;
       border: none !important;
     }
 
     .welly-boq-btn:hover {
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
 
     .welly-boq-btn .welly-sparkle {
@@ -1112,7 +1112,7 @@ interface DialogData {
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       color: white;
     }
 
@@ -1310,8 +1310,8 @@ interface DialogData {
       align-items: center;
       gap: 8px;
       padding: 8px 20px;
-      background: rgba(102, 126, 234, 0.08);
-      border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+      background: rgba(37, 99, 235, 0.08);
+      border-bottom: 1px solid rgba(37, 99, 235, 0.15);
       font-size: 13px;
       color: #555;
     }
@@ -1320,7 +1320,7 @@ interface DialogData {
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .welly-analysis-info .doc-count {
@@ -1335,7 +1335,7 @@ interface DialogData {
 
     .welly-extracted-boq {
       margin: 16px 0;
-      border: 2px solid #667eea;
+      border: 2px solid #2563eb;
       border-radius: 12px;
       padding: 16px;
       background: #f5f3ff;
@@ -1365,7 +1365,7 @@ interface DialogData {
     }
 
     .extracted-item .item-num {
-      color: #667eea;
+      color: #2563eb;
       font-weight: 600;
       min-width: 30px;
     }

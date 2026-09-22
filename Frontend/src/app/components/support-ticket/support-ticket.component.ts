@@ -659,7 +659,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 4px 20px rgba(99,102,241,0.2);
     }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #818cf8; }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #60a5fa; }
     .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
     @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
     .lc-subtitle { color: rgba(255,255,255,0.4) !important; font-size: 13px !important; }
@@ -667,7 +667,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .lc-progress-track { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; position: relative; }
     .lc-progress-fill {
       height: 100%; border-radius: 3px;
-      background: linear-gradient(90deg, #6366f1, #818cf8, #06b6d4);
+      background: linear-gradient(90deg, #6366f1, #60a5fa, #06b6d4);
       background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
       transition: width 0.15s ease-out; position: relative;
     }
@@ -678,7 +678,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
     .lc-progress-message { color: rgba(255,255,255,0.5); font-weight: 500; }
-    .lc-progress-pct { color: #818cf8; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .lc-progress-pct { color: #60a5fa; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
     .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.06); }
     .lc-step {
       display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -697,7 +697,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .lc-step.done .lc-step-dot { background: rgba(16,185,129,0.15); }
     .lc-step.done .lc-step-dot mat-icon { color: #10b981; }
     .lc-step-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.3); white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #818cf8; }
+    .lc-step.active .lc-step-label { color: #60a5fa; }
     .lc-step.done .lc-step-label { color: #10b981; }
 
     /* === Tab Bar === */
@@ -972,7 +972,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       height: 19px !important;
     }
 
-    .action-btn.comment { color: #818cf8 !important; }
+    .action-btn.comment { color: #60a5fa !important; }
     .action-btn.comment:hover { background: rgba(99, 102, 241, 0.12) !important; }
     .action-btn.resolve { color: #34d399 !important; }
     .action-btn.resolve:hover { background: rgba(16, 185, 129, 0.12) !important; }
@@ -1418,13 +1418,13 @@ export class SupportTicketComponent implements OnInit {
             <mat-form-field appearance="outline" class="half-width">
               <mat-label>Category</mat-label>
               <mat-select formControlName="category">
-                <mat-option value="IT Support">🖥️ IT Support</mat-option>
-                <mat-option value="Software">💿 Software</mat-option>
-                <mat-option value="Hardware">🔧 Hardware</mat-option>
-                <mat-option value="Network">🌐 Network</mat-option>
-                <mat-option value="Account">👤 Account</mat-option>
-                <mat-option value="Access">🔑 Access</mat-option>
-                <mat-option value="Other">📋 Other</mat-option>
+                <mat-option value="IT Support">IT Support</mat-option>
+                <mat-option value="Software">Software</mat-option>
+                <mat-option value="Hardware">Hardware</mat-option>
+                <mat-option value="Network">Network</mat-option>
+                <mat-option value="Account">Account</mat-option>
+                <mat-option value="Access">Access</mat-option>
+                <mat-option value="Other">Other</mat-option>
               </mat-select>
             </mat-form-field>
 
@@ -1677,7 +1677,7 @@ export class CreateTicketDialogComponent {
       width: 44px;
       height: 44px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #6366f1, #818cf8);
+      background: linear-gradient(135deg, #6366f1, #60a5fa);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1762,7 +1762,7 @@ export class CreateTicketDialogComponent {
     .cancel-btn { color: rgba(255,255,255,0.5) !important; }
     .cancel-btn:hover { background: rgba(255,255,255,0.05) !important; }
     .submit-btn {
-      background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+      background: linear-gradient(135deg, #6366f1, #60a5fa) !important;
       color: white !important;
       padding: 0 24px !important;
       height: 40px;

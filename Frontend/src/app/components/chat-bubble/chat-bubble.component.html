@@ -1,4 +1,4 @@
-<div class="chat-bubble-wrapper" [class.minimized]="isMinimized" [style.right.px]="getBubblePosition()">
+<div class="chat-bubble-wrapper" [class.minimized]="isMinimized" [class.attention]="attention" [style.right.px]="getBubblePosition()">
   <!-- Minimized Bubble -->
   <div class="bubble-icon" *ngIf="isMinimized" (click)="toggleMinimize()">
     <div class="avatar" *ngIf="!getProfileImage()">

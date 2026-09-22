@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject } from '@angular/core';
+import { Component, OnInit, Inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -18,7 +18,8 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { CollaborativeDocsService } from '../../services/collaborative-docs.service';
-import { CollaborativeDocument, CreateDocumentDto } from '../../models/collaborative-doc.model';
+import { CollaborativeDocument, CreateDocumentDto, DocumentUser } from '../../models/collaborative-doc.model';
+import * as mammoth from 'mammoth';
 
 @Component({
   selector: 'app-collaborative-docs',
@@ -54,10 +55,23 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
               <p>Create and edit documents in real-time with your team</p>
             </div>
           </div>
-          <button mat-raised-button color="primary" (click)="openCreateDialog()" class="create-btn">
-            <mat-icon>add</mat-icon>
-            New Document
-          </button>
+          <div class="header-actions">
+            <button mat-stroked-button (click)="triggerImport()" class="create-btn create-btn-import">
+              <mat-icon>upload_file</mat-icon>
+              Import
+            </button>
+            <button mat-stroked-button (click)="openCreateDialog('sheet')" class="create-btn create-btn-sheet">
+              <mat-icon>table_chart</mat-icon>
+              New Spreadsheet
+            </button>
+            <button mat-raised-button color="primary" (click)="openCreateDialog('doc')" class="create-btn">
+              <mat-icon>add</mat-icon>
+              New Document
+            </button>
+            <input #importInput type="file" hidden
+                   accept=".csv,.txt,.html,.htm,.md,.doc,.docx"
+                   (change)="onImportFilePicked($event)">
+          </div>
         </div>
       </div>
 
@@ -99,18 +113,24 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
           <div class="empty-state">
             <mat-icon>article</mat-icon>
             <h2>No Documents Yet</h2>
-            <p>Create your first collaborative document to get started</p>
-            <button mat-raised-button color="primary" (click)="openCreateDialog()">
-              <mat-icon>add</mat-icon>
-              Create Document
-            </button>
+            <p>Create your first collaborative document or spreadsheet to get started</p>
+            <div class="empty-actions">
+              <button mat-raised-button color="primary" (click)="openCreateDialog('doc')">
+                <mat-icon>add</mat-icon>
+                Create Document
+              </button>
+              <button mat-stroked-button (click)="openCreateDialog('sheet')">
+                <mat-icon>table_chart</mat-icon>
+                Create Spreadsheet
+              </button>
+            </div>
           </div>
         } @else {
           <div class="docs-grid">
             @for (doc of documents; track doc.id) {
-              <mat-card class="doc-card" (click)="openDocument(doc.id)">
+              <mat-card class="doc-card" [class.sheet-card]="doc.documentType === 'sheet'" (click)="openDocument(doc)">
                 <div class="doc-icon">
-                  <mat-icon>{{ doc.isPublic ? 'public' : 'lock' }}</mat-icon>
+                  <mat-icon>{{ doc.documentType === 'sheet' ? 'table_chart' : 'description' }}</mat-icon>
                 </div>
                 <div class="doc-content">
                   <h3>{{ doc.title }}</h3>
@@ -142,7 +162,7 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #docMenu="matMenu">
-                  <button mat-menu-item (click)="openDocument(doc.id)">
+                  <button mat-menu-item (click)="openDocument(doc)">
                     <mat-icon>edit</mat-icon>
                     <span>Open</span>
                   </button>
@@ -222,6 +242,27 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
       font-size: 16px !important;
     }
 
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .create-btn-sheet {
+      background: rgba(255,255,255,0.14) !important;
+      color: #fff !important;
+      border-color: rgba(255,255,255,0.35) !important;
+    }
+
+    .empty-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .sheet-card .doc-icon mat-icon { color: #059669; }
+
     .docs-content {
       padding: 32px 48px;
       max-width: 1400px;
@@ -240,11 +281,11 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
     .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
     .lc-icon-wrap {
       width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(118,75,162,0.12));
+      background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(30,64,175,0.12));
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(102,126,234,0.15);
+      box-shadow: 0 4px 20px rgba(37,99,235,0.15);
     }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #667eea; }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #2563eb; }
     .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
     @keyframes pulseGlow {
       0%, 100% { opacity: 1; transform: scale(1); }
@@ -258,7 +299,7 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
     }
     .lc-progress-fill {
       height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #667eea, #818cf8, #764ba2);
+      background: linear-gradient(90deg, #2563eb, #60a5fa, #1e40af);
       background-size: 200% 100%;
       animation: shimmer 2s ease-in-out infinite;
       transition: width 0.15s ease-out;
@@ -278,7 +319,7 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
       margin-top: 10px; font-size: 12px;
     }
     .lc-progress-message { color: #64748b; font-weight: 500; transition: opacity 0.3s ease; }
-    .lc-progress-pct { color: #667eea; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .lc-progress-pct { color: #2563eb; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
     .lc-steps {
       display: flex; justify-content: space-between; gap: 4px;
       padding-top: 4px; border-top: 1px solid #e2e8f0;
@@ -297,14 +338,14 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
     }
     .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
     .lc-step.active .lc-step-dot {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      box-shadow: 0 2px 10px rgba(102,126,234,0.3);
+      background: linear-gradient(135deg, #2563eb, #1e40af);
+      box-shadow: 0 2px 10px rgba(37,99,235,0.3);
     }
     .lc-step.active .lc-step-dot mat-icon { color: #fff; }
     .lc-step.done .lc-step-dot { background: #dcfce7; }
     .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
     .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #667eea; }
+    .lc-step.active .lc-step-label { color: #2563eb; }
     .lc-step.done .lc-step-label { color: #16a34a; }
 
     .empty-state {
@@ -319,7 +360,7 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
       font-size: 80px;
       width: 80px;
       height: 80px;
-      color: #667eea;
+      color: #2563eb;
       margin-bottom: 16px;
     }
 
@@ -357,7 +398,7 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
       width: 48px;
       height: 48px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -414,7 +455,7 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
     }
 
     .role-owner {
-      background-color: #667eea !important;
+      background-color: #2563eb !important;
       color: white !important;
     }
 
@@ -478,6 +519,8 @@ import { CollaborativeDocument, CreateDocumentDto } from '../../models/collabora
   `]
 })
 export class CollaborativeDocsComponent implements OnInit {
+  @ViewChild('importInput') importInput!: ElementRef<HTMLInputElement>;
+
   documents: CollaborativeDocument[] = [];
   loading = true;
 
@@ -561,26 +604,112 @@ export class CollaborativeDocsComponent implements OnInit {
     this.loadingStage = 0;
   }
 
-  openDocument(id: number): void {
-    this.router.navigate(['/docs', id]);
+  openDocument(doc: CollaborativeDocument): void {
+    if (doc.documentType === 'sheet') {
+      this.router.navigate(['/sheets', doc.id]);
+    } else {
+      this.router.navigate(['/docs', doc.id]);
+    }
   }
 
-  openCreateDialog(): void {
+  /** Open the hidden file picker for importing an existing document/spreadsheet. */
+  triggerImport(): void {
+    this.importInput?.nativeElement?.click();
+  }
+
+  async onImportFilePicked(evt: Event): Promise<void> {
+    const input = evt.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    const name = file.name;
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const baseTitle = name.replace(/\.[^.]+$/, '') || 'Imported';
+
+    try {
+      if (ext === 'csv') {
+        // CSV → spreadsheet: seed the sheet editor via sessionStorage.
+        const text = await file.text();
+        this.createAndSeed('sheet', baseTitle, text);
+      } else if (ext === 'docx' || ext === 'doc') {
+        // Word → document: convert to HTML with mammoth, then seed the doc editor.
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        this.createAndSeed('doc', baseTitle, result.value || '<p></p>');
+      } else if (ext === 'html' || ext === 'htm') {
+        const html = await file.text();
+        this.createAndSeed('doc', baseTitle, html);
+      } else {
+        // txt / md and anything else → treat as plain text paragraphs.
+        const text = await file.text();
+        const html = text
+          .split(/\r?\n/)
+          .map(line => `<p>${this.escapeHtml(line) || '<br>'}</p>`)
+          .join('');
+        this.createAndSeed('doc', baseTitle, html);
+      }
+    } catch (err) {
+      console.error('Import failed:', err);
+      this.snackBar.open('Could not import that file', 'Close', { duration: 3500 });
+    }
+  }
+
+  private escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** Create a new doc/sheet, stash the imported content, and open the editor. */
+  private createAndSeed(documentType: 'doc' | 'sheet', title: string, content: string): void {
+    this.docsService.createDocument({ title, documentType }).subscribe({
+      next: (doc) => {
+        const key = documentType === 'sheet'
+          ? `collab-import-sheet-${doc.id}`
+          : `collab-import-doc-${doc.id}`;
+        try { sessionStorage.setItem(key, content); } catch { /* quota */ }
+        this.snackBar.open('Importing…', 'Close', { duration: 1500 });
+        this.router.navigate([documentType === 'sheet' ? '/sheets' : '/docs', doc.id]);
+      },
+      error: (err) => {
+        console.error('Error creating document for import:', err);
+        this.snackBar.open('Failed to import', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  openCreateDialog(documentType: 'doc' | 'sheet' = 'doc'): void {
     const dialogRef = this.dialog.open(CreateDocumentDialogComponent, {
       width: '480px',
-      panelClass: 'modern-dialog'
+      panelClass: 'modern-dialog',
+      data: { documentType }
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.docsService.createDocument(result).subscribe({
+        const collaboratorIds: number[] = result.collaboratorIds || [];
+        const { collaboratorIds: _omit, ...createDto } = result;
+        this.docsService.createDocument({ ...createDto, documentType }).subscribe({
           next: (doc) => {
-            this.snackBar.open('Document created!', 'Close', { duration: 2000 });
-            this.router.navigate(['/docs', doc.id]);
+            const label = documentType === 'sheet' ? 'Spreadsheet' : 'Document';
+            const navigate = () => {
+              this.snackBar.open(`${label} created!`, 'Close', { duration: 2000 });
+              this.router.navigate([documentType === 'sheet' ? '/sheets' : '/docs', doc.id]);
+            };
+            if (collaboratorIds.length) {
+              let remaining = collaboratorIds.length;
+              collaboratorIds.forEach((userId: number) => {
+                this.docsService.addCollaborator(doc.id, { userId, role: 'editor' }).subscribe({
+                  next: () => { if (--remaining === 0) navigate(); },
+                  error: () => { if (--remaining === 0) navigate(); }
+                });
+              });
+            } else {
+              navigate();
+            }
           },
           error: (err) => {
             console.error('Error creating document:', err);
-            this.snackBar.open('Failed to create document', 'Close', { duration: 3000 });
+            this.snackBar.open('Failed to create', 'Close', { duration: 3000 });
           }
         });
       }
@@ -661,13 +790,13 @@ export class CollaborativeDocsComponent implements OnInit {
   ],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon>{{ data ? 'edit' : 'add' }}</mat-icon>
-      {{ data ? 'Edit Document' : 'Create New Document' }}
+      <mat-icon>{{ isEdit ? 'edit' : (documentType === 'sheet' ? 'table_chart' : 'add') }}</mat-icon>
+      {{ isEdit ? 'Edit' : 'Create New' }} {{ documentType === 'sheet' ? 'Spreadsheet' : 'Document' }}
     </h2>
     <mat-dialog-content>
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Title</mat-label>
-        <input matInput [(ngModel)]="title" placeholder="Enter document title" required>
+        <input matInput [(ngModel)]="title" placeholder="Enter title" required>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full-width">
@@ -676,13 +805,50 @@ export class CollaborativeDocsComponent implements OnInit {
       </mat-form-field>
 
       <mat-checkbox [(ngModel)]="isPublic" color="primary">
-        Make this document public (anyone can view)
+        Make this public (anyone can view)
       </mat-checkbox>
+
+      @if (!isEdit) {
+        <div class="collab-section">
+          <label class="collab-label">
+            <mat-icon>group_add</mat-icon> Add collaborators (optional)
+          </label>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Search people</mat-label>
+            <input matInput [(ngModel)]="userSearch" (ngModelChange)="onUserSearch($event)"
+                   placeholder="Type a name or email">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+
+          @if (searchResults.length) {
+            <div class="collab-results">
+              @for (u of searchResults; track u.id) {
+                <button type="button" class="collab-result" (click)="addCollaborator(u)">
+                  <mat-icon>person_add</mat-icon>
+                  <span class="cr-name">{{ u.fullName }}</span>
+                  <span class="cr-email">{{ u.email }}</span>
+                </button>
+              }
+            </div>
+          }
+
+          @if (selectedCollaborators.length) {
+            <div class="collab-chips">
+              @for (u of selectedCollaborators; track u.id) {
+                <span class="collab-chip">
+                  {{ u.fullName }}
+                  <mat-icon (click)="removeCollaborator(u)">close</mat-icon>
+                </span>
+              }
+            </div>
+          }
+        </div>
+      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button (click)="onCancel()">Cancel</button>
       <button mat-raised-button color="primary" [disabled]="!title.trim()" (click)="onSubmit()">
-        {{ data ? 'Save' : 'Create' }}
+        {{ isEdit ? 'Save' : 'Create' }}
       </button>
     </mat-dialog-actions>
   `,
@@ -706,33 +872,145 @@ export class CollaborativeDocsComponent implements OnInit {
     mat-checkbox {
       margin-bottom: 16px;
     }
+
+    .collab-section {
+      margin-top: 8px;
+      border-top: 1px solid var(--border-color, #e0e0e0);
+      padding-top: 16px;
+    }
+
+    .collab-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary, #555);
+      margin-bottom: 8px;
+    }
+
+    .collab-label mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .collab-results {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 180px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+
+    .collab-result {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color, #e0e0e0);
+      border-radius: 8px;
+      background: var(--surface, #fff);
+      cursor: pointer;
+      text-align: left;
+      transition: background .15s ease;
+    }
+
+    .collab-result:hover { background: rgba(37, 99, 235, .08); }
+    .collab-result mat-icon { font-size: 18px; width: 18px; height: 18px; color: #2563eb; }
+    .cr-name { font-weight: 600; font-size: 13px; }
+    .cr-email { font-size: 12px; color: #888; margin-left: auto; }
+
+    .collab-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .collab-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px 4px 12px;
+      background: rgba(37, 99, 235, .1);
+      color: #1e40af;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .collab-chip mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
   `]
 })
 export class CreateDocumentDialogComponent {
   title = '';
   description = '';
   isPublic = false;
+  isEdit = false;
+  documentType: 'doc' | 'sheet' = 'doc';
+
+  userSearch = '';
+  searchResults: DocumentUser[] = [];
+  selectedCollaborators: DocumentUser[] = [];
+  private searchDebounce?: any;
 
   constructor(
     public dialogRef: MatDialogRef<CreateDocumentDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CollaborativeDocument | null
+    private docsService: CollaborativeDocsService,
+    @Inject(MAT_DIALOG_DATA) public data: (CollaborativeDocument & { documentType?: string }) | { documentType?: string } | null
   ) {
-    if (data) {
+    if (data && 'title' in data && data.title) {
       this.title = data.title;
       this.description = data.description || '';
       this.isPublic = data.isPublic;
+      this.isEdit = true;
     }
+    this.documentType = (data as any)?.documentType === 'sheet' ? 'sheet' : 'doc';
   }
 
   onCancel(): void {
     this.dialogRef.close();
   }
 
+  onUserSearch(term: string): void {
+    clearTimeout(this.searchDebounce);
+    const q = (term || '').trim();
+    if (q.length < 2) { this.searchResults = []; return; }
+    this.searchDebounce = setTimeout(() => {
+      this.docsService.searchUsers(q).subscribe({
+        next: (users) => {
+          const chosen = new Set(this.selectedCollaborators.map(u => u.id));
+          this.searchResults = users.filter(u => !chosen.has(u.id)).slice(0, 8);
+        },
+        error: () => { this.searchResults = []; }
+      });
+    }, 250);
+  }
+
+  addCollaborator(u: DocumentUser): void {
+    if (!this.selectedCollaborators.some(x => x.id === u.id)) {
+      this.selectedCollaborators.push(u);
+    }
+    this.userSearch = '';
+    this.searchResults = [];
+  }
+
+  removeCollaborator(u: DocumentUser): void {
+    this.selectedCollaborators = this.selectedCollaborators.filter(x => x.id !== u.id);
+  }
+
   onSubmit(): void {
     this.dialogRef.close({
       title: this.title.trim(),
       description: this.description.trim() || undefined,
-      isPublic: this.isPublic
+      isPublic: this.isPublic,
+      collaboratorIds: this.selectedCollaborators.map(u => u.id)
     });
   }
 }

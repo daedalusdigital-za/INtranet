@@ -18,6 +18,7 @@ import { MatSortModule } from '@angular/material/sort';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatDialogModule, MatDialog, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -30,10 +31,12 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
+import { ImportTripsheetDialog, CreateTripsheetDialog, EditPodDialog } from '../logistics/logistics-dashboard.component';
 import { environment } from '../../../environments/environment';
 import { WellyActivityService } from '../../services/welly-activity.service';
 import { PROMED_BACK_ORDERS, ACCESS_BACK_ORDERS, PHARMATECH_BACK_ORDERS, SEBENZANI_BACK_ORDERS, BackOrderItem } from './back-orders-data';
-import Chart from 'chart.js/auto';
+import * as XLSX from 'xlsx';
+import { AuthService } from '../../services/auth.service';
 
 // Company definitions
 const COMPANIES = [
@@ -127,6 +130,48 @@ interface Customer {
   companyCode?: string;
 }
 
+interface SalesTripSheetLine {
+  customerName?: string;
+  invoiceNumber?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  contactPerson?: string;
+  contactPhone?: string;
+  productDescription?: string;
+  quantity: number;
+  value: number;
+}
+
+interface SalesTripSheet {
+  id: number;
+  tripSheetNumber: string;
+  status: string; // PendingSignature, PendingApproval, Approved, Rejected
+  warehouseCode?: string;
+  routeArea?: string;
+  scheduledDate?: string;
+  notes?: string;
+  createdByUserId?: number;
+  createdByName?: string;
+  signerUserId?: number;
+  signerName?: string;
+  approverUserId?: number;
+  approverName?: string;
+  createdAt: string;
+  signedByUserId?: number;
+  signedByName?: string;
+  signedAt?: string;
+  checkedByUserId?: number;
+  checkedByName?: string;
+  checkedAt?: string;
+  approvalNotes?: string;
+  rejectionReason?: string;
+  convertedLoadId?: number;
+  convertedLoadNumber?: string;
+  totalValue: number;
+  lines: SalesTripSheetLine[];
+}
+
 interface Invoice {
   id: number;
   transactionNumber: string;
@@ -188,38 +233,6 @@ interface SalesStats {
   processingOrders: number;
 }
 
-interface SalesReportChartData {
-  labels: string[];
-  values: number[];
-}
-
-interface SalesReportSummary {
-  totalInvoices: number;
-  totalRevenue: number;
-  netSales: number;
-  grossProfit: number;
-  marginPercent: number;
-  totalReturns: number;
-  uniqueCustomers: number;
-  uniqueProducts: number;
-  totalCancellations: number;
-  cancellationValue: number;
-}
-
-interface SalesReportResponse {
-  analysis: string;
-  reportType: string;
-  charts: {
-    salesByCompany: SalesReportChartData;
-    topCustomers: SalesReportChartData;
-    salesByProvince: SalesReportChartData;
-    topProducts: SalesReportChartData;
-    dailySales: SalesReportChartData;
-    cancellationsByReason: SalesReportChartData;
-  };
-  summary: SalesReportSummary;
-}
-
 @Component({
   selector: 'app-sales-dashboard',
   standalone: true,
@@ -243,6 +256,7 @@ interface SalesReportResponse {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    MatAutocompleteModule,
     MatDatepickerModule,
     MatNativeDateModule,
     MatDialogModule,
@@ -336,6 +350,10 @@ interface SalesReportResponse {
           <button class="action-btn primary" (click)="promptImportPassword('customers')">
             <mat-icon>group_add</mat-icon>
             <span>Import Customers</span>
+          </button>
+          <button class="action-btn" (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
+            <mat-icon>file_download</mat-icon>
+            <span>Export Customers</span>
           </button>
           <button class="action-btn import" (click)="promptImportPassword('sales')">
             <mat-icon>upload_file</mat-icon>
@@ -824,7 +842,7 @@ interface SalesReportResponse {
       </div>
 
       <!-- Stats Grid -->
-      <div class="stats-grid">
+      <div class="stats-grid ui-stagger">
         <div class="modern-stat-card customers">
           <div class="stat-icon-wrapper">
             <mat-icon>people</mat-icon>
@@ -1054,6 +1072,9 @@ interface SalesReportResponse {
                   <button mat-raised-button color="primary" (click)="promptImportPassword('customers')">
                     <mat-icon>group_add</mat-icon> Import Customers
                   </button>
+                  <button mat-raised-button color="accent" (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
+                    <mat-icon>file_download</mat-icon> Export Customers
+                  </button>
                 </div>
               </div>
 
@@ -1196,7 +1217,8 @@ interface SalesReportResponse {
                       <mat-option value="Delivered">Delivered</mat-option>
                     </mat-select>
                   </mat-form-field>
-                  <button mat-stroked-button (click)="importInvoices()">
+                  <!-- Import invoices hidden until implemented -->
+                  <button mat-stroked-button (click)="importInvoices()" style="display:none">
                     <mat-icon>upload</mat-icon> Import
                   </button>
                   <button mat-flat-button class="request-delivery-tab-btn" (click)="showDeliveryPasswordPrompt()">
@@ -1848,7 +1870,7 @@ interface SalesReportResponse {
                           <div class="pod-card-header">
                             <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
                             <div class="pod-card-info">
-                              <span class="pod-driver">{{ pod.driverName }}</span>
+                              <span class="pod-driver">{{ pod.podNumber || ('POD' + pod.id) }}</span>
                               <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
                             </div>
                             <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId) ? 'linked' : 'not-linked'">
@@ -1917,9 +1939,9 @@ interface SalesReportResponse {
                     <!-- List View -->
                     <div class="pod-list-container">
                       <table mat-table [dataSource]="podDocuments" class="pod-table modern-table">
-                        <ng-container matColumnDef="driverName">
-                          <th mat-header-cell *matHeaderCellDef>Driver</th>
-                          <td mat-cell *matCellDef="let pod">{{ pod.driverName }}</td>
+                        <ng-container matColumnDef="podNumber">
+                          <th mat-header-cell *matHeaderCellDef>POD ID</th>
+                          <td mat-cell *matCellDef="let pod"><span class="pod-id-cell">{{ pod.podNumber || ('POD' + pod.id) }}</span></td>
                         </ng-container>
                         <ng-container matColumnDef="deliveryDate">
                           <th mat-header-cell *matHeaderCellDef>Date</th>
@@ -2026,190 +2048,534 @@ interface SalesReportResponse {
             </div>
           </mat-tab>
 
-          <!-- Reports Tab -->
+          <!-- Trip Sheets Tab -->
           <mat-tab>
             <ng-template mat-tab-label>
-              <mat-icon>analytics</mat-icon>
-              <span>Reports</span>
+              <mat-icon>assignment</mat-icon>
+              <span>Trip Sheets</span>
+              @if (pendingTripSheetCount() > 0) {
+                <span class="tab-badge">{{ pendingTripSheetCount() }}</span>
+              }
             </ng-template>
             <div class="tab-content">
               <div class="section-header">
-                <h3>Sales Reports</h3>
+                <h3>Sales Trip Sheets</h3>
                 <div class="section-actions">
-                  <mat-form-field appearance="outline" class="date-field">
-                    <mat-label>From Date</mat-label>
-                    <input matInput [matDatepicker]="fromPicker" [(ngModel)]="reportFromDate">
-                    <mat-datepicker-toggle matSuffix [for]="fromPicker"></mat-datepicker-toggle>
-                    <mat-datepicker #fromPicker></mat-datepicker>
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Status</mat-label>
+                    <mat-select [value]="tripSheetStatusFilter()" (selectionChange)="tripSheetStatusFilter.set($event.value)">
+                      <mat-option value="all">All</mat-option>
+                      <mat-option value="PendingSignature">To Sign</mat-option>
+                      <mat-option value="PendingApproval">Awaiting Approval</mat-option>
+                      <mat-option value="Approved">Approved</mat-option>
+                      <mat-option value="Rejected">Rejected</mat-option>
+                    </mat-select>
                   </mat-form-field>
-                  <mat-form-field appearance="outline" class="date-field">
-                    <mat-label>To Date</mat-label>
-                    <input matInput [matDatepicker]="toPicker" [(ngModel)]="reportToDate">
-                    <mat-datepicker-toggle matSuffix [for]="toPicker"></mat-datepicker-toggle>
-                    <mat-datepicker #toPicker></mat-datepicker>
-                  </mat-form-field>
-                  <button mat-raised-button color="primary" (click)="generateReport()">
-                    <mat-icon>bar_chart</mat-icon> Generate Report
+                  <button mat-stroked-button (click)="loadSalesTripSheets()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                  <button mat-raised-button color="primary" (click)="openCreateTripSheet()">
+                    <mat-icon>add</mat-icon> Create Trip Sheet
                   </button>
                 </div>
               </div>
 
-              <div class="reports-grid">
-                <mat-card class="report-card" [class.active]="activeReportType === 'sales-summary'" (click)="runReport('sales-summary')">
-                  <mat-card-content>
-                    <mat-icon>summarize</mat-icon>
-                    <h4>Sales Summary</h4>
-                    <p>Overview of sales performance</p>
-                  </mat-card-content>
-                </mat-card>
+              <p class="ts-hint">
+                <mat-icon>info</mat-icon>
+                Stage 1: a sales agent creates a trip sheet. Stage 2: a <strong>different</strong> sales agent checks &amp; approves it — only then does it appear in Logistics.
+              </p>
 
-                <mat-card class="report-card" [class.active]="activeReportType === 'customer-analysis'" (click)="runReport('customer-analysis')">
-                  <mat-card-content>
-                    <mat-icon>analytics</mat-icon>
-                    <h4>Customer Analysis</h4>
-                    <p>Top customers and trends</p>
-                  </mat-card-content>
-                </mat-card>
-
-                <mat-card class="report-card" [class.active]="activeReportType === 'province-breakdown'" (click)="runReport('province-breakdown')">
-                  <mat-card-content>
-                    <mat-icon>map</mat-icon>
-                    <h4>Province Breakdown</h4>
-                    <p>Sales by geographic region</p>
-                  </mat-card-content>
-                </mat-card>
-
-                <mat-card class="report-card" [class.active]="activeReportType === 'product-performance'" (click)="runReport('product-performance')">
-                  <mat-card-content>
-                    <mat-icon>inventory_2</mat-icon>
-                    <h4>Product Performance</h4>
-                    <p>Best and worst sellers</p>
-                  </mat-card-content>
-                </mat-card>
-              </div>
-
-              <!-- Welly Report Panel -->
-              @if (showReportPanel) {
-                <div class="welly-report-panel" id="welly-report-content">
-                  <div class="welly-report-header">
-                    <div class="welly-report-title">
-                      <mat-icon class="welly-sparkle-gold">auto_awesome</mat-icon>
-                      <h3>{{ reportPanelTitle }}</h3>
-                    </div>
-                    <div class="welly-report-header-actions">
-                      @if (!reportLoading && reportResult) {
-                        <button mat-raised-button color="primary" (click)="downloadReportPdf()">
-                          <mat-icon>picture_as_pdf</mat-icon> Download PDF
-                        </button>
-                        <button mat-button (click)="copyReportResult()">
-                          <mat-icon>content_copy</mat-icon> Copy
-                        </button>
+              @if (loadingTripSheets()) {
+                <div class="loading-container"><mat-spinner diameter="40"></mat-spinner></div>
+              } @else if (filteredTripSheets().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>assignment</mat-icon>
+                  <p>No trip sheets yet. Click "Create Trip Sheet" to build one.</p>
+                </div>
+              } @else {
+                <div class="table-container">
+                  <table class="ts-table">
+                    <thead>
+                      <tr>
+                        <th>Trip Sheet #</th>
+                        <th>Status</th>
+                        <th>Route / Area</th>
+                        <th>Stops</th>
+                        <th>Value</th>
+                        <th>Created By</th>
+                        <th>Checked By</th>
+                        <th>Logistics Load</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (ts of filteredTripSheets(); track ts.id) {
+                        <tr>
+                          <td><strong>{{ ts.tripSheetNumber }}</strong></td>
+                          <td>
+                            <span class="ts-status" [class.to-sign]="ts.status === 'PendingSignature'"
+                                  [class.pending]="ts.status === 'PendingApproval'"
+                                  [class.approved]="ts.status === 'Approved'"
+                                  [class.rejected]="ts.status === 'Rejected'">
+                              {{ tripSheetStatusLabel(ts.status) }}
+                            </span>
+                          </td>
+                          <td>{{ ts.routeArea || (ts.warehouseCode || '—') }}</td>
+                          <td>{{ ts.lines.length }}</td>
+                          <td>R {{ ts.totalValue | number:'1.2-2' }}</td>
+                          <td>{{ ts.createdByName || '—' }}</td>
+                          <td>{{ ts.checkedByName || '—' }}</td>
+                          <td>{{ ts.convertedLoadNumber || '—' }}</td>
+                          <td class="ts-actions">
+                            <button mat-icon-button matTooltip="View" (click)="viewTripSheet(ts)">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            @if (ts.status === 'PendingSignature' && canSignTripSheet(ts)) {
+                              <button mat-icon-button color="accent" matTooltip="Sign" (click)="signTripSheet(ts)">
+                                <mat-icon>draw</mat-icon>
+                              </button>
+                            }
+                            @if (ts.status === 'PendingApproval' || ts.status === 'PendingSignature') {
+                              <button mat-icon-button matTooltip="Edit" (click)="editTripSheet(ts)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button color="warn" matTooltip="Delete" (click)="deleteTripSheet(ts)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            }
+                          </td>
+                        </tr>
                       }
-                      <button mat-icon-button (click)="closeReportPanel()">
-                        <mat-icon>close</mat-icon>
-                      </button>
-                    </div>
-                  </div>
-
-                  @if (reportLoading) {
-                    <div class="welly-report-loading">
-                      <mat-spinner diameter="40"></mat-spinner>
-                      <p>Welly is generating your {{ reportPanelTitle }}...</p>
-                      <span class="loading-sub">Analyzing invoices, customers & cancellations</span>
-                    </div>
-                  } @else if (reportResult) {
-                    <!-- Summary Cards -->
-                    @if (reportSummary) {
-                      <div class="report-summary-grid">
-                        <div class="report-summary-card">
-                          <mat-icon>receipt_long</mat-icon>
-                          <div class="rs-info">
-                            <span class="rs-value">{{ reportSummary.totalInvoices | number }}</span>
-                            <span class="rs-label">Invoices</span>
-                          </div>
-                        </div>
-                        <div class="report-summary-card">
-                          <mat-icon>payments</mat-icon>
-                          <div class="rs-info">
-                            <span class="rs-value">R{{ reportSummary.totalRevenue | number:'1.0-0' }}</span>
-                            <span class="rs-label">Revenue</span>
-                          </div>
-                        </div>
-                        <div class="report-summary-card">
-                          <mat-icon>trending_up</mat-icon>
-                          <div class="rs-info">
-                            <span class="rs-value">R{{ reportSummary.grossProfit | number:'1.0-0' }}</span>
-                            <span class="rs-label">Gross Profit</span>
-                          </div>
-                        </div>
-                        <div class="report-summary-card">
-                          <mat-icon>speed</mat-icon>
-                          <div class="rs-info">
-                            <span class="rs-value">{{ reportSummary.marginPercent }}%</span>
-                            <span class="rs-label">Margin</span>
-                          </div>
-                        </div>
-                        <div class="report-summary-card">
-                          <mat-icon>people</mat-icon>
-                          <div class="rs-info">
-                            <span class="rs-value">{{ reportSummary.uniqueCustomers | number }}</span>
-                            <span class="rs-label">Customers</span>
-                          </div>
-                        </div>
-                        <div class="report-summary-card">
-                          <mat-icon>cancel</mat-icon>
-                          <div class="rs-info">
-                            <span class="rs-value">{{ reportSummary.totalCancellations }}</span>
-                            <span class="rs-label">Cancellations</span>
-                          </div>
-                        </div>
-                      </div>
-                    }
-
-                    <!-- Charts -->
-                    @if (reportCharts) {
-                      <div class="report-charts-grid">
-                        <div class="report-chart-card">
-                          <h4>Sales by Division</h4>
-                          <canvas id="report-chart-company"></canvas>
-                        </div>
-                        <div class="report-chart-card">
-                          <h4>Daily Sales Trend</h4>
-                          <canvas id="report-chart-daily"></canvas>
-                        </div>
-                        <div class="report-chart-card">
-                          <h4>Top Customers</h4>
-                          <canvas id="report-chart-customers"></canvas>
-                        </div>
-                        <div class="report-chart-card">
-                          <h4>Sales by Province</h4>
-                          <canvas id="report-chart-province"></canvas>
-                        </div>
-                        <div class="report-chart-card">
-                          <h4>Top Products</h4>
-                          <canvas id="report-chart-products"></canvas>
-                        </div>
-                        @if (reportCharts.cancellationsByReason.labels.length > 0) {
-                          <div class="report-chart-card">
-                            <h4>Cancellation Reasons</h4>
-                            <canvas id="report-chart-cancellations"></canvas>
-                          </div>
-                        }
-                      </div>
-                    }
-
-                    <!-- AI Analysis Text -->
-                    <div class="report-analysis-section">
-                      <h4 class="report-analysis-title"><mat-icon>psychology</mat-icon> Welly's Analysis</h4>
-                      <div class="report-analysis-text">{{ reportResult }}</div>
-                    </div>
-                  }
+                    </tbody>
+                  </table>
                 </div>
               }
             </div>
           </mat-tab>
+
         </mat-tab-group>
       </mat-card>
+
+      <!-- Trip Sheet Create/Edit Dialog -->
+      @if (showTripSheetDialog) {
+        <div class="dialog-overlay" (click)="closeTripSheetDialog()">
+          <div class="ts-dialog" (click)="$event.stopPropagation()">
+            <div class="ts-dialog-header">
+              <h2>
+                {{ editingTripSheetId ? 'Edit Trip Sheet' : 'Create Trip Sheet' }}
+                @if (!editingTripSheetId && tripSheetMode !== 'choose' && tripSheetMode !== 'signoff') {
+                  <span class="ts-mode-pill">{{ tripSheetMode === 'import' ? 'Import from Excel' : 'Manual entry' }}</span>
+                }
+              </h2>
+              <button mat-icon-button (click)="closeTripSheetDialog()"><mat-icon>close</mat-icon></button>
+            </div>
+            <div class="ts-dialog-body">
+
+              <!-- Stage 0: sign-off — capture signer & approver first -->
+              @if (tripSheetMode === 'signoff') {
+                <p class="ts-choose-intro">You (<strong>{{ currentUserName || 'current user' }}</strong>) are creating this trip sheet. Choose the <strong>sales agent who signs it off</strong> and the <strong>manager who approves it</strong>.</p>
+                <div class="ts-signoff-grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Signer — sales agent (colleague)</mat-label>
+                    <input type="text" matInput [matAutocomplete]="signerAuto"
+                           [(ngModel)]="signerSearch"
+                           (ngModelChange)="onSignerSearchChange($event)"
+                           placeholder="Type a colleague's name to search…">
+                    <mat-icon matSuffix>search</mat-icon>
+                    <mat-autocomplete #signerAuto="matAutocomplete"
+                                      (optionSelected)="onSignerSelected($event.option.value)"
+                                      [displayWith]="displayAgent">
+                      @for (a of filteredSignerAgents(); track a.userId) {
+                        <mat-option [value]="a.userId">{{ a.name }} {{ a.surname }}</mat-option>
+                      }
+                    </mat-autocomplete>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Approver — manager (checks &amp; signs)</mat-label>
+                    <input type="text" matInput [matAutocomplete]="approverAuto"
+                           [(ngModel)]="approverSearch"
+                           (ngModelChange)="onApproverSearchChange($event)"
+                           placeholder="Type your manager's name to search…">
+                    <mat-icon matSuffix>search</mat-icon>
+                    <mat-autocomplete #approverAuto="matAutocomplete"
+                                      (optionSelected)="onApproverSelected($event.option.value)"
+                                      [displayWith]="displayAgent">
+                      @for (a of filteredApproverAgents(); track a.userId) {
+                        <mat-option [value]="a.userId">{{ a.name }} {{ a.surname }}</mat-option>
+                      }
+                    </mat-autocomplete>
+                  </mat-form-field>
+                </div>
+                <p class="ts-signoff-note">
+                  <mat-icon>info</mat-icon>
+                  Two-person rule: the approver must be a different person than the signer. Only the designated
+                  approver (manager) may check &amp; sign to release this trip sheet to Logistics. Both are notified once it's approved.
+                </p>
+                <div class="ts-preview-actions">
+                  <button mat-raised-button color="primary" (click)="proceedFromSignoff()">
+                    <mat-icon>arrow_forward</mat-icon> Continue
+                  </button>
+                </div>
+              }
+
+              <!-- Stage 1: choose how to build -->
+              @if (tripSheetMode === 'choose') {
+                <button mat-button class="ts-back" (click)="tripSheetMode = 'signoff'">
+                  <mat-icon>arrow_back</mat-icon> Back
+                </button>
+                <p class="ts-choose-intro">How would you like to build this trip sheet?</p>
+                <div class="ts-mode-cards">
+                  <button class="ts-mode-card" (click)="openLogisticsImport()">
+                    <mat-icon>upload_file</mat-icon>
+                    <h4>Import Trip Sheet</h4>
+                    <p>Upload an Excel file (identical to Logistics). We parse &amp; match it, then open the full trip sheet builder with map, distance &amp; driver assignment.</p>
+                  </button>
+                  <button class="ts-mode-card" (click)="openLogisticsManual()">
+                    <mat-icon>edit_note</mat-icon>
+                    <h4>Manual</h4>
+                    <p>Open the full trip sheet builder to add stops, optimise the route on the map, calculate distance &amp; assign a driver/vehicle.</p>
+                  </button>
+                </div>
+              }
+
+              <!-- Import panel — exact mirror of the Logistics trip sheet import -->
+              @if (tripSheetMode === 'import') {
+                <div class="ts-import-panel">
+                  <button mat-button class="ts-back" (click)="backToModeChooser()">
+                    <mat-icon>arrow_back</mat-icon> Back
+                  </button>
+
+                  <!-- Step: upload -->
+                  @if (importStep === 'upload') {
+                    @if (!importSelectedFile) {
+                      <div class="ts-dropzone"
+                           [class.dragover]="importDragOver"
+                           (dragover)="onImportDragOver($event)"
+                           (dragleave)="onImportDragLeave($event)"
+                           (drop)="onTsImportDrop($event)"
+                           (click)="tsFile.click()">
+                        <input #tsFile type="file" accept=".xlsx,.xls" hidden (change)="onTsImportFileSelected($event)">
+                        <mat-icon>cloud_upload</mat-icon>
+                        <h4>Drag &amp; drop an Excel file here</h4>
+                        <p>or click to browse — Supported format: .xlsx (max 10MB)</p>
+                      </div>
+
+                      <div class="ts-format-hints">
+                        <h5>Supported trip sheet format</h5>
+                        <ul>
+                          <li><strong>INV NO</strong> <span class="req">required</span> — the invoice / transaction number</li>
+                          <li><strong>Customer Name</strong> <span class="req">required</span></li>
+                          <li><strong>Address</strong> <span class="req">required</span> — delivery address</li>
+                          <li><strong>Product Description</strong></li>
+                          <li><strong>Qty</strong></li>
+                          <li><strong>Value</strong></li>
+                        </ul>
+                      </div>
+                    } @else {
+                      <div class="ts-file-chip">
+                        <mat-icon>description</mat-icon>
+                        <div class="ts-file-meta">
+                          <strong>{{ importSelectedFile.name }}</strong>
+                          <span>{{ formatFileSize(importSelectedFile.size) }}</span>
+                        </div>
+                        <button mat-icon-button (click)="removeImportFile()"><mat-icon>close</mat-icon></button>
+                      </div>
+                      <div class="ts-preview-actions">
+                        <button mat-raised-button color="primary" [disabled]="importUploading" (click)="previewImportFile()">
+                          <mat-icon>visibility</mat-icon>
+                          {{ importUploading ? 'Parsing…' : 'Preview Import' }}
+                        </button>
+                      </div>
+                    }
+
+                    @if (importError) {
+                      <p class="ts-import-error"><mat-icon>error_outline</mat-icon> {{ importError }}</p>
+                    }
+                  }
+
+                  <!-- Step: preview -->
+                  @if (importStep === 'preview' && importPreviewResponse) {
+                    <div class="ts-preview-summary">
+                      <span class="chip total">{{ (importPreviewResponse.rows || []).length }} rows</span>
+                      <span class="chip matched">{{ getImportValidRowCount() }} usable</span>
+                      @if (importPreviewResponse.matchedCount != null) {
+                        <span class="chip matched">{{ importPreviewResponse.matchedCount }} matched</span>
+                      }
+                      @if (importPreviewResponse.unmatchedCount != null) {
+                        <span class="chip unmatched">{{ importPreviewResponse.unmatchedCount }} unmatched</span>
+                      }
+                      @if (importPreviewResponse.errorCount) {
+                        <span class="chip errors">{{ importPreviewResponse.errorCount }} errors</span>
+                      }
+                      <span class="chip total">Total R {{ getImportTotalValue() | number:'1.2-2' }}</span>
+                    </div>
+
+                    <div class="table-container ts-preview-table">
+                      <table class="ts-table">
+                        <thead>
+                          <tr><th>#</th><th>Status</th><th>Invoice</th><th>Customer</th><th>Address</th><th>Product</th><th>Qty</th><th>Value</th></tr>
+                        </thead>
+                        <tbody>
+                          @for (r of importPreviewResponse.rows; track $index) {
+                            <tr [class.row-error]="r.status === 'error'">
+                              <td>{{ $index + 1 }}</td>
+                              <td>
+                                <span class="ts-status"
+                                      [class.approved]="r.status === 'matched'"
+                                      [class.pending]="r.status === 'partial' || r.status === 'unmatched'"
+                                      [class.rejected]="r.status === 'error'">
+                                  {{ r.status || '—' }}
+                                </span>
+                              </td>
+                              <td>{{ r.data?.invoiceNumber || '—' }}</td>
+                              <td>{{ r.data?.customerName || r.data?.customerNumber || '—' }}</td>
+                              <td>{{ r.data?.deliveryAddress || '—' }}{{ r.data?.city ? ', ' + r.data.city : '' }}</td>
+                              <td>{{ r.data?.productDescription || '—' }}</td>
+                              <td>{{ r.data?.quantity || 0 }}</td>
+                              <td>R {{ (r.data?.salesAmount || 0) | number:'1.2-2' }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+
+                    @if (importError) {
+                      <p class="ts-import-error"><mat-icon>error_outline</mat-icon> {{ importError }}</p>
+                    }
+
+                    <div class="ts-preview-actions">
+                      <button mat-stroked-button (click)="removeImportFile()">
+                        <mat-icon>arrow_back</mat-icon> Choose another file
+                      </button>
+                      <button mat-raised-button color="primary" [disabled]="!hasValidImportRows()" (click)="useImportedRows()">
+                        <mat-icon>arrow_forward</mat-icon> Review &amp; Finalise ({{ getImportValidRowCount() }} stops)
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Manual / review editor -->
+              @if (tripSheetMode === 'manual') {
+                @if (!editingTripSheetId) {
+                  <button mat-button class="ts-back" (click)="backToModeChooser()">
+                    <mat-icon>arrow_back</mat-icon> Back
+                  </button>
+                }
+                <div class="ts-meta-grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Warehouse / Depot</mat-label>
+                    <mat-select [(value)]="tripSheetForm.warehouseCode">
+                      <mat-option value="">—</mat-option>
+                      <mat-option value="GP">GP (Gauteng)</mat-option>
+                      <mat-option value="CPT">CPT (Cape Town)</mat-option>
+                      <mat-option value="KZN">KZN (Durban)</mat-option>
+                      <mat-option value="EC">EC (Eastern Cape)</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Route / Area</mat-label>
+                    <input matInput [(ngModel)]="tripSheetForm.routeArea" placeholder="e.g. Pretoria North run">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Scheduled Date</mat-label>
+                    <input matInput type="date" [(ngModel)]="tripSheetForm.scheduledDate">
+                  </mat-form-field>
+                </div>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Notes / Special Instructions</mat-label>
+                  <textarea matInput rows="2" [(ngModel)]="tripSheetForm.notes"></textarea>
+                </mat-form-field>
+
+                <div class="ts-lines-header">
+                  <h4>Delivery Stops ({{ tripSheetLines.length }})</h4>
+                  <button mat-stroked-button color="primary" (click)="addTripSheetLine()">
+                    <mat-icon>add</mat-icon> Add Stop
+                  </button>
+                </div>
+
+                <div class="ts-lines">
+                  @for (line of tripSheetLines; track $index) {
+                    <div class="ts-line">
+                      <span class="ts-line-no">{{ $index + 1 }}</span>
+                      <div class="ts-line-fields">
+                        <div class="ts-invoice-row">
+                          <input class="ts-in" [(ngModel)]="line.invoiceNumber" placeholder="Invoice #"
+                                 (keyup.enter)="lookupInvoiceForLine($index)">
+                          <button mat-stroked-button class="ts-lookup-btn" [disabled]="lineLookupBusy[$index]"
+                                  (click)="lookupInvoiceForLine($index)" matTooltip="Auto-fill from invoice number">
+                            <mat-icon>{{ lineLookupBusy[$index] ? 'hourglass_empty' : 'search' }}</mat-icon>
+                            Lookup
+                          </button>
+                        </div>
+                        <input class="ts-in" [(ngModel)]="line.customerName" placeholder="Customer name">
+                        <div class="ts-address-row">
+                          <input class="ts-in wide" [(ngModel)]="line.address" placeholder="Delivery address">
+                          <button mat-stroked-button class="ts-verify-btn"
+                                  [class.confirmed]="lineAddressConfirmed[$index]"
+                                  [disabled]="lineGeocodeBusy[$index]"
+                                  (click)="verifyLineAddress($index)"
+                                  matTooltip="Confirm address via Google Maps">
+                            <mat-icon>{{ lineAddressConfirmed[$index] ? 'check_circle' : (lineGeocodeBusy[$index] ? 'hourglass_empty' : 'place') }}</mat-icon>
+                            {{ lineAddressConfirmed[$index] ? 'Confirmed' : 'Verify' }}
+                          </button>
+                        </div>
+                        <input class="ts-in" [(ngModel)]="line.city" placeholder="City">
+                        <input class="ts-in" [(ngModel)]="line.province" placeholder="Province">
+                        <input class="ts-in" [(ngModel)]="line.contactPerson" placeholder="Contact">
+                        <input class="ts-in" [(ngModel)]="line.contactPhone" placeholder="Phone">
+                        <input class="ts-in wide" [(ngModel)]="line.productDescription" placeholder="Product / commodity">
+                        <input class="ts-in narrow" type="number" [(ngModel)]="line.quantity" placeholder="Qty">
+                        <input class="ts-in narrow" type="number" [(ngModel)]="line.value" placeholder="Value">
+                      </div>
+                      <button mat-icon-button color="warn" (click)="removeTripSheetLine($index)">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </div>
+                  }
+                </div>
+
+                <div class="ts-total-row">
+                  <span>Total value:</span>
+                  <strong>R {{ tripSheetDialogTotal | number:'1.2-2' }}</strong>
+                </div>
+              }
+            </div>
+            @if (tripSheetMode === 'manual') {
+              <div class="ts-dialog-footer">
+                <button mat-button (click)="closeTripSheetDialog()">Cancel</button>
+                <button mat-raised-button color="primary" [disabled]="savingTripSheet" (click)="saveTripSheet()">
+                  {{ savingTripSheet ? 'Saving…' : (editingTripSheetId ? 'Save Changes' : 'Submit for Approval') }}
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Trip Sheet View / Approval Dialog -->
+      @if (viewingTripSheet) {
+        <div class="dialog-overlay" (click)="closeViewTripSheet()">
+          <div class="ts-dialog" (click)="$event.stopPropagation()">
+            <div class="ts-dialog-header">
+              <h2>{{ viewingTripSheet.tripSheetNumber }}
+                <span class="ts-status" [class.to-sign]="viewingTripSheet.status === 'PendingSignature'"
+                      [class.pending]="viewingTripSheet.status === 'PendingApproval'"
+                      [class.approved]="viewingTripSheet.status === 'Approved'"
+                      [class.rejected]="viewingTripSheet.status === 'Rejected'">
+                  {{ tripSheetStatusLabel(viewingTripSheet.status) }}
+                </span>
+              </h2>
+              <button mat-icon-button (click)="closeViewTripSheet()"><mat-icon>close</mat-icon></button>
+            </div>
+            <div class="ts-dialog-body">
+              <div class="ts-view-meta">
+                <div><label>Route / Area</label><span>{{ viewingTripSheet.routeArea || '—' }}</span></div>
+                <div><label>Warehouse</label><span>{{ viewingTripSheet.warehouseCode || '—' }}</span></div>
+                <div><label>Scheduled</label><span>{{ viewingTripSheet.scheduledDate ? (viewingTripSheet.scheduledDate | date:'mediumDate') : '—' }}</span></div>
+                <div><label>Created by</label><span>{{ viewingTripSheet.createdByName || '—' }}</span></div>
+                <div><label>Created</label><span>{{ viewingTripSheet.createdAt | date:'medium' }}</span></div>
+                @if (viewingTripSheet.signerName) {
+                  <div><label>Signer</label><span>{{ viewingTripSheet.signerName }}</span></div>
+                }
+                @if (viewingTripSheet.signedByName) {
+                  <div><label>Signed by</label><span>{{ viewingTripSheet.signedByName }}</span></div>
+                  <div><label>Signed at</label><span>{{ viewingTripSheet.signedAt | date:'medium' }}</span></div>
+                }
+                @if (viewingTripSheet.approverName) {
+                  <div><label>Approver</label><span>{{ viewingTripSheet.approverName }}</span></div>
+                }
+                @if (viewingTripSheet.checkedByName) {
+                  <div><label>Checked by</label><span>{{ viewingTripSheet.checkedByName }}</span></div>
+                  <div><label>Checked at</label><span>{{ viewingTripSheet.checkedAt | date:'medium' }}</span></div>
+                }
+                @if (viewingTripSheet.convertedLoadNumber) {
+                  <div><label>Logistics Load</label><span>{{ viewingTripSheet.convertedLoadNumber }}</span></div>
+                }
+              </div>
+              @if (viewingTripSheet.notes) {
+                <p class="ts-view-notes"><strong>Notes:</strong> {{ viewingTripSheet.notes }}</p>
+              }
+
+              <table class="ts-table">
+                <thead>
+                  <tr><th>#</th><th>Customer</th><th>Invoice</th><th>Address</th><th>Contact</th><th>Qty</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                  @for (l of viewingTripSheet.lines; track $index) {
+                    <tr>
+                      <td>{{ $index + 1 }}</td>
+                      <td>{{ l.customerName || '—' }}</td>
+                      <td>{{ l.invoiceNumber || '—' }}</td>
+                      <td>{{ l.address || '—' }}{{ l.city ? ', ' + l.city : '' }}</td>
+                      <td>{{ l.contactPerson || '—' }}{{ l.contactPhone ? ' (' + l.contactPhone + ')' : '' }}</td>
+                      <td>{{ l.quantity }}</td>
+                      <td>R {{ l.value | number:'1.2-2' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+
+              @if (viewingTripSheet.status === 'Rejected' && viewingTripSheet.rejectionReason) {
+                <p class="ts-reject-reason"><strong>Rejection reason:</strong> {{ viewingTripSheet.rejectionReason }}</p>
+              }
+
+              @if (viewingTripSheet.status === 'PendingSignature') {
+                <div class="ts-approval-box">
+                  @if (canSignTripSheet(viewingTripSheet)) {
+                    <h4>Sign this trip sheet</h4>
+                    <p class="ts-sign-as">Signing as <strong>{{ currentUserName || 'current agent' }}</strong>. Once signed it goes to <strong>{{ viewingTripSheet.approverName || 'the approver' }}</strong> for approval.</p>
+                    <div class="ts-approval-actions">
+                      <button mat-stroked-button color="warn" (click)="rejectTripSheet(viewingTripSheet)">
+                        <mat-icon>close</mat-icon> Reject
+                      </button>
+                      <button mat-raised-button color="primary" (click)="signTripSheet(viewingTripSheet)">
+                        <mat-icon>draw</mat-icon> Sign &amp; Send for Approval
+                      </button>
+                    </div>
+                  } @else {
+                    <p class="ts-own-warning">
+                      <mat-icon>lock</mat-icon>
+                      This trip sheet is waiting to be signed by <strong>{{ viewingTripSheet.signerName || 'the designated signer' }}</strong>.
+                    </p>
+                  }
+                </div>
+              }
+
+              @if (viewingTripSheet.status === 'PendingApproval') {
+                <div class="ts-approval-box">
+                  @if (canApproveTripSheet(viewingTripSheet)) {
+                    <h4>Check &amp; Sign</h4>
+                    <p class="ts-sign-as">Approving as <strong>{{ currentUserName || 'current agent' }}</strong></p>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Approval note (optional)</mat-label>
+                      <input matInput [(ngModel)]="approvalNotes">
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Rejection reason (if rejecting)</mat-label>
+                      <input matInput [(ngModel)]="rejectionReason">
+                    </mat-form-field>
+                    <div class="ts-approval-actions">
+                      <button mat-stroked-button color="warn" (click)="rejectTripSheet(viewingTripSheet)">
+                        <mat-icon>close</mat-icon> Reject
+                      </button>
+                      <button mat-raised-button color="primary" (click)="approveTripSheet(viewingTripSheet)">
+                        <mat-icon>check</mat-icon> Approve &amp; Send to Logistics
+                      </button>
+                    </div>
+                  } @else {
+                    <p class="ts-own-warning">
+                      <mat-icon>lock</mat-icon>
+                      This trip sheet is awaiting approval. It must be checked and signed by a
+                      <strong>different</strong> sales agent than the one who created it.
+                    </p>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
 
       <!-- Customer Detail Sidebar -->
       @if (selectedCustomer() && showCustomerSidebar) {
@@ -2933,7 +3299,7 @@ interface SalesReportResponse {
               <div class="welly-pod-title">
                 <h3>{{ wellyPodBatchMode ? 'Welly — Scanning Unlinked PODs' : 'Welly — Scan POD for Invoices' }}</h3>
                 @if (wellyPodCurrent) {
-                  <span class="welly-pod-sub">{{ wellyPodCurrent.driverName }} · {{ wellyPodCurrent.deliveryDate | date:'dd MMM yyyy' }} · {{ wellyPodCurrent.region }}</span>
+                  <span class="welly-pod-sub">{{ wellyPodCurrent.podNumber || ('POD' + wellyPodCurrent.id) }} · {{ wellyPodCurrent.deliveryDate | date:'dd MMM yyyy' }} · {{ wellyPodCurrent.region }}</span>
                 }
               </div>
               <button mat-icon-button (click)="closeWellyPodPanel()" [disabled]="wellyPodScanning || wellyPodLinking">
@@ -4445,8 +4811,8 @@ interface SalesReportResponse {
       color: white;
     }
 
-    .modern-stat-card.customers .stat-icon-wrapper { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .modern-stat-card.invoices .stat-icon-wrapper { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .modern-stat-card.customers .stat-icon-wrapper { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
+    .modern-stat-card.invoices .stat-icon-wrapper { background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%); }
     .modern-stat-card.revenue .stat-icon-wrapper { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
     .modern-stat-card.orders .stat-icon-wrapper { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
 
@@ -4481,7 +4847,7 @@ interface SalesReportResponse {
 
     .stat-progress .progress-bar {
       height: 100%;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(90deg, #2563eb 0%, #1e40af 100%);
       border-radius: 4px;
       transition: width 0.8s cubic-bezier(.4,0,.2,1);
     }
@@ -5280,279 +5646,6 @@ interface SalesReportResponse {
     .priority-chip-medium { background: #fff3e0 !important; color: #ef6c00 !important; }
     .priority-chip-low { background: #e8f5e9 !important; color: #2e7d32 !important; }
 
-    /* Reports Grid */
-    .reports-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-    }
-
-    .report-card {
-      border-radius: 16px;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(.4,0,.2,1);
-      border: 1px solid rgba(0, 0, 0, 0.06);
-      background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
-    }
-
-    .report-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 36px rgba(26, 35, 126, 0.14);
-      border-color: rgba(26, 35, 126, 0.2);
-    }
-
-    .report-card mat-card-content {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      padding: 36px 28px 32px;
-    }
-
-    .report-card mat-icon {
-      font-size: 56px;
-      width: 56px;
-      height: 56px;
-      color: #1a237e;
-      margin-bottom: 18px;
-      transition: transform 0.3s ease;
-      background: linear-gradient(135deg, rgba(26,35,126,0.08), rgba(26,35,126,0.04));
-      border-radius: 16px;
-      padding: 14px;
-      box-sizing: content-box;
-    }
-
-    .report-card:hover mat-icon {
-      transform: scale(1.1);
-      background: linear-gradient(135deg, rgba(26,35,126,0.14), rgba(26,35,126,0.06));
-    }
-
-    .report-card h4 {
-      margin: 0 0 8px 0;
-      color: #1a237e;
-      font-size: 17px;
-      font-weight: 600;
-      letter-spacing: -0.2px;
-    }
-
-    .report-card p {
-      margin: 0;
-      font-size: 13.5px;
-      color: #78909c;
-      line-height: 1.5;
-    }
-
-    .report-card.active {
-      border: 2px solid #1a237e;
-      box-shadow: 0 8px 28px rgba(26, 35, 126, 0.22);
-      background: linear-gradient(180deg, #f0f1ff 0%, #ffffff 100%);
-    }
-
-    @media (max-width: 1200px) {
-      .reports-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 600px) {
-      .reports-grid { grid-template-columns: 1fr; }
-    }
-
-    /* Welly Report Panel */
-    .welly-report-panel {
-      margin-top: 24px;
-      background: #f8f9fa;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03);
-      border: 1px solid rgba(0, 0, 0, 0.05);
-      animation: slideUp 0.35s cubic-bezier(.4,0,.2,1);
-    }
-
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(16px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .welly-report-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 20px;
-      background: linear-gradient(135deg, #1a237e 0%, #311b92 100%);
-      color: white;
-    }
-
-    .welly-report-title {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .welly-report-title h3 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .welly-sparkle-gold {
-      color: #ffd700;
-    }
-
-    .welly-report-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .welly-report-header-actions button {
-      color: white;
-    }
-
-    .welly-report-loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      padding: 48px;
-    }
-
-    .welly-report-loading p {
-      color: #444;
-      font-size: 15px;
-      font-weight: 500;
-      margin: 0;
-    }
-
-    .welly-report-loading .loading-sub {
-      color: #888;
-      font-size: 12px;
-    }
-
-    /* Report Summary Cards */
-    .report-summary-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 12px;
-      padding: 20px;
-    }
-
-    .report-summary-card {
-      background: white;
-      border-radius: 12px;
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-      border: 1px solid rgba(0, 0, 0, 0.04);
-      transition: all 0.2s ease;
-    }
-
-    .report-summary-card:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-      transform: translateY(-1px);
-    }
-
-    .report-summary-card mat-icon {
-      font-size: 24px;
-      width: 24px;
-      height: 24px;
-      color: #1a237e;
-    }
-
-    .rs-info {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .rs-value {
-      font-size: 16px;
-      font-weight: 700;
-      color: #333;
-      line-height: 1.2;
-    }
-
-    .rs-label {
-      font-size: 10px;
-      color: #888;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 500;
-    }
-
-    /* Report Charts Grid */
-    .report-charts-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      padding: 0 20px 20px;
-    }
-
-    .report-chart-card {
-      background: white;
-      border-radius: 14px;
-      padding: 18px;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-      border: 1px solid rgba(0, 0, 0, 0.04);
-      transition: box-shadow 0.2s ease;
-    }
-
-    .report-chart-card:hover {
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-    }
-
-    .report-chart-card h4 {
-      margin: 0 0 14px 0;
-      font-size: 12px;
-      font-weight: 600;
-      color: #78909c;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-    }
-
-    .report-chart-card canvas {
-      width: 100% !important;
-      max-height: 240px;
-    }
-
-    /* Report Analysis Section */
-    .report-analysis-section {
-      padding: 0 20px 20px;
-    }
-
-    .report-analysis-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 0 12px 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: #555;
-    }
-
-    .report-analysis-title mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      color: #1a237e;
-    }
-
-    .report-analysis-text {
-      background: white;
-      border: 1px solid rgba(0, 0, 0, 0.06);
-      border-radius: 14px;
-      padding: 20px;
-      font-size: 13.5px;
-      line-height: 1.75;
-      white-space: pre-wrap;
-      max-height: 50vh;
-      overflow-y: auto;
-      color: #37474f;
-    }
-
-    @media (max-width: 900px) {
-      .report-summary-grid { grid-template-columns: repeat(3, 1fr); }
-      .report-charts-grid { grid-template-columns: 1fr; }
-    }
-
     /* Customer Sidebar */
     .customer-sidebar {
       position: fixed;
@@ -5935,7 +6028,7 @@ interface SalesReportResponse {
 
     /* Welly Fix Button */
     .welly-fix-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
       color: white !important;
       font-weight: 500;
       border: none;
@@ -5945,11 +6038,11 @@ interface SalesReportResponse {
       padding: 6px 20px;
       border-radius: 8px;
       transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     }
 
     .welly-fix-btn:hover:not([disabled]) {
-      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5);
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
       transform: translateY(-1px);
     }
 
@@ -5986,8 +6079,8 @@ interface SalesReportResponse {
       align-items: center;
       gap: 16px;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%);
-      border: 1px solid #667eea22;
+      background: linear-gradient(135deg, #2563eb08 0%, #1e40af08 100%);
+      border: 1px solid #2563eb22;
       border-radius: 12px;
       margin-bottom: 16px;
     }
@@ -6043,7 +6136,7 @@ interface SalesReportResponse {
     }
 
     .welly-review-item:hover {
-      border-color: #667eea;
+      border-color: #2563eb;
       box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
 
@@ -6107,7 +6200,7 @@ interface SalesReportResponse {
       font-size: 16px;
       width: 16px;
       height: 16px;
-      color: #667eea;
+      color: #2563eb;
     }
 
     .welly-review-details {
@@ -7661,6 +7754,106 @@ interface SalesReportResponse {
     .sh-detail-table .sh-desc { font-weight: 600; color: #1e293b; }
     .sh-src-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; background: #ede9fe; color: #6d28d9; }
     .sh-src-tag.src-live { background: #dcfce7; color: #15803d; }
+
+    /* ── Trip Sheets ─────────────────────────────────────────────── */
+    .ts-hint { display: flex; align-items: center; gap: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin: 4px 0 16px; }
+    .ts-hint mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .ts-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
+    .ts-table thead th { background: #eef2f7; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; font-weight: 600; padding: 10px 14px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    .ts-table tbody td { padding: 10px 14px; border-bottom: 1px solid #eef2f7; font-size: 13px; color: #475569; }
+    .ts-table tbody tr:hover { background: #f8fafc; }
+    .ts-actions { white-space: nowrap; text-align: right; }
+    .ts-status { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .ts-status.to-sign { background: #e0e7ff; color: #4338ca; }
+    .ts-status.pending { background: #fef3c7; color: #b45309; }
+    .ts-status.approved { background: #dcfce7; color: #15803d; }
+    .ts-status.rejected { background: #fee2e2; color: #b91c1c; }
+    .empty-state { text-align: center; padding: 48px 20px; color: #94a3b8; }
+    .empty-state mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: .5; }
+
+    .ts-dialog { background: #fff; border-radius: 12px; width: min(1100px, 96vw); max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+    .ts-dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #eef2f7; }
+    .ts-dialog-header h2 { margin: 0; font-size: 19px; color: #1a1a2e; display: flex; align-items: center; gap: 10px; }
+    .ts-dialog-body { padding: 20px 22px; overflow-y: auto; }
+    .ts-dialog-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 14px 22px; border-top: 1px solid #eef2f7; }
+    .ts-meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .full-width { width: 100%; }
+    .ts-lines-header { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 10px; }
+    .ts-lines-header h4 { margin: 0; color: #334155; }
+    .ts-lines { display: flex; flex-direction: column; gap: 8px; }
+    .ts-line { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; }
+    .ts-line-no { flex: 0 0 24px; height: 24px; width: 24px; border-radius: 50%; background: #1e88e5; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .ts-line-fields { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; }
+    .ts-in { flex: 1 1 120px; min-width: 90px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12.5px; color: #1e293b; background: #fff; }
+    .ts-in.wide { flex: 2 1 200px; }
+    .ts-in.narrow { flex: 0 1 80px; min-width: 70px; }
+    .ts-in:focus { outline: none; border-color: #1e88e5; box-shadow: 0 0 0 2px rgba(30,136,229,.15); }
+    .ts-total-row { display: flex; justify-content: flex-end; gap: 10px; align-items: center; margin-top: 14px; font-size: 15px; color: #334155; }
+    .ts-total-row strong { color: #0f172a; font-size: 17px; }
+
+    .ts-view-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+    .ts-view-meta > div { display: flex; flex-direction: column; }
+    .ts-view-meta label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; font-weight: 600; }
+    .ts-view-meta span { font-size: 13.5px; color: #1e293b; }
+    .ts-view-notes { background: #f8fafc; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #475569; margin-bottom: 14px; }
+    .ts-reject-reason { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 10px 14px; margin-top: 14px; font-size: 13px; }
+    .ts-approval-box { margin-top: 18px; border-top: 1px dashed #cbd5e1; padding-top: 16px; }
+    .ts-approval-box h4 { margin: 0 0 4px; color: #334155; }
+    .ts-sign-as { color: #64748b; font-size: 13px; margin: 0 0 12px; }
+    .ts-approval-actions { display: flex; justify-content: flex-end; gap: 12px; }
+    .ts-own-warning { display: flex; align-items: center; gap: 10px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; font-size: 13px; }
+    .ts-own-warning mat-icon { font-size: 20px; width: 20px; height: 20px; }
+
+    /* Trip sheet create modes */
+    .ts-mode-pill { font-size: 11px; font-weight: 600; background: #e0f2fe; color: #0369a1; padding: 3px 10px; border-radius: 999px; margin-left: 10px; vertical-align: middle; }
+    .ts-choose-intro { color: #475569; font-size: 14px; margin: 4px 0 16px; }
+    .ts-mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ts-mode-card { text-align: left; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 22px; cursor: pointer; transition: all .15s; }
+    .ts-mode-card:hover { border-color: #1e88e5; background: #eff6ff; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(30,136,229,.12); }
+    .ts-mode-card mat-icon { font-size: 40px; width: 40px; height: 40px; color: #1e88e5; }
+    .ts-mode-card h4 { margin: 10px 0 6px; font-size: 17px; color: #1a1a2e; }
+    .ts-mode-card p { margin: 0; font-size: 13px; color: #64748b; line-height: 1.5; }
+    .ts-back { margin-bottom: 8px; color: #64748b; }
+    .ts-import-panel { display: flex; flex-direction: column; gap: 14px; }
+    .ts-upload-box { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; text-align: center; color: #64748b; }
+    .ts-upload-box mat-icon { font-size: 44px; width: 44px; height: 44px; color: #94a3b8; }
+    .ts-upload-box p { margin: 8px 0 14px; font-size: 14px; }
+    .ts-preview-summary { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ts-preview-summary .chip { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .ts-preview-summary .chip.total { background: #e2e8f0; color: #334155; }
+    .ts-preview-summary .chip.matched { background: #dcfce7; color: #15803d; }
+    .ts-preview-summary .chip.partial { background: #fef3c7; color: #b45309; }
+    .ts-preview-summary .chip.unmatched { background: #fee2e2; color: #b91c1c; }
+    .ts-preview-summary .chip.errors { background: #fecaca; color: #991b1b; }
+    .ts-preview-table { max-height: 320px; overflow-y: auto; }
+    .ts-preview-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .ts-signoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+    .ts-signoff-grid mat-form-field { width: 100%; }
+    .ts-signoff-note { display: flex; align-items: flex-start; gap: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 14px; border-radius: 10px; font-size: 13px; }
+    .ts-signoff-note mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .ts-dropzone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 34px; text-align: center; color: #64748b; cursor: pointer; transition: all .15s ease; }
+    .ts-dropzone:hover, .ts-dropzone.dragover { border-color: #6366f1; background: #eef2ff; color: #4338ca; }
+    .ts-dropzone mat-icon { font-size: 48px; width: 48px; height: 48px; color: #94a3b8; }
+    .ts-dropzone.dragover mat-icon { color: #6366f1; }
+    .ts-dropzone h4 { margin: 10px 0 4px; font-size: 15px; }
+    .ts-dropzone p { margin: 0; font-size: 13px; }
+    .ts-format-hints { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; }
+    .ts-format-hints h5 { margin: 0 0 8px; font-size: 13px; color: #475569; text-transform: uppercase; letter-spacing: .04em; }
+    .ts-format-hints ul { margin: 0; padding-left: 18px; font-size: 13px; color: #334155; }
+    .ts-format-hints li { margin: 3px 0; }
+    .ts-format-hints .req { background: #fee2e2; color: #b91c1c; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-left: 4px; text-transform: uppercase; }
+    .ts-file-chip { display: flex; align-items: center; gap: 12px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
+    .ts-file-chip mat-icon { color: #16a34a; }
+    .ts-file-meta { display: flex; flex-direction: column; flex: 1; }
+    .ts-file-meta span { font-size: 12px; color: #64748b; }
+    .ts-import-error { display: flex; align-items: center; gap: 6px; color: #b91c1c; font-size: 13px; margin: 4px 0 0; }
+    .ts-import-error mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .ts-table tr.row-error { background: #fef2f2; }
+    .ts-invoice-row, .ts-address-row { display: flex; gap: 6px; flex: 1 1 100%; }
+    .ts-address-row .ts-in.wide { flex: 1; }
+    .ts-lookup-btn, .ts-verify-btn { white-space: nowrap; font-size: 12px; min-width: 92px; padding: 0 10px; }
+    .ts-lookup-btn mat-icon, .ts-verify-btn mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; }
+    .ts-verify-btn.confirmed { color: #15803d; border-color: #86efac; background: #f0fdf4; }
   `]
 })
 export class SalesDashboardComponent implements OnInit {
@@ -7668,6 +7861,7 @@ export class SalesDashboardComponent implements OnInit {
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private wellyActivity = inject(WellyActivityService);
+  private auth = inject(AuthService);
   private apiUrl = environment.apiUrl;
 
   // Companies
@@ -7713,8 +7907,58 @@ export class SalesDashboardComponent implements OnInit {
   // Data signals
   customers = signal<Customer[]>([]);
   invoices = signal<Invoice[]>([]);
+
+  // ── Sales Trip Sheets tab state ──────────────────────────────────────────
+  salesTripSheets = signal<SalesTripSheet[]>([]);
+  loadingTripSheets = signal(false);
+  tripSheetsLoaded = false;
+  tripSheetStatusFilter = signal<string>('all');
+  // Create/edit dialog state
+  showTripSheetDialog = false;
+  editingTripSheetId: number | null = null;
+  tripSheetMode: 'signoff' | 'choose' | 'manual' | 'import' = 'signoff';
+  tripSheetForm: { warehouseCode: string; routeArea: string; scheduledDate: string; notes: string } = {
+    warehouseCode: '', routeArea: '', scheduledDate: '', notes: ''
+  };
+  tripSheetLines: SalesTripSheetLine[] = [];
+  savingTripSheet = false;
+  // Signer & approver
+  salesAgents: { userId: number; name: string; surname?: string; role?: string }[] = [];
+  tripSheetSignerId: number | null = null;
+  tripSheetApproverId: number | null = null;
+  // Signer/approver autocomplete search text
+  signerSearch = '';
+  approverSearch = '';
+  // Logistics reference data (for the shared Create/Import trip sheet dialogs)
+  tsDrivers: any[] = [];
+  tsVehicles: any[] = [];
+  tsWarehouses: any[] = [];
+  tsCustomers: any[] = [];
+  // Import flow state (mirrors logistics: 'upload' | 'preview')
+  importStep: 'upload' | 'preview' = 'upload';
+  importSelectedFile: File | null = null;
+  importUploading = false;
+  importError = '';
+  importDragOver = false;
+  importPreviewResponse: any = null;
+  // Per-line async flags
+  lineLookupBusy: { [index: number]: boolean } = {};
+  lineGeocodeBusy: { [index: number]: boolean } = {};
+  lineAddressConfirmed: { [index: number]: boolean } = {};
+  // Detail / approval dialog state
+  viewingTripSheet: SalesTripSheet | null = null;
+  approvalNotes = '';
+  rejectionReason = '';
+
+  filteredTripSheets = computed(() => {
+    const status = this.tripSheetStatusFilter();
+    const list = this.salesTripSheets();
+    return status === 'all' ? list : list.filter(t => t.status === status);
+  });
+
+  pendingTripSheetCount = computed(() => this.salesTripSheets().filter(t => t.status === 'PendingApproval' || t.status === 'PendingSignature').length);
+
   orders = signal<Order[]>([]);
-  // Server-computed company performance cards (lightweight; avoids loading all invoices to render the top cards)
   companyPerfServer = signal<CompanySales[] | null>(null);
   incomingEmails = signal<IncomingOrderEmail[]>([]);
   emailAccounts = signal<string[]>([]);
@@ -7784,7 +8028,7 @@ export class SalesDashboardComponent implements OnInit {
   podCurrentPage = 1;
   podPageSize = 50;
   podTotalCount = 0;
-  podTableColumns = ['driverName', 'deliveryDate', 'region', 'linkStatus', 'fileName', 'fileSize', 'actions'];
+  podTableColumns = ['podNumber', 'deliveryDate', 'region', 'linkStatus', 'fileName', 'fileSize', 'actions'];
   // POD Upload password gate
   showPodPasswordDialog = false;
   podPasswordInput = '';
@@ -7909,10 +8153,6 @@ export class SalesDashboardComponent implements OnInit {
     deliveryAddress: '',
     notes: ''
   };
-
-  // Report dates
-  reportFromDate: Date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  reportToDate: Date = new Date();
 
   // Table columns
   customerColumns = ['customerCode', 'name', 'contact', 'location', 'status', 'actions'];
@@ -8407,6 +8647,711 @@ export class SalesDashboardComponent implements OnInit {
         this.snackBar.open('Failed to load customers', 'Close', { duration: 3000 });
       }
     });
+  }
+
+  /**
+   * Export all customers to an Excel (.xlsx) file, including full address and contact details.
+   * Exports the complete customer list currently loaded (respecting no pagination),
+   * or the active search/province filter if one is applied.
+   */
+  exportCustomers(): void {
+    const source = this.allFilteredCustomers();
+    if (!source || source.length === 0) {
+      this.snackBar.open('No customers to export', 'Close', { duration: 3000 });
+      return;
+    }
+
+    try {
+      const rows = source.map(c => ({
+        'Customer Code': c.customerCode || '',
+        'Name': c.name || '',
+        'Short Name': c.shortName || '',
+        'Contact Person': c.contactPerson || '',
+        'Email': c.email || '',
+        'Phone': c.phoneNumber || '',
+        'Address': c.address || '',
+        'City': c.city || '',
+        'Province': c.province || '',
+        'Postal Code': c.postalCode || '',
+        'Delivery Address': c.deliveryAddress || '',
+        'Delivery City': c.deliveryCity || '',
+        'Delivery Province': c.deliveryProvince || '',
+        'Delivery Postal Code': c.deliveryPostalCode || '',
+        'Latitude': c.latitude ?? '',
+        'Longitude': c.longitude ?? '',
+        'Status': c.status || '',
+        'Company Code': c.companyCode || '',
+        'Total Orders': c.totalOrders ?? '',
+        'Total Revenue': c.totalRevenue ?? '',
+        'Created At': c.createdAt ? new Date(c.createdAt).toISOString().split('T')[0] : ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      // Set sensible column widths
+      ws['!cols'] = [
+        { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 22 }, { wch: 28 }, { wch: 16 },
+        { wch: 36 }, { wch: 18 }, { wch: 16 }, { wch: 12 },
+        { wch: 36 }, { wch: 18 }, { wch: 16 }, { wch: 14 },
+        { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+
+      const stamp = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `Customers_Export_${stamp}.xlsx`);
+
+      this.snackBar.open(`Exported ${rows.length} customers to Excel`, 'Close', { duration: 3000 });
+    } catch (err) {
+      console.error('Failed to export customers:', err);
+      this.snackBar.open('Failed to export customers', 'Close', { duration: 3000 });
+    }
+  }
+
+  // ── Sales Trip Sheets ─────────────────────────────────────────────────────
+  private tripSheetApi = `${this.apiUrl}/logistics/sales-tripsheets`;
+
+  loadSalesTripSheets(): void {
+    this.loadingTripSheets.set(true);
+    this.http.get<SalesTripSheet[]>(this.tripSheetApi).subscribe({
+      next: (sheets) => {
+        this.salesTripSheets.set(sheets || []);
+        this.loadingTripSheets.set(false);
+        this.tripSheetsLoaded = true;
+      },
+      error: (err) => {
+        console.error('Failed to load trip sheets:', err);
+        this.loadingTripSheets.set(false);
+        this.snackBar.open('Failed to load trip sheets', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  get currentUserId(): number | null {
+    return this.auth.currentUserValue?.userId ?? null;
+  }
+
+  get currentUserName(): string {
+    const u = this.auth.currentUserValue;
+    return u ? `${u.name} ${u.surname || ''}`.trim() : '';
+  }
+
+  /** Whether the current agent may check/approve a sheet (must be a different agent than the creator). */
+  canApproveTripSheet(sheet: SalesTripSheet): boolean {
+    if (sheet.status !== 'PendingApproval') return false;
+    const me = this.currentUserId;
+    if (me == null) return true; // fall back to backend enforcement
+    return sheet.createdByUserId !== me;
+  }
+
+  /** Whether the current agent may sign a sheet (must be the designated signer, if one is set). */
+  canSignTripSheet(sheet: SalesTripSheet): boolean {
+    if (sheet.status !== 'PendingSignature') return false;
+    const me = this.currentUserId;
+    if (me == null) return true; // fall back to backend enforcement
+    if (sheet.signerUserId == null) return true;
+    return sheet.signerUserId === me;
+  }
+
+  openCreateTripSheet(): void {
+    this.editingTripSheetId = null;
+    this.tripSheetMode = 'signoff';
+    this.tripSheetForm = { warehouseCode: '', routeArea: '', scheduledDate: '', notes: '' };
+    this.tripSheetLines = [];
+    this.tripSheetSignerId = null;
+    this.tripSheetApproverId = null;
+    this.signerSearch = '';
+    this.approverSearch = '';
+    this.loadSalesAgents();
+    this.loadTsRefData();
+    this.resetImportState();
+    this.showTripSheetDialog = true;
+  }
+
+  editTripSheet(sheet: SalesTripSheet): void {
+    this.editingTripSheetId = sheet.id;
+    this.tripSheetMode = 'manual';
+    this.tripSheetForm = {
+      warehouseCode: sheet.warehouseCode || '',
+      routeArea: sheet.routeArea || '',
+      scheduledDate: sheet.scheduledDate ? sheet.scheduledDate.split('T')[0] : '',
+      notes: sheet.notes || ''
+    };
+    this.tripSheetLines = sheet.lines.length
+      ? sheet.lines.map(l => ({ ...l }))
+      : [this.newTripSheetLine()];
+    this.tripSheetSignerId = sheet.signerUserId ?? this.currentUserId;
+    this.tripSheetApproverId = sheet.approverUserId ?? null;
+    this.loadSalesAgents();
+    this.resetImportState();
+    this.showTripSheetDialog = true;
+  }
+
+  closeTripSheetDialog(): void {
+    this.showTripSheetDialog = false;
+    this.editingTripSheetId = null;
+    this.tripSheetLines = [];
+    this.tripSheetMode = 'signoff';
+    this.resetImportState();
+  }
+
+  private resetImportState(): void {
+    this.importStep = 'upload';
+    this.importSelectedFile = null;
+    this.importUploading = false;
+    this.importError = '';
+    this.importDragOver = false;
+    this.importPreviewResponse = null;
+    this.lineLookupBusy = {};
+    this.lineGeocodeBusy = {};
+    this.lineAddressConfirmed = {};
+  }
+
+  /** Load the list of sales agents (users) to populate signer/approver dropdowns. */
+  loadSalesAgents(): void {
+    if (this.salesAgents.length > 0) return;
+    this.http.get<any[]>(`${this.apiUrl}/users`).subscribe({
+      next: (users) => {
+        this.salesAgents = (users || []).map(u => ({
+          userId: u.userId,
+          name: u.name || '',
+          surname: u.surname || '',
+          role: u.role || ''
+        }));
+        // Resolve any pre-selected signer/approver display text now that names are available
+        if (this.tripSheetSignerId != null && !this.signerSearch) {
+          this.signerSearch = this.agentDisplayName(this.tripSheetSignerId);
+        }
+        if (this.tripSheetApproverId != null && !this.approverSearch) {
+          this.approverSearch = this.agentDisplayName(this.tripSheetApproverId);
+        }
+      },
+      error: () => { /* fall back to free text / backend enforcement */ }
+    });
+  }
+
+  agentDisplayName(userId: number | null): string {
+    if (userId == null) return '';
+    const a = this.salesAgents.find(x => x.userId === userId);
+    return a ? `${a.name} ${a.surname || ''}`.trim() : '';
+  }
+
+  /** Autocomplete displayWith — resolves a userId to the agent's full name. */
+  displayAgent = (userId: number | null): string => this.agentDisplayName(userId);
+
+  private filterAgents(term: string, excludeId: number | null): { userId: number; name: string; surname?: string }[] {
+    const t = (term || '').toString().toLowerCase().trim();
+    return this.salesAgents.filter(a => {
+      if (excludeId != null && a.userId === excludeId) return false;
+      if (!t) return true;
+      const full = `${a.name} ${a.surname || ''}`.toLowerCase();
+      return full.includes(t);
+    }).slice(0, 50);
+  }
+
+  filteredSignerAgents(): { userId: number; name: string; surname?: string }[] {
+    return this.filterAgents(this.signerSearch, this.tripSheetApproverId);
+  }
+
+  filteredApproverAgents(): { userId: number; name: string; surname?: string }[] {
+    return this.filterAgents(this.approverSearch, this.tripSheetSignerId);
+  }
+
+  onSignerSearchChange(val: any): void {
+    // Clear the selection when the user edits the text (only re-set on explicit pick)
+    if (typeof val === 'string') this.tripSheetSignerId = null;
+  }
+
+  onApproverSearchChange(val: any): void {
+    if (typeof val === 'string') this.tripSheetApproverId = null;
+  }
+
+  onSignerSelected(userId: number): void {
+    this.tripSheetSignerId = userId;
+    this.signerSearch = this.agentDisplayName(userId);
+  }
+
+  onApproverSelected(userId: number): void {
+    this.tripSheetApproverId = userId;
+    this.approverSearch = this.agentDisplayName(userId);
+  }
+
+  /** Stage 0 -> Stage 1: validate signer & approver, then move to the mode chooser. */
+  proceedFromSignoff(): void {
+    if (this.tripSheetSignerId == null) {
+      this.snackBar.open('Select who is signing (creating) this trip sheet.', 'Close', { duration: 3000 });
+      return;
+    }
+    if (this.tripSheetApproverId == null) {
+      this.snackBar.open('Select the approver who will check & sign this trip sheet.', 'Close', { duration: 3000 });
+      return;
+    }
+    if (this.tripSheetSignerId === this.tripSheetApproverId) {
+      this.snackBar.open('The approver must be a different person than the signer.', 'Close', { duration: 3500 });
+      return;
+    }
+    this.tripSheetMode = 'choose';
+  }
+
+  /** Load logistics reference data needed by the shared Create/Import trip sheet dialogs. */
+  loadTsRefData(): void {
+    if (this.tsWarehouses.length === 0) {
+      this.http.get<any[]>(`${this.apiUrl}/warehouses`).subscribe({ next: d => this.tsWarehouses = d || [], error: () => {} });
+    }
+    if (this.tsDrivers.length === 0) {
+      this.http.get<any[]>(`${this.apiUrl}/logistics/drivers`).subscribe({ next: d => this.tsDrivers = d || [], error: () => {} });
+    }
+    if (this.tsCustomers.length === 0) {
+      this.http.get<any[]>(`${this.apiUrl}/logistics/customers?pageSize=100000`).subscribe({ next: d => this.tsCustomers = d || [], error: () => {} });
+    }
+    if (this.tsVehicles.length === 0) {
+      this.http.get<any[]>(`${this.apiUrl}/fleet/vehicles/live`).subscribe({
+        next: (fleet) => {
+          const unavailable = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+          this.tsVehicles = (fleet || [])
+            .filter(v => !unavailable.includes(v.status))
+            .map(v => ({
+              id: v.id,
+              registrationNumber: v.registrationNumber,
+              type: v.vehicleTypeName || 'Truck',
+              vehicleTypeName: v.vehicleTypeName,
+              status: v.status,
+              make: v.make,
+              model: v.model
+            }));
+        },
+        error: () => {}
+      });
+    }
+  }
+
+  private tripSheetSignoffData(): any {
+    return {
+      salesMode: true,
+      createdByName: this.currentUserName || null,
+      signerUserId: this.tripSheetSignerId,
+      signerName: this.agentDisplayName(this.tripSheetSignerId) || null,
+      approverUserId: this.tripSheetApproverId,
+      approverName: this.agentDisplayName(this.tripSheetApproverId) || null
+    };
+  }
+
+  private openSalesCreateDialog(preSelectedInvoices: any[], isManual: boolean, batchId?: string): void {
+    const dialogRef = this.dialog.open(CreateTripsheetDialog, {
+      width: '98vw',
+      maxWidth: '1800px',
+      height: '95vh',
+      panelClass: 'create-tripsheet-dialog-panel',
+      data: {
+        invoices: preSelectedInvoices,
+        drivers: this.tsDrivers,
+        vehicles: this.tsVehicles,
+        warehouses: this.tsWarehouses,
+        customers: this.tsCustomers,
+        apiUrl: this.apiUrl,
+        isImport: !isManual && preSelectedInvoices.length > 0,
+        isManualTripsheet: isManual,
+        batchId,
+        preSelectedInvoices,
+        ...this.tripSheetSignoffData()
+      }
+    });
+    dialogRef.afterClosed().subscribe((result: any) => {
+      if (result?.created) {
+        const msg = result.sentToSign
+          ? 'Trip sheet generated — sent to the signer to sign off'
+          : 'Trip sheet generated — awaiting approval by the designated approver';
+        this.snackBar.open(msg, 'Close', { duration: 4000 });
+        this.loadSalesTripSheets();
+      }
+    });
+  }
+
+  /** Import mode — opens the exact Logistics Excel import dialog, then the shared create dialog. */
+  openLogisticsImport(): void {
+    this.showTripSheetDialog = false;
+    const importRef = this.dialog.open(ImportTripsheetDialog, {
+      width: '900px',
+      maxWidth: '95vw',
+      panelClass: 'import-tripsheet-dialog-panel',
+      data: { apiUrl: this.apiUrl, padMode: false }
+    });
+    importRef.afterClosed().subscribe((result: any) => {
+      if (result?.openCreateDialog && result.invoices?.length > 0) {
+        setTimeout(() => this.openSalesCreateDialog(result.invoices, !!result.isManualTripsheet, result.batchId), 100);
+      }
+    });
+  }
+
+  /** Manual mode — opens the exact Logistics create dialog (map, distance, driver assignment). */
+  openLogisticsManual(): void {
+    this.showTripSheetDialog = false;
+    this.openSalesCreateDialog([], true);
+  }
+
+  selectTripSheetMode(mode: 'manual' | 'import'): void {
+    this.tripSheetMode = mode;
+    if (mode === 'manual' && this.tripSheetLines.length === 0) {
+      this.tripSheetLines = [this.newTripSheetLine()];
+    }
+  }
+
+  backToModeChooser(): void {
+    this.tripSheetMode = 'choose';
+    this.resetImportState();
+  }
+
+  // ---- Excel import (exact mirror of the Logistics trip sheet import) ----
+
+  onImportDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.importDragOver = true;
+  }
+
+  onImportDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.importDragOver = false;
+  }
+
+  onTsImportDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.importDragOver = false;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) this.handleImportFile(file);
+  }
+
+  onTsImportFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) this.handleImportFile(file);
+    input.value = '';
+  }
+
+  private handleImportFile(file: File): void {
+    const name = (file.name || '').toLowerCase();
+    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
+      this.importError = 'Please select an Excel file (.xlsx or .xls)';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      this.importError = 'File is too large. Maximum size is 10MB.';
+      return;
+    }
+    this.importError = '';
+    this.importSelectedFile = file;
+    this.importPreviewResponse = null;
+    this.importStep = 'upload';
+  }
+
+  removeImportFile(): void {
+    this.importSelectedFile = null;
+    this.importPreviewResponse = null;
+    this.importStep = 'upload';
+    this.importError = '';
+  }
+
+  formatFileSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  }
+
+  /** Upload the selected Excel to the logistics preview endpoint and show a parsed preview. */
+  previewImportFile(): void {
+    if (!this.importSelectedFile) return;
+    this.importUploading = true;
+    this.importError = '';
+    const formData = new FormData();
+    formData.append('file', this.importSelectedFile);
+    this.http.post<any>(`${this.apiUrl}/logistics/tripsheet/preview-import`, formData).subscribe({
+      next: (res) => {
+        this.importUploading = false;
+        this.importPreviewResponse = res;
+        this.importStep = 'preview';
+        const rows = (res?.rows || []).length;
+        if (rows === 0) {
+          this.importError = 'No rows could be read from this file. Check the format hints and try again.';
+        }
+      },
+      error: (err) => {
+        this.importUploading = false;
+        this.importError = err?.error?.error || err?.error?.message || 'Failed to parse Excel file';
+      }
+    });
+  }
+
+  hasValidImportRows(): boolean {
+    return this.getImportValidRowCount() > 0;
+  }
+
+  getImportValidRowCount(): number {
+    const rows = (this.importPreviewResponse?.rows || []) as any[];
+    return rows.filter(r => (r.status !== 'error') && (r.data?.invoiceNumber || r.data?.customerName)).length;
+  }
+
+  getImportTotalValue(): number {
+    const rows = (this.importPreviewResponse?.rows || []) as any[];
+    return rows.reduce((sum, r) => sum + (Number(r.data?.salesAmount) || 0), 0);
+  }
+
+  /** After reviewing the import preview, map the parsed rows into editable lines and finalise. */
+  useImportedRows(): void {
+    const rows = (this.importPreviewResponse?.rows || []) as any[];
+    this.tripSheetLines = rows
+      .filter(r => r.status !== 'error')
+      .map(r => {
+        const d = r.data || {};
+        return {
+          customerName: d.customerName || d.customerNumber || '',
+          invoiceNumber: d.invoiceNumber || '',
+          address: d.deliveryAddress || '',
+          city: d.city || '',
+          province: d.province || '',
+          contactPerson: d.contactPerson || '',
+          contactPhone: d.contactPhone || '',
+          productDescription: d.productDescription || '',
+          quantity: Number(d.quantity) || 0,
+          value: Number(d.salesAmount) || 0
+        } as SalesTripSheetLine;
+      });
+    if (this.tripSheetLines.length === 0) this.tripSheetLines = [this.newTripSheetLine()];
+    this.tripSheetMode = 'manual';
+  }
+
+  /** Look up an invoice number to auto-fill customer, address, product, qty and value. */
+  lookupInvoiceForLine(index: number): void {
+    const line = this.tripSheetLines[index];
+    const inv = (line?.invoiceNumber || '').trim();
+    if (!inv) {
+      this.snackBar.open('Enter an invoice number first', 'Close', { duration: 2500 });
+      return;
+    }
+    this.lineLookupBusy = { ...this.lineLookupBusy, [index]: true };
+    this.http.get<any>(`${this.tripSheetApi}/lookup-invoice/${encodeURIComponent(inv)}`).subscribe({
+      next: (res) => {
+        this.lineLookupBusy = { ...this.lineLookupBusy, [index]: false };
+        if (!res?.found) {
+          this.snackBar.open(`No invoice found for ${inv} — you can type the details manually`, 'Close', { duration: 4000 });
+          return;
+        }
+        const resultLines: SalesTripSheetLine[] = (res.lines || []).map((l: any) => ({
+          customerName: l.customerName || '',
+          invoiceNumber: l.invoiceNumber || inv,
+          address: l.address || '',
+          city: l.city || '',
+          province: l.province || '',
+          contactPerson: l.contactPerson || '',
+          contactPhone: l.contactPhone || '',
+          productDescription: l.productDescription || '',
+          quantity: Number(l.quantity) || 0,
+          value: Number(l.value) || 0
+        }));
+        if (resultLines.length === 0) return;
+        // Fill the current line with the first result
+        this.tripSheetLines[index] = resultLines[0];
+        // Append any additional product lines from the same invoice
+        if (resultLines.length > 1) {
+          this.tripSheetLines = [
+            ...this.tripSheetLines.slice(0, index + 1),
+            ...resultLines.slice(1),
+            ...this.tripSheetLines.slice(index + 1)
+          ];
+        } else {
+          this.tripSheetLines = [...this.tripSheetLines];
+        }
+        this.snackBar.open(
+          resultLines.length > 1
+            ? `Loaded ${resultLines.length} product lines from ${res.invoiceNumber}`
+            : `Loaded details from ${res.invoiceNumber}`,
+          'Close', { duration: 3000 });
+      },
+      error: () => {
+        this.lineLookupBusy = { ...this.lineLookupBusy, [index]: false };
+        this.snackBar.open('Invoice lookup failed', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  /** Confirm/normalise a line's delivery address via Google Maps geocoding. */
+  verifyLineAddress(index: number): void {
+    const line = this.tripSheetLines[index];
+    const addr = [line?.address, line?.city, line?.province].filter(Boolean).join(', ');
+    if (!addr) {
+      this.snackBar.open('Enter an address first', 'Close', { duration: 2500 });
+      return;
+    }
+    this.lineGeocodeBusy = { ...this.lineGeocodeBusy, [index]: true };
+    this.http.get<any>(`${this.apiUrl}/logistics/googlemaps/geocode?address=${encodeURIComponent(addr + ', South Africa')}`).subscribe({
+      next: (res) => {
+        this.lineGeocodeBusy = { ...this.lineGeocodeBusy, [index]: false };
+        if (res?.success) {
+          if (res.formattedAddress) this.tripSheetLines[index].address = res.formattedAddress;
+          if (res.city) this.tripSheetLines[index].city = res.city;
+          if (res.province) this.tripSheetLines[index].province = res.province;
+          this.tripSheetLines = [...this.tripSheetLines];
+          this.lineAddressConfirmed = { ...this.lineAddressConfirmed, [index]: true };
+          this.snackBar.open('Address confirmed via Google Maps', 'Close', { duration: 2500 });
+        } else {
+          this.snackBar.open(res?.error || 'Could not confirm this address', 'Close', { duration: 3500 });
+        }
+      },
+      error: () => {
+        this.lineGeocodeBusy = { ...this.lineGeocodeBusy, [index]: false };
+        this.snackBar.open('Address verification failed', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+
+  private newTripSheetLine(): SalesTripSheetLine {
+    return { customerName: '', invoiceNumber: '', address: '', city: '', province: '', contactPerson: '', contactPhone: '', productDescription: '', quantity: 0, value: 0 };
+  }
+
+  addTripSheetLine(): void {
+    this.tripSheetLines = [...this.tripSheetLines, this.newTripSheetLine()];
+  }
+
+  removeTripSheetLine(index: number): void {
+    this.tripSheetLines = this.tripSheetLines.filter((_, i) => i !== index);
+    if (this.tripSheetLines.length === 0) this.tripSheetLines = [this.newTripSheetLine()];
+  }
+
+  get tripSheetDialogTotal(): number {
+    return this.tripSheetLines.reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+  }
+
+  saveTripSheet(): void {
+    const lines = this.tripSheetLines.filter(l => (l.customerName || '').trim() || (l.invoiceNumber || '').trim());
+    if (lines.length === 0) {
+      this.snackBar.open('Add at least one delivery line (customer or invoice).', 'Close', { duration: 3500 });
+      return;
+    }
+    this.savingTripSheet = true;
+    const payload = {
+      warehouseCode: this.tripSheetForm.warehouseCode || null,
+      routeArea: this.tripSheetForm.routeArea || null,
+      scheduledDate: this.tripSheetForm.scheduledDate || null,
+      notes: this.tripSheetForm.notes || null,
+      createdByName: this.currentUserName || null,
+      signerUserId: this.tripSheetSignerId,
+      signerName: this.agentDisplayName(this.tripSheetSignerId) || this.currentUserName || null,
+      approverUserId: this.tripSheetApproverId,
+      approverName: this.agentDisplayName(this.tripSheetApproverId) || null,
+      lines: lines.map(l => ({
+        customerName: l.customerName || null,
+        invoiceNumber: l.invoiceNumber || null,
+        address: l.address || null,
+        city: l.city || null,
+        province: l.province || null,
+        contactPerson: l.contactPerson || null,
+        contactPhone: l.contactPhone || null,
+        productDescription: l.productDescription || null,
+        quantity: Number(l.quantity) || 0,
+        value: Number(l.value) || 0
+      }))
+    };
+
+    const req = this.editingTripSheetId
+      ? this.http.put<SalesTripSheet>(`${this.tripSheetApi}/${this.editingTripSheetId}`, payload)
+      : this.http.post<SalesTripSheet>(this.tripSheetApi, payload);
+
+    req.subscribe({
+      next: () => {
+        this.savingTripSheet = false;
+        this.snackBar.open(this.editingTripSheetId ? 'Trip sheet updated' : 'Trip sheet created — awaiting approval by another agent', 'Close', { duration: 3500 });
+        this.closeTripSheetDialog();
+        this.loadSalesTripSheets();
+      },
+      error: (err) => {
+        this.savingTripSheet = false;
+        this.snackBar.open(err?.error?.error || 'Failed to save trip sheet', 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  viewTripSheet(sheet: SalesTripSheet): void {
+    this.viewingTripSheet = sheet;
+    this.approvalNotes = '';
+    this.rejectionReason = '';
+  }
+
+  closeViewTripSheet(): void {
+    this.viewingTripSheet = null;
+  }
+
+  signTripSheet(sheet: SalesTripSheet): void {
+    if (!this.canSignTripSheet(sheet)) {
+      this.snackBar.open('Only the designated signer can sign this trip sheet.', 'Close', { duration: 4000 });
+      return;
+    }
+    this.http.post<SalesTripSheet>(`${this.tripSheetApi}/${sheet.id}/sign`, {
+      signedByName: this.currentUserName || null
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Trip sheet signed — now awaiting approval', 'Close', { duration: 3500 });
+        this.closeViewTripSheet();
+        this.loadSalesTripSheets();
+      },
+      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to sign trip sheet', 'Close', { duration: 4000 })
+    });
+  }
+
+  approveTripSheet(sheet: SalesTripSheet): void {
+    if (!this.canApproveTripSheet(sheet)) {
+      this.snackBar.open('You cannot approve your own trip sheet — it must be checked by a different sales agent.', 'Close', { duration: 4000 });
+      return;
+    }
+    this.http.post<SalesTripSheet>(`${this.tripSheetApi}/${sheet.id}/approve`, {
+      checkedByName: this.currentUserName || null,
+      approvalNotes: this.approvalNotes || null
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Trip sheet approved & sent to Logistics', 'Close', { duration: 3500 });
+        this.closeViewTripSheet();
+        this.loadSalesTripSheets();
+      },
+      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to approve trip sheet', 'Close', { duration: 4000 })
+    });
+  }
+
+  rejectTripSheet(sheet: SalesTripSheet): void {
+    this.http.post<SalesTripSheet>(`${this.tripSheetApi}/${sheet.id}/reject`, {
+      reason: this.rejectionReason || null
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Trip sheet rejected', 'Close', { duration: 3000 });
+        this.closeViewTripSheet();
+        this.loadSalesTripSheets();
+      },
+      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to reject trip sheet', 'Close', { duration: 4000 })
+    });
+  }
+
+  deleteTripSheet(sheet: SalesTripSheet): void {
+    if (!confirm(`Delete trip sheet ${sheet.tripSheetNumber}?`)) return;
+    this.http.delete(`${this.tripSheetApi}/${sheet.id}`).subscribe({
+      next: () => {
+        this.snackBar.open('Trip sheet deleted', 'Close', { duration: 3000 });
+        this.loadSalesTripSheets();
+      },
+      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to delete trip sheet', 'Close', { duration: 4000 })
+    });
+  }
+
+  tripSheetStatusLabel(status: string): string {
+    switch (status) {
+      case 'PendingSignature': return 'To Sign';
+      case 'PendingApproval': return 'Awaiting Approval';
+      case 'Approved': return 'Approved';
+      case 'Rejected': return 'Rejected';
+      default: return status;
+    }
   }
 
   loadInvoices(): void {
@@ -8953,235 +9898,6 @@ export class SalesDashboardComponent implements OnInit {
     if (!reason) return;
 
     this.snackBar.open('Order cancellation is no longer available. Use Back Orders tab instead.', 'Close', { duration: 3000 });
-  }
-
-  // ═══════════════════════════════════════════
-  // Welly Sales Reports (AI-Powered)
-  // ═══════════════════════════════════════════
-
-  showReportPanel = false;
-  reportLoading = false;
-  reportResult = '';
-  reportSummary: SalesReportSummary | null = null;
-  reportCharts: SalesReportResponse['charts'] | null = null;
-  activeReportType = '';
-  reportPanelTitle = 'Sales Report';
-  private reportChartInstances: Chart[] = [];
-
-  private readonly reportColors = [
-    '#1a237e', '#00695c', '#c62828', '#6a1b9a', '#ef6c00',
-    '#0277bd', '#2e7d32', '#ad1457', '#4527a0', '#00838f',
-    '#558b2f', '#d84315', '#6d4c41', '#37474f', '#ff6f00'
-  ];
-
-  private readonly reportTitles: Record<string, string> = {
-    'sales-summary': 'Sales Summary Report',
-    'customer-analysis': 'Customer Analysis Report',
-    'province-breakdown': 'Province Breakdown Report',
-    'product-performance': 'Product Performance Report'
-  };
-
-  generateReport(): void {
-    this.runReport('sales-summary');
-  }
-
-  runReport(reportType: string): void {
-    this.activeReportType = reportType;
-    this.reportPanelTitle = this.reportTitles[reportType] || 'Sales Report';
-    this.showReportPanel = true;
-    this.reportLoading = true;
-    this.reportResult = '';
-    this.reportSummary = null;
-    this.reportCharts = null;
-    this.destroyReportCharts();
-
-    this.http.post<SalesReportResponse>(
-      `${this.apiUrl}/aichat/welly-sales-report`,
-      {
-        reportType,
-        fromDate: this.reportFromDate.toISOString(),
-        toDate: this.reportToDate.toISOString()
-      }
-    ).subscribe({
-      next: (res) => {
-        this.reportResult = res.analysis;
-        this.reportSummary = res.summary;
-        this.reportCharts = res.charts;
-        this.reportLoading = false;
-        setTimeout(() => this.renderReportCharts(), 150);
-      },
-      error: () => {
-        this.snackBar.open('Welly could not generate the report. Please try again.', 'Close', { duration: 3000 });
-        this.reportLoading = false;
-      }
-    });
-  }
-
-  private destroyReportCharts(): void {
-    this.reportChartInstances.forEach(c => c.destroy());
-    this.reportChartInstances = [];
-  }
-
-  closeReportPanel(): void {
-    this.showReportPanel = false;
-    this.activeReportType = '';
-    this.destroyReportCharts();
-  }
-
-  private renderReportCharts(): void {
-    if (!this.reportCharts) return;
-    this.destroyReportCharts();
-
-    // Sales by Company (doughnut)
-    this.pushReportChart('report-chart-company', 'doughnut',
-      this.reportCharts.salesByCompany.labels,
-      this.reportCharts.salesByCompany.values, 'Revenue (R)');
-
-    // Daily Sales Trend (line)
-    this.pushReportLineChart('report-chart-daily',
-      this.reportCharts.dailySales.labels,
-      this.reportCharts.dailySales.values);
-
-    // Top Customers (bar - horizontal)
-    this.pushReportChart('report-chart-customers', 'bar',
-      this.reportCharts.topCustomers.labels,
-      this.reportCharts.topCustomers.values, 'Revenue (R)', true);
-
-    // Sales by Province (doughnut)
-    this.pushReportChart('report-chart-province', 'doughnut',
-      this.reportCharts.salesByProvince.labels,
-      this.reportCharts.salesByProvince.values, 'Revenue (R)');
-
-    // Top Products (bar - horizontal)
-    this.pushReportChart('report-chart-products', 'bar',
-      this.reportCharts.topProducts.labels,
-      this.reportCharts.topProducts.values, 'Revenue (R)', true);
-
-    // Cancellations by Reason (doughnut)
-    if (this.reportCharts.cancellationsByReason.labels.length > 0) {
-      this.pushReportChart('report-chart-cancellations', 'doughnut',
-        this.reportCharts.cancellationsByReason.labels,
-        this.reportCharts.cancellationsByReason.values, 'Count');
-    }
-  }
-
-  private pushReportChart(canvasId: string, type: 'doughnut' | 'bar', labels: string[], values: number[], label: string, horizontal = false): void {
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-    if (!canvas || !labels?.length) return;
-    const colors = labels.map((_, i) => this.reportColors[i % this.reportColors.length]);
-
-    if (type === 'doughnut') {
-      this.reportChartInstances.push(new Chart(canvas, {
-        type: 'doughnut',
-        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
-        options: {
-          responsive: true, maintainAspectRatio: true,
-          plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12, boxWidth: 12 } } }
-        }
-      }));
-    } else {
-      this.reportChartInstances.push(new Chart(canvas, {
-        type: 'bar',
-        data: { labels, datasets: [{ label, data: values, backgroundColor: colors, borderRadius: 6, borderSkipped: false }] },
-        options: {
-          responsive: true, maintainAspectRatio: true,
-          indexAxis: horizontal ? 'y' : 'x',
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { display: !horizontal }, ticks: { font: { size: 10 } } },
-            y: { grid: { display: horizontal }, ticks: { font: { size: 10 } } }
-          }
-        }
-      }));
-    }
-  }
-
-  private pushReportLineChart(canvasId: string, labels: string[], values: number[]): void {
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-    if (!canvas || !labels?.length) return;
-
-    this.reportChartInstances.push(new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Daily Sales (R)',
-          data: values,
-          borderColor: '#1a237e',
-          backgroundColor: 'rgba(26, 35, 126, 0.08)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3,
-          pointBackgroundColor: '#1a237e'
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
-          y: { ticks: { font: { size: 10 } } }
-        }
-      }
-    }));
-  }
-
-  async downloadReportPdf(): Promise<void> {
-    const element = document.getElementById('welly-report-content');
-    if (!element) return;
-
-    this.snackBar.open('Generating PDF...', '', { duration: 2000 });
-
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
-
-      const canvas = await html2canvas(element, {
-        scale: 2, useCORS: true, backgroundColor: '#f5f5f7', logging: false
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth() - 20;
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      const pageHeight = pdf.internal.pageSize.getHeight() - 20;
-
-      // Title
-      pdf.setFontSize(10);
-      pdf.setTextColor(100);
-      pdf.text(`ProMed Technologies — ${this.reportPanelTitle}`, 10, 8);
-      pdf.text(`${this.reportFromDate.toLocaleDateString()} to ${this.reportToDate.toLocaleDateString()}`, 10, 13);
-      let yOffset = 16;
-
-      let remainingHeight = pdfHeight;
-      while (remainingHeight > 0) {
-        const sourceY = (pdfHeight - remainingHeight) * (canvas.height / pdfHeight);
-        const sourceHeight = Math.min(pageHeight, remainingHeight) * (canvas.height / pdfHeight);
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sourceHeight;
-        const ctx = pageCanvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
-          pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 10, yOffset, pdfWidth, Math.min(pageHeight, remainingHeight));
-        }
-        remainingHeight -= pageHeight;
-        if (remainingHeight > 0) { pdf.addPage(); yOffset = 10; }
-      }
-
-      const filename = `${this.reportPanelTitle.replace(/\s+/g, '-')}-${this.reportFromDate.toISOString().split('T')[0]}-to-${this.reportToDate.toISOString().split('T')[0]}.pdf`;
-      pdf.save(filename);
-      this.snackBar.open('PDF downloaded ✓', 'Close', { duration: 2000 });
-    } catch (err) {
-      console.error('PDF generation error:', err);
-      this.snackBar.open('Failed to generate PDF.', 'Close', { duration: 3000 });
-    }
-  }
-
-  copyReportResult(): void {
-    navigator.clipboard.writeText(this.reportResult).then(() => {
-      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
-    });
   }
 
   // ============= Import Methods (Sales & Customers) =============
@@ -9825,6 +10541,10 @@ export class SalesDashboardComponent implements OnInit {
     // Sales History is tab index 3 — lazy load on first view
     if (index === 3 && !this.salesHistoryLoaded) {
       this.loadSalesHistory();
+    }
+    // Trip Sheets is the last tab (index 6) — lazy load on first view
+    if (index === 6 && !this.tripSheetsLoaded) {
+      this.loadSalesTripSheets();
     }
   }
 
@@ -10749,7 +11469,6 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   private openPodUploadDialogAfterAuth(): void {
-    const formData = new FormData();
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.zip';
@@ -10757,25 +11476,25 @@ export class SalesDashboardComponent implements OnInit {
       const file = e.target.files[0];
       if (!file) return;
 
-      const driverName = prompt('Enter driver name:');
-      if (!driverName) return;
+      // Ask for the invoice number(s) this POD covers — a single POD can cover
+      // multiple invoices, so accept a comma/space separated list.
+      const invoiceNumbers = prompt('Enter the invoice number(s) this POD covers.\nSeparate multiple with a comma, e.g. IN123456, IN123457');
+      if (!invoiceNumbers || !invoiceNumbers.trim()) return;
 
-      const region = prompt('Enter region (GP or KZN):');
-      if (!region) return;
+      const region = prompt('Enter region (GP or KZN) — optional:') || '';
+      const dateStr = prompt('Enter delivery date (YYYY-MM-DD) — optional:') || '';
 
-      const dateStr = prompt('Enter delivery date (YYYY-MM-DD):');
-      if (!dateStr) return;
-
+      const formData = new FormData();
       formData.append('file', file);
-      formData.append('driverName', driverName);
-      formData.append('region', region.toUpperCase());
-      formData.append('deliveryDate', dateStr);
+      formData.append('invoiceNumbers', invoiceNumbers.trim());
+      if (region.trim()) formData.append('region', region.toUpperCase().trim());
+      if (dateStr.trim()) formData.append('deliveryDate', dateStr.trim());
 
-      this.http.post(`${this.apiUrl}/PodDocuments/upload`, formData).subscribe({
-        next: () => {
+      this.http.post<any>(`${this.apiUrl}/PodDocuments/upload-with-invoices`, formData).subscribe({
+        next: (res) => {
           this.loadPodDocuments();
           this.loadPodSummary();
-          this.snackBar.open('POD uploaded successfully!', 'Close', { duration: 3000 });
+          this.snackBar.open(res?.message || 'POD uploaded and linked!', 'Close', { duration: 4000 });
         },
         error: (err) => {
           console.error('Failed to upload POD:', err);
@@ -10832,31 +11551,45 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   openLinkInvoiceDialog(pod: any): void {
-    const search = prompt('Enter invoice number to search:');
-    if (!search) return;
+    // A single POD can be linked to multiple invoices — accept a comma/space
+    // separated list of invoice numbers and link them all in one go.
+    const input = prompt('Enter invoice number(s) to link to this POD.\nSeparate multiple with a comma, e.g. IN123456, IN123457');
+    if (!input || !input.trim()) return;
 
-    this.http.get<any[]>(`${this.apiUrl}/PodDocuments/search-invoices?search=${encodeURIComponent(search)}`).subscribe({
-      next: (invoices) => {
-        if (invoices.length === 0) {
-          this.snackBar.open('No matching invoices found', 'Close', { duration: 3000 });
-          return;
-        }
-        const options = invoices.map((inv, i) => `${i + 1}. ${inv.transactionNumber} - ${inv.customerName} (${inv.status})`).join('\n');
-        const choice = prompt(`Select an invoice:\n${options}\n\nEnter number:`);
-        if (!choice) return;
-        const idx = parseInt(choice) - 1;
-        if (idx >= 0 && idx < invoices.length) {
-          this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/link-invoice`, { invoiceId: invoices[idx].id }).subscribe({
-            next: () => {
-              this.loadPodDocuments();
-              this.loadPodSummary();
-              this.snackBar.open(`POD linked to invoice ${invoices[idx].transactionNumber} → Status set to Delivered`, 'Close', { duration: 4000 });
-            },
-            error: () => this.snackBar.open('Failed to link POD to invoice', 'Close', { duration: 3000 })
-          });
-        }
-      },
-      error: () => this.snackBar.open('Failed to search invoices', 'Close', { duration: 3000 })
+    const tokens = input.split(/[\s,;]+/).map(t => t.trim()).filter(Boolean);
+    if (tokens.length === 0) return;
+
+    // Resolve each typed number to an invoice id via search, then bulk-link.
+    const lookups = tokens.map(t =>
+      this.http.get<any[]>(`${this.apiUrl}/PodDocuments/search-invoices?search=${encodeURIComponent(t)}`).toPromise()
+        .then(results => {
+          if (!results || results.length === 0) return { token: t, id: null as number | null };
+          // Prefer an exact transaction-number match, else the first result.
+          const exact = results.find(r => (r.transactionNumber || '').toLowerCase() === t.toLowerCase());
+          return { token: t, id: (exact || results[0]).id as number };
+        })
+        .catch(() => ({ token: t, id: null as number | null }))
+    );
+
+    Promise.all(lookups).then(resolved => {
+      const invoiceIds = resolved.filter(r => r.id != null).map(r => r.id as number);
+      const notFound = resolved.filter(r => r.id == null).map(r => r.token);
+
+      if (invoiceIds.length === 0) {
+        this.snackBar.open('No matching invoices found for: ' + notFound.join(', '), 'Close', { duration: 4000 });
+        return;
+      }
+
+      this.http.put<any>(`${this.apiUrl}/PodDocuments/${pod.id}/link-invoices`, { invoiceIds }).subscribe({
+        next: (res) => {
+          this.loadPodDocuments();
+          this.loadPodSummary();
+          const base = res?.message || `POD linked to ${invoiceIds.length} invoice(s)`;
+          const warn = notFound.length ? ` · Not found: ${notFound.join(', ')}` : '';
+          this.snackBar.open(base + warn, 'Close', { duration: 5000 });
+        },
+        error: () => this.snackBar.open('Failed to link POD to invoices', 'Close', { duration: 3000 })
+      });
     });
   }
 
@@ -11143,27 +11876,17 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   openEditPodDialog(pod: any): void {
-    const driverName = prompt('Driver name:', pod.driverName);
-    if (driverName === null) return;
+    const dialogRef = this.dialog.open(EditPodDialog, {
+      width: '550px',
+      maxWidth: '95vw',
+      data: { pod, drivers: this.podDriverList }
+    });
 
-    const region = prompt('Region (GP/KZN):', pod.region);
-    if (region === null) return;
-
-    const notes = prompt('Notes:', pod.notes || '');
-
-    this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}`, {
-      driverName: driverName || pod.driverName,
-      region: region || pod.region,
-      notes: notes
-    }).subscribe({
-      next: () => {
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.updated) {
         this.loadPodDocuments();
         this.loadPodSummary();
         this.snackBar.open('POD details updated', 'Close', { duration: 3000 });
-      },
-      error: (err) => {
-        console.error('Failed to update POD:', err);
-        this.snackBar.open('Failed to update POD details', 'Close', { duration: 3000 });
       }
     });
   }

@@ -395,10 +395,10 @@ interface Permission {
       color: white;
     }
 
-    .stat-icon.total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stat-icon.total { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
     .stat-icon.active { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
     .stat-icon.inactive { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
-    .stat-icon.admin { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stat-icon.admin { background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%); }
 
     .stat-content {
       display: flex;
@@ -468,7 +468,7 @@ interface Permission {
     .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
     .lc-progress-fill {
       height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #6366f1, #818cf8, #8b5cf6);
+      background: linear-gradient(90deg, #6366f1, #60a5fa, #8b5cf6);
       background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
       transition: width 0.15s ease-out; position: relative;
     }
@@ -542,7 +542,7 @@ interface Permission {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
       display: flex;
       align-items: center;
       justify-content: center;

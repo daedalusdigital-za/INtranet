@@ -147,7 +147,7 @@
 
 // Chat Header
 .chat-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   color: white;
   padding: 16px 20px;
   display: flex;
@@ -272,7 +272,7 @@
   position: relative;
 
   .user-message & {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
     color: white;
     border-bottom-right-radius: 4px;
   }
@@ -286,7 +286,7 @@
 
   &.action-bubble {
     max-width: 85%;
-    border-left: 4px solid #667eea;
+    border-left: 4px solid #2563eb;
     border-radius: 4px 16px 16px 4px;
     font-size: 13px;
   }
@@ -412,7 +412,7 @@
     flex: 1;
 
     svg {
-      color: #667eea;
+      color: #2563eb;
       flex-shrink: 0;
     }
 
@@ -462,7 +462,7 @@
   height: 44px;
   border: none;
   background: transparent;
-  color: #667eea;
+  color: #2563eb;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
@@ -472,7 +472,7 @@
   flex-shrink: 0;
 
   &:hover {
-    background: rgba(102, 126, 234, 0.1);
+    background: rgba(37, 99, 235, 0.1);
   }
 
   &:active {
@@ -490,8 +490,8 @@
   transition: all 0.2s ease;
 
   &:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
   }
 
   &::placeholder {
@@ -503,7 +503,7 @@
   width: 44px;
   height: 44px;
   border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   color: white;
   border-radius: 50%;
   cursor: pointer;
@@ -515,7 +515,7 @@
 
   &:hover:not(:disabled) {
     transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
   }
 
   &:active:not(:disabled) {
@@ -548,7 +548,7 @@
 // Streaming cursor animation
 .cursor {
   animation: blink 1s infinite;
-  color: #667eea;
+  color: #2563eb;
   font-weight: bold;
 }
 
@@ -580,8 +580,8 @@
   flex-shrink: 0;
 
   &:hover {
-    background: rgba(102, 126, 234, 0.12);
-    color: #667eea;
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
   }
 
   &.listening {

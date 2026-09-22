@@ -1,5 +1,57 @@
 /* You can add global styles to this file, and also import other style files */
 
+/* ============================================================
+   Typography — modern geometric sans-serif
+   Body: Manrope (geometric-humanist, great in dense tables)
+   Headings: Outfit (pure geometric) with tight tracking
+   ============================================================ */
+:root {
+  --font-body: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Outfit', 'Manrope', system-ui, sans-serif;
+
+  /* ---- Brand palette (professional blue) ----
+     Replaces the old #2563eb/#1e40af "AI purple". */
+  --brand-50:  #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;   /* primary */
+  --brand-700: #1d4ed8;
+  --brand-800: #1e40af;   /* deep */
+  --brand: var(--brand-600);
+  --brand-grad: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+
+  /* ---- Neutral slate base ---- */
+  --ink-900: #0f172a;
+  --ink-700: #334155;
+  --ink-500: #64748b;
+  --ink-300: #cbd5e1;
+  --ink-100: #f1f5f9;
+  --surface: #ffffff;
+  --canvas: #f5f7fa;
+
+  /* ---- Radius ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-control: 10px;   /* search bars, dropdowns, inputs */
+
+  /* ---- Elevation (soft, low-contrast) ---- */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+  /* ---- Spacing (4/8 grid) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+}
+
 html, body { 
   height: 100%; 
   margin: 0;
@@ -7,8 +59,30 @@ html, body {
 }
 
 body { 
-  font-family: Roboto, "Helvetica Neue", sans-serif;
+  font-family: var(--font-body);
   background-color: #f5f5f5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.006em;
+}
+
+/* Geometric headings with fairly tight proportions */
+h1, h2, h3, h4, h5, h6,
+.mat-mdc-card-title, .mat-mdc-dialog-title, .mat-toolbar {
+  font-family: var(--font-heading);
+  letter-spacing: -0.018em;
+  font-weight: 700;
+}
+
+/* Force Angular Material components onto the new body font (they default to
+   Roboto via their own design tokens). */
+.mat-typography,
+.mat-mdc-button, .mat-mdc-raised-button, .mat-mdc-stroked-button,
+.mat-mdc-flat-button, .mat-mdc-icon-button, .mat-mdc-outlined-button,
+.mat-mdc-form-field, .mat-mdc-select, .mat-mdc-menu-item,
+.mat-mdc-table, .mat-mdc-chip, .mat-mdc-tab, .mat-mdc-list-item,
+.mat-mdc-tooltip, .mdc-button__label, .mat-mdc-option {
+  font-family: var(--font-body) !important;
 }
 
 /* Animated background visibility - ensures icons show through page backgrounds */
@@ -19,9 +93,9 @@ app-root {
   z-index: 1;
 }
 
-/* Universal toolbar styling - dark blue across all pages */
+/* Universal toolbar styling - cohesive brand across all pages */
 mat-toolbar {
-  background: #1e90ff !important;
+  background: var(--brand-700) !important;
   color: white !important;
 }
 
@@ -56,10 +130,10 @@ mat-toolbar mat-icon {
 
 /* Message notification snackbar - more prominent */
 .message-notification-snack .mdc-snackbar__surface {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: var(--brand-700) !important;
   color: white !important;
-  border-radius: 12px !important;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
   padding: 12px 16px !important;
 }
 
@@ -144,7 +218,7 @@ mat-toolbar mat-icon {
   z-index: 10000 !important;
   border-radius: 4px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  font-family: Roboto, sans-serif;
+  font-family: var(--font-body);
 }
 
 .pac-item {
@@ -259,6 +333,19 @@ body.artwork-viewer-open app-chatbot {
   display: none !important;
 }
 
+/* I Hate PDF toolbox dialog */
+.ihp-dialog-panel .mat-mdc-dialog-container {
+  padding: 0 !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+.ihp-dialog-panel .mat-mdc-dialog-surface {
+  padding: 0 !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35) !important;
+}
+
 /* Logistics Open Map dialog */
 .open-map-dialog-panel .mat-mdc-dialog-container {
   padding: 0 !important;
@@ -275,4 +362,239 @@ body.artwork-viewer-open app-chatbot {
   max-height: none !important;
   margin: 0 !important;
   padding: 0 !important;
+}
+
+/* ============================================================
+   Form control consistency
+   One rounded style for every search bar, dropdown and text
+   input across the app. Kills the rectangular vs. curved
+   inconsistency without touching each component.
+   ============================================================ */
+
+/* Native search bars / filter inputs / dropdowns */
+.search-input,
+.filter-input,
+.filter-select,
+.search-bar,
+.search-box,
+input.search,
+select.filter,
+select:not([multiple]) {
+  border-radius: var(--radius-control) !important;
+}
+
+/* Wrappers that hold an icon + borderless input (transparent inner input) */
+.search-input-wrap,
+.search-wrapper,
+.search-container,
+.filter-wrap {
+  border-radius: var(--radius-control) !important;
+}
+
+/* Angular Material outlined form fields (mat-form-field appearance="outline").
+   Round every corner of the notched outline uniformly. */
+.mat-mdc-form-field .mdc-notched-outline__leading {
+  border-top-left-radius: var(--radius-control) !important;
+  border-bottom-left-radius: var(--radius-control) !important;
+  width: var(--radius-control) !important;
+}
+.mat-mdc-form-field .mdc-notched-outline__trailing {
+  border-top-right-radius: var(--radius-control) !important;
+  border-bottom-right-radius: var(--radius-control) !important;
+}
+
+/* Filled/plain text-field flavour */
+.mat-mdc-text-field-wrapper {
+  border-radius: var(--radius-control) !important;
+}
+
+/* The dropdown panel that opens from a mat-select */
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel,
+.mat-mdc-menu-panel {
+  border-radius: var(--radius-md) !important;
+}
+
+/* Google Places autocomplete dropdown -> match app radius */
+.pac-container {
+  border-radius: var(--radius-md) !important;
+}
+
+/* ============================================================
+   Micro-interactions — custom flair, GPU-cheap
+   Everything here animates transform/opacity only (composited,
+   no layout thrash) and is disabled under reduced-motion.
+   ============================================================ */
+
+/* ---- 1. Card entrance: fade + rise, with a subtle stagger ---- */
+@keyframes ui-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Opt-in per view: add class="ui-stagger" on a grid/row wrapper and its
+   direct children animate in sequence. */
+.ui-stagger > * {
+  animation: ui-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ui-stagger > *:nth-child(1) { animation-delay: 0.00s; }
+.ui-stagger > *:nth-child(2) { animation-delay: 0.04s; }
+.ui-stagger > *:nth-child(3) { animation-delay: 0.08s; }
+.ui-stagger > *:nth-child(4) { animation-delay: 0.12s; }
+.ui-stagger > *:nth-child(5) { animation-delay: 0.16s; }
+.ui-stagger > *:nth-child(6) { animation-delay: 0.20s; }
+.ui-stagger > *:nth-child(7) { animation-delay: 0.24s; }
+.ui-stagger > *:nth-child(8) { animation-delay: 0.28s; }
+.ui-stagger > *:nth-child(n+9) { animation-delay: 0.30s; }
+
+/* ---- 2. Hover lift for cards & interactive tiles ---- */
+.ui-lift,
+.stat-card, .modern-stat-card, .kpi-card, .module-card, .mc-card,
+.dashboard-card, .widget-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  will-change: transform;
+}
+.ui-lift:hover,
+.stat-card:hover, .modern-stat-card:hover, .kpi-card:hover,
+.module-card:hover, .mc-card:hover,
+.dashboard-card:hover, .widget-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ---- 3. Branded focus ring (accessible + cohesive) ---- */
+.search-input:focus,
+.filter-input:focus,
+.filter-select:focus,
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-100);
+  border-color: var(--brand-500) !important;
+}
+
+/* ---- 4. Skeleton shimmer loader utility ---- */
+@keyframes ui-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: #eef2f7;
+  background-image: linear-gradient(
+    90deg, #eef2f7 0px, #f6f8fb 200px, #eef2f7 400px
+  );
+  background-size: 800px 100%;
+  animation: ui-shimmer 1.2s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- 5. Button press feedback ---- */
+.mat-mdc-raised-button:active,
+.mat-mdc-flat-button:active,
+.mat-mdc-button:active,
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* ---- 6. Respect reduced-motion: kill all of the above ---- */
+@media (prefers-reduced-motion: reduce) {
+  .ui-stagger > *,
+  .skeleton {
+    animation: none !important;
+  }
+  .ui-lift, .stat-card, .modern-stat-card, .kpi-card, .module-card,
+  .mc-card, .dashboard-card, .widget-card,
+  .mat-mdc-raised-button, .mat-mdc-flat-button, .mat-mdc-button, button {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* ============================================================
+   Flat icon chips — retire the multi-colour gradient tiles
+   The rainbow of diagonal-gradient icon squares is the biggest
+   "AI bento" tell. Flatten them all to one calm tinted chip:
+   soft brand-tinted background + brand icon. Also paints faster
+   (no gradient) and reads as deliberately designed.
+   ============================================================ */
+.stat-icon-wrapper,
+.stat-icon-mini,
+.header-icon-wrap,
+.widget-icon,
+.kpi-icon,
+.mc-icon,
+.module-icon,
+.card-icon,
+.metric-icon {
+  background: var(--brand-50) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: 1px solid var(--brand-100) !important;
+}
+
+/* Icons inside the chips: brand colour instead of white-on-gradient */
+.stat-icon-wrapper mat-icon,
+.stat-icon-mini mat-icon,
+.header-icon-wrap mat-icon,
+.widget-icon mat-icon,
+.kpi-icon mat-icon,
+.mc-icon mat-icon,
+.module-icon mat-icon,
+.card-icon mat-icon,
+.metric-icon mat-icon {
+  color: var(--brand-700) !important;
+}
+
+/* ============================================================
+   Shared brand layout utilities (opt-in)
+   Adopt these on new/updated pages for a consistent look:
+     <div class="brand-page"> ... <div class="brand-surface"> ...
+   Non-breaking: nothing uses these unless a component opts in.
+   ============================================================ */
+.brand-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 45%, #1e40af 100%);
+  background-attachment: fixed;
+}
+
+/* White content card that lifts off the brand gradient */
+.brand-surface {
+  background: var(--surface);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* Page header sitting on the brand gradient (white text + frosted icon) */
+.brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.brand-header__lead { display: flex; align-items: center; gap: 14px; }
+.brand-header__icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 14px;
+  padding: 8px;
+  box-sizing: content-box;
+  flex-shrink: 0;
+}
+.brand-header__title { margin: 0; color: #fff; font-size: 1.3rem; font-weight: 700; }
+.brand-header__subtitle { margin: 0; color: rgba(255, 255, 255, 0.82); font-size: 0.8rem; }
+
+/* Responsive card grid helpers */
+.brand-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.brand-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.brand-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+@media (max-width: 900px) {
+  .brand-grid-2, .brand-grid-3, .brand-grid-4 { grid-template-columns: 1fr; }
 }

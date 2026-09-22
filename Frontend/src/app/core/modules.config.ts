@@ -31,6 +31,7 @@ export const MODULE_KEYS = {
   AI: 'ai',
   CALENDAR: 'calendar',
   FINANCE: 'finance',
+  MANAGEMENT: 'management',
   SETTINGS: 'settings'
 } as const;
 
@@ -138,8 +139,8 @@ export const MODULES: ModuleConfig[] = [
   },
   {
     key: 'documents',
-    name: 'Documents',
-    description: 'Document management and file sharing',
+    name: 'Portal',
+    description: 'Portal management and file sharing',
     icon: 'folder',
     route: '/documents',
     color: '#607D8B',
@@ -212,6 +213,17 @@ export const MODULES: ModuleConfig[] = [
     requiresPermission: true,
     showInNavbar: false,
     showInDashboard: false
+  },
+  {
+    key: 'management',
+    name: 'Management',
+    description: 'Executive oversight: sales, tenders, logistics, finance, paperless approvals and payments',
+    icon: 'insights',
+    route: '/management',
+    color: '#2563eb',
+    requiresPermission: true,
+    showInNavbar: true,
+    showInDashboard: true
   },
   {
     key: 'settings',
@@ -388,6 +400,12 @@ export function getModuleRoutes(): Routes {
 
     // Logistics Module
     { 
+      path: 'logistics/scan', 
+      loadComponent: () => import('../components/logistics/asset-tracking.component').then(m => m.AssetTrackingComponent),
+      canActivate: [authGuard, moduleGuard], 
+      data: { module: 'logistics' } 
+    },
+    { 
       path: 'logistics', 
       loadComponent: () => import('../components/logistics/logistics-dashboard.component').then(m => m.LogisticsDashboardComponent),
       canActivate: [authGuard, moduleGuard], 
@@ -506,6 +524,14 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard] 
     },
     
+    // Management / Executive Oversight Module
+    {
+      path: 'management',
+      loadComponent: () => import('../components/management/management.component').then(m => m.ManagementComponent),
+      canActivate: [authGuard, moduleGuard],
+      data: { module: 'management' }
+    },
+
     // Collaborative Documents Module
     { 
       path: 'docs', 
@@ -515,6 +541,11 @@ export function getModuleRoutes(): Routes {
     { 
       path: 'docs/:id', 
       loadComponent: () => import('../components/collaborative-docs/doc-editor/doc-editor.component').then(m => m.DocEditorComponent),
+      canActivate: [authGuard] 
+    },
+    { 
+      path: 'sheets/:id', 
+      loadComponent: () => import('../components/collaborative-docs/sheet-editor/sheet-editor.component').then(m => m.SheetEditorComponent),
       canActivate: [authGuard] 
     },
     
