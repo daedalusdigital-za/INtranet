@@ -451,12 +451,40 @@ namespace ProjectTracker.API.Controllers
             return Ok(employee);
         }
 
+        // Returns the current time in South Africa Standard Time (UTC+2),
+        // resilient to differing timezone-id conventions across OSes.
+        private static DateTime GetSouthAfricaNow()
+        {
+            try
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById("South Africa Standard Time");
+                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                try
+                {
+                    var tz = TimeZoneInfo.FindSystemTimeZoneById("Africa/Johannesburg");
+                    return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+                }
+                catch
+                {
+                    // Fallback: SAST is a fixed UTC+2 offset with no DST.
+                    return DateTime.UtcNow.AddHours(2);
+                }
+            }
+        }
+
         // GET: api/attendance/earliest-today
         [HttpGet("earliest-today")]
         public async Task<ActionResult<object>> GetEarliestEmployeesToday()
         {
-            // Use local date instead of UTC to match database dates
-            var today = DateTime.Now.Date;
+            // Compute "today" in South Africa time (UTC+2) so it matches the
+            // dates written by the biometric clock-in machine. The container
+            // runs in UTC, so DateTime.Now can be on the previous/next calendar
+            // day during the day-boundary window, which caused the dashboard to
+            // incorrectly show "No check-ins yet" despite existing clock-ins.
+            var today = GetSouthAfricaNow().Date;
             
             // Get all check-ins from today
             var allAttendance = await _context.AttendanceRecords

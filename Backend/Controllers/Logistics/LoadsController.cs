@@ -1196,6 +1196,23 @@ namespace ProjectTracker.API.Controllers.Logistics
             };
         }
 
+        // Summarise distinct customer names from a load's delivery stops
+        // (used when a multi-customer load has no single CustomerId set).
+        private static string? SummariseStopCustomers(Load l)
+        {
+            if (l.Stops == null) return null;
+            var names = l.Stops
+                .Where(s => !string.Equals(s.StopType, "Pickup", StringComparison.OrdinalIgnoreCase))
+                .Select(s => s.Customer?.Name ?? s.CompanyName)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (names.Count == 0) return null;
+            if (names.Count == 1) return names[0];
+            return $"{names[0]} +{names.Count - 1} more";
+        }
+
         // Helper method to map Load to LoadDto
         private static LoadDto MapToLoadDto(Load l)
         {
@@ -1204,7 +1221,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 Id = l.Id,
                 LoadNumber = l.LoadNumber,
                 CustomerId = l.CustomerId,
-                CustomerName = l.Customer?.Name,
+                CustomerName = l.Customer?.Name ?? SummariseStopCustomers(l),
                 VehicleId = l.VehicleId,
                 VehicleRegistration = l.Vehicle?.RegistrationNumber,
                 DriverId = l.DriverId,

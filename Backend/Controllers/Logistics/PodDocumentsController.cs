@@ -105,12 +105,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     p.InvoiceId,
                     InvoiceNumber = p.Invoice != null ? p.Invoice.TransactionNumber : null,
                     InvoiceLinks = p.InvoiceLinks
-                        .OrderBy(l => l.Invoice != null ? l.Invoice.TransactionNumber : "")
+                        .OrderBy(l => l.Invoice != null ? l.Invoice.TransactionNumber : l.InvoiceNumber)
                         .Select(l => new
                         {
                             l.Id,
                             l.InvoiceId,
-                            InvoiceNumber = l.Invoice != null ? l.Invoice.TransactionNumber : null,
+                            InvoiceNumber = l.Invoice != null ? l.Invoice.TransactionNumber : l.InvoiceNumber,
                             l.LinkedAt
                         })
                         .ToList()
@@ -174,6 +174,71 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .ToListAsync();
 
             return Ok(drivers);
+        }
+
+        /// <summary>
+        /// Get a tripsheet/load with all POD documents (attachments) linked to it.
+        /// Used by the POD Documents side panel when clicking a tripsheet badge.
+        /// </summary>
+        [HttpGet("by-load/{loadId}")]
+        public async Task<IActionResult> GetByLoad(int loadId)
+        {
+            var load = await _context.Loads
+                .Where(l => l.Id == loadId)
+                .Select(l => new
+                {
+                    l.Id,
+                    l.LoadNumber,
+                    l.Status,
+                    l.DriverId,
+                    l.ScheduledDeliveryDate,
+                    l.ActualDeliveryDate,
+                    l.DeliveryLocation,
+                    l.PickupLocation
+                })
+                .FirstOrDefaultAsync();
+
+            if (load == null)
+                return NotFound("Tripsheet/load not found");
+
+            var pods = await _context.PodDocuments
+                .Include(p => p.InvoiceLinks)
+                    .ThenInclude(l => l.Invoice)
+                .Where(p => p.LoadId == loadId)
+                .OrderByDescending(p => p.DeliveryDate)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.PodNumber,
+                    p.DriverId,
+                    p.DriverName,
+                    p.DeliveryDate,
+                    p.Region,
+                    p.FileName,
+                    p.OriginalFileName,
+                    p.ContentType,
+                    p.FileSize,
+                    p.Notes,
+                    p.UploadedAt,
+                    p.CreatedAt,
+                    p.LoadId,
+                    LoadNumber = p.Load != null ? p.Load.LoadNumber : null,
+                    p.InvoiceId,
+                    InvoiceNumber = p.Invoice != null ? p.Invoice.TransactionNumber : null,
+                    InvoiceLinks = p.InvoiceLinks
+                        .OrderBy(l => l.Invoice != null ? l.Invoice.TransactionNumber : l.InvoiceNumber)
+                        .Select(l => new
+                        {
+                            l.Id,
+                            l.InvoiceId,
+                            InvoiceNumber = l.Invoice != null ? l.Invoice.TransactionNumber : l.InvoiceNumber,
+                            l.LinkedAt
+                        })
+                        .ToList()
+                })
+                .ToListAsync();
+
+            return Ok(new { load, pods });
         }
 
         /// <summary>
@@ -1159,9 +1224,19 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (request?.Candidates == null || request.Candidates.Count == 0)
                 return Ok(new { matches = new List<object>(), unmatched = new List<string>() });
 
+            var (matches, unmatched) = await BuildInvoiceMatchesAsync(request.Candidates);
+            return Ok(new { matches, unmatched });
+        }
+
+        /// <summary>
+        /// Shared matching engine: normalises raw OCR candidates, corrects common mis-reads and
+        /// validates them against ImportedInvoices. Returns matched invoice objects + unmatched raw tokens.
+        /// </summary>
+        private async Task<(List<object> matches, List<string> unmatched)> BuildInvoiceMatchesAsync(List<string> candidates)
+        {
             // Build the set of normalized candidate keys → keep the original OCR text for display.
             var candidateMap = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var raw in request.Candidates)
+            foreach (var raw in candidates)
             {
                 if (string.IsNullOrWhiteSpace(raw)) continue;
                 foreach (var normalized in NormalizeInvoiceCandidate(raw))
@@ -1176,7 +1251,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             if (candidateMap.Count == 0)
-                return Ok(new { matches = new List<object>(), unmatched = request.Candidates });
+                return (new List<object>(), candidates.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList());
 
             var keys = candidateMap.Keys.ToList();
 
@@ -1203,7 +1278,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             var matchedKeys = new HashSet<string>(found.Select(f => f.TransactionNumber), StringComparer.OrdinalIgnoreCase);
 
-            var matches = found.Select(f => new
+            var matches = found.Select(f => (object)new
             {
                 f.Id,
                 f.TransactionNumber,
@@ -1227,11 +1302,88 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Distinct()
                 .ToList();
 
-            return Ok(new { matches, unmatched });
+            return (matches, unmatched);
         }
 
         /// <summary>
-        /// Produces one or more candidate invoice numbers (format IN######) from a raw OCR token,
+        /// SERVER-SIDE INTENSIVE OCR fallback. Runs Tesseract on the server against the POD file
+        /// (rendering PDF pages via poppler), with orientation auto-detection (handles upside-down /
+        /// sideways scans) and image preprocessing. Extracts invoice numbers and matches them.
+        /// Use this when the in-browser OCR fails to read a difficult / rotated scan.
+        /// </summary>
+        [HttpPost("{id}/server-ocr")]
+        public async Task<IActionResult> ServerOcr(int id, [FromServices] ServerOcrService ocr)
+        {
+            var pod = await _context.PodDocuments.FindAsync(id);
+            if (pod == null)
+                return NotFound("POD document not found");
+            if (!System.IO.File.Exists(pod.FilePath))
+                return NotFound("POD file not found on server");
+
+            if (!ServerOcrService.IsAvailable)
+                return StatusCode(503, new { error = "Server OCR engine (tesseract) is not installed in this environment." });
+
+            OcrExtractionResult result;
+            try
+            {
+                result = await ocr.ExtractInvoiceCandidatesAsync(pod.FilePath, pod.ContentType);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Server OCR failed", detail = ex.Message });
+            }
+
+            var (matches, unmatched) = await BuildInvoiceMatchesAsync(result.Candidates);
+
+            return Ok(new
+            {
+                matches,
+                unmatched,
+                candidates = result.Candidates,
+                rawText = result.RawText,
+                pageCount = result.PageCount,
+                engine = "tesseract-server"
+            });
+        }
+
+        /// <summary>
+        /// Detect invoice numbers from an uploaded file BEFORE it is saved as a POD.
+        /// Used by the multi-POD Tools uploader so the user can auto-fill the invoice-number
+        /// field (Welly reads the scan, auto-rotating upside-down pages) and edit before upload.
+        /// </summary>
+        [HttpPost("detect-invoices")]
+        [RequestSizeLimit(25_000_000)]
+        public async Task<IActionResult> DetectInvoices([FromForm] IFormFile file, [FromServices] ServerOcrService ocr)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file provided");
+
+            if (!ServerOcrService.IsAvailable)
+                return StatusCode(503, new { error = "Server OCR engine (tesseract) is not installed in this environment." });
+
+            OcrExtractionResult result;
+            try
+            {
+                using var stream = file.OpenReadStream();
+                result = await ocr.ExtractFromStreamAsync(stream, file.FileName, file.ContentType);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Server OCR failed", detail = ex.Message });
+            }
+
+            var (matches, unmatched) = await BuildInvoiceMatchesAsync(result.Candidates);
+
+            return Ok(new
+            {
+                matches,
+                unmatched,
+                candidates = result.Candidates,
+                pageCount = result.PageCount,
+                engine = "tesseract-server"
+            });
+        }
+
         /// applying common OCR character-confusion corrections.
         /// </summary>
         private static IEnumerable<string> NormalizeInvoiceCandidate(string raw)

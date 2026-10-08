@@ -177,5 +177,24 @@ namespace ProjectTracker.API.Controllers
 
             return File(user.ProfilePictureData, user.ProfilePictureMimeType ?? "image/jpeg");
         }
+
+        // DELETE: api/profile/{userId}/photo
+        [HttpDelete("{userId}/photo")]
+        public async Task<IActionResult> DeletePhoto(int userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            user.ProfilePictureData = null;
+            user.ProfilePictureMimeType = null;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Profile photo removed for user {UserId}", userId);
+
+            return Ok(new { message = "Photo removed successfully" });
+        }
     }
 }

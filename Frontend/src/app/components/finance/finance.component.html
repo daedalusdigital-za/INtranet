@@ -568,58 +568,8 @@
 }
 
 <!-- ═══════════════════════════════════════════════ -->
-<!--  PASSWORD DIALOG                               -->
-<!-- ═══════════════════════════════════════════════ -->
-@if (showPasswordDialog) {
-  <div class="dialog-backdrop" (click)="closePasswordDialog()">
-    <div class="dialog-panel password-dialog" (click)="$event.stopPropagation()">
-      <div class="dialog-header">
-        <div class="dialog-header-left">
-          <div class="dialog-icon lock-icon">
-            <mat-icon>lock</mat-icon>
-          </div>
-          <div>
-            <h2>Authentication Required</h2>
-            <p>Enter the password for <strong>{{ selectedCompany }}</strong></p>
-          </div>
-        </div>
-        <button class="dialog-close" (click)="closePasswordDialog()">
-          <mat-icon>close</mat-icon>
-        </button>
-      </div>
-      <div class="password-body">
-        <div class="password-input-group">
-          <label>
-            <mat-icon>vpn_key</mat-icon>
-            Password
-          </label>
-          <input
-            type="password"
-            [(ngModel)]="companyPassword"
-            placeholder="Enter company password..."
-            (keyup.enter)="submitPassword()"
-            autofocus>
-        </div>
-        @if (passwordError) {
-          <div class="password-error">
-            <mat-icon>error_outline</mat-icon>
-            {{ passwordError }}
-          </div>
-        }
-        <div class="password-actions">
-          <button class="btn-secondary" (click)="backToCompanySelect()">
-            <mat-icon>arrow_back</mat-icon>
-            Back
-          </button>
-          <button class="btn-primary" (click)="submitPassword()" [disabled]="!companyPassword">
-            <mat-icon>login</mat-icon>
-            Unlock
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-}
+<!--  PASSWORD DIALOG REMOVED — access is now verified server-side via
+      GET /api/finance/company-access (role check on the JWT).           -->
 
 <!-- ═══════════════════════════════════════════════ -->
 <!--  REQUESTED PAYMENTS PANEL (full overlay)       -->

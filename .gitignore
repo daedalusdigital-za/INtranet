@@ -98,6 +98,8 @@ appsettings.local.json
 # appsettings.json contains real credentials — keep sensitive files out of git
 # Use appsettings.Production.json (env-var placeholders) and user secrets in dev
 Backend/appsettings.json
+Backend/appsettings.Development.json
+Backend/publish/
 docker-compose.yml
 
 # ===================

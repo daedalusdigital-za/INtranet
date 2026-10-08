@@ -14,11 +14,19 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly IEmailService _emailService;
         private readonly ILogger<ToolsController> _logger;
+        private readonly IAuditLogService _auditLog;
+        private readonly string _documentsBasePath;
 
-        public ToolsController(IEmailService emailService, ILogger<ToolsController> logger)
+        public ToolsController(
+            IEmailService emailService,
+            ILogger<ToolsController> logger,
+            IAuditLogService auditLog,
+            IConfiguration configuration)
         {
             _emailService = emailService;
             _logger = logger;
+            _auditLog = auditLog;
+            _documentsBasePath = configuration.GetValue<string>("DocumentsPath") ?? "/app/documents";
         }
 
         /// <summary>
@@ -90,6 +98,85 @@ namespace ProjectTracker.API.Controllers
             {
                 _logger.LogError(ex, "Failed to email PDF to {Recipients}", string.Join(", ", recipients));
                 return StatusCode(500, new { message = "An error occurred while sending the email." });
+            }
+        }
+
+        /// <summary>
+        /// Persist a stamped PDF (produced client-side by the I Hate PDF ▸ Stamp tool)
+        /// into the IT portal under a "Stamped" folder, and record the activity in the
+        /// admin audit log for traceability.
+        /// </summary>
+        [HttpPost("stamp-pdf")]
+        [RequestSizeLimit(80_000_000)] // 80 MB
+        public async Task<IActionResult> SaveStampedPdf(
+            [FromForm] string? originalName,
+            [FromForm] string? stampName,
+            IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "No file provided." });
+
+            try
+            {
+                _auditLog.SetHttpContext(HttpContext);
+
+                // Store in the IT portal ▸ Stamped folder.
+                var stampedDir = Path.Combine(_documentsBasePath, "IT", "Stamped");
+                Directory.CreateDirectory(stampedDir);
+
+                // Build a safe, timestamped file name.
+                var baseName = string.IsNullOrWhiteSpace(originalName) ? "document.pdf" : originalName!;
+                baseName = Path.GetFileName(baseName); // strip any path components
+                var nameNoExt = Path.GetFileNameWithoutExtension(baseName);
+                if (string.IsNullOrWhiteSpace(nameNoExt)) nameNoExt = "document";
+                foreach (var c in Path.GetInvalidFileNameChars())
+                    nameNoExt = nameNoExt.Replace(c, '_');
+
+                var stampLabel = string.IsNullOrWhiteSpace(stampName) ? "" : $"-{stampName}";
+                foreach (var c in Path.GetInvalidFileNameChars())
+                    stampLabel = stampLabel.Replace(c, '_');
+
+                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                var finalName = $"{nameNoExt}{stampLabel}-STAMPED-{stamp}.pdf";
+                var finalPath = Path.Combine(stampedDir, finalName);
+
+                using (var stream = new FileStream(finalPath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var details = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    originalName = baseName,
+                    stampName = stampName ?? "(unspecified)",
+                    savedAs = finalName,
+                    folder = "IT/Stamped",
+                    sizeBytes = file.Length
+                });
+
+                await _auditLog.LogAsync(
+                    action: "Stamped PDF",
+                    category: "document",
+                    entityType: "Document",
+                    entityId: null,
+                    description: $"Applied '{stampName ?? "stamp"}' stamp to '{baseName}' and saved to IT ▸ Stamped.",
+                    details: details,
+                    severity: "info",
+                    isSuccess: true);
+
+                _logger.LogInformation("Saved stamped PDF '{FinalName}' to IT/Stamped.", finalName);
+
+                return Ok(new
+                {
+                    message = "Stamped PDF saved to IT portal (Stamped).",
+                    savedAs = finalName,
+                    folder = "IT/Stamped"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save stamped PDF.");
+                return StatusCode(500, new { message = "Failed to save the stamped PDF." });
             }
         }
     }

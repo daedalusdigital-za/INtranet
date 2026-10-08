@@ -71,6 +71,11 @@ import {
             <div class="kpi-value">{{ o.logistics.inTransit }}</div>
             <div class="kpi-sub">{{ o.logistics.assigned }} assigned · {{ o.logistics.available }} available</div>
           </div>
+          <div class="kpi-card k-stock" [class.attention]="o.stock.outOfStock > 0">
+            <div class="kpi-top"><mat-icon>inventory_2</mat-icon><span class="kpi-label">Stock On Hand</span></div>
+            <div class="kpi-value">{{ o.stock.totalQuantityOnHand | number }}</div>
+            <div class="kpi-sub">{{ o.stock.totalSkus | number }} SKUs · {{ o.stock.warehouses }} warehouses</div>
+          </div>
           <div class="kpi-card k-fin">
             <div class="kpi-top"><mat-icon>payments</mat-icon><span class="kpi-label">Payments Pending</span></div>
             <div class="kpi-value">{{ money(o.finance.payments.pendingAmount) }}</div>
@@ -133,6 +138,28 @@ import {
               <div class="stat-row good"><span>Delivered</span><strong>{{ o.logistics.delivered }}</strong></div>
               <div class="stat-row"><span>Pending delivery requests</span><strong>{{ o.logistics.pendingDeliveryRequests }}</strong></div>
             </div>
+          </mat-card>
+
+          <!-- Stock -->
+          <mat-card class="module-card">
+            <div class="mc-head">
+              <div class="mc-title"><mat-icon>inventory_2</mat-icon> Stock</div>
+              <a mat-button routerLink="/stock-management">Open <mat-icon>arrow_forward</mat-icon></a>
+            </div>
+            <div class="stat-rows">
+              <div class="stat-row"><span>Total SKUs</span><strong>{{ o.stock.totalSkus | number }}</strong></div>
+              <div class="stat-row"><span>Quantity on hand</span><strong>{{ o.stock.totalQuantityOnHand | number }}</strong></div>
+              <div class="stat-row"><span>Warehouses</span><strong>{{ o.stock.warehouses }}</strong></div>
+              <div class="stat-row warn"><span>Low stock</span><strong>{{ o.stock.lowStock }}</strong></div>
+              <div class="stat-row" [class.warn]="o.stock.outOfStock > 0"><span>Out of stock</span><strong>{{ o.stock.outOfStock }}</strong></div>
+            </div>
+            @if (o.stock.byWarehouse.length) {
+              <div class="mini-list">
+                @for (w of o.stock.byWarehouse; track w.warehouse) {
+                  <div class="mini-row"><span class="chip">{{ w.warehouse }}</span><strong>{{ w.totalQuantity | number }}</strong></div>
+                }
+              </div>
+            }
           </mat-card>
 
           <!-- Finance -->
@@ -264,6 +291,7 @@ import {
     .kpi-card.k-sales  { border-left-color: #2196F3; }
     .kpi-card.k-tenders{ border-left-color: #f59e0b; }
     .kpi-card.k-logi   { border-left-color: #FF9800; }
+    .kpi-card.k-stock  { border-left-color: #00897b; }
     .kpi-card.k-fin    { border-left-color: #4CAF50; }
     .kpi-card.k-appr   { border-left-color: #2563eb; }
     .kpi-card.attention { background: #f5f3ff; box-shadow: 0 4px 16px rgba(37,99,235,.18); }

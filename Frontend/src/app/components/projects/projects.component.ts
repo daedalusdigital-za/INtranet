@@ -300,22 +300,19 @@ import { environment } from '../../../environments/environment';
           </mat-card-content>
         </mat-card>
 
-        <!-- Motivational Quote -->
-        <mat-card class="widget quote-widget">
-          <mat-card-header>
-            <div class="widget-icon" style="background: linear-gradient(135deg, #FA709A 0%, #FEE140 100%);">
-              <mat-icon>format_quote</mat-icon>
-            </div>
-            <mat-card-title>Quote of the Day</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <div class="quote-container">
-              <mat-icon class="quote-mark">format_quote</mat-icon>
-              <p class="quote-text">{{ dailyQuote.text }}</p>
-              <p class="quote-author">— {{ dailyQuote.author }}</p>
-            </div>
-          </mat-card-content>
-        </mat-card>
+        <!-- Image Slideshow -->
+        @if (slideshowImageUrls.length > 0) {
+          <mat-card class="widget quote-widget image-mode">
+            @if (frontSlideUrl) {
+              <img class="slideshow-image" [class.visible]="showFront" [src]="frontSlideUrl"
+                   alt="" decoding="async" (error)="onSlideError()" />
+            }
+            @if (backSlideUrl) {
+              <img class="slideshow-image" [class.visible]="!showFront" [src]="backSlideUrl"
+                   alt="" decoding="async" (error)="onSlideError()" />
+            }
+          </mat-card>
+        }
 
       </div>
     </div>
@@ -325,15 +322,20 @@ import { environment } from '../../../environments/environment';
       display: block;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      /* Smooth, infinitely-looping animated gradient (pure CSS, no JS) */
+      background: linear-gradient(
+        -45deg,
+        #4facfe, #1e3c72, #4a1c8c, #a01a5c, #2b5876, #4facfe
+      );
+      background-size: 400% 400%;
+      animation: pageGradientShift 45s ease infinite;
       overflow-x: hidden;
+    }
+
+    @keyframes pageGradientShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
     }
 
     .spacer {
@@ -1345,6 +1347,33 @@ import { environment } from '../../../environments/environment';
     .quote-widget {
       grid-column: span 1;
       background: linear-gradient(135deg, #FA709A 0%, #FEE140 100%);
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* When showing a slideshow image, the picture fills the entire card */
+    .quote-widget.image-mode {
+      position: relative;
+      padding: 0;
+      overflow: hidden;
+      background: #1a1a1a;
+    }
+
+    .quote-widget.image-mode .slideshow-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      opacity: 0;
+      transition: opacity 1200ms ease-in-out;
+      will-change: opacity;
+    }
+
+    .quote-widget.image-mode .slideshow-image.visible {
+      opacity: 1;
     }
 
     .quote-widget mat-card-title {
@@ -1384,6 +1413,18 @@ import { environment } from '../../../environments/environment';
       font-weight: 600;
       margin: 0;
     }
+
+    .slideshow-container {
+      width: 100%;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.15);
+    }
+
   `]
 })
 export class ProjectsComponent implements OnInit, OnDestroy {
@@ -1499,6 +1540,18 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     author: 'Winston Churchill'
   };
 
+  // Quote / image slideshow
+  slideshowImageUrls: string[] = [];
+  slideshowShowingImage = false;   // false = quote is displayed, true = an image
+  slideshowIndex = 0;              // index into slideshowImageUrls
+  // Two stacked layers for a seamless crossfade (no background gap)
+  frontSlideUrl: string | null = null;
+  backSlideUrl: string | null = null;
+  showFront = true;                // which layer is currently visible
+  private slideshowInterval: any;
+  private readonly slideshowImageCount = 50;     // max images to cycle through (randomized)
+  private readonly slideshowIntervalMs = 6000;   // time per slide / quote
+
   constructor(
     private apiService: ApiService,
     private authService: AuthService,
@@ -1532,6 +1585,9 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     this.loadRecentConversations();
     this.loadUnreadCount();
 
+    // Load slideshow images and start the quote/image rotation
+    this.loadSlideshowImages();
+
     // Close dropdowns when clicking outside
     document.addEventListener('click', () => {
       this.showNotifications = false;
@@ -1547,6 +1603,76 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     if (this.weatherRotationInterval) {
       clearInterval(this.weatherRotationInterval);
     }
+    if (this.slideshowInterval) {
+      clearInterval(this.slideshowInterval);
+    }
+  }
+
+  // Quote / Image Slideshow
+  loadSlideshowImages(): void {
+    this.apiService.getRandomDashboardImages(this.slideshowImageCount).subscribe({
+      next: (res) => {
+        const images = (res?.images ?? []) as Array<{ id: number }>;
+        this.slideshowImageUrls = images.map(i => this.apiService.getDashboardImageUrl(i.id));
+        // Preload in the background so slides appear instantly during rotation
+        this.slideshowImageUrls.forEach(url => { const im = new Image(); im.src = url; });
+        this.startSlideshow();
+      },
+      error: () => {
+        // No images / error: hide the slideshow widget
+        this.slideshowImageUrls = [];
+      }
+    });
+  }
+
+  // If an image fails to load, drop it and move on so the widget never gets stuck
+  onSlideError(): void {
+    const visibleUrl = this.showFront ? this.frontSlideUrl : this.backSlideUrl;
+    if (visibleUrl) {
+      this.slideshowImageUrls = this.slideshowImageUrls.filter(u => u !== visibleUrl);
+    }
+    this.advanceSlide();
+  }
+
+  startSlideshow(): void {
+    if (this.slideshowInterval) {
+      clearInterval(this.slideshowInterval);
+    }
+    if (this.slideshowImageUrls.length === 0) {
+      this.frontSlideUrl = null;
+      this.backSlideUrl = null;
+      return;
+    }
+
+    // Show the first image immediately on the front layer, then rotate
+    this.slideshowIndex = 0;
+    this.showFront = true;
+    this.frontSlideUrl = this.slideshowImageUrls[0];
+    this.backSlideUrl = null;
+
+    if (this.slideshowImageUrls.length > 1) {
+      this.slideshowInterval = setInterval(() => this.advanceSlide(), this.slideshowIntervalMs);
+    }
+  }
+
+  advanceSlide(): void {
+    if (this.slideshowImageUrls.length === 0) {
+      this.frontSlideUrl = null;
+      this.backSlideUrl = null;
+      return;
+    }
+
+    this.slideshowIndex = (this.slideshowIndex + 1) % this.slideshowImageUrls.length;
+    const nextUrl = this.slideshowImageUrls[this.slideshowIndex];
+
+    // Load the next image onto the hidden layer, then flip visibility so
+    // the two layers crossfade with no gap and no background flash.
+    if (this.showFront) {
+      this.backSlideUrl = nextUrl;
+    } else {
+      this.frontSlideUrl = nextUrl;
+    }
+    this.showFront = !this.showFront;
   }
 
   // Hero Card Rotation

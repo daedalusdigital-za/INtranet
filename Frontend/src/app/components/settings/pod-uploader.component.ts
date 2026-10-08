@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 type PodStatus = 'pending' | 'uploading' | 'done' | 'error';
@@ -23,6 +24,11 @@ interface PodEntry {
   isImage: boolean;
   isPdf?: boolean;      // true when the file is a PDF (previewable in an iframe)
   rotation: number;   // 0, 90, 180, 270 — baked into the file on upload
+  detecting?: boolean;      // Welly OCR detection in progress
+  detectMsg?: string;       // result message from detection
+  detectElapsed?: number;   // seconds elapsed during detection (for progress feedback)
+  deliveryDate?: string;    // yyyy-MM-dd — per-file delivery date (overrides the batch date)
+  dateFromName?: boolean;   // true when the date was auto-parsed from the filename
 }
 
 /**
@@ -42,8 +48,8 @@ interface PodEntry {
     <div class="pu__intro">
       <mat-icon>fact_check</mat-icon>
       <div>
-        <h3>Upload PODs &amp; tag invoices</h3>
-        <p>Add multiple proof-of-delivery files, then enter the invoice number(s) each one covers. Invoices are matched and linked automatically — numbers that aren't imported yet are kept as <strong>pending</strong> and linked once they arrive.</p>
+        <h3>Upload PODs — auto-dated &amp; AI-matched</h3>
+        <p>Drop in multiple proof-of-delivery files. Welly reads a delivery <strong>date from each file name</strong> and <strong>scans the document</strong> to find &amp; match the invoice numbers automatically. Review, correct or add numbers per file, then upload — unmatched numbers are kept <strong>pending</strong> and linked when those invoices arrive.</p>
       </div>
     </div>
 
@@ -52,7 +58,7 @@ interface PodEntry {
       <mat-icon>event</mat-icon>
       <label for="pu-date">Delivery date</label>
       <input id="pu-date" type="date" [(ngModel)]="deliveryDate" [max]="today" />
-      <span class="pu__date-hint">Applied to all PODs in this batch · back-date freely for catch-up loads.</span>
+      <span class="pu__date-hint">Batch fallback date · used only when a file has no date. Dates found in file names are applied automatically per file.</span>
     </div>
 
     <!-- Drop / pick zone -->
@@ -68,12 +74,24 @@ interface PodEntry {
 
     @if (entries().length) {
       <div class="pu__bulkbar">
-        <span>{{ entries().length }} file(s) · {{ readyCount() }} ready · {{ doneCount() }} uploaded</span>
+        <span class="pu__bulkstat">{{ entries().length }} file(s) · {{ readyCount() }} ready · {{ doneCount() }} uploaded @if (matchedTotal() > 0) { · <strong>{{ matchedTotal() }} invoice(s) matched</strong> }</span>
         <span class="pu__spacer"></span>
-        <button class="pu__btn" (click)="clearAll()" [disabled]="uploadingAny()">
+        <label class="pu__autoscan" title="Automatically run Welly on each file as it is added">
+          <input type="checkbox" [(ngModel)]="autoScan" />
+          <mat-icon>auto_awesome</mat-icon> Auto-scan on add
+        </label>
+        <button class="pu__btn" (click)="clearAll()" [disabled]="uploadingAny() || scanningAny()">
           <mat-icon>clear_all</mat-icon> Clear
         </button>
-        <button class="pu__btn pu__btn--primary" (click)="uploadAll()" [disabled]="uploadingAny() || readyCount() === 0">
+        <button class="pu__btn pu__btn--scan" (click)="scanAll()" [disabled]="scanningAny() || uploadingAny() || pendingScanCount() === 0"
+                title="Run Welly on every file that hasn't been scanned yet">
+          @if (scanningAny()) {
+            <mat-icon class="pu-spin">radar</mat-icon> Scanning {{ scanDoneCount() }}/{{ scanTotal() }}…
+          } @else {
+            <mat-icon>document_scanner</mat-icon> Scan all ({{ pendingScanCount() }})
+          }
+        </button>
+        <button class="pu__btn pu__btn--primary" (click)="uploadAll()" [disabled]="uploadingAny() || scanningAny() || readyCount() === 0">
           <mat-icon>upload</mat-icon> Upload all ({{ readyCount() }})
         </button>
       </div>
@@ -120,15 +138,56 @@ interface PodEntry {
               }
 
               <label class="pu-row__label">Invoice number(s)</label>
-              <input class="pu-row__input" type="text"
-                     [(ngModel)]="e.invoiceNumbers"
-                     [disabled]="e.status==='uploading' || e.status==='done'"
-                     placeholder="e.g. IN123456, IN123457" />
+              <div class="pu-row__invrow">
+                <input class="pu-row__input" type="text"
+                       [(ngModel)]="e.invoiceNumbers"
+                       [disabled]="e.status==='uploading' || e.status==='done'"
+                       placeholder="e.g. IN123456, IN123457" />
+                @if (e.status !== 'done') {
+                  <button type="button" class="pu-row__detect"
+                          (click)="detectInvoices($index)"
+                          [disabled]="e.detecting || e.status==='uploading'"
+                          title="Welly reads invoice numbers off the scan (auto-rotates pages)">
+                    @if (e.detecting) {
+                      <mat-icon class="pu-spin">progress_activity</mat-icon> Scanning…
+                    } @else {
+                      <mat-icon>auto_awesome</mat-icon> Detect
+                    }
+                  </button>
+                }
+              </div>
+              @if (e.detecting) {
+                <div class="pu-row__scanning">
+                  <div class="pu-row__scanbar"><span class="pu-row__scanfill"></span></div>
+                  <div class="pu-row__scanlabel">
+                    <mat-icon class="pu-spin">radar</mat-icon>
+                    Welly is reading the document (auto-rotating &amp; scanning)… {{ e.detectElapsed || 0 }}s
+                  </div>
+                </div>
+              }
+              @if (e.detectMsg) {
+                <div class="pu-row__detectmsg">{{ e.detectMsg }}</div>
+              }
 
               <input class="pu-row__notes" type="text"
                      [(ngModel)]="e.notes"
                      [disabled]="e.status==='uploading' || e.status==='done'"
                      placeholder="Notes (optional)" />
+
+              <div class="pu-row__daterow">
+                <label class="pu-row__label" [for]="'pu-date-' + $index">Delivery date</label>
+                <input class="pu-row__date" type="date" [id]="'pu-date-' + $index"
+                       [(ngModel)]="e.deliveryDate" [max]="today"
+                       (ngModelChange)="e.dateFromName = false"
+                       [disabled]="e.status==='uploading' || e.status==='done'" />
+                @if (e.dateFromName) {
+                  <span class="pu-row__datehint pu-row__datehint--auto" title="Detected from the file name">
+                    <mat-icon>auto_awesome</mat-icon> from filename
+                  </span>
+                } @else if (!e.deliveryDate) {
+                  <span class="pu-row__datehint">uses batch date ({{ deliveryDate }})</span>
+                }
+              </div>
 
               @if (e.message) {
                 <div class="pu-row__msg" [class.ok]="e.status==='done'" [class.err]="e.status==='error'">
@@ -206,14 +265,21 @@ interface PodEntry {
     .pu__drop-title { font-weight:700; color:#334155; }
     .pu__drop-hint { font-size:0.78rem; color:#94a3b8; }
 
-    .pu__bulkbar { display:flex; align-items:center; gap:10px; margin:16px 0 10px; font-size:0.84rem; color:#475569; }
+    .pu__bulkbar { display:flex; align-items:center; gap:10px; margin:16px 0 10px; font-size:0.84rem; color:#475569; flex-wrap:wrap; }
+    .pu__bulkstat strong { color:#4f46e5; }
     .pu__spacer { flex:1; }
+    .pu__autoscan { display:inline-flex; align-items:center; gap:5px; font-size:0.8rem; color:#4f46e5; font-weight:600; cursor:pointer; user-select:none; padding:4px 8px; background:#eef2ff; border-radius:20px; }
+    .pu__autoscan input { accent-color:#4f46e5; cursor:pointer; }
+    .pu__autoscan mat-icon { font-size:16px; width:16px; height:16px; }
     .pu__btn {
       display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border:1px solid #e2e8f0;
       border-radius:10px; background:#fff; color:#334155; font-weight:600; font-size:0.82rem; cursor:pointer;
     }
     .pu__btn:hover { background:#f8fafc; }
+    .pu__btn--scan { border-color:#c7d2fe; background:#eef2ff; color:#4f46e5; }
+    .pu__btn--scan:hover { background:#e0e7ff; }
     .pu__btn--primary { background:linear-gradient(120deg,#6366f1,#4f46e5); border-color:transparent; color:#fff; }
+    .pu__btn--primary:hover { background:linear-gradient(120deg,#4f46e5,#4338ca); }
     .pu__btn[disabled] { opacity:0.5; cursor:not-allowed; }
     .pu__btn mat-icon { font-size:18px; width:18px; height:18px; }
 
@@ -260,6 +326,35 @@ interface PodEntry {
     }
     .pu-row__input { font-family:monospace; }
     .pu-row__input:focus, .pu-row__notes:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+    .pu-row__invrow { display:flex; align-items:flex-start; gap:8px; }
+    .pu-row__invrow .pu-row__input { flex:1; margin-bottom:6px; }
+    .pu-row__detect {
+      flex:0 0 auto; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+      padding:8px 12px; border:1px solid #c7d2fe; background:#eef2ff; color:#4f46e5;
+      border-radius:9px; cursor:pointer; font-size:0.8rem; font-weight:600; height:37px;
+    }
+    .pu-row__detect:hover:not(:disabled) { background:#e0e7ff; }
+    .pu-row__detect:disabled { opacity:0.6; cursor:default; }
+    .pu-row__detect mat-icon { font-size:17px; width:17px; height:17px; }
+    .pu-row__detectmsg { font-size:0.76rem; color:#475569; margin:-2px 0 6px; }
+    .pu-row__daterow { display:flex; align-items:center; gap:8px; margin:2px 0 6px; flex-wrap:wrap; }
+    .pu-row__daterow .pu-row__label { margin:0; }
+    .pu-row__date { border:1px solid #cbd5e1; border-radius:8px; padding:6px 9px; font-size:0.82rem; }
+    .pu-row__date:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+    .pu-row__datehint { font-size:0.74rem; color:#94a3b8; }
+    .pu-row__datehint--auto { display:inline-flex; align-items:center; gap:3px; color:#4f46e5; font-weight:600; background:#eef2ff; padding:2px 7px; border-radius:20px; }
+    .pu-row__datehint--auto mat-icon { font-size:14px; width:14px; height:14px; }
+    .pu-row__scanning { margin:2px 0 8px; }
+    .pu-row__scanbar { position:relative; height:6px; border-radius:6px; background:#e0e7ff; overflow:hidden; }
+    .pu-row__scanfill {
+      position:absolute; left:0; top:0; height:100%; width:40%; border-radius:6px;
+      background:linear-gradient(90deg,#6366f1,#818cf8); animation:pu-scan 1.2s ease-in-out infinite;
+    }
+    @keyframes pu-scan {
+      0% { left:-40%; } 100% { left:100%; }
+    }
+    .pu-row__scanlabel { display:flex; align-items:center; gap:6px; font-size:0.76rem; color:#4f46e5; margin-top:5px; }
+    .pu-row__scanlabel mat-icon { font-size:16px; width:16px; height:16px; }
     .pu__date { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; }
     .pu__date > mat-icon { color:#4f46e5; }
     .pu__date label { font-size:0.85rem; font-weight:600; color:#334155; }
@@ -328,10 +423,20 @@ export class PodUploaderComponent {
   readonly today = new Date().toISOString().slice(0, 10);
   /** Bulk delivery date applied to every POD in the batch (back-datable). */
   deliveryDate = this.today;
+  /** When true, Welly automatically scans each file for invoices as it's added. */
+  autoScan = true;
 
   readyCount(): number { return this.entries().filter(e => e.status === 'pending' || e.status === 'error').length; }
   doneCount(): number { return this.entries().filter(e => e.status === 'done').length; }
   uploadingAny(): boolean { return this.entries().some(e => e.status === 'uploading'); }
+  scanningAny(): boolean { return this.entries().some(e => e.detecting); }
+  matchedTotal(): number { return this.entries().reduce((n, e) => n + (e.matched?.length || 0), 0); }
+  /** Files that can be scanned (image/PDF) and haven't been scanned yet. */
+  pendingScanCount(): number {
+    return this.entries().filter(e => (e.isImage || e.isPdf) && !e.detecting && !e.detectMsg && e.status !== 'done').length;
+  }
+  scanTotal(): number { return this.entries().filter(e => e.isImage || e.isPdf).length; }
+  scanDoneCount(): number { return this.entries().filter(e => (e.isImage || e.isPdf) && !!e.detectMsg).length; }
 
   onPick(evt: Event): void {
     const input = evt.target as HTMLInputElement;
@@ -349,14 +454,96 @@ export class PodUploaderComponent {
     const additions: PodEntry[] = Array.from(files).map(file => {
       const isImage = file.type.startsWith('image/');
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const parsed = this.parseDateFromFilename(file.name);
       return {
         file, invoiceNumbers: '', notes: '', status: 'pending' as PodStatus,
         isImage, isPdf,
-        previewUrl: (isImage || isPdf) ? URL.createObjectURL(file) : null, rotation: 0
+        previewUrl: (isImage || isPdf) ? URL.createObjectURL(file) : null, rotation: 0,
+        deliveryDate: parsed ?? undefined,
+        dateFromName: !!parsed
       };
     });
+    const startIndex = this.entries().length;
     this.entries.update(list => [...list, ...additions]);
     this.checkDuplicates(additions.map(a => a.file.name));
+
+    // Auto-scan newly added image/PDF files with Welly (throttled to 2 at a time).
+    if (this.autoScan) {
+      const toScan = additions
+        .map((a, i) => ({ a, index: startIndex + i }))
+        .filter(x => x.a.isImage || x.a.isPdf)
+        .map(x => x.index);
+      this.runScanQueue(toScan, 2);
+    }
+  }
+
+  /** Scan every not-yet-scanned image/PDF file now (Scan all button). */
+  scanAll(): void {
+    const indices = this.entries()
+      .map((e, i) => ({ e, i }))
+      .filter(x => (x.e.isImage || x.e.isPdf) && !x.e.detecting && !x.e.detectMsg && x.e.status !== 'done')
+      .map(x => x.i);
+    this.runScanQueue(indices, 2);
+  }
+
+  /** Run detection over a list of entry indices with limited concurrency. */
+  private async runScanQueue(indices: number[], concurrency: number): Promise<void> {
+    const queue = [...indices];
+    const workers: Promise<void>[] = [];
+    const next = async (): Promise<void> => {
+      const idx = queue.shift();
+      if (idx === undefined) return;
+      await this.detectInvoices(idx);
+      return next();
+    };
+    for (let i = 0; i < Math.min(concurrency, queue.length); i++) workers.push(next());
+    await Promise.all(workers);
+  }
+
+  /**
+   * Try to extract a delivery date from a POD file name. Handles the common patterns we see:
+   *   KZN_Unknown_20260219_1.pdf      → 2026-02-19  (yyyymmdd)
+   *   POD 19-02-2026.pdf              → 2026-02-19  (dd-mm-yyyy)
+   *   driver_2026-02-19.jpg           → 2026-02-19  (yyyy-mm-dd)
+   *   Delivery 19.02.26.pdf           → 2026-02-19  (dd.mm.yy)
+   * Returns yyyy-MM-dd, or null if no plausible (not-in-the-future) date is found.
+   */
+  private parseDateFromFilename(name: string): string | null {
+    const base = name.replace(/\.[^.]+$/, ''); // drop extension
+    const todayStr = this.today;
+
+    const valid = (y: number, m: number, d: number): string | null => {
+      if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+      const dt = new Date(y, m - 1, d);
+      if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null; // real calendar date
+      const iso = `${y.toString().padStart(4, '0')}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+      if (iso > todayStr) return null;          // never accept a future date
+      if (y < 2015) return null;                // guard against random 8-digit numbers
+      return iso;
+    };
+    const y2 = (yy: number) => 2000 + yy;       // 2-digit year → 20yy
+
+    // 1) yyyymmdd (8 contiguous digits) — must not be part of a longer digit run.
+    for (const m of base.matchAll(/(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)/g)) {
+      const r = valid(+m[1], +m[2], +m[3]);
+      if (r) return r;
+    }
+    // 2) yyyy-mm-dd / yyyy.mm.dd / yyyy_mm_dd
+    for (const m of base.matchAll(/(?<!\d)(\d{4})[-_.](\d{1,2})[-_.](\d{1,2})(?!\d)/g)) {
+      const r = valid(+m[1], +m[2], +m[3]);
+      if (r) return r;
+    }
+    // 3) dd-mm-yyyy / dd.mm.yyyy / dd_mm_yyyy
+    for (const m of base.matchAll(/(?<!\d)(\d{1,2})[-_.](\d{1,2})[-_.](\d{4})(?!\d)/g)) {
+      const r = valid(+m[3], +m[2], +m[1]);
+      if (r) return r;
+    }
+    // 4) dd-mm-yy / dd.mm.yy (2-digit year, last so it doesn't shadow 4-digit years)
+    for (const m of base.matchAll(/(?<!\d)(\d{1,2})[-_.](\d{1,2})[-_.](\d{2})(?!\d)/g)) {
+      const r = valid(y2(+m[3]), +m[2], +m[1]);
+      if (r) return r;
+    }
+    return null;
   }
 
   /** Open the full-size previewer for an entry (image or PDF). */
@@ -457,6 +644,65 @@ export class PodUploaderComponent {
     this.entries.set([]);
   }
 
+  /** Ask Welly to read invoice numbers off the scan (server OCR, auto-rotating pages). */
+  async detectInvoices(index: number): Promise<void> {
+    const e = this.entries()[index];
+    if (!e || e.detecting) return;
+    this.patch(index, { detecting: true, detectMsg: undefined, detectElapsed: 0 });
+
+    // Live elapsed-time ticker so the user has feedback while the server OCR runs.
+    const startedAt = Date.now();
+    const ticker = setInterval(() => {
+      this.patch(index, { detectElapsed: Math.round((Date.now() - startedAt) / 1000) });
+    }, 1000);
+
+    // Bake any manual rotation into the image first so the OCR sees it upright too.
+    const fileToSend = e.isImage && e.rotation ? await this.bakeRotation(e.file, e.rotation) : e.file;
+
+    const form = new FormData();
+    form.append('file', fileToSend);
+
+    try {
+      const res: any = await firstValueFrom(
+        this.http.post<any>(`${this.apiUrl}/PodDocuments/detect-invoices`, form)
+      );
+      clearInterval(ticker);
+      const matched: string[] = (res?.matches || [])
+        .map((m: any) => m.transactionNumber || m.TransactionNumber)
+        .filter((n: any) => !!n);
+      const candidates: string[] = res?.candidates || [];
+      // Merge detected numbers into the existing field (dedupe, keep user's typed ones).
+      const existing = (this.entries()[index].invoiceNumbers || '')
+        .split(/[\s,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+      const all = Array.from(new Set([...existing, ...matched.map(m => m.toUpperCase())]));
+      const unmatchedExtra = candidates.filter(c => !all.includes(c.toUpperCase()));
+
+      let msg: string;
+      if (matched.length > 0) {
+        msg = `Welly found ${matched.length} matching invoice${matched.length === 1 ? '' : 's'}.` +
+              (unmatchedExtra.length ? ` (${unmatchedExtra.length} unrecognised: ${unmatchedExtra.join(', ')})` : '');
+      } else if (candidates.length > 0) {
+        msg = `Read ${candidates.join(', ')} but none matched a known invoice — check & edit.`;
+      } else {
+        msg = 'No invoice numbers detected. Enter them manually.';
+      }
+      this.patch(index, {
+        detecting: false,
+        detectMsg: msg,
+        matched,
+        invoiceNumbers: all.join(', ')
+      });
+    } catch (err: any) {
+      clearInterval(ticker);
+      this.patch(index, {
+        detecting: false,
+        detectMsg: err?.status === 503
+          ? 'Auto-detection engine unavailable on the server.'
+          : 'Welly could not scan this file. Enter numbers manually.'
+      });
+    }
+  }
+
   async uploadAll(): Promise<void> {
     const list = this.entries();
     for (let i = 0; i < list.length; i++) {
@@ -481,7 +727,10 @@ export class PodUploaderComponent {
       const form = new FormData();
       form.append('file', fileToSend);
       form.append('invoiceNumbers', e.invoiceNumbers.trim());
-      if (this.deliveryDate) form.append('deliveryDate', this.deliveryDate);
+      // Per-file date (parsed from the filename or edited by the user) takes precedence
+      // over the batch date.
+      const effectiveDate = e.deliveryDate || this.deliveryDate;
+      if (effectiveDate) form.append('deliveryDate', effectiveDate);
       if (e.notes.trim()) form.append('notes', e.notes.trim());
 
       this.http.post<any>(`${this.apiUrl}/PodDocuments/upload-with-invoices`, form).subscribe({

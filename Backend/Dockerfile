@@ -21,6 +21,13 @@ WORKDIR /app
 # Install curl for health checks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
+# Install OCR tooling for server-side POD invoice reading:
+#  - tesseract-ocr + English + OSD (orientation/script) trained data (handles rotated scans)
+#  - poppler-utils provides pdftoppm to rasterise PDF pages before OCR
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 # Container-optimized GC settings
 ENV DOTNET_gcServer=1
 ENV DOTNET_GCDynamicAdaptationMode=1

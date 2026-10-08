@@ -114,7 +114,7 @@ The dashboard is a `mat-tab-group`. Tabs below are listed in display order. "Pri
 ### 4.5 Tripsheets
 - **What it shows:** Creation and management of tripsheets (delivery runs). Six creation modes via the chooser:
   1. **Import** – parse an Excel tripsheet (`POST /api/logistics/tripsheet/preview-import` → `/import`)
-  2. **Pad Tripsheet** – import as-is, no DB matching (`preview-import?skipMatching=true`)
+  2. **DN Tripsheet** – mixed invoices & delivery notes; invoices are linked where found, the rest imported as-is (`preview-import?skipMatching=true`)
   3. **Manual** – build a load from scratch
   4. **Transfer** – internal stock transfer between warehouses
   5. **Welly (AI)** – `POST /api/logistics/tripsheet/welly-analyze-excel` → `/welly-create-tripsheet`

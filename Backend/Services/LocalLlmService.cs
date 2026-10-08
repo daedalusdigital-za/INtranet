@@ -387,7 +387,11 @@ Be concise, professional, and friendly. Use the provided database context when a
                             }
                         }
                     }
-                    catch (JsonException) { }
+                    catch (JsonException ex)
+                    {
+                        // Malformed SSE chunk from llama.cpp — skip it but leave a trace
+                        _logger.LogDebug(ex, "Skipping malformed LLM stream event: {Data}", data);
+                    }
 
                     if (!string.IsNullOrEmpty(token))
                     {
@@ -569,7 +573,11 @@ Be concise, professional, and friendly. Use the provided database context when a
                             }
                         }
                     }
-                    catch (JsonException) { }
+                    catch (JsonException ex)
+                    {
+                        // Malformed SSE chunk from llama.cpp — skip it but leave a trace
+                        _logger.LogDebug(ex, "Skipping malformed LLM stream event: {Data}", data);
+                    }
 
                     if (!string.IsNullOrEmpty(rawToken))
                     {

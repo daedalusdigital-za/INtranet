@@ -669,6 +669,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     i.TransactionDate,
                     i.DeliveryAddress,
                     i.DeliveryCity,
+                    i.DeliveryProvince,
                     i.ContactPerson,
                     i.ContactPhone
                 })
@@ -729,19 +730,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 
                 try
                 {
-                    using var memoryStream = new MemoryStream();
-                    var writerProperties = new WriterProperties();
-                    using var pdfWriter = new PdfWriter(memoryStream, writerProperties);
-                    using var pdfDocument = new PdfDocument(pdfWriter);
-                    
-                    // Set landscape A4
-                    pdfDocument.SetDefaultPageSize(iText.Kernel.Geom.PageSize.A4.Rotate());
-                    
-                    // Convert HTML to PDF
-                    var converterProperties = new ConverterProperties();
-                    HtmlConverter.ConvertToPdf(html, pdfDocument, converterProperties);
-                    
-                    pdfBytes = memoryStream.ToArray();
+                    pdfBytes = ConvertHtmlToPdf(html);
                     attachmentFileName = $"TripSheet_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.pdf";
                     attachmentContentType = "application/pdf";
                     
@@ -756,6 +745,27 @@ namespace ProjectTracker.API.Controllers.Logistics
                     attachmentContentType = "text/html";
                 }
 
+                // Generate picking slip PDF (same design, warehouse variant)
+                byte[]? pickingSlipBytes = null;
+                string pickingSlipFileName = $"PickingSlip_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.pdf";
+                string pickingSlipContentType = "application/pdf";
+                if (dto.AttachPickingSlip)
+                {
+                    try
+                    {
+                        var pickingHtml = GenerateTripSheetHtml(tripSheet, isPickingSlip: true);
+                        pickingSlipBytes = ConvertHtmlToPdf(pickingHtml);
+                        _logger.LogInformation("Picking slip PDF generated, size: {Size} bytes", pickingSlipBytes.Length);
+                    }
+                    catch (Exception psEx)
+                    {
+                        _logger.LogWarning(psEx, "Failed to generate picking slip PDF, sending HTML fallback");
+                        pickingSlipBytes = System.Text.Encoding.UTF8.GetBytes(GenerateTripSheetHtml(tripSheet, isPickingSlip: true));
+                        pickingSlipFileName = $"PickingSlip_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.html";
+                        pickingSlipContentType = "text/html";
+                    }
+                }
+
                 // Get warehouse details
                 var load = await _context.Loads
                     .Include(l => l.Warehouse)
@@ -763,7 +773,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     .FirstOrDefaultAsync(l => l.Id == loadId);
 
                 var warehouseName = load?.Warehouse?.Name ?? "Warehouse";
-                var warehouseManagerName = load?.Warehouse?.ManagerName ?? "Warehouse Manager";
+                // Manager names in the Warehouses table are unverified seed data —
+                // use a neutral greeting addressed to the warehouse team instead.
+                var warehouseManagerName = $"{warehouseName} Team";
                 var driverName = load?.Driver != null 
                     ? $"{load.Driver.FirstName} {load.Driver.LastName}" 
                     : "Not assigned";
@@ -831,23 +843,75 @@ namespace ProjectTracker.API.Controllers.Logistics
                     }
                 };
 
+                if (pickingSlipBytes != null)
+                {
+                    attachments.Add(new EmailAttachment
+                    {
+                        FileName = pickingSlipFileName,
+                        Content = pickingSlipBytes,
+                        ContentType = pickingSlipContentType
+                    });
+                }
+
                 // Get recipient emails
                 var recipients = new List<string>();
                 if (!string.IsNullOrWhiteSpace(dto.RecipientEmail))
                     recipients.Add(dto.RecipientEmail);
-                
-                // Add warehouse email if available and different from primary recipient
-                if (!string.IsNullOrWhiteSpace(load?.Warehouse?.Email) && 
-                    !recipients.Contains(load.Warehouse.Email, StringComparer.OrdinalIgnoreCase))
+
+                if (dto.RecipientEmails != null)
                 {
-                    recipients.Add(load.Warehouse.Email);
+                    foreach (var email in dto.RecipientEmails)
+                    {
+                        if (!string.IsNullOrWhiteSpace(email) &&
+                            !recipients.Contains(email.Trim(), StringComparer.OrdinalIgnoreCase))
+                        {
+                            recipients.Add(email.Trim());
+                        }
+                    }
                 }
 
+                // Recipients are entered manually in the email popup — no warehouse fallback
                 if (recipients.Count == 0)
-                    return BadRequest(new { error = "No recipient email addresses provided" });
+                    return BadRequest(new { error = "No recipient email addresses provided. Please enter at least one recipient." });
 
                 // CC list
-                var ccList = dto.CcEmails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList();
+                var ccList = dto.CcEmails?.Where(e => !string.IsNullOrWhiteSpace(e))
+                    .Select(e => e.Trim())
+                    .ToList() ?? new List<string>();
+
+                // CC the sending user so they get a copy
+                if (dto.CcSelf)
+                {
+                    // JWT stores the user id as ClaimTypes.NameIdentifier (see TokenService)
+                    var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                        ?? User.FindFirst("UserId")?.Value
+                        ?? User.FindFirst("sub")?.Value;
+                    string? userEmail = null;
+                    if (int.TryParse(userIdClaim, out var currentUserId))
+                    {
+                        userEmail = await _context.Users
+                            .Where(u => u.UserId == currentUserId)
+                            .Select(u => u.Email)
+                            .FirstOrDefaultAsync();
+                    }
+                    // Fallback: email claim straight from the token
+                    userEmail ??= User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                        ?? User.FindFirst("email")?.Value;
+
+                    if (!string.IsNullOrWhiteSpace(userEmail) &&
+                        !recipients.Contains(userEmail, StringComparer.OrdinalIgnoreCase) &&
+                        !ccList.Contains(userEmail, StringComparer.OrdinalIgnoreCase))
+                    {
+                        ccList.Add(userEmail);
+                        _logger.LogInformation("CC-self: adding {Email} to CC list", userEmail);
+                    }
+                    else if (string.IsNullOrWhiteSpace(userEmail))
+                    {
+                        _logger.LogWarning("CC-self requested but could not resolve current user's email (claim: {Claim})", userIdClaim ?? "none");
+                    }
+                }
+
+                if (ccList.Count == 0) ccList = null!;
 
                 // Send email
                 var subject = $"TripSheet {tripSheet.LoadNumber} - {warehouseName} - {scheduledDate}";
@@ -1129,6 +1193,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                     EstimatedTime = FormatDuration(l.EstimatedTimeMinutes ?? l.ActualTimeMinutes ?? 0),
                     Date = l.ScheduledDeliveryDate ?? l.ScheduledPickupDate ?? l.CreatedAt,
                     Status = l.Status,
+                    CreatedByName = l.CreatedByUserId != null
+                        ? _context.Users.Where(u => u.UserId == l.CreatedByUserId)
+                            .Select(u => (u.Name + " " + u.Surname).Trim())
+                            .FirstOrDefault()
+                        : null,
                     TotalValue = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0),
                     VatAmount = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0) * TripSheetDto.VatRate,
                     TotalWithVat = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0) * (1 + TripSheetDto.VatRate)
@@ -1346,7 +1415,66 @@ namespace ProjectTracker.API.Controllers.Logistics
             return crc ^ 0xFFFFFFFF;
         }
 
-        private string GenerateTripSheetHtml(TripSheetDto tripSheet)
+        private static byte[] ConvertHtmlToPdf(string html)
+        {
+            using var memoryStream = new MemoryStream();
+            var writerProperties = new WriterProperties();
+            using (var pdfWriter = new PdfWriter(memoryStream, writerProperties))
+            using (var pdfDocument = new PdfDocument(pdfWriter))
+            {
+                pdfDocument.SetDefaultPageSize(iText.Kernel.Geom.PageSize.A4.Rotate());
+                var converterProperties = new ConverterProperties();
+                HtmlConverter.ConvertToPdf(html, pdfDocument, converterProperties);
+            }
+            return memoryStream.ToArray();
+        }
+
+        /// <summary>
+        /// Preview the picking slip (warehouse variant of the trip sheet) as HTML
+        /// </summary>
+        [HttpGet("{loadId}/picking-slip/html")]
+        public async Task<IActionResult> GetPickingSlipHtml(int loadId)
+        {
+            var tripSheetResult = await GetTripSheet(loadId);
+            if (tripSheetResult.Result is NotFoundObjectResult)
+                return NotFound(new { error = "Load not found" });
+
+            var tripSheet = (tripSheetResult.Result as OkObjectResult)?.Value as TripSheetDto;
+            if (tripSheet == null)
+                return BadRequest(new { error = "Failed to generate trip sheet data" });
+
+            var html = GenerateTripSheetHtml(tripSheet, isPickingSlip: true);
+            return Content(html, "text/html");
+        }
+
+        /// <summary>
+        /// Download/preview the picking slip (warehouse variant of the trip sheet) as PDF
+        /// </summary>
+        [HttpGet("{loadId}/picking-slip/pdf")]
+        public async Task<IActionResult> GetPickingSlipPdf(int loadId)
+        {
+            var tripSheetResult = await GetTripSheet(loadId);
+            if (tripSheetResult.Result is NotFoundObjectResult)
+                return NotFound(new { error = "Load not found" });
+
+            var tripSheet = (tripSheetResult.Result as OkObjectResult)?.Value as TripSheetDto;
+            if (tripSheet == null)
+                return BadRequest(new { error = "Failed to generate trip sheet data" });
+
+            var html = GenerateTripSheetHtml(tripSheet, isPickingSlip: true);
+            try
+            {
+                var pdf = ConvertHtmlToPdf(html);
+                return File(pdf, "application/pdf", $"PickingSlip_{tripSheet.LoadNumber}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Picking slip PDF generation failed, returning HTML");
+                return Content(html, "text/html");
+            }
+        }
+
+        private string GenerateTripSheetHtml(TripSheetDto tripSheet, bool isPickingSlip = false)
         {
             var sb = new StringBuilder();
             var totalStops = tripSheet.Stops.Where(s => s.StopType != "Pickup").Count();
@@ -1412,7 +1540,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 <html>
 <head>
     <meta charset='UTF-8'>
-    <title>Trip Sheet - " + tripSheet.LoadNumber + @"</title>
+    <title>" + (isPickingSlip ? "Picking Slip" : "Trip Sheet") + @" - " + tripSheet.LoadNumber + @"</title>
     <style>
         @page { size: landscape; margin: 10mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1569,6 +1697,19 @@ namespace ProjectTracker.API.Controllers.Logistics
             font-size: 11px;
             line-height: 1.3;
             color: #333;
+        }
+        /* Picking slip: product is the star — bigger, bolder, roomier */
+        .product-cell.picking {
+            font-size: 14px;
+            line-height: 1.7;
+            font-weight: 600;
+            color: #111;
+            padding: 10px 8px;
+        }
+        .product-cell.picking .prod-qty {
+            color: #033142;
+            font-weight: 700;
+            white-space: nowrap;
         }
         .checkbox-cell {
             width: 20px;
@@ -1796,11 +1937,12 @@ namespace ProjectTracker.API.Controllers.Logistics
 <body>");
 
             // Header
+            var docTitle = isPickingSlip ? "&#x1F4E6; PICKING SLIP" : "&#x1F69B; TRIP SHEET";
             sb.AppendLine($@"
     <div class='header'>
         <div class='header-left'>
             <img src='data:image/png;base64,{COMPANY_LOGO_BASE64}' class='header-logo' alt='Company Logo' />
-            <span class='logo-text'>&#x1F69B; TRIP SHEET</span>
+            <span class='logo-text'>{docTitle}</span>
             <span class='trip-badge'>{tripSheet.LoadNumber}</span>
         </div>
         <div class='header-right'>
@@ -1814,7 +1956,21 @@ namespace ProjectTracker.API.Controllers.Logistics
     </div>");
 
             // Compact Info Row
-            sb.AppendLine($@"
+            if (isPickingSlip)
+            {
+                sb.AppendLine($@"
+    <div class='info-strip'>
+        <div class='info-item'><span class='info-icon'>&#x1F4CD;</span> <strong>{tripSheet.WarehouseName ?? "N/A"}</strong> <span class='info-sub'>{tripSheet.PickupCity ?? ""}</span></div>
+        <div class='info-item'><span class='info-icon'>&#x1F4C5;</span> <strong>{tripSheet.PickupDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy")}</strong> <span class='info-sub'>{tripSheet.PickupTime ?? "TBD"}</span></div>
+        <div class='info-item'><span class='info-icon'>&#x1F464;</span> <strong>{tripSheet.DriverName ?? "UNASSIGNED"}</strong> <span class='info-sub'>Driver</span></div>
+        <div class='info-item'><span class='info-icon'>&#x1F69B;</span> <strong>{tripSheet.VehicleRegistration ?? "N/A"}</strong> <span class='info-sub'>{tripSheet.VehicleType ?? ""}</span></div>
+        <div class='info-item'><span class='info-icon'>&#x1F69A;</span> <strong>{totalStops} Stops</strong> <span class='info-sub'>({uniqueCustomers} customers)</span></div>
+        <div class='info-item' style='background: #fff3e0; border-color: #ff9800;'><span class='info-icon'>&#x26A0;</span> <strong>Pick &amp; stage before:</strong> <span class='info-sub'>{tripSheet.PickupDate?.ToString("dd/MM/yyyy") ?? "TBD"} {tripSheet.PickupTime ?? ""}</span></div>
+    </div>");
+            }
+            else
+            {
+                sb.AppendLine($@"
     <div class='info-strip'>
         <div class='info-item'><span class='info-icon'>&#x1F464;</span> <strong>{tripSheet.DriverName ?? "UNASSIGNED"}</strong> <span class='info-sub'>({tripSheet.DriverPhone ?? "N/A"})</span></div>
         <div class='info-item'><span class='info-icon'>&#x1F69B;</span> <strong>{tripSheet.VehicleRegistration ?? "N/A"}</strong> <span class='info-sub'>{tripSheet.VehicleType ?? ""}</span></div>
@@ -1826,19 +1982,34 @@ namespace ProjectTracker.API.Controllers.Logistics
         <div class='info-item' style='background: #e8f5e9; border-color: #4caf50;'><span class='info-icon'>&#x26FD;</span> <strong>Fuel Est:</strong> <span class='info-sub'>R {fuelCostEstimate:N2} ({fuelLitres:N0}L @ R{fuelPricePerLitre:N2} TFN avg)</span></div>
         <div class='info-item'><span class='info-icon'>&#x1F4B0;</span> <strong>R {tripSheet.TotalValue:N2}</strong></div>
     </div>");
+            }
 
             // Main Delivery Table
-            sb.AppendLine(@"
+            var valueHeader = isPickingSlip
+                ? "<th class='center' style='width: 80px;'>PICKED QTY</th>"
+                : "<th class='right' style='width: 70px;'>VALUE</th>";
+            // On the picking slip the PRODUCT column is the most important — give it
+            // the flexible width and keep address/customer compact instead.
+            var customerHeader = isPickingSlip
+                ? "<th style='width: 120px;'>CUSTOMER NAME</th>"
+                : "<th style='width: 150px;'>CUSTOMER NAME</th>";
+            var addressHeader = isPickingSlip
+                ? "<th style='width: 140px;'>DELIVERY ADDRESS</th>"
+                : "<th>DELIVERY ADDRESS</th>";
+            var productHeader = isPickingSlip
+                ? "<th style='min-width: 320px;'>PRODUCT</th>"
+                : "<th style='width: 150px;'>PRODUCT</th>";
+            sb.AppendLine($@"
     <table class='main-table'>
         <thead>
             <tr>
                 <th class='center' style='width: 35px;'>NO</th>
                 <th style='width: 80px;'>INV NO</th>
-                <th style='width: 150px;'>CUSTOMER NAME</th>
-                <th>DELIVERY ADDRESS</th>
-                <th style='width: 150px;'>PRODUCT</th>
+                {customerHeader}
+                {addressHeader}
+                {productHeader}
                 <th class='center' style='width: 40px;'>QTY</th>
-                <th class='right' style='width: 70px;'>VALUE</th>
+                {valueHeader}
                 <th class='center' style='width: 46px;'>SCAN</th>
                 <th class='center' style='width: 35px;'>&#x2713;</th>
             </tr>
@@ -1856,15 +2027,24 @@ namespace ProjectTracker.API.Controllers.Logistics
                 totalValue += stopValue;
                 totalQty += stopQty;
 
-                // Build product list with quantities
+                // Build product list with quantities.
+                // Picking slip: show FULL product names (never truncated) — the
+                // warehouse team picks by product, so readability is critical.
                 var productLines = new List<string>();
                 if (stop.Commodities != null && stop.Commodities.Any())
                 {
                     foreach (var c in stop.Commodities)
                     {
                         var name = c.CommodityName ?? "Product";
-                        if (name.Length > 20) name = name.Substring(0, 17) + "...";
-                        productLines.Add($"{name} x{(int)c.Quantity}");
+                        if (isPickingSlip)
+                        {
+                            productLines.Add($"{name} <span class='prod-qty'>&times;{(int)c.Quantity}</span>");
+                        }
+                        else
+                        {
+                            if (name.Length > 20) name = name.Substring(0, 17) + "...";
+                            productLines.Add($"{name} x{(int)c.Quantity}");
+                        }
                     }
                 }
                 var productDisplay = productLines.Any() ? string.Join("<br/>", productLines) : "N/A";
@@ -1877,15 +2057,19 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ? $"<img src='data:image/png;base64,{GenerateQrPngBase64(lineCode, 4)}' class='line-qr' alt='{lineCode}' />"
                     : "<span class='no-qr'>&ndash;</span>";
 
+                var valueCell = isPickingSlip
+                    ? "<td class='center'><div class='input-box' style='border:1px solid #ccc; border-radius:4px; height:22px; width:60px; margin:0 auto; background:white;'></div></td>"
+                    : $"<td class='right'>R {stopValue:N2}</td>";
+
                 sb.AppendLine($@"
             <tr>
                 <td class='center'><span class='stop-num'>{stopNum}</span></td>
                 <td>{stop.InvoiceNumber ?? stop.OrderNumber ?? "N/A"}</td>
                 <td class='customer-name'>{stop.CustomerName ?? stop.CompanyName ?? "Customer"}</td>
                 <td class='address-text'>{stop.Address ?? "Address TBC"}</td>
-                <td class='product-cell'>{productDisplay}</td>
+                <td class='product-cell{(isPickingSlip ? " picking" : "")}'>{productDisplay}</td>
                 <td class='center'><strong>{stopQty}</strong></td>
-                <td class='right'>R {stopValue:N2}</td>
+                {valueCell}
                 <td class='center scan-cell'>{scanCell}</td>
                 <td class='center'><span class='checkbox-cell'></span></td>
             </tr>");
@@ -1893,11 +2077,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             // Totals Row
+            var totalsValueCell = isPickingSlip ? "<td></td>" : $"<td class='right'>R {totalValue:N2}</td>";
             sb.AppendLine($@"
             <tr class='totals-row'>
                 <td colspan='5' style='text-align: right;'>TOTALS:</td>
                 <td class='center'>{totalQty}</td>
-                <td class='right'>R {totalValue:N2}</td>
+                {totalsValueCell}
                 <td></td>
                 <td></td>
             </tr>
@@ -1905,7 +2090,50 @@ namespace ProjectTracker.API.Controllers.Logistics
     </table>");
 
             // Bottom Section - KM/Fuel and Signatures
-            sb.AppendLine(@"
+            if (isPickingSlip)
+            {
+                sb.AppendLine(@"
+    <div class='bottom-section'>
+        <div class='km-fuel-section'>
+            <h4>&#x1F4CB; PICKING RECORD</h4>
+            <div class='km-grid'>
+                <div class='km-field'>
+                    <label>Picked By:</label>
+                    <div class='input-box'></div>
+                </div>
+                <div class='km-field'>
+                    <label>Date / Time Picked:</label>
+                    <div class='input-box'></div>
+                </div>
+                <div class='km-field'>
+                    <label>Checked By:</label>
+                    <div class='input-box'></div>
+                </div>
+                <div class='km-field'>
+                    <label>Staging Bay:</label>
+                    <div class='input-box'></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class='signature-section'>
+            <h4>&#x270F;&#xFE0F; AUTHORISATION</h4>
+            <div class='signature-grid'>
+                <div class='signature-box'>
+                    <div class='signature-line'></div>
+                    <div class='signature-label'>Picker Signature</div>
+                </div>
+                <div class='signature-box'>
+                    <div class='signature-line'></div>
+                    <div class='signature-label'>Warehouse Manager Signature</div>
+                </div>
+            </div>
+        </div>
+    </div>");
+            }
+            else
+            {
+                sb.AppendLine(@"
     <div class='bottom-section'>
         <div class='km-fuel-section'>
             <h4>&#x1F4CB; VEHICLE RECORD</h4>
@@ -1945,6 +2173,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             </div>
         </div>
     </div>");
+            }
 
             // Authorisation Panels - Sales & Logistics (built for future e-signature flow)
             // Each signature slot carries data-* attributes so an e-signature/approval
@@ -1955,7 +2184,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     <div class='auth-sign-area' data-signature-slot='{signRole}'><!-- signature image + timestamp injected here --></div>
                 </div>";
 
-            sb.AppendLine($@"
+            if (!isPickingSlip)
+            {
+                sb.AppendLine($@"
     <div class='auth-row'>
         <div class='auth-panel' data-auth-group='sales'>
             <h4>&#x1F4BC; SALES AUTHORISATION <span class='auth-status' data-auth-status='sales'>Pending</span></h4>
@@ -1972,11 +2203,13 @@ namespace ProjectTracker.API.Controllers.Logistics
             </div>
         </div>
     </div>");
+            }
 
             // Footer
+            var footerDocLabel = isPickingSlip ? "Picking Slip" : "Trip Sheet";
             sb.AppendLine($@"
     <div class='footer'>
-        Generated: {DateTime.Now:dd MMM yyyy HH:mm} | Trip Sheet: {tripSheet.LoadNumber} | Status: {tripSheet.Status} | Created by: {tripSheet.CreatedByUserName ?? "System"}
+        Generated: {DateTime.Now:dd MMM yyyy HH:mm} | {footerDocLabel}: {tripSheet.LoadNumber} | Status: {tripSheet.Status} | Created by: {tripSheet.CreatedByUserName ?? "System"}
         <div class='footer-barcode'>
             <img src='data:image/png;base64,{GenerateCode128Png(tripSheet.LoadNumber)}' class='footer-barcode-img' alt='{tripSheet.LoadNumber}' />
             <div class='barcode-number'>{tripSheet.LoadNumber}</div>
@@ -2643,6 +2876,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string EstimatedTime { get; set; } = string.Empty;
         public DateTime Date { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string? CreatedByName { get; set; }   // Name of the person who generated the tripsheet
         public decimal TotalValue { get; set; }      // Subtotal excluding VAT
         public decimal VatAmount { get; set; }       // VAT at 15%
         public decimal TotalWithVat { get; set; }    // Total including VAT
@@ -2656,7 +2890,10 @@ namespace ProjectTracker.API.Controllers.Logistics
     public class EmailTripSheetDto
     {
         public string RecipientEmail { get; set; } = string.Empty;
+        public List<string>? RecipientEmails { get; set; }
         public List<string>? CcEmails { get; set; }
+        public bool CcSelf { get; set; }
+        public bool AttachPickingSlip { get; set; }
         public string? CustomMessage { get; set; }
     }
 }

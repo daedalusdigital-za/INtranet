@@ -90,6 +90,7 @@ export interface ClockInEmployee {
   idNum?: string;
   address?: string;
   mobileNo?: string;
+  hasPhoto?: boolean;
 }
 
 export interface ClockInEmployeeRequest {
@@ -268,6 +269,16 @@ export class UserManagementService {
 
   deleteClockInEmployee(empId: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/clockin-employees/${encodeURIComponent(empId)}`, { headers: this.getHeaders() });
+  }
+
+  /** URL of a clock-in employee's biometric machine photo. */
+  clockInEmployeePhotoUrl(empId: string): string {
+    return `${this.apiUrl}/clockin-employees/${encodeURIComponent(empId)}/photo`;
+  }
+
+  /** Copy the linked clock-in employee's photo into the user's profile picture. */
+  useClockInPhoto(userId: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/${userId}/use-clockin-photo`, {}, { headers: this.getHeaders() });
   }
 
   // Search users

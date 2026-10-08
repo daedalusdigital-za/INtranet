@@ -15,6 +15,7 @@
             @case ('split') { Extract & split pages }
             @case ('merge') { Merge, rotate & combine PDFs }
             @case ('compress') { Shrink your PDF }
+            @case ('stamp') { Stamp a PDF with a company stamp }
             @default { Quick PDF tools — right here, nothing leaves your browser }
           }
         </div>
@@ -54,6 +55,11 @@
           <span class="ihp-card__icon material-icons">compress</span>
           <span class="ihp-card__name">PDF Compressor</span>
           <span class="ihp-card__desc">Shrink a bulky PDF with three strength levels — Light, Balanced (Smart) or Strong — then preview and download.</span>
+        </button>
+        <button class="ihp-card ihp-card--stamp" (click)="choose('stamp')">
+          <span class="ihp-card__icon material-icons">approval</span>
+          <span class="ihp-card__name">PDF Stamper</span>
+          <span class="ihp-card__desc">Upload a PDF, pick a company stamp and drop it anywhere on the page. Download the stamped file — a copy is archived in the IT portal.</span>
         </button>
       </div>
     }
@@ -260,6 +266,92 @@
         }
       }
     }
+
+    <!-- ── STAMPER ──────────────────────────────────────────── -->
+    @if (mode() === 'stamp') {
+      @if (!fileName()) {
+        <div class="ihp-drop" (click)="triggerPicker()" (drop)="onDrop($event)" (dragover)="onDragOver($event)">
+          <span class="material-icons">approval</span>
+          <div class="ihp-drop__title">Drop a PDF here or click to browse</div>
+          <div class="ihp-drop__hint">Then pick a company stamp and click anywhere on the page to place it.</div>
+        </div>
+      } @else {
+        <div class="ihp-file">
+          <span class="material-icons">description</span>
+          <div class="ihp-file__meta">
+            <div class="ihp-file__name" [title]="fileName()">{{ fileName() }}</div>
+            <div class="ihp-file__size">{{ humanSize(fileSize()) }} · {{ stampPages().length }} pages · {{ stampCount() }} stamp{{ stampCount() === 1 ? '' : 's' }} placed</div>
+          </div>
+          <button class="ihp-btn ihp-btn--ghost" (click)="triggerPicker()">
+            <span class="material-icons">swap_horiz</span> Change
+          </button>
+        </div>
+
+        <!-- Step 1 — choose a company stamp (shown before the preview) -->
+        @if (!stampReady()) {
+          <div class="ihp-stamp-chooser">
+            <div class="ihp-stamp-chooser__title">Which company stamp would you like to use?</div>
+            <div class="ihp-stamp-chooser__sub">Pick a stamp to continue — you'll then place it on the page.</div>
+            <div class="ihp-stamp-chooser__grid">
+              @for (s of stampAssets; track s.key) {
+                <button class="ihp-stamp-card" (click)="chooseStamp(s.key)">
+                  <div class="ihp-stamp-card__thumb">
+                    <img [src]="s.url" [alt]="s.name" (load)="onStampImgLoad(s.key, $event)" />
+                  </div>
+                  <span class="ihp-stamp-card__name">{{ s.name }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        } @else {
+          <!-- Step 2 — chosen stamp bar + placement preview -->
+          <div class="ihp-stamp-selected">
+            <div class="ihp-stamp-selected__preview">
+              <img [src]="stampUrl(selectedStamp()!)" [alt]="stampName(selectedStamp()!)" />
+            </div>
+            <div class="ihp-stamp-selected__meta">
+              <div class="ihp-stamp-selected__name">{{ stampName(selectedStamp()!) }}</div>
+              <div class="ihp-stamp-selected__hint">Click on the page to drop the stamp, drag to move, use the pink handle to resize.</div>
+            </div>
+            <button class="ihp-btn ihp-btn--ghost" (click)="changeStamp()">
+              <span class="material-icons">swap_horiz</span> Change stamp
+            </button>
+          </div>
+
+          <!-- Pages with placed stamps -->
+          @if (stampPages().length) {
+            <div class="ihp-stamp-pages">
+              @for (pg of stampPages(); track pg.index) {
+                <div class="ihp-stamp-page"
+                     [class.ihp-stamp-page--armed]="selectedStamp()"
+                     (click)="onPageClick(pg.index, $event)">
+                  <img class="ihp-stamp-page__img" [src]="pg.dataUrl" [alt]="'Page ' + (pg.index + 1)" draggable="false" />
+                  <span class="ihp-stamp-page__no">{{ pg.index + 1 }}</span>
+                  @for (st of placedForPage(pg.index); track st.id) {
+                    <div class="ihp-placed"
+                         [style.left.%]="st.xPct * 100"
+                         [style.top.%]="st.yPct * 100"
+                         [style.width.%]="st.wPct * 100"
+                         (mousedown)="startDrag(st.id, 'move', $event)"
+                         (click)="$event.stopPropagation()">
+                      <img [src]="stampUrl(st.assetKey)" [alt]="stampName(st.assetKey)" draggable="false" />
+                      <button class="ihp-placed__del" (mousedown)="$event.stopPropagation()" (click)="removePlaced(st.id, $event)" title="Remove stamp">
+                        <span class="material-icons">close</span>
+                      </button>
+                      <span class="ihp-placed__resize" (mousedown)="startDrag(st.id, 'resize', $event)" title="Drag to resize"></span>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        }
+
+        @if (stampSaved()) {
+          <div class="ihp-sent"><span class="material-icons">verified</span> Stamped PDF downloaded &amp; archived in IT portal (Stamped).</div>
+        }
+      }
+    }
   </div>
 
   <!-- Footer -->
@@ -295,6 +387,14 @@
         <div class="ihp__footbtns">
           <button class="ihp-btn ihp-btn--primary" (click)="downloadCompressed()">
             <span class="material-icons">download</span> Download compressed PDF
+          </button>
+        </div>
+      }
+      @if (mode() === 'stamp') {
+        <span class="ihp__footinfo">{{ stampCount() }} stamp{{ stampCount() === 1 ? '' : 's' }} placed</span>
+        <div class="ihp__footbtns">
+          <button class="ihp-btn ihp-btn--primary" (click)="applyAndDownloadStamp()" [disabled]="busy() || stampCount() === 0">
+            <span class="material-icons">approval</span> {{ stampSaving() ? 'Saving…' : 'Apply, download & archive' }}
           </button>
         </div>
       }

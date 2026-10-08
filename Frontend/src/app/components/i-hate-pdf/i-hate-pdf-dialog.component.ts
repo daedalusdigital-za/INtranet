@@ -13,7 +13,33 @@ import { environment } from '../../../environments/environment';
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc =
   new URL('pdf.worker.min.mjs', document.baseURI).toString();
 
-type Mode = 'home' | 'split' | 'merge' | 'compress';
+type Mode = 'home' | 'split' | 'merge' | 'compress' | 'stamp';
+
+/** A company stamp available to apply. PNGs live in /public/stamps. */
+interface StampAsset {
+  key: string;
+  name: string;
+  url: string;
+}
+
+/** A stamp instance placed on a page (all geometry stored as page fractions). */
+interface PlacedStamp {
+  id: string;
+  pageIndex: number;
+  assetKey: string;
+  xPct: number;   // left edge, fraction of page width (0..1)
+  yPct: number;   // top edge, fraction of page height (0..1)
+  wPct: number;   // width, fraction of page width
+  aspect: number; // image height / width
+}
+
+/** A rendered PDF page used as the stamping canvas. */
+interface StampPageView {
+  index: number;
+  dataUrl: string;
+  wPt: number;    // page width in PDF points
+  hPt: number;    // page height in PDF points
+}
 
 interface PageThumb {
   index: number;      // 0-based page index
@@ -102,8 +128,46 @@ export class IHatePdfDialogComponent {
   emailMessage = '';
   readonly sendingEmail = signal(false);
 
+  // ── Stamp state ────────────────────────────────────────────
+  readonly stampAssets: StampAsset[] = [
+    { key: 'Access',       name: 'Access Medical',  url: 'stamps/Access.png' },
+    { key: 'Liamed',       name: 'Liamed',          url: 'stamps/Liamed.png' },
+    { key: 'NewAge',       name: 'New Age',         url: 'stamps/NewAge.png' },
+    { key: 'Promed',       name: 'Promed',          url: 'stamps/Promed.png' },
+    { key: 'Sebenzani',    name: 'Sebenzani',       url: 'stamps/Sebenzani.png' },
+    { key: 'ShakaHolding', name: 'Shaka Holding',   url: 'stamps/ShakaHolding.png' }
+  ];
+  readonly selectedStamp = signal<string | null>(null);
+  readonly stampPages = signal<StampPageView[]>([]);
+  readonly placedStamps = signal<PlacedStamp[]>([]);
+  readonly stampSaving = signal(false);
+  readonly stampSaved = signal(false);
+  /** natural aspect (h/w) of each stamp image, populated as they load. */
+  private stampAspect = new Map<string, number>();
+  // drag/resize bookkeeping
+  private dragId: string | null = null;
+  private dragMode: 'move' | 'resize' | null = null;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private dragOrig: PlacedStamp | null = null;
+  private dragPageEl: HTMLElement | null = null;
+
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('mergeInput') mergeInput?: ElementRef<HTMLInputElement>;
+
+  constructor() {
+    // Preload each stamp so its true aspect ratio is known up-front. This makes
+    // the first placement land exactly where the user clicks (no post-load jump).
+    for (const s of this.stampAssets) {
+      const img = new Image();
+      img.onload = () => {
+        if (img.naturalWidth > 0) {
+          this.stampAspect.set(s.key, img.naturalHeight / img.naturalWidth);
+        }
+      };
+      img.src = s.url;
+    }
+  }
 
   // ── Navigation ─────────────────────────────────────────────
   choose(mode: Mode): void {
@@ -129,6 +193,19 @@ export class IHatePdfDialogComponent {
     this.compressedSize.set(0);
     this.revokeCompressed();
     this.resetMerge();
+    this.resetStamp();
+  }
+
+  private resetStamp(): void {
+    this.selectedStamp.set(null);
+    this.stampPages.set([]);
+    this.placedStamps.set([]);
+    this.stampSaving.set(false);
+    this.stampSaved.set(false);
+    this.dragId = null;
+    this.dragMode = null;
+    this.dragOrig = null;
+    this.dragPageEl = null;
   }
 
   private resetMerge(): void {
@@ -188,6 +265,9 @@ export class IHatePdfDialogComponent {
 
     if (this.mode() === 'split') {
       await this.renderThumbnails();
+    }
+    if (this.mode() === 'stamp') {
+      await this.renderStampPages();
     }
   }
 
@@ -549,6 +629,230 @@ export class IHatePdfDialogComponent {
     }
   }
   readonly emailSent = signal(false);
+
+  // ── Stamp tool ─────────────────────────────────────────────
+  /** Render every page as an image so the user can drop stamps onto it. */
+  private async renderStampPages(): Promise<void> {
+    if (!this.sourceBytes) return;
+    this.busy.set(true);
+    this.busyMsg.set('Rendering pages…');
+    this.placedStamps.set([]);
+    try {
+      const doc = await (pdfjsLib as any).getDocument({ data: this.sourceBytes.slice() }).promise;
+      const views: StampPageView[] = [];
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d')!;
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const base = page.getViewport({ scale: 1 });
+        views.push({
+          index: i - 1,
+          dataUrl: canvas.toDataURL('image/jpeg', 0.72),
+          wPt: base.width,
+          hPt: base.height
+        });
+        this.busyMsg.set(`Rendering pages… ${i}/${doc.numPages}`);
+      }
+      this.stampPages.set(views);
+    } catch {
+      this.error.set('Could not read this PDF. It may be corrupted or password-protected.');
+    } finally {
+      this.busy.set(false);
+      this.busyMsg.set('');
+    }
+  }
+
+  pickStamp(key: string): void {
+    this.selectedStamp.set(this.selectedStamp() === key ? null : key);
+    this.stampSaved.set(false);
+  }
+
+  /** True once a company stamp has been chosen (gates the placement preview). */
+  readonly stampReady = computed(() => this.selectedStamp() !== null);
+
+  /** Chooser-card click: select this stamp and advance to the placement step. */
+  chooseStamp(key: string): void {
+    this.selectedStamp.set(key);
+    this.stampSaved.set(false);
+  }
+
+  /** Go back to the company-stamp chooser without losing placed stamps. */
+  changeStamp(): void {
+    this.selectedStamp.set(null);
+  }
+
+  stampUrl(key: string): string {
+    return this.stampAssets.find(s => s.key === key)?.url ?? '';
+  }
+  stampName(key: string): string {
+    return this.stampAssets.find(s => s.key === key)?.name ?? key;
+  }
+
+  /** Capture the natural aspect ratio of a stamp thumbnail once it loads. */
+  onStampImgLoad(key: string, evt: Event): void {
+    const img = evt.target as HTMLImageElement;
+    if (img.naturalWidth > 0) {
+      this.stampAspect.set(key, img.naturalHeight / img.naturalWidth);
+    }
+  }
+
+  /** Click on a page to drop the selected stamp there (centred on the click). */
+  onPageClick(pageIndex: number, evt: MouseEvent): void {
+    const key = this.selectedStamp();
+    if (!key) { this.error.set('Pick a company stamp first.'); return; }
+    this.error.set('');
+    const el = evt.currentTarget as HTMLElement;
+    // Measure against the actual rendered page image so the drop lands exactly
+    // under the cursor (the wrapper can differ from the image by sub-pixels).
+    const imgEl = el.querySelector('.ihp-stamp-page__img') as HTMLElement | null;
+    const rect = (imgEl ?? el).getBoundingClientRect();
+    const aspect = this.stampAspect.get(key) || 0.4;
+    const wPct = 0.22; // default stamp is 22% of page width
+    const hPct = (wPct * rect.width * aspect) / rect.height;
+    let xPct = (evt.clientX - rect.left) / rect.width - wPct / 2;
+    let yPct = (evt.clientY - rect.top) / rect.height - hPct / 2;
+    xPct = Math.max(0, Math.min(1 - wPct, xPct));
+    yPct = Math.max(0, Math.min(1 - hPct, yPct));
+    const placed: PlacedStamp = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      pageIndex, assetKey: key, xPct, yPct, wPct, aspect
+    };
+    this.placedStamps.update(list => [...list, placed]);
+    this.stampSaved.set(false);
+  }
+
+  placedForPage(pageIndex: number): PlacedStamp[] {
+    return this.placedStamps().filter(p => p.pageIndex === pageIndex);
+  }
+
+  removePlaced(id: string, evt?: Event): void {
+    evt?.stopPropagation();
+    this.placedStamps.update(list => list.filter(p => p.id !== id));
+    this.stampSaved.set(false);
+  }
+
+  // ── Drag & resize placed stamps ────────────────────────────
+  startDrag(id: string, mode: 'move' | 'resize', evt: MouseEvent): void {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const placed = this.placedStamps().find(p => p.id === id);
+    if (!placed) return;
+    this.dragId = id;
+    this.dragMode = mode;
+    this.dragStartX = evt.clientX;
+    this.dragStartY = evt.clientY;
+    this.dragOrig = { ...placed };
+    // The page surface is the stamp overlay's offset parent.
+    let node = (evt.currentTarget as HTMLElement).closest('.ihp-stamp-page') as HTMLElement | null;
+    this.dragPageEl = node;
+    window.addEventListener('mousemove', this.onDragMove);
+    window.addEventListener('mouseup', this.onDragEnd);
+  }
+
+  private onDragMove = (evt: MouseEvent): void => {
+    if (!this.dragId || !this.dragOrig || !this.dragPageEl) return;
+    const rect = this.dragPageEl.getBoundingClientRect();
+    const dxPct = (evt.clientX - this.dragStartX) / rect.width;
+    const dyPct = (evt.clientY - this.dragStartY) / rect.height;
+    this.placedStamps.update(list => list.map(p => {
+      if (p.id !== this.dragId) return p;
+      const o = this.dragOrig!;
+      if (this.dragMode === 'move') {
+        let x = o.xPct + dxPct;
+        let y = o.yPct + dyPct;
+        const hPct = (o.wPct * rect.width * o.aspect) / rect.height;
+        x = Math.max(0, Math.min(1 - o.wPct, x));
+        y = Math.max(0, Math.min(1 - hPct, y));
+        return { ...p, xPct: x, yPct: y };
+      } else {
+        let w = o.wPct + dxPct;
+        w = Math.max(0.05, Math.min(1 - o.xPct, w));
+        return { ...p, wPct: w };
+      }
+    }));
+    this.stampSaved.set(false);
+  };
+
+  private onDragEnd = (): void => {
+    this.dragId = null;
+    this.dragMode = null;
+    this.dragOrig = null;
+    this.dragPageEl = null;
+    window.removeEventListener('mousemove', this.onDragMove);
+    window.removeEventListener('mouseup', this.onDragEnd);
+  };
+
+  readonly stampCount = computed(() => this.placedStamps().length);
+
+  /** Burn the placed stamps into the PDF and return the stamped bytes. */
+  private async buildStampedPdf(): Promise<Uint8Array> {
+    if (!this.sourceBytes) throw new Error('no source');
+    const pdf = await PDFDocument.load(this.sourceBytes.slice());
+    const pages = pdf.getPages();
+    const embedded = new Map<string, any>();
+    for (const placed of this.placedStamps()) {
+      const page = pages[placed.pageIndex];
+      if (!page) continue;
+      let img = embedded.get(placed.assetKey);
+      if (!img) {
+        const url = this.stampUrl(placed.assetKey);
+        const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        img = await pdf.embedPng(bytes);
+        embedded.set(placed.assetKey, img);
+      }
+      const { width, height } = page.getSize();
+      const w = placed.wPct * width;
+      const h = w * placed.aspect;
+      const x = placed.xPct * width;
+      const y = height - (placed.yPct * height) - h; // pdf-lib origin is bottom-left
+      page.drawImage(img, { x, y, width: w, height: h });
+    }
+    return await pdf.save();
+  }
+
+  /** Apply stamps, download the file, then persist a copy + audit log server-side. */
+  async applyAndDownloadStamp(): Promise<void> {
+    if (!this.sourceBytes) { this.error.set('Upload a PDF first.'); return; }
+    if (this.placedStamps().length === 0) { this.error.set('Place at least one stamp.'); return; }
+    this.busy.set(true);
+    this.busyMsg.set('Applying stamps…');
+    this.error.set('');
+    try {
+      const bytes = await this.buildStampedPdf();
+      const stampedName = this.suffixedName('stamped');
+      this.downloadBytes(bytes, stampedName, 'application/pdf');
+
+      // Save a copy + record the activity in the IT portal / admin log.
+      this.stampSaving.set(true);
+      this.busyMsg.set('Saving copy to IT portal…');
+      const buf = bytes.slice().buffer as ArrayBuffer;
+      const blob = new Blob([buf], { type: 'application/pdf' });
+      const usedStamps = Array.from(new Set(this.placedStamps().map(p => this.stampName(p.assetKey)))).join(', ');
+      const form = new FormData();
+      form.append('originalName', this.fileName() || 'document.pdf');
+      form.append('stampName', usedStamps);
+      form.append('file', blob, stampedName);
+      try {
+        await this.http.post(`${this.apiUrl}/tools/stamp-pdf`, form).toPromise();
+        this.stampSaved.set(true);
+      } catch {
+        // Download already succeeded — only the archival copy failed.
+        this.error.set('Stamped PDF downloaded, but saving the archive copy failed.');
+      }
+    } catch {
+      this.error.set('Stamping failed. The PDF may be protected or unusually large.');
+    } finally {
+      this.stampSaving.set(false);
+      this.busy.set(false);
+      this.busyMsg.set('');
+    }
+  }
 
   // ── Helpers ────────────────────────────────────────────────
   private suffixedName(suffix: string): string {

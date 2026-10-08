@@ -1,0 +1,199 @@
+<div class="dt-wrap">
+  <!-- Header -->
+  <div class="dt-head">
+    <div class="dt-head-left">
+      <div class="dt-icon"><mat-icon>auto_awesome</mat-icon></div>
+      <div>
+        <h2>Sage Document Templates</h2>
+        <p>Upload Crystal Reports, reconstruct them as intranet templates, and print invoices that look exactly like Sage.</p>
+      </div>
+    </div>
+    <button mat-stroked-button (click)="loadCatalogue()"><mat-icon>refresh</mat-icon> Refresh</button>
+  </div>
+
+  <div *ngIf="loading" class="dt-loading"><mat-spinner diameter="40"></mat-spinner></div>
+
+  <!-- Catalogue grid: companies × document types -->
+  <div *ngIf="!loading" class="catalogue">
+    <div class="company-col" *ngFor="let c of companies">
+      <div class="company-name">{{ c.name }} <span class="code">{{ c.code }}</span></div>
+      <div class="type-cards">
+        <div class="type-card"
+             *ngFor="let t of docTypes"
+             [class.selected]="selectedCompany === c.code && selectedType === t.key"
+             (click)="select(c.code, t.key)">
+          <mat-icon>{{ t.icon }}</mat-icon>
+          <span class="tname">{{ t.name }}</span>
+          <div class="badges">
+            <span class="badge" [class.on]="cardFor(c.code, t.key)?.hasRpt" matTooltip="Crystal Report uploaded">RPT</span>
+            <span class="badge" [class.on]="cardFor(c.code, t.key)?.hasSample" matTooltip="Sample PDF uploaded">PDF</span>
+            <span class="badge" [class.on]="cardFor(c.code, t.key)?.hasTemplate" matTooltip="Template built">HTML</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workspace -->
+  <div *ngIf="selectedCompany && selectedType" class="workspace">
+    <div class="ws-head">
+      <h3>{{ selectedCompanyName }} — {{ selectedTypeName }}</h3>
+    </div>
+
+    <!-- Upload row -->
+    <div class="upload-row">
+      <div class="up-box">
+        <label class="up-label"><mat-icon>description</mat-icon> Crystal Report (.rpt)</label>
+        <div class="up-controls">
+          <input type="file" accept=".rpt" (change)="onRptPicked($event)" />
+          <span class="cur" *ngIf="selectedCard?.rptFileName">Current: {{ selectedCard?.rptFileName }}</span>
+        </div>
+      </div>
+      <div class="up-box">
+        <label class="up-label"><mat-icon>picture_as_pdf</mat-icon> Sample PDF (rendered from Sage)</label>
+        <div class="up-controls">
+          <input type="file" accept="application/pdf" (change)="onSamplePicked($event)" />
+          <span class="cur" *ngIf="selectedCard?.sampleFileName">Current: {{ selectedCard?.sampleFileName }}</span>
+        </div>
+      </div>
+      <button mat-flat-button color="primary" class="up-btn" (click)="upload()" [disabled]="uploading">
+        <mat-icon>{{ uploading ? 'hourglass_empty' : 'cloud_upload' }}</mat-icon>
+        {{ uploading ? 'Uploading…' : 'Upload' }}
+      </button>
+    </div>
+
+    <!-- Artwork row: logo + banner -->
+    <div class="artwork-row">
+      <div class="art-box">
+        <div class="art-head"><mat-icon>image</mat-icon> Logo</div>
+        <div class="art-preview logo">
+          <img *ngIf="logoUrl" [src]="logoUrl" alt="logo" />
+          <div *ngIf="!logoUrl" class="art-empty">No logo</div>
+        </div>
+        <div class="art-actions">
+          <label class="art-upload">
+            <mat-icon>{{ uploadingArt === 'logo' ? 'hourglass_empty' : 'upload' }}</mat-icon>
+            {{ uploadingArt === 'logo' ? 'Uploading…' : (logoUrl ? 'Replace' : 'Upload') }}
+            <input type="file" accept="image/*" hidden (change)="onArtPicked($event, 'logo')" />
+          </label>
+          <button mat-icon-button *ngIf="logoUrl" matTooltip="Download logo" (click)="downloadArt('logo')">
+            <mat-icon>download</mat-icon>
+          </button>
+          <button mat-icon-button *ngIf="hasLogo" matTooltip="Remove logo" (click)="removeArt('logo')">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="art-box">
+        <div class="art-head"><mat-icon>panorama</mat-icon> Banner / Artwork</div>
+        <div class="art-preview banner">
+          <img *ngIf="bannerUrl" [src]="bannerUrl" alt="banner" />
+          <div *ngIf="!bannerUrl" class="art-empty">No banner</div>
+        </div>
+        <div class="art-actions">
+          <label class="art-upload">
+            <mat-icon>{{ uploadingArt === 'banner' ? 'hourglass_empty' : 'upload' }}</mat-icon>
+            {{ uploadingArt === 'banner' ? 'Uploading…' : (bannerUrl ? 'Replace' : 'Upload') }}
+            <input type="file" accept="image/*" hidden (change)="onArtPicked($event, 'banner')" />
+          </label>
+          <button mat-icon-button *ngIf="bannerUrl" matTooltip="Download banner" (click)="downloadArt('banner')">
+            <mat-icon>download</mat-icon>
+          </button>
+          <button mat-icon-button *ngIf="hasBanner" matTooltip="Remove banner" (click)="removeArt('banner')">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="art-hint">
+        <mat-icon>info</mat-icon>
+        <span>Uploaded logo/banner override the graphics auto-extracted from the Sage PDF and feed the
+          <code>{{ '{{Logo}}' }}</code> / <code>{{ '{{Banner}}' }}</code> tokens. PNG with transparency looks best.</span>
+      </div>
+    </div>
+
+    <!-- Editor + preview -->
+    <div class="editor-grid">
+      <!-- Left: template editor -->
+      <div class="pane">
+        <div class="pane-head">
+          <span><mat-icon>code</mat-icon> Template (HTML)</span>
+          <button mat-flat-button color="primary" (click)="saveTemplate()" [disabled]="savingTemplate">
+            <mat-icon>save</mat-icon> {{ savingTemplate ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+        <textarea class="tpl-editor" [(ngModel)]="templateHtml" spellcheck="false"></textarea>
+        <p class="hint" ngNonBindable>
+          Tokens: <code>{{CustomerName}}</code>, <code>{{InvoiceDate}}</code>,
+          <code>{{SubTotal}}</code>, <code>{{VatAmount}}</code>,
+          <code>{{Total}}</code> — line items go inside
+          <code>{{#Lines}} … {{/Lines}}</code>.
+        </p>
+      </div>
+
+      <!-- Right: sample + live preview -->
+      <div class="pane">
+        <div class="pane-head">
+          <span><mat-icon>compare</mat-icon> Sample vs Live Preview</span>
+          <div class="preview-actions">
+            <button mat-stroked-button *ngIf="sampleUrl" (click)="openSample()"><mat-icon>open_in_new</mat-icon> Sage Sample</button>
+            <button mat-flat-button color="accent" (click)="generatePdf()" [disabled]="!selectedInvoice">
+              <mat-icon>print</mat-icon> Generate PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- invoice picker -->
+        <div class="inv-picker">
+          <div class="inv-search">
+            <mat-icon>search</mat-icon>
+            <input type="text" placeholder="Search invoice #, customer…"
+                   [(ngModel)]="invoiceSearch" (keyup.enter)="loadInvoices()" />
+            <button mat-icon-button (click)="loadInvoices()"><mat-icon>refresh</mat-icon></button>
+          </div>
+          <div class="inv-list">
+            <div *ngIf="loadingInvoices" class="inv-loading"><mat-spinner diameter="22"></mat-spinner></div>
+            <div class="inv-row"
+                 *ngFor="let inv of invoices"
+                 [class.sel]="selectedInvoice?.transactionNumber === inv.transactionNumber"
+                 (click)="pickInvoice(inv)">
+              <div class="inv-main">
+                <span class="inv-num">{{ inv.transactionNumber }}</span>
+                <span class="inv-cust">{{ inv.customerName }}</span>
+              </div>
+              <div class="inv-meta">
+                <span>{{ inv.date | date:'dd MMM yyyy' }}</span>
+                <span class="inv-total">R {{ inv.total | number:'1.2-2' }}</span>
+              </div>
+            </div>
+            <div *ngIf="!loadingInvoices && invoices.length === 0" class="inv-empty">
+              No imported invoices found for this company.
+            </div>
+          </div>
+        </div>
+
+        <div class="preview-frames">
+          <div class="frame-col">
+            <div class="frame-label">Live Preview (intranet)</div>
+            <iframe *ngIf="previewUrl" [src]="previewUrl" class="preview-frame"></iframe>
+            <div *ngIf="!previewUrl" class="frame-empty">
+              <mat-icon>visibility</mat-icon>
+              <p>Pick an invoice, or save the template, to preview.</p>
+              <button mat-stroked-button (click)="refreshPreview()">Preview with sample data</button>
+            </div>
+          </div>
+          <div class="frame-col" *ngIf="sampleUrl">
+            <div class="frame-label">Sage Sample</div>
+            <iframe [src]="sampleUrl" class="preview-frame"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="!selectedCompany && !loading" class="pick-hint">
+    <mat-icon>touch_app</mat-icon>
+    <p>Select a company &amp; document type above to upload the Sage report and build the template.</p>
+  </div>
+</div>

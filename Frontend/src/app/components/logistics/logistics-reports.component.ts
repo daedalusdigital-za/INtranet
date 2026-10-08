@@ -191,15 +191,21 @@ interface Incident {
             } @else {
               <div class="fuel-cards-grid">
                 @for (vehicle of flaggedFuelVehicles(); track vehicle.vehicleId) {
-                  <div class="fuel-card" [class]="'risk-' + vehicle.riskLevel" (click)="openFuelHealthDetail(vehicle)">
+                  <div class="fuel-card" [class]="'risk-' + vehicle.riskLevel" [class.expanded]="vehicle._expanded" (click)="openFuelHealthDetail(vehicle)">
                     <div class="fuel-card-header">
-                      <div class="reg-badge">{{ vehicle.registrationNumber }}</div>
+                      <div class="reg-badge">
+                        <mat-icon>directions_car</mat-icon>
+                        {{ vehicle.registrationNumber }}
+                      </div>
                       <span class="risk-badge" [class]="'risk-' + vehicle.riskLevel">
                         @if (vehicle.riskLevel === 'high') { HIGH RISK }
                         @else if (vehicle.riskLevel === 'watch') { WATCH }
                         @else { {{ vehicle.riskLevel | uppercase }} }
                       </span>
                     </div>
+                    @if (vehicle.make || vehicle.model) {
+                      <div class="veh-sub">{{ vehicle.make }} {{ vehicle.model }}</div>
+                    }
                     <div class="fuel-card-content">
                       <div class="metric">
                         <label>Risk Score</label>
@@ -207,17 +213,66 @@ interface Incident {
                       </div>
                       <div class="metric">
                         <label>Flagged Fills</label>
-                        <span class="value">{{ vehicle.flaggedFills ?? 0 }}</span>
+                        <span class="value">{{ vehicle.flaggedFills ?? 0 }} of {{ vehicle.fillCount ?? 0 }}</span>
                       </div>
                       <div class="metric">
-                        <label>Est. Litres Lost</label>
-                        <span class="value">{{ vehicle.estimatedLitresLost | number:'1.0-0' }}</span>
+                        <label>Actual km/L</label>
+                        <span class="value">
+                          {{ vehicle.actualKmPerLitre ? (vehicle.actualKmPerLitre | number:'1.1-1') : '—' }}
+                          <span class="expected">/ exp {{ vehicle.expectedKmPerLitre | number:'1.1-1' }}</span>
+                        </span>
+                      </div>
+                      <div class="metric">
+                        <label>Total Fuel</label>
+                        <span class="value">{{ vehicle.totalLitres | number:'1.0-0' }}L · R{{ vehicle.totalAmount | number:'1.0-0' }}</span>
                       </div>
                     </div>
                     <div class="fuel-card-footer">
                       <span class="reason">{{ vehicle.anomalyReason }}</span>
-                      <mat-icon>expand_more</mat-icon>
+                      <mat-icon>{{ vehicle._expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
                     </div>
+
+                    @if (vehicle._expanded) {
+                      <div class="fuel-detail" (click)="$event.stopPropagation()">
+                        @if (vehicle._findings?.length) {
+                          <div class="detail-block">
+                            <h4><mat-icon>report_problem</mat-icon> Findings ({{ vehicle._findings.length }})</h4>
+                            @for (f of vehicle._findings; track $index) {
+                              <div class="finding" [class]="severityClass(f.severity)">
+                                <span class="sev-dot"></span>
+                                <div class="finding-body">
+                                  <span class="finding-msg">{{ f.message }}</span>
+                                  @if (f.date) { <span class="finding-date">{{ f.date | date:'dd MMM yyyy' }}</span> }
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                        @if (vehicle._fills?.length) {
+                          <div class="detail-block">
+                            <h4><mat-icon>local_gas_station</mat-icon> Fill Breakdown ({{ vehicle._fills.length }})</h4>
+                            <div class="fills-table">
+                              <div class="fill-row head">
+                                <span>Date</span><span>Litres</span><span>Amount</span><span>Km</span><span>Tank %</span><span>Flag</span>
+                              </div>
+                              @for (fill of vehicle._fills; track $index) {
+                                <div class="fill-row" [class.flagged]="fill.flag">
+                                  <span>{{ fill.date | date:'dd MMM' }}</span>
+                                  <span>{{ fill.litres | number:'1.0-0' }}L</span>
+                                  <span>R{{ fill.amount | number:'1.0-0' }}</span>
+                                  <span>{{ fill.kmSinceLastFill ? (fill.kmSinceLastFill | number:'1.0-0') : '—' }}</span>
+                                  <span>{{ fill.fillVsTankPercent != null ? fill.fillVsTankPercent + '%' : '—' }}</span>
+                                  <span class="fill-flag" [matTooltip]="fill.flag || ''">{{ fill.flag ? '⚠' : '✓' }}</span>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                        @if (!vehicle._findings?.length && !vehicle._fills?.length) {
+                          <div class="detail-empty">No detailed fill data available for this window.</div>
+                        }
+                      </div>
+                    }
                   </div>
                 }
               </div>
@@ -299,16 +354,19 @@ interface Incident {
     .fuel-empty h3 { margin:0; color:#1a1a2e; font-size:18px; }
     .fuel-empty p { margin:0; color:#6b7280; font-size:14px; }
 
-    .fuel-cards-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+    .fuel-cards-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; align-items:start; }
     .fuel-card { display:flex; flex-direction:column; padding:16px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer; transition:all .2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
     .fuel-card:hover { transform:translateY(-4px); border-color:#c7d2fe; box-shadow: 0 6px 20px rgba(0,0,0,0.10); }
+    .fuel-card.expanded { transform:none; box-shadow: 0 6px 24px rgba(0,0,0,0.12); grid-column: 1 / -1; }
     .fuel-card.risk-high { border-left:4px solid #ef4444; }
     .fuel-card.risk-watch { border-left:4px solid #f97316; }
     .fuel-card.risk-normal { border-left:4px solid #22c55e; }
 
-    .fuel-card-header { display:flex; justify-content:space-between; align-items:start; gap:8px; margin-bottom:12px; }
-    .reg-badge { padding:4px 10px; background:#eef2ff; color:#3f51b5; border-radius:4px; font-weight:600; font-size:14px; }
-    .risk-badge { padding:4px 10px; border-radius:4px; font-size:11px; font-weight:700; }
+    .fuel-card-header { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+    .reg-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; background:#eef2ff; color:#3f51b5; border-radius:6px; font-weight:700; font-size:15px; letter-spacing:0.3px; }
+    .reg-badge mat-icon { font-size:18px; width:18px; height:18px; }
+    .veh-sub { font-size:12px; color:#9ca3af; margin-bottom:10px; }
+    .risk-badge { padding:4px 10px; border-radius:4px; font-size:11px; font-weight:700; white-space:nowrap; }
     .risk-badge.risk-high { background:#fee2e2; color:#b91c1c; }
     .risk-badge.risk-watch { background:#ffedd5; color:#c2410c; }
     .risk-badge.risk-normal { background:#dcfce7; color:#15803d; }
@@ -317,10 +375,32 @@ interface Incident {
     .metric { display:flex; justify-content:space-between; align-items:center; }
     .metric > label { font-size:12px; color:#6b7280; }
     .metric > .value { font-weight:600; font-size:14px; color:#1a1a2e; }
+    .metric .expected { font-weight:400; font-size:11px; color:#9ca3af; margin-left:4px; }
 
-    .fuel-card-footer { display:flex; justify-content:space-between; align-items:center; padding-top:10px; border-top:1px solid #f0f1f3; }
+    .fuel-card-footer { display:flex; justify-content:space-between; align-items:center; gap:8px; padding-top:10px; border-top:1px solid #f0f1f3; }
     .reason { font-size:12px; color:#6b7280; flex:1; }
-    .fuel-card-footer > mat-icon { font-size:18px; width:18px; height:18px; color:#9ca3af; }
+    .fuel-card-footer > mat-icon { font-size:20px; width:20px; height:20px; color:#9ca3af; flex-shrink:0; }
+
+    /* Expanded detail */
+    .fuel-detail { margin-top:14px; padding-top:14px; border-top:2px dashed #e5e7eb; display:flex; flex-direction:column; gap:16px; cursor:default; }
+    .detail-block h4 { display:flex; align-items:center; gap:6px; margin:0 0 10px; font-size:13px; color:#374151; }
+    .detail-block h4 mat-icon { font-size:18px; width:18px; height:18px; color:#f97316; }
+    .finding { display:flex; align-items:flex-start; gap:8px; padding:8px 10px; border-radius:6px; background:#f9fafb; margin-bottom:6px; }
+    .finding .sev-dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0; }
+    .finding.sev-high .sev-dot { background:#ef4444; }
+    .finding.sev-medium .sev-dot { background:#f97316; }
+    .finding.sev-low .sev-dot { background:#eab308; }
+    .finding.sev-high { background:#fef2f2; }
+    .finding-body { display:flex; flex-direction:column; gap:2px; }
+    .finding-msg { font-size:13px; color:#374151; }
+    .finding-date { font-size:11px; color:#9ca3af; }
+    .fills-table { display:flex; flex-direction:column; font-size:12px; border:1px solid #eef0f2; border-radius:6px; overflow:hidden; }
+    .fill-row { display:grid; grid-template-columns:1fr 0.8fr 0.9fr 0.7fr 0.7fr 0.5fr; gap:6px; padding:7px 10px; align-items:center; border-bottom:1px solid #f3f4f6; }
+    .fill-row.head { background:#f9fafb; font-weight:600; color:#6b7280; font-size:11px; text-transform:uppercase; }
+    .fill-row.flagged { background:#fff7ed; }
+    .fill-row:last-child { border-bottom:none; }
+    .fill-flag { text-align:center; }
+    .detail-empty { font-size:12px; color:#9ca3af; padding:10px; text-align:center; }
   `]
 })
 export class LogisticsReportsComponent implements OnInit {
@@ -409,7 +489,31 @@ export class LogisticsReportsComponent implements OnInit {
     this.http.get<any>(`${environment.apiUrl}/fleet/fuel-analysis?days=${this.fuelAnalysisDays}`, { headers: this.headers() })
       .subscribe({
         next: (res) => {
-          const flagged = (res.vehicles || []).filter((v: any) => v.riskLevel === 'high' || v.riskLevel === 'watch');
+          const flagged = (res.vehicles || [])
+            .filter((v: any) => v.riskLevel === 'high' || v.riskLevel === 'watch')
+            .map((v: any) => {
+              const findings = v.findings || [];
+              const fills = v.fills || [];
+              const flaggedFills = fills.filter((f: any) => f.flag || (f.severity && f.severity !== 'ok')).length;
+              // Sort findings by severity so the worst reason surfaces
+              const sevRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+              const topFinding = [...findings].sort((a: any, b: any) =>
+                (sevRank[b.severity] || 0) - (sevRank[a.severity] || 0))[0];
+              return {
+                ...v,
+                registrationNumber: v.registration || v.registrationNumber || 'Unknown',
+                flaggedFills,
+                findingsCount: findings.length,
+                anomalyReason: topFinding?.message || (findings.length ? `${findings.length} finding(s)` : 'Consumption outside expected range'),
+                actualKmPerLitre: v.actualKmPerLitre,
+                expectedKmPerLitre: v.expectedKmPerLitre,
+                _findings: findings,
+                _fills: fills,
+                _expanded: false
+              };
+            });
+          // Worst risk first
+          flagged.sort((a: any, b: any) => (b.riskScore || 0) - (a.riskScore || 0));
           this.flaggedFuelVehicles.set(flagged);
           this.fuelAnalysisLoading.set(false);
         },
@@ -446,7 +550,12 @@ export class LogisticsReportsComponent implements OnInit {
   }
 
   openFuelHealthDetail(vehicle: any): void {
-    // Could open a detailed dialog for individual vehicle analysis
-    this.snack.open(`Viewing fuel health for ${vehicle.registrationNumber}`, 'Close', { duration: 2500 });
+    // Toggle the inline detail panel for this vehicle
+    vehicle._expanded = !vehicle._expanded;
+    this.flaggedFuelVehicles.update(list => [...list]);
+  }
+
+  severityClass(sev: string): string {
+    return 'sev-' + (sev || 'medium').toLowerCase();
   }
 }

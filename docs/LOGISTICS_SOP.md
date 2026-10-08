@@ -102,7 +102,7 @@ Dispatch Clerk (primary), Warehouse Manager, Driver, Controller.
 **B. Build the trip sheet** (Tripsheets tab → choose a mode)
 3. Choose the appropriate creation mode:
    - **Import Excel** — parse an existing tripsheet (`preview-import` → `import`).
-   - **Pad tripsheet** — import as-is without DB matching (`preview-import?skipMatching=true`).
+   - **DN Tripsheet** — mixed invoices &amp; delivery notes; invoices are linked where found, the rest imported as-is (`preview-import?skipMatching=true`).
    - **Manual** — build a load stop-by-stop.
    - **Transfer** — internal stock move between warehouses.
    - **Welly (AI)** — AI reads the Excel and drafts the sheet (`welly-analyze-excel` → `welly-create-tripsheet`).

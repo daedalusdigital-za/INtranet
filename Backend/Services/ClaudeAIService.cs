@@ -442,7 +442,11 @@ Guidelines:
                             break;
                         }
                     }
-                    catch (JsonException) { }
+                    catch (JsonException ex)
+                    {
+                        // Malformed SSE chunk from the Anthropic API — skip it but leave a trace
+                        _logger.LogDebug(ex, "Skipping malformed Claude stream event");
+                    }
 
                     if (!string.IsNullOrEmpty(tokenToYield))
                     {

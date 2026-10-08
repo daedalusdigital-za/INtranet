@@ -153,7 +153,8 @@ namespace ProjectTracker.API.Controllers
                     JobTitle = e.JobTitle,
                     IdNum = e.IdNum,
                     Address = e.Address,
-                    MobileNo = e.MobileNo
+                    MobileNo = e.MobileNo,
+                    HasPhoto = e.Photo != null
                 })
                 .ToListAsync();
 
@@ -177,11 +178,25 @@ namespace ProjectTracker.API.Controllers
                 JobTitle = e.JobTitle,
                 IdNum = e.IdNum,
                 Address = e.Address,
-                MobileNo = e.MobileNo
+                MobileNo = e.MobileNo,
+                HasPhoto = e.Photo != null
             });
         }
 
-        // POST: api/users/clockin-employees
+        // GET: api/users/clockin-employees/{empId}/photo
+        // Serves the biometric clock-in machine photo for an employee.
+        [HttpGet("clockin-employees/{empId}/photo")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetClockInEmployeePhoto(string empId)
+        {
+            var e = await _context.EmpRegistrations.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.EmpId == empId);
+            if (e?.Photo == null || e.Photo.Length == 0)
+                return NotFound();
+
+            // Biometric machines store the face capture as a JPEG blob.
+            return File(e.Photo, "image/jpeg");
+        }
         [HttpPost("clockin-employees")]
         public async Task<ActionResult<ClockInEmployeeDto>> CreateClockInEmployee([FromBody] ClockInEmployeeRequest request)
         {
@@ -463,7 +478,18 @@ namespace ProjectTracker.API.Controllers
                 user.DepartmentId = dto.DepartmentId.Value == 0 ? null : dto.DepartmentId;
 
             if (dto.LinkedEmpId != null)
-                user.LinkedEmpId = string.IsNullOrEmpty(dto.LinkedEmpId) ? null : dto.LinkedEmpId;
+            {
+                var newLink = string.IsNullOrEmpty(dto.LinkedEmpId) ? null : dto.LinkedEmpId;
+                var linkChanged = newLink != user.LinkedEmpId;
+                user.LinkedEmpId = newLink;
+
+                // When newly linked, adopt the biometric machine photo if the user
+                // doesn't already have a profile picture of their own.
+                if (linkChanged && newLink != null && user.ProfilePictureData == null)
+                {
+                    await CopyClockInPhotoToUserAsync(user, newLink);
+                }
+            }
 
             if (dto.IsActive.HasValue)
                 user.IsActive = dto.IsActive.Value;
@@ -505,6 +531,46 @@ namespace ProjectTracker.API.Controllers
                 $"Updated user: {user.Name} {user.Surname} ({user.Email})");
 
             return Ok(new { message = "User updated successfully" });
+        }
+
+        // POST: api/users/{id}/use-clockin-photo
+        // Copies the linked clock-in employee's biometric photo into the user's profile picture.
+        [HttpPost("{id}/use-clockin-photo")]
+        public async Task<IActionResult> UseClockInPhoto(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+                return NotFound(new { message = "User not found" });
+
+            if (string.IsNullOrEmpty(user.LinkedEmpId))
+                return BadRequest(new { message = "This user is not linked to a clock-in profile." });
+
+            var copied = await CopyClockInPhotoToUserAsync(user, user.LinkedEmpId);
+            if (!copied)
+                return BadRequest(new { message = "The linked clock-in profile has no photo on the machine." });
+
+            await _context.SaveChangesAsync();
+
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync("User Photo From Clock-In", "user", "User", id,
+                $"Set profile picture from clock-in profile {user.LinkedEmpId} for {user.Name} {user.Surname}");
+
+            return Ok(new { message = "Profile picture updated from clock-in photo.", photoUrl = $"/api/profile/{id}/photo" });
+        }
+
+        // Copies the biometric photo of the given clock-in employee onto the user.
+        // Returns true if a photo was found and applied. Does NOT call SaveChanges.
+        private async Task<bool> CopyClockInPhotoToUserAsync(User user, string empId)
+        {
+            var emp = await _context.EmpRegistrations.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.EmpId == empId);
+            if (emp?.Photo == null || emp.Photo.Length == 0)
+                return false;
+
+            user.ProfilePictureData = emp.Photo;
+            user.ProfilePictureMimeType = "image/jpeg";
+            user.UpdatedAt = DateTime.UtcNow;
+            return true;
         }
 
         // DELETE: api/users/{id}
@@ -920,6 +986,7 @@ namespace ProjectTracker.API.Controllers
         public string? IdNum { get; set; }
         public string? Address { get; set; }
         public string? MobileNo { get; set; }
+        public bool HasPhoto { get; set; }
         public string FullName => $"{Name} {LastName}".Trim();
     }
 

@@ -29,11 +29,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SystemLogsService, SystemLog } from '../../services/system-logs.service';
 import { AnnouncementHistoryService, Announcement } from '../../services/announcement-history.service';
 import { AuthService } from '../../services/auth.service';
+import { ApiService } from '../../services/api.service';
 import { UserManagementService, User, Department, CreateUserDto, Permission, ModulePermission, OperatingCompany, ClockInEmployee, ClockInEmployeeRequest } from '../../services/user-management.service';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { environment } from '../../../environments/environment';
 import { PodUploaderComponent } from './pod-uploader.component';
+import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -67,7 +69,8 @@ import * as XLSX from 'xlsx';
     MatNativeDateModule,
     MatMenuModule,
     NavbarComponent,
-    PodUploaderComponent
+    PodUploaderComponent,
+    DocumentTemplatesComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -91,6 +94,96 @@ import * as XLSX from 'xlsx';
           </ng-template>
           <div class="tab-content">
             <app-pod-uploader></app-pod-uploader>
+          </div>
+        </mat-tab>
+
+        <!-- Sage Document Templates Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>auto_awesome</mat-icon>
+            <span>Document Templates</span>
+          </ng-template>
+          <div class="tab-content">
+            <app-document-templates></app-document-templates>
+          </div>
+        </mat-tab>
+
+        <!-- Dashboard Gallery Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>photo_library</mat-icon>
+            <span>Dashboard Gallery</span>
+          </ng-template>
+          <div class="tab-content">
+            <div class="gallery-intro">
+              <p>
+                Upload images for the dashboard slideshow. The main menu widget alternates
+                between the Quote of the Day and a rotating set of these images. You can store
+                up to {{ galleryMax }} images; 8 are shown at random each time the dashboard loads.
+                Images are automatically compressed on upload for fast loading.
+              </p>
+              <div class="gallery-toolbar">
+                <button mat-raised-button color="primary"
+                        (click)="galleryFileInput.click()"
+                        [disabled]="galleryUploading || galleryImages.length >= galleryMax">
+                  <mat-icon>upload</mat-icon>
+                  Upload Images
+                </button>
+                <input #galleryFileInput type="file" accept="image/*" hidden multiple
+                       (change)="onGalleryFileSelected($event)" />
+                <button mat-stroked-button color="warn"
+                        (click)="deleteAllDashboardImages()"
+                        [disabled]="galleryUploading || galleryOptimizing || galleryImages.length === 0"
+                        matTooltip="Remove every image from the slideshow">
+                  <mat-icon>delete_sweep</mat-icon>
+                  Delete all
+                </button>
+                <span class="gallery-count">{{ galleryImages.length }} / {{ galleryMax }} images</span>
+                @if (galleryUploading || galleryOptimizing) {
+                  <mat-spinner diameter="24"></mat-spinner>
+                }
+              </div>
+            </div>
+
+            <!-- Drag & drop zone -->
+            <div class="gallery-dropzone"
+                 [class.dragover]="galleryDragOver"
+                 (click)="galleryFileInput.click()"
+                 (dragover)="onGalleryDragOver($event)"
+                 (dragleave)="onGalleryDragLeave($event)"
+                 (drop)="onGalleryDrop($event)">
+              <mat-icon>cloud_upload</mat-icon>
+              <p>
+                @if (galleryUploading) {
+                  Uploading {{ galleryUploadDone }} / {{ galleryUploadTotal }}…
+                } @else {
+                  Drag &amp; drop images here, or click to browse
+                }
+              </p>
+              <span class="dropzone-hint">JPEG, PNG, GIF or WebP · up to {{ galleryMax }} images</span>
+            </div>
+
+            @if (galleryLoading) {
+              <div class="loading-state"><mat-spinner diameter="40"></mat-spinner></div>
+            } @else if (galleryImages.length === 0) {
+              <div class="empty-state">
+                <mat-icon>photo_library</mat-icon>
+                <h3>No images yet</h3>
+                <p>Upload your first image to start the dashboard slideshow</p>
+              </div>
+            } @else {
+              <div class="gallery-grid">
+                @for (img of galleryImages; track img.id) {
+                  <div class="gallery-item">
+                    <img [src]="galleryUrl(img.id)" [alt]="img.fileName" />
+                    <button mat-icon-button color="warn" class="gallery-delete"
+                            matTooltip="Delete image" (click)="deleteDashboardImage(img)">
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
           </div>
         </mat-tab>
 
@@ -378,6 +471,16 @@ import * as XLSX from 'xlsx';
 
             <div class="table-container">
               <table mat-table [dataSource]="filteredClockInEmployees">
+                <ng-container matColumnDef="photo">
+                  <th mat-header-cell *matHeaderCellDef></th>
+                  <td mat-cell *matCellDef="let e">
+                    @if (e.hasPhoto) {
+                      <img [src]="clockInPhotoUrl(e.empId)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #e0e3ff;" />
+                    } @else {
+                      <mat-icon style="color:#c5cae9;">account_circle</mat-icon>
+                    }
+                  </td>
+                </ng-container>
                 <ng-container matColumnDef="empId">
                   <th mat-header-cell *matHeaderCellDef>Emp ID</th>
                   <td mat-cell *matCellDef="let e">{{ e.empId }}</td>
@@ -871,6 +974,15 @@ import * as XLSX from 'xlsx';
                     </div>
                   </div>
                   <div class="import-type-card"
+                       [class.selected]="selectedImportType === 'backorders'"
+                       (click)="selectImportType('backorders')">
+                    <mat-icon>pending_actions</mat-icon>
+                    <div class="type-info">
+                      <span>Backorders</span>
+                      <small>Import backorders per company</small>
+                    </div>
+                  </div>
+                  <div class="import-type-card"
                        [class.selected]="selectedImportType === 'employees'"
                        (click)="selectImportType('employees')">
                     <mat-icon>badge</mat-icon>
@@ -967,8 +1079,8 @@ import * as XLSX from 'xlsx';
                   </div>
                 </div>
 
-                <!-- Company Selection for Invoices -->
-                @if (selectedImportType === 'invoices') {
+                <!-- Company Selection for Invoices / Backorders -->
+                @if (selectedImportType === 'invoices' || selectedImportType === 'backorders') {
                   <div class="company-selector">
                     <h4><mat-icon>business</mat-icon> Select Company</h4>
                     <mat-form-field appearance="outline">
@@ -980,6 +1092,9 @@ import * as XLSX from 'xlsx';
                         <mat-option value="SBT">Sebenzani Trading (SBT)</mat-option>
                       </mat-select>
                     </mat-form-field>
+                    @if (selectedImportType === 'backorders') {
+                      <p class="import-note"><mat-icon inline>info</mat-icon> Importing replaces the previous backorder snapshot for the selected company.</p>
+                    }
                   </div>
                 }
 
@@ -3446,6 +3561,93 @@ import * as XLSX from 'xlsx';
       width: 16px;
       height: 16px;
     }
+
+    .gallery-dropzone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      color: #64748b;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 24px;
+    }
+
+    .gallery-dropzone:hover {
+      border-color: #6366f1;
+      background: #f8faff;
+    }
+
+    .gallery-dropzone.dragover {
+      border-color: #6366f1;
+      background: #eef2ff;
+    }
+
+    .gallery-dropzone mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: #94a3b8;
+    }
+
+    .gallery-dropzone p {
+      margin: 8px 0 4px 0;
+      font-weight: 500;
+    }
+
+    .gallery-dropzone .dropzone-hint {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .gallery-intro p {
+      color: #64748b;
+      margin: 0 0 16px 0;
+      max-width: 720px;
+    }
+
+    .gallery-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .gallery-count {
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .gallery-item {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f1f5f9;
+      aspect-ratio: 4 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+
+    .gallery-item img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .gallery-delete {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(255, 255, 255, 0.9);
+    }
   `]
 })
 export class SettingsComponent implements OnInit {
@@ -3476,7 +3678,7 @@ export class SettingsComponent implements OnInit {
   departments: Department[] = [];
   companies: OperatingCompany[] = [];
   clockInEmployees: ClockInEmployee[] = [];
-  clockInColumns = ['empId', 'name', 'idNum', 'department', 'jobTitle', 'actions'];
+  clockInColumns = ['photo', 'empId', 'name', 'idNum', 'department', 'jobTitle', 'actions'];
   clockInSearchQuery = '';
   showClockInForm = false;
   editingClockInEmpId: string | null = null;
@@ -3554,6 +3756,21 @@ export class SettingsComponent implements OnInit {
   importResults: { success: boolean; message: string; details: string[] } | null = null;
   
   importTypeFields: { [key: string]: { field: string; label: string; required: boolean }[] } = {
+    backorders: [
+      { field: 'orderNumber', label: 'Order Number', required: true },
+      { field: 'orderDate', label: 'Order Date', required: false },
+      { field: 'customerNo', label: 'Customer No', required: false },
+      { field: 'customerName', label: 'Customer Name', required: false },
+      { field: 'poNo', label: 'PO No', required: false },
+      { field: 'itemDesc', label: 'Item Description', required: true },
+      { field: 'location', label: 'Location', required: false },
+      { field: 'uom', label: 'UOM', required: false },
+      { field: 'qtyBackOrder', label: 'Qty Back Order', required: true },
+      { field: 'unitPrice', label: 'Unit Price', required: false },
+      { field: 'extPrice', label: 'Ext Price', required: false },
+      { field: 'contract', label: 'Contract', required: false },
+      { field: 'accountSet', label: 'Account Set', required: false }
+    ],
     invoices: [
       { field: 'invoiceNumber', label: 'Invoice Number', required: true },
       { field: 'customerName', label: 'Customer Name', required: true },
@@ -3644,6 +3861,7 @@ export class SettingsComponent implements OnInit {
     private logsService: SystemLogsService,
     private authService: AuthService,
     public userService: UserManagementService,
+    private apiService: ApiService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog
   ) {
@@ -3664,6 +3882,159 @@ export class SettingsComponent implements OnInit {
     this.loadEmailAccounts();
     this.loadMgmtAssets();
     this.loadAssetLocations();
+    this.loadDashboardImages();
+  }
+
+  // Dashboard Gallery
+  galleryImages: Array<{ id: number; fileName: string; contentType: string; createdAt: string }> = [];
+  galleryLoading = false;
+  galleryUploading = false;
+  galleryOptimizing = false;
+  galleryDragOver = false;
+  galleryUploadTotal = 0;
+  galleryUploadDone = 0;
+  galleryMax = 50;
+
+  loadDashboardImages(): void {
+    this.galleryLoading = true;
+    this.apiService.getDashboardImages().subscribe({
+      next: (res) => {
+        this.galleryImages = res?.images ?? [];
+        this.galleryMax = res?.max ?? 30;
+        this.galleryLoading = false;
+      },
+      error: () => {
+        this.galleryLoading = false;
+        this.snackBar.open('Failed to load gallery images', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  galleryUrl(id: number): string {
+    return this.apiService.getDashboardImageUrl(id);
+  }
+
+  onGalleryFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = input.files ? Array.from(input.files) : [];
+    this.uploadGalleryFiles(files);
+    input.value = '';
+  }
+
+  onGalleryDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.galleryDragOver = true;
+  }
+
+  onGalleryDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.galleryDragOver = false;
+  }
+
+  onGalleryDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.galleryDragOver = false;
+    const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
+    const images = files.filter(f => f.type.startsWith('image/'));
+    if (images.length === 0) {
+      this.snackBar.open('Only image files are allowed', 'Close', { duration: 3000 });
+      return;
+    }
+    this.uploadGalleryFiles(images);
+  }
+
+  private uploadGalleryFiles(files: File[]): void {
+    if (this.galleryUploading || files.length === 0) return;
+
+    const available = this.galleryMax - this.galleryImages.length;
+    if (available <= 0) {
+      this.snackBar.open(`Maximum of ${this.galleryMax} images reached`, 'Close', { duration: 3000 });
+      return;
+    }
+
+    let queue = files;
+    if (files.length > available) {
+      this.snackBar.open(`Only ${available} more image(s) can be added; extra files skipped`, 'Close', { duration: 4000 });
+      queue = files.slice(0, available);
+    }
+
+    this.galleryUploading = true;
+    this.galleryUploadTotal = queue.length;
+    this.galleryUploadDone = 0;
+
+    const uploadNext = (index: number) => {
+      if (index >= queue.length) {
+        this.galleryUploading = false;
+        this.snackBar.open(`Uploaded ${this.galleryUploadDone} image(s)`, 'Close', { duration: 2500 });
+        return;
+      }
+      this.apiService.uploadDashboardImage(queue[index]).subscribe({
+        next: (img) => {
+          this.galleryImages = [img, ...this.galleryImages];
+          this.galleryUploadDone++;
+          uploadNext(index + 1);
+        },
+        error: (err) => {
+          const msg = err?.error?.message ?? `Failed to upload ${queue[index].name}`;
+          this.snackBar.open(msg, 'Close', { duration: 4000 });
+          uploadNext(index + 1);
+        }
+      });
+    };
+
+    uploadNext(0);
+  }
+
+  deleteDashboardImage(img: { id: number }): void {
+    this.apiService.deleteDashboardImage(img.id).subscribe({
+      next: () => {
+        this.galleryImages = this.galleryImages.filter(i => i.id !== img.id);
+        this.snackBar.open('Image deleted', 'Close', { duration: 2000 });
+      },
+      error: () => {
+        this.snackBar.open('Failed to delete image', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  deleteAllDashboardImages(): void {
+    if (this.galleryImages.length === 0) return;
+    const all = [...this.galleryImages];
+    let remaining = all.length;
+    all.forEach(img => {
+      this.apiService.deleteDashboardImage(img.id).subscribe({
+        next: () => {
+          this.galleryImages = this.galleryImages.filter(i => i.id !== img.id);
+          if (--remaining === 0) {
+            this.snackBar.open('All images deleted', 'Close', { duration: 2500 });
+          }
+        },
+        error: () => {
+          if (--remaining === 0) {
+            this.snackBar.open('Some images could not be deleted', 'Close', { duration: 3000 });
+          }
+        }
+      });
+    });
+  }
+
+  optimizeDashboardImages(): void {
+    this.galleryOptimizing = true;
+    this.apiService.recompressDashboardImages().subscribe({
+      next: (res) => {
+        this.galleryOptimizing = false;
+        const saved = res?.savedKb ?? 0;
+        this.snackBar.open(`Optimized ${res?.processed ?? 0} image(s), saved ${saved} KB`, 'Close', { duration: 4000 });
+        this.loadDashboardImages();
+      },
+      error: () => {
+        this.galleryOptimizing = false;
+        this.snackBar.open('Failed to optimize images', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   initAnnouncementForm(): void {
@@ -3851,6 +4222,10 @@ export class SettingsComponent implements OnInit {
       (e.department || '').toLowerCase().includes(q) ||
       (e.jobTitle || '').toLowerCase().includes(q)
     );
+  }
+
+  clockInPhotoUrl(empId: string): string {
+    return this.userService.clockInEmployeePhotoUrl(empId);
   }
 
   openClockInEmployeeForm(emp?: ClockInEmployee): void {
@@ -4590,7 +4965,7 @@ export class SettingsComponent implements OnInit {
     const requiredFields = fields.filter(f => f.required);
     const allRequiredMapped = requiredFields.every(f => this.isColumnMapped(f.field));
     
-    if (this.selectedImportType === 'invoices' && !this.importSourceCompany) {
+    if ((this.selectedImportType === 'invoices' || this.selectedImportType === 'backorders') && !this.importSourceCompany) {
       return false;
     }
     
@@ -4729,7 +5104,9 @@ export class SettingsComponent implements OnInit {
   }
 
   async sendDataToServer(data: any[]): Promise<{ success: boolean; imported: number; details: string[] }> {
-    const endpoint = `${environment.apiUrl}/api/import/${this.selectedImportType}`;
+    const endpoint = this.selectedImportType === 'backorders'
+      ? `${environment.apiUrl}/backorders/import`
+      : `${environment.apiUrl}/api/import/${this.selectedImportType}`;
     
     return new Promise((resolve, reject) => {
       this.http.post<any>(endpoint, { data, sourceCompany: this.importSourceCompany }).subscribe({
@@ -4741,6 +5118,10 @@ export class SettingsComponent implements OnInit {
           });
         },
         error: (error) => {
+          if (this.selectedImportType === 'backorders') {
+            reject(new Error(error?.error?.error || error?.message || 'Backorder import failed'));
+            return;
+          }
           // For now, simulate success since we don't have the endpoint yet
           console.warn('Import API not available, simulating success:', error);
           resolve({
@@ -4780,6 +5161,13 @@ export class SettingsComponent implements OnInit {
 
   downloadTemplate(type: string): void {
     const templates: { [key: string]: { headers: string[]; sample: any[] } } = {
+      backorders: {
+        headers: ['Order Number', 'Order Date', 'Customer No', 'Customer Name', 'PO No', 'Item Description', 'Location', 'UOM', 'Qty Back Order', 'Unit Price', 'Ext Price', 'Contract', 'Account Set'],
+        sample: [
+          ['ORD136999', '2024/10/02', 'KZN038', 'Department Of Health-Kwazulu Natal', 'ZNQ 1098-24', 'NW GLOVE-S-SML', 'PMB', 'EA', '100', '88.00', '8800.00', 'RT5301-2023/24', 'MAIN'],
+          ['ORD141852', '2025/02/04', 'EC016', 'Dept Of Health-Eastern Cape', 'EC09-0007-25', 'NW GLOVE-M-MED', 'JHB', 'EA', '1000', '88.00', '88000.00', 'SCMU 04-2024/25', 'MAIN']
+        ]
+      },
       invoices: {
         headers: ['Invoice Number', 'Customer Name', 'Invoice Date', 'Total Amount', 'VAT Amount', 'Status'],
         sample: [

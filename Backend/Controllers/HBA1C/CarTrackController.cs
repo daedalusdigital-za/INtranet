@@ -20,12 +20,15 @@ namespace ProjectTracker.API.Controllers.HBA1C
         private readonly ICarTrackService _carTrackService;
         private readonly IHBA1CApiService _hba1cApi;
 
-        // HBA1C Sales Rep vehicles — registration → (unitId, driverName)
+        // HBA1C Sales Rep vehicles — CarTrack registration → (unitId, driverName)
+        // NOTE: these vehicles were re-registered from GP plates (LP30YGGP /
+        // LP30XPGP / LP30XVGP) to ZN plates; CarTrack now reports the ZN regs,
+        // so the lookup keys must be the ZN registrations.
         private static readonly Dictionary<string, (string UnitId, string DriverName)> TrackedVehicles = new()
         {
-            { "LP30YGGP", ("DJ76VFZN", "Lindani Zitha") },
-            { "LP30XPGP", ("DJ76WCZN", "Deon") },
-            { "LP30XVGP", ("DJ78VWZN", "Ziba Mthethwa") },
+            { "DJ76VFZN", ("DJ76VFZN", "Lindani") },
+            { "DJ76WCZN", ("DJ76WCZN", "Deon") },
+            { "DJ78VWZN", ("DJ76VWZN", "Stanley") },
             { "BS72YKZN", ("BS72YKZN", "Dylan Govender") }
         };
 

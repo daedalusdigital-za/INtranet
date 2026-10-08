@@ -29,6 +29,9 @@ namespace ProjectTracker.API.Data
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<DocumentShare> DocumentShares { get; set; }
 
+        // Dashboard slideshow images (admin-uploaded)
+        public DbSet<DashboardImage> DashboardImages { get; set; }
+
         // Attendance System Tables
         public DbSet<Employee> Employees { get; set; }
         public DbSet<Attendance> Attendances { get; set; }
@@ -105,6 +108,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.WarehouseInventory> WarehouseInventory { get; set; }
         public DbSet<Models.Logistics.StockTransfer> StockTransfers { get; set; }
         public DbSet<Models.Logistics.Backorder> Backorders { get; set; }
+        public DbSet<Models.Logistics.ImportedBackorder> ImportedBackorders { get; set; }
         public DbSet<Models.Logistics.ProofOfDelivery> ProofOfDeliveries { get; set; }
         public DbSet<Models.Logistics.ScrapRecord> ScrapRecords { get; set; }
         public DbSet<Models.Logistics.Invoice> Invoices { get; set; }

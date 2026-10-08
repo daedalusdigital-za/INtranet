@@ -75,9 +75,9 @@ public class TripSheetImportService
 
             response.SheetName = worksheet.Name;
 
-            // Clean and parse the worksheet. For Pad Tripsheets (skipMatching) we relax the
-            // invoice-number detection so non-standard references like "PIN056" are still
-            // treated as line items instead of being ignored.
+            // Clean and parse the worksheet. For DN Tripsheets (skipMatching) we relax the
+            // invoice-number detection so non-standard references like "PIN056" or DN numbers
+            // are still treated as line items instead of being ignored.
             var extractedRows = ExtractDeliveryRows(worksheet, fileName, skipMatching);
 
             // Collapse multiple line-item rows that share the same invoice number into a
@@ -106,20 +106,13 @@ public class TripSheetImportService
                 // Validate required fields
                 ValidateRow(previewRow);
 
-                // If no hard errors, attempt matching. For Pad Tripsheets we import the
-                // rows exactly as-is (no invoice-number or customer linking to our DB);
-                // every valid row is treated as Unmatched so the user supplies the
-                // customer/address manually after import.
+                // If no hard errors, attempt matching. DN Tripsheets can contain a
+                // mixture of real invoices and delivery notes (DNs): we link whatever
+                // matches an invoice in our DB and simply accept the rest as Unmatched
+                // (the user supplies customer/address manually after import).
                 if (previewRow.Status != ImportRowStatus.Error)
                 {
-                    if (skipMatching)
-                    {
-                        previewRow.Status = ImportRowStatus.Unmatched;
-                    }
-                    else
-                    {
-                        await MatchRowAsync(previewRow, existingCustomers, existingInvoices);
-                    }
+                    await MatchRowAsync(previewRow, existingCustomers, existingInvoices);
                 }
 
                 response.Rows.Add(previewRow);
@@ -676,7 +669,7 @@ public class TripSheetImportService
             var address = GetCellValue(row, columnMap, "DeliveryAddress");
             
             // Check if this is an invoice row (has invoice number matching pattern).
-            // In relaxed (Pad Tripsheet) mode, accept ANY non-empty, non-label reference
+            // In relaxed (DN Tripsheet) mode, accept ANY non-empty, non-label reference
             // (e.g. "PIN056") so custom numbering schemes are imported as-is.
             var isInvoiceRow = !string.IsNullOrEmpty(invoiceNumber) &&
                 (relaxedInvoiceDetection

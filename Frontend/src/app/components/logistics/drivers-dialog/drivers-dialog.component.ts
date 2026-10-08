@@ -302,6 +302,20 @@ interface Driver {
             </div>
 
             <table mat-table [dataSource]="drivers" class="drivers-table" *ngIf="!isLoading && drivers.length > 0">
+              <!-- Rank Column -->
+              <ng-container matColumnDef="rank">
+                <th mat-header-cell *matHeaderCellDef>Rank</th>
+                <td mat-cell *matCellDef="let driver">
+                  <span class="rank-badge" [class.medal]="getRank(driver) <= 3 && isActive(driver)" [attr.data-rank]="getRank(driver)"
+                        [matTooltip]="isActive(driver) ? ('Ranked #' + getRank(driver) + ' by trips & distance') : 'Not ranked (inactive)'">
+                    <ng-container *ngIf="isActive(driver) && getRank(driver) === 1">🥇</ng-container>
+                    <ng-container *ngIf="isActive(driver) && getRank(driver) === 2">🥈</ng-container>
+                    <ng-container *ngIf="isActive(driver) && getRank(driver) === 3">🥉</ng-container>
+                    <ng-container *ngIf="!isActive(driver) || getRank(driver) > 3">{{ isActive(driver) ? getRank(driver) : '—' }}</ng-container>
+                  </span>
+                </td>
+              </ng-container>
+
               <!-- Name Column -->
               <ng-container matColumnDef="name">
                 <th mat-header-cell *matHeaderCellDef>Name</th>
@@ -716,6 +730,25 @@ interface Driver {
               color: #4facfe;
             }
           }
+
+          .rank-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 30px;
+            height: 30px;
+            padding: 0 6px;
+            border-radius: 50%;
+            font-size: 14px;
+            font-weight: 700;
+            color: #6b7280;
+            background: #f1f5f9;
+          }
+          .rank-badge.medal {
+            font-size: 20px;
+            background: transparent;
+            min-width: auto;
+          }
         }
 
         .no-data {
@@ -789,7 +822,7 @@ export class DriversDialogComponent implements OnInit {
   private dialogRef = inject(MatDialogRef<DriversDialogComponent>);
 
   drivers: Driver[] = [];
-  displayedColumns = ['name', 'licenseNumber', 'licenseType', 'totalTrips', 'totalKm', 'status', 'actions'];
+  displayedColumns = ['rank', 'name', 'licenseNumber', 'licenseType', 'totalTrips', 'totalKm', 'status', 'actions'];
   showAddForm = false;
   isLoading = false;
   errorMessage = '';
@@ -825,10 +858,15 @@ export class DriversDialogComponent implements OnInit {
     this.http.get<Driver[]>(`${environment.apiUrl}/logistics/drivers/with-stats`).subscribe({
       next: (data) => {
         this.drivers = data.sort((a, b) => {
-          // Active first, inactive last
+          // Active drivers ranked first, everyone else after
           const aActive = a.status?.toLowerCase() === 'active' ? 0 : 1;
           const bActive = b.status?.toLowerCase() === 'active' ? 0 : 1;
           if (aActive !== bActive) return aActive - bActive;
+          // Ranking: most trips first, then most km, then name as a tiebreaker
+          const tripsDiff = (b.totalTrips || 0) - (a.totalTrips || 0);
+          if (tripsDiff !== 0) return tripsDiff;
+          const kmDiff = (b.totalKmDriven || 0) - (a.totalKmDriven || 0);
+          if (kmDiff !== 0) return kmDiff;
           return (a.firstName || '').localeCompare(b.firstName || '');
         });
         this.isLoading = false;
@@ -844,6 +882,19 @@ export class DriversDialogComponent implements OnInit {
   // Stats helper methods
   getAvailableCount(): number {
     return this.drivers.filter(d => d.status?.toLowerCase() === 'active').length;
+  }
+
+  isActive(driver: Driver): boolean {
+    return driver.status?.toLowerCase() === 'active';
+  }
+
+  // Rank among active drivers (1-based) by trips then km. Because the list is
+  // already sorted active-first then by trips/km, the rank is the driver's
+  // position within the active subset.
+  getRank(driver: Driver): number {
+    const activeDrivers = this.drivers.filter(d => this.isActive(d));
+    const idx = activeDrivers.indexOf(driver);
+    return idx >= 0 ? idx + 1 : 0;
   }
 
   getTotalTrips(): number {

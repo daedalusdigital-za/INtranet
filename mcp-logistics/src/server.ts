@@ -16,7 +16,7 @@ const PORT = parseInt(process.env.PORT || '8080', 10);
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
 // The single shared password a user must type on the Claude OAuth consent screen.
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || 'change-me-please';
-const TOKEN_TTL_SECONDS = 60 * 60 * 8; // 8 hours
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 // Build the externally-visible base URL for this request. Honours a fixed
 // PUBLIC_URL when set; otherwise uses the (Cloudflare) forwarded proto + host,

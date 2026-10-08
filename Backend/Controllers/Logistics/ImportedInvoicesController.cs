@@ -722,6 +722,21 @@ namespace ProjectTracker.API.Controllers.Logistics
                 oldestDays = invoices.Max(i => (int)(DateTime.UtcNow - i.ImportedAt).TotalDays),
                 highestPriority = GetHighestPriorityFromInvoices(invoices),
                 invoiceIds = invoices.Select(i => i.Id).ToList(),
+                invoices = invoices.Select(i => new
+                {
+                    id = i.Id,
+                    transactionNumber = i.TransactionNumber,
+                    customerNumber = i.CustomerNumber,
+                    customerName = i.CustomerName,
+                    productDescription = i.ProductDescription,
+                    quantity = i.Quantity,
+                    salesAmount = Math.Round((double)(i.SalesAmount - i.SalesReturns), 2),
+                    deliveryCity = i.DeliveryCity ?? i.Customer?.City,
+                    deliveryAddress = i.DeliveryAddress ?? i.Customer?.DeliveryAddress,
+                    deliveryProvince = i.DeliveryProvince ?? i.Customer?.Province,
+                    contactPerson = i.ContactPerson,
+                    contactPhone = i.ContactPhone
+                }).OrderByDescending(x => x.salesAmount).ToList(),
                 customers = customerGroups.Select(cg => new
                 {
                     customerNumber = cg.Key.CustomerNumber,

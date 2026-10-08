@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { readFile } from 'node:fs/promises';
-import { resolve, normalize, basename } from 'node:path';
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { resolve, normalize, basename, join, extname } from 'node:path';
 import { query } from './db.js';
 
 const DOCS_ROOT = process.env.DOCS_ROOT ?? '/app/documents';
@@ -222,7 +222,7 @@ export function registerTools(server: McpServer) {
   // ---- POD file (actual PDF/image bytes) -----------------------------------
   server.tool(
     'get_pod_file',
-    'Fetch the actual proof-of-delivery file (PDF or image) for a POD by its Id, returned as an embedded resource so it can be viewed/analysed. Use pod_summary first to find the POD Id.',
+    'Fetch the actual proof-of-delivery file (PDF or image) for a POD by its Id, returned as an embedded resource so it can be viewed/analysed. Use pod_summary first to find the POD Id. When analysing the scan, cross-check it against the load: compare the signature presence, delivery date and received quantities on the document against the invoice lines (load_timeline / get_load) and the load\'s actual delivery date, and flag any mismatch.',
     {
       podId: z.number().int().describe('The PodDocuments Id (from pod_summary).'),
     },
@@ -943,5 +943,643 @@ export function registerTools(server: McpServer) {
         },
       });
     }
+  );
+
+  // ===========================================================================
+  // Phase 3 — composed lookups, scorecards and exception sweeps.
+  // ===========================================================================
+
+  // ---- Where is a vehicle right now? ----------------------------------------
+  server.tool(
+    'where_is_vehicle',
+    "A vehicle's current situation: last known position (CarTrack-synced address + timestamp), its most recent movement/trip, and any active load with the scheduled next delivery (as an ETA proxy). Look up by registration number.",
+    {
+      registration: z.string().describe('Vehicle registration number, e.g. "JND553MP".'),
+    },
+    async ({ registration }) => {
+      const [vehicle] = await query(
+        `SELECT Id, RegistrationNumber, Make, Model, Status, CurrentOdometer,
+                Province, LastKnownAddress, LastLocationUpdate
+         FROM dbo.vw_mcp_vehicles WHERE RegistrationNumber = @registration`,
+        { registration }
+      );
+      if (!vehicle) return textResult({ error: 'Vehicle not found', registration });
+
+      const [lastTrip] = await query(
+        `SELECT TOP 1 MovementDate, StartTimestamp, EndTimestamp, StartLocation, EndLocation,
+                TripDistance, MaxSpeed, IdleTimeSeconds
+         FROM dbo.vw_mcp_vehicle_movements
+         WHERE RegistrationNumber = @registration
+         ORDER BY EndTimestamp DESC`,
+        { registration }
+      );
+
+      const activeLoads = await query(
+        `SELECT TOP 5 LoadNumber, Status, ScheduledPickupDate, ScheduledDeliveryDate,
+                PickupLocation, DeliveryLocation, DriverName
+         FROM dbo.vw_mcp_loads
+         WHERE VehicleReg = @registration AND ActualDeliveryDate IS NULL
+           AND Status NOT IN ('Cancelled')
+         ORDER BY ScheduledDeliveryDate ASC`,
+        { registration }
+      );
+
+      return textResult({
+        vehicle,
+        lastKnownPosition: {
+          address: (vehicle as any).LastKnownAddress,
+          updatedAt: (vehicle as any).LastLocationUpdate,
+        },
+        lastTrip: lastTrip ?? null,
+        activeLoads,
+        note: 'Position is the last CarTrack sync, not a live GPS ping. ETA = ScheduledDeliveryDate of the active load.',
+      });
+    }
+  );
+
+  // ---- Full load timeline ----------------------------------------------------
+  server.tool(
+    'load_timeline',
+    'One load end-to-end: the load record, its invoices, the originating trip sheet (if converted from one), CarTrack trips of the assigned vehicle between pickup and delivery, and POD documents. Answers "where did this load go wrong?" in one call.',
+    {
+      loadNumber: z.string().describe('The load number, e.g. "L-2026-0012".'),
+    },
+    async ({ loadNumber }) => {
+      const [load] = await query(
+        `SELECT * FROM dbo.vw_mcp_loads WHERE LoadNumber = @loadNumber`,
+        { loadNumber }
+      );
+      if (!load) return textResult({ error: 'Load not found', loadNumber });
+      const L = load as any;
+
+      const [invoices, tripsheet, pods] = await Promise.all([
+        query(
+          `SELECT TransactionNumber, CustomerName, ProductDescription, Quantity, DeliveredQuantity,
+                  NetSales, DeliveryCity, DeliveryProvince, Status
+           FROM dbo.vw_mcp_load_invoices WHERE LoadId = @id`,
+          { id: L.Id }
+        ),
+        query(
+          `SELECT TripSheetNumber, Status, RouteArea, ScheduledDate, CreatedByName,
+                  CheckedByName, ApproverName, SignedByName, SignedAt
+           FROM dbo.vw_mcp_tripsheets WHERE ConvertedLoadNumber = @loadNumber`,
+          { loadNumber }
+        ),
+        query(
+          `SELECT Id, PodNumber, DriverName, DeliveryDate, Region, OriginalFileName, UploadedAt,
+                  DATEDIFF(hour, DeliveryDate, UploadedAt) AS PodTurnaroundHours
+           FROM dbo.vw_mcp_pods WHERE LoadId = @id`,
+          { id: L.Id }
+        ),
+      ]);
+
+      let movements: any[] = [];
+      if (L.VehicleReg && L.ScheduledPickupDate) {
+        movements = await query(
+          `SELECT MovementDate, StartTimestamp, EndTimestamp, StartLocation, EndLocation,
+                  TripDistance, MaxSpeed, IdleTimeSeconds,
+                  HarshBrakingEvents, HarshCorneringEvents, HarshAccelerationEvents
+           FROM dbo.vw_mcp_vehicle_movements
+           WHERE RegistrationNumber = @reg
+             AND MovementDate >= CAST(@fromD AS date)
+             AND MovementDate <= CAST(COALESCE(@toD, GETDATE()) AS date)
+           ORDER BY StartTimestamp ASC`,
+          { reg: L.VehicleReg, fromD: L.ScheduledPickupDate, toD: L.ActualDeliveryDate ?? L.ScheduledDeliveryDate }
+        );
+      }
+
+      return textResult({
+        load,
+        originatingTripsheet: tripsheet[0] ?? null,
+        invoices,
+        vehicleTripsDuringLoad: movements,
+        pods,
+        analysisHints: 'Compare ActualDeliveryDate vs ScheduledDeliveryDate; check movements for late depot departure, excessive idle, or off-route locations; check POD turnaround hours.',
+      });
+    }
+  );
+
+  // ---- Customer scorecard ----------------------------------------------------
+  server.tool(
+    'customer_scorecard',
+    "One customer's performance scorecard: on-time delivery %, average POD turnaround, monthly sales trend, recent sales total vs credit limit, and pending (undelivered) value. Look up by name/code search.",
+    {
+      search: z.string().describe('Customer name, short name or code.'),
+      months: z.number().int().min(1).max(24).default(6).describe('How many months of sales trend.'),
+    },
+    async ({ search, months }) => {
+      const [customer] = await query(
+        `SELECT TOP 1 Id, CustomerCode, Name, PaymentTerms, CreditLimit, Status
+         FROM dbo.vw_mcp_customers
+         WHERE Name LIKE '%' + @search + '%' OR ShortName LIKE '%' + @search + '%' OR CustomerCode LIKE '%' + @search + '%'
+         ORDER BY CASE WHEN Name = @search THEN 0 WHEN Name LIKE @search + '%' THEN 1 ELSE 2 END, LEN(Name)`,
+        { search }
+      );
+      if (!customer) return textResult({ error: 'Customer not found', search });
+      const cname = (customer as any).Name;
+
+      const [delivery] = await query(
+        `SELECT COUNT(DISTINCT l.Id) AS TotalLoads,
+                SUM(CASE WHEN l.ActualDeliveryDate IS NOT NULL AND CAST(l.ActualDeliveryDate AS date) <= CAST(l.ScheduledDeliveryDate AS date) THEN 1 ELSE 0 END) AS OnTime,
+                SUM(CASE WHEN l.ActualDeliveryDate IS NOT NULL THEN 1 ELSE 0 END) AS Delivered
+         FROM dbo.vw_mcp_loads l
+         WHERE l.Id IN (SELECT DISTINCT LoadId FROM dbo.vw_mcp_pending_invoices WHERE CustomerName = @cname AND LoadId IS NOT NULL)`,
+        { cname }
+      );
+
+      const [podStats] = await query(
+        `SELECT COUNT(*) AS PodCount,
+                CAST(AVG(CAST(DATEDIFF(hour, p.DeliveryDate, p.UploadedAt) AS float)) AS decimal(10,1)) AS AvgPodTurnaroundHours
+         FROM dbo.vw_mcp_pods p
+         WHERE p.LoadId IN (SELECT DISTINCT LoadId FROM dbo.vw_mcp_pending_invoices WHERE CustomerName = @cname AND LoadId IS NOT NULL)`,
+        { cname }
+      );
+
+      const salesTrend = await query(
+        `SELECT YEAR(InvoiceDate) AS Yr, MONTH(InvoiceDate) AS Mo,
+                CAST(SUM(SalesAmount) AS decimal(14,2)) AS Sales,
+                CAST(SUM(GrossProfit) AS decimal(14,2)) AS GrossProfit
+         FROM dbo.vw_mcp_sales_history
+         WHERE CustomerName = @cname AND InvoiceDate >= DATEADD(month, -@months, GETDATE())
+         GROUP BY YEAR(InvoiceDate), MONTH(InvoiceDate)
+         ORDER BY Yr, Mo`,
+        { cname, months }
+      );
+
+      const [pendingValue] = await query(
+        `SELECT CAST(SUM(NetSales) AS decimal(14,2)) AS PendingNetSales, COUNT(*) AS PendingLines
+         FROM dbo.vw_mcp_pending_invoices
+         WHERE CustomerName = @cname AND (LoadId IS NULL OR Status = 'Pending')`,
+        { cname }
+      );
+
+      const d = delivery as any;
+      const recentSales = salesTrend.reduce((s: number, r: any) => s + Number(r.Sales ?? 0), 0);
+      const creditLimit = Number((customer as any).CreditLimit ?? 0);
+
+      return textResult({
+        customer,
+        delivery: {
+          totalLoads: d.TotalLoads,
+          delivered: d.Delivered,
+          onTime: d.OnTime,
+          onTimePct: d.Delivered > 0 ? Math.round((d.OnTime / d.Delivered) * 1000) / 10 : null,
+        },
+        pod: podStats,
+        salesTrendByMonth: salesTrend,
+        pending: pendingValue,
+        credit: {
+          creditLimit,
+          recentSalesTotal: Math.round(recentSales * 100) / 100,
+          note: 'Outstanding balance is not tracked in the logistics DB; recent sales vs credit limit is a proxy only.',
+        },
+      });
+    }
+  );
+
+  // ---- Driver scorecard -------------------------------------------------------
+  server.tool(
+    'driver_scorecard',
+    "One driver's scorecard: licence status, on-time delivery %, missing PODs, fuel efficiency (TFN), and driving behaviour (harsh events from CarTrack on vehicles they drove). Look up by name search.",
+    {
+      search: z.string().describe('Driver first/last name (partial ok).'),
+      days: z.number().int().min(7).max(365).default(90).describe('Look-back window in days.'),
+    },
+    async ({ search, days }) => {
+      const [driver] = await query(
+        `SELECT TOP 1 Id, FirstName, LastName, LicenseNumber, LicenseType, LicenseExpiryDate, Status,
+                DATEDIFF(day, CAST(GETDATE() AS date), LicenseExpiryDate) AS DaysUntilLicenceExpiry
+         FROM dbo.vw_mcp_drivers
+         WHERE FirstName + ' ' + LastName LIKE '%' + @search + '%'
+         ORDER BY LEN(FirstName + LastName)`,
+        { search }
+      );
+      if (!driver) return textResult({ error: 'Driver not found', search });
+      const D = driver as any;
+
+      const [loads] = await query(
+        `SELECT COUNT(*) AS TotalLoads,
+                SUM(CASE WHEN ActualDeliveryDate IS NOT NULL THEN 1 ELSE 0 END) AS Delivered,
+                SUM(CASE WHEN ActualDeliveryDate IS NOT NULL AND CAST(ActualDeliveryDate AS date) <= CAST(ScheduledDeliveryDate AS date) THEN 1 ELSE 0 END) AS OnTime
+         FROM dbo.vw_mcp_loads
+         WHERE DriverId = @id AND ScheduledDeliveryDate >= DATEADD(day, -@days, GETDATE())`,
+        { id: D.Id, days }
+      );
+
+      const missingPods = await query(
+        `SELECT LoadNumber, ActualDeliveryDate, HoursSinceDelivery
+         FROM dbo.vw_mcp_outstanding_pods WHERE DriverName = @dn ORDER BY HoursSinceDelivery DESC`,
+        { dn: `${D.FirstName} ${D.LastName}` }
+      );
+
+      const [fuel] = await query(
+        `SELECT COUNT(*) AS FillCount, CAST(SUM(Litres) AS decimal(12,1)) AS TotalLitres,
+                CAST(SUM(TotalAmount) AS decimal(14,2)) AS TotalSpend,
+                CAST(AVG(NULLIF(FuelEfficiency,0)) AS decimal(8,2)) AS AvgKmPerLitre,
+                SUM(CASE WHEN IsAnomaly = 1 THEN 1 ELSE 0 END) AS Anomalies
+         FROM dbo.vw_mcp_tfn_transactions
+         WHERE DriverId = @id AND TransactionDate >= DATEADD(day, -@days, GETDATE())`,
+        { id: D.Id, days }
+      );
+
+      const behaviour = await query(
+        `SELECT m.RegistrationNumber, COUNT(*) AS Trips,
+                CAST(SUM(m.TripDistance) AS decimal(12,1)) AS DistanceKm,
+                SUM(m.HarshBrakingEvents + m.HarshCorneringEvents + m.HarshAccelerationEvents) AS HarshEvents
+         FROM dbo.vw_mcp_vehicle_movements m
+         WHERE m.RegistrationNumber IN (
+                 SELECT DISTINCT VehicleReg FROM dbo.vw_mcp_loads WHERE DriverId = @id AND VehicleReg IS NOT NULL)
+           AND m.MovementDate >= DATEADD(day, -@days, GETDATE())
+         GROUP BY m.RegistrationNumber`,
+        { id: D.Id, days }
+      );
+
+      const l = loads as any;
+      return textResult({
+        driver,
+        periodDays: days,
+        deliveries: {
+          totalLoads: l.TotalLoads, delivered: l.Delivered, onTime: l.OnTime,
+          onTimePct: l.Delivered > 0 ? Math.round((l.OnTime / l.Delivered) * 1000) / 10 : null,
+        },
+        missingPods: { count: missingPods.length, items: missingPods },
+        fuel,
+        behaviourByVehicle: behaviour,
+        note: 'Behaviour is per-vehicle (CarTrack has no driver dimension) over vehicles this driver was assigned loads on — treat as indicative when vehicles are shared.',
+      });
+    }
+  );
+
+  // ---- Cost per km -------------------------------------------------------------
+  server.tool(
+    'cost_per_km',
+    'Per-vehicle running cost over a date range: fuel spend (TFN + fuel transactions), maintenance cost, CarTrack distance, and cost-per-km. Shows which trucks cost the most to run. NOTE: tolls and general expenses are not in the logistics DB yet, so this covers fuel + maintenance only.',
+    {
+      fromDate: z.string().describe('Start date yyyy-mm-dd.'),
+      toDate: z.string().describe('End date yyyy-mm-dd.'),
+      registration: z.string().optional().describe('Optionally limit to one vehicle.'),
+    },
+    async ({ fromDate, toDate, registration }) => {
+      const rows = await query(
+        `WITH dist AS (
+           SELECT RegistrationNumber AS Reg, SUM(TripDistance) AS Km
+           FROM dbo.vw_mcp_vehicle_movements
+           WHERE MovementDate >= @fromDate AND MovementDate <= @toDate
+           GROUP BY RegistrationNumber
+         ), fuel AS (
+           SELECT VehicleReg AS Reg, SUM(TotalAmount) AS FuelSpend, SUM(Litres) AS Litres
+           FROM dbo.vw_mcp_tfn_transactions
+           WHERE TransactionDate >= @fromDate AND TransactionDate <= @toDate
+           GROUP BY VehicleReg
+         ), fuel2 AS (
+           SELECT RegistrationNumber AS Reg, SUM(AmountSpent) AS FuelSpend2
+           FROM dbo.vw_mcp_fuel_transactions
+           WHERE TransactionDate >= @fromDate AND TransactionDate <= @toDate
+           GROUP BY RegistrationNumber
+         ), maint AS (
+           SELECT VehicleReg AS Reg, SUM(COALESCE(Cost, EstimatedCost, 0)) AS MaintCost
+           FROM dbo.vw_mcp_maintenance
+           WHERE COALESCE(CompletedDate, ScheduledDate) >= @fromDate
+             AND COALESCE(CompletedDate, ScheduledDate) <= @toDate
+           GROUP BY VehicleReg
+         )
+         SELECT COALESCE(d.Reg, f.Reg, f2.Reg, m.Reg) AS Registration,
+                CAST(d.Km AS decimal(12,1)) AS DistanceKm,
+                CAST(COALESCE(f.FuelSpend, f2.FuelSpend2, 0) AS decimal(14,2)) AS FuelSpend,
+                CAST(f.Litres AS decimal(12,1)) AS Litres,
+                CAST(COALESCE(m.MaintCost, 0) AS decimal(14,2)) AS MaintenanceCost,
+                CAST(COALESCE(f.FuelSpend, f2.FuelSpend2, 0) + COALESCE(m.MaintCost, 0) AS decimal(14,2)) AS TotalCost,
+                CAST(CASE WHEN d.Km > 0 THEN (COALESCE(f.FuelSpend, f2.FuelSpend2, 0) + COALESCE(m.MaintCost, 0)) / d.Km END AS decimal(10,2)) AS CostPerKm
+         FROM dist d
+         FULL OUTER JOIN fuel f ON f.Reg = d.Reg
+         FULL OUTER JOIN fuel2 f2 ON f2.Reg = COALESCE(d.Reg, f.Reg)
+         FULL OUTER JOIN maint m ON m.Reg = COALESCE(d.Reg, f.Reg, f2.Reg)
+         WHERE (@registration IS NULL OR COALESCE(d.Reg, f.Reg, f2.Reg, m.Reg) = @registration)
+         ORDER BY CostPerKm DESC`,
+        { fromDate, toDate, registration: registration ?? null }
+      );
+      return textResult({ fromDate, toDate, count: rows.length, vehicles: rows,
+        note: 'Fuel = TFN card spend (falls back to fuel-transaction spend where no TFN rows). Excludes tolls/other expenses (not in this DB).' });
+    }
+  );
+
+  // ---- Exceptions today ---------------------------------------------------------
+  server.tool(
+    'exceptions_today',
+    'Everything needing attention right now, in one call: late/undelivered loads, outstanding PODs, fuel anomalies (last 7 days), licences expiring within 30 days, overdue vehicle services, stock below reorder, and trip sheets waiting for signature/approval.',
+    {},
+    async () => {
+      const [lateLoads, pods, anomalies, licences, services, stock, sheets] = await Promise.all([
+        query(
+          `SELECT TOP 25 LoadNumber, Status, ScheduledDeliveryDate, DeliveryLocation, DriverName, VehicleReg,
+                  DATEDIFF(hour, ScheduledDeliveryDate, GETDATE()) AS HoursLate
+           FROM dbo.vw_mcp_loads
+           WHERE ActualDeliveryDate IS NULL AND ScheduledDeliveryDate < GETDATE()
+             AND Status NOT IN ('Cancelled', 'Delivered')
+           ORDER BY ScheduledDeliveryDate ASC`
+        ),
+        query(
+          `SELECT TOP 25 LoadNumber, DriverName, VehicleReg, ActualDeliveryDate, HoursSinceDelivery
+           FROM dbo.vw_mcp_outstanding_pods WHERE HoursSinceDelivery >= 48 ORDER BY HoursSinceDelivery DESC`
+        ),
+        query(
+          `SELECT TOP 25 TransactionDate, VehicleReg, DriverName, Litres, TotalAmount, AnomalyReason
+           FROM dbo.vw_mcp_tfn_transactions
+           WHERE IsAnomaly = 1 AND TransactionDate >= DATEADD(day, -7, GETDATE())
+           ORDER BY TransactionDate DESC`
+        ),
+        query(
+          `SELECT FirstName, LastName, LicenseExpiryDate,
+                  DATEDIFF(day, CAST(GETDATE() AS date), LicenseExpiryDate) AS DaysUntilExpiry
+           FROM dbo.vw_mcp_drivers
+           WHERE LicenseExpiryDate IS NOT NULL AND LicenseExpiryDate <= DATEADD(day, 30, CAST(GETDATE() AS date))
+           ORDER BY LicenseExpiryDate ASC`
+        ),
+        query(
+          `SELECT TOP 25 VehicleReg, MaintenanceType, Status, Priority,
+                  COALESCE(ScheduledDate, NextServiceDate) AS DueDate
+           FROM dbo.vw_mcp_maintenance
+           WHERE Status <> 'Complete' AND COALESCE(ScheduledDate, NextServiceDate) < CAST(GETDATE() AS date)
+           ORDER BY COALESCE(ScheduledDate, NextServiceDate) ASC`
+        ),
+        query(
+          `SELECT TOP 25 WarehouseName, CommodityName, QuantityOnHand, ReorderLevel
+           FROM dbo.vw_mcp_stock_on_hand WHERE BelowReorder = 1 ORDER BY WarehouseName, CommodityName`
+        ),
+        query(
+          `SELECT TOP 25 TripSheetNumber, Status, RouteArea, ScheduledDate, CreatedByName
+           FROM dbo.vw_mcp_tripsheets
+           WHERE Status IN ('PendingSignature', 'PendingApproval')
+           ORDER BY ScheduledDate ASC`
+        ),
+      ]);
+      return textResult({
+        asOf: new Date().toISOString(),
+        lateLoads: { count: lateLoads.length, items: lateLoads },
+        outstandingPods: { count: pods.length, items: pods },
+        fuelAnomaliesLast7Days: { count: anomalies.length, items: anomalies },
+        licencesExpiring30Days: { count: licences.length, items: licences },
+        overdueServices: { count: services.length, items: services },
+        stockBelowReorder: { count: stock.length, items: stock },
+        tripsheetsAwaitingAction: { count: sheets.length, items: sheets },
+      });
+    }
+  );
+
+  // ---- Incident history -----------------------------------------------------
+  server.tool(
+    'incident_history',
+    'Logged logistics security incidents (Speeding, CurfewMovement, GeofenceExit) per vehicle or driver over a date range, alongside harsh-driving event totals from CarTrack for the same vehicle/period.',
+    {
+      registration: z.string().optional().describe('Filter by vehicle registration.'),
+      driver: z.string().optional().describe('Filter by driver name (partial match).'),
+      fromDate: z.string().optional().describe('From date yyyy-mm-dd (default 30 days ago).'),
+      toDate: z.string().optional().describe('To date yyyy-mm-dd (default today).'),
+      limit: z.number().int().min(1).max(500).default(100),
+    },
+    async ({ registration, driver, fromDate, toDate, limit }) => {
+      const from = fromDate ?? new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+      const to = toDate ?? new Date().toISOString().slice(0, 10);
+      const incidents = await query(
+        `SELECT TOP (@limit) Id, Type, Severity, Registration, Driver, Address, Speed, Zone,
+                DuringCurfew, Details, IncidentDate
+         FROM dbo.vw_mcp_incidents
+         WHERE IncidentDate >= @from AND IncidentDate < DATEADD(day, 1, CAST(@to AS date))
+           AND (@registration IS NULL OR Registration = @registration)
+           AND (@driver IS NULL OR Driver LIKE '%' + @driver + '%')
+         ORDER BY IncidentDate DESC`,
+        { limit, from, to, registration: registration ?? null, driver: driver ?? null }
+      );
+      let harsh: any[] = [];
+      if (registration) {
+        harsh = await query(
+          `SELECT CAST(SUM(HarshBrakingEvents) AS int) AS HarshBraking,
+                  CAST(SUM(HarshCorneringEvents) AS int) AS HarshCornering,
+                  CAST(SUM(HarshAccelerationEvents) AS int) AS HarshAcceleration
+           FROM dbo.vw_mcp_vehicle_movements
+           WHERE RegistrationNumber = @registration AND MovementDate >= @from AND MovementDate <= @to`,
+          { registration, from, to }
+        );
+      }
+      return textResult({ period: { from, to }, incidentCount: incidents.length, incidents,
+        harshEventsSamePeriod: harsh[0] ?? null });
+    }
+  );
+
+  // ---- Driver availability -----------------------------------------------------
+  server.tool(
+    'driver_availability',
+    'Which drivers are free, busy, or unavailable on a given date. Busy = assigned to a load scheduled that day. Unavailable = driver status not Active. NOTE: HR leave records are not in the logistics DB, so leave is not reflected — treat "free" as "no load booked and status Active".',
+    {
+      date: z.string().optional().describe('Date yyyy-mm-dd (default today).'),
+    },
+    async ({ date }) => {
+      const day = date ?? new Date().toISOString().slice(0, 10);
+      const drivers = await query(
+        `SELECT d.Id, d.FirstName, d.LastName, d.Status, d.LicenseExpiryDate,
+                (SELECT STRING_AGG(l.LoadNumber, ', ')
+                 FROM dbo.vw_mcp_loads l
+                 WHERE l.DriverId = d.Id
+                   AND (CAST(l.ScheduledPickupDate AS date) = @day OR CAST(l.ScheduledDeliveryDate AS date) = @day)
+                   AND l.Status NOT IN ('Cancelled', 'Delivered')) AS LoadsThatDay
+         FROM dbo.vw_mcp_drivers d
+         ORDER BY d.LastName, d.FirstName`,
+        { day }
+      );
+      const classed = drivers.map((d: any) => ({
+        ...d,
+        Availability: d.Status !== 'Active' ? 'Unavailable (' + d.Status + ')'
+          : d.LoadsThatDay ? 'Busy' : 'Free',
+      }));
+      return textResult({
+        date: day,
+        free: classed.filter((d: any) => d.Availability === 'Free'),
+        busy: classed.filter((d: any) => d.Availability === 'Busy'),
+        unavailable: classed.filter((d: any) => d.Availability.startsWith('Unavailable')),
+        note: 'Leave/attendance is not in the logistics DB; confirm leave with HR before assigning.',
+      });
+    }
+  );
+
+  // ---- SOP / document search -----------------------------------------------------
+  server.tool(
+    'search_sop',
+    'Full-text search over SOP / knowledge-base documents (.md/.txt) stored in the document share, so answers can quote the exact rule. Returns matching files with surrounding context snippets.',
+    {
+      searchText: z.string().min(2).describe('Text to search for (case-insensitive).'),
+      maxFiles: z.number().int().min(1).max(20).default(5),
+    },
+    async ({ searchText, maxFiles }) => {
+      const root = resolve(DOCS_ROOT);
+      const needle = searchText.toLowerCase();
+      const hits: { file: string; snippets: string[] }[] = [];
+      const MAX_SCAN = 2000; // file-count safety cap
+      let scanned = 0;
+
+      async function walk(dir: string): Promise<void> {
+        if (hits.length >= maxFiles || scanned >= MAX_SCAN) return;
+        let entries: string[];
+        try { entries = await readdir(dir); } catch { return; }
+        for (const e of entries) {
+          if (hits.length >= maxFiles || scanned >= MAX_SCAN) return;
+          const p = join(dir, e);
+          if (!normalize(p).startsWith(root)) continue;
+          let s;
+          try { s = await stat(p); } catch { continue; }
+          if (s.isDirectory()) { await walk(p); continue; }
+          const ext = extname(e).toLowerCase();
+          if (!['.md', '.txt'].includes(ext) || s.size > 2_000_000) continue;
+          scanned++;
+          let text: string;
+          try { text = await readFile(p, 'utf8'); } catch { continue; }
+          const lower = text.toLowerCase();
+          if (!lower.includes(needle)) continue;
+          const snippets: string[] = [];
+          let idx = 0;
+          while (snippets.length < 3 && (idx = lower.indexOf(needle, idx)) !== -1) {
+            snippets.push(text.slice(Math.max(0, idx - 150), idx + needle.length + 150).replace(/\s+/g, ' ').trim());
+            idx += needle.length;
+          }
+          hits.push({ file: p.slice(root.length + 1), snippets });
+        }
+      }
+      await walk(root);
+      return textResult({ searchText, filesScanned: scanned, matchCount: hits.length, matches: hits,
+        note: hits.length === 0 ? 'No .md/.txt documents matched under the document share.' : undefined });
+    }
+  );
+
+  // ---- Compare periods ------------------------------------------------------------
+  server.tool(
+    'compare_periods',
+    'Compare a key figure between two periods (e.g. this week vs last week, or this month vs the same month last year). Metrics: loads (count/delivered/on-time%), sales (amount/GP), fuel (litres/spend), distance (km). Provide the current period; the comparison period defaults to the immediately preceding period of the same length, or pass explicit dates.',
+    {
+      metric: z.enum(['loads', 'sales', 'fuel', 'distance']).describe('Which figure to compare.'),
+      fromDate: z.string().describe('Current period start yyyy-mm-dd.'),
+      toDate: z.string().describe('Current period end yyyy-mm-dd.'),
+      compareFromDate: z.string().optional().describe('Comparison period start (default: preceding period of equal length).'),
+      compareToDate: z.string().optional().describe('Comparison period end.'),
+    },
+    async ({ metric, fromDate, toDate, compareFromDate, compareToDate }) => {
+      const msDay = 864e5;
+      const curFrom = new Date(fromDate + 'T00:00:00Z');
+      const curTo = new Date(toDate + 'T00:00:00Z');
+      const lenDays = Math.round((curTo.getTime() - curFrom.getTime()) / msDay) + 1;
+      const prevTo = compareToDate ?? new Date(curFrom.getTime() - msDay).toISOString().slice(0, 10);
+      const prevFrom = compareFromDate ?? new Date(curFrom.getTime() - lenDays * msDay).toISOString().slice(0, 10);
+
+      async function measure(f: string, t: string): Promise<any> {
+        switch (metric) {
+          case 'loads': {
+            const [r] = await query(
+              `SELECT COUNT(*) AS TotalLoads,
+                      SUM(CASE WHEN ActualDeliveryDate IS NOT NULL THEN 1 ELSE 0 END) AS Delivered,
+                      SUM(CASE WHEN ActualDeliveryDate IS NOT NULL AND CAST(ActualDeliveryDate AS date) <= CAST(ScheduledDeliveryDate AS date) THEN 1 ELSE 0 END) AS OnTime
+               FROM dbo.vw_mcp_loads
+               WHERE ScheduledDeliveryDate >= @f AND ScheduledDeliveryDate < DATEADD(day, 1, CAST(@t AS date))`,
+              { f, t });
+            const x = r as any;
+            return { ...x, OnTimePct: x.Delivered > 0 ? Math.round((x.OnTime / x.Delivered) * 1000) / 10 : null };
+          }
+          case 'sales': {
+            const [r] = await query(
+              `SELECT CAST(SUM(SalesAmount) AS decimal(14,2)) AS Sales,
+                      CAST(SUM(GrossProfit) AS decimal(14,2)) AS GrossProfit, COUNT(*) AS Invoices
+               FROM dbo.vw_mcp_sales_history
+               WHERE InvoiceDate >= @f AND InvoiceDate < DATEADD(day, 1, CAST(@t AS date))`,
+              { f, t });
+            return r;
+          }
+          case 'fuel': {
+            const [r] = await query(
+              `SELECT CAST(SUM(Litres) AS decimal(12,1)) AS Litres,
+                      CAST(SUM(TotalAmount) AS decimal(14,2)) AS Spend, COUNT(*) AS Fills
+               FROM dbo.vw_mcp_tfn_transactions
+               WHERE TransactionDate >= @f AND TransactionDate < DATEADD(day, 1, CAST(@t AS date))`,
+              { f, t });
+            return r;
+          }
+          case 'distance': {
+            const [r] = await query(
+              `SELECT CAST(SUM(TripDistance) AS decimal(14,1)) AS DistanceKm, COUNT(*) AS Trips
+               FROM dbo.vw_mcp_vehicle_movements
+               WHERE MovementDate >= @f AND MovementDate <= @t`,
+              { f, t });
+            return r;
+          }
+        }
+      }
+
+      const [current, previous] = await Promise.all([measure(fromDate, toDate), measure(prevFrom, prevTo)]);
+      const deltas: Record<string, number | null> = {};
+      for (const k of Object.keys(current ?? {})) {
+        const c = Number((current as any)[k]); const p = Number((previous as any)[k]);
+        deltas[k] = Number.isFinite(c) && Number.isFinite(p) && p !== 0
+          ? Math.round(((c - p) / p) * 1000) / 10 : null;
+      }
+      return textResult({
+        metric,
+        currentPeriod: { fromDate, toDate, values: current },
+        comparisonPeriod: { fromDate: prevFrom, toDate: prevTo, values: previous },
+        percentChange: deltas,
+      });
+    }
+  );
+
+  // ===========================================================================
+  // Built-in prompts — one-click workflows in Claude.
+  // ===========================================================================
+  server.prompt(
+    'morning_briefing',
+    'Daily operations briefing: yesterday\'s performance plus everything needing attention today.',
+    () => ({
+      messages: [{ role: 'user', content: { type: 'text', text:
+        'Give me a morning operations briefing for Rocket Freight. 1) Run daily_ops_briefing for yesterday. 2) Run exceptions_today. 3) Summarise concisely: how yesterday went (loads, on-time %), then a prioritised action list for today (late loads first, then missing PODs, fuel anomalies, expiring licences, overdue services, low stock, trip sheets awaiting approval). Use bullet points and flag anything critical in bold.' } }],
+    })
+  );
+
+  server.prompt(
+    'weekly_fleet_review',
+    'Weekly fleet review: delivery performance, driving behaviour, fuel efficiency and incidents for the past 7 days.',
+    () => ({
+      messages: [{ role: 'user', content: { type: 'text', text:
+        'Run a weekly fleet review covering the last 7 days. Use delivery_performance_summary (byWarehouse true), driving_behaviour_summary, fuel_efficiency_summary, incident_history and compare_periods (metric loads, this week vs last week). For each late delivery pattern, check list_vehicle_movements for likely causes: late depot departure, excessive idle time, or off-route trips. End with the 3 most important actions for next week.' } }],
+    })
+  );
+
+  server.prompt(
+    'month_end_fuel_audit',
+    'Month-end fuel audit: spend, efficiency, anomalies and possible theft indicators.',
+    () => ({
+      messages: [{ role: 'user', content: { type: 'text', text:
+        'Do a month-end fuel audit for the current month. Use fuel_efficiency_summary, list_fuel_orders, cost_per_km and compare_periods (metric fuel, this month vs last month). For every anomaly flagged in the TFN data, cross-check list_vehicle_movements for the same vehicle around the transaction time — a fill-up at a time or place where CarTrack shows the truck was not moving or elsewhere is a theft indicator. Report: total spend, best/worst vehicles by km/l, anomaly list with your assessment, and recommended follow-ups.' } }],
+    })
+  );
+
+  server.prompt(
+    'customer_dispute_pack',
+    'Everything needed to handle a customer delivery dispute in one pack.',
+    () => ({
+      messages: [{ role: 'user', content: { type: 'text', text:
+        'I need a customer dispute pack. Ask me for the customer name and (if known) the invoice or load number. Then: run customer_scorecard and get_customer; use load_timeline for the disputed load; fetch the POD with get_pod_file and CHECK IT — compare the signature, delivery date and received quantities on the scanned document against the invoice lines and the load\'s actual delivery date, and point out any mismatch. Summarise the facts chronologically and give an assessment of whether the dispute looks valid.' } }],
+    })
+  );
+
+  server.prompt(
+    'compliance_sweep',
+    'Compliance sweep: licences, services, missing PODs and incidents.',
+    () => ({
+      messages: [{ role: 'user', content: { type: 'text', text:
+        'Run a compliance sweep: driver_licence_expiry (90 days ahead), list_maintenance (upcomingOnly and overdue via exceptions_today), outstanding_pods, and incident_history for the last 30 days. If SOP rules are relevant, use search_sop to quote the exact rule being breached. Output a compliance register: item, owner, severity, SOP reference, recommended deadline.' } }],
+    })
+  );
+
+  server.prompt(
+    'driver_performance_review',
+    'A structured performance review for one driver.',
+    () => ({
+      messages: [{ role: 'user', content: { type: 'text', text:
+        'Prepare a driver performance review. Ask me which driver, then run driver_scorecard (90 days) and incident_history filtered to that driver. Structure the review as: deliveries & punctuality, POD discipline, fuel efficiency, driving behaviour, incidents, licence status. Compare against fleet averages where tools allow (driving_behaviour_summary / fuel_efficiency_summary for the same period). Be factual and fair — note where data is per-vehicle rather than per-driver.' } }],
+    })
   );
 }

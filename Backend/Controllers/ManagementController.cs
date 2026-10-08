@@ -90,6 +90,7 @@ namespace ProjectTracker.API.Controllers
             var sales = await BuildSalesSummary(now, startOfYear);
             var tenders = await BuildTendersSummary(now, startOfYear, endOfWeek);
             var logistics = await BuildLogisticsSummary();
+            var stock = await BuildStockSummary();
             var finance = await BuildFinanceSummary();
             var paperless = await BuildPaperlessSummary(uid, emailLc);
 
@@ -99,6 +100,7 @@ namespace ProjectTracker.API.Controllers
                 sales,
                 tenders,
                 logistics,
+                stock,
                 finance,
                 paperless
             });
@@ -197,6 +199,64 @@ namespace ProjectTracker.API.Controllers
             {
                 _logger.LogWarning(ex, "Management: logistics summary failed");
                 return new { total = 0, available = 0, assigned = 0, inTransit = 0, delivered = 0, cancelled = 0, pendingDeliveryRequests = 0 };
+            }
+        }
+
+        private async Task<object> BuildStockSummary()
+        {
+            try
+            {
+                // Live warehouse inventory: quantity on hand per SKU per warehouse,
+                // with reorder levels used to flag low / out-of-stock items.
+                var rows = await _context.WarehouseInventory.AsNoTracking()
+                    .Select(wi => new
+                    {
+                        wi.WarehouseId,
+                        WarehouseName = wi.Warehouse != null ? wi.Warehouse.Name : "Unknown",
+                        wi.QuantityOnHand,
+                        wi.ReorderLevel
+                    })
+                    .ToListAsync();
+
+                bool IsOut(decimal qty) => qty <= 0;
+                bool IsLow(decimal qty, decimal? reorder) =>
+                    reorder.HasValue && reorder.Value > 0 && qty > 0 && qty <= reorder.Value;
+
+                var byWarehouse = rows
+                    .GroupBy(r => new { r.WarehouseId, r.WarehouseName })
+                    .Select(g => new
+                    {
+                        warehouse = g.Key.WarehouseName,
+                        skuCount = g.Count(),
+                        totalQuantity = g.Sum(x => x.QuantityOnHand),
+                        lowStock = g.Count(x => IsLow(x.QuantityOnHand, x.ReorderLevel)),
+                        outOfStock = g.Count(x => IsOut(x.QuantityOnHand))
+                    })
+                    .OrderByDescending(x => x.totalQuantity)
+                    .ToList();
+
+                return new
+                {
+                    totalSkus = rows.Count,
+                    totalQuantityOnHand = rows.Sum(r => r.QuantityOnHand),
+                    lowStock = rows.Count(r => IsLow(r.QuantityOnHand, r.ReorderLevel)),
+                    outOfStock = rows.Count(r => IsOut(r.QuantityOnHand)),
+                    warehouses = byWarehouse.Count,
+                    byWarehouse
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Management: stock summary failed");
+                return new
+                {
+                    totalSkus = 0,
+                    totalQuantityOnHand = 0m,
+                    lowStock = 0,
+                    outOfStock = 0,
+                    warehouses = 0,
+                    byWarehouse = Array.Empty<object>()
+                };
             }
         }
 

@@ -1,0 +1,2442 @@
+    <app-navbar></app-navbar>
+    <div class="logistics-dashboard">
+      <!-- Modern Header Section -->
+      <div class="modern-header">
+        <div class="header-main">
+          <div class="header-icon-wrapper">
+            <img class="header-logo" src="logos/rocket-round.png?v=4" alt="Rocket Freight" width="72" height="72" decoding="async" />
+          </div>
+          <div class="header-text-area">
+            <h1>Logistics Management</h1>
+            <p class="header-subtitle">Fleet, Loads, Maintenance & Tracking</p>
+          </div>
+        </div>
+        <div class="header-stats-row">
+          <div class="barcode-search" [class.busy]="barcodeBusy()">
+            <mat-icon>qr_code_scanner</mat-icon>
+            <input type="text" [(ngModel)]="barcodeQuery" placeholder="Enter barcode numberâ€¦"
+                   (keyup.enter)="lookupBarcode()" aria-label="Barcode lookup" />
+            @if (barcodeBusy()) {
+              <mat-icon class="spin">progress_activity</mat-icon>
+            } @else {
+              <button class="barcode-go" (click)="lookupBarcode()" matTooltip="Look up barcode">
+                <mat-icon>search</mat-icon>
+              </button>
+            }
+          </div>
+          <button class="open-map-btn" (click)="openLiveMap()" matTooltip="Open the live fleet map">
+            <mat-icon>map</mat-icon>
+            <span>Open Map</span>
+          </button>
+          <button class="open-map-btn scan-track-btn" (click)="openScanTrack()" matTooltip="Barcode / QR asset & consignment tracking">
+            <mat-icon>qr_code_scanner</mat-icon>
+            <span>Scan &amp; Track</span>
+          </button>
+        </div>
+      </div>
+
+      @if (initialLoading()) {
+        <div class="loading-state">
+          <div class="loading-card">
+            <div class="lc-icon-wrap">
+              <mat-icon class="lc-icon pulse-icon">local_shipping</mat-icon>
+            </div>
+            <h3>Loading Logistics Dashboard</h3>
+            <p class="lc-subtitle">Fetching fleet, loads, drivers & maintenance data</p>
+            <div class="lc-progress-wrap">
+              <div class="lc-progress-track">
+                <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
+              </div>
+              <div class="lc-progress-info">
+                <span class="lc-progress-message">{{ loadingMessage }}</span>
+                <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
+              </div>
+            </div>
+            <div class="lc-steps">
+              @for (step of loadingSteps; track step.label; let i = $index) {
+                <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
+                  <div class="lc-step-dot">
+                    @if (loadingStage > i) {
+                      <mat-icon>check</mat-icon>
+                    } @else {
+                      <mat-icon>{{ step.icon }}</mat-icon>
+                    }
+                  </div>
+                  <span class="lc-step-label">{{ step.label }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      } @else {
+        <!-- Modern Stats Cards -->
+        <div class="modern-stats-grid">
+          <div class="modern-stat-card">
+            <div class="stat-icon-wrapper loads">
+              <mat-icon>assignment</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ stats().activeLoads }}</span>
+              <span class="stat-label">Active Loads</span>
+              <div class="stat-progress">
+                <div class="progress-bar" [style.width.%]="stats().activeLoads > 0 ? 100 : 0"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modern-stat-card clickable" (click)="openAddressIssuesDialog()">
+            <div class="stat-icon-wrapper address">
+              <mat-icon>local_post_office</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ addressIssuesCount() }}</span>
+              <span class="stat-label">Address Issues</span>
+              <div class="stat-progress warning">
+                <div class="progress-bar" [style.width.%]="addressIssuesCount() > 0 ? Math.min(addressIssuesCount() * 10, 100) : 0"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modern-stat-card clickable" (click)="openPumaGarageDialog()">
+            <div class="stat-icon-wrapper puma">
+              <mat-icon>local_gas_station</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ pumaOrdersCount() }}</span>
+              <span class="stat-label">Puma Garage</span>
+              <div class="stat-progress">
+                <div class="progress-bar" [style.width.%]="pumaOrdersCount() > 0 ? Math.min(pumaOrdersCount() * 2, 100) : 0"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modern-stat-card clickable" [class.warning]="tfnOrdersCount() > 5" (click)="openTfnOrdersDialog()">
+            <div class="stat-icon-wrapper tfn">
+              <mat-icon>local_gas_station</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value" [class.warning-text]="tfnOrdersCount() > 5">{{ tfnOrdersCount() }}</span>
+              <span class="stat-label">TFN Orders</span>
+              <div class="stat-progress" [class.danger]="tfnOrdersCount() > 5">
+                <div class="progress-bar" [style.width.%]="tfnOrdersCount() > 0 ? Math.min(tfnOrdersCount() * 10, 100) : 0"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Secondary Stats Row -->
+        <div class="secondary-stats-grid">
+          <div class="secondary-stat-card clickable" (click)="openVehiclesDialog()">
+            <div class="stat-icon-mini vehicles">
+              <mat-icon>directions_car</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ stats().availableVehicles }}/{{ stats().totalVehicles }}</span>
+              <span class="stat-label">Available Vehicles</span>
+            </div>
+          </div>
+
+          <div class="secondary-stat-card clickable" (click)="openDriversDialog()">
+            <div class="stat-icon-mini drivers">
+              <mat-icon>person</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ stats().availableDrivers }}/{{ stats().totalDrivers }}</span>
+              <span class="stat-label">Available Drivers</span>
+            </div>
+          </div>
+
+          <div class="secondary-stat-card clickable" [class.warning]="deliveryRequestsCount() > 5" (click)="openIncomingRequestsDialog()">
+            <div class="stat-icon-mini incoming-requests">
+              <mat-icon>move_to_inbox</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value" [class.warning-text]="deliveryRequestsCount() > 5">{{ deliveryRequestsCount() }}</span>
+              <span class="stat-label">Incoming Requests</span>
+            </div>
+          </div>
+
+          <div class="secondary-stat-card clickable" (click)="openDepotsMapDialog()">
+            <div class="stat-icon-mini depots">
+              <mat-icon>local_gas_station</mat-icon>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ tfnDepotsCount() }}</span>
+              <span class="stat-label">TFN Depots</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <mat-card class="main-content modern-tabs-card">
+          <mat-tab-group animationDuration="200ms">
+            <!-- Active Loads Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>assignment</mat-icon>
+                Active Loads
+              </ng-template>
+              <div class="tab-content">
+                @if (activeLoads().length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>local_shipping</mat-icon>
+                    <h3>No Active Loads</h3>
+                    <p>Create a new load to get started</p>
+                    <button mat-raised-button color="primary" class="modern-action-btn" (click)="createNewLoad()">
+                      <mat-icon>add</mat-icon> Create Load
+                    </button>
+                  </div>
+                } @else {
+                  <table mat-table [dataSource]="activeLoads()" class="loads-table modern-table">
+                    <ng-container matColumnDef="loadNumber">
+                      <th mat-header-cell *matHeaderCellDef>Load #</th>
+                      <td mat-cell *matCellDef="let load">
+                        <strong>{{ load.loadNumber }}</strong>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="date">
+                      <th mat-header-cell *matHeaderCellDef>Date</th>
+                      <td mat-cell *matCellDef="let load">
+                        <span class="load-date">{{ load.scheduledDate ? (load.scheduledDate | date:'dd MMM yyyy') : 'No date' }}</span>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="customer">
+                      <th mat-header-cell *matHeaderCellDef>Customer</th>
+                      <td mat-cell *matCellDef="let load">{{ load.customerName }}</td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="route">
+                      <th mat-header-cell *matHeaderCellDef>Route</th>
+                      <td mat-cell *matCellDef="let load">
+                        <div class="route-cell">
+                          <span>{{ load.origin }}</span>
+                          <mat-icon>arrow_forward</mat-icon>
+                          <span>{{ load.destination }}</span>
+                        </div>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="vehicle">
+                      <th mat-header-cell *matHeaderCellDef>Vehicle</th>
+                      <td mat-cell *matCellDef="let load">{{ load.vehicleRegistration || 'Unassigned' }}</td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="driver">
+                      <th mat-header-cell *matHeaderCellDef>Driver</th>
+                      <td mat-cell *matCellDef="let load">{{ load.driverName || 'Unassigned' }}</td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="status">
+                      <th mat-header-cell *matHeaderCellDef>Status</th>
+                      <td mat-cell *matCellDef="let load">
+                        <mat-chip [ngClass]="getStatusClass(load.status)">
+                          {{ load.status }}
+                        </mat-chip>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="actions">
+                      <th mat-header-cell *matHeaderCellDef></th>
+                      <td mat-cell *matCellDef="let load">
+                        <button mat-icon-button [matMenuTriggerFor]="loadMenu" matTooltip="Actions">
+                          <mat-icon>more_vert</mat-icon>
+                        </button>
+                        <mat-menu #loadMenu="matMenu" class="modern-menu">
+                          <div class="menu-section-header">View</div>
+                          <button mat-menu-item class="modern-menu-item" (click)="viewLoadDetails(load)">
+                            <mat-icon class="menu-icon-blue">visibility</mat-icon>
+                            <span>View Details</span>
+                          </button>
+                          <button mat-menu-item class="modern-menu-item" (click)="viewRouteOnMap(load)">
+                            <mat-icon class="menu-icon-teal">map</mat-icon>
+                            <span>View Route</span>
+                          </button>
+                          <button mat-menu-item class="modern-menu-item" (click)="trackLoad(load)">
+                            <mat-icon class="menu-icon-green">gps_fixed</mat-icon>
+                            <span>Track</span>
+                          </button>
+                          <div class="menu-divider"></div>
+                          <div class="menu-section-header">Manage</div>
+                          <button mat-menu-item class="modern-menu-item" (click)="updateLoadStatus(load)">
+                            <mat-icon class="menu-icon-purple">edit</mat-icon>
+                            <span>Update Status</span>
+                          </button>
+                          <button mat-menu-item class="modern-menu-item" (click)="reassignLoad(load)">
+                            <mat-icon class="menu-icon-orange">swap_horiz</mat-icon>
+                            <span>Reassign</span>
+                          </button>
+                        </mat-menu>
+                      </td>
+                    </ng-container>
+
+                    <tr mat-header-row *matHeaderRowDef="loadColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: loadColumns;" [ngClass]="getLoadRowClass(row)"></tr>
+                  </table>
+                }
+              </div>
+            </mat-tab>
+
+            <!-- Fleet Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>directions_car</mat-icon>
+                Fleet (Live)
+              </ng-template>
+              <div class="tab-content">
+                <div class="fleet-toolbar">
+                  <div class="fleet-stats">
+                    <span class="stat-badge linked">
+                      <mat-icon>link</mat-icon>
+                      Linked: {{ getLinkedVehicleCount() }}
+                    </span>
+                    <span class="stat-badge unlinked">
+                      <mat-icon>link_off</mat-icon>
+                      Unlinked: {{ vehicles().length - getLinkedVehicleCount() }}
+                    </span>
+                  </div>
+                  <div class="fleet-actions">
+                    <div class="fleet-search">
+                      <mat-icon>search</mat-icon>
+                      <input type="text" [ngModel]="fleetSearch()" (ngModelChange)="fleetSearch.set($event)"
+                             placeholder="Search vehicle ID, reg, driver..." aria-label="Search vehicles" />
+                      @if (fleetSearch()) {
+                        <button type="button" class="fleet-search-clear" (click)="fleetSearch.set('')" aria-label="Clear search">
+                          <mat-icon>close</mat-icon>
+                        </button>
+                      }
+                    </div>
+                    <button mat-stroked-button (click)="syncCarTrackVehicles()" [disabled]="carTrackSyncing()">
+                      @if (carTrackSyncing()) {
+                        <mat-spinner diameter="18"></mat-spinner>
+                      } @else {
+                        <mat-icon>gps_fixed</mat-icon>
+                      }
+                      Sync CarTrack
+                    </button>
+                    <button mat-stroked-button color="primary" (click)="syncTfnVehicles()" [disabled]="tfnSyncing()">
+                      @if (tfnSyncing()) {
+                        <mat-spinner diameter="18"></mat-spinner>
+                      } @else {
+                        <mat-icon>local_gas_station</mat-icon>
+                      }
+                      Sync TFN
+                    </button>
+                    <button mat-stroked-button (click)="loadVehiclesFromDatabase()">
+                      <mat-icon>refresh</mat-icon>
+                      Refresh
+                    </button>
+                    <button mat-raised-button color="primary" (click)="addVehicle()">
+                      <mat-icon>add</mat-icon> Add Vehicle
+                    </button>
+                  </div>
+                </div>
+                @if (vehicles().length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>directions_car</mat-icon>
+                    <h3>No Vehicles</h3>
+                    <p>Add vehicles to your fleet or check CarTrack connection</p>
+                    <button mat-raised-button color="primary" (click)="addVehicle()">
+                      <mat-icon>add</mat-icon> Add Vehicle
+                    </button>
+                  </div>
+                } @else {
+                  <div class="fleet-grid">
+                    @for (vehicle of filteredVehicles(); track $index) {
+                      <mat-card class="vehicle-card" [ngClass]="'status-' + (vehicle.status || 'unknown').toLowerCase().replace(' ', '-')">
+
+                        <mat-card-header>
+                          <mat-icon mat-card-avatar>local_shipping</mat-icon>
+                          <mat-card-title>{{ vehicle.registrationNumber }}</mat-card-title>
+                          <mat-card-subtitle>
+                            @if (vehicle.speed !== undefined && vehicle.speed > 0) {
+                              <span class="speed-indicator">{{ vehicle.speed }} km/h</span>
+                            } @else {
+                              {{ vehicle.type || vehicle.vehicleTypeName || 'Vehicle' }}
+                            }
+                          </mat-card-subtitle>
+                          <!-- Integration badges -->
+                          <div class="integration-badges">
+                            @if (vehicle.province) {
+                              <span class="badge province-badge" [matTooltip]="'Province: ' + vehicle.province">
+                                <mat-icon>place</mat-icon> {{ getProvinceAbbreviation(vehicle.province) }}
+                              </span>
+                            }
+                            @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
+                              <span class="badge cartrack-badge" matTooltip="Linked to CarTrack">
+                                <mat-icon>gps_fixed</mat-icon> CT
+                              </span>
+                            }
+                            @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn || vehicle.tankSize) {
+                              <span class="badge tfn-badge" matTooltip="TruckFuelNet - Tank: {{ vehicle.tankSize || vehicle.fuelCapacity || '?' }}L">
+                                <mat-icon>local_gas_station</mat-icon> TFN
+                              </span>
+                            }
+                          </div>
+                          <!-- Actions menu -->
+                          <button mat-icon-button [matMenuTriggerFor]="vehicleMenu" class="vehicle-menu-btn" (click)="$event.stopPropagation()">
+                            <mat-icon>more_vert</mat-icon>
+                          </button>
+                          <mat-menu #vehicleMenu="matMenu" class="modern-menu">
+                            <div class="menu-section-header">General</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewVehicleDetails(vehicle)">
+                              <mat-icon class="menu-icon-blue">visibility</mat-icon>
+                              <span>View Details</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="editVehicle(vehicle)">
+                              <mat-icon class="menu-icon-blue">edit</mat-icon>
+                              <span>Edit Vehicle</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="assignDriver(vehicle)">
+                              <mat-icon class="menu-icon-purple">person_add</mat-icon>
+                              <span>Assign Driver</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="reassignProvince(vehicle)">
+                              <mat-icon class="menu-icon-purple">place</mat-icon>
+                              <span>Reassign Province</span>
+                            </button>
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Integrations</div>
+                            @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
+                              <button mat-menu-item class="modern-menu-item" (click)="unlinkCarTrack(vehicle)">
+                                <mat-icon class="menu-icon-orange">link_off</mat-icon>
+                                <span>Unlink CarTrack</span>
+                              </button>
+                            } @else {
+                              <button mat-menu-item class="modern-menu-item" (click)="linkCarTrack(vehicle)">
+                                <mat-icon class="menu-icon-green">link</mat-icon>
+                                <span>Link to CarTrack</span>
+                              </button>
+                            }
+                            @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn) {
+                              <button mat-menu-item class="modern-menu-item" (click)="unlinkTfn(vehicle)">
+                                <mat-icon class="menu-icon-orange">link_off</mat-icon>
+                                <span>Unlink TFN</span>
+                              </button>
+                            } @else {
+                              <button mat-menu-item class="modern-menu-item" (click)="linkTfn(vehicle)">
+                                <mat-icon class="menu-icon-green">link</mat-icon>
+                                <span>Link to TFN</span>
+                              </button>
+                            }
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Tracking & History</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="trackVehicle(vehicle)">
+                              <mat-icon class="menu-icon-teal">gps_fixed</mat-icon>
+                              <span>Track Location</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewFuelHistory(vehicle)">
+                              <mat-icon class="menu-icon-amber">local_gas_station</mat-icon>
+                              <span>Fuel History</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewVehicleMaintenanceHistory(vehicle)">
+                              <mat-icon class="menu-icon-orange">build</mat-icon>
+                              <span>Maintenance History</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewTodayHistory(vehicle)">
+                              <mat-icon class="menu-icon-cyan">timeline</mat-icon>
+                              <span>Movement History</span>
+                            </button>
+                            <div class="menu-divider"></div>
+                            <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteVehicle(vehicle)">
+                              <mat-icon class="menu-icon-red">delete</mat-icon>
+                              <span>Delete Vehicle</span>
+                            </button>
+                          </mat-menu>
+                        </mat-card-header>
+                        <mat-card-content>
+                          <div class="vehicle-info">
+                            <div class="info-row">
+                              <mat-icon>person</mat-icon>
+                              <span>{{ vehicle.currentDriver || vehicle.currentDriverName || 'No driver assigned' }}</span>
+                            </div>
+                            <div class="info-row">
+                              <mat-icon>location_on</mat-icon>
+                              <span class="location-text">{{ vehicle.lastLocation || 'Unknown location' }}</span>
+                            </div>
+                            <!-- Always show speed for CarTrack linked vehicles -->
+                            @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
+                              <div class="info-row speed-row">
+                                <mat-icon>speed</mat-icon>
+                                <span class="speed-value">{{ vehicle.speed ?? 0 }} km/h</span>
+                                @if ((vehicle.speed ?? 0) > 0 || vehicle.liveStatus === 'moving') {
+                                  <span class="moving-badge">MOVING</span>
+                                } @else if (vehicle.liveStatus === 'idling') {
+                                  <span class="idling-badge">IDLING</span>
+                                } @else if (vehicle.liveStatus === 'offline') {
+                                  <span class="offline-badge">OFFLINE</span>
+                                } @else {
+                                  <span class="stationary-badge">STATIONARY</span>
+                                }
+                              </div>
+                            }
+                            @if (vehicle.tankSize || vehicle.fuelCapacity) {
+                              <div class="info-row">
+                                <mat-icon>local_gas_station</mat-icon>
+                                <span>Tank: {{ vehicle.tankSize || vehicle.fuelCapacity }} L</span>
+                                @if (vehicle.fuelType) {
+                                  <span class="fuel-type-badge">{{ vehicle.fuelType }}</span>
+                                }
+                              </div>
+                            }
+                            @if (vehicle.tfnCreditLimit && vehicle.tfnCurrentBalance !== undefined) {
+                              <div class="info-row tfn-balance">
+                                <mat-icon>account_balance_wallet</mat-icon>
+                                <span>Balance: R{{ vehicle.tfnCurrentBalance | number:'1.2-2' }} / R{{ vehicle.tfnCreditLimit | number:'1.2-2' }}</span>
+                              </div>
+                            }
+                            @if (vehicle.lastUpdate) {
+                              <div class="info-row">
+                                <mat-icon>schedule</mat-icon>
+                                <span class="update-time">Updated: {{ formatLastUpdate(vehicle.lastUpdate) }}</span>
+                              </div>
+                            }
+                          </div>
+                          <div class="card-footer">
+                            <mat-chip class="status-chip" [ngClass]="'status-' + (vehicle.status || 'unknown').toLowerCase().replace(' ', '-')">
+                              {{ vehicle.status || 'Unknown' }}
+                            </mat-chip>
+                            @if (vehicle.tfnVehicleId || vehicle.isLinkedToTfn) {
+                              <div class="tfn-indicator" matTooltip="TruckFuelNet Integrated">
+                                <mat-icon>local_gas_station</mat-icon>
+                              </div>
+                            }
+                          </div>
+                        </mat-card-content>
+                        <mat-card-actions>
+                          <button mat-button color="primary" (click)="viewVehicleDetails(vehicle)">
+                            <mat-icon>visibility</mat-icon> Details
+                          </button>
+                          <button mat-button (click)="trackVehicle(vehicle)">
+                            <mat-icon>gps_fixed</mat-icon> Track
+                          </button>
+                        </mat-card-actions>
+                      </mat-card>
+                    }
+                  </div>
+                  @if (filteredVehicles().length === 0) {
+                    <div class="fleet-no-results">
+                      <mat-icon>search_off</mat-icon>
+                      <p>No vehicles match â€œ{{ fleetSearch() }}â€</p>
+                      <button mat-stroked-button (click)="fleetSearch.set('')">Clear search</button>
+                    </div>
+                  }
+                }
+              </div>
+            </mat-tab>
+
+            <!-- Maintenance Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>build</mat-icon>
+                Maintenance
+              </ng-template>
+              <div class="tab-content">
+                <!-- Stats Row -->
+                <div class="maintenance-header">
+                  <div class="maintenance-stats-row">
+                    <mat-card class="maintenance-stat-card critical" (click)="maintenanceStatusFilter = 'overdue'">
+                      <mat-icon>warning</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getMaintenanceByStatus('overdue').length }}</span>
+                        <span class="stat-label">Overdue</span>
+                      </div>
+                    </mat-card>
+                    <mat-card class="maintenance-stat-card in-progress" (click)="maintenanceStatusFilter = 'in-progress'">
+                      <mat-icon>engineering</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getMaintenanceByStatus('in-progress').length }}</span>
+                        <span class="stat-label">In Progress</span>
+                      </div>
+                    </mat-card>
+                    <mat-card class="maintenance-stat-card scheduled" (click)="maintenanceStatusFilter = 'scheduled'">
+                      <mat-icon>schedule</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getMaintenanceByStatus('scheduled').length }}</span>
+                        <span class="stat-label">Scheduled</span>
+                      </div>
+                    </mat-card>
+                    <mat-card class="maintenance-stat-card license" (click)="maintenanceStatusFilter = 'all'">
+                      <mat-icon>badge</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getExpiringLicenses().length }}</span>
+                        <span class="stat-label">Licenses Expiring</span>
+                      </div>
+                    </mat-card>
+                    <mat-card class="maintenance-stat-card completed" (click)="maintenanceStatusFilter = 'completed'">
+                      <mat-icon>check_circle</mat-icon>
+                      <div class="stat-info">
+                        <span class="stat-value">{{ getCompletedMaintenance().length }}</span>
+                        <span class="stat-label">Completed</span>
+                      </div>
+                    </mat-card>
+                  </div>
+                </div>
+
+                <!-- Filters & Actions Bar -->
+                <div class="maintenance-toolbar">
+                  <div class="maintenance-filters">
+                    <mat-form-field appearance="outline" class="filter-field search-field">
+                      <mat-label>Search</mat-label>
+                      <mat-icon matPrefix>search</mat-icon>
+                      <input matInput [(ngModel)]="maintenanceSearch" placeholder="Search reg, type, description...">
+                      @if (maintenanceSearch) {
+                        <button matSuffix mat-icon-button (click)="maintenanceSearch = ''">
+                          <mat-icon>close</mat-icon>
+                        </button>
+                      }
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Vehicle</mat-label>
+                      <mat-select [(ngModel)]="maintenanceVehicleFilter">
+                        <mat-option value="all">All Vehicles</mat-option>
+                        @for (v of getUniqueMaintenanceVehicles(); track v) {
+                          <mat-option [value]="v">{{ v }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Status</mat-label>
+                      <mat-select [(ngModel)]="maintenanceStatusFilter">
+                        <mat-option value="all">All Statuses</mat-option>
+                        <mat-option value="scheduled">Scheduled</mat-option>
+                        <mat-option value="in-progress">In Progress</mat-option>
+                        <mat-option value="overdue">Overdue</mat-option>
+                        <mat-option value="completed">Completed</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Type</mat-label>
+                      <mat-select [(ngModel)]="maintenanceTypeFilter">
+                        <mat-option value="all">All Types</mat-option>
+                        <mat-option value="scheduled">Scheduled Service</mat-option>
+                        <mat-option value="repair">Repair</mat-option>
+                        <mat-option value="spares">Spares</mat-option>
+                        <mat-option value="license">License</mat-option>
+                        <mat-option value="inspection">Inspection</mat-option>
+                        <mat-option value="other">Other</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Assigned To</mat-label>
+                      <mat-select [(ngModel)]="maintenanceAssignedToFilter">
+                        <mat-option value="all">All Assignees</mat-option>
+                        @for (a of getUniqueMaintenanceAssignees(); track a) {
+                          <mat-option [value]="a">{{ a }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <div class="maintenance-actions">
+                    <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
+                      <mat-icon>add</mat-icon>
+                      Schedule Maintenance
+                    </button>
+                    <button mat-raised-button color="accent" (click)="exportMaintenanceToExcel()" matTooltip="Export the fleet-repair list &amp; dashboard to Excel">
+                      <mat-icon>file_download</mat-icon>
+                      Export to Excel
+                    </button>
+                    <button mat-raised-button (click)="loadMaintenanceRecords()">
+                      <mat-icon>refresh</mat-icon>
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <!-- License Expiry Alerts -->
+                @if (getExpiringLicenses().length > 0 && maintenanceStatusFilter === 'all') {
+                  <div class="license-alerts">
+                    <h4><mat-icon>notification_important</mat-icon> License Expiry Alerts</h4>
+                    <div class="license-cards">
+                      @for (record of getExpiringLicenses(); track record.id) {
+                        <mat-card class="license-card" [class.critical]="record.daysUntilExpiry! <= 7" [class.warning]="record.daysUntilExpiry! > 7 && record.daysUntilExpiry! <= 30">
+                          <div class="license-info">
+                            <mat-icon>directions_car</mat-icon>
+                            <div>
+                              <span class="vehicle-reg">{{ record.vehicleReg }}</span>
+                              <span class="expiry-text">
+                                @if (record.daysUntilExpiry! <= 0) {
+                                  License EXPIRED!
+                                } @else {
+                                  Expires in {{ record.daysUntilExpiry }} days
+                                }
+                              </span>
+                            </div>
+                          </div>
+                          <button mat-icon-button color="primary" matTooltip="Schedule License Renewal" (click)="scheduleLicenseRenewal(record)">
+                            <mat-icon>event</mat-icon>
+                          </button>
+                        </mat-card>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (getFilteredMaintenanceRecords().length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>build_circle</mat-icon>
+                    <h3>No Maintenance Records</h3>
+                    <p>{{ maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' || maintenanceAssignedToFilter !== 'all' ? 'No records match your filters' : 'No vehicles are currently scheduled for maintenance' }}</p>
+                    @if (maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' || maintenanceAssignedToFilter !== 'all') {
+                      <button mat-raised-button (click)="clearMaintenanceFilters()">
+                        <mat-icon>filter_list_off</mat-icon> Clear Filters
+                      </button>
+                    } @else {
+                      <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">
+                        <mat-icon>add</mat-icon> Schedule Maintenance
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <!-- Modern Table View -->
+                  <div class="maintenance-table-container">
+                    <table mat-table [dataSource]="getFilteredMaintenanceRecords()" class="maintenance-table" matSort>
+                      <!-- Vehicle Reg Column -->
+                      <ng-container matColumnDef="vehicleReg">
+                        <th mat-header-cell *matHeaderCellDef>Vehicle</th>
+                        <td mat-cell *matCellDef="let record">
+                          <div class="vehicle-cell">
+                            <div class="reg-plate">
+                              <span class="plate-text">{{ record.vehicleReg || 'N/A' }}</span>
+                            </div>
+                            <span class="vehicle-type-label">{{ record.vehicleType }}</span>
+                          </div>
+                        </td>
+                      </ng-container>
+
+                      <!-- Type Column -->
+                      <ng-container matColumnDef="maintenanceType">
+                        <th mat-header-cell *matHeaderCellDef>Type</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="maintenance-type-badge" [class]="record.maintenanceType">
+                            {{ record.maintenanceType | titlecase }}
+                          </span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Description Column -->
+                      <ng-container matColumnDef="description">
+                        <th mat-header-cell *matHeaderCellDef>Description</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="description-text">{{ record.description }}</span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Scheduled Date Column -->
+                      <ng-container matColumnDef="scheduledDate">
+                        <th mat-header-cell *matHeaderCellDef>Scheduled</th>
+                        <td mat-cell *matCellDef="let record">
+                          {{ record.scheduledDate | date:'dd MMM yyyy' }}
+                        </td>
+                      </ng-container>
+
+                      <!-- Cost Column -->
+                      <ng-container matColumnDef="cost">
+                        <th mat-header-cell *matHeaderCellDef>Cost</th>
+                        <td mat-cell *matCellDef="let record">
+                          @if (record.cost) {
+                            <span class="cost-value">R{{ record.cost | number:'1.2-2' }}</span>
+                          } @else if (record.estimatedCost) {
+                            <span class="cost-estimate">Est: R{{ record.estimatedCost | number:'1.2-2' }}</span>
+                          } @else {
+                            <span class="cost-na">â€”</span>
+                          }
+                        </td>
+                      </ng-container>
+
+                      <!-- Priority Column -->
+                      <ng-container matColumnDef="priority">
+                        <th mat-header-cell *matHeaderCellDef>Priority</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="priority-badge" [class]="record.priority">
+                            {{ record.priority | titlecase }}
+                          </span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Status Column -->
+                      <ng-container matColumnDef="status">
+                        <th mat-header-cell *matHeaderCellDef>Status</th>
+                        <td mat-cell *matCellDef="let record">
+                          <span class="status-badge" [class]="record.status">
+                            @switch (record.status) {
+                              @case ('scheduled') { <mat-icon>schedule</mat-icon> Scheduled }
+                              @case ('in-progress') { <mat-icon>engineering</mat-icon> In Progress }
+                              @case ('completed') { <mat-icon>check_circle</mat-icon> Completed }
+                              @case ('overdue') { <mat-icon>warning</mat-icon> Overdue }
+                            }
+                          </span>
+                        </td>
+                      </ng-container>
+
+                      <!-- Assigned To Column -->
+                      <ng-container matColumnDef="assignedTo">
+                        <th mat-header-cell *matHeaderCellDef>Assigned To</th>
+                        <td mat-cell *matCellDef="let record">
+                          {{ record.assignedTo || record.actionOwner || record.serviceProvider || 'â€”' }}
+                        </td>
+                      </ng-container>
+
+                      <!-- Files Column -->
+                      <ng-container matColumnDef="files">
+                        <th mat-header-cell *matHeaderCellDef>Files</th>
+                        <td mat-cell *matCellDef="let record">
+                          <button mat-icon-button 
+                            class="files-btn"
+                            [class.has-files]="(maintenanceAttachmentCounts()[record.id] || 0) > 0"
+                            matTooltip="View / Upload Files"
+                            (click)="openMaintenanceAttachments(record)">
+                            <mat-icon>attach_file</mat-icon>
+                            @if ((maintenanceAttachmentCounts()[record.id] || 0) > 0) {
+                              <span class="file-count-badge">{{ maintenanceAttachmentCounts()[record.id] }}</span>
+                            }
+                          </button>
+                        </td>
+                      </ng-container>
+
+                      <!-- Actions Column -->
+                      <ng-container matColumnDef="actions">
+                        <th mat-header-cell *matHeaderCellDef>Actions</th>
+                        <td mat-cell *matCellDef="let record">
+                          <div class="action-buttons">
+                            @if (record.status === 'scheduled') {
+                              <button mat-icon-button color="primary" matTooltip="Start" (click)="startMaintenance(record)">
+                                <mat-icon>play_arrow</mat-icon>
+                              </button>
+                            }
+                            @if (record.status === 'in-progress') {
+                              <button mat-icon-button color="accent" matTooltip="Complete" (click)="completeMaintenance(record)">
+                                <mat-icon>check</mat-icon>
+                              </button>
+                            }
+                            <button mat-icon-button matTooltip="Edit" (click)="editMaintenance(record)">
+                              <mat-icon>edit</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="maintenanceMenu">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #maintenanceMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item class="modern-menu-item" [matMenuTriggerFor]="statusMenu">
+                                <mat-icon class="menu-icon-purple">update</mat-icon>
+                                <span>Change Status</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="openMaintenanceAttachments(record)">
+                                <mat-icon class="menu-icon-teal">attach_file</mat-icon>
+                                <span>Upload Files</span>
+                              </button>
+                              <div class="menu-divider"></div>
+                              <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteMaintenance(record)">
+                                <mat-icon class="menu-icon-red">delete</mat-icon>
+                                <span>Delete</span>
+                              </button>
+                            </mat-menu>
+                            <mat-menu #statusMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'scheduled')">
+                                <mat-icon class="menu-icon-blue">schedule</mat-icon>
+                                <span>Scheduled</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'in-progress')">
+                                <mat-icon class="menu-icon-amber">engineering</mat-icon>
+                                <span>In Progress</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'overdue')">
+                                <mat-icon class="menu-icon-red">warning</mat-icon>
+                                <span>Overdue</span>
+                              </button>
+                              <button mat-menu-item class="modern-menu-item" (click)="changeMaintenanceStatus(record, 'completed')">
+                                <mat-icon class="menu-icon-green">check_circle</mat-icon>
+                                <span>Completed</span>
+                              </button>
+                            </mat-menu>
+                          </div>
+                        </td>
+                      </ng-container>
+
+                      <tr mat-header-row *matHeaderRowDef="maintenanceColumns"></tr>
+                      <tr mat-row *matRowDef="let row; columns: maintenanceColumns;" 
+                          [class]="'status-row-' + row.status"></tr>
+                    </table>
+                  </div>
+                }
+
+                <!-- Maintenance Attachment Slide-Out Panel -->
+                @if (showMaintenanceAttachmentPanel) {
+                  <div class="attachment-overlay" (click)="closeMaintenanceAttachments()"></div>
+                  <div class="attachment-slide-panel" [class.open]="showMaintenanceAttachmentPanel">
+                    <div class="attachment-panel-header">
+                      <div class="panel-title-section">
+                        <mat-icon>attach_file</mat-icon>
+                        <div>
+                          <h3>Maintenance Files</h3>
+                          <span class="panel-subtitle">
+                            {{ selectedMaintenanceRecord?.vehicleReg }} â€” {{ selectedMaintenanceRecord?.maintenanceType | titlecase }}
+                          </span>
+                        </div>
+                      </div>
+                      <button mat-icon-button (click)="closeMaintenanceAttachments()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+
+                    <div class="attachment-panel-body">
+                      <!-- Upload Section -->
+                      <div class="upload-section">
+                        <div class="upload-dropzone"
+                             (dragover)="$event.preventDefault(); maintenanceDragOver = true"
+                             (dragleave)="maintenanceDragOver = false"
+                             (drop)="onMaintenanceFileDrop($event)"
+                             [class.drag-over]="maintenanceDragOver">
+                          <mat-icon>cloud_upload</mat-icon>
+                          <p>Drag & drop files here or</p>
+                          <button mat-raised-button color="primary" (click)="maintenanceFileInput.click()">
+                            <mat-icon>upload_file</mat-icon> Choose Files
+                          </button>
+                          <input #maintenanceFileInput type="file" multiple hidden
+                                 (change)="onMaintenanceFileSelected($event)">
+                          <span class="upload-hint">PDF, images, documents up to 50MB each</span>
+                        </div>
+                        @if (maintenanceUploading) {
+                          <mat-progress-bar mode="indeterminate" class="upload-progress"></mat-progress-bar>
+                        }
+                      </div>
+
+                      <!-- Existing Attachments -->
+                      <div class="attachments-list">
+                        <h4>Uploaded Files ({{ maintenanceAttachments().length }})</h4>
+                        @if (maintenanceAttachments().length === 0) {
+                          <div class="no-attachments">
+                            <mat-icon>folder_open</mat-icon>
+                            <p>No files uploaded yet</p>
+                          </div>
+                        } @else {
+                          @for (att of maintenanceAttachments(); track att.id) {
+                            <div class="attachment-item">
+                              <div class="attachment-info">
+                                <mat-icon class="file-icon">{{ getFileIcon(att.fileName) }}</mat-icon>
+                                <div class="file-details">
+                                  <span class="file-name">{{ att.fileName }}</span>
+                                  <span class="file-meta">
+                                    {{ formatFileSize(att.fileSize) }} · {{ att.uploadedBy || 'Unknown' }} · {{ att.uploadedAt | date:'dd MMM yyyy HH:mm' }}
+                                  </span>
+                                </div>
+                              </div>
+                              <div class="attachment-actions">
+                                <button mat-icon-button matTooltip="Download" (click)="downloadMaintenanceAttachment(att)">
+                                  <mat-icon>download</mat-icon>
+                                </button>
+                                <button mat-icon-button matTooltip="Delete" color="warn" (click)="deleteMaintenanceAttachment(att)">
+                                  <mat-icon>delete</mat-icon>
+                                </button>
+                              </div>
+                            </div>
+                          }
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </mat-tab>
+
+            <!-- Invoices Tab (hidden from UI but code preserved) -->
+            <!-- @if (false) { -->
+            <mat-tab [disabled]="true" *ngIf="false">
+              <ng-template mat-tab-label>
+                <mat-icon [matBadge]="stats().pendingInvoices" matBadgeColor="accent" 
+                  [matBadgeHidden]="stats().pendingInvoices === 0" aria-hidden="false">receipt</mat-icon>
+                Invoices
+              </ng-template>
+              <div class="tab-content">
+                <div class="invoices-section">
+                  <div class="invoices-header">
+                    <h3><mat-icon>receipt_long</mat-icon> Imported Invoices</h3>
+                    <div class="invoices-actions">
+                      <mat-form-field appearance="outline" class="search-field">
+                        <mat-label>Search Invoices</mat-label>
+                        <input matInput [value]="invoiceSearch()" (input)="invoiceSearch.set($any($event.target).value); invoicePageIndex.set(0)" placeholder="Invoice #, customer, product...">
+                        <mat-icon matSuffix>search</mat-icon>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="filter-field">
+                        <mat-label>Status</mat-label>
+                        <mat-select [value]="invoiceStatusFilter()" (selectionChange)="invoiceStatusFilter.set($event.value); invoicePageIndex.set(0)">
+                          <mat-option value="all">All</mat-option>
+                          <mat-option value="pending">Pending</mat-option>
+                          <mat-option value="assigned">Assigned</mat-option>
+                          <mat-option value="delivered">Delivered</mat-option>
+                          <mat-option value="query">⚠️ Queries ({{ queryInvoiceCount() }})</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="filter-field">
+                        <mat-label>Company</mat-label>
+                        <mat-select [value]="invoiceSourceFilter()" (selectionChange)="invoiceSourceFilter.set($event.value); invoicePageIndex.set(0)">
+                          <mat-option value="all">All Sources</mat-option>
+                          <mat-option value="Promed Technologies">Promed Technologies</mat-option>
+                          <mat-option value="Access Medical">Access Medical</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="filter-field">
+                        <mat-label>Province</mat-label>
+                        <mat-select [value]="invoiceProvinceFilter()" (selectionChange)="invoiceProvinceFilter.set($event.value); invoicePageIndex.set(0)">
+                          <mat-option value="all">All Provinces</mat-option>
+                          @for (province of uniqueProvinces(); track province) {
+                            <mat-option [value]="province">{{ province }} ({{ getProvinceInvoiceCount(province) }})</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      <button mat-raised-button color="accent" (click)="showSuggestedTrips()" 
+                        [disabled]="pendingInvoiceCount() === 0">
+                        <mat-icon>lightbulb</mat-icon> Suggested Trips
+                      </button>
+                      <button mat-raised-button color="primary" (click)="createTripsheetFromInvoices()" 
+                        [disabled]="pendingInvoiceCount() === 0">
+                        <mat-icon>add</mat-icon> Create Tripsheet
+                      </button>
+                      <button mat-icon-button (click)="loadImportedInvoices()" matTooltip="Refresh">
+                        <mat-icon>refresh</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="invoice-summary-cards">
+                    <div class="summary-card">
+                      <span class="value">{{ importedInvoices().length }}</span>
+                      <span class="label">Total Invoices</span>
+                    </div>
+                    <div class="summary-card pending">
+                      <span class="value">{{ invoiceStatusCounts().pending || 0 }}</span>
+                      <span class="label">Pending</span>
+                    </div>
+                    <div class="summary-card assigned">
+                      <span class="value">{{ invoiceStatusCounts().assigned || 0 }}</span>
+                      <span class="label">Assigned</span>
+                    </div>
+                    <div class="summary-card delivered">
+                      <span class="value">{{ invoiceStatusCounts().delivered || 0 }}</span>
+                      <span class="label">Delivered</span>
+                    </div>
+                    <div class="summary-card partdelivered">
+                      <span class="value">{{ invoiceStatusCounts().partdelivered || 0 }}</span>
+                      <span class="label">Part Delivered</span>
+                    </div>
+                  </div>
+
+                  @if (filteredInvoices().length === 0) {
+                    <div class="empty-state">
+                      <mat-icon>receipt_long</mat-icon>
+                      <h3>No Invoices Found</h3>
+                      <p>Import invoices from ERP system to manage deliveries</p>
+                    </div>
+                  } @else {
+                    <div class="table-container">
+                      <table mat-table [dataSource]="filteredInvoices()" class="invoices-table">
+                        <ng-container matColumnDef="transactionNumber">
+                          <th mat-header-cell *matHeaderCellDef>Invoice #</th>
+                          <td mat-cell *matCellDef="let inv">
+                            <strong>{{ inv.transactionNumber }}</strong>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="date">
+                          <th mat-header-cell *matHeaderCellDef>Date</th>
+                          <td mat-cell *matCellDef="let inv">{{ inv.transactionDate | date:'dd/MM/yyyy' }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="customer">
+                          <th mat-header-cell *matHeaderCellDef>Customer</th>
+                          <td mat-cell *matCellDef="let inv">
+                            <div class="customer-cell">
+                              <span class="customer-name">{{ inv.customerName }}</span>
+                              <span class="customer-code">{{ inv.customerNumber }}</span>
+                            </div>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="product">
+                          <th mat-header-cell *matHeaderCellDef>Product</th>
+                          <td mat-cell *matCellDef="let inv">
+                            <div class="product-cell">
+                              @if (inv.productDescription) {
+                                <span class="product-desc">{{ inv.productDescription }}</span>
+                                @if (inv.productCode) {
+                                  <span class="product-code">{{ inv.productCode }}</span>
+                                }
+                              } @else {
+                                <span class="product-desc no-product">No product info</span>
+                              }
+                            </div>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="quantity">
+                          <th mat-header-cell *matHeaderCellDef>Qty</th>
+                          <td mat-cell *matCellDef="let inv">{{ inv.quantity | number:'1.0-0' }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="salesAmount">
+                          <th mat-header-cell *matHeaderCellDef>Sales (incl. VAT)</th>
+                          <td mat-cell *matCellDef="let inv">R{{ inv.salesAmount * 1.15 | number:'1.2-2' }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="status">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let inv">
+                            <span class="status-chip" [ngClass]="getInvoiceStatusClass(inv.status)">
+                              {{ inv.status }}
+                            </span>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="actions">
+                          <th mat-header-cell *matHeaderCellDef>Actions</th>
+                          <td mat-cell *matCellDef="let inv">
+                            <button mat-icon-button [matMenuTriggerFor]="invoiceMenu" matTooltip="Actions">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #invoiceMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item class="modern-menu-item" (click)="viewInvoiceDetails(inv)">
+                                <mat-icon class="menu-icon-blue">visibility</mat-icon>
+                                <span>View Details</span>
+                              </button>
+                              @if (inv.status === 'Pending') {
+                                <button mat-menu-item class="modern-menu-item">
+                                  <mat-icon class="menu-icon-green">local_shipping</mat-icon>
+                                  <span>Add to Load</span>
+                                </button>
+                              }
+                            </mat-menu>
+                          </td>
+                        </ng-container>
+
+                        <tr mat-header-row *matHeaderRowDef="invoiceColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: invoiceColumns;"></tr>
+                      </table>
+                    </div>
+                    <mat-paginator [length]="allFilteredInvoices().length"
+                                   [pageSize]="invoicePageSize()"
+                                   [pageIndex]="invoicePageIndex()"
+                                   [pageSizeOptions]="[10, 25, 50, 100]"
+                                   (page)="onInvoicePageChange($event)"
+                                   showFirstLastButtons>
+                    </mat-paginator>
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
+            <!-- Tripsheets Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>description</mat-icon>
+                Tripsheets
+              </ng-template>
+              <div class="tab-content">
+                <div class="tripsheets-section">
+                  <!-- Modern Header -->
+                  <div class="ts-filter-header">
+                    <div class="ts-filter-title-row">
+                      <h3><mat-icon>description</mat-icon> Trip Sheets</h3>
+                      <div class="ts-filter-title-actions">
+                        <span class="ts-results-count">{{ allFilteredTripsheets().length }} results</span>
+                        <button mat-raised-button color="primary" class="ts-create-btn" (click)="openTripsheetTypeDialog()">
+                          <mat-icon>add</mat-icon>
+                          Create Trip Sheet
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Modern Filter Bar -->
+                    <div class="ts-filter-bar">
+                      <!-- Search -->
+                      <div class="ts-search-wrapper">
+                        <mat-icon class="ts-search-icon">search</mat-icon>
+                        <input class="ts-search-input" [(ngModel)]="tripsheetSearch" placeholder="Search by load #, driver, vehicle..." (ngModelChange)="onTripsheetFilterChange()">
+                        @if (tripsheetSearch) {
+                          <button class="ts-search-clear" (click)="tripsheetSearch = ''; onTripsheetFilterChange()">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        }
+                      </div>
+
+                      <!-- Filter Pills Row -->
+                      <div class="ts-filter-pills">
+                        <!-- Warehouse Toggle Group -->
+                        <div class="ts-filter-group">
+                          <span class="ts-filter-label"><mat-icon>warehouse</mat-icon> Warehouse</span>
+                          <mat-button-toggle-group [(ngModel)]="tripsheetWarehouseFilter" (ngModelChange)="onTripsheetFilterChange()" class="ts-toggle-group warehouse-toggles" appearance="standard">
+                            <mat-button-toggle value="all" matTooltip="All Warehouses">ALL</mat-button-toggle>
+                            <mat-button-toggle value="GP" matTooltip="Gauteng - Johannesburg">GP</mat-button-toggle>
+                            <mat-button-toggle value="CPT" matTooltip="Cape Town">CPT</mat-button-toggle>
+                            <mat-button-toggle value="KZN" matTooltip="KwaZulu-Natal - Durban">KZN</mat-button-toggle>
+                            <mat-button-toggle value="PE" matTooltip="Eastern Cape - Gqeberha">PE</mat-button-toggle>
+                          </mat-button-toggle-group>
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="ts-filter-divider"></div>
+
+                        <!-- Status Filter -->
+                        <div class="ts-filter-group">
+                          <span class="ts-filter-label"><mat-icon>flag</mat-icon> Status</span>
+                          <mat-button-toggle-group [(ngModel)]="tripsheetStatusFilter" (ngModelChange)="onTripsheetFilterChange()" class="ts-toggle-group status-toggles" appearance="standard">
+                            <mat-button-toggle value="all">All</mat-button-toggle>
+                            <mat-button-toggle value="draft" class="draft-toggle">Draft</mat-button-toggle>
+                            <mat-button-toggle value="pending">Pending</mat-button-toggle>
+                            <mat-button-toggle value="assigned">Assigned</mat-button-toggle>
+                            <mat-button-toggle value="scheduled">Scheduled</mat-button-toggle>
+                            <mat-button-toggle value="active">Active</mat-button-toggle>
+                            <mat-button-toggle value="in-transit">In Transit</mat-button-toggle>
+                            <mat-button-toggle value="completed">Completed</mat-button-toggle>
+                            <mat-button-toggle value="cancelled">Cancelled</mat-button-toggle>
+                          </mat-button-toggle-group>
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="ts-filter-divider"></div>
+
+                        <!-- Date Range -->
+                        <div class="ts-filter-group">
+                          <span class="ts-filter-label"><mat-icon>date_range</mat-icon> Date Range</span>
+                          <div class="ts-date-range">
+                            <mat-form-field appearance="outline" class="ts-date-field">
+                              <mat-label>From</mat-label>
+                              <input matInput [matDatepicker]="tripFromPicker" [(ngModel)]="tripsheetFromDate" (dateChange)="onTripsheetDateFilterChange()">
+                              <mat-datepicker-toggle matIconSuffix [for]="tripFromPicker"></mat-datepicker-toggle>
+                              <mat-datepicker #tripFromPicker></mat-datepicker>
+                            </mat-form-field>
+                            <mat-icon class="ts-date-arrow">arrow_forward</mat-icon>
+                            <mat-form-field appearance="outline" class="ts-date-field">
+                              <mat-label>To</mat-label>
+                              <input matInput [matDatepicker]="tripToPicker" [(ngModel)]="tripsheetToDate" (dateChange)="onTripsheetDateFilterChange()">
+                              <mat-datepicker-toggle matIconSuffix [for]="tripToPicker"></mat-datepicker-toggle>
+                              <mat-datepicker #tripToPicker></mat-datepicker>
+                            </mat-form-field>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Active filters summary & clear -->
+                      @if (hasActiveTripsheetFilters) {
+                        <div class="ts-active-filters">
+                          <mat-icon>filter_list</mat-icon>
+                          <span>Active filters:</span>
+                          @if (tripsheetWarehouseFilter !== 'all') {
+                            <span class="ts-active-chip warehouse-chip">
+                              <mat-icon>warehouse</mat-icon> {{ tripsheetWarehouseFilter }}
+                              <button (click)="tripsheetWarehouseFilter = 'all'; onTripsheetFilterChange()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          @if (tripsheetStatusFilter !== 'all') {
+                            <span class="ts-active-chip status-chip">
+                              <mat-icon>flag</mat-icon> {{ tripsheetStatusFilter }}
+                              <button (click)="tripsheetStatusFilter = 'all'; onTripsheetFilterChange()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          @if (tripsheetFromDate || tripsheetToDate) {
+                            <span class="ts-active-chip date-chip">
+                              <mat-icon>date_range</mat-icon>
+                              {{ tripsheetFromDate ? (tripsheetFromDate | date:'dd MMM') : '...' }}
+                              → {{ tripsheetToDate ? (tripsheetToDate | date:'dd MMM') : '...' }}
+                              <button (click)="clearTripsheetDateFilter()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          @if (tripsheetSearch) {
+                            <span class="ts-active-chip search-chip">
+                              <mat-icon>search</mat-icon> "{{ tripsheetSearch }}"
+                              <button (click)="tripsheetSearch = ''; onTripsheetFilterChange()"><mat-icon>close</mat-icon></button>
+                            </span>
+                          }
+                          <button class="ts-clear-all" (click)="clearAllTripsheetFilters()">
+                            <mat-icon>clear_all</mat-icon> Clear all
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  @if (filteredTripsheets().length === 0) {
+                    <div class="empty-state">
+                      <mat-icon>description</mat-icon>
+                      <h3>No Tripsheets Found</h3>
+                      <p>Tripsheets are generated when loads are dispatched</p>
+                    </div>
+                  } @else {
+                    <table mat-table [dataSource]="filteredTripsheets()" class="tripsheets-table">
+                      <ng-container matColumnDef="tripNumber">
+                        <th mat-header-cell *matHeaderCellDef>Trip #</th>
+                        <td mat-cell *matCellDef="let trip">
+                          <strong>{{ trip.tripNumber }}</strong>
+                        </td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="loadNumber">
+                        <th mat-header-cell *matHeaderCellDef>Load #</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.loadNumber }}</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="driver">
+                        <th mat-header-cell *matHeaderCellDef>Driver</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.driverName }}</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="vehicle">
+                        <th mat-header-cell *matHeaderCellDef>Vehicle</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.vehicleReg }}</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="route">
+                        <th mat-header-cell *matHeaderCellDef>Route</th>
+                        <td mat-cell *matCellDef="let trip">
+                          <div class="route-cell">
+                            <span>{{ trip.origin }}</span>
+                            <mat-icon>arrow_forward</mat-icon>
+                            <span>{{ trip.destination }}</span>
+                          </div>
+                        </td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="warehouse">
+                        <th mat-header-cell *matHeaderCellDef>Warehouse</th>
+                        <td mat-cell *matCellDef="let trip">
+                          <span class="ts-warehouse-badge" [ngClass]="'wh-' + (trip.warehouseCode || 'unknown').toLowerCase()" [matTooltip]="trip.warehouseName || 'Unknown'">
+                            {{ displayWarehouseCode(trip.warehouseCode) }}
+                          </span>
+                        </td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="stops">
+                        <th mat-header-cell *matHeaderCellDef>Stops</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.totalStops }}</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="distance">
+                        <th mat-header-cell *matHeaderCellDef>Distance</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.totalDistance }} km</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="estTime">
+                        <th mat-header-cell *matHeaderCellDef>Est. Time</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.estimatedTime }}</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="date">
+                        <th mat-header-cell *matHeaderCellDef>Date</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.date | date:'dd MMM yyyy' }}</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="status">
+                        <th mat-header-cell *matHeaderCellDef>Status</th>
+                        <td mat-cell *matCellDef="let trip">
+                          <mat-chip [ngClass]="getTripStatusClass(trip.status)">
+                            {{ trip.status }}
+                          </mat-chip>
+                        </td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="createdBy">
+                        <th mat-header-cell *matHeaderCellDef>Created By</th>
+                        <td mat-cell *matCellDef="let trip">{{ trip.createdByName || 'â€”' }}</td>
+                      </ng-container>
+
+                      <ng-container matColumnDef="actions">
+                        <th mat-header-cell *matHeaderCellDef></th>
+                        <td mat-cell *matCellDef="let trip">
+                          <button mat-icon-button [matMenuTriggerFor]="tripMenu" matTooltip="Actions">
+                            <mat-icon>more_vert</mat-icon>
+                          </button>
+                          <mat-menu #tripMenu="matMenu" class="modern-menu">
+                            <div class="menu-section-header">View</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewTripsheet(trip)">
+                              <mat-icon class="menu-icon-blue">visibility</mat-icon>
+                              <span>View Details</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewPickingSlip(trip)">
+                              <mat-icon class="menu-icon-orange">inventory_2</mat-icon>
+                              <span>View Picking Slip</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="viewRouteOnMap(trip)">
+                              <mat-icon class="menu-icon-teal">map</mat-icon>
+                              <span>View Route</span>
+                            </button>
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Manage</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="editTripsheet(trip)">
+                              <mat-icon class="menu-icon-blue">edit</mat-icon>
+                              <span>Edit</span>
+                            </button>
+                            @if (!trip.driverName || !trip.vehicleReg) {
+                              <button mat-menu-item class="modern-menu-item" (click)="assignTripsheet(trip)">
+                                <mat-icon class="menu-icon-purple">person_add</mat-icon>
+                                <span>Assign Driver/Vehicle</span>
+                              </button>
+                            }
+                            @if (trip.driverName || trip.vehicleReg) {
+                              <button mat-menu-item class="modern-menu-item" (click)="reassignTripsheet(trip)">
+                                <mat-icon class="menu-icon-orange">swap_horiz</mat-icon>
+                                <span>Reassign Driver/Vehicle</span>
+                              </button>
+                            }
+                            <button mat-menu-item class="modern-menu-item" (click)="rescheduleTripsheet(trip)">
+                              <mat-icon class="menu-icon-purple">schedule</mat-icon>
+                              <span>Reschedule</span>
+                            </button>
+                            <div class="menu-divider"></div>
+                            <div class="menu-section-header">Export</div>
+                            <button mat-menu-item class="modern-menu-item" (click)="printTripsheet(trip)">
+                              <mat-icon class="menu-icon-teal">print</mat-icon>
+                              <span>Print</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="downloadTripsheet(trip)">
+                              <mat-icon class="menu-icon-green">download</mat-icon>
+                              <span>Download PDF</span>
+                            </button>
+                            <button mat-menu-item class="modern-menu-item" (click)="emailToWarehouseManager(trip)">
+                              <mat-icon class="menu-icon-blue">email</mat-icon>
+                              <span>Email Trip Sheet + Picking Slip</span>
+                            </button>
+                            <div class="menu-divider"></div>
+                            @if (trip.status === 'Draft') {
+                              <button mat-menu-item class="modern-menu-item" (click)="continueDraft(trip)">
+                                <mat-icon class="menu-icon-orange">edit_note</mat-icon>
+                                <span>Continue Draft</span>
+                              </button>
+                            }
+                            @if (trip.status !== 'Active' && trip.status !== 'Completed' && trip.status !== 'Draft') {
+                              <button mat-menu-item class="modern-menu-item" (click)="activateTripsheet(trip)">
+                                <mat-icon class="menu-icon-green">play_arrow</mat-icon>
+                                <span>Generate Load</span>
+                              </button>
+                            }
+                            <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteTripsheet(trip)">
+                              <mat-icon class="menu-icon-red">delete</mat-icon>
+                              <span>Delete</span>
+                            </button>
+                          </mat-menu>
+                        </td>
+                      </ng-container>
+
+                      <tr mat-header-row *matHeaderRowDef="tripsheetColumns"></tr>
+                      <tr mat-row *matRowDef="let row; columns: tripsheetColumns;" [ngClass]="getTripsheetRowClass(row)"></tr>
+                    </table>
+                    <mat-paginator [length]="allFilteredTripsheets().length"
+                                   [pageSize]="tripsheetPageSize()"
+                                   [pageIndex]="tripsheetPageIndex()"
+                                   [pageSizeOptions]="[10, 25, 50, 100]"
+                                   (page)="onTripsheetPageChange($event)"
+                                   showFirstLastButtons>
+                    </mat-paginator>
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
+            <!-- POD Documents Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>verified</mat-icon>
+                POD Documents
+              </ng-template>
+              <div class="tab-content">
+                <div class="pod-section">
+                  <!-- POD Toolbar -->
+                  <div class="pod-toolbar">
+                    <div class="pod-filters">
+                      <mat-form-field appearance="outline" class="pod-filter-field">
+                        <mat-label>Region</mat-label>
+                        <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All Regions</mat-option>
+                          <mat-option value="GP">Gauteng (GP)</mat-option>
+                          <mat-option value="KZN">KwaZulu-Natal (KZN)</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline" class="pod-filter-field">
+                        <mat-label>Month</mat-label>
+                        <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All Months</mat-option>
+                          <mat-option value="1-2026">January 2026</mat-option>
+                          <mat-option value="2-2026">February 2026</mat-option>
+                          <mat-option value="3-2026">March 2026</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline" class="pod-filter-field pod-driver-field">
+                        <mat-label>Driver</mat-label>
+                        <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All Drivers</mat-option>
+                          @for (driver of podDriverList; track driver) {
+                            <mat-option [value]="driver">{{ driver }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline" class="pod-filter-field">
+                        <mat-label>Link Status</mat-label>
+                        <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="loadPodDocuments()">
+                          <mat-option value="">All</mat-option>
+                          <mat-option value="linked">Linked</mat-option>
+                          <mat-option value="not-linked">Not Linked</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+
+                    <div class="pod-actions">
+                      <button mat-stroked-button class="pod-upload-btn" (click)="openPodUploadDialog()">
+                        <mat-icon>upload_file</mat-icon> Upload POD
+                      </button>
+                      <button mat-stroked-button class="pod-reconcile-btn" (click)="reconcilePodTripsheets()" [disabled]="podReconciling" matTooltip="Auto-link PODs to tripsheets that share the same invoices">
+                        <mat-icon>{{ podReconciling ? 'hourglass_empty' : 'sync' }}</mat-icon> {{ podReconciling ? 'Linking…' : 'Reconcile → Tripsheets' }}
+                      </button>
+                      <div class="pod-view-toggle">
+                        <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
+                          <mat-icon>grid_view</mat-icon>
+                        </button>
+                        <button mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
+                          <mat-icon>view_list</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- POD Summary Stats -->
+                  @if (podSummary) {
+                    <div class="pod-stats-row">
+                      <div class="pod-stat-chip">
+                        <mat-icon>folder</mat-icon>
+                        <span class="stat-num">{{ podSummary.total }}</span>
+                        <span class="stat-lbl">Total PODs</span>
+                      </div>
+                      <div class="pod-stat-chip linked-chip">
+                        <mat-icon>link</mat-icon>
+                        <span class="stat-num">{{ podSummary.linked || 0 }}</span>
+                        <span class="stat-lbl">Linked</span>
+                      </div>
+                      <div class="pod-stat-chip tripsheet-chip">
+                        <mat-icon>description</mat-icon>
+                        <span class="stat-num">{{ podSummary.linkedToTripsheet || 0 }}</span>
+                        <span class="stat-lbl">Tripsheets</span>
+                      </div>
+                      <div class="pod-stat-chip invoice-chip">
+                        <mat-icon>receipt</mat-icon>
+                        <span class="stat-num">{{ podSummary.linkedToInvoice || 0 }}</span>
+                        <span class="stat-lbl">Invoices</span>
+                      </div>
+                      <div class="pod-stat-chip unlinked-chip">
+                        <mat-icon>link_off</mat-icon>
+                        <span class="stat-num">{{ podSummary.unlinked || 0 }}</span>
+                        <span class="stat-lbl">Not Linked</span>
+                      </div>
+                      @for (r of podSummary.byRegion; track r.region) {
+                        <div class="pod-stat-chip region-chip">
+                          <mat-icon>location_on</mat-icon>
+                          <span class="stat-num">{{ r.count }}</span>
+                          <span class="stat-lbl">{{ r.region }}</span>
+                        </div>
+                      }
+                      <div class="pod-stat-chip drivers-chip">
+                        <mat-icon>people</mat-icon>
+                        <span class="stat-num">{{ podSummary.drivers?.length || 0 }}</span>
+                        <span class="stat-lbl">Drivers</span>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Loading State -->
+                  @if (podLoading) {
+                    <div class="loading-state">
+                      <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+                      <p>Loading POD documents...</p>
+                    </div>
+                  } @else if (podDocuments.length === 0) {
+                    <div class="empty-state">
+                      <mat-icon>verified</mat-icon>
+                      <h3>No POD Documents Found</h3>
+                      <p>Adjust your filters or upload new POD documents</p>
+                    </div>
+                  } @else {
+                    <!-- Grid View -->
+                    @if (podViewMode === 'grid') {
+                      <div class="pod-grid">
+                        @for (pod of podDocuments; track pod.id) {
+                          <mat-card class="pod-card" (click)="viewPodDocument(pod)">
+                            <div class="pod-card-header">
+                              <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
+                              <div class="pod-card-info">
+                                <span class="pod-driver">{{ pod.driverName }}</span>
+                                <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
+                              </div>
+                              <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId || (pod.invoiceLinks?.length > 0)) ? 'linked' : 'not-linked'">
+                                <mat-icon>{{ (pod.loadId || pod.invoiceId || (pod.invoiceLinks?.length > 0)) ? 'link' : 'link_off' }}</mat-icon>
+                                {{ pod.loadId ? 'Tripsheet' : (pod.invoiceLinks?.length > 0 || pod.invoiceId) ? 'Invoice' : 'Not Linked' }}
+                              </span>
+                              <span class="pod-region-badge" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                            </div>
+                            @if (pod.loadNumber) {
+                              <div class="pod-tripsheet-ref clickable" (click)="previewTripsheetFromPod(pod); $event.stopPropagation()" matTooltip="Preview tripsheet">
+                                <mat-icon>description</mat-icon>
+                                <span>{{ pod.loadNumber }}</span>
+                                <mat-icon class="open-panel-icon">open_in_new</mat-icon>
+                              </div>
+                            }
+                            @if (pod.invoiceLinks?.length > 0) {
+                              <div class="pod-tripsheet-ref invoice-ref clickable" (click)="openPodInvoicesDialog(pod); $event.stopPropagation()" matTooltip="View all invoice numbers">
+                                <mat-icon>receipt</mat-icon>
+                                <span>
+                                  {{ pod.invoiceLinks[0]?.invoiceNumber || pod.invoiceNumber || 'Invoice' }}
+                                  @if (pod.invoiceLinks.length > 1) {
+                                    <strong> +{{ pod.invoiceLinks.length - 1 }} more</strong>
+                                  }
+                                </span>
+                              </div>
+                            } @else if (pod.invoiceNumber) {
+                              <div class="pod-tripsheet-ref invoice-ref clickable" (click)="openPodInvoicesDialog(pod); $event.stopPropagation()" matTooltip="View invoice details">
+                                <mat-icon>receipt</mat-icon>
+                                <span>{{ pod.invoiceNumber }}</span>
+                              </div>
+                            }
+                            <div class="pod-card-meta">
+                              <span class="pod-filename" matTooltip="{{ pod.originalFileName }}">{{ pod.originalFileName || pod.fileName }}</span>
+                              <span class="pod-size">{{ formatPodFileSize(pod.fileSize) }}</span>
+                            </div>
+                            <div class="pod-card-actions">
+                              <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                                <mat-icon>visibility</mat-icon>
+                              </button>
+                              <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                                <mat-icon>download</mat-icon>
+                              </button>
+                              <button mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                                <mat-icon>more_vert</mat-icon>
+                              </button>
+                              <mat-menu #podActionMenu="matMenu" class="modern-menu">
+                                @if (!pod.loadId) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkTripsheetDialog(pod)">
+                                    <mat-icon>link</mat-icon> Link to Tripsheet
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkPod(pod)">
+                                    <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                  </button>
+                                }
+                                @if (pod.invoiceLinks?.length === 0) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
+                                  </button>
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkInvoice(pod)">
+                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice(s)
+                                  </button>
+                                }
+                                <button mat-menu-item class="modern-menu-item" (click)="openEditPodDialog(pod)">
+                                  <mat-icon>edit</mat-icon> Edit Details
+                                </button>
+                              </mat-menu>
+                            </div>
+                          </mat-card>
+                        }
+                      </div>
+                    } @else {
+                      <!-- List View -->
+                      <div class="pod-list-container">
+                        <table mat-table [dataSource]="podDocuments" class="pod-table modern-table">
+                          <ng-container matColumnDef="driverName">
+                            <th mat-header-cell *matHeaderCellDef>Driver</th>
+                            <td mat-cell *matCellDef="let pod">{{ pod.driverName }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="deliveryDate">
+                            <th mat-header-cell *matHeaderCellDef>Date</th>
+                            <td mat-cell *matCellDef="let pod">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="region">
+                            <th mat-header-cell *matHeaderCellDef>Region</th>
+                            <td mat-cell *matCellDef="let pod">
+                              <span class="pod-region-badge small" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                            </td>
+                          </ng-container>
+                          <ng-container matColumnDef="linkStatus">
+                            <th mat-header-cell *matHeaderCellDef>Status</th>
+                            <td mat-cell *matCellDef="let pod">
+                              @if (pod.loadId) {
+                                <span class="pod-link-badge small linked clickable" (click)="previewTripsheetFromPod(pod); $event.stopPropagation()" matTooltip="Preview tripsheet">
+                                  <mat-icon>link</mat-icon>
+                                  {{ pod.loadNumber || 'Tripsheet' }}
+                                </span>
+                              } @else if (pod.invoiceId || (pod.invoiceLinks?.length > 0)) {
+                                <span class="pod-link-badge small linked invoice clickable" (click)="openPodInvoicesDialog(pod); $event.stopPropagation()" matTooltip="View all invoice numbers">
+                                  <mat-icon>receipt</mat-icon>
+                                  {{ (pod.invoiceLinks?.length > 0) ? ((pod.invoiceLinks[0]?.invoiceNumber || pod.invoiceNumber || 'Invoice') + (pod.invoiceLinks.length > 1 ? (' +' + (pod.invoiceLinks.length - 1)) : '')) : (pod.invoiceNumber || 'Invoice') }}
+                                </span>
+                              } @else {
+                                <span class="pod-link-badge small not-linked">
+                                  <mat-icon>link_off</mat-icon>
+                                  Not Linked
+                                </span>
+                              }
+                            </td>
+                          </ng-container>
+                          <ng-container matColumnDef="fileName">
+                            <th mat-header-cell *matHeaderCellDef>File</th>
+                            <td mat-cell *matCellDef="let pod">{{ pod.originalFileName || pod.fileName }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="fileSize">
+                            <th mat-header-cell *matHeaderCellDef>Size</th>
+                            <td mat-cell *matCellDef="let pod">{{ formatPodFileSize(pod.fileSize) }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Actions</th>
+                            <td mat-cell *matCellDef="let pod">
+                              <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                                <mat-icon>visibility</mat-icon>
+                              </button>
+                              <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                                <mat-icon>download</mat-icon>
+                              </button>
+                              <button mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                                <mat-icon>more_vert</mat-icon>
+                              </button>
+                              <mat-menu #podListMenu="matMenu" class="modern-menu">
+                                @if (!pod.loadId) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkTripsheetDialog(pod)">
+                                    <mat-icon>link</mat-icon> Link to Tripsheet
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkPod(pod)">
+                                    <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                  </button>
+                                }
+                                @if (pod.invoiceLinks?.length === 0) {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
+                                  </button>
+                                } @else {
+                                  <button mat-menu-item class="modern-menu-item" (click)="openLinkInvoiceDialog(pod)">
+                                    <mat-icon>receipt</mat-icon> Link to Invoice(s)
+                                  </button>
+                                  <button mat-menu-item class="modern-menu-item" (click)="delinkInvoice(pod)">
+                                    <mat-icon>receipt_long</mat-icon> Delink from Invoice(s)
+                                  </button>
+                                }
+                                <button mat-menu-item class="modern-menu-item" (click)="openEditPodDialog(pod)">
+                                  <mat-icon>edit</mat-icon> Edit Details
+                                </button>
+                              </mat-menu>
+                            </td>
+                          </ng-container>
+                          <tr mat-header-row *matHeaderRowDef="podTableColumns"></tr>
+                          <tr mat-row *matRowDef="let row; columns: podTableColumns;" class="clickable-row" (click)="viewPodDocument(row)"></tr>
+                        </table>
+                      </div>
+                    }
+
+                    <!-- Pagination -->
+                    @if (podTotalCount > podPageSize) {
+                      <div class="pod-pagination">
+                        <span class="pod-page-info">Showing {{ (podCurrentPage - 1) * podPageSize + 1 }} - {{ Math.min(podCurrentPage * podPageSize, podTotalCount) }} of {{ podTotalCount }}</span>
+                        <div class="pod-page-btns">
+                          <button mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
+                            <mat-icon>chevron_left</mat-icon>
+                          </button>
+                          <span class="page-num">Page {{ podCurrentPage }}</span>
+                          <button mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
+                            <mat-icon>chevron_right</mat-icon>
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
+            <!-- Fuel History Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>local_gas_station</mat-icon>
+                Fuel History
+              </ng-template>
+              <div class="tab-content">
+                <div class="fuel-history-section">
+                  <!-- Period Selector -->
+                  <div class="fuel-toolbar">
+                    <div class="fuel-period-selector">
+                      <mat-form-field appearance="outline" class="period-select">
+                        <mat-label>Period</mat-label>
+                        <mat-select [(ngModel)]="selectedFuelPeriod" (selectionChange)="loadFuelMonthlyReport()">
+                          @for (period of fuelPeriods(); track period) {
+                            <mat-option [value]="period">{{ period.monthName }} {{ period.reportYear }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+                    <div class="fuel-stats-bar">
+                      @if (fuelReport()) {
+                        <span class="fuel-stat">
+                          <mat-icon>local_shipping</mat-icon>
+                          <strong>{{ fuelReport()!.uniqueVehicles }}</strong> Vehicles
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>receipt</mat-icon>
+                          <strong>{{ fuelReport()!.totalTransactions }}</strong> Transactions
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>opacity</mat-icon>
+                          <strong>{{ fuelReport()!.totalLitresUsed | number:'1.0-0' }}</strong> Litres
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>payments</mat-icon>
+                          <strong>R {{ fuelReport()!.totalAmountSpent | number:'1.2-2' }}</strong>
+                        </span>
+                        <span class="fuel-stat">
+                          <mat-icon>speed</mat-icon>
+                          <strong>R {{ fuelReport()!.averageCostPerLitre | number:'1.2-2' }}</strong>/L
+                        </span>
+                      }
+                    </div>
+                    <div class="fuel-actions">
+                      <mat-button-toggle-group [(ngModel)]="fuelViewMode" class="fuel-view-toggle">
+                        <mat-button-toggle value="summary">
+                          <mat-icon>summarize</mat-icon> Summary
+                        </mat-button-toggle>
+                        <mat-button-toggle value="transactions">
+                          <mat-icon>list</mat-icon> Transactions
+                        </mat-button-toggle>
+                        <mat-button-toggle value="byGroup">
+                          <mat-icon>category</mat-icon> By Group
+                        </mat-button-toggle>
+                      </mat-button-toggle-group>
+                      <button mat-stroked-button class="fuel-export-btn" (click)="openFuelExportDialog()">
+                        <mat-icon>download</mat-icon> Export Excel
+                      </button>
+                      <button mat-stroked-button class="fuel-sync-btn" (click)="syncFuelFromTfn()" [disabled]="fuelSyncing">
+                        @if (fuelSyncing) {
+                          <mat-spinner diameter="16"></mat-spinner>
+                          Syncing...
+                        } @else {
+                          <mat-icon>sync</mat-icon> Sync from TFN
+                        }
+                      </button>
+                      @if (fuelSummary()?.syncStatus; as sync) {
+                        <span class="fuel-last-sync"
+                              [class.stale]="isSyncStale(sync.lastSuccessfulSyncUtc)"
+                              [class.error]="sync.lastRunHadError"
+                              [title]="sync.lastRunHadError ? (sync.lastErrorMessage || 'Last sync reported errors') : 'Last successful TFN sync'">
+                          <mat-icon>{{ sync.lastRunHadError ? 'error_outline' : 'schedule' }}</mat-icon>
+                          Last sync: {{ formatLastSync(sync.lastSuccessfulSyncUtc) }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Fuel Export Dialog Overlay -->
+                  @if (showFuelExportDialog) {
+                    <div class="fuel-export-overlay" (click)="closeFuelExportDialog()">
+                      <div class="fuel-export-dialog" (click)="$event.stopPropagation()">
+                        <div class="fuel-export-header">
+                          <mat-icon>table_chart</mat-icon>
+                          <h3>Export Fuel History to Excel</h3>
+                          <button mat-icon-button (click)="closeFuelExportDialog()" class="close-btn">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        </div>
+                        <p class="fuel-export-subtitle">Select a date range or choose from the available periods to export fuel transaction data.</p>
+
+                        <div class="fuel-export-quick-ranges">
+                          <span class="range-label">Quick select:</span>
+                          @for (period of fuelPeriods(); track period) {
+                            <button mat-stroked-button class="range-btn" 
+                                    [class.active]="fuelExportQuickSelect === period.reportMonth + '-' + period.reportYear"
+                                    (click)="setFuelExportPeriod(period)">
+                              {{ period.monthName }} {{ period.reportYear }}
+                            </button>
+                          }
+                          <button mat-stroked-button class="range-btn all-btn" 
+                                  [class.active]="fuelExportQuickSelect === 'all'"
+                                  (click)="setFuelExportAll()">
+                            <mat-icon>date_range</mat-icon> All Months
+                          </button>
+                        </div>
+
+                        <div class="fuel-export-date-row">
+                          <mat-form-field appearance="outline" class="fuel-export-date-field">
+                            <mat-label>From</mat-label>
+                            <input matInput [matDatepicker]="fuelFromPicker" [(ngModel)]="fuelExportFromDate">
+                            <mat-datepicker-toggle matSuffix [for]="fuelFromPicker"></mat-datepicker-toggle>
+                            <mat-datepicker #fuelFromPicker></mat-datepicker>
+                          </mat-form-field>
+                          <mat-form-field appearance="outline" class="fuel-export-date-field">
+                            <mat-label>To</mat-label>
+                            <input matInput [matDatepicker]="fuelToPicker" [(ngModel)]="fuelExportToDate">
+                            <mat-datepicker-toggle matSuffix [for]="fuelToPicker"></mat-datepicker-toggle>
+                            <mat-datepicker #fuelToPicker></mat-datepicker>
+                          </mat-form-field>
+                        </div>
+
+                        <div class="fuel-export-actions">
+                          <button mat-button (click)="closeFuelExportDialog()">Cancel</button>
+                          <button mat-raised-button color="primary" (click)="exportFuelExcel()" [disabled]="fuelExportGenerating">
+                            @if (fuelExportGenerating) {
+                              <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
+                              Generating...
+                            } @else {
+                              <mat-icon>download</mat-icon>
+                              Export Excel
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+
+                  @if (fuelLoading()) {
+                    <div class="loading-state">
+                      <mat-spinner diameter="40"></mat-spinner>
+                      <p>Loading fuel data...</p>
+                    </div>
+                  } @else if (!fuelReport() && !fuelLoading()) {
+                    <div class="empty-state">
+                      <mat-icon>local_gas_station</mat-icon>
+                      <h3>No Fuel Data</h3>
+                      <p>Select a period above to view fuel history</p>
+                    </div>
+                  } @else {
+                    <!-- Summary View -->
+                    @if (fuelViewMode === 'summary' && fuelReport()) {
+                      <div class="fuel-summary-grid">
+                        @for (summary of fuelReport()!.vehicleSummaries; track summary.vehicleId) {
+                          <mat-card class="fuel-vehicle-card" [ngClass]="getFuelCardClass(summary.depotAssignment)">
+                            <mat-card-header>
+                              <mat-icon mat-card-avatar class="vehicle-fuel-icon">local_shipping</mat-icon>
+                              <mat-card-title>{{ summary.registrationNumber }}</mat-card-title>
+                              <mat-card-subtitle>
+                                <mat-chip class="assignment-chip" [ngClass]="getAssignmentClass(summary.depotAssignment)">
+                                  {{ summary.depotAssignment || 'Unassigned' }}
+                                </mat-chip>
+                                @if (summary.vehicleTypeName) {
+                                  <span class="vehicle-type-label">{{ summary.vehicleTypeName }}</span>
+                                }
+                              </mat-card-subtitle>
+                            </mat-card-header>
+                            <mat-card-content>
+                              <div class="fuel-stats-grid">
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Fills</span>
+                                  <span class="stat-value">{{ summary.transactionCount }}</span>
+                                </div>
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Total Litres</span>
+                                  <span class="stat-value">{{ summary.totalLitresUsed | number:'1.0-0' }}L</span>
+                                </div>
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Total Cost</span>
+                                  <span class="stat-value">R {{ summary.totalAmountSpent | number:'1.2-2' }}</span>
+                                </div>
+                                <div class="fuel-stat-item">
+                                  <span class="stat-label">Avg Per Fill</span>
+                                  <span class="stat-value">{{ summary.averageLitresPerFill | number:'1.0-0' }}L</span>
+                                </div>
+                              </div>
+                              <div class="allocation-bar">
+                                <div class="allocation-label">
+                                  <span>Allocation: {{ summary.allocationLitres }}L</span>
+                                  <span class="usage-percent" [ngClass]="{ 'over-allocation': summary.allocationUsagePercent > 100 }">
+                                    {{ summary.allocationUsagePercent | number:'1.1-1' }}% used
+                                  </span>
+                                </div>
+                                <mat-progress-bar 
+                                  [value]="summary.allocationUsagePercent > 100 ? 100 : summary.allocationUsagePercent" 
+                                  [color]="summary.allocationUsagePercent > 90 ? 'warn' : 'primary'"
+                                  mode="determinate">
+                                </mat-progress-bar>
+                              </div>
+                            </mat-card-content>
+                          </mat-card>
+                        }
+                      </div>
+                    }
+
+                    <!-- Transactions View -->
+                    @if (fuelViewMode === 'transactions' && fuelTransactions().length > 0) {
+                      <div class="fuel-filter-bar">
+                        <mat-form-field appearance="outline" class="fuel-search">
+                          <mat-label>Search by registration</mat-label>
+                          <input matInput [(ngModel)]="fuelSearchTerm" (input)="filterFuelTransactions()" placeholder="e.g. BB59KXZN">
+                          <mat-icon matSuffix>search</mat-icon>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline" class="assignment-filter">
+                          <mat-label>Filter by Group</mat-label>
+                          <mat-select [(ngModel)]="fuelAssignmentFilter" (selectionChange)="filterFuelTransactions()">
+                            <mat-option value="">All Groups</mat-option>
+                            @for (group of fuelAssignmentGroups(); track group) {
+                              <mat-option [value]="group">{{ group }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline" class="assignment-filter">
+                          <mat-label>Fuel Source</mat-label>
+                          <mat-select [(ngModel)]="fuelSourceFilter" (selectionChange)="filterFuelTransactions()">
+                            <mat-option value="">All Sources</mat-option>
+                            <mat-option value="TFN">TFN</mat-option>
+                            <mat-option value="PUMA">Puma Garage</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                      <div class="table-responsive">
+                        <table mat-table [dataSource]="filteredFuelTransactions()" class="fuel-table modern-table" matSort>
+                          <ng-container matColumnDef="source">
+                            <th mat-header-cell *matHeaderCellDef>Source</th>
+                            <td mat-cell *matCellDef="let t">
+                              <span class="fuel-source-badge" [class.puma]="t.source === 'PUMA'" [class.tfn]="t.source !== 'PUMA'">
+                                {{ t.source === 'PUMA' ? 'PUMA' : 'TFN' }}
+                              </span>
+                            </td>
+                          </ng-container>
+                          <ng-container matColumnDef="registrationNumber">
+                            <th mat-header-cell *matHeaderCellDef>Vehicle</th>
+                            <td mat-cell *matCellDef="let t"><strong>{{ t.registrationNumber }}</strong></td>
+                          </ng-container>
+                          <ng-container matColumnDef="depotName">
+                            <th mat-header-cell *matHeaderCellDef>Depot</th>
+                            <td mat-cell *matCellDef="let t">{{ t.depotName }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="litresUsed">
+                            <th mat-header-cell *matHeaderCellDef>Litres</th>
+                            <td mat-cell *matCellDef="let t">{{ t.litresUsed | number:'1.2-2' }}L</td>
+                          </ng-container>
+                          <ng-container matColumnDef="amountSpent">
+                            <th mat-header-cell *matHeaderCellDef>Amount</th>
+                            <td mat-cell *matCellDef="let t">R {{ t.amountSpent | number:'1.2-2' }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="transactionDate">
+                            <th mat-header-cell *matHeaderCellDef>Date</th>
+                            <td mat-cell *matCellDef="let t">{{ t.transactionDate | date:'dd MMM yyyy HH:mm' }}</td>
+                          </ng-container>
+                          <ng-container matColumnDef="depotAssignment">
+                            <th mat-header-cell *matHeaderCellDef>Group</th>
+                            <td mat-cell *matCellDef="let t">
+                              <mat-chip class="assignment-chip" [ngClass]="getAssignmentClass(t.depotAssignment)">
+                                {{ t.depotAssignment }}
+                              </mat-chip>
+                            </td>
+                          </ng-container>
+                          <tr mat-header-row *matHeaderRowDef="fuelDisplayedColumns"></tr>
+                          <tr mat-row *matRowDef="let row; columns: fuelDisplayedColumns;"></tr>
+                        </table>
+                      </div>
+                    }
+
+                    <!-- By Group View -->
+                    @if (fuelViewMode === 'byGroup' && fuelGroupData().length > 0) {
+                      <div class="fuel-groups-grid">
+                        @for (group of fuelGroupData(); track group.depotAssignment) {
+                          <mat-card class="fuel-group-card" [ngClass]="getAssignmentClass(group.depotAssignment)">
+                            <mat-card-header>
+                              <mat-icon mat-card-avatar>category</mat-icon>
+                              <mat-card-title>{{ group.depotAssignment }}</mat-card-title>
+                              <mat-card-subtitle>{{ group.vehicleCount }} vehicles · {{ group.transactionCount }} transactions</mat-card-subtitle>
+                            </mat-card-header>
+                            <mat-card-content>
+                              <div class="group-stats">
+                                <div class="group-stat">
+                                  <mat-icon>opacity</mat-icon>
+                                  <div>
+                                    <span class="stat-value">{{ group.totalLitres | number:'1.0-0' }}L</span>
+                                    <span class="stat-label">Total Litres</span>
+                                  </div>
+                                </div>
+                                <div class="group-stat">
+                                  <mat-icon>payments</mat-icon>
+                                  <div>
+                                    <span class="stat-value">R {{ group.totalAmount | number:'1.2-2' }}</span>
+                                    <span class="stat-label">Total Cost</span>
+                                  </div>
+                                </div>
+                                <div class="group-stat">
+                                  <mat-icon>speed</mat-icon>
+                                  <div>
+                                    <span class="stat-value">{{ group.averageLitresPerVehicle | number:'1.0-0' }}L</span>
+                                    <span class="stat-label">Avg/Vehicle</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </mat-card-content>
+                          </mat-card>
+                        }
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
+            <!-- Requisitions / Petty Cash Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>receipt_long</mat-icon>
+                Requisitions
+              </ng-template>
+              <div class="tab-content">
+                <div class="sleep-out-section">
+                  <!-- Toolbar -->
+                  <div class="fuel-toolbar">
+                    <div class="fuel-period-selector" style="flex: 1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                      <mat-form-field appearance="outline" class="period-select" style="min-width: 200px;">
+                        <mat-label>Period</mat-label>
+                        <mat-select [ngModel]="reqPeriod()" (ngModelChange)="reqPeriod.set($event); loadRequisitions()">
+                          @for (p of reqPeriods(); track p.year + '-' + p.month) {
+                            <mat-option [value]="p.year + '-' + p.month">{{ reqMonthName(p.month) }} {{ p.year }} ({{ p.count }})</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="period-select" style="min-width: 200px;">
+                        <mat-label>Search</mat-label>
+                        <input matInput [ngModel]="reqSearch()" (ngModelChange)="reqSearch.set($event)" placeholder="Search paid to, reason, RF#...">
+                        <mat-icon matSuffix>search</mat-icon>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="period-select" style="min-width: 150px;">
+                        <mat-label>Status</mat-label>
+                        <mat-select [ngModel]="reqStatusFilter()" (ngModelChange)="reqStatusFilter.set($event)">
+                          <mat-option value="all">All</mat-option>
+                          <mat-option value="Active">Active</mat-option>
+                          <mat-option value="Cancelled">Cancelled</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+                    <button mat-raised-button color="primary" (click)="openRequisitionDialog()">
+                      <mat-icon>add</mat-icon> New Requisition
+                    </button>
+                    <button mat-icon-button (click)="loadRequisitions()" matTooltip="Refresh">
+                      <mat-icon>refresh</mat-icon>
+                    </button>
+                  </div>
+
+                  <!-- Summary Stats -->
+                  @if (reqSummary()) {
+                    <div class="fuel-stats-bar" style="padding: 8px 16px; gap: 20px; flex-wrap: wrap;">
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
+                        Active: {{ reqSummary().activeCount }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">cancel</mat-icon>
+                        Cancelled: {{ reqSummary().cancelledCount }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">account_balance_wallet</mat-icon>
+                        E-Wallet: R{{ reqSummary().totalEwallet | number:'1.2-2' }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">local_gas_station</mat-icon>
+                        Diesel: R{{ reqSummary().totalDiesel | number:'1.2-2' }}
+                      </span>
+                      <span class="fuel-stat">
+                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">payments</mat-icon>
+                        Non-Diesel: R{{ reqSummary().totalNonDiesel | number:'1.2-2' }}
+                      </span>
+                    </div>
+                    @if (reqSummary().weeks?.length) {
+                      <div class="fuel-stats-bar" style="padding: 4px 16px 12px; gap: 8px; flex-wrap: wrap;">
+                        @for (w of reqSummary().weeks; track w.week) {
+                          <span class="status-chip status-approved" matTooltip="{{ w.from | date:'dd MMM' }} - {{ w.to | date:'dd MMM' }}">
+                            Wk {{ w.week }}: R{{ w.ewallet | number:'1.0-0' }} + diesel R{{ w.diesel | number:'1.0-0' }} ({{ w.count }})
+                          </span>
+                        }
+                      </div>
+                    }
+                  }
+
+                  <!-- Requisitions Table -->
+                  @if (reqLoading()) {
+                    <div style="display: flex; justify-content: center; padding: 40px;">
+                      <mat-spinner diameter="40"></mat-spinner>
+                    </div>
+                  } @else {
+                    <div class="table-container">
+                      <table mat-table [dataSource]="filteredRequisitions()" class="full-width-table">
+                        <ng-container matColumnDef="rfNumber">
+                          <th mat-header-cell *matHeaderCellDef>RF #</th>
+                          <td mat-cell *matCellDef="let row">{{ row.rfNumber || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="date">
+                          <th mat-header-cell *matHeaderCellDef>Date</th>
+                          <td mat-cell *matCellDef="let row">{{ row.date ? (row.date | date:'dd MMM yyyy') : '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="paidTo">
+                          <th mat-header-cell *matHeaderCellDef>Paid To</th>
+                          <td mat-cell *matCellDef="let row">{{ row.paidTo || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="cellNumber">
+                          <th mat-header-cell *matHeaderCellDef>Cell</th>
+                          <td mat-cell *matCellDef="let row">{{ row.cellNumber || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="amountEwallet">
+                          <th mat-header-cell *matHeaderCellDef>E-Wallet</th>
+                          <td mat-cell *matCellDef="let row" style="font-weight: 600;">{{ row.amountEwallet ? ('R' + (row.amountEwallet | number:'1.2-2')) : '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="reason">
+                          <th mat-header-cell *matHeaderCellDef>Reason</th>
+                          <td mat-cell *matCellDef="let row">{{ row.reason || '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="dieselAmount">
+                          <th mat-header-cell *matHeaderCellDef>Diesel</th>
+                          <td mat-cell *matCellDef="let row">{{ row.dieselAmount ? ('R' + (row.dieselAmount | number:'1.2-2')) : '-' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="status">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let row">
+                            <span class="status-chip" [ngClass]="{
+                              'status-approved': row.status === 'Active',
+                              'status-rejected': row.status === 'Cancelled'
+                            }">{{ row.status }}</span>
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="actions">
+                          <th mat-header-cell *matHeaderCellDef>Actions</th>
+                          <td mat-cell *matCellDef="let row">
+                            <div style="display: flex; gap: 4px;">
+                              <button mat-icon-button matTooltip="Edit" (click)="openRequisitionDialog(row)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button color="warn" matTooltip="Delete" (click)="deleteRequisition(row)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            </div>
+                          </td>
+                        </ng-container>
+                        <tr mat-header-row *matHeaderRowDef="reqColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: reqColumns;" [ngClass]="{'cancelled-row': row.status === 'Cancelled'}"></tr>
+                      </table>
+                      @if (filteredRequisitions().length === 0) {
+                        <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
+                          <mat-icon style="font-size: 48px; height: 48px; width: 48px;">receipt_long</mat-icon>
+                          <p>No requisitions found</p>
+                        </div>
+                      }
+
+                      <!-- Period navigation footer -->
+                      @if (reqPeriods().length > 1) {
+                        <div class="req-period-footer">
+                          <button mat-stroked-button (click)="stepRequisitionPeriod(-1)" [disabled]="!reqHasPrevPeriod()">
+                            <mat-icon>chevron_left</mat-icon> Previous
+                          </button>
+                          <div class="req-period-current">
+                            <mat-icon>event</mat-icon>
+                            <span>{{ reqCurrentPeriodLabel() }}</span>
+                            <span class="req-period-count">{{ filteredRequisitions().length }} shown</span>
+                          </div>
+                          <button mat-stroked-button (click)="stepRequisitionPeriod(1)" [disabled]="!reqHasNextPeriod()">
+                            Next <mat-icon>chevron_right</mat-icon>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </mat-tab>
+
+            <!-- Controller (Security Monitoring) Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>shield</mat-icon>
+                Controller
+              </ng-template>
+              <div class="tab-content">
+                <app-controller-monitoring></app-controller-monitoring>
+              </div>
+            </mat-tab>
+
+            <!-- Reports (daily security incident log) Tab -->
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>assessment</mat-icon>
+                Reports
+              </ng-template>
+              <div class="tab-content">
+                <app-logistics-reports></app-logistics-reports>
+              </div>
+            </mat-tab>
+
+          </mat-tab-group>
+        </mat-card>
+      }
+
+      <!-- Sleep Out Dialog Overlay -->
+      @if (showSleepOutDialog) {
+        <div class="sleep-out-overlay" (click)="closeSleepOutDialog()">
+          <div class="sleep-out-dialog" (click)="$event.stopPropagation()">
+            <div class="sleep-out-dialog-header">
+              <mat-icon>hotel</mat-icon>
+              <h3>{{ editingSleepOut ? 'Edit Sleep Out' : 'New Sleep Out Request' }}</h3>
+              <button mat-icon-button (click)="closeSleepOutDialog()" class="close-btn">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <p class="sleep-out-subtitle">Select a tripsheet to auto-fill driver and vehicle details, then specify the allowance amount.</p>
+            <div class="sleep-out-form-body">
+              <!-- Tripsheet Selector -->
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Select Tripsheet</mat-label>
+                <mat-select [(ngModel)]="sleepOutForm.tripSheetId" (selectionChange)="onSleepOutTripsheetChange($event.value)">
+                  @for (trip of tripsheets(); track (trip.loadId || trip.id)) {
+                    <mat-option [value]="trip.loadId || trip.id">
+                      {{ trip.tripNumber || trip.loadNumber }} - {{ trip.driverName }} ({{ trip.vehicleReg || trip.vehicleRegNumber || trip.vehicleRegistration }})
+                    </mat-option>
+                  }
+                </mat-select>
+                <mat-hint>Driver and vehicle will auto-fill from tripsheet</mat-hint>
+              </mat-form-field>
+
+              <div class="sleep-out-row">
+                <!-- Driver (auto-populated, read-only) -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Driver</mat-label>
+                  <input matInput [(ngModel)]="sleepOutForm.driverName" readonly>
+                  <mat-icon matSuffix>person</mat-icon>
+                </mat-form-field>
+                <!-- Vehicle (auto-populated, read-only) -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Vehicle</mat-label>
+                  <input matInput [(ngModel)]="sleepOutForm.vehicleReg" readonly>
+                  <mat-icon matSuffix>local_shipping</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <!-- Date -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Date</mat-label>
+                  <input matInput [matDatepicker]="sleepOutDatePicker" [(ngModel)]="sleepOutForm.date">
+                  <mat-datepicker-toggle matSuffix [for]="sleepOutDatePicker"></mat-datepicker-toggle>
+                  <mat-datepicker #sleepOutDatePicker></mat-datepicker>
+                </mat-form-field>
+                <!-- Amount -->
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Amount (R)</mat-label>
+                  <input matInput type="number" [(ngModel)]="sleepOutForm.amount" placeholder="0.00">
+                  <span matPrefix style="padding-left: 12px;">R&nbsp;</span>
+                  <mat-icon matSuffix>payments</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <!-- Reason -->
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Reason</mat-label>
+                <textarea matInput [(ngModel)]="sleepOutForm.reason" rows="2" placeholder="e.g. Long-haul delivery, overnight stop required"></textarea>
+              </mat-form-field>
+
+              <!-- Notes -->
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Notes (optional)</mat-label>
+                <textarea matInput [(ngModel)]="sleepOutForm.notes" rows="2"></textarea>
+              </mat-form-field>
+            </div>
+
+            <div class="sleep-out-dialog-actions">
+              <button mat-button (click)="closeSleepOutDialog()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="saveSleepOut()" [disabled]="!sleepOutForm.driverId || !sleepOutForm.amount">
+                @if (editingSleepOut) {
+                  <mat-icon>save</mat-icon> Update
+                } @else {
+                  <mat-icon>add</mat-icon> Submit Request
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Requisition Dialog Overlay -->
+      @if (showRequisitionDialog) {
+        <div class="sleep-out-overlay" (click)="closeRequisitionDialog()">
+          <div class="sleep-out-dialog" (click)="$event.stopPropagation()">
+            <div class="sleep-out-dialog-header">
+              <mat-icon>receipt_long</mat-icon>
+              <h3>{{ editingRequisition ? 'Edit Requisition' : 'New Requisition' }}</h3>
+              <button mat-icon-button (click)="closeRequisitionDialog()" class="close-btn">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <p class="sleep-out-subtitle">Capture a petty-cash / e-wallet requisition. Diesel amounts are tracked separately from other payouts.</p>
+            <div class="sleep-out-form-body">
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>RF Number</mat-label>
+                  <input matInput [(ngModel)]="requisitionForm.rfNumber" placeholder="e.g. 325">
+                  <mat-icon matSuffix>tag</mat-icon>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Date</mat-label>
+                  <input matInput [matDatepicker]="reqDatePicker" [(ngModel)]="requisitionForm.date">
+                  <mat-datepicker-toggle matSuffix [for]="reqDatePicker"></mat-datepicker-toggle>
+                  <mat-datepicker #reqDatePicker></mat-datepicker>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Paid To</mat-label>
+                  <input matInput [(ngModel)]="requisitionForm.paidTo" placeholder="Recipient name">
+                  <mat-icon matSuffix>person</mat-icon>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Cell Number</mat-label>
+                  <input matInput [(ngModel)]="requisitionForm.cellNumber" placeholder="Optional">
+                  <mat-icon matSuffix>phone</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>E-Wallet Amount (R)</mat-label>
+                  <input matInput type="number" [(ngModel)]="requisitionForm.amountEwallet" placeholder="0.00">
+                  <span matPrefix style="padding-left: 12px;">R&nbsp;</span>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Diesel Amount (R)</mat-label>
+                  <input matInput type="number" [(ngModel)]="requisitionForm.dieselAmount" placeholder="0.00">
+                  <span matPrefix style="padding-left: 12px;">R&nbsp;</span>
+                  <mat-icon matSuffix>local_gas_station</mat-icon>
+                </mat-form-field>
+              </div>
+
+              <div class="sleep-out-row">
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Payment Method</mat-label>
+                  <mat-select [(ngModel)]="requisitionForm.paymentMethod">
+                    <mat-option value="E-Wallet">E-Wallet</mat-option>
+                    <mat-option value="Bank Transfer">Bank Transfer</mat-option>
+                    <mat-option value="Cash">Cash</mat-option>
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sleep-out-field">
+                  <mat-label>Status</mat-label>
+                  <mat-select [(ngModel)]="requisitionForm.status">
+                    <mat-option value="Active">Active</mat-option>
+                    <mat-option value="Cancelled">Cancelled</mat-option>
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
+              <mat-form-field appearance="outline" class="sleep-out-field">
+                <mat-label>Reason</mat-label>
+                <textarea matInput [(ngModel)]="requisitionForm.reason" rows="2" placeholder="e.g. Diesel, relocation, casuals..."></textarea>
+              </mat-form-field>
+            </div>
+
+            <div class="sleep-out-dialog-actions">
+              <button mat-button (click)="closeRequisitionDialog()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="saveRequisition()" [disabled]="!requisitionForm.paidTo">
+                @if (editingRequisition) {
+                  <mat-icon>save</mat-icon> Update
+                } @else {
+                  <mat-icon>add</mat-icon> Save
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </div>

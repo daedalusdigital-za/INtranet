@@ -28,6 +28,27 @@ namespace ProjectTracker.API.Controllers
         }
 
         // ============================================================================
+        // COMPANY ACCESS VERIFICATION
+        // Replaces the old frontend-hardcoded per-company passwords (which shipped
+        // in the JS bundle and enforced nothing). Access to company financials is
+        // now a server-side role check on the authenticated JWT.
+        // ============================================================================
+
+        [HttpGet("company-access")]
+        public ActionResult VerifyCompanyAccess()
+        {
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
+            var allowed = role is "Admin" or "Super Admin" or "Finance" or "Manager";
+            if (!allowed)
+            {
+                _logger.LogWarning("Finance company access denied for {Email} (role: {Role})",
+                    GetCurrentUserEmail(), role);
+                return Forbid();
+            }
+            return Ok(new { allowed = true, role });
+        }
+
+        // ============================================================================
         // FINANCE CATEGORIES
         // ============================================================================
 

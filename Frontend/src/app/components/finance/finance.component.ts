@@ -124,7 +124,6 @@ export class FinanceComponent implements OnInit {
 
   // Dialog state
   showCompanyDialog = false;
-  showPasswordDialog = false;
   showRequestedPaymentsPanel = false;
 
   // Stationery Requests
@@ -142,22 +141,15 @@ export class FinanceComponent implements OnInit {
   requisitionCounts = { requested: 0, paid: 0, rejected: 0, total: 0 };
 
   selectedCompany = '';
-  companyPassword = '';
-  passwordError = '';
+  accessError = '';
   requestedPaymentsLoading = false;
   requestedPayments: RequestedPayment[] = [];
   previewPayment: RequestedPayment | null = null;
   showPreviewDialog = false;
 
-  // Company passwords (frontend-only for now)
-  private companyPasswords: { [key: string]: string } = {
-    'Acess Medical': 'acess2026',
-    'Promed Technologies': 'promed2026',
-    'Promed Pharmatech': 'pharma2026',
-    'Sebenzani Trading': 'sebenzani2026',
-    'SA Wellness': 'sawellness2026',
-    'Kog Trading': 'kog2026'
-  };
+  // NOTE: the old frontend-hardcoded per-company passwords were removed.
+  // Access is now verified server-side (GET /api/finance/company-access)
+  // against the authenticated user's role.
 
   constructor(
     private financeService: FinanceService,
@@ -350,46 +342,28 @@ export class FinanceComponent implements OnInit {
 
   openRequestedPayments(): void {
     this.selectedCompany = '';
-    this.companyPassword = '';
-    this.passwordError = '';
+    this.accessError = '';
     this.showCompanyDialog = true;
   }
 
   selectCompany(companyName: string): void {
     this.selectedCompany = companyName;
-    this.companyPassword = '';
-    this.passwordError = '';
-    this.showCompanyDialog = false;
-    this.showPasswordDialog = true;
+    this.accessError = '';
+    // Server-side role check replaces the old client-side password gate
+    this.http.get(`${environment.apiUrl}/finance/company-access`).subscribe({
+      next: () => {
+        this.showCompanyDialog = false;
+        this.loadRequestedPayments();
+      },
+      error: () => {
+        this.accessError = 'You do not have permission to view company financials.';
+        this.snackBar.open('Access denied — finance permission required.', 'Close', { duration: 4000 });
+      }
+    });
   }
 
   closeCompanyDialog(): void {
     this.showCompanyDialog = false;
-  }
-
-  closePasswordDialog(): void {
-    this.showPasswordDialog = false;
-    this.selectedCompany = '';
-    this.companyPassword = '';
-    this.passwordError = '';
-  }
-
-  backToCompanySelect(): void {
-    this.showPasswordDialog = false;
-    this.companyPassword = '';
-    this.passwordError = '';
-    this.showCompanyDialog = true;
-  }
-
-  submitPassword(): void {
-    const expected = this.companyPasswords[this.selectedCompany];
-    if (this.companyPassword === expected) {
-      this.showPasswordDialog = false;
-      this.passwordError = '';
-      this.loadRequestedPayments();
-    } else {
-      this.passwordError = 'Incorrect password. Please try again.';
-    }
   }
 
   loadRequestedPayments(): void {

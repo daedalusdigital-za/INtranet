@@ -61,6 +61,7 @@ interface ClockInEmployee {
   department?: string;
   jobTitle?: string;
   idNum?: string;
+  hasPhoto?: boolean;
 }
 
 interface Permission {
@@ -1021,6 +1022,37 @@ export class UserManagementComponent implements OnInit {
     </h2>
     <mat-dialog-content>
       <form [formGroup]="form">
+        @if (data.mode === 'edit') {
+          <div class="avatar-section">
+            <div class="avatar-preview">
+              @if (avatarPreview || data.user?.hasProfilePicture) {
+                <img [src]="avatarPreview || userPhotoUrl()" alt="Profile picture" />
+              } @else {
+                <mat-icon>account_circle</mat-icon>
+              }
+            </div>
+            <div class="avatar-actions">
+              <span class="avatar-title">Profile Picture</span>
+              <span class="section-hint">Upload a photo (JPEG, PNG, GIF or WebP, max 5MB)</span>
+              <div class="avatar-buttons">
+                <button mat-stroked-button type="button" color="primary"
+                        [disabled]="uploadingAvatar" (click)="avatarInput.click()">
+                  <mat-icon>upload</mat-icon>
+                  {{ uploadingAvatar ? 'Uploading…' : 'Upload / Change' }}
+                </button>
+                @if (data.user?.hasProfilePicture || avatarPreview) {
+                  <button mat-stroked-button type="button" color="warn"
+                          [disabled]="uploadingAvatar" (click)="removeAvatar()">
+                    <mat-icon>delete</mat-icon>
+                    Remove
+                  </button>
+                }
+              </div>
+              <input #avatarInput type="file" accept="image/*" hidden (change)="onAvatarSelected($event)" />
+            </div>
+          </div>
+        }
+
         <div class="form-row">
           <mat-form-field appearance="outline">
             <mat-label>First Name</mat-label>
@@ -1128,6 +1160,23 @@ export class UserManagementComponent implements OnInit {
               <mat-icon>check_circle</mat-icon>
               <span>Linked to clock-in system</span>
             </div>
+            @if (selectedClockInHasPhoto()) {
+              <div class="clockin-photo-row">
+                <img class="clockin-photo" [src]="clockInPhotoUrl(form.get('linkedEmpId')?.value)" alt="Clock-in photo" />
+                <div class="clockin-photo-meta">
+                  <span class="clockin-photo-title">Clock-in machine photo</span>
+                  @if (data.mode === 'edit') {
+                    <button mat-stroked-button type="button" color="primary"
+                            [disabled]="applyingPhoto" (click)="useClockInPhoto()">
+                      <mat-icon>account_circle</mat-icon>
+                      {{ applyingPhoto ? 'Applying…' : 'Use as profile picture' }}
+                    </button>
+                  } @else {
+                    <span class="section-hint">This photo will be used as the profile picture after saving.</span>
+                  }
+                </div>
+              </div>
+            }
           }
         </div>
 
@@ -1296,6 +1345,93 @@ export class UserManagementComponent implements OnInit {
       height: 18px;
     }
 
+    .clockin-photo-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid #ffe0b2;
+      border-radius: 8px;
+    }
+
+    .clockin-photo {
+      width: 64px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 2px solid #ffcc80;
+      background: #fafafa;
+    }
+
+    .clockin-photo-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .clockin-photo-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e65100;
+    }
+
+    .avatar-section {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin: 4px 0 20px;
+      padding: 16px;
+      background: #f5f7ff;
+      border: 1px solid #e0e3ff;
+      border-radius: 12px;
+    }
+
+    .avatar-preview {
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e8eaf6;
+      border: 3px solid #c5cae9;
+      flex-shrink: 0;
+    }
+
+    .avatar-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .avatar-preview mat-icon {
+      font-size: 56px;
+      width: 56px;
+      height: 56px;
+      color: #9fa8da;
+    }
+
+    .avatar-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .avatar-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #303f9f;
+    }
+
+    .avatar-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
     .companies-section {
       margin: 16px 0;
       padding: 16px;
@@ -1365,10 +1501,16 @@ export class UserFormDialogComponent {
   selectedPermissions: string[] = [];
   selectedCompanies: number[] = [];
   formSubmitted = false;
+  applyingPhoto = false;
+  uploadingAvatar = false;
+  avatarPreview: string | null = null;
+  readonly apiUrl = environment.apiUrl;
 
   constructor(
     private fb: FormBuilder,
     private dialogRef: MatDialogRef<UserFormDialogComponent>,
+    private http: HttpClient,
+    private snackBar: MatSnackBar,
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {
     const user = data.user;
@@ -1409,6 +1551,110 @@ export class UserFormDialogComponent {
     if (!date) return '';
     const d = new Date(date);
     return d.toISOString().split('T')[0];
+  }
+
+  // ── Clock-in photo helpers ────────────────────────────────
+  private getHeaders(): HttpHeaders {
+    const token = localStorage.getItem('token');
+    return new HttpHeaders({ 'Authorization': `Bearer ${token}` });
+  }
+
+  clockInPhotoUrl(empId: string): string {
+    return `${this.apiUrl}/users/clockin-employees/${encodeURIComponent(empId)}/photo`;
+  }
+
+  selectedClockInHasPhoto(): boolean {
+    const empId = this.form.get('linkedEmpId')?.value;
+    if (!empId) return false;
+    const emp = (this.data.clockInEmployees || []).find((e: ClockInEmployee) => e.empId === empId);
+    return !!emp?.hasPhoto;
+  }
+
+  useClockInPhoto(): void {
+    const user = this.data.user;
+    if (!user?.userId) return;
+    this.applyingPhoto = true;
+    this.http.post(`${this.apiUrl}/users/${user.userId}/use-clockin-photo`, {}, { headers: this.getHeaders() })
+      .subscribe({
+        next: () => {
+          this.applyingPhoto = false;
+          user.hasProfilePicture = true;
+          this.avatarPreview = null;
+          this.snackBar.open('Profile picture set from clock-in photo.', 'OK', { duration: 3000 });
+        },
+        error: (err) => {
+          this.applyingPhoto = false;
+          this.snackBar.open(err?.error?.message || 'Could not apply clock-in photo.', 'OK', { duration: 4000 });
+        }
+      });
+  }
+
+  // ── Profile picture upload (admin) ────────────────────────
+  userPhotoUrl(): string {
+    const id = this.data.user?.userId;
+    // Cache-bust so a freshly-uploaded picture is shown immediately.
+    return `${this.apiUrl}/profile/${id}/photo?t=${Date.now()}`;
+  }
+
+  onAvatarSelected(evt: Event): void {
+    const input = evt.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      this.snackBar.open('Please choose a JPEG, PNG, GIF or WebP image.', 'OK', { duration: 4000 });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      this.snackBar.open('Image is too large (max 5MB).', 'OK', { duration: 4000 });
+      return;
+    }
+
+    const userId = this.data.user?.userId;
+    if (!userId) return;
+
+    // Local preview while uploading.
+    const reader = new FileReader();
+    reader.onload = () => (this.avatarPreview = reader.result as string);
+    reader.readAsDataURL(file);
+
+    const form = new FormData();
+    form.append('file', file, file.name);
+    this.uploadingAvatar = true;
+    this.http.post(`${this.apiUrl}/profile/${userId}/upload-photo`, form, { headers: this.getHeaders() })
+      .subscribe({
+        next: () => {
+          this.uploadingAvatar = false;
+          this.data.user.hasProfilePicture = true;
+          this.snackBar.open('Profile picture updated.', 'OK', { duration: 3000 });
+        },
+        error: (err) => {
+          this.uploadingAvatar = false;
+          this.avatarPreview = null;
+          this.snackBar.open(err?.error?.message || 'Could not upload the picture.', 'OK', { duration: 4000 });
+        }
+      });
+  }
+
+  removeAvatar(): void {
+    const userId = this.data.user?.userId;
+    if (!userId) return;
+    this.uploadingAvatar = true;
+    this.http.delete(`${this.apiUrl}/profile/${userId}/photo`, { headers: this.getHeaders() })
+      .subscribe({
+        next: () => {
+          this.uploadingAvatar = false;
+          this.data.user.hasProfilePicture = false;
+          this.avatarPreview = null;
+          this.snackBar.open('Profile picture removed.', 'OK', { duration: 3000 });
+        },
+        error: (err) => {
+          this.uploadingAvatar = false;
+          this.snackBar.open(err?.error?.message || 'Could not remove the picture.', 'OK', { duration: 4000 });
+        }
+      });
   }
 
   getPermissionCategories(): string[] {

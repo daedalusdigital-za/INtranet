@@ -1,0 +1,3265 @@
+    <app-navbar></app-navbar>
+    <div class="sales-dashboard">
+      @if (initialLoading()) {
+        <div class="loading-state">
+          <div class="loading-card">
+            <div class="lc-icon-wrap">
+              <mat-icon class="lc-icon pulse-icon">point_of_sale</mat-icon>
+            </div>
+            <h3>Loading Sales Dashboard</h3>
+            <p class="lc-subtitle">Fetching customers, invoices, orders & analytics</p>
+            <div class="lc-progress-wrap">
+              <div class="lc-progress-track">
+                <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
+              </div>
+              <div class="lc-progress-info">
+                <span class="lc-progress-message">{{ loadingMessage }}</span>
+                <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
+              </div>
+            </div>
+            <div class="lc-steps">
+              @for (step of loadingSteps; track step.label; let i = $index) {
+                <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
+                  <div class="lc-step-dot">
+                    @if (loadingStage > i) {
+                      <mat-icon>check</mat-icon>
+                    } @else {
+                      <mat-icon>{{ step.icon }}</mat-icon>
+                    }
+                  </div>
+                  <span class="lc-step-label">{{ step.label }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      } @else {
+      <!-- Modern Header -->
+      <div class="dashboard-header">
+        <div class="header-content-wrapper">
+          <div class="header-icon-wrapper">
+            <mat-icon>point_of_sale</mat-icon>
+          </div>
+          <div class="header-text-area">
+            <h1>Sales Dashboard</h1>
+            <p class="subtitle">Manage customers, invoices, and orders across all companies</p>
+          </div>
+        </div>
+        <div class="header-stats-row">
+          <div class="mini-stat">
+            <mat-icon>people</mat-icon>
+            <div class="mini-stat-info">
+              <span class="mini-value">{{ stats().totalCustomers }}</span>
+              <span class="mini-label">Customers</span>
+            </div>
+          </div>
+          <div class="mini-stat">
+            <mat-icon>receipt_long</mat-icon>
+            <div class="mini-stat-info">
+              <span class="mini-value">{{ stats().totalInvoices }}</span>
+              <span class="mini-label">Invoices</span>
+            </div>
+          </div>
+          <div class="mini-stat">
+            <mat-icon>shopping_cart</mat-icon>
+            <div class="mini-stat-info">
+              <span class="mini-value">{{ stats().incomingOrders }}</span>
+              <span class="mini-label">Orders</span>
+            </div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="action-btn attention" (click)="openAttentionDialog()" 
+                  [matBadge]="attentionCount()" matBadgeColor="accent"
+                  [matBadgeHidden]="attentionCount() === 0">
+            <mat-icon>warning</mat-icon>
+            <span>Attention</span>
+          </button>
+          <button class="action-btn primary" (click)="promptImportPassword('customers')">
+            <mat-icon>group_add</mat-icon>
+            <span>Import Customers</span>
+          </button>
+          <button class="action-btn" (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
+            <mat-icon>file_download</mat-icon>
+            <span>Export Customers</span>
+          </button>
+          <button class="action-btn import" (click)="promptImportPassword('sales')">
+            <mat-icon>upload_file</mat-icon>
+            <span>Import Sales</span>
+          </button>
+          <button class="action-btn delivery" (click)="showDeliveryPasswordPrompt()">
+            <mat-icon>local_shipping</mat-icon>
+            <span>Request Delivery</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Password Protection Dialog -->
+      @if (showImportPasswordDialog) {
+        <div class="dialog-overlay" (click)="closeImportPasswordDialog()">
+          <div class="import-password-dialog" (click)="$event.stopPropagation()">
+            <div class="password-dialog-header">
+              <div class="password-icon-circle" [style.background]="pendingImportType === 'customers' ? 'linear-gradient(135deg, #1e88e5 0%, #1565c0 100%)' : 'linear-gradient(135deg, #43a047 0%, #2e7d32 100%)'">
+                <mat-icon>{{ pendingImportType === 'customers' ? 'group_add' : 'lock' }}</mat-icon>
+              </div>
+              <h2>Import Authentication</h2>
+              <p>Enter the access code to import {{ pendingImportType === 'customers' ? 'customers' : 'sales transactions' }}</p>
+            </div>
+            <div class="password-dialog-body">
+              <div class="pin-input-group">
+                @for (i of [0, 1, 2, 3]; track i) {
+                  <input
+                    type="password"
+                    maxlength="1"
+                    class="pin-digit"
+                    [class.filled]="importPasswordDigits()[i]"
+                    [class.error]="importPasswordError()"
+                    [value]="importPasswordDigits()[i] || ''"
+                    (input)="onPinInput($event, i)"
+                    (keydown)="onPinKeydown($event, i)"
+                    (paste)="onPinPaste($event)"
+                    [attr.data-pin-index]="i"
+                  />
+                }
+              </div>
+              @if (importPasswordError()) {
+                <div class="password-error">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>Incorrect access code. Please try again.</span>
+                </div>
+              }
+            </div>
+            <div class="password-dialog-actions">
+              <button class="dialog-btn cancel" (click)="closeImportPasswordDialog()">Cancel</button>
+              <button class="dialog-btn submit" (click)="verifyImportPassword()" [disabled]="importPasswordDigits().join('').length < 4">Verify</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Email View PIN Dialog -->
+      @if (showEmailPinDialog) {
+        <div class="dialog-overlay" (click)="closeEmailPinDialog()">
+          <div class="import-password-dialog" (click)="$event.stopPropagation()">
+            <div class="password-dialog-header">
+              <div class="password-icon-circle" style="background: linear-gradient(135deg, #1a237e 0%, #3f51b5 100%); box-shadow: 0 8px 24px rgba(26, 35, 126, 0.3);">
+                <mat-icon>mail_lock</mat-icon>
+              </div>
+              <h2>Email Protected</h2>
+              <p>Enter PIN to view this email</p>
+            </div>
+            <div class="password-dialog-body">
+              <div class="pin-input-group">
+                @for (i of [0, 1, 2]; track i) {
+                  <input
+                    type="password"
+                    maxlength="1"
+                    class="pin-digit email-pin"
+                    [class.filled]="emailPinDigits()[i]"
+                    [class.error]="emailPinError()"
+                    [value]="emailPinDigits()[i] || ''"
+                    (input)="onEmailPinInput($event, i)"
+                    (keydown)="onEmailPinKeydown($event, i)"
+                    (paste)="onEmailPinPaste($event)"
+                    [attr.data-email-pin-index]="i"
+                  />
+                }
+              </div>
+              @if (emailPinError()) {
+                <div class="password-error">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>Incorrect PIN. Please try again.</span>
+                </div>
+              }
+            </div>
+            <div class="password-dialog-actions">
+              <button class="dialog-btn cancel" (click)="closeEmailPinDialog()">Cancel</button>
+              <button class="dialog-btn submit" style="background: linear-gradient(135deg, #1a237e 0%, #3f51b5 100%); box-shadow: 0 4px 12px rgba(26, 35, 126, 0.3);" (click)="verifyEmailPin()" [disabled]="emailPinDigits().join('').length < 3">Unlock</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Edit Invoice Dialog -->
+      @if (showEditInvoiceDialog) {
+        <div class="dialog-overlay" (click)="closeEditInvoiceDialog()">
+          <div class="edit-invoice-dialog" (click)="$event.stopPropagation()">
+            <div class="edit-invoice-header">
+              <div class="edit-invoice-icon">
+                <mat-icon>edit_note</mat-icon>
+              </div>
+              <h2>Edit Invoice</h2>
+              <p>Update invoice details below</p>
+              <button mat-icon-button class="edit-invoice-close" (click)="closeEditInvoiceDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="edit-invoice-body">
+              <div class="edit-invoice-grid">
+                <div class="edit-field">
+                  <label>Transaction Number</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.transactionNumber" placeholder="Transaction #" />
+                </div>
+                <div class="edit-field">
+                  <label>Customer Name</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.customerName" placeholder="Customer name" />
+                </div>
+                <div class="edit-field">
+                  <label>Customer Number</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.customerNumber" placeholder="Customer #" />
+                </div>
+                <div class="edit-field">
+                  <label>Product Code</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.productCode" placeholder="Product code" />
+                </div>
+                <div class="edit-field full-width">
+                  <label>Product Description</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.productDescription" placeholder="Product description" />
+                </div>
+                <div class="edit-field">
+                  <label>Quantity</label>
+                  <input type="number" [(ngModel)]="editInvoiceForm.quantity" placeholder="0" />
+                </div>
+                <div class="edit-field">
+                  <label>Sales Amount</label>
+                  <input type="number" [(ngModel)]="editInvoiceForm.salesAmount" step="0.01" placeholder="0.00" />
+                </div>
+                <div class="edit-field">
+                  <label>Cost of Sales</label>
+                  <input type="number" [(ngModel)]="editInvoiceForm.costOfSales" step="0.01" placeholder="0.00" />
+                </div>
+                <div class="edit-field">
+                  <label>Transaction Date</label>
+                  <input type="date" [(ngModel)]="editInvoiceForm.transactionDate" />
+                </div>
+                <div class="edit-field">
+                  <label>Status</label>
+                  <select [(ngModel)]="editInvoiceForm.status">
+                    <option value="Pending">Pending</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="InProgress">In Progress</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div class="edit-field">
+                  <label>Delivery Province</label>
+                  <select [(ngModel)]="editInvoiceForm.deliveryProvince">
+                    <option value="">-- Select --</option>
+                    @for (p of provinces; track p) {
+                      <option [value]="p">{{ p }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="edit-field">
+                  <label>Source Company</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.sourceCompany" placeholder="Source company" />
+                </div>
+                <div class="edit-field full-width">
+                  <label>Delivery Address</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.deliveryAddress" placeholder="Delivery address" />
+                </div>
+              </div>
+            </div>
+            <div class="edit-invoice-actions">
+              <button class="dialog-btn cancel" (click)="closeEditInvoiceDialog()">Cancel</button>
+              <button class="dialog-btn submit" (click)="saveEditedInvoice()" [disabled]="editInvoiceSaving">
+                @if (editInvoiceSaving) {
+                  <mat-icon class="spin-icon">sync</mat-icon> Saving...
+                } @else {
+                  <mat-icon>save</mat-icon> Save Changes
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ==================== DELIVERY PASSWORD DIALOG ==================== -->
+      @if (showDeliveryPasswordDialog) {
+        <div class="dialog-overlay" (click)="cancelDeliveryPassword()">
+          <div class="pwd-dialog" (click)="$event.stopPropagation()">
+            <mat-icon class="pwd-lock-icon">lock</mat-icon>
+            <h3>Password Required</h3>
+            <p>Enter the delivery request password to continue</p>
+            @if (deliveryPasswordError) {
+              <div class="pwd-error">{{ deliveryPasswordError }}</div>
+            }
+            <mat-form-field appearance="outline" class="pwd-input">
+              <mat-label>Password</mat-label>
+              <input matInput type="password" [(ngModel)]="deliveryPasswordInput"
+                     (keydown.enter)="verifyDeliveryPassword()"
+                     placeholder="Enter password" autofocus>
+            </mat-form-field>
+            <div class="pwd-actions">
+              <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+                <mat-icon>lock_open</mat-icon> Verify
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ==================== REQUEST DELIVERY DIALOG ==================== -->
+      @if (showDeliveryDialog) {
+        <div class="dialog-overlay" (click)="closeDeliveryDialog()">
+          <div class="delivery-request-dialog" (click)="$event.stopPropagation()">
+            <div class="delivery-header">
+              <div class="delivery-icon-circle">
+                <mat-icon>local_shipping</mat-icon>
+              </div>
+              <h2>Request Urgent Delivery</h2>
+              <p>Select invoices that require logistics to deliver urgently</p>
+              <button mat-icon-button class="delivery-close-btn" (click)="closeDeliveryDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            @if (deliverySuccess) {
+              <div class="delivery-success-state">
+                <div class="delivery-success-icon"><mat-icon>check_circle</mat-icon></div>
+                <h3>Delivery Request Submitted!</h3>
+                <p>{{ deliverySuccessMsg }}</p>
+                <div class="delivery-success-ref">{{ deliverySuccessRef }}</div>
+                <div class="delivery-success-actions">
+                  <button class="dialog-btn submit delivery-submit" (click)="resetDeliveryForm()">
+                    <mat-icon>add</mat-icon> Submit Another
+                  </button>
+                  <button class="dialog-btn cancel" (click)="closeDeliveryDialog()">
+                    <mat-icon>close</mat-icon> Close
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <div class="delivery-body">
+                @if (deliveryError) {
+                  <div class="delivery-error-bar">
+                    <mat-icon>error_outline</mat-icon>
+                    <span>{{ deliveryError }}</span>
+                  </div>
+                }
+
+                <!-- Invoice Search & Selection -->
+                <div class="delivery-section">
+                  <label class="delivery-section-label">Search & Select Invoices <span class="req-star">*</span></label>
+                  <div class="delivery-invoice-search">
+                    <mat-icon>search</mat-icon>
+                    <input type="text" placeholder="Search by invoice #, customer name, product..." [(ngModel)]="deliveryInvoiceSearch" (input)="filterDeliveryInvoices()">
+                    @if (deliveryInvoiceSearch) {
+                      <button mat-icon-button class="clear-search" (click)="deliveryInvoiceSearch = ''; filterDeliveryInvoices()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    }
+                  </div>
+
+                  @if (deliverySelectedInvoices.length > 0) {
+                    <div class="delivery-selected-chips">
+                      <span class="selected-label">Selected ({{ deliverySelectedInvoices.length }}):</span>
+                      @for (inv of deliverySelectedInvoices; track inv.id) {
+                        <div class="delivery-chip">
+                          <span>{{ inv.transactionNumber }}</span>
+                          <span class="chip-customer">{{ inv.customerName }}</span>
+                          <button mat-icon-button class="chip-remove" (click)="removeDeliveryInvoice(inv)">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  <div class="delivery-invoice-list">
+                    @if (deliveryFilteredInvoices.length === 0) {
+                      <div class="delivery-no-results">
+                        <mat-icon>search_off</mat-icon>
+                        <span>{{ deliveryInvoiceSearch ? 'No invoices match your search' : 'Type to search invoices' }}</span>
+                      </div>
+                    } @else {
+                      @for (inv of deliveryFilteredInvoices; track inv.id) {
+                        <div class="delivery-invoice-row" [class.selected]="isInvoiceSelected(inv)" (click)="toggleDeliveryInvoice(inv)">
+                          <div class="inv-checkbox">
+                            <mat-icon>{{ isInvoiceSelected(inv) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+                          </div>
+                          <div class="inv-details">
+                            <div class="inv-top-row">
+                              <strong>{{ inv.transactionNumber }}</strong>
+                              <span class="inv-amount">R{{ inv.salesAmount * 1.15 | number:'1.2-2' }}</span>
+                            </div>
+                            <div class="inv-bottom-row">
+                              <span class="inv-customer">{{ inv.customerName }}</span>
+                              <span class="inv-product">{{ inv.productDescription }}</span>
+                              @if (inv.deliveryProvince) {
+                                <span class="inv-province">{{ inv.deliveryProvince }}</span>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    }
+                  </div>
+                </div>
+
+                <!-- Priority & Details -->
+                <div class="delivery-form-grid">
+                  <div class="delivery-field">
+                    <label>Priority <span class="req-star">*</span></label>
+                    <select [(ngModel)]="deliveryForm.priority">
+                      <option value="Normal">Normal</option>
+                      <option value="Urgent">🔴 Urgent</option>
+                    </select>
+                  </div>
+                  <div class="delivery-field">
+                    <label>Quantity</label>
+                    <input type="number" [(ngModel)]="deliveryForm.quantity" min="1" placeholder="Auto from invoices">
+                  </div>
+                  <div class="delivery-field full-w">
+                    <label>Description <span class="req-star">*</span></label>
+                    <input type="text" [(ngModel)]="deliveryForm.description" placeholder="e.g. Urgent delivery required for customer order">
+                  </div>
+                  <div class="delivery-field full-w">
+                    <label>Delivery Address</label>
+                    <input type="text" [(ngModel)]="deliveryForm.deliveryAddress" placeholder="Delivery address (optional)">
+                  </div>
+                  <div class="delivery-field full-w">
+                    <label>Notes</label>
+                    <input type="text" [(ngModel)]="deliveryForm.notes" placeholder="Additional notes for logistics (optional)">
+                  </div>
+                </div>
+
+                <!-- Summary preview -->
+                @if (deliverySelectedInvoices.length > 0) {
+                  <div class="delivery-preview">
+                    <mat-icon>summarize</mat-icon>
+                    <div class="preview-content">
+                      <strong>{{ deliverySelectedInvoices.length }} invoice(s)</strong> selected â€¢
+                      Total value: <strong>R{{ getDeliveryTotalValue() | number:'1.2-2' }}</strong>
+                      @if (deliveryForm.priority === 'Urgent') {
+                        • <span class="urgent-tag">🔴 URGENT</span>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <div class="delivery-actions">
+                <button class="dialog-btn cancel" (click)="closeDeliveryDialog()">Cancel</button>
+                <button class="dialog-btn submit delivery-submit" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || deliverySelectedInvoices.length === 0 || !deliveryForm.description">
+                  @if (deliverySaving) {
+                    <mat-icon class="spin-icon">sync</mat-icon> Submitting...
+                  } @else {
+                    <mat-icon>send</mat-icon> Submit Request ({{ deliverySelectedInvoices.length }})
+                  }
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Hidden file inputs for import -->
+      <input
+        type="file"
+        id="salesFileInput"
+        style="display: none"
+        accept=".xlsx,.xls"
+        (change)="onImportFileSelected($event)"
+      />
+      <input
+        type="file"
+        id="customerFileInput"
+        style="display: none"
+        accept=".xlsx,.xls"
+        (change)="onCustomerFileSelected($event)"
+      />
+
+      <!-- Customer Import Result Dialog -->
+      @if (showCustomerImportResult && customerImportResult) {
+        <div class="import-result-overlay" (click)="closeCustomerImportResult()">
+          <div class="import-result-dialog" (click)="$event.stopPropagation()">
+            <div class="import-result-header" [class.success]="customerImportResult.success" [class.error]="!customerImportResult.success">
+              <mat-icon>{{ customerImportResult.success ? 'check_circle' : 'error' }}</mat-icon>
+              <h3>Customer Import {{ customerImportResult.success ? 'Complete' : 'Failed' }}</h3>
+              <button mat-icon-button (click)="closeCustomerImportResult()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="import-result-body">
+              <div class="import-stats-grid">
+                <div class="import-stat">
+                  <span class="stat-number">{{ customerImportResult.totalRecords }}</span>
+                  <span class="stat-label">Total Records</span>
+                </div>
+                <div class="import-stat created">
+                  <span class="stat-number">{{ customerImportResult.created }}</span>
+                  <span class="stat-label">Created</span>
+                </div>
+                <div class="import-stat updated">
+                  <span class="stat-number">{{ customerImportResult.updated }}</span>
+                  <span class="stat-label">Updated</span>
+                </div>
+                <div class="import-stat failed">
+                  <span class="stat-number">{{ customerImportResult.failed }}</span>
+                  <span class="stat-label">Failed</span>
+                </div>
+              </div>
+              @if (customerImportResult.errors && customerImportResult.errors.length > 0) {
+                <div class="import-errors-section">
+                  <h4><mat-icon>warning</mat-icon> Errors</h4>
+                  <div class="import-errors-list">
+                    @for (error of customerImportResult.errors; track error) {
+                      <div class="import-error-item">{{ error }}</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+            <div class="import-result-footer">
+              <button mat-raised-button color="primary" (click)="closeCustomerImportResult()">Close</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Company Sales Comparison - Business Day Comparison -->
+      <div class="company-sales-section">
+        <div class="section-header-row">
+          <div class="section-title-area">
+            <mat-icon>business</mat-icon>
+            <h3>Company Performance</h3>
+          </div>
+          <span class="comparison-label">{{ lastBusinessDayLabel() }} → {{ currentBusinessDayLabel() }} · Trend vs MTD avg</span>
+        </div>
+        <div class="company-cards-grid">
+          @for (cs of companyCards(); track cs.company.code) {
+            <div class="modern-company-card" [style.--company-color]="cs.company.color" (click)="openCompanySalesDialog(cs.company)">
+              <div class="company-card-header">
+                <div class="company-badge">
+                  <img class="company-badge-logo" [src]="cs.company.logo" [alt]="cs.company.name" width="42" height="42" decoding="async" loading="lazy" />
+                </div>
+                <div class="company-title">
+                  <span class="company-name">{{ cs.company.shortName }}</span>
+                  <span class="company-full">{{ cs.company.name }}</span>
+                </div>
+                <div class="trend-indicator" [class.up]="cs.percentChange >= 0" [class.down]="cs.percentChange < 0"
+                     [matTooltip]="'vs month-to-date daily avg: R' + formatCurrency(cs.monthlyDailyAvg)">
+                  <mat-icon>{{ cs.percentChange >= 0 ? 'trending_up' : 'trending_down' }}</mat-icon>
+                  <span>{{ cs.percentChange >= 0 ? '+' : '' }}{{ cs.percentChange | number:'1.0-0' }}%</span>
+                </div>
+              </div>
+              <div class="company-sales-comparison">
+                <div class="sales-period yesterday">
+                  <span class="period-label">{{ lastBusinessDayLabel() }}</span>
+                  <span class="period-value">R{{ formatCurrency(cs.yesterdaySales) }}</span>
+                  <span class="period-orders">{{ cs.yesterdayOrders }} orders</span>
+                </div>
+                <div class="comparison-arrow">
+                  <mat-icon>east</mat-icon>
+                </div>
+                <div class="sales-period today">
+                  <span class="period-label">{{ currentBusinessDayLabel() }}</span>
+                  <span class="period-value">R{{ formatCurrency(cs.todaySales) }}</span>
+                  <span class="period-orders">{{ cs.todayOrders }} orders</span>
+                </div>
+              </div>
+              <div class="card-footer">
+                <span class="click-hint"><mat-icon>touch_app</mat-icon> View Details</span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid ui-stagger">
+        <div class="modern-stat-card customers">
+          <div class="stat-icon-wrapper">
+            <mat-icon>people</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">{{ stats().totalCustomers }}</span>
+            <span class="stat-label">Total Customers</span>
+            <div class="stat-progress">
+              <div class="progress-bar" [style.width.%]="(stats().activeCustomers / stats().totalCustomers) * 100"></div>
+            </div>
+            <span class="stat-sub">{{ stats().activeCustomers }} active ({{ ((stats().activeCustomers / stats().totalCustomers) * 100) | number:'1.0-0' }}%)</span>
+          </div>
+        </div>
+
+        <div class="modern-stat-card invoices">
+          <div class="stat-icon-wrapper">
+            <mat-icon>receipt_long</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">{{ stats().totalInvoices }}</span>
+            <span class="stat-label">Total Invoices</span>
+            <div class="stat-progress">
+              <div class="progress-bar pending" [style.width.%]="stats().totalInvoices > 0 ? (stats().pendingInvoices / stats().totalInvoices) * 100 : 0"></div>
+            </div>
+            <span class="stat-sub">{{ stats().pendingInvoices }} pending</span>
+          </div>
+        </div>
+
+        <div class="modern-stat-card revenue">
+          <div class="stat-icon-wrapper">
+            <mat-icon>trending_up</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">R{{ formatCurrency(stats().monthlyRevenue) }}</span>
+            <span class="stat-label">Monthly Revenue</span>
+            <div class="revenue-breakdown">
+              <span class="total-label">Total: R{{ formatCurrency(stats().totalRevenue) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modern-stat-card orders">
+          <div class="stat-icon-wrapper">
+            <mat-icon>email</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">{{ stats().incomingOrders }}</span>
+            <span class="stat-label">Order Emails Today</span>
+            <div class="order-breakdown">
+              <span class="processing-badge">
+                <mat-icon>mark_email_unread</mat-icon>
+                {{ stats().processingOrders }} unread
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content Tabs -->
+      <mat-card class="main-content">
+        <mat-tab-group animationDuration="200ms" [(selectedIndex)]="selectedTab" (selectedIndexChange)="onSalesTabChange($event)">
+          <!-- Incoming Order Emails Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>email</mat-icon>
+              <span>Incoming Orders</span>
+              @if (stats().incomingOrders > 0) {
+                <span class="tab-badge">{{ stats().incomingOrders }}</span>
+              }
+            </ng-template>
+            <div class="tab-content">
+              <div class="section-header">
+                <h3>
+                  <mat-icon style="vertical-align: middle; margin-right: 8px;">mark_email_unread</mat-icon>
+                  Incoming Order Emails â€” Today
+                </h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="search-field">
+                    <mat-label>Filter emails</mat-label>
+                    <input matInput [value]="emailFilterSearch()" (input)="emailFilterSearch.set($any($event.target).value)">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Read Status</mat-label>
+                    <mat-select [value]="emailReadFilter()" (selectionChange)="emailReadFilter.set($event.value)">
+                      <mat-option value="all">All</mat-option>
+                      <mat-option value="unread">Unread</mat-option>
+                      <mat-option value="read">Read</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="filter-field" style="min-width: 200px;">
+                    <mat-label>Mailbox</mat-label>
+                    <mat-select [value]="selectedEmailAccounts()" (selectionChange)="selectedEmailAccounts.set($event.value); loadOrders()" multiple>
+                      @for (account of emailAccounts(); track account) {
+                        <mat-option [value]="account">{{ account }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <button mat-icon-button (click)="loadOrders()" matTooltip="Refresh emails from IMAP">
+                    <mat-icon>refresh</mat-icon>
+                  </button>
+                </div>
+              </div>
+
+              @if (loadingOrders()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="40"></mat-spinner>
+                  <p style="margin-top: 12px; color: #666;">Connecting to mail server...</p>
+                </div>
+              } @else if (filteredEmails().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>mark_email_read</mat-icon>
+                  <h3>No Order Emails Today</h3>
+                  <p>No emails with "{{ emailSearchKeyword() }}" in the subject were found for today</p>
+                  <button mat-raised-button color="primary" (click)="loadOrders()" style="margin-top: 12px;">
+                    <mat-icon>refresh</mat-icon> Check Again
+                  </button>
+                </div>
+              } @else {
+                <div class="email-summary-bar">
+                  <span class="email-count">
+                    <mat-icon>inbox</mat-icon>
+                    {{ filteredEmails().length }} email(s) found
+                  </span>
+                  <span class="unread-count">
+                    <mat-icon>mark_email_unread</mat-icon>
+                    {{ unreadEmailCount() }} unread
+                  </span>
+                  <span class="attachment-count">
+                    <mat-icon>attach_file</mat-icon>
+                    {{ attachmentEmailCount() }} with attachments
+                  </span>
+                </div>
+                <div class="email-list">
+                  @for (email of filteredEmails(); track email.messageId) {
+                    <mat-card class="email-card" [class.email-unread]="!email.isRead" [class.email-high-priority]="email.priority === 'High'" (click)="viewEmailDetail(email)" style="cursor: pointer;">
+                      <div class="email-row">
+                        <div class="email-status-indicator">
+                          @if (!email.isRead) {
+                            <div class="unread-dot"></div>
+                          }
+                          @if (email.priority === 'High') {
+                            <mat-icon class="priority-flag" matTooltip="High Priority">flag</mat-icon>
+                          }
+                        </div>
+                        <div class="email-sender">
+                          <div class="sender-avatar">
+                            {{ email.from.charAt(0).toUpperCase() }}
+                          </div>
+                          <div class="sender-details">
+                            <span class="sender-name">{{ email.from }}</span>
+                            <span class="sender-email">{{ email.fromEmail }}</span>
+                          </div>
+                        </div>
+                        <div class="email-content">
+                          <div class="email-subject">
+                            {{ email.subject }}
+                            @if (email.hasAttachments) {
+                              <mat-icon class="attachment-icon" matTooltip="Has attachments">attach_file</mat-icon>
+                            }
+                          </div>
+                          @if (email.preview) {
+                            <div class="email-preview">{{ email.preview }}</div>
+                          }
+                        </div>
+                        <div class="email-meta">
+                          <span class="email-time">{{ email.date | date:'HH:mm' }}</span>
+                          <span class="email-date">{{ email.date | date:'dd MMM' }}</span>
+                          @for (acct of email.foundInAccounts; track acct) {
+                            <mat-chip class="mailbox-chip" matTooltip="Received in {{ acct }}">
+                              {{ getMailboxName(acct) }}
+                            </mat-chip>
+                          }
+                        </div>
+                        <div class="email-actions">
+                          <button mat-icon-button [matMenuTriggerFor]="emailMenu" matTooltip="More actions" (click)="$event.stopPropagation()">
+                            <mat-icon>more_vert</mat-icon>
+                          </button>
+                          <mat-menu #emailMenu="matMenu">
+                            <button mat-menu-item (click)="viewEmailDetail(email)">
+                              <mat-icon>open_in_new</mat-icon> View Full Email
+                            </button>
+                            <button mat-menu-item (click)="copyEmailSender(email)">
+                              <mat-icon>content_copy</mat-icon> Copy Sender Email
+                            </button>
+                            <mat-divider></mat-divider>
+                            <button mat-menu-item (click)="createOrderFromEmail(email)">
+                              <mat-icon>add_shopping_cart</mat-icon> Create Order
+                            </button>
+                            <button mat-menu-item (click)="forwardToLogistics(email)">
+                              <mat-icon>local_shipping</mat-icon> Forward to Logistics
+                            </button>
+                          </mat-menu>
+                        </div>
+                      </div>
+                    </mat-card>
+                  }
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Customers Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>people</mat-icon>
+              <span>Customers</span>
+            </ng-template>
+            <div class="tab-content">
+              <div class="section-header">
+                <h3>Customer Management</h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="search-field">
+                    <mat-label>Search customers</mat-label>
+                    <input matInput [value]="customerSearch()" (input)="customerSearch.set($any($event.target).value); customerPageIndex.set(0)">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Province</mat-label>
+                    <mat-select [value]="customerProvinceFilter()" (selectionChange)="customerProvinceFilter.set($event.value); customerPageIndex.set(0)">
+                      <mat-option value="all">All Provinces</mat-option>
+                      @for (province of provinces; track province) {
+                        <mat-option [value]="province">{{ province }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <button mat-raised-button color="primary" (click)="promptImportPassword('customers')">
+                    <mat-icon>group_add</mat-icon> Import Customers
+                  </button>
+                  <button mat-raised-button color="accent" (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
+                    <mat-icon>file_download</mat-icon> Export Customers
+                  </button>
+                </div>
+              </div>
+
+              @if (loadingCustomers()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="40"></mat-spinner>
+                </div>
+              } @else {
+                <div class="table-container">
+                  <table mat-table [dataSource]="filteredCustomers()" class="customers-table">
+                    <ng-container matColumnDef="customerCode">
+                      <th mat-header-cell *matHeaderCellDef>Code</th>
+                      <td mat-cell *matCellDef="let customer">
+                        <strong>{{ customer.customerCode }}</strong>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="name">
+                      <th mat-header-cell *matHeaderCellDef>Customer Name</th>
+                      <td mat-cell *matCellDef="let customer">
+                        <div class="customer-name-cell">
+                          <span class="name">{{ customer.name }}</span>
+                          @if (customer.shortName) {
+                            <span class="short-name">({{ customer.shortName }})</span>
+                          }
+                        </div>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="contact">
+                      <th mat-header-cell *matHeaderCellDef>Contact</th>
+                      <td mat-cell *matCellDef="let customer">
+                        <div class="contact-cell">
+                          @if (customer.contactPerson) {
+                            <span class="contact-person">{{ customer.contactPerson }}</span>
+                          }
+                          @if (customer.email) {
+                            <span class="email">{{ customer.email }}</span>
+                          }
+                          @if (customer.phoneNumber) {
+                            <span class="phone">{{ customer.phoneNumber }}</span>
+                          }
+                        </div>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="location">
+                      <th mat-header-cell *matHeaderCellDef>Location</th>
+                      <td mat-cell *matCellDef="let customer">
+                        <div class="location-cell">
+                          @if (customer.city || customer.province) {
+                            <span>{{ customer.city }}{{ customer.city && customer.province ? ', ' : '' }}{{ customer.province }}</span>
+                          } @else {
+                            <span class="no-data">No location</span>
+                          }
+                          @if (customer.latitude && customer.longitude) {
+                            <mat-icon class="verified-icon" matTooltip="Address verified">verified</mat-icon>
+                          }
+                        </div>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="status">
+                      <th mat-header-cell *matHeaderCellDef>Status</th>
+                      <td mat-cell *matCellDef="let customer">
+                        <mat-chip [class]="'status-' + customer.status.toLowerCase()">
+                          {{ customer.status }}
+                        </mat-chip>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="actions">
+                      <th mat-header-cell *matHeaderCellDef>Actions</th>
+                      <td mat-cell *matCellDef="let customer">
+                        <button mat-icon-button matTooltip="Edit" (click)="editCustomer(customer)">
+                          <mat-icon>edit</mat-icon>
+                        </button>
+                        <button mat-icon-button matTooltip="View Invoices" (click)="viewCustomerInvoices(customer)">
+                          <mat-icon>receipt</mat-icon>
+                        </button>
+                        <button mat-icon-button matTooltip="Geocode Address" (click)="geocodeCustomer(customer)">
+                          <mat-icon>location_on</mat-icon>
+                        </button>
+                        <button mat-icon-button [matMenuTriggerFor]="customerMenu">
+                          <mat-icon>more_vert</mat-icon>
+                        </button>
+                        <mat-menu #customerMenu="matMenu">
+                          <button mat-menu-item (click)="createOrderForCustomer(customer)">
+                            <mat-icon>add_shopping_cart</mat-icon> New Order
+                          </button>
+                          <button mat-menu-item (click)="viewCustomerHistory(customer)">
+                            <mat-icon>history</mat-icon> View History
+                          </button>
+                          <mat-divider></mat-divider>
+                          <button mat-menu-item class="delete-btn" (click)="deleteCustomer(customer)">
+                            <mat-icon>delete</mat-icon> Delete
+                          </button>
+                        </mat-menu>
+                      </td>
+                    </ng-container>
+
+                    <tr mat-header-row *matHeaderRowDef="customerColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: customerColumns;" 
+                        (click)="selectCustomer(row)"
+                        [class.selected]="selectedCustomer()?.id === row.id"></tr>
+                  </table>
+                </div>
+                <mat-paginator [length]="allFilteredCustomers().length"
+                               [pageSize]="customerPageSize()"
+                               [pageIndex]="customerPageIndex()"
+                               [pageSizeOptions]="[5, 10, 25, 50]"
+                               (page)="onCustomerPageChange($event)"
+                               showFirstLastButtons>
+                </mat-paginator>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Invoices Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>receipt_long</mat-icon>
+              <span>Invoices</span>
+            </ng-template>
+            <div class="tab-content">
+              <div class="section-header">
+                <h3>Invoice Management</h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="search-field">
+                    <mat-label>Search invoices</mat-label>
+                    <input matInput [value]="invoiceSearch()" (input)="invoiceSearch.set($any($event.target).value); invoicePageIndex.set(0)">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Status</mat-label>
+                    <mat-select [value]="invoiceStatusFilter()" (selectionChange)="invoiceStatusFilter.set($event.value); invoicePageIndex.set(0)">
+                      <mat-option value="all">All Status</mat-option>
+                      <mat-option value="Pending">Pending</mat-option>
+                      <mat-option value="Assigned">Assigned</mat-option>
+                      <mat-option value="Delivered">Delivered</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <!-- Import invoices hidden until implemented -->
+                  <button mat-stroked-button (click)="importInvoices()" style="display:none">
+                    <mat-icon>upload</mat-icon> Import
+                  </button>
+                  <button mat-flat-button class="request-delivery-tab-btn" (click)="showDeliveryPasswordPrompt()">
+                    <mat-icon>local_shipping</mat-icon> Request Delivery
+                  </button>
+                </div>
+              </div>
+
+              @if (loadingInvoices()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="40"></mat-spinner>
+                </div>
+              } @else {
+                <div class="table-container">
+                  <table mat-table [dataSource]="filteredInvoices()" class="invoices-table">
+                    <ng-container matColumnDef="transactionNumber">
+                      <th mat-header-cell *matHeaderCellDef>Invoice #</th>
+                      <td mat-cell *matCellDef="let inv">
+                        <strong>{{ inv.transactionNumber }}</strong>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="date">
+                      <th mat-header-cell *matHeaderCellDef>Date</th>
+                      <td mat-cell *matCellDef="let inv">{{ inv.transactionDate | date:'dd/MM/yyyy' }}</td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="customer">
+                      <th mat-header-cell *matHeaderCellDef>Customer</th>
+                      <td mat-cell *matCellDef="let inv">
+                        <div class="customer-cell">
+                          <span class="name">{{ inv.customerName }}</span>
+                          <span class="code">{{ inv.customerNumber }}</span>
+                        </div>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="product">
+                      <th mat-header-cell *matHeaderCellDef>Product</th>
+                      <td mat-cell *matCellDef="let inv">
+                        <div class="product-cell">
+                          <span class="description">{{ inv.productDescription }}</span>
+                          <span class="code">{{ inv.productCode }}</span>
+                        </div>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="amount">
+                      <th mat-header-cell *matHeaderCellDef>Amount (incl. VAT)</th>
+                      <td mat-cell *matCellDef="let inv">
+                        <div class="amount-cell">
+                          <span class="sales">R{{ inv.salesAmount * 1.15 | number:'1.2-2' }}</span>
+                          <span class="margin" [class.positive]="inv.salesAmount > inv.costOfSales">
+                            {{ calculateMargin(inv.salesAmount, inv.costOfSales) | number:'1.1-1' }}%
+                          </span>
+                        </div>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="province">
+                      <th mat-header-cell *matHeaderCellDef>Province</th>
+                      <td mat-cell *matCellDef="let inv">
+                        @if (inv.deliveryProvince) {
+                          <span>{{ inv.deliveryProvince }}</span>
+                        } @else {
+                          <span class="no-data">Not set</span>
+                        }
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="source">
+                      <th mat-header-cell *matHeaderCellDef>Source</th>
+                      <td mat-cell *matCellDef="let inv">
+                        @if (inv.sourceCompany) {
+                          <mat-chip class="company-chip" [style.background-color]="getCompanyColor(inv.sourceCompany)">
+                            {{ getCompanyShortName(inv.sourceCompany) }}
+                          </mat-chip>
+                        } @else {
+                          <span class="no-data">-</span>
+                        }
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="status">
+                      <th mat-header-cell *matHeaderCellDef>Status</th>
+                      <td mat-cell *matCellDef="let inv">
+                        <mat-chip [class]="'status-' + inv.status.toLowerCase()">
+                          {{ inv.status }}
+                        </mat-chip>
+                      </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="actions">
+                      <th mat-header-cell *matHeaderCellDef>Actions</th>
+                      <td mat-cell *matCellDef="let inv">
+                        <button mat-icon-button matTooltip="Edit" (click)="editInvoice(inv)">
+                          <mat-icon>edit</mat-icon>
+                        </button>
+                        <button mat-icon-button matTooltip="Request Delivery" (click)="showDeliveryPasswordPrompt(inv)" class="req-delivery-icon">
+                          <mat-icon>local_shipping</mat-icon>
+                        </button>
+                        <button mat-icon-button [matMenuTriggerFor]="invoiceMenu">
+                          <mat-icon>more_vert</mat-icon>
+                        </button>
+                        <mat-menu #invoiceMenu="matMenu">
+                          <button mat-menu-item (click)="printInvoice(inv)">
+                            <mat-icon>print</mat-icon> Print
+                          </button>
+                          <button mat-menu-item (click)="emailInvoice(inv)">
+                            <mat-icon>email</mat-icon> Email to Customer
+                          </button>
+                          <button mat-menu-item (click)="duplicateInvoice(inv)">
+                            <mat-icon>content_copy</mat-icon> Duplicate
+                          </button>
+                          <mat-divider></mat-divider>
+                          <button mat-menu-item class="delete-btn" (click)="deleteInvoice(inv)">
+                            <mat-icon>delete</mat-icon> Delete
+                          </button>
+                        </mat-menu>
+                      </td>
+                    </ng-container>
+
+                    <tr mat-header-row *matHeaderRowDef="invoiceColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: invoiceColumns;"></tr>
+                  </table>
+                </div>
+                <mat-paginator [length]="allFilteredInvoices().length"
+                               [pageSize]="invoicePageSize()"
+                               [pageIndex]="invoicePageIndex()"
+                               [pageSizeOptions]="[10, 15, 25, 50, 100]"
+                               (page)="onInvoicePageChange($event)"
+                               showFirstLastButtons>
+                </mat-paginator>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Sales History Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>history</mat-icon>
+              <span>Sales History</span>
+              @if (salesHistoryTotalCount() > 0) {
+                <span class="tab-badge">{{ salesHistoryTotalCount() }}</span>
+              }
+            </ng-template>
+            <div class="tab-content sales-history-tab">
+              <!-- Company selector chips -->
+              <div class="sh-company-bar">
+                <button class="sh-company-chip" [class.active]="salesHistoryCompany() === ''"
+                        (click)="salesHistoryCompany.set(''); onSalesHistoryFilterChange()">
+                  <mat-icon>apps</mat-icon> All Companies
+                </button>
+                @for (c of companies; track c.code) {
+                  <button class="sh-company-chip sh-company-chip--logo" [class.active]="salesHistoryCompany() === c.code"
+                          [style.--chip-color]="c.color"
+                          (click)="salesHistoryCompany.set(c.code); onSalesHistoryFilterChange()">
+                    <img class="sh-chip-logo" [src]="c.logo" [alt]="c.name" width="32" height="32" decoding="async" loading="lazy" />
+                    <span class="sh-chip-label">{{ c.shortName }}</span>
+                  </button>
+                }
+              </div>
+
+              <!-- Toolbar -->
+              <div class="sh-toolbar">
+                <mat-form-field appearance="outline" class="sh-search">
+                  <mat-label>Search customer, invoice, order or shipment</mat-label>
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [value]="salesHistorySearch()" (input)="salesHistorySearch.set($any($event.target).value); onSalesHistoryFilterChange()">
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sh-date">
+                  <mat-label>From</mat-label>
+                  <input matInput [matDatepicker]="shFromPicker" [(ngModel)]="salesHistoryFromDate" (dateChange)="onSalesHistoryFilterChange()">
+                  <mat-datepicker-toggle matSuffix [for]="shFromPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #shFromPicker></mat-datepicker>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="sh-date">
+                  <mat-label>To</mat-label>
+                  <input matInput [matDatepicker]="shToPicker" [(ngModel)]="salesHistoryToDate" (dateChange)="onSalesHistoryFilterChange()">
+                  <mat-datepicker-toggle matSuffix [for]="shToPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #shToPicker></mat-datepicker>
+                </mat-form-field>
+                <button mat-stroked-button class="sh-btn" (click)="clearSalesHistoryFilters()">
+                  <mat-icon>clear</mat-icon> Clear
+                </button>
+                <button mat-stroked-button class="sh-btn sh-toggle-btn" [class.active]="salesHistoryDetailedOnly()"
+                        (click)="toggleSalesHistoryDetailedOnly()"
+                        matTooltip="Show only invoices that have product descriptions">
+                  <mat-icon>inventory_2</mat-icon> Products only
+                </button>
+                <button mat-stroked-button class="sh-btn" (click)="runSalesHistoryReconcile()">
+                  <mat-icon>fact_check</mat-icon> Reconcile
+                </button>
+              </div>
+
+              <!-- KPI summary -->
+              <div class="sh-kpi-grid">
+                <div class="sh-kpi kpi-sales">
+                  <div class="sh-kpi-icon"><mat-icon>payments</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value">R {{ formatCurrencyFull(salesHistoryTotalAmount()) }}</span>
+                    <span class="sh-kpi-label">Total Sales</span>
+                  </div>
+                </div>
+                <div class="sh-kpi kpi-inv">
+                  <div class="sh-kpi-icon"><mat-icon>receipt_long</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value">{{ salesHistoryInvoiceCount() | number }}</span>
+                    <span class="sh-kpi-label">Invoices &middot; {{ salesHistoryDetailedCount() | number }} with detail</span>
+                  </div>
+                </div>
+                <div class="sh-kpi kpi-cust">
+                  <div class="sh-kpi-icon"><mat-icon>groups</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value">{{ salesHistoryCustomerCount() | number }}</span>
+                    <span class="sh-kpi-label">Customers</span>
+                  </div>
+                </div>
+                <div class="sh-kpi kpi-date">
+                  <div class="sh-kpi-icon"><mat-icon>date_range</mat-icon></div>
+                  <div class="sh-kpi-body">
+                    <span class="sh-kpi-value sh-kpi-date-val">{{ salesHistoryDateRangeLabel() }}</span>
+                    <span class="sh-kpi-label">Date Range</span>
+                  </div>
+                </div>
+              </div>
+
+              @if (salesHistoryReconcile()) {
+                <div class="reconcile-banner">
+                  <mat-icon>fact_check</mat-icon>
+                  <span>Reconciliation: <strong>{{ salesHistoryReconcile()!.matchedCount | number }}</strong> matched,
+                    <strong>{{ salesHistoryReconcile()!.missingCount | number }}</strong> missing from live sales
+                    (R {{ formatCurrencyFull(salesHistoryReconcile()!.missingAmount) }})</span>
+                  <button mat-icon-button (click)="salesHistoryReconcile.set(null)"><mat-icon>close</mat-icon></button>
+                </div>
+              }
+
+              @if (salesHistoryLoading()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="40"></mat-spinner>
+                  <p>Loading sales history...</p>
+                </div>
+              } @else if (salesHistoryRecords().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>history</mat-icon>
+                  <h3>No Sales History Found</h3>
+                  <p>Import a sales report to populate historical invoices, or adjust your filters.</p>
+                </div>
+              } @else {
+                <div class="sh-table-wrap">
+                  <table class="sh-table">
+                    <thead>
+                      <tr>
+                        <th class="sh-expand-col"></th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Invoice No</th>
+                        <th>Order No</th>
+                        <th>Company</th>
+                        <th class="right-align">Sales</th>
+                        <th class="center-align">Live</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of salesHistoryRecords(); track row.id) {
+                        <tr class="sh-row" [class.expandable]="row.hasLineDetail"
+                            [class.expanded]="salesHistoryExpandedId() === row.id"
+                            (click)="toggleSalesHistoryLines(row)">
+                          <td class="sh-expand-col">
+                            @if (row.hasLineDetail) {
+                              <mat-icon class="sh-expand-icon">{{ salesHistoryExpandedId() === row.id ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                            }
+                          </td>
+                          <td class="sh-nowrap">{{ row.invoiceDate | date:'dd MMM yyyy' }}</td>
+                          <td class="sh-customer">{{ row.customerName }}</td>
+                          <td class="mono">{{ row.invoiceNumber }}
+                            @if (row.hasLineDetail) {
+                              <span class="sh-products-pill"><mat-icon>inventory_2</mat-icon> products</span>
+                            }
+                          </td>
+                          <td class="mono sh-muted">{{ row.orderNumber || 'â€”' }}</td>
+                          <td>
+                            @if (getCompanyLogo(row.sourceCompany || '')) {
+                              <img class="sh-company-logo" [src]="getCompanyLogo(row.sourceCompany || '')"
+                                   [alt]="getCompanyName(row.sourceCompany || '')" width="28" height="28"
+                                   decoding="async"
+                                   [matTooltip]="getCompanyName(row.sourceCompany || '')" loading="lazy" />
+                            } @else if (row.sourceCompany) {
+                              <span class="sh-company-tag" [style.--chip-color]="getCompanyColor(row.sourceCompany || '')">
+                                {{ getCompanyShortName(row.sourceCompany || '') }}
+                              </span>
+                            } @else {
+                              <span class="sh-muted">â€”</span>
+                            }
+                          </td>
+                          <td class="right-align sh-amount">R {{ formatCurrencyFull(row.salesAmount) }}</td>
+                          <td class="center-align">
+                            @if (row.isReconciled) {
+                              <mat-icon class="ok-icon" matTooltip="Matched in live sales">check_circle</mat-icon>
+                            } @else {
+                              <mat-icon class="warn-icon" matTooltip="Not in live sales">remove_circle_outline</mat-icon>
+                            }
+                          </td>
+                        </tr>
+                        @if (salesHistoryExpandedId() === row.id) {
+                          <tr class="sh-detail-row">
+                            <td colspan="8">
+                              @if (salesHistoryLinesLoading()) {
+                                <div class="sh-detail-loading"><mat-spinner diameter="24"></mat-spinner> Loading product detailâ€¦</div>
+                              } @else if (salesHistoryLines().length === 0) {
+                                <div class="sh-detail-empty">No product-level detail available for this invoice.</div>
+                              } @else {
+                                <div class="sh-detail-title"><mat-icon>inventory_2</mat-icon> Product Breakdown â€” {{ row.invoiceNumber }}</div>
+                                <table class="sh-detail-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Item Code</th>
+                                      <th>Product Description</th>
+                                      <th class="right-align">Qty</th>
+                                      <th class="right-align">Unit Price</th>
+                                      <th class="right-align">Sales</th>
+                                      <th class="center-align">Source</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    @for (line of salesHistoryLines(); track line.id) {
+                                      <tr>
+                                        <td class="mono">{{ line.itemCode || 'â€”' }}</td>
+                                        <td class="sh-desc">{{ line.description || 'â€”' }}</td>
+                                        <td class="right-align">{{ line.quantity | number:'1.0-2' }}</td>
+                                        <td class="right-align">R {{ formatCurrencyFull(line.unitPrice) }}</td>
+                                        <td class="right-align sh-amount">R {{ formatCurrencyFull(line.salesAmount) }}</td>
+                                        <td class="center-align">
+                                          <span class="sh-src-tag" [class.src-live]="line.source === 'Live Sales'">{{ line.source }}</span>
+                                        </td>
+                                      </tr>
+                                    }
+                                  </tbody>
+                                </table>
+                              }
+                            </td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                <mat-paginator
+                  [length]="salesHistoryTotalCount()"
+                  [pageSize]="salesHistoryPageSize()"
+                  [pageIndex]="salesHistoryPageIndex()"
+                  [pageSizeOptions]="[25, 50, 100, 200]"
+                  (page)="onSalesHistoryPageChange($event)"
+                  showFirstLastButtons>
+                </mat-paginator>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Back Orders Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>assignment_return</mat-icon>
+              <span>Back Orders</span>
+              @if (backOrderTotalCount() > 0) {
+                <span class="tab-badge warning">{{ backOrderTotalCount() }}</span>
+              }
+            </ng-template>
+            <div class="tab-content">
+              <div class="section-header">
+                <h3>Back Orders</h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="search-field">
+                    <mat-label>Search back orders</mat-label>
+                    <input matInput [value]="backOrderSearch()" (input)="backOrderSearch.set($any($event.target).value)">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <!-- Back Order Stats -->
+              <div class="back-order-stats">
+                <div class="bo-stat total">
+                  <mat-icon>inventory</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">{{ filteredBackOrders().length }}</span>
+                    <span class="label">Total Items</span>
+                  </div>
+                </div>
+                <div class="bo-stat qty">
+                  <mat-icon>shopping_cart</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">{{ backOrderTotalQty() }}</span>
+                    <span class="label">Total Qty</span>
+                  </div>
+                </div>
+                <div class="bo-stat value">
+                  <mat-icon>payments</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">R{{ formatCurrency(backOrderTotalValue()) }}</span>
+                    <span class="label">Total Value</span>
+                  </div>
+                </div>
+                <div class="bo-stat orders">
+                  <mat-icon>receipt_long</mat-icon>
+                  <div class="stat-info">
+                    <span class="value">{{ backOrderUniqueOrders() }}</span>
+                    <span class="label">Unique Orders</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Company Sub-Tabs -->
+              <div class="back-order-company-tabs">
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'promed'" (click)="activeBackOrderTab.set('promed'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#1a237e"></span>
+                  Promed
+                  <span class="bo-tab-count">{{ promedBackOrders().length }}</span>
+                </button>
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'access'" (click)="activeBackOrderTab.set('access'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#00695c"></span>
+                  Access
+                  <span class="bo-tab-count">{{ accessBackOrders().length }}</span>
+                </button>
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'pharmatech'" (click)="activeBackOrderTab.set('pharmatech'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#c62828"></span>
+                  Pharmatech
+                  <span class="bo-tab-count">{{ pharmatechBackOrders().length }}</span>
+                </button>
+                <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'sebenzani'" (click)="activeBackOrderTab.set('sebenzani'); backOrderPage.set(0)">
+                  <span class="bo-tab-dot" style="background:#6a1b9a"></span>
+                  Sebenzani
+                  <span class="bo-tab-count">{{ sebenzaniBackOrders().length }}</span>
+                </button>
+              </div>
+
+              <!-- Back Orders Table -->
+              @if (activeBackOrderTab() === 'promed' || activeBackOrderTab() === 'access' || activeBackOrderTab() === 'pharmatech' || activeBackOrderTab() === 'sebenzani') {
+                @if (filteredBackOrders().length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>inventory_2</mat-icon>
+                    <h3>No Back Orders Found</h3>
+                    <p>No back orders match your search criteria</p>
+                  </div>
+                } @else {
+                  <div class="back-order-table-wrapper">
+                    <table class="back-order-table">
+                      <thead>
+                        <tr>
+                          <th class="bo-col-order">Order No</th>
+                          <th class="bo-col-date">Order Date</th>
+                          <th class="bo-col-custno">Cust No</th>
+                          <th class="bo-col-custname">Customer Name</th>
+                          <th class="bo-col-po">PO No</th>
+                          <th class="bo-col-item">Item Description</th>
+                          <th class="bo-col-loc">Location</th>
+                          <th class="bo-col-uom">UOM</th>
+                          <th class="bo-col-qty">Qty B/O</th>
+                          <th class="bo-col-price">Unit Price</th>
+                          <th class="bo-col-ext">Ext Price</th>
+                          <th class="bo-col-contract">Contract</th>
+                          <th class="bo-col-acct">Account Set</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (bo of paginatedBackOrders(); track bo.orderNumber + bo.itemDesc) {
+                          <tr>
+                            <td class="bo-col-order"><strong>{{ bo.orderNumber }}</strong></td>
+                            <td class="bo-col-date">{{ bo.orderDate }}</td>
+                            <td class="bo-col-custno">{{ bo.customerNo }}</td>
+                            <td class="bo-col-custname">{{ bo.customerName }}</td>
+                            <td class="bo-col-po">{{ bo.poNo }}</td>
+                            <td class="bo-col-item">{{ bo.itemDesc }}</td>
+                            <td class="bo-col-loc">{{ bo.location }}</td>
+                            <td class="bo-col-uom">{{ bo.uom }}</td>
+                            <td class="bo-col-qty">{{ bo.qtyBackOrder }}</td>
+                            <td class="bo-col-price">R{{ bo.unitPrice | number:'1.2-2' }}</td>
+                            <td class="bo-col-ext">R{{ bo.extPrice | number:'1.2-2' }}</td>
+                            <td class="bo-col-contract">{{ bo.contract }}</td>
+                            <td class="bo-col-acct">{{ bo.accountSet }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="back-order-pagination">
+                    <span class="bo-page-info">Showing {{ backOrderPageStart() + 1 }}-{{ backOrderPageEnd() }} of {{ filteredBackOrders().length }} items</span>
+                    <div class="bo-page-controls">
+                      <button mat-icon-button [disabled]="backOrderPage() === 0" (click)="backOrderPage.set(backOrderPage() - 1)">
+                        <mat-icon>chevron_left</mat-icon>
+                      </button>
+                      <span class="bo-page-number">Page {{ backOrderPage() + 1 }} of {{ backOrderTotalPages() }}</span>
+                      <button mat-icon-button [disabled]="backOrderPage() >= backOrderTotalPages() - 1" (click)="backOrderPage.set(backOrderPage() + 1)">
+                        <mat-icon>chevron_right</mat-icon>
+                      </button>
+                      <mat-form-field appearance="outline" class="bo-page-size-field">
+                        <mat-select [value]="backOrderPageSize()" (selectionChange)="onBackOrderPageSizeChange($event.value)">
+                          <mat-option [value]="25">25</mat-option>
+                          <mat-option [value]="50">50</mat-option>
+                          <mat-option [value]="100">100</mat-option>
+                          <mat-option [value]="250">250</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+                  </div>
+                }
+              } @else {
+                <div class="empty-state">
+                  <mat-icon>inventory_2</mat-icon>
+                  <h3>No Back Orders</h3>
+                  <p>No back order data available for {{ activeBackOrderTab() | titlecase }} yet</p>
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- POD Documents Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>verified</mat-icon>
+              <span>POD Documents</span>
+              @if (podTotalCount > 0) {
+                <span class="tab-badge">{{ podTotalCount }}</span>
+              }
+            </ng-template>
+            <div class="tab-content">
+              <div class="pod-section">
+                <!-- POD Toolbar -->
+                <div class="pod-toolbar">
+                  <div class="pod-filters">
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Region</mat-label>
+                      <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Regions</mat-option>
+                        <mat-option value="GP">Gauteng (GP)</mat-option>
+                        <mat-option value="KZN">KwaZulu-Natal (KZN)</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Month</mat-label>
+                      <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Months</mat-option>
+                        <mat-option value="1-2026">January 2026</mat-option>
+                        <mat-option value="2-2026">February 2026</mat-option>
+                        <mat-option value="3-2026">March 2026</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field pod-driver-field">
+                      <mat-label>Driver</mat-label>
+                      <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All Drivers</mat-option>
+                        @for (driver of podDriverList; track driver) {
+                          <mat-option [value]="driver">{{ driver }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="pod-filter-field">
+                      <mat-label>Link Status</mat-label>
+                      <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="loadPodDocuments()">
+                        <mat-option value="">All</mat-option>
+                        <mat-option value="linked">Linked</mat-option>
+                        <mat-option value="not-linked">Not Linked</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+
+                  <div class="pod-actions">
+                    <button mat-stroked-button class="pod-welly-btn" (click)="wellyScanAllUnlinked()" matTooltip="Welly reads invoice numbers off unlinked POD images and auto-links exact matches">
+                      <mat-icon>auto_awesome</mat-icon> Welly: Scan Unlinked
+                    </button>
+                    <button mat-stroked-button class="pod-upload-btn" (click)="openSalesPodUploadDialog()">
+                      <mat-icon>upload_file</mat-icon> Upload POD
+                    </button>
+                    <div class="pod-view-toggle">
+                      <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
+                        <mat-icon>grid_view</mat-icon>
+                      </button>
+                      <button mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
+                        <mat-icon>view_list</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- POD Summary Stats -->
+                @if (podSummary) {
+                  <div class="pod-stats-row">
+                    <div class="pod-stat-chip">
+                      <mat-icon>folder</mat-icon>
+                      <span class="stat-num">{{ podSummary.total }}</span>
+                      <span class="stat-lbl">Total PODs</span>
+                    </div>
+                    <div class="pod-stat-chip linked-chip">
+                      <mat-icon>link</mat-icon>
+                      <span class="stat-num">{{ podSummary.linked || 0 }}</span>
+                      <span class="stat-lbl">Linked</span>
+                    </div>
+                    <div class="pod-stat-chip tripsheet-chip">
+                      <mat-icon>description</mat-icon>
+                      <span class="stat-num">{{ podSummary.linkedToTripsheet || 0 }}</span>
+                      <span class="stat-lbl">Tripsheets</span>
+                    </div>
+                    <div class="pod-stat-chip invoice-chip">
+                      <mat-icon>receipt</mat-icon>
+                      <span class="stat-num">{{ podSummary.linkedToInvoice || 0 }}</span>
+                      <span class="stat-lbl">Invoices</span>
+                    </div>
+                    <div class="pod-stat-chip unlinked-chip">
+                      <mat-icon>link_off</mat-icon>
+                      <span class="stat-num">{{ podSummary.unlinked || 0 }}</span>
+                      <span class="stat-lbl">Not Linked</span>
+                    </div>
+                    @for (r of podSummary.byRegion; track r.region) {
+                      <div class="pod-stat-chip region-chip">
+                        <mat-icon>location_on</mat-icon>
+                        <span class="stat-num">{{ r.count }}</span>
+                        <span class="stat-lbl">{{ r.region }}</span>
+                      </div>
+                    }
+                    <div class="pod-stat-chip drivers-chip">
+                      <mat-icon>people</mat-icon>
+                      <span class="stat-num">{{ podSummary.drivers?.length || 0 }}</span>
+                      <span class="stat-lbl">Drivers</span>
+                    </div>
+                  </div>
+                }
+
+                <!-- Loading State -->
+                @if (podLoading) {
+                  <div class="loading-state">
+                    <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+                    <p>Loading POD documents...</p>
+                  </div>
+                } @else if (podDocuments.length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>verified</mat-icon>
+                    <h3>No POD Documents Found</h3>
+                    <p>Adjust your filters or upload new POD documents</p>
+                  </div>
+                } @else {
+                  <!-- Grid View -->
+                  @if (podViewMode === 'grid') {
+                    <div class="pod-grid">
+                      @for (pod of podDocuments; track pod.id) {
+                        <mat-card class="pod-card" (click)="viewPodDocument(pod)">
+                          <div class="pod-card-header">
+                            <mat-icon class="pdf-icon">picture_as_pdf</mat-icon>
+                            <div class="pod-card-info">
+                              <span class="pod-driver">{{ pod.podNumber || ('POD' + pod.id) }}</span>
+                              <span class="pod-date">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</span>
+                            </div>
+                            <span class="pod-link-badge" [ngClass]="(pod.loadId || pod.invoiceId) ? 'linked' : 'not-linked'">
+                              <mat-icon>{{ (pod.loadId || pod.invoiceId) ? 'link' : 'link_off' }}</mat-icon>
+                              {{ pod.loadId ? 'Tripsheet' : pod.invoiceId ? 'Invoice' : 'Not Linked' }}
+                            </span>
+                            <span class="pod-region-badge" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                          </div>
+                          @if (pod.loadNumber) {
+                            <div class="pod-tripsheet-ref clickable" (click)="previewTripsheetFromPod(pod); $event.stopPropagation()" matTooltip="Preview tripsheet">
+                              <mat-icon>description</mat-icon>
+                              <span>{{ pod.loadNumber }}</span>
+                              <mat-icon class="open-panel-icon">chevron_right</mat-icon>
+                            </div>
+                          }
+                          @if (pod.invoiceLinks?.length > 0) {
+                            <div class="pod-tripsheet-ref invoice-ref clickable" (click)="openPodInvoicesDialog(pod); $event.stopPropagation()" matTooltip="View all invoices in this POD">
+                              <mat-icon>receipt</mat-icon>
+                              <span>{{ pod.invoiceLinks[0]?.invoiceNumber || pod.invoiceNumber || 'Invoice' }}</span>
+                              @if (pod.invoiceLinks.length > 1) {
+                                <strong class="inv-more">+{{ pod.invoiceLinks.length - 1 }} more</strong>
+                              }
+                            </div>
+                          } @else if (pod.invoiceNumber) {
+                            <div class="pod-tripsheet-ref invoice-ref clickable" (click)="openPodInvoicesDialog(pod); $event.stopPropagation()" matTooltip="View invoice details">
+                              <mat-icon>receipt</mat-icon>
+                              <span>{{ pod.invoiceNumber }}</span>
+                            </div>
+                          }
+                          <div class="pod-card-meta">
+                            <span class="pod-filename" matTooltip="{{ pod.originalFileName }}">{{ pod.originalFileName || pod.fileName }}</span>
+                            <span class="pod-size">{{ formatPodFileSize(pod.fileSize) }}</span>
+                          </div>
+                          <div class="pod-card-actions">
+                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                              <mat-icon>download</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #podActionMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item (click)="wellyScanPod(pod)">
+                                <mat-icon>auto_awesome</mat-icon> Welly: Scan for Invoice #s
+                              </button>
+                              @if (!pod.loadId) {
+                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
+                                  <mat-icon>link</mat-icon> Link to Tripsheet
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkPod(pod)">
+                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                </button>
+                              }
+                              @if (!pod.invoiceId) {
+                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
+                                  <mat-icon>receipt</mat-icon> Link to Invoice
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkInvoice(pod)">
+                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                </button>
+                              }
+                              <button mat-menu-item (click)="openEditPodDialog(pod)">
+                                <mat-icon>edit</mat-icon> Edit Details
+                              </button>
+                            </mat-menu>
+                          </div>
+                        </mat-card>
+                      }
+                    </div>
+                  } @else {
+                    <!-- List View -->
+                    <div class="pod-list-container">
+                      <table mat-table [dataSource]="podDocuments" class="pod-table modern-table">
+                        <ng-container matColumnDef="podNumber">
+                          <th mat-header-cell *matHeaderCellDef>POD ID</th>
+                          <td mat-cell *matCellDef="let pod"><span class="pod-id-cell">{{ pod.podNumber || ('POD' + pod.id) }}</span></td>
+                        </ng-container>
+                        <ng-container matColumnDef="deliveryDate">
+                          <th mat-header-cell *matHeaderCellDef>Date</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.deliveryDate | date:'dd MMM yyyy' }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="region">
+                          <th mat-header-cell *matHeaderCellDef>Region</th>
+                          <td mat-cell *matCellDef="let pod">
+                            <span class="pod-region-badge small" [ngClass]="'region-' + pod.region.toLowerCase()">{{ pod.region }}</span>
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="linkStatus">
+                          <th mat-header-cell *matHeaderCellDef>Status</th>
+                          <td mat-cell *matCellDef="let pod">
+                            @if (pod.loadId) {
+                              <span class="pod-link-badge small linked clickable" (click)="previewTripsheetFromPod(pod); $event.stopPropagation()" matTooltip="Preview tripsheet">
+                                <mat-icon>link</mat-icon>
+                                {{ pod.loadNumber || 'Tripsheet' }}
+                              </span>
+                            } @else if (pod.invoiceLinks?.length > 0 || pod.invoiceId) {
+                              <span class="pod-link-badge small linked invoice clickable" (click)="openPodInvoicesDialog(pod); $event.stopPropagation()" matTooltip="View invoices in this POD">
+                                <mat-icon>receipt</mat-icon>
+                                {{ (pod.invoiceLinks?.length > 0) ? ((pod.invoiceLinks[0]?.invoiceNumber || pod.invoiceNumber || 'Invoice') + (pod.invoiceLinks.length > 1 ? (' +' + (pod.invoiceLinks.length - 1)) : '')) : (pod.invoiceNumber || 'Invoice') }}
+                              </span>
+                            } @else {
+                              <span class="pod-link-badge small not-linked">
+                                <mat-icon>link_off</mat-icon>
+                                Not Linked
+                              </span>
+                            }
+                          </td>
+                        </ng-container>
+                        <ng-container matColumnDef="fileName">
+                          <th mat-header-cell *matHeaderCellDef>File</th>
+                          <td mat-cell *matCellDef="let pod">{{ pod.originalFileName || pod.fileName }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="fileSize">
+                          <th mat-header-cell *matHeaderCellDef>Size</th>
+                          <td mat-cell *matCellDef="let pod">{{ formatPodFileSize(pod.fileSize) }}</td>
+                        </ng-container>
+                        <ng-container matColumnDef="actions">
+                          <th mat-header-cell *matHeaderCellDef>Actions</th>
+                          <td mat-cell *matCellDef="let pod">
+                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                              <mat-icon>download</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                              <mat-icon>more_vert</mat-icon>
+                            </button>
+                            <mat-menu #podListMenu="matMenu" class="modern-menu">
+                              <button mat-menu-item (click)="wellyScanPod(pod)">
+                                <mat-icon>auto_awesome</mat-icon> Welly: Scan for Invoice #s
+                              </button>
+                              @if (!pod.loadId) {
+                                <button mat-menu-item (click)="openLinkTripsheetDialog(pod)">
+                                  <mat-icon>link</mat-icon> Link to Tripsheet
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkPod(pod)">
+                                  <mat-icon>link_off</mat-icon> Delink from Tripsheet
+                                </button>
+                              }
+                              @if (!pod.invoiceId) {
+                                <button mat-menu-item (click)="openLinkInvoiceDialog(pod)">
+                                  <mat-icon>receipt</mat-icon> Link to Invoice
+                                </button>
+                              } @else {
+                                <button mat-menu-item (click)="delinkInvoice(pod)">
+                                  <mat-icon>receipt_long</mat-icon> Delink from Invoice
+                                </button>
+                              }
+                              <button mat-menu-item (click)="openEditPodDialog(pod)">
+                                <mat-icon>edit</mat-icon> Edit Details
+                              </button>
+                            </mat-menu>
+                          </td>
+                        </ng-container>
+                        <tr mat-header-row *matHeaderRowDef="podTableColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: podTableColumns;" class="clickable-row" (click)="viewPodDocument(row)"></tr>
+                      </table>
+                    </div>
+                  }
+
+                  <!-- Pagination -->
+                  @if (podTotalCount > podPageSize) {
+                    <div class="pod-pagination">
+                      <span class="pod-page-info">Showing {{ (podCurrentPage - 1) * podPageSize + 1 }} - {{ Math.min(podCurrentPage * podPageSize, podTotalCount) }} of {{ podTotalCount }}</span>
+                      <div class="pod-page-btns">
+                        <button mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
+                          <mat-icon>chevron_left</mat-icon>
+                        </button>
+                        <span class="page-num">Page {{ podCurrentPage }}</span>
+                        <button mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
+                          <mat-icon>chevron_right</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+              </div>
+            </div>
+          </mat-tab>
+
+          <!-- Trip Sheets Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>assignment</mat-icon>
+              <span>Trip Sheets</span>
+              @if (pendingTripSheetCount() > 0) {
+                <span class="tab-badge">{{ pendingTripSheetCount() }}</span>
+              }
+            </ng-template>
+            <div class="tab-content">
+              <div class="section-header">
+                <h3>Sales Trip Sheets</h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Status</mat-label>
+                    <mat-select [value]="tripSheetStatusFilter()" (selectionChange)="tripSheetStatusFilter.set($event.value)">
+                      <mat-option value="all">All</mat-option>
+                      <mat-option value="PendingSignature">To Sign</mat-option>
+                      <mat-option value="PendingApproval">Awaiting Approval</mat-option>
+                      <mat-option value="Approved">Approved</mat-option>
+                      <mat-option value="Rejected">Rejected</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <button mat-stroked-button (click)="loadSalesTripSheets()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                  <button mat-raised-button color="primary" (click)="openCreateTripSheet()">
+                    <mat-icon>add</mat-icon> Create Trip Sheet
+                  </button>
+                </div>
+              </div>
+
+              <p class="ts-hint">
+                <mat-icon>info</mat-icon>
+                Stage 1: a sales agent creates a trip sheet. Stage 2: a <strong>different</strong> sales agent checks &amp; approves it â€” only then does it appear in Logistics.
+              </p>
+
+              @if (loadingTripSheets()) {
+                <div class="loading-container"><mat-spinner diameter="40"></mat-spinner></div>
+              } @else if (filteredTripSheets().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>assignment</mat-icon>
+                  <p>No trip sheets yet. Click "Create Trip Sheet" to build one.</p>
+                </div>
+              } @else {
+                <div class="table-container">
+                  <table class="ts-table">
+                    <thead>
+                      <tr>
+                        <th>Trip Sheet #</th>
+                        <th>Status</th>
+                        <th>Route / Area</th>
+                        <th>Stops</th>
+                        <th>Value</th>
+                        <th>Created By</th>
+                        <th>Checked By</th>
+                        <th>Logistics Load</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (ts of filteredTripSheets(); track ts.id) {
+                        <tr>
+                          <td><strong>{{ ts.tripSheetNumber }}</strong></td>
+                          <td>
+                            <span class="ts-status" [class.to-sign]="ts.status === 'PendingSignature'"
+                                  [class.pending]="ts.status === 'PendingApproval'"
+                                  [class.approved]="ts.status === 'Approved'"
+                                  [class.rejected]="ts.status === 'Rejected'">
+                              {{ tripSheetStatusLabel(ts.status) }}
+                            </span>
+                          </td>
+                          <td>{{ ts.routeArea || (ts.warehouseCode || 'â€”') }}</td>
+                          <td>{{ ts.lines.length }}</td>
+                          <td>R {{ ts.totalValue | number:'1.2-2' }}</td>
+                          <td>{{ ts.createdByName || 'â€”' }}</td>
+                          <td>{{ ts.checkedByName || 'â€”' }}</td>
+                          <td>{{ ts.convertedLoadNumber || 'â€”' }}</td>
+                          <td class="ts-actions">
+                            <button mat-icon-button matTooltip="View" (click)="viewTripSheet(ts)">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                            @if (ts.status === 'PendingSignature' && canSignTripSheet(ts)) {
+                              <button mat-icon-button color="accent" matTooltip="Sign" (click)="signTripSheet(ts)">
+                                <mat-icon>draw</mat-icon>
+                              </button>
+                            }
+                            @if (ts.status === 'PendingApproval' || ts.status === 'PendingSignature') {
+                              <button mat-icon-button matTooltip="Edit" (click)="editTripSheet(ts)">
+                                <mat-icon>edit</mat-icon>
+                              </button>
+                              <button mat-icon-button color="warn" matTooltip="Delete" (click)="deleteTripSheet(ts)">
+                                <mat-icon>delete</mat-icon>
+                              </button>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+        </mat-tab-group>
+      </mat-card>
+
+      <!-- Trip Sheet Create/Edit Dialog -->
+      @if (showTripSheetDialog) {
+        <div class="dialog-overlay" (click)="closeTripSheetDialog()">
+          <div class="ts-dialog" (click)="$event.stopPropagation()">
+            <div class="ts-dialog-header">
+              <h2>
+                {{ editingTripSheetId ? 'Edit Trip Sheet' : 'Create Trip Sheet' }}
+                @if (!editingTripSheetId && tripSheetMode !== 'choose' && tripSheetMode !== 'signoff') {
+                  <span class="ts-mode-pill">{{ tripSheetMode === 'import' ? 'Import from Excel' : 'Manual entry' }}</span>
+                }
+              </h2>
+              <button mat-icon-button (click)="closeTripSheetDialog()"><mat-icon>close</mat-icon></button>
+            </div>
+            <div class="ts-dialog-body">
+
+              <!-- Stage 0: sign-off â€” capture signer & approver first -->
+              @if (tripSheetMode === 'signoff') {
+                <p class="ts-choose-intro">You (<strong>{{ currentUserName || 'current user' }}</strong>) are creating this trip sheet. Choose the <strong>sales agent who signs it off</strong> and the <strong>manager who approves it</strong>.</p>
+                <div class="ts-signoff-grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Signer â€” sales agent (colleague)</mat-label>
+                    <input type="text" matInput [matAutocomplete]="signerAuto"
+                           [(ngModel)]="signerSearch"
+                           (ngModelChange)="onSignerSearchChange($event)"
+                           placeholder="Type a colleague's name to searchâ€¦">
+                    <mat-icon matSuffix>search</mat-icon>
+                    <mat-autocomplete #signerAuto="matAutocomplete"
+                                      (optionSelected)="onSignerSelected($event.option.value)"
+                                      [displayWith]="displayAgent">
+                      @for (a of filteredSignerAgents(); track a.userId) {
+                        <mat-option [value]="a.userId">{{ a.name }} {{ a.surname }}</mat-option>
+                      }
+                    </mat-autocomplete>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Approver â€” manager (checks &amp; signs)</mat-label>
+                    <input type="text" matInput [matAutocomplete]="approverAuto"
+                           [(ngModel)]="approverSearch"
+                           (ngModelChange)="onApproverSearchChange($event)"
+                           placeholder="Type your manager's name to searchâ€¦">
+                    <mat-icon matSuffix>search</mat-icon>
+                    <mat-autocomplete #approverAuto="matAutocomplete"
+                                      (optionSelected)="onApproverSelected($event.option.value)"
+                                      [displayWith]="displayAgent">
+                      @for (a of filteredApproverAgents(); track a.userId) {
+                        <mat-option [value]="a.userId">{{ a.name }} {{ a.surname }}</mat-option>
+                      }
+                    </mat-autocomplete>
+                  </mat-form-field>
+                </div>
+                <p class="ts-signoff-note">
+                  <mat-icon>info</mat-icon>
+                  Two-person rule: the approver must be a different person than the signer. Only the designated
+                  approver (manager) may check &amp; sign to release this trip sheet to Logistics. Both are notified once it's approved.
+                </p>
+                <div class="ts-preview-actions">
+                  <button mat-raised-button color="primary" (click)="proceedFromSignoff()">
+                    <mat-icon>arrow_forward</mat-icon> Continue
+                  </button>
+                </div>
+              }
+
+              <!-- Stage 1: choose how to build -->
+              @if (tripSheetMode === 'choose') {
+                <button mat-button class="ts-back" (click)="tripSheetMode = 'signoff'">
+                  <mat-icon>arrow_back</mat-icon> Back
+                </button>
+                <p class="ts-choose-intro">How would you like to build this trip sheet?</p>
+                <div class="ts-mode-cards">
+                  <button class="ts-mode-card" (click)="openLogisticsImport()">
+                    <mat-icon>upload_file</mat-icon>
+                    <h4>Import Trip Sheet</h4>
+                    <p>Upload an Excel file (identical to Logistics). We parse &amp; match it, then open the full trip sheet builder with map, distance &amp; driver assignment.</p>
+                  </button>
+                  <button class="ts-mode-card" (click)="openLogisticsManual()">
+                    <mat-icon>edit_note</mat-icon>
+                    <h4>Manual</h4>
+                    <p>Open the full trip sheet builder to add stops, optimise the route on the map, calculate distance &amp; assign a driver/vehicle.</p>
+                  </button>
+                </div>
+              }
+
+              <!-- Import panel â€” exact mirror of the Logistics trip sheet import -->
+              @if (tripSheetMode === 'import') {
+                <div class="ts-import-panel">
+                  <button mat-button class="ts-back" (click)="backToModeChooser()">
+                    <mat-icon>arrow_back</mat-icon> Back
+                  </button>
+
+                  <!-- Step: upload -->
+                  @if (importStep === 'upload') {
+                    @if (!importSelectedFile) {
+                      <div class="ts-dropzone"
+                           [class.dragover]="importDragOver"
+                           (dragover)="onImportDragOver($event)"
+                           (dragleave)="onImportDragLeave($event)"
+                           (drop)="onTsImportDrop($event)"
+                           (click)="tsFile.click()">
+                        <input #tsFile type="file" accept=".xlsx,.xls" hidden (change)="onTsImportFileSelected($event)">
+                        <mat-icon>cloud_upload</mat-icon>
+                        <h4>Drag &amp; drop an Excel file here</h4>
+                        <p>or click to browse â€” Supported format: .xlsx (max 10MB)</p>
+                      </div>
+
+                      <div class="ts-format-hints">
+                        <h5>Supported trip sheet format</h5>
+                        <ul>
+                          <li><strong>INV NO</strong> <span class="req">required</span> â€” the invoice / transaction number</li>
+                          <li><strong>Customer Name</strong> <span class="req">required</span></li>
+                          <li><strong>Address</strong> <span class="req">required</span> â€” delivery address</li>
+                          <li><strong>Product Description</strong></li>
+                          <li><strong>Qty</strong></li>
+                          <li><strong>Value</strong></li>
+                        </ul>
+                      </div>
+                    } @else {
+                      <div class="ts-file-chip">
+                        <mat-icon>description</mat-icon>
+                        <div class="ts-file-meta">
+                          <strong>{{ importSelectedFile.name }}</strong>
+                          <span>{{ formatFileSize(importSelectedFile.size) }}</span>
+                        </div>
+                        <button mat-icon-button (click)="removeImportFile()"><mat-icon>close</mat-icon></button>
+                      </div>
+                      <div class="ts-preview-actions">
+                        <button mat-raised-button color="primary" [disabled]="importUploading" (click)="previewImportFile()">
+                          <mat-icon>visibility</mat-icon>
+                          {{ importUploading ? 'Parsingâ€¦' : 'Preview Import' }}
+                        </button>
+                      </div>
+                    }
+
+                    @if (importError) {
+                      <p class="ts-import-error"><mat-icon>error_outline</mat-icon> {{ importError }}</p>
+                    }
+                  }
+
+                  <!-- Step: preview -->
+                  @if (importStep === 'preview' && importPreviewResponse) {
+                    <div class="ts-preview-summary">
+                      <span class="chip total">{{ (importPreviewResponse.rows || []).length }} rows</span>
+                      <span class="chip matched">{{ getImportValidRowCount() }} usable</span>
+                      @if (importPreviewResponse.matchedCount != null) {
+                        <span class="chip matched">{{ importPreviewResponse.matchedCount }} matched</span>
+                      }
+                      @if (importPreviewResponse.unmatchedCount != null) {
+                        <span class="chip unmatched">{{ importPreviewResponse.unmatchedCount }} unmatched</span>
+                      }
+                      @if (importPreviewResponse.errorCount) {
+                        <span class="chip errors">{{ importPreviewResponse.errorCount }} errors</span>
+                      }
+                      <span class="chip total">Total R {{ getImportTotalValue() | number:'1.2-2' }}</span>
+                    </div>
+
+                    <div class="table-container ts-preview-table">
+                      <table class="ts-table">
+                        <thead>
+                          <tr><th>#</th><th>Status</th><th>Invoice</th><th>Customer</th><th>Address</th><th>Product</th><th>Qty</th><th>Value</th></tr>
+                        </thead>
+                        <tbody>
+                          @for (r of importPreviewResponse.rows; track $index) {
+                            <tr [class.row-error]="r.status === 'error'">
+                              <td>{{ $index + 1 }}</td>
+                              <td>
+                                <span class="ts-status"
+                                      [class.approved]="r.status === 'matched'"
+                                      [class.pending]="r.status === 'partial' || r.status === 'unmatched'"
+                                      [class.rejected]="r.status === 'error'">
+                                  {{ r.status || 'â€”' }}
+                                </span>
+                              </td>
+                              <td>{{ r.data?.invoiceNumber || 'â€”' }}</td>
+                              <td>{{ r.data?.customerName || r.data?.customerNumber || 'â€”' }}</td>
+                              <td>{{ r.data?.deliveryAddress || 'â€”' }}{{ r.data?.city ? ', ' + r.data.city : '' }}</td>
+                              <td>{{ r.data?.productDescription || 'â€”' }}</td>
+                              <td>{{ r.data?.quantity || 0 }}</td>
+                              <td>R {{ (r.data?.salesAmount || 0) | number:'1.2-2' }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+
+                    @if (importError) {
+                      <p class="ts-import-error"><mat-icon>error_outline</mat-icon> {{ importError }}</p>
+                    }
+
+                    <div class="ts-preview-actions">
+                      <button mat-stroked-button (click)="removeImportFile()">
+                        <mat-icon>arrow_back</mat-icon> Choose another file
+                      </button>
+                      <button mat-raised-button color="primary" [disabled]="!hasValidImportRows()" (click)="useImportedRows()">
+                        <mat-icon>arrow_forward</mat-icon> Review &amp; Finalise ({{ getImportValidRowCount() }} stops)
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Manual / review editor -->
+              @if (tripSheetMode === 'manual') {
+                @if (!editingTripSheetId) {
+                  <button mat-button class="ts-back" (click)="backToModeChooser()">
+                    <mat-icon>arrow_back</mat-icon> Back
+                  </button>
+                }
+                <div class="ts-meta-grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Warehouse / Depot</mat-label>
+                    <mat-select [(value)]="tripSheetForm.warehouseCode">
+                      <mat-option value="">â€”</mat-option>
+                      <mat-option value="GP">GP (Gauteng)</mat-option>
+                      <mat-option value="CPT">CPT (Cape Town)</mat-option>
+                      <mat-option value="KZN">KZN (Durban)</mat-option>
+                      <mat-option value="EC">EC (Eastern Cape)</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Route / Area</mat-label>
+                    <input matInput [(ngModel)]="tripSheetForm.routeArea" placeholder="e.g. Pretoria North run">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Scheduled Date</mat-label>
+                    <input matInput type="date" [(ngModel)]="tripSheetForm.scheduledDate">
+                  </mat-form-field>
+                </div>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Notes / Special Instructions</mat-label>
+                  <textarea matInput rows="2" [(ngModel)]="tripSheetForm.notes"></textarea>
+                </mat-form-field>
+
+                <div class="ts-lines-header">
+                  <h4>Route &amp; Delivery Stops ({{ tripSheetLines.length }})</h4>
+                  <button mat-stroked-button color="primary" (click)="addTripSheetLine()">
+                    <mat-icon>add_location_alt</mat-icon> Add Stop
+                  </button>
+                </div>
+
+                <div class="ts-route" cdkDropList (cdkDropListDropped)="dropTripSheetLine($event)">
+                  @for (line of tripSheetLines; track $index) {
+                    <div class="ts-stop" cdkDrag cdkDragLockAxis="y">
+                      <!-- Drag handle -->
+                      <button class="ts-stop-handle" cdkDragHandle matTooltip="Drag to reorder">
+                        <mat-icon>drag_indicator</mat-icon>
+                      </button>
+
+                      <!-- Timeline: pin + connecting line -->
+                      <div class="ts-stop-timeline">
+                        <span class="ts-stop-pin"
+                              [class.origin]="$index === 0"
+                              [class.destination]="$index === tripSheetLines.length - 1">
+                          @if ($index === tripSheetLines.length - 1 && tripSheetLines.length > 1) {
+                            <mat-icon>place</mat-icon>
+                          } @else {
+                            <span class="ts-stop-dot">{{ $index + 1 }}</span>
+                          }
+                        </span>
+                        @if ($index < tripSheetLines.length - 1) {
+                          <span class="ts-stop-connector"></span>
+                        }
+                      </div>
+
+                      <!-- Placeholder shown while dragging -->
+                      <div class="ts-stop-preview" *cdkDragPreview>
+                        <mat-icon>place</mat-icon>
+                        {{ line.customerName || line.address || ('Stop ' + ($index + 1)) }}
+                      </div>
+
+                      <!-- Fields -->
+                      <div class="ts-stop-body">
+                        <div class="ts-stop-address">
+                          <input class="ts-in ts-in--address" [(ngModel)]="line.address" placeholder="Delivery address">
+                          <button mat-icon-button class="ts-stop-verify"
+                                  [class.confirmed]="lineAddressConfirmed[$index]"
+                                  [disabled]="lineGeocodeBusy[$index]"
+                                  (click)="verifyLineAddress($index)"
+                                  matTooltip="Confirm address via Google Maps">
+                            <mat-icon>{{ lineAddressConfirmed[$index] ? 'check_circle' : (lineGeocodeBusy[$index] ? 'hourglass_empty' : 'place') }}</mat-icon>
+                          </button>
+                        </div>
+                        <div class="ts-stop-grid">
+                          <div class="ts-invoice-row">
+                            <input class="ts-in" [(ngModel)]="line.invoiceNumber" placeholder="Invoice #"
+                                   (keyup.enter)="lookupInvoiceForLine($index)">
+                            <button mat-stroked-button class="ts-lookup-btn" [disabled]="lineLookupBusy[$index]"
+                                    (click)="lookupInvoiceForLine($index)" matTooltip="Auto-fill from invoice number">
+                              <mat-icon>{{ lineLookupBusy[$index] ? 'hourglass_empty' : 'search' }}</mat-icon>
+                              Lookup
+                            </button>
+                          </div>
+                          <input class="ts-in" [(ngModel)]="line.customerName" placeholder="Customer name">
+                          <input class="ts-in" [(ngModel)]="line.city" placeholder="City">
+                          <input class="ts-in" [(ngModel)]="line.province" placeholder="Province">
+                          <input class="ts-in" [(ngModel)]="line.contactPerson" placeholder="Contact">
+                          <input class="ts-in" [(ngModel)]="line.contactPhone" placeholder="Phone">
+                          <input class="ts-in wide" [(ngModel)]="line.productDescription" placeholder="Product / commodity">
+                          <input class="ts-in narrow" type="number" [(ngModel)]="line.quantity" placeholder="Qty">
+                          <input class="ts-in narrow" type="number" [(ngModel)]="line.value" placeholder="Value">
+                        </div>
+                      </div>
+
+                      <button mat-icon-button color="warn" class="ts-stop-remove" (click)="removeTripSheetLine($index)"
+                              matTooltip="Remove stop">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </div>
+                  }
+                </div>
+
+                <div class="ts-total-row">
+                  <span>Total value:</span>
+                  <strong>R {{ tripSheetDialogTotal | number:'1.2-2' }}</strong>
+                </div>
+              }
+            </div>
+            @if (tripSheetMode === 'manual') {
+              <div class="ts-dialog-footer">
+                <button mat-button (click)="closeTripSheetDialog()">Cancel</button>
+                <button mat-raised-button color="primary" [disabled]="savingTripSheet" (click)="saveTripSheet()">
+                  {{ savingTripSheet ? 'Savingâ€¦' : (editingTripSheetId ? 'Save Changes' : 'Submit for Approval') }}
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- POD Tripsheet Attachments Side Panel -->
+      @if (tripsheetPanelOpen) {
+        <div class="pod-panel-backdrop" (click)="closeTripsheetPanel()"></div>
+        <div class="pod-side-panel" [class.open]="tripsheetPanelOpen">
+          <div class="pod-panel-header">
+            <div class="pod-panel-title">
+              <mat-icon>local_shipping</mat-icon>
+              <div>
+                <div class="pod-panel-heading">{{ tripsheetPanelLoad?.loadNumber || 'Tripsheet' }}</div>
+                <div class="pod-panel-sub">POD Attachments</div>
+              </div>
+            </div>
+            <button mat-icon-button (click)="closeTripsheetPanel()"><mat-icon>close</mat-icon></button>
+          </div>
+
+          <div class="pod-panel-actions-bar">
+            <button mat-flat-button color="primary" class="pod-panel-preview-btn"
+                    [disabled]="tripsheetPreviewLoading"
+                    (click)="previewTripsheet()">
+              @if (tripsheetPreviewLoading) {
+                <mat-spinner diameter="18"></mat-spinner>
+                <span>Loadingâ€¦</span>
+              } @else {
+                <mat-icon>description</mat-icon>
+                <span>Preview Tripsheet</span>
+              }
+            </button>
+          </div>
+
+          <div class="pod-panel-body">
+            @if (tripsheetPanelLoading) {
+              <div class="pod-panel-loading">
+                <mat-spinner diameter="32"></mat-spinner>
+                <p>Loading attachmentsâ€¦</p>
+              </div>
+            } @else {
+              @if (tripsheetPanelLoad) {
+                <div class="pod-panel-meta">
+                  <div><label>Status</label><span>{{ tripsheetPanelLoad.status || 'â€”' }}</span></div>
+                  @if (tripsheetPanelLoad.deliveryLocation) {
+                    <div><label>Delivery</label><span>{{ tripsheetPanelLoad.deliveryLocation }}</span></div>
+                  }
+                  @if (tripsheetPanelLoad.actualDeliveryDate || tripsheetPanelLoad.scheduledDeliveryDate) {
+                    <div><label>Delivery date</label><span>{{ (tripsheetPanelLoad.actualDeliveryDate || tripsheetPanelLoad.scheduledDeliveryDate) | date:'dd MMM yyyy' }}</span></div>
+                  }
+                </div>
+              }
+
+              <div class="pod-panel-count">
+                {{ tripsheetPanelPods.length }} attachment{{ tripsheetPanelPods.length === 1 ? '' : 's' }} on this tripsheet
+              </div>
+
+              @if (tripsheetPanelPods.length === 0) {
+                <div class="pod-panel-empty">
+                  <mat-icon>folder_off</mat-icon>
+                  <p>No POD attachments found for this tripsheet.</p>
+                </div>
+              } @else {
+                <div class="pod-panel-list">
+                  @for (att of tripsheetPanelPods; track att.id) {
+                    <div class="pod-panel-item" [class.active]="att.id === tripsheetPanelActiveId">
+                      <mat-icon class="pod-panel-item-icon">picture_as_pdf</mat-icon>
+                      <div class="pod-panel-item-info" (click)="viewPodDocument(att)">
+                        <span class="pod-panel-item-name">{{ att.podNumber || ('POD' + att.id) }}</span>
+                        <span class="pod-panel-item-sub">
+                          {{ att.deliveryDate | date:'dd MMM yyyy' }} · {{ att.driverName || '—' }} · {{ formatPodFileSize(att.fileSize) }}
+                        </span>
+                        @if (att.invoiceLinks?.length > 0) {
+                          <span class="pod-panel-item-inv">
+                            <mat-icon>receipt</mat-icon>
+                            {{ att.invoiceLinks[0]?.invoiceNumber }}{{ att.invoiceLinks.length > 1 ? (' +' + (att.invoiceLinks.length - 1)) : '' }}
+                          </span>
+                        }
+                      </div>
+                      <div class="pod-panel-item-actions">
+                        <button mat-icon-button color="primary" (click)="viewPodDocument(att)" matTooltip="View">
+                          <mat-icon>visibility</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="downloadPodDocument(att)" matTooltip="Download">
+                          <mat-icon>download</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Trip Sheet View / Approval Dialog -->
+      @if (viewingTripSheet) {
+        <div class="dialog-overlay" (click)="closeViewTripSheet()">
+          <div class="ts-dialog" (click)="$event.stopPropagation()">
+            <div class="ts-dialog-header">
+              <h2>{{ viewingTripSheet.tripSheetNumber }}
+                <span class="ts-status" [class.to-sign]="viewingTripSheet.status === 'PendingSignature'"
+                      [class.pending]="viewingTripSheet.status === 'PendingApproval'"
+                      [class.approved]="viewingTripSheet.status === 'Approved'"
+                      [class.rejected]="viewingTripSheet.status === 'Rejected'">
+                  {{ tripSheetStatusLabel(viewingTripSheet.status) }}
+                </span>
+              </h2>
+              <button mat-icon-button (click)="closeViewTripSheet()"><mat-icon>close</mat-icon></button>
+            </div>
+            <div class="ts-dialog-body">
+              <div class="ts-view-meta">
+                <div><label>Route / Area</label><span>{{ viewingTripSheet.routeArea || 'â€”' }}</span></div>
+                <div><label>Warehouse</label><span>{{ viewingTripSheet.warehouseCode || 'â€”' }}</span></div>
+                <div><label>Scheduled</label><span>{{ viewingTripSheet.scheduledDate ? (viewingTripSheet.scheduledDate | date:'mediumDate') : 'â€”' }}</span></div>
+                <div><label>Created by</label><span>{{ viewingTripSheet.createdByName || 'â€”' }}</span></div>
+                <div><label>Created</label><span>{{ viewingTripSheet.createdAt | date:'medium' }}</span></div>
+                @if (viewingTripSheet.signerName) {
+                  <div><label>Signer</label><span>{{ viewingTripSheet.signerName }}</span></div>
+                }
+                @if (viewingTripSheet.signedByName) {
+                  <div><label>Signed by</label><span>{{ viewingTripSheet.signedByName }}</span></div>
+                  <div><label>Signed at</label><span>{{ viewingTripSheet.signedAt | date:'medium' }}</span></div>
+                }
+                @if (viewingTripSheet.approverName) {
+                  <div><label>Approver</label><span>{{ viewingTripSheet.approverName }}</span></div>
+                }
+                @if (viewingTripSheet.checkedByName) {
+                  <div><label>Checked by</label><span>{{ viewingTripSheet.checkedByName }}</span></div>
+                  <div><label>Checked at</label><span>{{ viewingTripSheet.checkedAt | date:'medium' }}</span></div>
+                }
+                @if (viewingTripSheet.convertedLoadNumber) {
+                  <div><label>Logistics Load</label><span>{{ viewingTripSheet.convertedLoadNumber }}</span></div>
+                }
+              </div>
+              @if (viewingTripSheet.notes) {
+                <p class="ts-view-notes"><strong>Notes:</strong> {{ viewingTripSheet.notes }}</p>
+              }
+
+              <table class="ts-table">
+                <thead>
+                  <tr><th>#</th><th>Customer</th><th>Invoice</th><th>Address</th><th>Contact</th><th>Qty</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                  @for (l of viewingTripSheet.lines; track $index) {
+                    <tr>
+                      <td>{{ $index + 1 }}</td>
+                      <td>{{ l.customerName || 'â€”' }}</td>
+                      <td>{{ l.invoiceNumber || 'â€”' }}</td>
+                      <td>{{ l.address || 'â€”' }}{{ l.city ? ', ' + l.city : '' }}</td>
+                      <td>{{ l.contactPerson || 'â€”' }}{{ l.contactPhone ? ' (' + l.contactPhone + ')' : '' }}</td>
+                      <td>{{ l.quantity }}</td>
+                      <td>R {{ l.value | number:'1.2-2' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+
+              @if (viewingTripSheet.status === 'Rejected' && viewingTripSheet.rejectionReason) {
+                <p class="ts-reject-reason"><strong>Rejection reason:</strong> {{ viewingTripSheet.rejectionReason }}</p>
+              }
+
+              @if (viewingTripSheet.status === 'PendingSignature') {
+                <div class="ts-approval-box">
+                  @if (canSignTripSheet(viewingTripSheet)) {
+                    <h4>Sign this trip sheet</h4>
+                    <p class="ts-sign-as">Signing as <strong>{{ currentUserName || 'current agent' }}</strong>. Once signed it goes to <strong>{{ viewingTripSheet.approverName || 'the approver' }}</strong> for approval.</p>
+                    <div class="ts-approval-actions">
+                      <button mat-stroked-button color="warn" (click)="rejectTripSheet(viewingTripSheet)">
+                        <mat-icon>close</mat-icon> Reject
+                      </button>
+                      <button mat-raised-button color="primary" (click)="signTripSheet(viewingTripSheet)">
+                        <mat-icon>draw</mat-icon> Sign &amp; Send for Approval
+                      </button>
+                    </div>
+                  } @else {
+                    <p class="ts-own-warning">
+                      <mat-icon>lock</mat-icon>
+                      This trip sheet is waiting to be signed by <strong>{{ viewingTripSheet.signerName || 'the designated signer' }}</strong>.
+                    </p>
+                  }
+                </div>
+              }
+
+              @if (viewingTripSheet.status === 'PendingApproval') {
+                <div class="ts-approval-box">
+                  @if (canApproveTripSheet(viewingTripSheet)) {
+                    <h4>Check &amp; Sign</h4>
+                    <p class="ts-sign-as">Approving as <strong>{{ currentUserName || 'current agent' }}</strong></p>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Approval note (optional)</mat-label>
+                      <input matInput [(ngModel)]="approvalNotes">
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Rejection reason (if rejecting)</mat-label>
+                      <input matInput [(ngModel)]="rejectionReason">
+                    </mat-form-field>
+                    <div class="ts-approval-actions">
+                      <button mat-stroked-button color="warn" (click)="rejectTripSheet(viewingTripSheet)">
+                        <mat-icon>close</mat-icon> Reject
+                      </button>
+                      <button mat-raised-button color="primary" (click)="approveTripSheet(viewingTripSheet)">
+                        <mat-icon>check</mat-icon> Approve &amp; Send to Logistics
+                      </button>
+                    </div>
+                  } @else {
+                    <p class="ts-own-warning">
+                      <mat-icon>lock</mat-icon>
+                      This trip sheet is awaiting approval. It must be checked and signed by a
+                      <strong>different</strong> sales agent than the one who created it.
+                    </p>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Customer Detail Sidebar -->
+      @if (selectedCustomer() && showCustomerSidebar) {
+        <div class="customer-sidebar">
+          <div class="sidebar-header">
+            <h3>Customer Details</h3>
+            <button mat-icon-button (click)="showCustomerSidebar = false">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <div class="sidebar-content">
+            <div class="customer-info-section">
+              <h4>{{ selectedCustomer()!.name }}</h4>
+              <p class="customer-code">{{ selectedCustomer()!.customerCode }}</p>
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-group">
+              <h5>Contact Information</h5>
+              @if (selectedCustomer()!.contactPerson) {
+                <div class="info-item">
+                  <mat-icon>person</mat-icon>
+                  <span>{{ selectedCustomer()!.contactPerson }}</span>
+                </div>
+              }
+              @if (selectedCustomer()!.email) {
+                <div class="info-item">
+                  <mat-icon>email</mat-icon>
+                  <a [href]="'mailto:' + selectedCustomer()!.email">{{ selectedCustomer()!.email }}</a>
+                </div>
+              }
+              @if (selectedCustomer()!.phoneNumber) {
+                <div class="info-item">
+                  <mat-icon>phone</mat-icon>
+                  <a [href]="'tel:' + selectedCustomer()!.phoneNumber">{{ selectedCustomer()!.phoneNumber }}</a>
+                </div>
+              }
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="info-group">
+              <h5>Delivery Address</h5>
+              @if (selectedCustomer()!.deliveryAddress) {
+                <div class="address-block">
+                  <p>{{ selectedCustomer()!.deliveryAddress }}</p>
+                  <p>{{ selectedCustomer()!.deliveryCity }}, {{ selectedCustomer()!.deliveryProvince }}</p>
+                  <p>{{ selectedCustomer()!.deliveryPostalCode }}</p>
+                </div>
+              } @else {
+                <p class="no-data">No delivery address set</p>
+              }
+              @if (selectedCustomer()!.latitude && selectedCustomer()!.longitude) {
+                <button mat-stroked-button (click)="openInMaps(selectedCustomer()!)">
+                  <mat-icon>map</mat-icon> View on Map
+                </button>
+              }
+            </div>
+            
+            <mat-divider></mat-divider>
+            
+            <div class="sidebar-actions">
+              <button mat-raised-button color="primary" (click)="editCustomer(selectedCustomer()!)">
+                <mat-icon>edit</mat-icon> Edit Customer
+              </button>
+              <button mat-stroked-button (click)="viewCustomerInvoices(selectedCustomer()!)">
+                <mat-icon>receipt</mat-icon> View Invoices
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Attention Dialog -->
+      @if (showAttentionDialog) {
+        <div class="attention-overlay" (click)="closeAttentionDialog()">
+          <div class="attention-dialog" (click)="$event.stopPropagation()">
+            <div class="attention-header">
+              <h2><mat-icon>warning</mat-icon> Data Issues Requiring Attention</h2>
+              <button mat-icon-button (click)="closeAttentionDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            
+            <mat-tab-group [(selectedIndex)]="attentionTabIndex">
+              <!-- Customers Without Locations -->
+              <mat-tab>
+                <ng-template mat-tab-label>
+                  <mat-icon>location_off</mat-icon>
+                  Customers Without Locations
+                  <span class="attention-badge">{{ customersWithoutLocation().length }}</span>
+                </ng-template>
+                
+                <div class="attention-content">
+                  @if (customersWithoutLocation().length === 0 && !showWellyCustomerReview) {
+                    <div class="empty-state">
+                      <mat-icon>check_circle</mat-icon>
+                      <h3>All Good!</h3>
+                      <p>All customers have location data set.</p>
+                    </div>
+                  } @else if (showWellyCustomerReview) {
+                    <!-- Welly Review Panel -->
+                    <div class="welly-review-panel">
+                      <div class="welly-review-header">
+                        <div class="welly-avatar">🤖</div>
+                        <div>
+                          <h3>Welly's Suggested Fixes</h3>
+                          <p>Review each suggestion below. Toggle off any you don't want to apply.</p>
+                        </div>
+                        <div class="welly-review-actions-header">
+                          <button mat-button (click)="toggleAllCustomerFixes(true)">
+                            <mat-icon>check_box</mat-icon> Select All
+                          </button>
+                          <button mat-button (click)="toggleAllCustomerFixes(false)">
+                            <mat-icon>check_box_outline_blank</mat-icon> Deselect All
+                          </button>
+                        </div>
+                      </div>
+                      <div class="welly-review-list">
+                        @for (fix of wellyCustomerFixes; track fix.customerId) {
+                          <div class="welly-review-item" [class.failed]="!fix.success" [class.rejected]="!fix.approved">
+                            <div class="welly-review-toggle">
+                              @if (fix.success) {
+                                <mat-slide-toggle [(ngModel)]="fix.approved" color="primary"></mat-slide-toggle>
+                              } @else {
+                                <mat-icon class="fix-failed-icon">error_outline</mat-icon>
+                              }
+                            </div>
+                            <div class="welly-review-info">
+                              <div class="welly-review-name">
+                                <strong>{{ fix.customerName }}</strong>
+                                <span class="code">{{ fix.customerCode }}</span>
+                              </div>
+                              @if (fix.success) {
+                                <div class="welly-review-suggestion">
+                                  <mat-icon>arrow_forward</mat-icon>
+                                  <span>{{ fix.suggestedFormattedAddress }}</span>
+                                </div>
+                                <div class="welly-review-details">
+                                  <span class="welly-chip">{{ fix.suggestedProvince }}</span>
+                                  @if (fix.suggestedCity) {
+                                    <span class="welly-chip">{{ fix.suggestedCity }}</span>
+                                  }
+                                </div>
+                              } @else {
+                                <div class="welly-review-error">{{ fix.error }}</div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                      <div class="welly-review-actions">
+                        <button mat-stroked-button (click)="cancelWellyCustomerReview()">
+                          <mat-icon>close</mat-icon> Cancel
+                        </button>
+                        <button mat-raised-button color="primary" (click)="applyWellyCustomerFixes()" 
+                                [disabled]="wellyCustomerFixApplying || approvedCustomerFixCount === 0">
+                          @if (wellyCustomerFixApplying) {
+                            <mat-spinner diameter="18"></mat-spinner> Applying...
+                          } @else {
+                            <mat-icon>check_circle</mat-icon>
+                            Apply {{ approvedCustomerFixCount }} Fixes
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="attention-desc-row">
+                      <p class="attention-desc">These customers don't have GPS coordinates set. Click to edit and add location.</p>
+                      <div class="attention-desc-buttons">
+                        <button mat-raised-button class="welly-fix-btn" (click)="wellyFixCustomerLocations()" 
+                                [disabled]="wellyCustomerFixLoading">
+                          @if (wellyCustomerFixLoading) {
+                            <mat-spinner diameter="18"></mat-spinner>
+                            Welly is analyzing...
+                          } @else {
+                            <span class="welly-btn-icon">🤖</span> Ask Welly to Fix
+                          }
+                        </button>
+                        <button mat-raised-button color="accent" (click)="geocodeAllCustomers()" [disabled]="isGeocoding">
+                          @if (isGeocoding) {
+                            <mat-spinner diameter="18"></mat-spinner>
+                            Geocoding {{ geocodeProgress }}...
+                          } @else {
+                            <ng-container><mat-icon>my_location</mat-icon> Geocode All ({{ customersWithoutLocation().length }})</ng-container>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                    <div class="attention-list">
+                      @for (customer of customersWithoutLocation(); track customer.id) {
+                        <div class="attention-item">
+                          <div class="attention-item-info">
+                            <strong>{{ customer.name }}</strong>
+                            <span class="code">{{ customer.customerCode }}</span>
+                            <span class="address">{{ customer.deliveryAddress || customer.address || 'No address' }}</span>
+                          </div>
+                          <div class="attention-item-actions">
+                            <button mat-stroked-button (click)="geocodeCustomerFromAttention(customer)">
+                              <mat-icon>my_location</mat-icon> Auto-Geocode
+                            </button>
+                            <button mat-raised-button color="primary" (click)="editCustomerLocation(customer)">
+                              <mat-icon>place</mat-icon> Enter Address
+                            </button>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </mat-tab>
+              
+              <!-- Invoices Without Provinces -->
+              <mat-tab>
+                <ng-template mat-tab-label>
+                  <mat-icon>map</mat-icon>
+                  Invoices Without Province
+                  <span class="attention-badge">{{ invoicesWithoutProvince().length }}</span>
+                </ng-template>
+                
+                <div class="attention-content">
+                  @if (invoicesWithoutProvince().length === 0 && !showWellyInvoiceReview) {
+                    <div class="empty-state">
+                      <mat-icon>check_circle</mat-icon>
+                      <h3>All Good!</h3>
+                      <p>All invoices have delivery province set.</p>
+                    </div>
+                  } @else if (showWellyInvoiceReview) {
+                    <!-- Welly Invoice Review Panel -->
+                    <div class="welly-review-panel">
+                      <div class="welly-review-header">
+                        <div class="welly-avatar">🤖</div>
+                        <div>
+                          <h3>Welly's Province Suggestions</h3>
+                          <p>Review each suggestion. Toggle off any you don't want to apply.</p>
+                        </div>
+                        <div class="welly-review-actions-header">
+                          <button mat-button (click)="toggleAllInvoiceFixes(true)">
+                            <mat-icon>check_box</mat-icon> Select All
+                          </button>
+                          <button mat-button (click)="toggleAllInvoiceFixes(false)">
+                            <mat-icon>check_box_outline_blank</mat-icon> Deselect All
+                          </button>
+                        </div>
+                      </div>
+                      <div class="welly-review-list">
+                        @for (fix of wellyInvoiceFixes; track fix.invoiceId) {
+                          <div class="welly-review-item" [class.failed]="!fix.success" [class.rejected]="!fix.approved">
+                            <div class="welly-review-toggle">
+                              @if (fix.success) {
+                                <mat-slide-toggle [(ngModel)]="fix.approved" color="primary"></mat-slide-toggle>
+                              } @else {
+                                <mat-icon class="fix-failed-icon">error_outline</mat-icon>
+                              }
+                            </div>
+                            <div class="welly-review-info">
+                              <div class="welly-review-name">
+                                <strong>{{ fix.transactionNumber }}</strong>
+                                <span class="customer">{{ fix.customerName }}</span>
+                                <span class="amount">R{{ fix.salesAmount * 1.15 | number:'1.2-2' }}</span>
+                              </div>
+                              @if (fix.success) {
+                                <div class="welly-review-suggestion">
+                                  <mat-icon>arrow_forward</mat-icon>
+                                  <span class="welly-chip province">{{ fix.suggestedProvince }}</span>
+                                  @if (fix.suggestedCity) {
+                                    <span class="welly-chip">{{ fix.suggestedCity }}</span>
+                                  }
+                                </div>
+                                <div class="welly-review-source">
+                                  <mat-icon>info_outline</mat-icon> Source: {{ fix.source }}
+                                </div>
+                              } @else {
+                                <div class="welly-review-error">{{ fix.error }}</div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                      <div class="welly-review-actions">
+                        <button mat-stroked-button (click)="cancelWellyInvoiceReview()">
+                          <mat-icon>close</mat-icon> Cancel
+                        </button>
+                        <button mat-raised-button color="primary" (click)="applyWellyInvoiceFixes()"
+                                [disabled]="wellyInvoiceFixApplying || approvedInvoiceFixCount === 0">
+                          @if (wellyInvoiceFixApplying) {
+                            <mat-spinner diameter="18"></mat-spinner> Applying...
+                          } @else {
+                            <mat-icon>check_circle</mat-icon>
+                            Apply {{ approvedInvoiceFixCount }} Fixes
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="attention-desc-row">
+                      <p class="attention-desc">These invoices don't have a delivery province set. Select a province to assign.</p>
+                      <button mat-raised-button class="welly-fix-btn" (click)="wellyFixInvoiceProvinces()"
+                              [disabled]="wellyInvoiceFixLoading">
+                        @if (wellyInvoiceFixLoading) {
+                          <mat-spinner diameter="18"></mat-spinner>
+                          Welly is analyzing...
+                        } @else {
+                          <span class="welly-btn-icon">🤖</span> Ask Welly to Fix
+                        }
+                      </button>
+                    </div>
+                    <div class="attention-list">
+                      @for (invoice of invoicesWithoutProvince(); track invoice.id) {
+                        <div class="attention-item">
+                          <div class="attention-item-info">
+                            <strong>{{ invoice.transactionNumber }}</strong>
+                            <span class="customer">{{ invoice.customerName }}</span>
+                            <span class="amount">R{{ invoice.salesAmount * 1.15 | number:'1.2-2' }}</span>
+                          </div>
+                          <div class="attention-item-actions">
+                            <mat-form-field class="province-select">
+                              <mat-label>Select Province</mat-label>
+                              <mat-select (selectionChange)="setInvoiceProvince(invoice, $event.value)">
+                                @for (prov of provinces; track prov) {
+                                  <mat-option [value]="prov">{{ prov }}</mat-option>
+                                }
+                              </mat-select>
+                            </mat-form-field>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                    <div class="bulk-actions">
+                      <mat-form-field class="bulk-province">
+                        <mat-label>Bulk Assign Province</mat-label>
+                        <mat-select [(value)]="bulkProvince">
+                          @for (prov of provinces; track prov) {
+                            <mat-option [value]="prov">{{ prov }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      <button mat-raised-button color="primary" (click)="bulkAssignProvince()" [disabled]="!bulkProvince">
+                        <mat-icon>playlist_add_check</mat-icon> Assign to All ({{ invoicesWithoutProvince().length }})
+                      </button>
+                    </div>
+                  }
+                </div>
+              </mat-tab>
+            </mat-tab-group>
+          </div>
+        </div>
+      }
+
+      <!-- Company Sales Details Dialog -->
+      @if (showCompanySalesDialog && selectedCompanyForDialog) {
+        <div class="company-sales-overlay" (click)="closeCompanySalesDialog()">
+          <div class="company-sales-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header" [style.background]="selectedCompanyForDialog.color">
+              <div class="header-content">
+                <mat-icon>business</mat-icon>
+                <div class="header-text">
+                  <h2>{{ selectedCompanyForDialog.name }}</h2>
+                  <span>Sales Analytics & History</span>
+                </div>
+              </div>
+              <button mat-icon-button (click)="closeCompanySalesDialog()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            
+            <div class="dialog-body">
+              <!-- Summary Cards -->
+              <div class="summary-row">
+                <div class="summary-card">
+                  <div class="summary-icon today"><mat-icon>today</mat-icon></div>
+                  <div class="summary-info">
+                    <span class="summary-label">Today</span>
+                    <span class="summary-value">R{{ formatCurrency(getCompanySalesForPeriod('today').total) }}</span>
+                    <span class="summary-orders">{{ getCompanySalesForPeriod('today').count }} orders</span>
+                  </div>
+                </div>
+                <div class="summary-card">
+                  <div class="summary-icon week"><mat-icon>date_range</mat-icon></div>
+                  <div class="summary-info">
+                    <span class="summary-label">Past 7 Days</span>
+                    <span class="summary-value">R{{ formatCurrency(getCompanySalesForPeriod('week').total) }}</span>
+                    <span class="summary-orders">{{ getCompanySalesForPeriod('week').count }} orders</span>
+                  </div>
+                </div>
+                <div class="summary-card">
+                  <div class="summary-icon month"><mat-icon>calendar_month</mat-icon></div>
+                  <div class="summary-info">
+                    <span class="summary-label">This Month</span>
+                    <span class="summary-value">R{{ formatCurrency(getCompanySalesForPeriod('month').total) }}</span>
+                    <span class="summary-orders">{{ getCompanySalesForPeriod('month').count }} orders</span>
+                  </div>
+                </div>
+                <div class="summary-card">
+                  <div class="summary-icon quarter"><mat-icon>assessment</mat-icon></div>
+                  <div class="summary-info">
+                    <span class="summary-label">This Quarter</span>
+                    <span class="summary-value">R{{ formatCurrency(getCompanySalesForPeriod('quarter').total) }}</span>
+                    <span class="summary-orders">{{ getCompanySalesForPeriod('quarter').count }} orders</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chart Section -->
+              <div class="chart-section">
+                <div class="chart-header">
+                  <h3><mat-icon>show_chart</mat-icon> Sales Trend</h3>
+                  <div class="chart-controls">
+                    <mat-button-toggle-group [(value)]="companySalesDateRange" (change)="updateCompanySalesChart()">
+                      <mat-button-toggle value="week">7 Days</mat-button-toggle>
+                      <mat-button-toggle value="month">30 Days</mat-button-toggle>
+                      <mat-button-toggle value="quarter">90 Days</mat-button-toggle>
+                    </mat-button-toggle-group>
+                  </div>
+                </div>
+                <div class="chart-container">
+                  <div class="chart-bars">
+                    @for (day of companySalesHistoryData; track day.date) {
+                      <div class="chart-bar-wrapper" [matTooltip]="day.date + ': R' + formatCurrencyFull(day.total) + ' (' + day.count + ' orders)'">
+                        <div class="chart-bar" 
+                             [style.height.%]="getBarHeight(day.total)"
+                             [style.background]="selectedCompanyForDialog.color">
+                        </div>
+                        <span class="chart-label">{{ day.label }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sales Table -->
+              <div class="sales-table-section">
+                <div class="table-header">
+                  <h3><mat-icon>receipt_long</mat-icon> Recent Sales</h3>
+                  <div class="table-header-actions">
+                    <button mat-stroked-button class="export-btn excel-btn" (click)="openExportDatePicker('excel')">
+                      <mat-icon>table_chart</mat-icon> Export Excel
+                    </button>
+                    <button mat-stroked-button class="export-btn pdf-btn" (click)="openExportDatePicker('pdf')">
+                      <mat-icon>picture_as_pdf</mat-icon> Generate PDF
+                    </button>
+                    <button mat-stroked-button class="export-btn compare-btn" (click)="openCompareDialog()">
+                      <mat-icon>compare_arrows</mat-icon> Compare
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Sales Data Table -->
+                <div class="table-container">
+                  <table mat-table [dataSource]="companySalesTableData" class="sales-table">
+                    <ng-container matColumnDef="date">
+                      <th mat-header-cell *matHeaderCellDef>Date</th>
+                      <td mat-cell *matCellDef="let row">{{ row.transactionDate | date:'dd MMM yyyy' }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="transaction">
+                      <th mat-header-cell *matHeaderCellDef>Transaction #</th>
+                      <td mat-cell *matCellDef="let row">{{ row.transactionNumber }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="customer">
+                      <th mat-header-cell *matHeaderCellDef>Customer</th>
+                      <td mat-cell *matCellDef="let row">{{ row.customerName }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="product">
+                      <th mat-header-cell *matHeaderCellDef>Product</th>
+                      <td mat-cell *matCellDef="let row">{{ row.productDescription }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="quantity">
+                      <th mat-header-cell *matHeaderCellDef>Qty</th>
+                      <td mat-cell *matCellDef="let row">{{ row.quantity }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="amount">
+                      <th mat-header-cell *matHeaderCellDef>Amount (incl. VAT)</th>
+                      <td mat-cell *matCellDef="let row" class="amount-cell">R{{ row.salesAmount * 1.15 | number:'1.2-2' }}</td>
+                    </ng-container>
+
+                    <tr mat-header-row *matHeaderRowDef="['date', 'transaction', 'customer', 'product', 'quantity', 'amount']"></tr>
+                    <tr mat-row *matRowDef="let row; columns: ['date', 'transaction', 'customer', 'product', 'quantity', 'amount'];"></tr>
+                  </table>
+
+                  @if (companySalesTableData.length === 0) {
+                    <div class="no-data">
+                      <mat-icon>inbox</mat-icon>
+                      <p>No sales data found for {{ selectedCompanyForDialog.shortName }}</p>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Company Comparison Dialog -->
+        @if (showCompareDialog && selectedCompanyForDialog) {
+          <div class="export-date-overlay" (click)="closeCompareDialog()">
+            <div class="compare-dialog" (click)="$event.stopPropagation()">
+              <div class="compare-dialog-header">
+                <div class="compare-title">
+                  <mat-icon>compare_arrows</mat-icon>
+                  <h3>Company Comparison</h3>
+                </div>
+                <button mat-icon-button (click)="closeCompareDialog()">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+
+              <!-- Config Row -->
+              <div class="compare-config">
+                <div class="compare-companies">
+                  <div class="compare-company-badge" [style.background]="selectedCompanyForDialog.color">
+                    {{ selectedCompanyForDialog.shortName }}
+                  </div>
+                  <mat-icon>vs</mat-icon>
+                  <mat-form-field appearance="outline" class="compare-select">
+                    <mat-label>Compare with</mat-label>
+                    <mat-select [(ngModel)]="compareCompanyCode" (ngModelChange)="loadComparisonData()">
+                      @for (c of getCompareOptions(); track c.code) {
+                        <mat-option [value]="c.code">{{ c.shortName }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+                <div class="compare-date-range">
+                  <mat-form-field appearance="outline" class="compare-date-field">
+                    <mat-label>From</mat-label>
+                    <input matInput [matDatepicker]="cmpFrom" [(ngModel)]="compareFromDate" (dateChange)="loadComparisonData()">
+                    <mat-datepicker-toggle matIconSuffix [for]="cmpFrom"></mat-datepicker-toggle>
+                    <mat-datepicker #cmpFrom></mat-datepicker>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="compare-date-field">
+                    <mat-label>To</mat-label>
+                    <input matInput [matDatepicker]="cmpTo" [(ngModel)]="compareToDate" (dateChange)="loadComparisonData()">
+                    <mat-datepicker-toggle matIconSuffix [for]="cmpTo"></mat-datepicker-toggle>
+                    <mat-datepicker #cmpTo></mat-datepicker>
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <!-- Quick Range Buttons -->
+              <div class="compare-quick-ranges">
+                <button mat-stroked-button (click)="setCompareRange('week')">Past 7 Days</button>
+                <button mat-stroked-button (click)="setCompareRange('month')">This Month</button>
+                <button mat-stroked-button (click)="setCompareRange('quarter')">This Quarter</button>
+                <button mat-stroked-button (click)="setCompareRange('year')">This Year</button>
+              </div>
+
+              @if (compareCompanyCode) {
+                <!-- Side-by-Side Summary -->
+                <div class="compare-summary">
+                  <div class="compare-col">
+                    <div class="compare-col-header" [style.background]="selectedCompanyForDialog.color">
+                      {{ selectedCompanyForDialog.shortName }}
+                    </div>
+                    <div class="compare-stat"><span class="label">Invoices</span><span class="val">{{ compareDataA.count }}</span></div>
+                    <div class="compare-stat"><span class="label">Revenue</span><span class="val">R{{ formatCurrencyFull(compareDataA.revenue) }}</span></div>
+                    <div class="compare-stat"><span class="label">Incl. VAT</span><span class="val">R{{ formatCurrencyFull(compareDataA.revenue * 1.15) }}</span></div>
+                    <div class="compare-stat"><span class="label">Avg/Invoice</span><span class="val">R{{ formatCurrencyFull(compareDataA.count > 0 ? compareDataA.revenue / compareDataA.count : 0) }}</span></div>
+                    <div class="compare-stat"><span class="label">Cost</span><span class="val">R{{ formatCurrencyFull(compareDataA.cost) }}</span></div>
+                    <div class="compare-stat"><span class="label">Margin</span><span class="val">{{ compareDataA.revenue > 0 ? ((compareDataA.revenue - compareDataA.cost) / compareDataA.revenue * 100).toFixed(1) : '0.0' }}%</span></div>
+                  </div>
+                  <div class="compare-vs">VS</div>
+                  <div class="compare-col">
+                    <div class="compare-col-header" [style.background]="getCompareCompany()?.color">
+                      {{ getCompareCompany()?.shortName }}
+                    </div>
+                    <div class="compare-stat"><span class="label">Invoices</span><span class="val">{{ compareDataB.count }}</span></div>
+                    <div class="compare-stat"><span class="label">Revenue</span><span class="val">R{{ formatCurrencyFull(compareDataB.revenue) }}</span></div>
+                    <div class="compare-stat"><span class="label">Incl. VAT</span><span class="val">R{{ formatCurrencyFull(compareDataB.revenue * 1.15) }}</span></div>
+                    <div class="compare-stat"><span class="label">Avg/Invoice</span><span class="val">R{{ formatCurrencyFull(compareDataB.count > 0 ? compareDataB.revenue / compareDataB.count : 0) }}</span></div>
+                    <div class="compare-stat"><span class="label">Cost</span><span class="val">R{{ formatCurrencyFull(compareDataB.cost) }}</span></div>
+                    <div class="compare-stat"><span class="label">Margin</span><span class="val">{{ compareDataB.revenue > 0 ? ((compareDataB.revenue - compareDataB.cost) / compareDataB.revenue * 100).toFixed(1) : '0.0' }}%</span></div>
+                  </div>
+                </div>
+
+                <!-- Comparison Bar Chart -->
+                <div class="compare-chart-section">
+                  <h4><mat-icon>bar_chart</mat-icon> Daily Revenue Comparison</h4>
+                  <div class="compare-chart">
+                    @for (day of compareDailyData; track day.date) {
+                      <div class="compare-chart-day">
+                        <div class="compare-bars">
+                          <div class="compare-bar bar-a" [style.height.%]="getCompareBarHeight(day.totalA)" [style.background]="selectedCompanyForDialog.color"
+                               [matTooltip]="selectedCompanyForDialog.shortName + ': R' + formatCurrencyFull(day.totalA)"></div>
+                          <div class="compare-bar bar-b" [style.height.%]="getCompareBarHeight(day.totalB)" [style.background]="getCompareCompany()?.color"
+                               [matTooltip]="getCompareCompany()?.shortName + ': R' + formatCurrencyFull(day.totalB)"></div>
+                        </div>
+                        <span class="compare-chart-label">{{ day.label }}</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="compare-legend">
+                    <span class="legend-item"><span class="legend-dot" [style.background]="selectedCompanyForDialog.color"></span> {{ selectedCompanyForDialog.shortName }}</span>
+                    <span class="legend-item"><span class="legend-dot" [style.background]="getCompareCompany()?.color"></span> {{ getCompareCompany()?.shortName }}</span>
+                  </div>
+                </div>
+
+                <!-- Difference Highlights -->
+                <div class="compare-highlights">
+                  <div class="highlight-card" [class.positive]="compareDataA.revenue >= compareDataB.revenue" [class.negative]="compareDataA.revenue < compareDataB.revenue">
+                    <mat-icon>{{ compareDataA.revenue >= compareDataB.revenue ? 'trending_up' : 'trending_down' }}</mat-icon>
+                    <div class="highlight-text">
+                      <span class="highlight-label">Revenue Difference</span>
+                      <span class="highlight-value">R{{ formatCurrencyFull(Math.abs(compareDataA.revenue - compareDataB.revenue)) }}</span>
+                      <span class="highlight-sub">{{ selectedCompanyForDialog.shortName }} is {{ compareDataA.revenue >= compareDataB.revenue ? 'ahead' : 'behind' }}</span>
+                    </div>
+                  </div>
+                  <div class="highlight-card" [class.positive]="compareDataA.count >= compareDataB.count" [class.negative]="compareDataA.count < compareDataB.count">
+                    <mat-icon>{{ compareDataA.count >= compareDataB.count ? 'trending_up' : 'trending_down' }}</mat-icon>
+                    <div class="highlight-text">
+                      <span class="highlight-label">Invoice Volume</span>
+                      <span class="highlight-value">{{ Math.abs(compareDataA.count - compareDataB.count) }} invoices</span>
+                      <span class="highlight-sub">{{ selectedCompanyForDialog.shortName }} has {{ compareDataA.count >= compareDataB.count ? 'more' : 'fewer' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Export Button -->
+                <div class="compare-actions">
+                  <button mat-raised-button color="primary" (click)="exportComparisonExcel()" [disabled]="compareExporting">
+                    @if (compareExporting) {
+                      <mat-icon class="spin-icon">hourglass_empty</mat-icon> Exporting...
+                    } @else {
+                      <mat-icon>table_chart</mat-icon> Export Comparison to Excel
+                    }
+                  </button>
+                </div>
+              } @else {
+                <div class="compare-placeholder">
+                  <mat-icon>compare_arrows</mat-icon>
+                  <p>Select a company above to start comparing</p>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Export Date Range Picker Popup -->
+        @if (showExportDatePicker) {
+          <div class="export-date-overlay" (click)="closeExportDatePicker()">
+            <div class="export-date-popup" (click)="$event.stopPropagation()">
+              <div class="export-popup-header">
+                <mat-icon>{{ exportType === 'excel' ? 'table_chart' : 'picture_as_pdf' }}</mat-icon>
+                <h3>{{ exportType === 'excel' ? 'Export to Excel' : 'Generate PDF Report' }}</h3>
+                <button mat-icon-button (click)="closeExportDatePicker()">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+              <p class="export-popup-desc">
+                {{ exportType === 'excel' ? 'Select a date range to export all invoices to an Excel spreadsheet.' : 'Select a date range to generate a PDF report with charts and invoice details.' }}
+              </p>
+              <div class="export-date-fields">
+                <mat-form-field appearance="outline">
+                  <mat-label>From Date</mat-label>
+                  <input matInput [matDatepicker]="exportFromPicker" [(ngModel)]="exportFromDate">
+                  <mat-datepicker-toggle matIconSuffix [for]="exportFromPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #exportFromPicker></mat-datepicker>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>To Date</mat-label>
+                  <input matInput [matDatepicker]="exportToPicker" [(ngModel)]="exportToDate">
+                  <mat-datepicker-toggle matIconSuffix [for]="exportToPicker"></mat-datepicker-toggle>
+                  <mat-datepicker #exportToPicker></mat-datepicker>
+                </mat-form-field>
+              </div>
+              <div class="export-quick-ranges">
+                <button mat-stroked-button (click)="setExportRange('week')">Past 7 Days</button>
+                <button mat-stroked-button (click)="setExportRange('month')">This Month</button>
+                <button mat-stroked-button (click)="setExportRange('quarter')">This Quarter</button>
+                <button mat-stroked-button (click)="setExportRange('year')">This Year</button>
+              </div>
+              <div class="export-popup-actions">
+                <button mat-button (click)="closeExportDatePicker()">Cancel</button>
+                <button mat-raised-button [color]="exportType === 'excel' ? 'primary' : 'warn'"
+                        (click)="executeExport()" [disabled]="exportGenerating">
+                  @if (exportGenerating) {
+                    <mat-icon class="spin-icon">hourglass_empty</mat-icon> Generating...
+                  } @else {
+                    <mat-icon>{{ exportType === 'excel' ? 'download' : 'picture_as_pdf' }}</mat-icon>
+                    {{ exportType === 'excel' ? 'Export Excel' : 'Generate PDF' }}
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+      }
+      }
+
+      <!-- POD Upload Password Dialog -->
+      @if (showPodPasswordDialog) {
+        <div class="pod-password-overlay" (click)="cancelPodPasswordDialog()">
+          <div class="pod-password-card" (click)="$event.stopPropagation()">
+            <mat-icon class="lock-icon">lock</mat-icon>
+            <h3>Upload Password Required</h3>
+            <p>Enter the password to upload POD documents</p>
+            @if (podPasswordError) {
+              <div class="pod-password-error">{{ podPasswordError }}</div>
+            }
+            <mat-form-field appearance="outline" class="password-input">
+              <mat-label>Password</mat-label>
+              <input matInput type="password" [(ngModel)]="podPasswordInput"
+                     (keydown.enter)="verifyPodUploadPassword()"
+                     placeholder="Enter password" autofocus>
+            </mat-form-field>
+            <div class="password-actions">
+              <button mat-stroked-button (click)="cancelPodPasswordDialog()">Cancel</button>
+              <button mat-raised-button color="primary" (click)="verifyPodUploadPassword()">
+                <mat-icon>lock_open</mat-icon> Verify
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Welly POD OCR suggestion panel -->
+      @if (showWellyPodPanel) {
+        <div class="welly-pod-overlay" (click)="closeWellyPodPanel()">
+          <div class="welly-pod-card" (click)="$event.stopPropagation()">
+            <div class="welly-pod-header">
+              <mat-icon class="welly-spark">auto_awesome</mat-icon>
+              <div class="welly-pod-title">
+                <h3>{{ wellyPodBatchMode ? 'Welly â€” Scanning Unlinked PODs' : 'Welly â€” Scan POD for Invoices' }}</h3>
+                @if (wellyPodCurrent) {
+                  <span class="welly-pod-sub">{{ wellyPodCurrent.podNumber || ('POD' + wellyPodCurrent.id) }} · {{ wellyPodCurrent.deliveryDate | date:'dd MMM yyyy' }} · {{ wellyPodCurrent.region }}</span>
+                }
+              </div>
+              <button mat-icon-button (click)="closeWellyPodPanel()" [disabled]="wellyPodScanning || wellyPodLinking">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            @if (wellyPodScanning) {
+              <div class="welly-pod-progress">
+                <mat-progress-bar mode="determinate" [value]="wellyPodProgress"></mat-progress-bar>
+                <p class="welly-pod-status"><mat-icon class="spin">sync</mat-icon> {{ wellyPodStatus }}</p>
+              </div>
+            } @else {
+              <p class="welly-pod-status">{{ wellyPodStatus }}</p>
+            }
+
+            <!-- Batch results -->
+            @if (wellyPodBatchMode) {
+              @if (wellyPodBatchResults.length > 0) {
+                <div class="welly-pod-batch-list">
+                  @for (r of wellyPodBatchResults; track r.pod.id) {
+                    <div class="welly-batch-row" [class.linked]="r.linked > 0">
+                      <mat-icon>{{ r.linked > 0 ? 'check_circle' : (r.found > 0 ? 'help' : 'remove_circle_outline') }}</mat-icon>
+                      <span class="wb-driver">{{ r.pod.driverName }}</span>
+                      <span class="wb-date">{{ r.pod.deliveryDate | date:'dd MMM' }}</span>
+                      <span class="wb-result">
+                        @if (r.linked > 0) { Linked {{ r.linked }} }
+                        @else if (r.found > 0) { {{ r.found }} found (needs review) }
+                        @else { No match }
+                      </span>
+                    </div>
+                  }
+                </div>
+              }
+            } @else {
+              <!-- Single-POD suggestion list -->
+              @if (!wellyPodScanning && wellyPodMatches.length > 0) {
+                <div class="welly-pod-matches">
+                  @for (m of wellyPodMatches; track m.id) {
+                    <label class="welly-match-row" [class.exact]="m.readExactly" [class.already]="m.alreadyLinked">
+                      <mat-checkbox [(ngModel)]="m.approved" [disabled]="m.alreadyLinked"></mat-checkbox>
+                      <div class="welly-match-main">
+                        <span class="wm-inv">{{ m.transactionNumber }}</span>
+                        <span class="wm-cust">{{ m.customerName }}</span>
+                      </div>
+                      <div class="welly-match-tags">
+                        @if (m.readExactly) {
+                          <span class="wm-tag exact"><mat-icon>verified</mat-icon> Exact read</span>
+                        } @else {
+                          <span class="wm-tag fuzzy"><mat-icon>auto_fix_high</mat-icon> Auto-corrected</span>
+                        }
+                        @if (m.alreadyLinked) {
+                          <span class="wm-tag already">Already linked</span>
+                        }
+                        <span class="wm-amount">R{{ formatCurrency(m.salesAmount) }}</span>
+                      </div>
+                    </label>
+                  }
+                </div>
+              }
+
+              @if (!wellyPodScanning && wellyPodUnmatched.length > 0) {
+                <div class="welly-pod-unmatched">
+                  <mat-icon>info</mat-icon>
+                  <span>Couldn't match: {{ wellyPodUnmatched.join(', ') }}</span>
+                </div>
+              }
+
+              <!-- Nothing matched: show what Welly actually read so you can see why -->
+              @if (!wellyPodScanning && wellyPodMatches.length === 0) {
+                <div class="welly-pod-debug">
+                  @if (wellyPodCandidatesFound.length > 0) {
+                    <p class="wd-line"><mat-icon>search</mat-icon> Numbers Welly spotted: <b>{{ wellyPodCandidatesFound.join(', ') }}</b> â€” none exist in the invoice database.</p>
+                  } @else {
+                    <p class="wd-line"><mat-icon>visibility_off</mat-icon> Welly couldn't spot any invoice numbers in the text{{ wellyPodPageCount ? ' (read ' + wellyPodPageCount + ' page' + (wellyPodPageCount === 1 ? '' : 's') + ')' : '' }}.</p>
+                  }
+                  <button mat-button class="wd-toggle" (click)="wellyPodShowDebug = !wellyPodShowDebug">
+                    <mat-icon>{{ wellyPodShowDebug ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    {{ wellyPodShowDebug ? 'Hide' : 'Show' }} what Welly read
+                  </button>
+                  @if (wellyPodShowDebug) {
+                    <pre class="wd-text">{{ wellyPodOcrText || '(no text extracted)' }}</pre>
+                  }
+                  <p class="wd-hint">If you can see the invoice number but Welly can't, the scan may be low-resolution. You can still link it manually below.</p>
+                  <button mat-stroked-button class="wd-manual" (click)="openLinkInvoiceDialog(wellyPodCurrent)">
+                    <mat-icon>receipt</mat-icon> Link invoice manually
+                  </button>
+                </div>
+              }
+            }
+
+            <div class="welly-pod-actions">
+              <button mat-stroked-button (click)="closeWellyPodPanel()" [disabled]="wellyPodScanning || wellyPodLinking">Close</button>
+              @if (!wellyPodBatchMode && wellyPodMatches.length > 0) {
+                <button mat-raised-button color="primary" (click)="applyWellyPodLinks()"
+                        [disabled]="wellyPodScanning || wellyPodLinking || wellyPodApprovedCount() === 0">
+                  <mat-icon>link</mat-icon>
+                  {{ wellyPodLinking ? 'Linkingâ€¦' : 'Link ' + wellyPodApprovedCount() + ' Invoice(s)' }}
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>

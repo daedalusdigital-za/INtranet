@@ -51,11 +51,29 @@ export interface PaperlessSummary {
   myPendingApprovals: number;
 }
 
+export interface StockWarehouseBreakdown {
+  warehouse: string;
+  skuCount: number;
+  totalQuantity: number;
+  lowStock: number;
+  outOfStock: number;
+}
+
+export interface StockSummary {
+  totalSkus: number;
+  totalQuantityOnHand: number;
+  lowStock: number;
+  outOfStock: number;
+  warehouses: number;
+  byWarehouse: StockWarehouseBreakdown[];
+}
+
 export interface ManagementOverview {
   generatedAt: string;
   sales: SalesSummary;
   tenders: TendersSummary;
   logistics: LogisticsSummary;
+  stock: StockSummary;
   finance: FinanceSummary;
   paperless: PaperlessSummary;
 }
