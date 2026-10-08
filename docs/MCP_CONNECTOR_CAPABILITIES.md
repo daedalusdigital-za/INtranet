@@ -221,3 +221,13 @@ and tool-level allow-lists.
 
 See also: [CLAUDE_LOGISTICS_CONNECTOR.md](CLAUDE_LOGISTICS_CONNECTOR.md) (setup guide) and
 [mcp-logistics/README.md](../mcp-logistics/README.md) (developer docs).
+
+---
+
+## 8. Changelog
+
+- **Oct 2026:** Sales-rep vehicles added to the fleet and visible via `list_vehicles` /
+  `list_vehicle_movements`: Lindani (DJ 76 VF ZN), Stanley (DJ 76 VW ZN, CarTrack unit
+  DJ78VWZN), Deon (DJ 76 WC ZN). All three have live CarTrack positions and persisted
+  movement history (`VehicleMovementHistory`).
+

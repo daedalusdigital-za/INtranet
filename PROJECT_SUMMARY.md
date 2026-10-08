@@ -197,7 +197,7 @@ ProjectTracker/
 ## 🚀 Technology Stack
 
 ### Backend
-- **.NET 9** - Latest framework
+- **.NET 10** - Latest framework
 - **ASP.NET Core** - Web API
 - **Entity Framework Core** - ORM
 - **SQL Server** - Database

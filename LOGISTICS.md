@@ -229,6 +229,21 @@ Comprehensive logistics management system integrated into the INtranet applicati
 - `GET /api/tracking/load/{loadId}/track` - Track active load
 - `GET /api/tracking/active-loads` - List active loads
 
+### Document Generation (Trip Sheets, Invoices, Delivery Notes)
+- `GET /api/document-templates/for-load/{loadId}/invoices` - List invoices linked to a load (for the preview selector)
+- `GET /api/document-templates/for-load/{loadId}/{type}?format=html|pdf&txn={invoiceNo}` - Generate tax invoices or delivery notes for a load
+  - Multi-document preview renders two A4 pages per row with per-document scoped CSS (mixed-company loads keep each company's branding)
+  - Print/PDF outputs one full-size document per page; iText7 uses print media rules
+  - Logo/banner assets fall back across document types per company; missing artwork tags are stripped
+- Delivery Note template mirrors the Tax Invoice artwork with a Qty Received column and goods-received sign-off block
+
+### Imported Backorders (Admin → Data Import)
+- `POST /api/backorders/import` - Per-company snapshot import (replaces existing rows for that company)
+- `GET /api/backorders?company={code}` - List imported backorders
+- `GET /api/backorders/summary` - Row counts per company
+- `DELETE /api/backorders/company/{code}` - Clear a company's snapshot
+- Valid companies: PMT, ACM, PHT, SBT, SAW, KOG; sales dashboard back-order tabs prefer imported data over static lists
+
 ### Maintenance
 - `GET /api/maintenance?vehicleId={id}&status={status}` - List maintenance records
 - `GET /api/maintenance/{id}` - Get maintenance record

@@ -1,34 +1,40 @@
-# Project Tracker - Trello-like Internal Project Management
+# Promed Intranet (Project Tracker)
 
-A modern, full-stack project tracking application built with Angular 18 and ASP.NET Core 9, designed for internal department project management.
+A full-stack company intranet built with Angular 18 and ASP.NET Core (.NET 10), running in Docker (frontend + backend + SQL Server + MCP connector + Cloudflare tunnel). Originally a Trello-like project tracker, it has grown into a multi-module business platform.
 
-## 🚀 Features
+## 🚀 Modules & Features
 
-- **Multi-Department Support**: Organize projects by department
-- **Kanban Boards**: Visual project tracking with drag-and-drop cards
-- **Real-time Updates**: Live synchronization using SignalR
-- **Role-Based Access**: Admin, Manager, and Employee roles
-- **Card Management**: Create, edit, move, and delete project cards
-- **Comments & Attachments**: Collaborate on cards with comments and file attachments
-- **Audit Logging**: Track all changes and actions
-- **JWT Authentication**: Secure API access
+- **Projects / Kanban Boards**: Multi-department boards, drag-and-drop cards, comments, attachments, real-time SignalR updates, HBA1C project suite (incl. sales-rep Car Track log)
+- **Logistics**: Loads, trip sheets (manual, Excel import, DN tripsheets), picking slips, POD management, driver/vehicle fleet with live CarTrack GPS tracking and persisted movement history, warehouses & stock transfers, imported ERP invoices with load assignment, document generation (Tax Invoice / Delivery Note previews, print and PDF per invoice or per load)
+- **Sales**: Dashboard with invoices, orders (IMAP), customers, back orders per company (imported via admin or static fallback), sales trip sheets
+- **Stock Management**: Warehouse inventory, SOH Excel imports with preview/commit, fulfilment checks
+- **Document Templates (Admin)**: Per-company (PMT/ACM/PHT/SBT/SAW/KOG) invoice/delivery-note/quote templates reconstructed from Sage Crystal reports, with logo/banner artwork management and merged multi-invoice output
+- **Data Import (Admin)**: Excel/CSV importers for sales/invoices, customers, products, employees and **backorders** (per company, snapshot-replace)
+- **HR / Finance / Expense Tracker / Knowledge Base / Messaging / Calendar / Support Tickets / Paperless documents**
+- **AI**: Claude-powered assistant (Welly), local LLM support, MCP logistics connector so Claude can query loads, vehicles, movements, fuel and incidents
+- **Auth**: JWT with role + per-module permissions, BCrypt passwords
 
 ## 📋 Technology Stack
 
 ### Backend
-- **ASP.NET Core 9** - Web API
+- **ASP.NET Core (.NET 10)** - Web API
 - **Entity Framework Core** - ORM
-- **SQL Server** - Database
+- **SQL Server** (Docker) - Database
 - **SignalR** - Real-time communication
-- **JWT** - Authentication
+- **iText7 + pdfHTML** - PDF generation (invoices, delivery notes, picking slips)
+- **ClosedXML / EPPlus** - Excel import/export
+- **JWT + BCrypt** - Authentication
 
 ### Frontend
-- **Angular 18** - SPA Framework
+- **Angular 18** - SPA Framework (standalone components, signals)
 - **Angular Material** - UI Components
-- **TypeScript** - Type-safe development
-- **SCSS** - Styling
-- **Angular CDK** - Drag-and-drop functionality
+- **TypeScript / SCSS**
 - **SignalR Client** - Real-time updates
+
+### Infrastructure
+- **Docker Compose**: frontend (nginx), backend, SQL Server, searxng, mcp-logistics, cloudflared tunnel
+- **NAS (CIFS)** volumes for documents/archives
+- **CarTrack Fleet API** integration (live GPS + trip history)
 
 ## 🏗️ Architecture
 
@@ -74,9 +80,9 @@ Cards
 ## 🔧 Setup Instructions
 
 ### Prerequisites
-- .NET 9 SDK
+- .NET 10 SDK
 - Node.js 18+ and npm
-- SQL Server (LocalDB or full version)
+- Docker Desktop (recommended) or SQL Server locally
 - Angular CLI 18
 - Visual Studio Code or Visual Studio 2022
 
@@ -228,36 +234,40 @@ ProjectTracker/
 └── README.md
 ```
 
-## 🚀 Deployment to Azure
+## 🚀 Deployment (Docker Compose)
 
-### Backend (Azure App Service)
+Production runs entirely via Docker Compose (see [DOCKER.md](DOCKER.md) and [DEPLOYMENT.md](DEPLOYMENT.md)):
 
-1. **Create Azure SQL Database**
-2. **Create App Service for API**
-3. **Configure connection string in App Service settings**
-4. **Set JWT secret key in App Service configuration**
-5. **Deploy using:**
-   ```powershell
-   dotnet publish -c Release
-   ```
+```powershell
+# Build frontend
+cd Frontend; npx ng build --configuration production; cd ..
 
-### Frontend (Azure Static Web Apps or App Service)
+# Build and start containers
+docker compose build backend frontend
+docker compose up -d
+```
 
-1. **Build for production:**
-   ```powershell
-   ng build --configuration production
-   ```
-
-2. **Deploy dist folder to Azure Static Web Apps or App Service**
+Services: `projecttracker-frontend` (nginx), `projecttracker-backend` (.NET 10, port 5143), `projecttracker-db` (SQL Server), `mcp-logistics` (Claude MCP connector), `cloudflared` (tunnel), `searxng`.
 
 ## 📝 Environment Variables (Production)
 
 ### Backend
-- `SQL_CONNECTION_STRING` - Azure SQL connection string
-- `JWT_SECRET_KEY` - Secret key for JWT tokens
+- `ConnectionStrings__DefaultConnection` - SQL Server connection string
+- `Jwt__Key` - Secret key for JWT tokens
+- `DocumentsPath` - mounted documents/template assets path (NAS CIFS in prod)
 
 ### Frontend
-- Update API URLs in environment files before building
+- API is served same-origin under `/api` via nginx proxy
+
+## 🆕 Recent Updates (Oct 2026)
+
+- **Logistics document previews**: Trip sheet "View Details" now renders the real generated documents (trip sheet, picking slip, tax invoices, delivery notes) with a per-invoice selector; multi-invoice preview shows two A4 pages per row with per-document scoped styling (mixed-company loads keep each company's branding); print/PDF outputs one full-size document per page
+- **Delivery Note template**: identical artwork to the Tax Invoice with a Qty Received column and goods-received sign-off block
+- **DN Tripsheets** (renamed from Pad Tripsheets): links what it can to system invoices and accepts the rest as unmatched
+- **Trip sheet email**: manual recipients popup, CC-self, trip sheet + picking slip PDF attachments
+- **Backorder importer**: Admin → Data Import → Backorders (per-company snapshot import, api/backorders); sales dashboard back-order tabs read imported data
+- **Sales-rep fleet tracking**: Lindani / Stanley / Deon vehicles (DJ76…ZN) added to fleet with CarTrack live positions + movement history; HBA1C Car Track registrations fixed (GP → ZN plates)
+- **MCP logistics connector**: Claude can list vehicles, movements, loads, fuel data and incidents
 
 ## 🤝 Contributing
 
@@ -269,6 +279,4 @@ Internal use only - Company proprietary software
 
 ## 🆘 Support
 
-For technical support, contact:
-- IT Department
-- Email: support@company.com
+For technical support, contact the internal IT/development team.
