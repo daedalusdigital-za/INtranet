@@ -211,10 +211,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<IActionResult> GetHtml(string company, string type)
         {
             if (!ValidCompany(company) || !ValidType(type)) return NotFound();
-            var path = Path.Combine(Dir(company, type), "template.html");
-            var html = System.IO.File.Exists(path)
-                ? await System.IO.File.ReadAllTextAsync(path)
-                : StarterTemplate(company, type);
+            var html = await ResolveTemplateAsync(company, type);
             return Ok(new { company, type, html });
         }
 
@@ -421,10 +418,7 @@ namespace ProjectTracker.API.Controllers
             foreach (var grp in lines.GroupBy(l => new { l.SourceCompany, l.TransactionNumber }))
             {
                 var company = ValidCompany(grp.Key.SourceCompany ?? "") ? grp.Key.SourceCompany! : "PMT";
-                var tplPath = Path.Combine(Dir(company, type), "template.html");
-                var template = System.IO.File.Exists(tplPath)
-                    ? await System.IO.File.ReadAllTextAsync(tplPath)
-                    : StarterTemplate(company, type);
+                var template = await ResolveTemplateAsync(company, type);
                 docs.Add(MergeTemplate(template, company, type, grp.OrderBy(l => l.ProductCode).ToList()));
             }
 
@@ -569,10 +563,7 @@ namespace ProjectTracker.API.Controllers
             if (lines.Count == 0)
                 return NotFound(new { error = "No invoice lines found for that transaction." });
 
-            var tplPath = Path.Combine(Dir(company, type), "template.html");
-            var template = System.IO.File.Exists(tplPath)
-                ? await System.IO.File.ReadAllTextAsync(tplPath)
-                : StarterTemplate(company, type);
+            var template = await ResolveTemplateAsync(company, type);
 
             var html = MergeTemplate(template, company, type, lines);
 
@@ -605,10 +596,7 @@ namespace ProjectTracker.API.Controllers
                 .OrderBy(i => i.ProductCode)
                 .ToListAsync();
 
-            var tplPath = Path.Combine(Dir(company, type), "template.html");
-            var template = System.IO.File.Exists(tplPath)
-                ? await System.IO.File.ReadAllTextAsync(tplPath)
-                : StarterTemplate(company, type);
+            var template = await ResolveTemplateAsync(company, type);
 
             // If no invoice chosen, merge with sample placeholder data
             var html = lines.Count > 0
@@ -1036,48 +1024,83 @@ namespace ProjectTracker.API.Controllers
             // UOM column there is a single "Qty Received" column instead of
             // Unit Price + Extended Price (the two documents go hand in hand).
             if (type.Equals("delivery-note", StringComparison.OrdinalIgnoreCase))
-            {
-                // Normalise line endings so multi-line replacements match reliably
-                html = html.Replace("\r\n", "\n");
+                html = ApplyDeliveryNoteTransform(html);
 
-                html = html
-                    // Column headers: Unit Price + Extended Price -> Qty Received
-                    .Replace(
-                        "<th class=\"c-up\">Unit Price</th>\n        <th class=\"c-ext\">Extended Price</th>",
-                        "<th class=\"c-qr\">Qty<br/>Received</th>")
-                    // Line cells: price cells -> one empty write-in cell
-                    .Replace(
-                        "<td class=\"num\">{{UnitPrice}}</td>\n        <td class=\"num\">{{LineAmount}}</td>",
-                        "<td class=\"qr-cell\">&nbsp;</td>")
-                    // COMPLETE row + spacer row: 9 columns -> 8
-                    .Replace(
-                        "<tr><td></td><td></td><td></td><td></td><td></td><td class=\"complete\">COMPLETE</td><td></td><td></td><td></td></tr>",
-                        "<tr><td></td><td></td><td></td><td></td><td></td><td class=\"complete\">COMPLETE</td><td></td><td></td></tr>")
-                    .Replace(
-                        "<tr class=\"spacer\"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>",
-                        "<tr class=\"spacer\"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>")
-                    // No money totals on a delivery note: banking block + goods-received sign-off
-                    .Replace("<td class=\"bank\" colspan=\"6\" rowspan=\"5\">", "<td class=\"bank\" colspan=\"5\" rowspan=\"5\">")
-                    .Replace(
-                        "<td class=\"tl\" colspan=\"2\">Subtotal</td>\n        <td class=\"tv\">{{SubTotal}}</td>",
-                        "<td class=\"tl\" colspan=\"2\">Received By (print name)</td>\n        <td class=\"tv\">&nbsp;</td>")
-                    .Replace(
-                        "<tr><td class=\"tl\" colspan=\"2\">Total sales tax</td><td class=\"tv\">{{VatAmount}}</td></tr>",
-                        "<tr><td class=\"tl\" colspan=\"2\">Signature</td><td class=\"tv\">&nbsp;</td></tr>")
-                    .Replace(
-                        "<tr class=\"rule\"><td class=\"tl\" colspan=\"2\">Total amount</td><td class=\"tv\">{{TotalWithTax}}</td></tr>",
-                        "<tr class=\"rule\"><td class=\"tl\" colspan=\"2\">Date Received</td><td class=\"tv\">&nbsp;</td></tr>")
-                    .Replace(
-                        "<tr><td class=\"tl\" colspan=\"2\">Less payment</td><td class=\"tv\">{{LessPayment}}</td></tr>",
-                        "<tr><td class=\"tl\" colspan=\"2\">Time</td><td class=\"tv\">&nbsp;</td></tr>")
-                    .Replace(
-                        "<tr class=\"due\"><td class=\"tl\" colspan=\"2\">Amount due</td><td class=\"tv\">{{Total}}</td></tr>",
-                        "<tr class=\"due\"><td class=\"tl\" colspan=\"2\">Goods received in good order</td><td class=\"tv\">YES / NO</td></tr>")
-                    // Column width for the new Qty Received column + write-in cell style
-                    .Replace(
-                        ".c-item{width:86pt;} .c-desc{width:auto;} .c-uom{width:40pt;} .c-up{width:58pt;} .c-ext{width:74pt;}",
-                        ".c-item{width:86pt;} .c-desc{width:auto;} .c-uom{width:40pt;} .c-qr{width:74pt;}\n  .qr-cell { border-bottom: 0.5pt dotted #999; }");
+            return html;
+        }
+
+        // ====================================================================
+        // Template resolution: prefer the saved template for the exact doc
+        // type; for delivery notes fall back to the company's OWN saved
+        // invoice template (transformed) before resorting to the generic
+        // starter shell — otherwise e.g. an Access Medical delivery note
+        // would come out with the default Promed-blue theme.
+        // ====================================================================
+        private async Task<string> ResolveTemplateAsync(string company, string type)
+        {
+            var tplPath = Path.Combine(Dir(company, type), "template.html");
+            if (System.IO.File.Exists(tplPath))
+                return await System.IO.File.ReadAllTextAsync(tplPath);
+
+            if (type.Equals("delivery-note", StringComparison.OrdinalIgnoreCase))
+            {
+                var invPath = Path.Combine(Dir(company, "invoice"), "template.html");
+                if (System.IO.File.Exists(invPath))
+                    return ApplyDeliveryNoteTransform(await System.IO.File.ReadAllTextAsync(invPath));
             }
+
+            return StarterTemplate(company, type);
+        }
+
+        // Converts a Tax Invoice template (starter shell or a saved per-company
+        // copy that kept the shell's markup) into a Delivery Note: swaps the
+        // price columns for a Qty Received write-in column and replaces the
+        // money totals with a goods-received sign-off block.
+        private static string ApplyDeliveryNoteTransform(string html)
+        {
+            // Normalise line endings so multi-line replacements match reliably
+            html = html.Replace("\r\n", "\n");
+
+            html = html
+                // Document title (saved invoice templates have it baked in)
+                .Replace("Tax Invoice", "Delivery Note")
+                .Replace("TAX INVOICE", "DELIVERY NOTE")
+                // Column headers: Unit Price + Extended Price -> Qty Received
+                .Replace(
+                    "<th class=\"c-up\">Unit Price</th>\n        <th class=\"c-ext\">Extended Price</th>",
+                    "<th class=\"c-qr\">Qty<br/>Received</th>")
+                // Line cells: price cells -> one empty write-in cell
+                .Replace(
+                    "<td class=\"num\">{{UnitPrice}}</td>\n        <td class=\"num\">{{LineAmount}}</td>",
+                    "<td class=\"qr-cell\">&nbsp;</td>")
+                // COMPLETE row + spacer row: 9 columns -> 8
+                .Replace(
+                    "<tr><td></td><td></td><td></td><td></td><td></td><td class=\"complete\">COMPLETE</td><td></td><td></td><td></td></tr>",
+                    "<tr><td></td><td></td><td></td><td></td><td></td><td class=\"complete\">COMPLETE</td><td></td><td></td></tr>")
+                .Replace(
+                    "<tr class=\"spacer\"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>",
+                    "<tr class=\"spacer\"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>")
+                // No money totals on a delivery note: banking block + goods-received sign-off
+                .Replace("<td class=\"bank\" colspan=\"6\" rowspan=\"5\">", "<td class=\"bank\" colspan=\"5\" rowspan=\"5\">")
+                .Replace(
+                    "<td class=\"tl\" colspan=\"2\">Subtotal</td>\n        <td class=\"tv\">{{SubTotal}}</td>",
+                    "<td class=\"tl\" colspan=\"2\">Received By (print name)</td>\n        <td class=\"tv\">&nbsp;</td>")
+                .Replace(
+                    "<tr><td class=\"tl\" colspan=\"2\">Total sales tax</td><td class=\"tv\">{{VatAmount}}</td></tr>",
+                    "<tr><td class=\"tl\" colspan=\"2\">Signature</td><td class=\"tv\">&nbsp;</td></tr>")
+                .Replace(
+                    "<tr class=\"rule\"><td class=\"tl\" colspan=\"2\">Total amount</td><td class=\"tv\">{{TotalWithTax}}</td></tr>",
+                    "<tr class=\"rule\"><td class=\"tl\" colspan=\"2\">Date Received</td><td class=\"tv\">&nbsp;</td></tr>")
+                .Replace(
+                    "<tr><td class=\"tl\" colspan=\"2\">Less payment</td><td class=\"tv\">{{LessPayment}}</td></tr>",
+                    "<tr><td class=\"tl\" colspan=\"2\">Time</td><td class=\"tv\">&nbsp;</td></tr>")
+                .Replace(
+                    "<tr class=\"due\"><td class=\"tl\" colspan=\"2\">Amount due</td><td class=\"tv\">{{Total}}</td></tr>",
+                    "<tr class=\"due\"><td class=\"tl\" colspan=\"2\">Goods received in good order</td><td class=\"tv\">YES / NO</td></tr>")
+                // Column width for the new Qty Received column + write-in cell style
+                .Replace(
+                    ".c-item{width:86pt;} .c-desc{width:auto;} .c-uom{width:40pt;} .c-up{width:58pt;} .c-ext{width:74pt;}",
+                    ".c-item{width:86pt;} .c-desc{width:auto;} .c-uom{width:40pt;} .c-qr{width:74pt;}\n  .qr-cell { border-bottom: 0.5pt dotted #999; }");
 
             return html;
         }
