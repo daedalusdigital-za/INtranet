@@ -1,5 +1,5 @@
-﻿// ============================================================
-// Sales dialog components â€” extracted verbatim from the former
+// ============================================================
+// Sales dialog components — extracted verbatim from the former
 // 12.8k-line sales-dashboard.component.ts.
 // ============================================================
 import { Component, OnInit, inject, signal, computed, Inject } from '@angular/core';
@@ -61,7 +61,7 @@ import { Invoice, IncomingOrderEmail } from './sales.models';
   template: `
     <h2 mat-dialog-title style="display: flex; align-items: center; gap: 8px;">
       <mat-icon style="color:#1a237e;">receipt_long</mat-icon>
-      {{ data.pod.podNumber || ('POD' + data.pod.id) }} â€” Invoices
+      {{ data.pod.podNumber || ('POD' + data.pod.id) }} — Invoices
     </h2>
     <mat-dialog-content style="min-width: 380px;">
       @if (invoices.length > 0) {

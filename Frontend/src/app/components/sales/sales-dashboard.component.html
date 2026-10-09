@@ -431,7 +431,7 @@
                   <div class="delivery-preview">
                     <mat-icon>summarize</mat-icon>
                     <div class="preview-content">
-                      <strong>{{ deliverySelectedInvoices.length }} invoice(s)</strong> selected â€¢
+                      <strong>{{ deliverySelectedInvoices.length }} invoice(s)</strong> selected •
                       Total value: <strong>R{{ getDeliveryTotalValue() | number:'1.2-2' }}</strong>
                       @if (deliveryForm.priority === 'Urgent') {
                         • <span class="urgent-tag">🔴 URGENT</span>
@@ -645,7 +645,7 @@
               <div class="section-header">
                 <h3>
                   <mat-icon style="vertical-align: middle; margin-right: 8px;">mark_email_unread</mat-icon>
-                  Incoming Order Emails â€” Today
+                  Incoming Order Emails — Today
                 </h3>
                 <div class="section-actions">
                   <mat-form-field appearance="outline" class="search-field">
@@ -1227,7 +1227,7 @@
                               <span class="sh-products-pill"><mat-icon>inventory_2</mat-icon> products</span>
                             }
                           </td>
-                          <td class="mono sh-muted">{{ row.orderNumber || 'â€”' }}</td>
+                          <td class="mono sh-muted">{{ row.orderNumber || '—' }}</td>
                           <td>
                             @if (getCompanyLogo(row.sourceCompany || '')) {
                               <img class="sh-company-logo" [src]="getCompanyLogo(row.sourceCompany || '')"
@@ -1239,7 +1239,7 @@
                                 {{ getCompanyShortName(row.sourceCompany || '') }}
                               </span>
                             } @else {
-                              <span class="sh-muted">â€”</span>
+                              <span class="sh-muted">—</span>
                             }
                           </td>
                           <td class="right-align sh-amount">R {{ formatCurrencyFull(row.salesAmount) }}</td>
@@ -1255,11 +1255,11 @@
                           <tr class="sh-detail-row">
                             <td colspan="8">
                               @if (salesHistoryLinesLoading()) {
-                                <div class="sh-detail-loading"><mat-spinner diameter="24"></mat-spinner> Loading product detailâ€¦</div>
+                                <div class="sh-detail-loading"><mat-spinner diameter="24"></mat-spinner> Loading product detail…</div>
                               } @else if (salesHistoryLines().length === 0) {
                                 <div class="sh-detail-empty">No product-level detail available for this invoice.</div>
                               } @else {
-                                <div class="sh-detail-title"><mat-icon>inventory_2</mat-icon> Product Breakdown â€” {{ row.invoiceNumber }}</div>
+                                <div class="sh-detail-title"><mat-icon>inventory_2</mat-icon> Product Breakdown — {{ row.invoiceNumber }}</div>
                                 <table class="sh-detail-table">
                                   <thead>
                                     <tr>
@@ -1274,8 +1274,8 @@
                                   <tbody>
                                     @for (line of salesHistoryLines(); track line.id) {
                                       <tr>
-                                        <td class="mono">{{ line.itemCode || 'â€”' }}</td>
-                                        <td class="sh-desc">{{ line.description || 'â€”' }}</td>
+                                        <td class="mono">{{ line.itemCode || '—' }}</td>
+                                        <td class="sh-desc">{{ line.description || '—' }}</td>
                                         <td class="right-align">{{ line.quantity | number:'1.0-2' }}</td>
                                         <td class="right-align">R {{ formatCurrencyFull(line.unitPrice) }}</td>
                                         <td class="right-align sh-amount">R {{ formatCurrencyFull(line.salesAmount) }}</td>
@@ -1819,7 +1819,7 @@
 
               <p class="ts-hint">
                 <mat-icon>info</mat-icon>
-                Stage 1: a sales agent creates a trip sheet. Stage 2: a <strong>different</strong> sales agent checks &amp; approves it â€” only then does it appear in Logistics.
+                Stage 1: a sales agent creates a trip sheet. Stage 2: a <strong>different</strong> sales agent checks &amp; approves it — only then does it appear in Logistics.
               </p>
 
               @if (loadingTripSheets()) {
@@ -1857,12 +1857,12 @@
                               {{ tripSheetStatusLabel(ts.status) }}
                             </span>
                           </td>
-                          <td>{{ ts.routeArea || (ts.warehouseCode || 'â€”') }}</td>
+                          <td>{{ ts.routeArea || (ts.warehouseCode || '—') }}</td>
                           <td>{{ ts.lines.length }}</td>
                           <td>R {{ ts.totalValue | number:'1.2-2' }}</td>
-                          <td>{{ ts.createdByName || 'â€”' }}</td>
-                          <td>{{ ts.checkedByName || 'â€”' }}</td>
-                          <td>{{ ts.convertedLoadNumber || 'â€”' }}</td>
+                          <td>{{ ts.createdByName || '—' }}</td>
+                          <td>{{ ts.checkedByName || '—' }}</td>
+                          <td>{{ ts.convertedLoadNumber || '—' }}</td>
                           <td class="ts-actions">
                             <button mat-icon-button matTooltip="View" (click)="viewTripSheet(ts)">
                               <mat-icon>visibility</mat-icon>
@@ -1908,16 +1908,16 @@
             </div>
             <div class="ts-dialog-body">
 
-              <!-- Stage 0: sign-off â€” capture signer & approver first -->
+              <!-- Stage 0: sign-off — capture signer & approver first -->
               @if (tripSheetMode === 'signoff') {
                 <p class="ts-choose-intro">You (<strong>{{ currentUserName || 'current user' }}</strong>) are creating this trip sheet. Choose the <strong>sales agent who signs it off</strong> and the <strong>manager who approves it</strong>.</p>
                 <div class="ts-signoff-grid">
                   <mat-form-field appearance="outline">
-                    <mat-label>Signer â€” sales agent (colleague)</mat-label>
+                    <mat-label>Signer — sales agent (colleague)</mat-label>
                     <input type="text" matInput [matAutocomplete]="signerAuto"
                            [(ngModel)]="signerSearch"
                            (ngModelChange)="onSignerSearchChange($event)"
-                           placeholder="Type a colleague's name to searchâ€¦">
+                           placeholder="Type a colleague's name to search…">
                     <mat-icon matSuffix>search</mat-icon>
                     <mat-autocomplete #signerAuto="matAutocomplete"
                                       (optionSelected)="onSignerSelected($event.option.value)"
@@ -1928,11 +1928,11 @@
                     </mat-autocomplete>
                   </mat-form-field>
                   <mat-form-field appearance="outline">
-                    <mat-label>Approver â€” manager (checks &amp; signs)</mat-label>
+                    <mat-label>Approver — manager (checks &amp; signs)</mat-label>
                     <input type="text" matInput [matAutocomplete]="approverAuto"
                            [(ngModel)]="approverSearch"
                            (ngModelChange)="onApproverSearchChange($event)"
-                           placeholder="Type your manager's name to searchâ€¦">
+                           placeholder="Type your manager's name to search…">
                     <mat-icon matSuffix>search</mat-icon>
                     <mat-autocomplete #approverAuto="matAutocomplete"
                                       (optionSelected)="onApproverSelected($event.option.value)"
@@ -1975,7 +1975,7 @@
                 </div>
               }
 
-              <!-- Import panel â€” exact mirror of the Logistics trip sheet import -->
+              <!-- Import panel — exact mirror of the Logistics trip sheet import -->
               @if (tripSheetMode === 'import') {
                 <div class="ts-import-panel">
                   <button mat-button class="ts-back" (click)="backToModeChooser()">
@@ -1994,15 +1994,15 @@
                         <input #tsFile type="file" accept=".xlsx,.xls" hidden (change)="onTsImportFileSelected($event)">
                         <mat-icon>cloud_upload</mat-icon>
                         <h4>Drag &amp; drop an Excel file here</h4>
-                        <p>or click to browse â€” Supported format: .xlsx (max 10MB)</p>
+                        <p>or click to browse — Supported format: .xlsx (max 10MB)</p>
                       </div>
 
                       <div class="ts-format-hints">
                         <h5>Supported trip sheet format</h5>
                         <ul>
-                          <li><strong>INV NO</strong> <span class="req">required</span> â€” the invoice / transaction number</li>
+                          <li><strong>INV NO</strong> <span class="req">required</span> — the invoice / transaction number</li>
                           <li><strong>Customer Name</strong> <span class="req">required</span></li>
-                          <li><strong>Address</strong> <span class="req">required</span> â€” delivery address</li>
+                          <li><strong>Address</strong> <span class="req">required</span> — delivery address</li>
                           <li><strong>Product Description</strong></li>
                           <li><strong>Qty</strong></li>
                           <li><strong>Value</strong></li>
@@ -2020,7 +2020,7 @@
                       <div class="ts-preview-actions">
                         <button mat-raised-button color="primary" [disabled]="importUploading" (click)="previewImportFile()">
                           <mat-icon>visibility</mat-icon>
-                          {{ importUploading ? 'Parsingâ€¦' : 'Preview Import' }}
+                          {{ importUploading ? 'Parsing…' : 'Preview Import' }}
                         </button>
                       </div>
                     }
@@ -2061,13 +2061,13 @@
                                       [class.approved]="r.status === 'matched'"
                                       [class.pending]="r.status === 'partial' || r.status === 'unmatched'"
                                       [class.rejected]="r.status === 'error'">
-                                  {{ r.status || 'â€”' }}
+                                  {{ r.status || '—' }}
                                 </span>
                               </td>
-                              <td>{{ r.data?.invoiceNumber || 'â€”' }}</td>
-                              <td>{{ r.data?.customerName || r.data?.customerNumber || 'â€”' }}</td>
-                              <td>{{ r.data?.deliveryAddress || 'â€”' }}{{ r.data?.city ? ', ' + r.data.city : '' }}</td>
-                              <td>{{ r.data?.productDescription || 'â€”' }}</td>
+                              <td>{{ r.data?.invoiceNumber || '—' }}</td>
+                              <td>{{ r.data?.customerName || r.data?.customerNumber || '—' }}</td>
+                              <td>{{ r.data?.deliveryAddress || '—' }}{{ r.data?.city ? ', ' + r.data.city : '' }}</td>
+                              <td>{{ r.data?.productDescription || '—' }}</td>
                               <td>{{ r.data?.quantity || 0 }}</td>
                               <td>R {{ (r.data?.salesAmount || 0) | number:'1.2-2' }}</td>
                             </tr>
@@ -2103,7 +2103,7 @@
                   <mat-form-field appearance="outline">
                     <mat-label>Warehouse / Depot</mat-label>
                     <mat-select [(value)]="tripSheetForm.warehouseCode">
-                      <mat-option value="">â€”</mat-option>
+                      <mat-option value="">—</mat-option>
                       <mat-option value="GP">GP (Gauteng)</mat-option>
                       <mat-option value="CPT">CPT (Cape Town)</mat-option>
                       <mat-option value="KZN">KZN (Durban)</mat-option>
@@ -2212,7 +2212,7 @@
               <div class="ts-dialog-footer">
                 <button mat-button (click)="closeTripSheetDialog()">Cancel</button>
                 <button mat-raised-button color="primary" [disabled]="savingTripSheet" (click)="saveTripSheet()">
-                  {{ savingTripSheet ? 'Savingâ€¦' : (editingTripSheetId ? 'Save Changes' : 'Submit for Approval') }}
+                  {{ savingTripSheet ? 'Saving…' : (editingTripSheetId ? 'Save Changes' : 'Submit for Approval') }}
                 </button>
               </div>
             }
@@ -2241,7 +2241,7 @@
                     (click)="previewTripsheet()">
               @if (tripsheetPreviewLoading) {
                 <mat-spinner diameter="18"></mat-spinner>
-                <span>Loadingâ€¦</span>
+                <span>Loading…</span>
               } @else {
                 <mat-icon>description</mat-icon>
                 <span>Preview Tripsheet</span>
@@ -2253,12 +2253,12 @@
             @if (tripsheetPanelLoading) {
               <div class="pod-panel-loading">
                 <mat-spinner diameter="32"></mat-spinner>
-                <p>Loading attachmentsâ€¦</p>
+                <p>Loading attachments…</p>
               </div>
             } @else {
               @if (tripsheetPanelLoad) {
                 <div class="pod-panel-meta">
-                  <div><label>Status</label><span>{{ tripsheetPanelLoad.status || 'â€”' }}</span></div>
+                  <div><label>Status</label><span>{{ tripsheetPanelLoad.status || '—' }}</span></div>
                   @if (tripsheetPanelLoad.deliveryLocation) {
                     <div><label>Delivery</label><span>{{ tripsheetPanelLoad.deliveryLocation }}</span></div>
                   }
@@ -2328,10 +2328,10 @@
             </div>
             <div class="ts-dialog-body">
               <div class="ts-view-meta">
-                <div><label>Route / Area</label><span>{{ viewingTripSheet.routeArea || 'â€”' }}</span></div>
-                <div><label>Warehouse</label><span>{{ viewingTripSheet.warehouseCode || 'â€”' }}</span></div>
-                <div><label>Scheduled</label><span>{{ viewingTripSheet.scheduledDate ? (viewingTripSheet.scheduledDate | date:'mediumDate') : 'â€”' }}</span></div>
-                <div><label>Created by</label><span>{{ viewingTripSheet.createdByName || 'â€”' }}</span></div>
+                <div><label>Route / Area</label><span>{{ viewingTripSheet.routeArea || '—' }}</span></div>
+                <div><label>Warehouse</label><span>{{ viewingTripSheet.warehouseCode || '—' }}</span></div>
+                <div><label>Scheduled</label><span>{{ viewingTripSheet.scheduledDate ? (viewingTripSheet.scheduledDate | date:'mediumDate') : '—' }}</span></div>
+                <div><label>Created by</label><span>{{ viewingTripSheet.createdByName || '—' }}</span></div>
                 <div><label>Created</label><span>{{ viewingTripSheet.createdAt | date:'medium' }}</span></div>
                 @if (viewingTripSheet.signerName) {
                   <div><label>Signer</label><span>{{ viewingTripSheet.signerName }}</span></div>
@@ -2363,10 +2363,10 @@
                   @for (l of viewingTripSheet.lines; track $index) {
                     <tr>
                       <td>{{ $index + 1 }}</td>
-                      <td>{{ l.customerName || 'â€”' }}</td>
-                      <td>{{ l.invoiceNumber || 'â€”' }}</td>
-                      <td>{{ l.address || 'â€”' }}{{ l.city ? ', ' + l.city : '' }}</td>
-                      <td>{{ l.contactPerson || 'â€”' }}{{ l.contactPhone ? ' (' + l.contactPhone + ')' : '' }}</td>
+                      <td>{{ l.customerName || '—' }}</td>
+                      <td>{{ l.invoiceNumber || '—' }}</td>
+                      <td>{{ l.address || '—' }}{{ l.city ? ', ' + l.city : '' }}</td>
+                      <td>{{ l.contactPerson || '—' }}{{ l.contactPhone ? ' (' + l.contactPhone + ')' : '' }}</td>
                       <td>{{ l.quantity }}</td>
                       <td>R {{ l.value | number:'1.2-2' }}</td>
                     </tr>
@@ -3155,7 +3155,7 @@
             <div class="welly-pod-header">
               <mat-icon class="welly-spark">auto_awesome</mat-icon>
               <div class="welly-pod-title">
-                <h3>{{ wellyPodBatchMode ? 'Welly â€” Scanning Unlinked PODs' : 'Welly â€” Scan POD for Invoices' }}</h3>
+                <h3>{{ wellyPodBatchMode ? 'Welly — Scanning Unlinked PODs' : 'Welly — Scan POD for Invoices' }}</h3>
                 @if (wellyPodCurrent) {
                   <span class="welly-pod-sub">{{ wellyPodCurrent.podNumber || ('POD' + wellyPodCurrent.id) }} · {{ wellyPodCurrent.deliveryDate | date:'dd MMM yyyy' }} · {{ wellyPodCurrent.region }}</span>
                 }
@@ -3230,7 +3230,7 @@
               @if (!wellyPodScanning && wellyPodMatches.length === 0) {
                 <div class="welly-pod-debug">
                   @if (wellyPodCandidatesFound.length > 0) {
-                    <p class="wd-line"><mat-icon>search</mat-icon> Numbers Welly spotted: <b>{{ wellyPodCandidatesFound.join(', ') }}</b> â€” none exist in the invoice database.</p>
+                    <p class="wd-line"><mat-icon>search</mat-icon> Numbers Welly spotted: <b>{{ wellyPodCandidatesFound.join(', ') }}</b> — none exist in the invoice database.</p>
                   } @else {
                     <p class="wd-line"><mat-icon>visibility_off</mat-icon> Welly couldn't spot any invoice numbers in the text{{ wellyPodPageCount ? ' (read ' + wellyPodPageCount + ' page' + (wellyPodPageCount === 1 ? '' : 's') + ')' : '' }}.</p>
                   }
@@ -3255,7 +3255,7 @@
                 <button mat-raised-button color="primary" (click)="applyWellyPodLinks()"
                         [disabled]="wellyPodScanning || wellyPodLinking || wellyPodApprovedCount() === 0">
                   <mat-icon>link</mat-icon>
-                  {{ wellyPodLinking ? 'Linkingâ€¦' : 'Link ' + wellyPodApprovedCount() + ' Invoice(s)' }}
+                  {{ wellyPodLinking ? 'Linking…' : 'Link ' + wellyPodApprovedCount() + ' Invoice(s)' }}
                 </button>
               }
             </div>

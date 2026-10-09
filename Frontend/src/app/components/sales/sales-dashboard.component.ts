@@ -129,7 +129,7 @@ export class SalesDashboardComponent implements OnInit {
   salesHistoryDateRangeLabel = computed(() => {
     const min = this.salesHistoryDateMin();
     const max = this.salesHistoryDateMax();
-    if (!min || !max) return 'â€”';
+    if (!min || !max) return '—';
     const fmt = (s: string) => new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: '2-digit' });
     return `${fmt(min)} → ${fmt(max)}`;
   });
@@ -1112,7 +1112,7 @@ export class SalesDashboardComponent implements OnInit {
     return a ? `${a.name} ${a.surname || ''}`.trim() : '';
   }
 
-  /** Autocomplete displayWith â€” resolves a userId to the agent's full name. */
+  /** Autocomplete displayWith — resolves a userId to the agent's full name. */
   displayAgent = (userId: number | null): string => this.agentDisplayName(userId);
 
   private filterAgents(term: string, excludeId: number | null): { userId: number; name: string; surname?: string }[] {
@@ -1235,15 +1235,15 @@ export class SalesDashboardComponent implements OnInit {
     dialogRef.afterClosed().subscribe((result: any) => {
       if (result?.created) {
         const msg = result.sentToSign
-          ? 'Trip sheet generated â€” sent to the signer to sign off'
-          : 'Trip sheet generated â€” awaiting approval by the designated approver';
+          ? 'Trip sheet generated — sent to the signer to sign off'
+          : 'Trip sheet generated — awaiting approval by the designated approver';
         this.snackBar.open(msg, 'Close', { duration: 4000 });
         this.loadSalesTripSheets();
       }
     });
   }
 
-  /** Import mode â€” opens the exact Logistics Excel import dialog, then the shared create dialog. */
+  /** Import mode — opens the exact Logistics Excel import dialog, then the shared create dialog. */
   openLogisticsImport(): void {
     this.showTripSheetDialog = false;
     const importRef = this.dialog.open(ImportTripsheetDialog, {
@@ -1259,7 +1259,7 @@ export class SalesDashboardComponent implements OnInit {
     });
   }
 
-  /** Manual mode â€” opens the exact Logistics create dialog (map, distance, driver assignment). */
+  /** Manual mode — opens the exact Logistics create dialog (map, distance, driver assignment). */
   openLogisticsManual(): void {
     this.showTripSheetDialog = false;
     this.openSalesCreateDialog([], true);
@@ -1412,7 +1412,7 @@ export class SalesDashboardComponent implements OnInit {
       next: (res) => {
         this.lineLookupBusy = { ...this.lineLookupBusy, [index]: false };
         if (!res?.found) {
-          this.snackBar.open(`No invoice found for ${inv} â€” you can type the details manually`, 'Close', { duration: 4000 });
+          this.snackBar.open(`No invoice found for ${inv} — you can type the details manually`, 'Close', { duration: 4000 });
           return;
         }
         const resultLines: SalesTripSheetLine[] = (res.lines || []).map((l: any) => ({
@@ -1561,7 +1561,7 @@ export class SalesDashboardComponent implements OnInit {
     req.subscribe({
       next: () => {
         this.savingTripSheet = false;
-        this.snackBar.open(this.editingTripSheetId ? 'Trip sheet updated' : 'Trip sheet created â€” awaiting approval by another agent', 'Close', { duration: 3500 });
+        this.snackBar.open(this.editingTripSheetId ? 'Trip sheet updated' : 'Trip sheet created — awaiting approval by another agent', 'Close', { duration: 3500 });
         this.closeTripSheetDialog();
         this.loadSalesTripSheets();
       },
@@ -1591,7 +1591,7 @@ export class SalesDashboardComponent implements OnInit {
       signedByName: this.currentUserName || null
     }).subscribe({
       next: () => {
-        this.snackBar.open('Trip sheet signed â€” now awaiting approval', 'Close', { duration: 3500 });
+        this.snackBar.open('Trip sheet signed — now awaiting approval', 'Close', { duration: 3500 });
         this.closeViewTripSheet();
         this.loadSalesTripSheets();
       },
@@ -1601,7 +1601,7 @@ export class SalesDashboardComponent implements OnInit {
 
   approveTripSheet(sheet: SalesTripSheet): void {
     if (!this.canApproveTripSheet(sheet)) {
-      this.snackBar.open('You cannot approve your own trip sheet â€” it must be checked by a different sales agent.', 'Close', { duration: 4000 });
+      this.snackBar.open('You cannot approve your own trip sheet — it must be checked by a different sales agent.', 'Close', { duration: 4000 });
       return;
     }
     this.http.post<SalesTripSheet>(`${this.tripSheetApi}/${sheet.id}/approve`, {
@@ -2835,11 +2835,11 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   onSalesTabChange(index: number): void {
-    // Sales History is tab index 3 â€” lazy load on first view
+    // Sales History is tab index 3 — lazy load on first view
     if (index === 3 && !this.salesHistoryLoaded) {
       this.loadSalesHistory();
     }
-    // Trip Sheets is the last tab (index 6) â€” lazy load on first view
+    // Trip Sheets is the last tab (index 6) — lazy load on first view
     if (index === 6 && !this.tripSheetsLoaded) {
       this.loadSalesTripSheets();
     }
@@ -3087,7 +3087,7 @@ export class SalesDashboardComponent implements OnInit {
 
       // Build rows
       const rows: any[][] = [
-        [`${companyName} â€” Sales Report`],
+        [`${companyName} — Sales Report`],
         [`Period: ${fromStr} to ${toStr}`],
         [`Generated: ${new Date().toLocaleString('en-ZA')}`],
         [],
@@ -3198,7 +3198,7 @@ export class SalesDashboardComponent implements OnInit {
       pdf.text(`${company.name}`, margin, 14);
       pdf.setFontSize(11);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(`Sales Report â€” ${fromStr} to ${toStr}`, margin, 22);
+      pdf.text(`Sales Report — ${fromStr} to ${toStr}`, margin, 22);
       pdf.setFontSize(8);
       pdf.text(`Generated: ${new Date().toLocaleString('en-ZA')}`, margin, 28);
       y = 40;
@@ -3380,7 +3380,7 @@ export class SalesDashboardComponent implements OnInit {
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(8);
       hx = margin + 2;
-      pdf.text(`TOTALS â€” ${invoices.length} invoices`, hx, y + 5.5);
+      pdf.text(`TOTALS — ${invoices.length} invoices`, hx, y + 5.5);
       hx = margin + 2 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4];
       pdf.text(`R${this.formatCurrencyFull(totalSales)}`, hx, y + 5.5);
       hx += colWidths[5];
@@ -3392,7 +3392,7 @@ export class SalesDashboardComponent implements OnInit {
       pdf.setTextColor(150, 150, 150);
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(7);
-      pdf.text('ProMed Technologies â€” Confidential', margin, y);
+      pdf.text('ProMed Technologies — Confidential', margin, y);
       pdf.text(`Page 1 of ${pdf.getNumberOfPages()}`, pageWidth - margin - 25, y);
 
       const filename = `${company.shortName}_Sales_Report_${this.exportFromDate.toISOString().split('T')[0]}_to_${this.exportToDate.toISOString().split('T')[0]}.pdf`;
@@ -3572,7 +3572,7 @@ export class SalesDashboardComponent implements OnInit {
       // Daily breakdown sheet
       const dailyRows: any[][] = [
         ['Daily Revenue Comparison'],
-        [`${companyA.shortName} vs ${companyB.shortName} â€” ${fromStr} to ${toStr}`],
+        [`${companyA.shortName} vs ${companyB.shortName} — ${fromStr} to ${toStr}`],
         [],
         ['Date', `${companyA.shortName} Revenue`, `${companyB.shortName} Revenue`, 'Difference', 'Leader']
       ];
@@ -3609,7 +3609,7 @@ export class SalesDashboardComponent implements OnInit {
           .sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
 
         const rows: any[][] = [
-          [`${companyName} â€” Invoice Details`],
+          [`${companyName} — Invoice Details`],
           [`Period: ${fromStr} to ${toStr}`],
           [],
           ['Date', 'Transaction #', 'Customer', 'Product', 'Qty', 'Amount (excl VAT)', 'VAT', 'Total (incl VAT)']
@@ -3831,7 +3831,7 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   openLinkInvoiceDialog(pod: any): void {
-    // A single POD can be linked to multiple invoices â€” accept a comma/space
+    // A single POD can be linked to multiple invoices — accept a comma/space
     // separated list of invoice numbers and link them all in one go.
     const input = prompt('Enter invoice number(s) to link to this POD.\nSeparate multiple with a comma, e.g. IN123456, IN123457');
     if (!input || !input.trim()) return;
@@ -3874,7 +3874,7 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // Welly POD OCR â€” scan a POD image, read invoice numbers, suggest links
+  // Welly POD OCR — scan a POD image, read invoice numbers, suggest links
   // ═══════════════════════════════════════════════════════════════════
 
   /** Scan a single POD document with Welly OCR and show suggested invoice links. */
@@ -3890,7 +3890,7 @@ export class SalesDashboardComponent implements OnInit {
     this.showWellyPodPanel = true;
     this.wellyPodScanning = true;
     this.wellyPodProgress = 0;
-    this.wellyPodStatus = 'Fetching documentâ€¦';
+    this.wellyPodStatus = 'Fetching document…';
     this.wellyPodActivityId = this.wellyActivity.start(`Welly: scanning POD (${pod.driverName})`);
 
     try {
@@ -3898,17 +3898,17 @@ export class SalesDashboardComponent implements OnInit {
 
       let res: any = null;
       if (candidates.length > 0) {
-        this.wellyPodStatus = 'Matching against invoicesâ€¦';
+        this.wellyPodStatus = 'Matching against invoices…';
         res = await this.http
           .post(`${this.apiUrl}/PodDocuments/match-invoice-numbers`, { candidates })
           .toPromise();
       }
 
       // Fallback: if in-browser OCR found nothing (or matched nothing), try the
-      // stronger server-side Tesseract engine â€” better on rotated / faint scans.
+      // stronger server-side Tesseract engine — better on rotated / faint scans.
       const noMatches = !res || (res.matches?.length ?? 0) === 0;
       if (noMatches) {
-        this.wellyPodStatus = 'Trying deep server scan (handles rotated / faint scans)â€¦';
+        this.wellyPodStatus = 'Trying deep server scan (handles rotated / faint scans)…';
         try {
           const serverRes: any = await this.http
             .post(`${this.apiUrl}/PodDocuments/${pod.id}/server-ocr`, {})
@@ -3958,7 +3958,7 @@ export class SalesDashboardComponent implements OnInit {
     const imageSources: (string | Blob)[] = [];
 
     if (contentType.includes('pdf') || (pod.fileName || '').toLowerCase().endsWith('.pdf')) {
-      this.wellyPodStatus = 'Rendering PDF pagesâ€¦';
+      this.wellyPodStatus = 'Rendering PDF pages…';
       const pages = await this.renderPdfToImages(blob);
       imageSources.push(...pages);
     } else {
@@ -3967,8 +3967,8 @@ export class SalesDashboardComponent implements OnInit {
 
     if (imageSources.length === 0) return [];
 
-    // 2. OCR each page â€” intensive multi-rotation + preprocessing.
-    this.wellyPodStatus = 'Loading OCR engineâ€¦';
+    // 2. OCR each page — intensive multi-rotation + preprocessing.
+    this.wellyPodStatus = 'Loading OCR engine…';
     const { createWorker } = await import('tesseract.js');
     const totalPages = imageSources.length;
     let progressPage = 0;
@@ -3989,7 +3989,7 @@ export class SalesDashboardComponent implements OnInit {
       // Pass 1: as-is (grayscale kept) across all rotations.
       let best = await this.ocrPageAllRotations(worker, base, i, totalPages, false);
 
-      // Pass 2: if nothing found, binarize (Otsu) and try harder â€” helps faint / photographed scans.
+      // Pass 2: if nothing found, binarize (Otsu) and try harder — helps faint / photographed scans.
       if (best.tokens.length === 0) {
         const bin = this.binarizeCanvas(this.cloneCanvas(base));
         const binBest = await this.ocrPageAllRotations(worker, bin, i, totalPages, true);
@@ -4022,7 +4022,7 @@ export class SalesDashboardComponent implements OnInit {
       const label = totalPages > 1 ? `page ${pageIdx + 1}/${totalPages}` : 'document';
       const rot = deg ? ` · rotated ${deg}°` : '';
       const pp = binarized ? ' · enhanced' : '';
-      this.wellyPodStatus = `Reading ${label}${rot}${pp}â€¦`;
+      this.wellyPodStatus = `Reading ${label}${rot}${pp}…`;
       const canvas = this.rotateCanvas(baseCanvas, deg);
       const result: any = await worker.recognize(canvas);
       const text = result?.data?.text || '';
@@ -4032,7 +4032,7 @@ export class SalesDashboardComponent implements OnInit {
         tokens.length > best.tokens.length ||
         (tokens.length === best.tokens.length && conf > best.conf);
       if (better) best = { text, tokens, rotation: deg, conf };
-      // Early exit: upright read already produced solid results â€” don't waste time rotating.
+      // Early exit: upright read already produced solid results — don't waste time rotating.
       if (deg === 0 && tokens.length > 0 && conf >= 70) break;
       if (tokens.length > 0 && conf >= 82) break;
     }
@@ -4051,7 +4051,7 @@ export class SalesDashboardComponent implements OnInit {
     const rxPrefixed = /\b[I1L][NMH][\s.\-:]?[0-9OQDILSBZGT]{5,8}\b/g;
     // Pattern B: the literal word/label "INV" or "INVOICE" then a number.
     const rxLabeled = /INV(?:OICE)?[\s.#:\-]*([0-9OQDILSBZGT]{5,8})/g;
-    // Pattern C: a bare 6-digit run (fallback â€” backend still validates it exists as IN######).
+    // Pattern C: a bare 6-digit run (fallback — backend still validates it exists as IN######).
     const rxBare = /\b([0-9]{6})\b/g;
     let m: RegExpExecArray | null;
     while ((m = rxPrefixed.exec(upper)) !== null) tokens.add(m[0].replace(/[\s.\-:]/g, ''));
@@ -4070,7 +4070,7 @@ export class SalesDashboardComponent implements OnInit {
         im.onerror = reject;
         im.src = url;
       });
-      // Upscale small scans so 8â€“10px invoice digits become legible to Tesseract.
+      // Upscale small scans so 8–10px invoice digits become legible to Tesseract.
       const minWidth = 1600;
       const scale = img.naturalWidth > 0 && img.naturalWidth < minWidth ? minWidth / img.naturalWidth : 1;
       const canvas = document.createElement('canvas');
@@ -4110,7 +4110,7 @@ export class SalesDashboardComponent implements OnInit {
       gray[p] = g;
       hist[g]++;
     }
-    // Otsu's method â€” find the global threshold that maximises between-class variance.
+    // Otsu's method — find the global threshold that maximises between-class variance.
     let sum = 0;
     for (let t = 0; t < 256; t++) sum += t * hist[t];
     let sumB = 0, wB = 0, maxVar = 0, threshold = 127;
@@ -4164,7 +4164,7 @@ export class SalesDashboardComponent implements OnInit {
     const images: string[] = [];
     const maxPages = Math.min(pdf.numPages, 12); // cap for performance
 
-    // First, try to harvest any embedded (selectable) text layer â€” digital PDFs carry the
+    // First, try to harvest any embedded (selectable) text layer — digital PDFs carry the
     // invoice number as real text, which is far more reliable than OCR-ing a rasterized page.
     let embedded = '';
     for (let p = 1; p <= maxPages; p++) {
@@ -4184,7 +4184,7 @@ export class SalesDashboardComponent implements OnInit {
       canvas.height = viewport.height;
       const ctx = canvas.getContext('2d')!;
       // CRITICAL: paint the canvas white first. The default canvas is transparent, so a
-      // vector/text PDF renders black text on a transparent background â€” Tesseract then reads
+      // vector/text PDF renders black text on a transparent background — Tesseract then reads
       // the transparent area as black and sees nothing. A white fill makes text OCR-able.
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -4259,17 +4259,17 @@ export class SalesDashboardComponent implements OnInit {
       try {
         let res: any = null;
 
-        // Primary: server-side Tesseract â€” reliable on large multi-page scanned bundles
+        // Primary: server-side Tesseract — reliable on large multi-page scanned bundles
         // (rotated/faint) that would overwhelm the in-browser OCR.
         try {
-          this.wellyPodStatus = `POD ${i + 1}/${queue.length}: deep server scanâ€¦`;
+          this.wellyPodStatus = `POD ${i + 1}/${queue.length}: deep server scan…`;
           res = await this.http
             .post(`${this.apiUrl}/PodDocuments/${pod.id}/server-ocr`, {})
             .toPromise();
         } catch (srvErr: any) {
           // 503 => server OCR not installed; fall back to in-browser OCR.
           if (srvErr?.status === 503) {
-            this.wellyPodStatus = `POD ${i + 1}/${queue.length}: browser scanâ€¦`;
+            this.wellyPodStatus = `POD ${i + 1}/${queue.length}: browser scan…`;
             const candidates = await this.ocrExtractInvoiceNumbers(pod);
             if (candidates.length > 0) {
               res = await this.http
@@ -4302,7 +4302,7 @@ export class SalesDashboardComponent implements OnInit {
     this.finishWellyPodActivity();
     this.loadPodDocuments();
     this.loadPodSummary();
-    this.wellyPodStatus = `Done â€” auto-linked ${totalLinked} invoice(s) across ${queue.length} POD(s).`;
+    this.wellyPodStatus = `Done — auto-linked ${totalLinked} invoice(s) across ${queue.length} POD(s).`;
     this.snackBar.open(this.wellyPodStatus, 'Close', { duration: 5000 });
   }
 

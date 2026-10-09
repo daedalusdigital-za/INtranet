@@ -1,5 +1,5 @@
-﻿// ============================================================
-// Shared logistics domain models â€” extracted from the former
+// ============================================================
+// Shared logistics domain models — extracted from the former
 // 36k-line logistics-dashboard.component.ts during the split.
 // ============================================================
 

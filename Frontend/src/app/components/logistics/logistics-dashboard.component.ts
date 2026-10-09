@@ -1417,9 +1417,9 @@ Notes: ${record.notes || 'No notes'}
     if (parts.length > 1) {
       // Try to get a short name - take up to the city part
       const short = parts[0].trim();
-      return short.length > 30 ? short.substring(0, 28) + 'â€¦' : short;
+      return short.length > 30 ? short.substring(0, 28) + '…' : short;
     }
-    return location.length > 30 ? location.substring(0, 28) + 'â€¦' : location;
+    return location.length > 30 ? location.substring(0, 28) + '…' : location;
   }
 
   getStatusClass(status: string): string {
@@ -1565,10 +1565,10 @@ Notes: ${record.notes || 'No notes'}
         });
       },
       error: (err) => {
-        // No CarTrack or vehicle not linked â€” fall back to showing route on map
+        // No CarTrack or vehicle not linked — fall back to showing route on map
         this.viewRouteOnMap(load);
         if (err.status === 400) {
-          this.snackBar.open('Live tracking unavailable â€” vehicle not linked to CarTrack. Showing route map.', 'Close', { duration: 5000 });
+          this.snackBar.open('Live tracking unavailable — vehicle not linked to CarTrack. Showing route map.', 'Close', { duration: 5000 });
         }
       }
     });
@@ -2108,7 +2108,7 @@ Notes: ${record.notes || 'No notes'}
   /** Display friendly region label for a warehouse code (WC→CPT, EC→PE). */
   displayWarehouseCode(code: string | null | undefined): string {
     const c = (code || '').toUpperCase();
-    if (!c) return 'â€”';
+    if (!c) return '—';
     if (c === 'WC') return 'CPT';
     if (c === 'EC') return 'PE';
     return c;
@@ -2438,7 +2438,7 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
-  // Open Welly Suggests Dialog â€” AI-batched tripsheet suggestions by warehouse
+  // Open Welly Suggests Dialog — AI-batched tripsheet suggestions by warehouse
   openWellySuggestsDialog(): void {
     const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
     const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
@@ -3082,7 +3082,7 @@ Notes: ${record.notes || 'No notes'}
     });
 
     dialogRef.afterClosed().subscribe(() => {
-      // Always refresh count after dialog closes â€” Welly fixes may have been applied
+      // Always refresh count after dialog closes — Welly fixes may have been applied
       this.loadAddressIssuesCount();
       this.loadCustomers();
     });
@@ -3288,7 +3288,7 @@ Notes: ${record.notes || 'No notes'}
 
       // ---- Sheet 1: Transactions ----
       const txnRows: any[][] = [
-        ['ProMed Technologies â€” Fuel History Report'],
+        ['ProMed Technologies — Fuel History Report'],
         [`Period: ${fromStr} to ${toStr}`],
         [`Generated: ${new Date().toLocaleString('en-ZA')}`],
         [`Total Transactions: ${filtered.length}`],
@@ -3345,7 +3345,7 @@ Notes: ${record.notes || 'No notes'}
       }
 
       const summaryRows: any[][] = [
-        ['ProMed Technologies â€” Fuel Summary by Vehicle'],
+        ['ProMed Technologies — Fuel Summary by Vehicle'],
         [`Period: ${fromStr} to ${toStr}`],
         [],
         ['Registration', 'Assignment', 'Transactions', 'Allocation (L)', 'Total Litres', 'Total Amount (R)', 'Avg Cost/Litre (R)', 'Avg Litres/Fill']
@@ -3391,7 +3391,7 @@ Notes: ${record.notes || 'No notes'}
       }
 
       const groupRows: any[][] = [
-        ['ProMed Technologies â€” Fuel Summary by Group'],
+        ['ProMed Technologies — Fuel Summary by Group'],
         [`Period: ${fromStr} to ${toStr}`],
         [],
         ['Group/Assignment', 'Vehicles', 'Transactions', 'Total Litres', 'Total Amount (R)', 'Avg Cost/Litre (R)', 'Avg per Vehicle (R)']
@@ -3903,7 +3903,7 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
-  // Preview the tripsheet a POD is linked to â€” opens the standard Rocket Freight
+  // Preview the tripsheet a POD is linked to — opens the standard Rocket Freight
   // printable tripsheet (same rendering used by Print/Download) in a new tab.
   previewTripsheetFromPod(pod: any): void {
     const loadId = pod?.loadId;

@@ -12,7 +12,7 @@ $utf8 = [System.Text.UTF8Encoding]::new($false)
 $win1252 = [System.Text.Encoding]::GetEncoding(1252)
 
 # Marker chars that indicate mojibake (â Ã Â ð followed by continuation garbage)
-$markerPattern = '[\u00E2\u00C3\u00C2\u00F0][\u0080-\u00BF\u2018\u2019\u201A\u201C\u201D\u201E\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178\u00A0-\u00FF]'
+$markerPattern = '[\u00E2\u00C3\u00C2\u00F0][\u0080-\u00BF\u20AC\u2018\u2019\u201A\u201C\u201D\u201E\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178\u00A0-\u00FF]'
 
 $files = Get-ChildItem -Path $root -Recurse -Include $exts
 $totalFixed = 0

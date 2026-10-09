@@ -1,5 +1,5 @@
-﻿// ============================================================
-// Shared sales domain models â€” extracted from the former
+// ============================================================
+// Shared sales domain models — extracted from the former
 // 12.8k-line sales-dashboard.component.ts during the split.
 // ============================================================
 

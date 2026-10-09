@@ -1,5 +1,5 @@
 // ============================================================
-// Logistics dialog components â€” extracted verbatim from the
+// Logistics dialog components — extracted verbatim from the
 // former 36k-line logistics-dashboard.component.ts. Each dialog
 // is an independent standalone component opened via MatDialog.
 // Shared domain interfaces live in ./logistics.models.
@@ -470,14 +470,14 @@ export class UploadPODDialog {
               <div class="detect-chips">
                 @for (item of detected; track item.number) {
                   <span class="inv-chip" [class.matched]="item.matched" [class.unmatched]="!item.matched"
-                        [matTooltip]="item.matched ? (item.customerName || 'Matches a known invoice') : 'Not found in the system â€” will not be linked'">
+                        [matTooltip]="item.matched ? (item.customerName || 'Matches a known invoice') : 'Not found in the system — will not be linked'">
                     <mat-icon class="chip-state">{{ item.matched ? 'verified' : 'help_outline' }}</mat-icon>
                     {{ item.number }}
                     <button class="chip-remove" (click)="removeInvoice(item)" matTooltip="Remove"><mat-icon>close</mat-icon></button>
                   </span>
                 }
                 @if (detected.length === 0) {
-                  <span class="detect-empty">No invoice numbers yet â€” add them below.</span>
+                  <span class="detect-empty">No invoice numbers yet — add them below.</span>
                 }
               </div>
 
@@ -707,7 +707,7 @@ export class UploadPodDocumentDialog {
     if (!this.uploadedPodId) return;
     this.detecting = true;
     this.detectRan = false;
-    this.detectStatus = 'Welly is reading the document (auto-rotating & scanning)â€¦';
+    this.detectStatus = 'Welly is reading the document (auto-rotating & scanning)…';
     this.detectProgress = 0;
 
     this.http.post<any>(`${this.apiUrl}/PodDocuments/${this.uploadedPodId}/server-ocr`, {}).subscribe({
@@ -720,7 +720,7 @@ export class UploadPodDocumentDialog {
           const num = m.transactionNumber || m.TransactionNumber;
           if (num) map.set(num.toUpperCase(), { number: num, id: m.id ?? m.Id ?? null, matched: true, customerName: m.customerName || m.CustomerName });
         }
-        // Raw candidates that didn't match a known invoice â€” still show them for the user to confirm/edit.
+        // Raw candidates that didn't match a known invoice — still show them for the user to confirm/edit.
         for (const c of (res?.candidates || [])) {
           const key = (c || '').toUpperCase();
           if (key && !map.has(key)) map.set(key, { number: c, id: null, matched: false });
@@ -776,7 +776,7 @@ export class UploadPodDocumentDialog {
   saveDetectedLinks() {
     const ids = this.detected.filter(d => d.matched && d.id).map(d => d.id as number);
     if (ids.length === 0) {
-      // Nothing matched â€” just finish the upload.
+      // Nothing matched — just finish the upload.
       this.dialogRef.close({ uploaded: true });
       return;
     }
@@ -1864,7 +1864,7 @@ export class InvoiceDetailsDialog {
             @if (filteredVehicles.length === 0) {
               <div class="no-vehicles-found">
                 <mat-icon>search_off</mat-icon>
-                <span>No vehicles match â€œ{{ vehicleSearch }}â€</span>
+                <span>No vehicles match “{{ vehicleSearch }}”</span>
               </div>
             }
           </div>
@@ -2387,7 +2387,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
 
     let arcColor = '#22c55e';                          // green  ≤ 40
     if (speed > 80) arcColor = '#ef4444';              // red    > 80
-    else if (speed > 40) arcColor = '#f59e0b';         // amber  40â€“80
+    else if (speed > 40) arcColor = '#f59e0b';         // amber  40–80
     if (offline) arcColor = '#94a3b8';
 
     const polar = (deg: number) => {
@@ -2528,7 +2528,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
               // Update snackbar with real road distance/time
               const leg = result.routes?.[0]?.legs?.[0];
               if (leg) {
-                this.snackBar.open(`Nearest TFN: ${depot.name} â€” ${leg.distance?.text} by road (${leg.duration?.text})`, 'Close', { duration: 6000 });
+                this.snackBar.open(`Nearest TFN: ${depot.name} — ${leg.distance?.text} by road (${leg.duration?.text})`, 'Close', { duration: 6000 });
                 this.lastDepotInfo = { ...this.lastDepotInfo, roadDistance: leg.distance?.text, roadDuration: leg.duration?.text };
               }
               // Encode the route path for a printable static map
@@ -2641,16 +2641,16 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
 
     const summary = d ? `
       <table style="width:100%; border-collapse:collapse; margin-bottom:12px; font-size:13px;">
-        <tr><td style="padding:4px 8px; font-weight:bold; width:170px;">Vehicle</td><td style="padding:4px 8px;">${d.vehicleReg || 'â€”'}</td></tr>
-        <tr><td style="padding:4px 8px; font-weight:bold;">Nearest TFN Depot</td><td style="padding:4px 8px;">${d.name || 'â€”'} ${d.code ? '(' + d.code + ')' : ''}</td></tr>
-        <tr><td style="padding:4px 8px; font-weight:bold;">Straight-line Distance</td><td style="padding:4px 8px;">${d.distanceKm ?? 'â€”'} km</td></tr>
+        <tr><td style="padding:4px 8px; font-weight:bold; width:170px;">Vehicle</td><td style="padding:4px 8px;">${d.vehicleReg || '—'}</td></tr>
+        <tr><td style="padding:4px 8px; font-weight:bold;">Nearest TFN Depot</td><td style="padding:4px 8px;">${d.name || '—'} ${d.code ? '(' + d.code + ')' : ''}</td></tr>
+        <tr><td style="padding:4px 8px; font-weight:bold;">Straight-line Distance</td><td style="padding:4px 8px;">${d.distanceKm ?? '—'} km</td></tr>
         ${d.roadDistance ? `<tr><td style="padding:4px 8px; font-weight:bold;">Road Distance</td><td style="padding:4px 8px;">${d.roadDistance} (${d.roadDuration})</td></tr>` : ''}
-        <tr><td style="padding:4px 8px; font-weight:bold;">Depot Address</td><td style="padding:4px 8px;">${[d.address, d.city, d.province].filter(Boolean).join(', ') || 'â€”'}</td></tr>
+        <tr><td style="padding:4px 8px; font-weight:bold;">Depot Address</td><td style="padding:4px 8px;">${[d.address, d.city, d.province].filter(Boolean).join(', ') || '—'}</td></tr>
       </table>` : '<p style="font-size:13px; color:#666;">Tip: click <b>Nearest TFN</b> first to include the vehicle, depot and route on the printout.</p>';
 
     const mapBlock = mapImgDataUrl
       ? `<img src="${mapImgDataUrl}" style="width:100%; max-width:800px; border:1px solid #ccc; border-radius:8px;" alt="Route map" />
-         <div style="font-size:11px; color:#888; margin-top:6px;">Blue = Vehicle &nbsp;â€¢&nbsp; Orange = TFN Depot &nbsp;â€¢&nbsp; Route follows roads</div>`
+         <div style="font-size:11px; color:#888; margin-top:6px;">Blue = Vehicle &nbsp;•&nbsp; Orange = TFN Depot &nbsp;•&nbsp; Route follows roads</div>`
       : '<p style="color:#b00; font-size:13px;">Could not capture the map. Make sure the map is fully loaded and try again.</p>';
 
     const printWindow = window.open('', '_blank', 'width=960,height=820');
@@ -2795,7 +2795,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
               @if (selectedWarehouse) {
                 <div class="warehouse-info">
                   <mat-icon>warehouse</mat-icon>
-                  <span>{{ selectedWarehouse.address }}, {{ selectedWarehouse.city }} â€¢ Manager: {{ selectedWarehouse.managerName }}</span>
+                  <span>{{ selectedWarehouse.address }}, {{ selectedWarehouse.city }} • Manager: {{ selectedWarehouse.managerName }}</span>
                 </div>
               }
             </div>
@@ -2903,7 +2903,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
                               <div class="chips-row">
                                 @for (c of stop.commodities; track $index) {
                                   <mat-chip (removed)="removeCommodityFromStop(stop, c.commodityId)">
-                                    {{ c.commodityName }} Ãƒâ€” {{ c.quantity }}
+                                    {{ c.commodityName }} × {{ c.quantity }}
                                     <mat-icon matChipRemove>cancel</mat-icon>
                                   </mat-chip>
                                 }
@@ -3773,7 +3773,7 @@ export class NewLoadDialogComponent implements OnInit, OnDestroy {
         drivingTime: this.formatDuration(drivingHours),
         offloadTime: this.formatDuration(offloadHours),
         totalTime: this.formatDuration(totalHours),
-        breakdown: `${this.formatDuration(drivingHours)} driving + ${offloadHours}h offloading (${this.stops.length} stops Ãƒâ€” 1h)`
+        breakdown: `${this.formatDuration(drivingHours)} driving + ${offloadHours}h offloading (${this.stops.length} stops × 1h)`
       };
 
       this.calculatingRoute = false;
@@ -3814,7 +3814,7 @@ export class NewLoadDialogComponent implements OnInit, OnDestroy {
       drivingTime: this.formatDuration(drivingHours),
       offloadTime: this.formatDuration(offloadHours),
       totalTime: this.formatDuration(totalHours),
-      breakdown: `${this.formatDuration(drivingHours)} driving + ${offloadHours}h offloading (${this.stops.length} stops Ãƒâ€” 1h) [Estimated]`
+      breakdown: `${this.formatDuration(drivingHours)} driving + ${offloadHours}h offloading (${this.stops.length} stops × 1h) [Estimated]`
     };
 
     this.calculatingRoute = false;
@@ -3851,7 +3851,7 @@ interface RouteEstimate {
   breakdown: string;
 }
 
-// POD Invoices Dialog Component (Logistics) â€” lists all invoice numbers on a POD
+// POD Invoices Dialog Component (Logistics) — lists all invoice numbers on a POD
 @Component({
   selector: 'app-logistics-pod-invoices-dialog',
   standalone: true,
@@ -3866,7 +3866,7 @@ interface RouteEstimate {
   template: `
     <h2 mat-dialog-title style="display: flex; align-items: center; gap: 8px;">
       <mat-icon style="color:#1a237e;">receipt_long</mat-icon>
-      {{ data.pod.podNumber || ('POD' + data.pod.id) }} â€” Invoices
+      {{ data.pod.podNumber || ('POD' + data.pod.id) }} — Invoices
     </h2>
     <mat-dialog-content style="min-width: 380px;">
       @if (invoices.length > 0) {
@@ -5308,7 +5308,7 @@ export class SuggestedTripsDialog implements OnInit {
               <div class="card-vehicle">
                 <div class="vehicle-plate">
                   <mat-icon>directions_car</mat-icon>
-                  <span class="plate-text">{{ order.vehicleRegistration || order.vehicle?.registrationNumber || 'â€”' }}</span>
+                  <span class="plate-text">{{ order.vehicleRegistration || order.vehicle?.registrationNumber || '—' }}</span>
                 </div>
                 @if (order.virtualCardNumber) {
                   <span class="virtual-card">
@@ -5638,7 +5638,7 @@ export class TfnOrdersListDialog {
 
   getShortStatus(status: string): string {
     if (!status) return 'Pending';
-    if (status.length > 20) return status.substring(0, 18) + 'â€¦';
+    if (status.length > 20) return status.substring(0, 18) + '…';
     return status;
   }
 
@@ -9378,9 +9378,9 @@ export class AddDeliveryNoteDialog {
                                     @if (isStopResolved(group)) {
                                       <mat-icon class="coord-icon success" matTooltip="Coordinates: {{ group.latitude }}, {{ group.longitude }}">location_on</mat-icon>
                                     } @else if (group.addressApproximate) {
-                                      <mat-icon class="coord-icon warning" matTooltip="Address too vague â€” enter a full street address">wrong_location</mat-icon>
+                                      <mat-icon class="coord-icon warning" matTooltip="Address too vague — enter a full street address">wrong_location</mat-icon>
                                     } @else if (isBlankAddress(group.deliveryAddress)) {
-                                      <mat-icon class="coord-icon warning" matTooltip="Delivery address missing â€” match from customer DB or enter it">location_off</mat-icon>
+                                      <mat-icon class="coord-icon warning" matTooltip="Delivery address missing — match from customer DB or enter it">location_off</mat-icon>
                                     } @else {
                                       <mat-icon class="coord-icon warning" matTooltip="Missing coordinates - geocode this address">location_off</mat-icon>
                                     }
@@ -9401,7 +9401,7 @@ export class AddDeliveryNoteDialog {
                                   } @else if (group.addressFromCustomerDb) {
                                     <div class="address-info-banner">
                                       <mat-icon>contacts</mat-icon>
-                                      <span>Address filled from the customer database â€” verify it's correct.</span>
+                                      <span>Address filled from the customer database — verify it's correct.</span>
                                     </div>
                                   }
                                   <!-- Saved Addresses Dropdown -->
@@ -9723,7 +9723,7 @@ export class AddDeliveryNoteDialog {
                   <div class="review-card">
                     <h4><mat-icon>route</mat-icon> Route Info</h4>
                     <p class="main-value">{{ selectedStops.length }} stops</p>
-                    <p class="sub-value">{{ totalDistance | number:'1.0-0' }} km â€¢ {{ estimatedTime }}</p>
+                    <p class="sub-value">{{ totalDistance | number:'1.0-0' }} km • {{ estimatedTime }}</p>
                     <p class="sub-value">Total: R {{ totalValue | number:'1.2-2' }}</p>
                   </div>
                 </div>
@@ -11189,7 +11189,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       preSpecialInstructions?: string,
       preTotalDistance?: number,
       preEstimatedTime?: string,
-      // Sales mode â€” create a Sales Trip Sheet pending two-person approval instead of a live load
+      // Sales mode — create a Sales Trip Sheet pending two-person approval instead of a live load
       salesMode?: boolean,
       routeArea?: string,
       createdByName?: string | null,
@@ -11458,7 +11458,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         } else if ((invoice.customerName || '').trim() && invoice.customerName !== 'Unknown Customer') {
           searchQuery = invoice.customerName + ' South Africa';
         } else {
-          // Nothing to geocode reliably â€” skip so we don't drop a pin on the country centroid
+          // Nothing to geocode reliably — skip so we don't drop a pin on the country centroid
           return;
         }
         
@@ -12014,7 +12014,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const before = this.groupedStops.filter(g => this.isBlankAddress(g.deliveryAddress)).length;
 
     if (!(this.data.customers && this.data.customers.length)) {
-      this.snackBar.open('Customer database is still loading â€” please try again in a moment.', 'Close', { duration: 3500 });
+      this.snackBar.open('Customer database is still loading — please try again in a moment.', 'Close', { duration: 3500 });
       return;
     }
 
@@ -12029,7 +12029,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       // Geocode the newly-filled stops that still need coordinates
       await this.geocodeAllStops();
     } else if (after > 0) {
-      this.snackBar.open(`${after} stop${after === 1 ? '' : 's'} could not be matched â€” no address on file. Please enter them manually.`, 'Close', { duration: 5000 });
+      this.snackBar.open(`${after} stop${after === 1 ? '' : 's'} could not be matched — no address on file. Please enter them manually.`, 'Close', { duration: 5000 });
     } else {
       this.snackBar.open('All stops already have a delivery address.', 'Close', { duration: 3000 });
     }
@@ -12938,14 +12938,14 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           
           this.updateRouteMap();
         } else {
-          // Address only resolved to a country/province centroid â€” NOT a real delivery point.
+          // Address only resolved to a country/province centroid — NOT a real delivery point.
           // Clear any coordinates so the stop is clearly flagged as needing a proper address.
           group.latitude = null;
           group.longitude = null;
           group.addressApproximate = true;
           group.isCollapsed = false;
           this.snackBar.open(
-            `"${group.customerName}" â€” that address is too vague to place on the map. Please enter a full street address.`,
+            `"${group.customerName}" — that address is too vague to place on the map. Please enter a full street address.`,
             'OK', { duration: 5000 });
         }
         this.geocodingStop = null;
@@ -13025,7 +13025,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
             }
           });
         } else if (result?.isApproximate) {
-          // Coarse match â€” flag it, don't pretend it's located
+          // Coarse match — flag it, don't pretend it's located
           group.latitude = null;
           group.longitude = null;
           group.addressApproximate = true;
@@ -18717,12 +18717,12 @@ export class ViewRouteMapDialog implements OnInit {
                       <td class="center">{{ vehicle.no }}</td>
                       <td><span class="vehicle-type">{{ vehicle.vehicleType }}</span></td>
                       <td class="mono">{{ vehicle.registration }}</td>
-                      <td>{{ vehicle.driver || 'â€”' }}</td>
+                      <td>{{ vehicle.driver || '—' }}</td>
                       <td class="date-cell">{{ vehicle.dispatchDate }}</td>
                       <td class="currency">{{ vehicle.value | currency: 'R ' }}</td>
-                      <td class="route-cell" [title]="vehicle.route || ''">{{ vehicle.route || 'â€”' }}</td>
-                      <td class="center">{{ vehicle.stops || 'â€”' }}</td>
-                      <td class="notes-cell">{{ vehicle.comment || 'â€”' }}</td>
+                      <td class="route-cell" [title]="vehicle.route || ''">{{ vehicle.route || '—' }}</td>
+                      <td class="center">{{ vehicle.stops || '—' }}</td>
+                      <td class="notes-cell">{{ vehicle.comment || '—' }}</td>
                       <td class="currency mtd">{{ vehicle.monthlyValue | currency: 'R ' }}</td>
                     </tr>
                   }
@@ -20638,7 +20638,7 @@ export class VehicleStatusDialog {
             <div class="welly-says">
               <mat-icon class="welly-icon">smart_toy</mat-icon>
               <div class="bubble">
-                Hi! Upload your Excel file and I'll analyze it â€” finding customers, matching invoices,
+                Hi! Upload your Excel file and I'll analyze it — finding customers, matching invoices,
                 resolving addresses, and setting up an optimized tripsheet for you. 🚛
               </div>
             </div>
@@ -20649,11 +20649,11 @@ export class VehicleStatusDialog {
               @if (!selectedFile) {
                 <mat-icon class="upload-icon">cloud_upload</mat-icon>
                 <h3>Drop your Excel file here</h3>
-                <p>or click to browse â€” .xlsx files up to 10MB</p>
+                <p>or click to browse — .xlsx files up to 10MB</p>
               } @else {
                 <mat-icon class="upload-icon done">description</mat-icon>
                 <h3>{{ selectedFile.name }}</h3>
-                <p>{{ (selectedFile.size / 1024).toFixed(1) }} KB â€” Ready to analyze</p>
+                <p>{{ (selectedFile.size / 1024).toFixed(1) }} KB — Ready to analyze</p>
               }
             </div>
             <div class="step-actions">
@@ -20686,7 +20686,7 @@ export class VehicleStatusDialog {
                 @if (analysisResult.errors > 0) {
                   <span class="badge err">{{ analysisResult.errors }} errors</span>
                 }
-                â€” Review below and I'll handle the rest!
+                — Review below and I'll handle the rest!
               </div>
             </div>
 
@@ -20712,10 +20712,10 @@ export class VehicleStatusDialog {
                         @else if (row.status === 'Unmatched') { <mat-icon class="s-warn">warning</mat-icon> }
                         @else { <mat-icon class="s-err">error</mat-icon> }
                       </td>
-                      <td>{{ row.data?.invoiceNumber || 'â€”' }}</td>
-                      <td>{{ row.data?.customerName || 'â€”' }}</td>
-                      <td class="addr-cell">{{ row.data?.deliveryAddress || 'â€”' }}</td>
-                      <td>{{ row.data?.city || 'â€”' }}</td>
+                      <td>{{ row.data?.invoiceNumber || '—' }}</td>
+                      <td>{{ row.data?.customerName || '—' }}</td>
+                      <td class="addr-cell">{{ row.data?.deliveryAddress || '—' }}</td>
+                      <td>{{ row.data?.city || '—' }}</td>
                       <td class="num">{{ row.data?.quantity || 0 }}</td>
                       <td class="num">R{{ (row.data?.salesAmount || 0) | number:'1.2-2' }}</td>
                     </tr>
@@ -20801,7 +20801,7 @@ export class VehicleStatusDialog {
                     <div class="afc-header">
                       <mat-icon class="s-warn">location_off</mat-icon>
                       <strong>{{ row.data?.customerName || 'Unknown' }}</strong>
-                      <span class="inv-chip">{{ row.data?.invoiceNumber || 'â€”' }}</span>
+                      <span class="inv-chip">{{ row.data?.invoiceNumber || '—' }}</span>
                     </div>
                     <div class="afc-fields">
                       <mat-form-field appearance="outline" class="addr-field">
@@ -20874,7 +20874,7 @@ export class VehicleStatusDialog {
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Select Driver</mat-label>
                   <mat-select [(ngModel)]="selectedDriverId">
-                    <mat-option [value]="null">â€” Assign Later â€”</mat-option>
+                    <mat-option [value]="null">— Assign Later —</mat-option>
                     @for (d of analysisResult.drivers; track d.id) {
                       <mat-option [value]="d.id">
                         {{ d.name }} ({{ d.licenseType }}) {{ d.activeLoads === 0 ? '✅' : '⚠️ ' + d.activeLoads + ' active' }}
@@ -20889,7 +20889,7 @@ export class VehicleStatusDialog {
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Select Vehicle</mat-label>
                   <mat-select [(ngModel)]="selectedVehicleId">
-                    <mat-option [value]="null">â€” Assign Later â€”</mat-option>
+                    <mat-option [value]="null">— Assign Later —</mat-option>
                     @for (v of analysisResult.vehicles; track v.id) {
                       <mat-option [value]="v.id">
                         {{ v.registrationNumber }} — {{ v.type }} ({{ v.make }} {{ v.model }}) {{ v.activeLoads === 0 ? '✅' : '⚠️' }}
@@ -21499,7 +21499,7 @@ export class WellyTripsheetWizardDialog {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// Welly Suggests Dialog â€” AI-batched tripsheet suggestions by warehouse
+// Welly Suggests Dialog — AI-batched tripsheet suggestions by warehouse
 // ════════════════════════════════════════════════════════════════════════════════
 @Component({
   selector: 'welly-suggests-dialog',
@@ -21679,7 +21679,7 @@ export class WellyTripsheetWizardDialog {
                       <tr *ngFor="let cust of batch.customers">
                         <td class="customer-name">{{ cust.customerName }}</td>
                         <td class="customer-code">{{ cust.customerNumber }}</td>
-                        <td>{{ cust.city || 'â€”' }}</td>
+                        <td>{{ cust.city || '—' }}</td>
                         <td>{{ cust.invoiceCount }}</td>
                         <td class="right">R{{ formatMoney(cust.totalAmount) }}</td>
                       </tr>
@@ -22054,7 +22054,7 @@ export class WellySuggestsDialog implements OnInit {
         <!-- Loading -->
         <div class="ab-center" *ngIf="loading">
           <mat-spinner diameter="44"></mat-spinner>
-          <p>Analysing pending invoicesâ€¦</p>
+          <p>Analysing pending invoices…</p>
         </div>
 
         <!-- Error -->
@@ -22085,12 +22085,12 @@ export class WellySuggestsDialog implements OnInit {
               <span class="wh-city" *ngIf="wh.special">{{ wh.tagline }}</span>
               <div class="wh-meta" *ngIf="!wh.special">
                 <span>{{ pendingFor(wh) }} pending</span>
-                <span class="dot">â€¢</span>
+                <span class="dot">•</span>
                 <span>R {{ formatMoney(valueFor(wh)) }}</span>
               </div>
               <div class="wh-meta" *ngIf="wh.code === 'CUSTOM'">
                 <span>{{ totalPendingAll() }} pending</span>
-                <span class="dot">â€¢</span>
+                <span class="dot">•</span>
                 <span>all provinces</span>
               </div>
             </div>
@@ -22120,7 +22120,7 @@ export class WellySuggestsDialog implements OnInit {
         <!-- ─── STEP 3: BUILD LOAD ─── -->
         <div class="ab-panel" *ngIf="!loading && !error && step === 3">
           <div class="build-context">
-            <span class="ctx-chip"><mat-icon>warehouse</mat-icon>{{ selectedWarehouse?.short }} â€” {{ selectedWarehouse?.name }}</span>
+            <span class="ctx-chip"><mat-icon>warehouse</mat-icon>{{ selectedWarehouse?.short }} — {{ selectedWarehouse?.name }}</span>
             <span class="ctx-chip veh"><mat-icon>local_shipping</mat-icon>{{ selectedVehicle?.label }}</span>
           </div>
 
@@ -22168,7 +22168,7 @@ export class WellySuggestsDialog implements OnInit {
 
           <!-- AI suggested groups -->
           <div class="ai-groups-head">
-            <h3><mat-icon>auto_awesome</mat-icon>{{ selectedWarehouse?.code === 'CUSTOM' ? 'All batches â€” every province' : 'AI-grouped loads for ' + selectedWarehouse?.name }}</h3>
+            <h3><mat-icon>auto_awesome</mat-icon>{{ selectedWarehouse?.code === 'CUSTOM' ? 'All batches — every province' : 'AI-grouped loads for ' + selectedWarehouse?.name }}</h3>
             <span *ngIf="batches.length">{{ batches.length }} batch(es)</span>
           </div>
 
@@ -22220,7 +22220,7 @@ export class WellySuggestsDialog implements OnInit {
                     <span class="iv-prod" [matTooltip]="inv.productDescription">
                       <mat-icon>inventory_2</mat-icon>{{ inv.productDescription || 'No product description' }}
                     </span>
-                    <span class="iv-city"><mat-icon>place</mat-icon>{{ inv.deliveryCity || 'â€”' }}</span>
+                    <span class="iv-city"><mat-icon>place</mat-icon>{{ inv.deliveryCity || '—' }}</span>
                   </div>
                   <div class="iv-side">
                     <span class="iv-qty">{{ inv.quantity }}x</span>
@@ -22255,7 +22255,7 @@ export class WellySuggestsDialog implements OnInit {
               <mat-label>Vehicle ({{ selectedVehicle?.label }})</mat-label>
               <mat-select [(ngModel)]="vehicleId">
                 <mat-option [value]="null">Assign later</mat-option>
-                <mat-option *ngFor="let v of data.vehicles" [value]="v.id">{{ v.registrationNumber }}<span *ngIf="v.vehicleTypeName"> â€” {{ v.vehicleTypeName }}</span></mat-option>
+                <mat-option *ngFor="let v of data.vehicles" [value]="v.id">{{ v.registrationNumber }}<span *ngIf="v.vehicleTypeName"> — {{ v.vehicleTypeName }}</span></mat-option>
               </mat-select>
             </mat-form-field>
           </div>
@@ -22322,7 +22322,7 @@ export class WellySuggestsDialog implements OnInit {
             <div class="rs-row" *ngFor="let s of stops; let i = index">
               <span class="rs-seq">{{ i + 1 }}</span>
               <span class="rs-name">{{ s.customerName }}</span>
-              <span class="rs-loc">{{ s.city || 'â€”' }}<span *ngIf="s.province">, {{ s.province }}</span></span>
+              <span class="rs-loc">{{ s.city || '—' }}<span *ngIf="s.province">, {{ s.province }}</span></span>
               <span class="rs-amt">R {{ formatMoney(s.amount) }}</span>
             </div>
           </div>
@@ -22666,11 +22666,11 @@ export class AiTripsheetBuilderDialog implements OnInit {
 
   headerSubtitle(): string {
     switch (this.step) {
-      case 1: return 'Step 1 of 5 â€” choose a warehouse';
-      case 2: return 'Step 2 of 5 â€” choose a vehicle';
-      case 3: return 'Step 3 of 5 â€” build the load';
-      case 4: return 'Step 4 of 5 â€” route details & stops';
-      default: return 'Step 5 of 5 â€” review & generate';
+      case 1: return 'Step 1 of 5 — choose a warehouse';
+      case 2: return 'Step 2 of 5 — choose a vehicle';
+      case 3: return 'Step 3 of 5 — build the load';
+      case 4: return 'Step 4 of 5 — route details & stops';
+      default: return 'Step 5 of 5 — review & generate';
     }
   }
 
@@ -22931,7 +22931,7 @@ export class AiTripsheetBuilderDialog implements OnInit {
     }).subscribe({
       next: (res: any) => {
         this.creating = false;
-        this.snackBar.open(`Tripsheet ${res.loadNumber || ''} generated â€” ${ordered.length} invoices across ${this.stops.length} stops.`, 'OK', { duration: 5000 });
+        this.snackBar.open(`Tripsheet ${res.loadNumber || ''} generated — ${ordered.length} invoices across ${this.stops.length} stops.`, 'OK', { duration: 5000 });
         this.dialogRef.close({ created: true });
       },
       error: (err) => {
@@ -22968,7 +22968,7 @@ export class AiTripsheetBuilderDialog implements OnInit {
         <div class="header-info">
           <h2>
             <mat-icon>local_gas_station</mat-icon>
-            Fuel History â€” {{ data.vehicle.registrationNumber }}
+            Fuel History — {{ data.vehicle.registrationNumber }}
           </h2>
           <div class="vehicle-meta">
             @if (data.vehicle.make) {
@@ -23310,7 +23310,7 @@ export class FuelHistoryDialog {
         <div class="header-info">
           <h2>
             <mat-icon>build_circle</mat-icon>
-            Maintenance History â€” {{ data.vehicle.registrationNumber }}
+            Maintenance History — {{ data.vehicle.registrationNumber }}
           </h2>
           <div class="vehicle-meta">
             @if (data.vehicle.make) {
@@ -23417,7 +23417,7 @@ export class FuelHistoryDialog {
               </ng-container>
               <ng-container matColumnDef="description">
                 <th mat-header-cell *matHeaderCellDef>Description</th>
-                <td mat-cell *matCellDef="let r">{{ r.description || 'â€”' }}</td>
+                <td mat-cell *matCellDef="let r">{{ r.description || '—' }}</td>
               </ng-container>
               <ng-container matColumnDef="status">
                 <th mat-header-cell *matHeaderCellDef>Status</th>
@@ -23444,7 +23444,7 @@ export class FuelHistoryDialog {
                   @if (r.completedDate) {
                     {{ r.completedDate | date:'dd MMM yyyy' }}
                   } @else {
-                    <span class="muted">â€”</span>
+                    <span class="muted">—</span>
                   }
                 </td>
               </ng-container>
@@ -23456,13 +23456,13 @@ export class FuelHistoryDialog {
                   } @else if (r.estimatedCost) {
                     <span class="muted">~R {{ r.estimatedCost | number:'1.2-2' }}</span>
                   } @else {
-                    <span class="muted">â€”</span>
+                    <span class="muted">—</span>
                   }
                 </td>
               </ng-container>
               <ng-container matColumnDef="serviceProvider">
                 <th mat-header-cell *matHeaderCellDef>Service Provider</th>
-                <td mat-cell *matCellDef="let r">{{ r.serviceProvider || r.assignedTo || 'â€”' }}</td>
+                <td mat-cell *matCellDef="let r">{{ r.serviceProvider || r.assignedTo || '—' }}</td>
               </ng-container>
               <ng-container matColumnDef="odometer">
                 <th mat-header-cell *matHeaderCellDef>Odometer</th>
@@ -23470,7 +23470,7 @@ export class FuelHistoryDialog {
                   @if (r.odometerReading) {
                     {{ r.odometerReading | number:'1.0-0' }} km
                   } @else {
-                    <span class="muted">â€”</span>
+                    <span class="muted">—</span>
                   }
                 </td>
               </ng-container>
@@ -23795,7 +23795,7 @@ export class VehicleMaintenanceHistoryDialog {
 }
 
 // ==========================================
-// Today's Trip History Dialog â€” Map View
+// Today's Trip History Dialog — Map View
 // ==========================================
 @Component({
   selector: 'app-today-history-dialog',
@@ -23817,7 +23817,7 @@ export class VehicleMaintenanceHistoryDialog {
         <div class="header-info">
           <h2>
             <mat-icon>timeline</mat-icon>
-            Movement History â€” {{ data.vehicle.registrationNumber }}
+            Movement History — {{ data.vehicle.registrationNumber }}
           </h2>
           <div class="vehicle-meta">
             @if (data.vehicle.make) {
@@ -23846,7 +23846,7 @@ export class VehicleMaintenanceHistoryDialog {
             <mat-icon [class.spin]="refreshing">refresh</mat-icon>
           </button>
           @if (trips.length > 0) {
-            <button mat-icon-button matTooltip="Exportâ€¦" [matMenuTriggerFor]="exportMenu" class="header-btn">
+            <button mat-icon-button matTooltip="Export…" [matMenuTriggerFor]="exportMenu" class="header-btn">
               <mat-icon>download</mat-icon>
             </button>
             <mat-menu #exportMenu="matMenu">
@@ -23856,7 +23856,7 @@ export class VehicleMaintenanceHistoryDialog {
               </button>
               <button mat-menu-item (click)="exportDateRange()">
                 <mat-icon>date_range</mat-icon>
-                <span>Date rangeâ€¦</span>
+                <span>Date range…</span>
               </button>
               <button mat-menu-item (click)="exportMonthlyKm()">
                 <mat-icon>insights</mat-icon>
@@ -24469,16 +24469,16 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
   totalFuelLitres = 0;
   totalFuelAmount = 0;
 
-  // Live status for today (from CarTrack real-time feed) â€” shows in-progress movement
+  // Live status for today (from CarTrack real-time feed) — shows in-progress movement
   liveStatus: any = null;
-  loadingMessage = 'Loading movement historyâ€¦';
+  loadingMessage = 'Loading movement history…';
 
   // Fuel-theft / anomaly analysis (rolling window)
   fuelAnalysis: any = null;
   fuelAnalysisLoading = false;
   fuelAnalysisDays = 30;
 
-  // Selected date (yyyy-MM-dd) â€” supports back-dating
+  // Selected date (yyyy-MM-dd) — supports back-dating
   selectedDate = '';
   maxDate = '';
 
@@ -24544,8 +24544,8 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
 
     const reg = vehicle.registrationNumber;
     const targetDate = this.selectedDate;
-    if (refresh) { this.refreshing = true; this.loadingMessage = 'Syncing live data from CarTrackâ€¦'; }
-    else { this.loading = true; this.loadingMessage = 'Loading movement historyâ€¦'; }
+    if (refresh) { this.refreshing = true; this.loadingMessage = 'Syncing live data from CarTrack…'; }
+    else { this.loading = true; this.loadingMessage = 'Loading movement history…'; }
 
     const url = `${this.data.apiUrl}/fleet/vehicles/${encodeURIComponent(reg)}/trip-history?date=${targetDate}&refresh=${refresh}`;
     this.http.get<any>(url).subscribe({
@@ -24563,7 +24563,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
         this.totalFuelLitres = response.totalFuelLitres || 0;
         this.totalFuelAmount = response.totalFuelAmount || 0;
 
-        // Live status (today) â€” vehicle may be mid-trip with no completed trips yet
+        // Live status (today) — vehicle may be mid-trip with no completed trips yet
         this.liveStatus = response.liveStatus || null;
 
         this.loading = false;
@@ -24994,7 +24994,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
     const content = `
       <div style="padding:12px;min-width:220px;max-width:300px;">
         <h3 style="margin:0 0 6px;font-size:15px;color:#00838f;">
-          Trip ${index + 1} â€” ${type === 'start' ? 'Start' : 'End'}
+          Trip ${index + 1} — ${type === 'start' ? 'Start' : 'End'}
         </h3>
         <p style="margin:4px 0;font-size:13px;"><strong>📍 ${loc}</strong></p>
         <p style="margin:4px 0;font-size:12px;color:#666;"><strong>Time:</strong> ${time}</p>
@@ -25160,7 +25160,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
   }
 
   formatTime(timestamp: string): string {
-    if (!timestamp) return 'â€”';
+    if (!timestamp) return '—';
     try {
       const date = new Date(timestamp);
       return date.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
@@ -25184,7 +25184,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
 }
 
 // ==========================================
-// Fuel Health Score Dialog â€” per-fill irregularity analysis
+// Fuel Health Score Dialog — per-fill irregularity analysis
 // ==========================================
 @Component({
   selector: 'app-fuel-health-dialog',
@@ -25222,7 +25222,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
 
       @if (loading) {
         <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-        <div class="fh-center"><mat-spinner diameter="40"></mat-spinner><p>Analysing fuel historyâ€¦</p></div>
+        <div class="fh-center"><mat-spinner diameter="40"></mat-spinner><p>Analysing fuel history…</p></div>
       } @else if (!result) {
         <div class="fh-center"><mat-icon>error_outline</mat-icon><p>Could not load fuel analysis.</p></div>
       } @else {
@@ -25252,15 +25252,15 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
               <span class="fh-stat-lbl">fuel drawn</span>
             </div>
             <div class="fh-stat">
-              <span class="fh-stat-val">{{ result.actualKmPerLitre ? (result.actualKmPerLitre | number:'1.1-1') : 'â€”' }}</span>
+              <span class="fh-stat-val">{{ result.actualKmPerLitre ? (result.actualKmPerLitre | number:'1.1-1') : '—' }}</span>
               <span class="fh-stat-lbl">actual km/L</span>
             </div>
             <div class="fh-stat">
-              <span class="fh-stat-val">{{ result.baselineKmPerLitre ? (result.baselineKmPerLitre | number:'1.1-1') : 'â€”' }}</span>
+              <span class="fh-stat-val">{{ result.baselineKmPerLitre ? (result.baselineKmPerLitre | number:'1.1-1') : '—' }}</span>
               <span class="fh-stat-lbl">baseline km/L<span *ngIf="result.baselineSource==='self-learned'"> (learned)</span></span>
             </div>
             <div class="fh-stat">
-              <span class="fh-stat-val">{{ result.tankSizeLitres ? (result.tankSizeLitres | number:'1.0-0') + ' L' : 'â€”' }}</span>
+              <span class="fh-stat-val">{{ result.tankSizeLitres ? (result.tankSizeLitres | number:'1.0-0') + ' L' : '—' }}</span>
               <span class="fh-stat-lbl">tank size</span>
             </div>
             <div class="fh-stat">
@@ -25315,18 +25315,18 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
                     @for (fill of result.fills; track $index) {
                       <tr [class.flagged]="fill.flag" [class.flagged-high]="fill.severity === 'high'">
                         <td>{{ fill.date | date:'d MMM yyyy' }}</td>
-                        <td>{{ fill.depotName || 'â€”' }}</td>
+                        <td>{{ fill.depotName || '—' }}</td>
                         <td class="num">{{ fill.litres | number:'1.0-1' }}</td>
                         <td class="num">R{{ fill.amount | number:'1.0-0' }}</td>
                         <td class="num" [class.muted]="!fill.hasMovementData && $index > 0">
-                          {{ fill.kmSinceLastFill != null ? (fill.kmSinceLastFill | number:'1.0-0') : ($index === 0 ? 'â€”' : 'no data') }}
+                          {{ fill.kmSinceLastFill != null ? (fill.kmSinceLastFill | number:'1.0-0') : ($index === 0 ? '—' : 'no data') }}
                         </td>
-                        <td class="num">{{ fill.expectedLitresForLeg != null ? (fill.expectedLitresForLeg | number:'1.0-1') : 'â€”' }}</td>
-                        <td class="num" [class.over]="fill.fillVsTankPercent > 100">{{ fill.fillVsTankPercent != null ? fill.fillVsTankPercent + '%' : 'â€”' }}</td>
+                        <td class="num">{{ fill.expectedLitresForLeg != null ? (fill.expectedLitresForLeg | number:'1.0-1') : '—' }}</td>
+                        <td class="num" [class.over]="fill.fillVsTankPercent > 100">{{ fill.fillVsTankPercent != null ? fill.fillVsTankPercent + '%' : '—' }}</td>
                         <td class="flag-cell">
                           <span *ngIf="fill.flag" class="flag-pill" [class.high]="fill.severity === 'high'"><mat-icon>error</mat-icon> {{ fill.flag }}</span>
                           <span *ngIf="!fill.flag && $index > 0 && fill.hasMovementData" class="ok-tick">✓</span>
-                          <span *ngIf="!fill.flag && (!fill.hasMovementData && $index > 0)" class="muted">â€”</span>
+                          <span *ngIf="!fill.flag && (!fill.hasMovementData && $index > 0)" class="muted">—</span>
                         </td>
                       </tr>
                     }
@@ -25466,7 +25466,7 @@ export class FuelHealthDialog {
 }
 
 /**
- * Quick barcode lookup pop-up â€” shows the tripsheet(s), stock item, invoices,
+ * Quick barcode lookup pop-up — shows the tripsheet(s), stock item, invoices,
  * asset and recent scans linked to a scanned/typed barcode number.
  */
 @Component({
@@ -25543,7 +25543,7 @@ export class FuelHealthDialog {
       @if (data.asset) {
         <div class="bl__block">
           <div class="bl__bt"><mat-icon>chair</mat-icon> Fixed asset</div>
-          <div class="bl__kv"><span>Code</span><b>{{ data.asset.assetCode || 'â€”' }}</b></div>
+          <div class="bl__kv"><span>Code</span><b>{{ data.asset.assetCode || '—' }}</b></div>
           <div class="bl__kv"><span>Category</span><b>{{ data.asset.category }}</b></div>
           @if (data.asset.assignedTo) { <div class="bl__kv"><span>Assigned to</span><b>{{ data.asset.assignedTo }}</b></div> }
         </div>
@@ -25553,7 +25553,7 @@ export class FuelHealthDialog {
         <div class="bl__block">
           <div class="bl__bt"><mat-icon>history</mat-icon> Recent scans</div>
           @for (s of data.recentScans; track s.id) {
-            <div class="bl__scan"><mat-icon>bolt</mat-icon><div><b>{{ s.action }}</b> â€” {{ s.scannedByName || 'Unknown' }}<div class="bl__sub">{{ s.scannedAt | date:'d MMM, HH:mm' }}</div></div></div>
+            <div class="bl__scan"><mat-icon>bolt</mat-icon><div><b>{{ s.action }}</b> — {{ s.scannedByName || 'Unknown' }}<div class="bl__sub">{{ s.scannedAt | date:'d MMM, HH:mm' }}</div></div></div>
           }
         </div>
       }
