@@ -233,6 +233,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         CommodityCode = c.Commodity?.Code,
                         Description = c.Comment,
                         ContractNumber = c.Contract?.ContractNumber,
+                        InvoiceNumber = c.InvoiceNumber,
                         Quantity = c.Quantity,
                         UnitOfMeasure = c.UnitOfMeasure,
                         UnitPrice = c.UnitPrice,
@@ -611,12 +612,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var fileName = $"{ts.LoadNumber}_{DateTime.Now:yyyyMMdd}.pdf";
                 var filePath = Path.Combine(completedPath, fileName);
 
-                // Generate PDF (simplified - use existing PDF generation)
+                // Generate PDF (landscape, same as download/email paths)
                 var htmlContent = GenerateTripSheetHtml(ts);
-                using var pdfStream = new MemoryStream();
-                HtmlConverter.ConvertToPdf(htmlContent, pdfStream);
-                
-                await System.IO.File.WriteAllBytesAsync(filePath, pdfStream.ToArray());
+                var pdfBytes = ConvertHtmlToPdf(htmlContent);
+
+                await System.IO.File.WriteAllBytesAsync(filePath, pdfBytes);
                 _logger.LogInformation("Saved completed tripsheet {LoadNumber} to NAS: {FilePath}", ts.LoadNumber, filePath);
             }
         }
@@ -696,9 +696,17 @@ namespace ProjectTracker.API.Controllers.Logistics
             // Generate HTML for PDF
             var html = GenerateTripSheetHtml(tripSheet);
 
-            // Return HTML that can be converted to PDF on client side
-            // Or use a server-side PDF library
-            return Content(html, "text/html");
+            // Render a real landscape PDF server-side; fall back to HTML if conversion fails
+            try
+            {
+                var pdfBytes = ConvertHtmlToPdf(html);
+                return File(pdfBytes, "application/pdf", $"TripSheet_{tripSheet.LoadNumber}_{DateTime.Now:yyyyMMdd}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Trip sheet PDF conversion failed for load {LoadId}; returning HTML", loadId);
+                return Content(html, "text/html");
+            }
         }
 
         /// <summary>
@@ -1542,7 +1550,6 @@ namespace ProjectTracker.API.Controllers.Logistics
     <meta charset='UTF-8'>
     <title>" + (isPickingSlip ? "Picking Slip" : "Trip Sheet") + @" - " + tripSheet.LoadNumber + @"</title>
     <style>
-        @page { size: landscape; margin: 10mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Segoe UI', Arial, sans-serif; 
@@ -1691,12 +1698,17 @@ namespace ProjectTracker.API.Controllers.Logistics
         .address-text {
             color: #666;
             font-size: 11px;
-            max-width: 180px;
+            max-width: 240px;
         }
         .product-cell {
             font-size: 11px;
             line-height: 1.3;
             color: #333;
+        }
+        .product-cell .prod-inv {
+            color: #607d8b;
+            font-size: 10px;
+            white-space: nowrap;
         }
         /* Picking slip: product is the star — bigger, bolder, roomier */
         .product-cell.picking {
@@ -1928,9 +1940,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             .main-table tr { break-inside: avoid; }
         }
         
+        /* Single source of truth — landscape maximises table width for products/addresses */
         @page {
             margin: 10mm;
-            size: A4;
+            size: A4 landscape;
         }
     </style>
 </head>
@@ -1990,21 +2003,23 @@ namespace ProjectTracker.API.Controllers.Logistics
                 : "<th class='right' style='width: 70px;'>VALUE</th>";
             // On the picking slip the PRODUCT column is the most important — give it
             // the flexible width and keep address/customer compact instead.
+            // On the trip sheet (landscape) products also get generous width so full
+            // descriptions stay readable; address stays flexible.
             var customerHeader = isPickingSlip
                 ? "<th style='width: 120px;'>CUSTOMER NAME</th>"
-                : "<th style='width: 150px;'>CUSTOMER NAME</th>";
+                : "<th style='width: 140px;'>CUSTOMER NAME</th>";
             var addressHeader = isPickingSlip
                 ? "<th style='width: 140px;'>DELIVERY ADDRESS</th>"
-                : "<th>DELIVERY ADDRESS</th>";
+                : "<th style='width: 220px;'>DELIVERY ADDRESS</th>";
             var productHeader = isPickingSlip
                 ? "<th style='min-width: 320px;'>PRODUCT</th>"
-                : "<th style='width: 150px;'>PRODUCT</th>";
+                : "<th style='min-width: 260px;'>PRODUCT</th>";
             sb.AppendLine($@"
     <table class='main-table'>
         <thead>
             <tr>
                 <th class='center' style='width: 35px;'>NO</th>
-                <th style='width: 80px;'>INV NO</th>
+                <th style='width: 100px;'>INV NO</th>
                 {customerHeader}
                 {addressHeader}
                 {productHeader}
@@ -2042,8 +2057,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                         }
                         else
                         {
-                            if (name.Length > 20) name = name.Substring(0, 17) + "...";
-                            productLines.Add($"{name} x{(int)c.Quantity}");
+                            // Landscape gives the product column real width — show the
+                            // full description (drivers/receivers check products too).
+                            var invTag = !string.IsNullOrWhiteSpace(c.InvoiceNumber)
+                                ? $" <span class='prod-inv'>({c.InvoiceNumber})</span>" : "";
+                            productLines.Add($"{name} x{(int)c.Quantity}{invTag}");
                         }
                     }
                 }
@@ -2849,6 +2867,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string? CommodityCode { get; set; }
         public string? Description { get; set; }
         public string? ContractNumber { get; set; }
+        public string? InvoiceNumber { get; set; }
         public decimal Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }
         public decimal? UnitPrice { get; set; }
