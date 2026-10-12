@@ -680,10 +680,12 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
-        /// Generate and download trip sheet PDF
+        /// Generate and download trip sheet PDF.
+        /// format=html (default) returns the printable HTML used by the in-app preview
+        /// windows; format=pdf renders a true A4-landscape PDF server-side.
         /// </summary>
         [HttpGet("{loadId}/pdf")]
-        public async Task<IActionResult> DownloadTripSheetPdf(int loadId)
+        public async Task<IActionResult> DownloadTripSheetPdf(int loadId, [FromQuery] string? format = null)
         {
             var tripSheetResult = await GetTripSheet(loadId);
             if (tripSheetResult.Result is NotFoundObjectResult)
@@ -696,7 +698,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             // Generate HTML for PDF
             var html = GenerateTripSheetHtml(tripSheet);
 
-            // Render a real landscape PDF server-side; fall back to HTML if conversion fails
+            // Default is HTML: the Angular preview windows fetch this endpoint as text
+            // and inject it into a print window. Only render a server-side PDF when
+            // explicitly asked (paperless module, external downloads).
+            if (!string.Equals(format, "pdf", StringComparison.OrdinalIgnoreCase))
+                return Content(html, "text/html");
+
             try
             {
                 var pdfBytes = ConvertHtmlToPdf(html);

@@ -472,7 +472,7 @@ export class PaperlessService {
     });
     if (load?.id == null) return;
     this.previewLoading.set(true);
-    this.http.get(`${environment.apiUrl}/logistics/TripSheet/${load.id}/pdf`, { responseType: 'blob' }).subscribe({
+    this.http.get(`${environment.apiUrl}/logistics/TripSheet/${load.id}/pdf?format=pdf`, { responseType: 'blob' }).subscribe({
       next: (blob) => {
         const reader = new FileReader();
         reader.onload = () => {
