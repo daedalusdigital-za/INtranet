@@ -548,6 +548,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                                     : (commDto.Quantity * commDto.UnitPrice),
                                 Weight = commDto.Weight,
                                 Volume = commDto.Volume,
+                                OrderNumber = commDto.OrderNumber,
+                                InvoiceNumber = commDto.InvoiceNumber,
                                 Comment = comment
                             };
                             _context.StopCommodities.Add(commodity);

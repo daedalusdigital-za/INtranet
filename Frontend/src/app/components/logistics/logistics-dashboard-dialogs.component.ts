@@ -13570,6 +13570,25 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T12:00:00`;
   }
 
+  /**
+   * All distinct invoice numbers for a (possibly customer-grouped) stop,
+   * comma-separated. Grouped stops carry several invoices for the same sale
+   * location — keeping only the first number silently merged the others
+   * (e.g. IN172092 disappearing into IN172011 on RF-000798).
+   */
+  private stopInvoiceNumbers(stop: any): string | null {
+    const nums: string[] = [];
+    const add = (n: any) => {
+      const v = (n || '').toString().trim();
+      if (v && !nums.some(x => x.toLowerCase() === v.toLowerCase())) nums.push(v);
+    };
+    if (stop.invoices && stop.invoices.length) {
+      stop.invoices.forEach((inv: any) => add(inv.transactionNumber || inv.invoiceNumber));
+    }
+    add(stop.transactionNumber);
+    return nums.length ? nums.join(', ') : null;
+  }
+
   createTripsheet(sendToSign: boolean = false): void {
     // Hard guard: never allow generating a trip sheet with missing driver/vehicle,
     // an invalid date, or unresolved delivery addresses.
@@ -13595,7 +13614,11 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         invoices.forEach((inv: any) => {
           lines.push({
             customerName: stop.customerName || stop.companyName || inv.customerName || null,
-            invoiceNumber: stop.transactionNumber || inv.transactionNumber || inv.invoiceNumber || null,
+            // Each line must keep ITS OWN invoice number. Stops are grouped by
+            // customer (same sale location), so using the stop's number first
+            // would stamp every invoice at that location with the first one
+            // (e.g. IN172092 getting merged into IN172011).
+            invoiceNumber: inv.transactionNumber || inv.invoiceNumber || stop.transactionNumber || null,
             address: stop.deliveryAddress || stop.address || inv.deliveryAddress || null,
             city: stop.city || inv.city || null,
             province: stop.province || inv.province || null,
@@ -13664,12 +13687,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         province: stop.province || null,
         latitude: stop.latitude || null,
         longitude: stop.longitude || null,
-        orderNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
-        invoiceNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
+        orderNumber: this.stopInvoiceNumbers(stop),
+        invoiceNumber: this.stopInvoiceNumbers(stop),
         commodities: stop.invoices 
           ? stop.invoices.map((inv: any) => ({
               commodityName: inv.productDescription || 'Product',
               commodityCode: inv.productCode || null,
+              invoiceNumber: inv.transactionNumber || inv.invoiceNumber || null,
               quantity: inv.quantity || 1,
               unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
               totalPrice: inv.salesAmount || 0
@@ -13677,6 +13701,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           : [{
               commodityName: stop.productDescription || 'Product',
               commodityCode: stop.productCode || null,
+              invoiceNumber: stop.transactionNumber || null,
               quantity: stop.quantity || 1,
               unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
               totalPrice: stop.salesAmount || 0
@@ -13785,12 +13810,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         province: stop.province || null,
         latitude: stop.latitude || null,
         longitude: stop.longitude || null,
-        orderNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
-        invoiceNumber: stop.transactionNumber || stop.invoices?.[0]?.transactionNumber || null,
+        orderNumber: this.stopInvoiceNumbers(stop),
+        invoiceNumber: this.stopInvoiceNumbers(stop),
         commodities: stop.invoices 
           ? stop.invoices.map((inv: any) => ({
               commodityName: inv.productDescription || 'Product',
               commodityCode: inv.productCode || null,
+              invoiceNumber: inv.transactionNumber || inv.invoiceNumber || null,
               quantity: inv.quantity || 1,
               unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
               totalPrice: inv.salesAmount || 0
@@ -13798,6 +13824,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           : [{
               commodityName: stop.productDescription || 'Product',
               commodityCode: stop.productCode || null,
+              invoiceNumber: stop.transactionNumber || null,
               quantity: stop.quantity || 1,
               unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
               totalPrice: stop.salesAmount || 0
