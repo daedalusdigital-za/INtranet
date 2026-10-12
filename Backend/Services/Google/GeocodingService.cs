@@ -76,23 +76,33 @@ namespace ProjectTracker.API.Services.Google
         #endregion
 
         /// <summary>
-        /// Geocode an address string to get coordinates and structured address components
+        /// Geocode an address string to get coordinates and structured address components.
+        /// If placeId is supplied (user picked a Google Places suggestion) the lookup is
+        /// done by place_id — an exact, user-chosen place that is never treated as vague.
         /// </summary>
-        public async Task<GeocodingResult> GeocodeAddressAsync(string address, string? region = "ZA")
+        public async Task<GeocodingResult> GeocodeAddressAsync(string address, string? region = "ZA", string? placeId = null)
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(address))
+                if (string.IsNullOrWhiteSpace(address) && string.IsNullOrWhiteSpace(placeId))
                 {
                     return new GeocodingResult { Success = false, Error = "Address is required" };
                 }
 
-                var encodedAddress = HttpUtility.UrlEncode(address);
-                var url = $"{GoogleMapsConfig.GeocodingApiUrl}?address={encodedAddress}&key={GoogleMapsConfig.ApiKey}";
-                
-                if (!string.IsNullOrEmpty(region))
+                string url;
+                if (!string.IsNullOrWhiteSpace(placeId))
                 {
-                    url += $"&region={region}&components=country:{region}";
+                    url = $"{GoogleMapsConfig.GeocodingApiUrl}?place_id={HttpUtility.UrlEncode(placeId)}&key={GoogleMapsConfig.ApiKey}";
+                }
+                else
+                {
+                    var encodedAddress = HttpUtility.UrlEncode(address);
+                    url = $"{GoogleMapsConfig.GeocodingApiUrl}?address={encodedAddress}&key={GoogleMapsConfig.ApiKey}";
+
+                    if (!string.IsNullOrEmpty(region))
+                    {
+                        url += $"&region={region}&components=country:{region}";
+                    }
                 }
 
                 var response = await _httpClient.GetStringAsync(url);
@@ -179,17 +189,29 @@ namespace ProjectTracker.API.Services.Google
                 geocodingResult.RawComponents = componentsList.ToArray();
 
                 // Decide whether this match is too coarse to be a real delivery point.
-                // Coarse = APPROXIMATE precision, OR the top-level result is only a
-                // country/province/region/locality boundary rather than an actual address/point.
-                var coarseTypes = new[] { "country", "administrative_area_level_1", "administrative_area_level_2", "political" };
+                // IMPORTANT: Google returns location_type=APPROXIMATE for many perfectly
+                // valid named places (hospitals, clinics, depots) — the same places its
+                // own autocomplete suggests. So APPROXIMATE alone must NOT mean vague:
+                // only flag when the result ALSO has no precise/POI type, i.e. it is
+                // really just a country/province/city/suburb boundary.
+                var coarseTypes = new[] { "country", "administrative_area_level_1", "administrative_area_level_2", "political", "locality", "sublocality", "sublocality_level_1", "postal_code" };
                 var hasPreciseType = geocodingResult.ResultTypes.Any(t =>
                     t is "street_address" or "premise" or "subpremise" or "route" or
-                    "street_number" or "point_of_interest" or "establishment" or "plus_code");
+                    "street_number" or "point_of_interest" or "establishment" or "plus_code" or
+                    "intersection" or "airport" or "park" or "hospital" or "health");
                 var isCountryOnly = string.Equals(geocodingResult.Country, geocodingResult.FormattedAddress, StringComparison.OrdinalIgnoreCase);
                 geocodingResult.IsApproximate =
-                    string.Equals(geocodingResult.LocationType, "APPROXIMATE", StringComparison.OrdinalIgnoreCase)
-                    || isCountryOnly
-                    || (!hasPreciseType && geocodingResult.ResultTypes.All(t => coarseTypes.Contains(t)) && geocodingResult.ResultTypes.Length > 0);
+                    isCountryOnly
+                    || (!hasPreciseType &&
+                        (string.Equals(geocodingResult.LocationType, "APPROXIMATE", StringComparison.OrdinalIgnoreCase)
+                         || (geocodingResult.ResultTypes.All(t => coarseTypes.Contains(t)) && geocodingResult.ResultTypes.Length > 0)));
+
+                // The user explicitly selected this place from Google's own suggestions —
+                // by definition it is a concrete, deliverable place, never "too vague".
+                if (!string.IsNullOrWhiteSpace(placeId))
+                {
+                    geocodingResult.IsApproximate = false;
+                }
 
                 _logger.LogInformation("Geocoded '{Address}' -> {Province}, {City} (type={LocationType}, approx={Approx})", 
                     address, geocodingResult.Province, geocodingResult.City, geocodingResult.LocationType, geocodingResult.IsApproximate);

@@ -12787,6 +12787,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   // Google Places Autocomplete - Input handler
   onAddressInput(group: any, event: any): void {
     const query = event.target.value;
+    // Manual typing invalidates any previously picked Google place
+    group.selectedPlaceId = null;
     if (query && query.length > 2) {
       this.addressInputSubject.next({group, query});
     } else {
@@ -12873,6 +12875,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   onAddressSelected(group: any, event: any): void {
     const selectedAddress = event.option.value;
     group.deliveryAddress = selectedAddress;
+    // Remember the exact place the user picked — geocoding by place_id is
+    // precise, so a Google-suggested place can never be rejected as "vague".
+    const picked = this.addressPredictions.find(p => p.description === selectedAddress);
+    group.selectedPlaceId = picked?.place_id || null;
     this.addressPredictions = [];
     
     // Update all invoices in this group with the new address
@@ -12903,8 +12909,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
     this.geocodingStop = group;
     const address = group.deliveryAddress;
+    const params: any = { address };
+    if (group.selectedPlaceId) params.placeId = group.selectedPlaceId;
     this.http.get<any>(`${this.data.apiUrl}/logistics/googlemaps/geocode`, {
-      params: { address }
+      params
     }).subscribe({
       next: (result) => {
         if (result.latitude && result.longitude && !result.isApproximate) {
@@ -12944,6 +12952,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           group.longitude = null;
           group.addressApproximate = true;
           group.isCollapsed = false;
+          group.selectedPlaceId = null;
           this.snackBar.open(
             `"${group.customerName}" — that address is too vague to place on the map. Please enter a full street address.`,
             'OK', { duration: 5000 });

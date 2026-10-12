@@ -41,12 +41,12 @@ namespace ProjectTracker.API.Controllers.Logistics
         /// Geocode an address to get coordinates and structured components
         /// </summary>
         [HttpGet("geocode")]
-        public async Task<IActionResult> GeocodeAddress([FromQuery] string address)
+        public async Task<IActionResult> GeocodeAddress([FromQuery] string address, [FromQuery] string? placeId = null)
         {
-            if (string.IsNullOrWhiteSpace(address))
+            if (string.IsNullOrWhiteSpace(address) && string.IsNullOrWhiteSpace(placeId))
                 return BadRequest(new { error = "Address is required" });
 
-            var result = await _geocodingService.GeocodeAddressAsync(address);
+            var result = await _geocodingService.GeocodeAddressAsync(address, "ZA", placeId);
             return Ok(result);
         }
 
