@@ -18237,12 +18237,23 @@ export class ViewLoadDetailsDialog {
     </mat-dialog-actions>
   `,
   styles: [`
-    mat-dialog-content {
-      min-width: 90vw;
-      max-width: 1400px;
-      padding: 20px;
+    :host {
       display: flex;
       flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    mat-dialog-content {
+      width: 100%;
+      max-width: 100%;
+      max-height: none;
+      box-sizing: border-box;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
       overflow: hidden;
     }
 
@@ -18251,17 +18262,18 @@ export class ViewLoadDetailsDialog {
       gap: 16px;
       flex: 1;
       min-height: 0;
-      height: calc(85vh - 220px);
     }
 
     .route-sidebar {
-      width: 360px;
+      width: 340px;
       flex-shrink: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       display: flex;
       flex-direction: column;
       gap: 12px;
       padding-right: 4px;
+      box-sizing: border-box;
     }
 
     .route-map-panel {
@@ -18279,9 +18291,9 @@ export class ViewLoadDetailsDialog {
     }
 
     @media (max-width: 900px) {
-      .route-layout { flex-direction: column; height: auto; }
+      .route-layout { flex-direction: column; }
       .route-sidebar { width: 100%; max-height: 300px; }
-      .route-map-panel { height: 50vh; }
+      .route-map-panel { min-height: 50vh; }
     }
 
     h2 {
@@ -18295,19 +18307,21 @@ export class ViewLoadDetailsDialog {
     }
 
     .route-info {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      padding: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      padding: 10px 16px;
       background: #f5f5f5;
       border-radius: 8px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+      box-sizing: border-box;
     }
 
     .info-item {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 2px;
     }
 
     .info-item strong {
@@ -18376,6 +18390,8 @@ export class ViewLoadDetailsDialog {
 
     .stop-details {
       flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .stop-details strong {
