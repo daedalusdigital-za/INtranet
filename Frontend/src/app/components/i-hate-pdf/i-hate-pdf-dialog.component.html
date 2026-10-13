@@ -16,6 +16,10 @@
             @case ('merge') { Merge, rotate & combine PDFs }
             @case ('compress') { Shrink your PDF }
             @case ('stamp') { Stamp a PDF with a company stamp }
+            @case ('delete') { Remove unwanted pages }
+            @case ('number') { Add page numbers }
+            @case ('extract') { Pull the text out of a PDF }
+            @case ('rotate') { Rotate every page }
             @default { Quick PDF tools — right here, nothing leaves your browser }
           }
         </div>
@@ -60,6 +64,26 @@
           <span class="ihp-card__icon material-icons">approval</span>
           <span class="ihp-card__name">PDF Stamper</span>
           <span class="ihp-card__desc">Upload a PDF, pick a company stamp and drop it anywhere on the page. Download the stamped file — a copy is archived in the IT portal.</span>
+        </button>
+        <button class="ihp-card ihp-card--delete" (click)="choose('delete')">
+          <span class="ihp-card__icon material-icons">delete_sweep</span>
+          <span class="ihp-card__name">PDF Delete Pages</span>
+          <span class="ihp-card__desc">Upload a PDF, tick the pages you don't want and download the document without them.</span>
+        </button>
+        <button class="ihp-card ihp-card--number" (click)="choose('number')">
+          <span class="ihp-card__icon material-icons">pin</span>
+          <span class="ihp-card__name">PDF Numbering</span>
+          <span class="ihp-card__desc">Stamp “Page X of Y” on every page — choose the position and starting number, then download.</span>
+        </button>
+        <button class="ihp-card ihp-card--extract" (click)="choose('extract')">
+          <span class="ihp-card__icon material-icons">text_snippet</span>
+          <span class="ihp-card__name">PDF Extractor</span>
+          <span class="ihp-card__desc">Pull all the text out of a PDF — copy it to the clipboard or download it as a .txt file.</span>
+        </button>
+        <button class="ihp-card ihp-card--rotate" (click)="choose('rotate')">
+          <span class="ihp-card__icon material-icons">rotate_90_degrees_cw</span>
+          <span class="ihp-card__name">PDF Rotator</span>
+          <span class="ihp-card__desc">Rotate every page of a PDF by 90°, 180° or 270° and download the fixed file.</span>
         </button>
       </div>
     }
@@ -352,6 +376,168 @@
         }
       }
     }
+
+    <!-- ── DELETE PAGES ───────────────────────────────── -->
+    @if (mode() === 'delete') {
+      @if (!fileName()) {
+        <div class="ihp-drop" (click)="triggerPicker()" (drop)="onDrop($event)" (dragover)="onDragOver($event)">
+          <span class="material-icons">delete_sweep</span>
+          <div class="ihp-drop__title">Drop a PDF here or click to browse</div>
+          <div class="ihp-drop__hint">Tick the pages you want to remove — the rest stay in the file.</div>
+        </div>
+      } @else {
+        <div class="ihp-file">
+          <span class="material-icons">description</span>
+          <div class="ihp-file__meta">
+            <div class="ihp-file__name" [title]="fileName()">{{ fileName() }}</div>
+            <div class="ihp-file__size">{{ humanSize(fileSize()) }} · {{ pages().length }} pages</div>
+          </div>
+          <button class="ihp-btn ihp-btn--ghost" (click)="triggerPicker()">
+            <span class="material-icons">swap_horiz</span> Change
+          </button>
+        </div>
+
+        @if (pages().length) {
+          <div class="ihp-tools">
+            <div class="ihp-range">
+              <input class="ihp-input" type="text" [(ngModel)]="rangeText"
+                     placeholder="e.g. 1-3, 5, 8-10" (keyup.enter)="applyRange()" />
+              <button class="ihp-btn ihp-btn--ghost" (click)="applyRange()">Mark range</button>
+            </div>
+            <div class="ihp-tools__spacer"></div>
+            <button class="ihp-btn ihp-btn--ghost" (click)="selectNone()">Clear</button>
+          </div>
+
+          <div class="ihp-grid">
+            @for (p of pages(); track p.index) {
+              <button class="ihp-thumb ihp-thumb--del" [class.ihp-thumb--on]="p.selected" (click)="togglePage(p)">
+                <img [src]="p.dataUrl" alt="Page {{ p.index + 1 }}" />
+                <span class="ihp-thumb__no">{{ p.index + 1 }}</span>
+                @if (p.selected) {
+                  <span class="ihp-thumb__check ihp-thumb__check--del material-icons">delete</span>
+                }
+              </button>
+            }
+          </div>
+        }
+      }
+    }
+
+    <!-- ── NUMBERING ──────────────────────────────────── -->
+    @if (mode() === 'number') {
+      @if (!fileName()) {
+        <div class="ihp-drop" (click)="triggerPicker()" (drop)="onDrop($event)" (dragover)="onDragOver($event)">
+          <span class="material-icons">pin</span>
+          <div class="ihp-drop__title">Drop a PDF here or click to browse</div>
+          <div class="ihp-drop__hint">Choose where the numbers go, then download.</div>
+        </div>
+      } @else {
+        <div class="ihp-file">
+          <span class="material-icons">description</span>
+          <div class="ihp-file__meta">
+            <div class="ihp-file__name" [title]="fileName()">{{ fileName() }}</div>
+            <div class="ihp-file__size">{{ humanSize(fileSize()) }}</div>
+          </div>
+          <button class="ihp-btn ihp-btn--ghost" (click)="triggerPicker()">
+            <span class="material-icons">swap_horiz</span> Change
+          </button>
+        </div>
+
+        <div class="ihp-levels">
+          <button class="ihp-level" [class.ihp-level--on]="numberPosition() === 'bottom-center'" (click)="pickNumberPosition('bottom-center')">
+            <span class="ihp-level__icon material-icons">south</span>
+            <span class="ihp-level__name">Bottom centre</span>
+            <span class="ihp-level__blurb">Classic footer numbering</span>
+          </button>
+          <button class="ihp-level" [class.ihp-level--on]="numberPosition() === 'bottom-right'" (click)="pickNumberPosition('bottom-right')">
+            <span class="ihp-level__icon material-icons">south_east</span>
+            <span class="ihp-level__name">Bottom right</span>
+            <span class="ihp-level__blurb">Out of the way corner</span>
+          </button>
+          <button class="ihp-level" [class.ihp-level--on]="numberPosition() === 'top-right'" (click)="pickNumberPosition('top-right')">
+            <span class="ihp-level__icon material-icons">north_east</span>
+            <span class="ihp-level__name">Top right</span>
+            <span class="ihp-level__blurb">Header-style numbering</span>
+          </button>
+        </div>
+
+        <div class="ihp-tools" style="justify-content: center;">
+          <label style="font-size: 0.85rem; color: #64748b; font-weight: 600;">Start numbering at</label>
+          <input class="ihp-input" type="number" min="1" style="min-width: 90px; width: 90px;"
+                 [ngModel]="numberStart()" (ngModelChange)="numberStart.set($event)" />
+        </div>
+      }
+    }
+
+    <!-- ── TEXT EXTRACTOR ─────────────────────────────── -->
+    @if (mode() === 'extract') {
+      @if (!fileName()) {
+        <div class="ihp-drop" (click)="triggerPicker()" (drop)="onDrop($event)" (dragover)="onDragOver($event)">
+          <span class="material-icons">text_snippet</span>
+          <div class="ihp-drop__title">Drop a PDF here or click to browse</div>
+          <div class="ihp-drop__hint">We'll pull out all the selectable text, page by page.</div>
+        </div>
+      } @else {
+        <div class="ihp-file">
+          <span class="material-icons">description</span>
+          <div class="ihp-file__meta">
+            <div class="ihp-file__name" [title]="fileName()">{{ fileName() }}</div>
+            <div class="ihp-file__size">{{ humanSize(fileSize()) }}</div>
+          </div>
+          <button class="ihp-btn ihp-btn--ghost" (click)="triggerPicker()">
+            <span class="material-icons">swap_horiz</span> Change
+          </button>
+        </div>
+
+        @if (textCopied()) {
+          <div class="ihp-sent"><span class="material-icons">check_circle</span> Text copied to clipboard!</div>
+        }
+
+        @if (extractedText()) {
+          <textarea class="ihp-input ihp-input--area ihp-extract-area" readonly [value]="extractedText()"></textarea>
+        }
+      }
+    }
+
+    <!-- ── ROTATOR ────────────────────────────────────── -->
+    @if (mode() === 'rotate') {
+      @if (!fileName()) {
+        <div class="ihp-drop" (click)="triggerPicker()" (drop)="onDrop($event)" (dragover)="onDragOver($event)">
+          <span class="material-icons">rotate_90_degrees_cw</span>
+          <div class="ihp-drop__title">Drop a PDF here or click to browse</div>
+          <div class="ihp-drop__hint">Pick an angle — every page gets rotated.</div>
+        </div>
+      } @else {
+        <div class="ihp-file">
+          <span class="material-icons">description</span>
+          <div class="ihp-file__meta">
+            <div class="ihp-file__name" [title]="fileName()">{{ fileName() }}</div>
+            <div class="ihp-file__size">{{ humanSize(fileSize()) }}</div>
+          </div>
+          <button class="ihp-btn ihp-btn--ghost" (click)="triggerPicker()">
+            <span class="material-icons">swap_horiz</span> Change
+          </button>
+        </div>
+
+        <div class="ihp-levels">
+          <button class="ihp-level" [class.ihp-level--on]="rotateAngle() === 90" (click)="pickRotateAngle(90)">
+            <span class="ihp-level__icon material-icons">rotate_right</span>
+            <span class="ihp-level__name">90° right</span>
+            <span class="ihp-level__blurb">Quarter turn clockwise</span>
+          </button>
+          <button class="ihp-level" [class.ihp-level--on]="rotateAngle() === 180" (click)="pickRotateAngle(180)">
+            <span class="ihp-level__icon material-icons">sync</span>
+            <span class="ihp-level__name">180°</span>
+            <span class="ihp-level__blurb">Upside down fix</span>
+          </button>
+          <button class="ihp-level" [class.ihp-level--on]="rotateAngle() === 270" (click)="pickRotateAngle(270)">
+            <span class="ihp-level__icon material-icons">rotate_left</span>
+            <span class="ihp-level__name">90° left</span>
+            <span class="ihp-level__blurb">Quarter turn anticlockwise</span>
+          </button>
+        </div>
+      }
+    }
   </div>
 
   <!-- Footer -->
@@ -395,6 +581,41 @@
         <div class="ihp__footbtns">
           <button class="ihp-btn ihp-btn--primary" (click)="applyAndDownloadStamp()" [disabled]="busy() || stampCount() === 0">
             <span class="material-icons">approval</span> {{ stampSaving() ? 'Saving…' : 'Apply, download & archive' }}
+          </button>
+        </div>
+      }
+      @if (mode() === 'delete') {
+        <span class="ihp__footinfo">{{ selectedCount() }} of {{ pages().length }} pages marked for deletion</span>
+        <div class="ihp__footbtns">
+          <button class="ihp-btn ihp-btn--primary" (click)="downloadWithoutSelected()" [disabled]="busy() || !selectedCount()">
+            <span class="material-icons">delete_sweep</span> Delete {{ selectedCount() }} page{{ selectedCount() === 1 ? '' : 's' }} &amp; download
+          </button>
+        </div>
+      }
+      @if (mode() === 'number') {
+        <span class="ihp__footinfo">Position: {{ numberPosition() }}</span>
+        <div class="ihp__footbtns">
+          <button class="ihp-btn ihp-btn--primary" (click)="downloadNumbered()" [disabled]="busy()">
+            <span class="material-icons">pin</span> Add numbers &amp; download
+          </button>
+        </div>
+      }
+      @if (mode() === 'extract' && extractedText()) {
+        <span class="ihp__footinfo">{{ extractedText().length | number }} characters extracted</span>
+        <div class="ihp__footbtns">
+          <button class="ihp-btn ihp-btn--ghost" (click)="copyExtractedText()" [disabled]="busy()">
+            <span class="material-icons">content_copy</span> Copy text
+          </button>
+          <button class="ihp-btn ihp-btn--primary" (click)="downloadExtractedText()" [disabled]="busy()">
+            <span class="material-icons">download</span> Download .txt
+          </button>
+        </div>
+      }
+      @if (mode() === 'rotate') {
+        <span class="ihp__footinfo">Rotate all pages by {{ rotateAngle() }}°</span>
+        <div class="ihp__footbtns">
+          <button class="ihp-btn ihp-btn--primary" (click)="downloadRotated()" [disabled]="busy()">
+            <span class="material-icons">rotate_90_degrees_cw</span> Rotate &amp; download
           </button>
         </div>
       }

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { PDFDocument, degrees } from 'pdf-lib';
+import { PDFDocument, degrees, StandardFonts, rgb } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 import { jsPDF } from 'jspdf';
 import { HttpClient } from '@angular/common/http';
@@ -13,7 +13,7 @@ import { environment } from '../../../environments/environment';
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc =
   new URL('pdf.worker.min.mjs', document.baseURI).toString();
 
-type Mode = 'home' | 'split' | 'merge' | 'compress' | 'stamp';
+type Mode = 'home' | 'split' | 'merge' | 'compress' | 'stamp' | 'delete' | 'number' | 'extract' | 'rotate';
 
 /** A company stamp available to apply. PNGs live in /public/stamps. */
 interface StampAsset {
@@ -100,6 +100,13 @@ export class IHatePdfDialogComponent {
   readonly pages = signal<PageThumb[]>([]);
   readonly selectedCount = computed(() => this.pages().filter(p => p.selected).length);
   rangeText = '';
+
+  // ── Delete / Rotate / Number / Extract state ───────────────
+  readonly rotateAngle = signal<90 | 180 | 270>(90);
+  readonly numberPosition = signal<'bottom-center' | 'bottom-right' | 'top-right'>('bottom-center');
+  readonly numberStart = signal(1);
+  readonly extractedText = signal('');
+  readonly textCopied = signal(false);
 
   // ── Compressor state ───────────────────────────────────────
   readonly levels: CompressLevel[] = [
@@ -189,6 +196,11 @@ export class IHatePdfDialogComponent {
     this.sourceBytes = null;
     this.pages.set([]);
     this.rangeText = '';
+    this.rotateAngle.set(90);
+    this.numberPosition.set('bottom-center');
+    this.numberStart.set(1);
+    this.extractedText.set('');
+    this.textCopied.set(false);
     this.selectedLevel.set('balanced');
     this.compressedSize.set(0);
     this.revokeCompressed();
@@ -265,6 +277,14 @@ export class IHatePdfDialogComponent {
 
     if (this.mode() === 'split') {
       await this.renderThumbnails();
+    }
+    if (this.mode() === 'delete') {
+      await this.renderThumbnails();
+      // For deletion, start with nothing selected — user picks pages to remove.
+      this.pages.update(l => l.map(x => ({ ...x, selected: false })));
+    }
+    if (this.mode() === 'extract') {
+      await this.runExtractText();
     }
     if (this.mode() === 'stamp') {
       await this.renderStampPages();
@@ -374,6 +394,133 @@ export class IHatePdfDialogComponent {
       this.busy.set(false);
       this.busyMsg.set('');
     }
+  }
+
+  // ── Delete pages ───────────────────────────────────────────
+  /** Remove the selected pages and download what's left. */
+  async downloadWithoutSelected(): Promise<void> {
+    if (!this.sourceBytes) return;
+    const toDelete = new Set(this.pages().filter(p => p.selected).map(p => p.index));
+    if (toDelete.size === 0) { this.error.set('Select at least one page to delete.'); return; }
+    const keep = this.pages().map(p => p.index).filter(i => !toDelete.has(i));
+    if (keep.length === 0) { this.error.set('You cannot delete every page.'); return; }
+    this.busy.set(true);
+    this.busyMsg.set('Removing pages…');
+    try {
+      const src = await PDFDocument.load(this.sourceBytes.slice());
+      const out = await PDFDocument.create();
+      const copied = await out.copyPages(src, keep);
+      copied.forEach(pg => out.addPage(pg));
+      const bytes = await out.save();
+      this.downloadBytes(bytes, this.suffixedName('pages-removed'), 'application/pdf');
+    } catch {
+      this.error.set('Failed to delete pages. The PDF may be protected.');
+    } finally {
+      this.busy.set(false);
+      this.busyMsg.set('');
+    }
+  }
+
+  // ── Rotator ────────────────────────────────────────────────
+  pickRotateAngle(a: 90 | 180 | 270): void { this.rotateAngle.set(a); }
+
+  /** Rotate every page by the chosen angle and download. */
+  async downloadRotated(): Promise<void> {
+    if (!this.sourceBytes) { this.error.set('Upload a PDF first.'); return; }
+    this.busy.set(true);
+    this.busyMsg.set('Rotating pages…');
+    try {
+      const pdf = await PDFDocument.load(this.sourceBytes.slice());
+      for (const pg of pdf.getPages()) {
+        const current = pg.getRotation().angle || 0;
+        pg.setRotation(degrees((current + this.rotateAngle()) % 360));
+      }
+      const bytes = await pdf.save();
+      this.downloadBytes(bytes, this.suffixedName(`rotated-${this.rotateAngle()}`), 'application/pdf');
+    } catch {
+      this.error.set('Failed to rotate the PDF. It may be protected.');
+    } finally {
+      this.busy.set(false);
+      this.busyMsg.set('');
+    }
+  }
+
+  // ── Page numbering ─────────────────────────────────────────
+  pickNumberPosition(p: 'bottom-center' | 'bottom-right' | 'top-right'): void { this.numberPosition.set(p); }
+
+  /** Stamp "Page X of Y" on every page and download. */
+  async downloadNumbered(): Promise<void> {
+    if (!this.sourceBytes) { this.error.set('Upload a PDF first.'); return; }
+    this.busy.set(true);
+    this.busyMsg.set('Adding page numbers…');
+    try {
+      const pdf = await PDFDocument.load(this.sourceBytes.slice());
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      const pages = pdf.getPages();
+      const start = Math.max(1, Math.floor(this.numberStart() || 1));
+      const size = 10;
+      pages.forEach((pg, i) => {
+        const { width, height } = pg.getSize();
+        const label = `Page ${start + i} of ${start + pages.length - 1}`;
+        const textWidth = font.widthOfTextAtSize(label, size);
+        let x = (width - textWidth) / 2;
+        let y = 24;
+        if (this.numberPosition() === 'bottom-right') { x = width - textWidth - 36; }
+        if (this.numberPosition() === 'top-right') { x = width - textWidth - 36; y = height - 30; }
+        pg.drawText(label, { x, y, size, font, color: rgb(0.35, 0.38, 0.45) });
+      });
+      const bytes = await pdf.save();
+      this.downloadBytes(bytes, this.suffixedName('numbered'), 'application/pdf');
+    } catch {
+      this.error.set('Failed to add page numbers. The PDF may be protected.');
+    } finally {
+      this.busy.set(false);
+      this.busyMsg.set('');
+    }
+  }
+
+  // ── Text extractor ─────────────────────────────────────────
+  /** Pull all text out of the PDF with pdf.js. */
+  private async runExtractText(): Promise<void> {
+    if (!this.sourceBytes) return;
+    this.busy.set(true);
+    this.busyMsg.set('Extracting text…');
+    this.extractedText.set('');
+    this.textCopied.set(false);
+    try {
+      const doc = await (pdfjsLib as any).getDocument({ data: this.sourceBytes.slice() }).promise;
+      let out = '';
+      for (let i = 1; i <= doc.numPages; i++) {
+        this.busyMsg.set(`Extracting text… page ${i}/${doc.numPages}`);
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        const text = content.items.map((it: any) => it.str).join(' ');
+        out += `--- Page ${i} ---\n${text.trim()}\n\n`;
+      }
+      this.extractedText.set(out.trim() || 'No selectable text found — this PDF may be a scanned image.');
+    } catch {
+      this.error.set('Could not extract text. The PDF may be corrupted or password-protected.');
+    } finally {
+      this.busy.set(false);
+      this.busyMsg.set('');
+    }
+  }
+
+  async copyExtractedText(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.extractedText());
+      this.textCopied.set(true);
+      setTimeout(() => this.textCopied.set(false), 2500);
+    } catch {
+      this.error.set('Copy failed — select the text manually instead.');
+    }
+  }
+
+  downloadExtractedText(): void {
+    const blob = new Blob([this.extractedText()], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    this.triggerDownload(url, (this.fileName().replace(/\.pdf$/i, '') || 'document') + '.txt');
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   // ── Compressor ─────────────────────────────────────────────

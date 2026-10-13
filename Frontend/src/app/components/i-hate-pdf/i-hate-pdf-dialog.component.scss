@@ -251,6 +251,23 @@
 // ── Stamper ──────────────────────────────────────────────────
 .ihp-card--stamp .ihp-card__icon { color: #db2777; }
 
+// ── New tool cards ───────────────────────────────────────────
+.ihp-card--delete .ihp-card__icon { color: #ef4444; }
+.ihp-card--number .ihp-card__icon { color: #f59e0b; }
+.ihp-card--extract .ihp-card__icon { color: #10b981; }
+.ihp-card--rotate .ihp-card__icon { color: #8b5cf6; }
+
+// Delete-pages thumbs: marked pages glow red instead of indigo
+.ihp-thumb--del.ihp-thumb--on { border-color: #ef4444; }
+.ihp-thumb__check--del { color: #ef4444 !important; }
+
+// Text extractor output
+.ihp-extract-area {
+  width: 100%; min-height: 42vh; resize: vertical;
+  font-family: 'Consolas', 'Courier New', monospace; font-size: 0.8rem; line-height: 1.5;
+  background: #f8fafc;
+}
+
 .ihp-stamp-palette {
   margin: 14px 0 10px;
   &__label { font-size: 0.82rem; color: var(--ihp-muted); font-weight: 600; margin-bottom: 8px; }
