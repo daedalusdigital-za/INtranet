@@ -18114,113 +18114,120 @@ export class ViewLoadDetailsDialog {
           <p>{{ geocodingError }}</p>
         </div>
       } @else {
-        <google-map
-          [options]="mapOptions"
-          [center]="mapCenter"
-          [zoom]="mapZoom"
-          width="100%"
-          height="600px">
-          
-          <!-- Warehouse marker -->
-          @if (warehousePosition) {
-            <map-marker
-              [position]="warehousePosition"
-              [options]="warehouseMarkerOptions"
-              [title]="'Origin: ' + (data.load.warehouseName || data.load.warehouse?.name || 'Warehouse')">
-            </map-marker>
-          }
+        <div class="route-layout">
+          <!-- Left panel: live tracking + stops -->
+          <div class="route-sidebar">
+            @if (trackingInfo) {
+              <div class="tracking-banner">
+                <mat-icon>gps_fixed</mat-icon>
+                <div class="tracking-details">
+                  <strong>Live Tracking</strong>
+                  <span>{{ trackingInfo.vehicleRegistration }} · {{ trackingInfo.currentLocation?.status || 'Unknown' }}
+                    @if (trackingInfo.currentLocation?.speed > 0) {
+                      · {{ trackingInfo.currentLocation.speed }} km/h
+                    }
+                  </span>
+                  @if (trackingInfo.currentLocation?.location?.address) {
+                    <span>{{ trackingInfo.currentLocation.location.address }}</span>
+                  }
+                  @if (trackingInfo.distanceToNextStop) {
+                    <span>Next stop: {{ trackingInfo.distanceToNextStop | number:'1.1-1' }} km away</span>
+                  }
+                </div>
+              </div>
+            }
 
-          <!-- Stop markers -->
-          @for (stop of geocodedStops; track stop.id) {
-            <map-marker
-              [position]="stop.position"
-              [label]="stop.label"
-              [title]="stop.title"
-              [options]="stopMarkerOptions">
-            </map-marker>
-          }
-
-          <!-- Route polyline -->
-          @if (routePath.length > 0) {
-            <map-polyline
-              [path]="routePath"
-              [options]="polylineOptions">
-            </map-polyline>
-          }
-
-          <!-- Live vehicle position marker -->
-          @if (vehiclePosition) {
-            <map-marker
-              [position]="vehiclePosition"
-              [options]="vehicleMarkerOptions"
-              [title]="'Vehicle: ' + (trackingInfo?.vehicleRegistration || data.load.vehicleRegistration || 'Unknown')">
-            </map-marker>
-          }
-        </google-map>
-
-        <!-- Live tracking info banner -->
-        @if (trackingInfo) {
-          <div class="tracking-banner">
-            <mat-icon>gps_fixed</mat-icon>
-            <div class="tracking-details">
-              <strong>Live Tracking</strong>
-              <span>{{ trackingInfo.vehicleRegistration }} · {{ trackingInfo.currentLocation?.status || 'Unknown' }}
-                @if (trackingInfo.currentLocation?.speed > 0) {
-                  · {{ trackingInfo.currentLocation.speed }} km/h
-                }
-              </span>
-              @if (trackingInfo.currentLocation?.location?.address) {
-                <span>{{ trackingInfo.currentLocation.location.address }}</span>
+            <div class="stops-legend">
+              <h3>Stops Details ({{ data.load.stops?.length || 0 }} stop{{ (data.load.stops?.length || 0) === 1 ? '' : 's' }})</h3>
+              @if ((data.load.stops?.length || 0) === 1) {
+                <p class="group-note">
+                  <mat-icon>info</mat-icon>
+                  Invoices to the same customer are grouped into one stop.
+                </p>
               }
-              @if (trackingInfo.distanceToNextStop) {
-                <span>Next stop: {{ trackingInfo.distanceToNextStop | number:'1.1-1' }} km away</span>
+              @for (stop of data.load.stops; track stop.id; let i = $index) {
+                <div class="stop-item">
+                  <div class="stop-number">{{ i + 1 }}</div>
+                  <div class="stop-details">
+                    <strong>{{ stop.companyName || stop.customerName || 'Stop ' + (i + 1) }}</strong>
+                    <div>{{ stop.address }}{{ stop.city ? ', ' + stop.city : '' }}</div>
+                    @if (stop.invoiceNumber) {
+                      <div class="invoice-line"><mat-icon>receipt</mat-icon> {{ stop.invoiceNumber }}</div>
+                    }
+                    @if (stop.notes) {
+                      <div class="stop-notes">{{ stop.notes }}</div>
+                    }
+                    @if (stop.stopCommodities && stop.stopCommodities.length > 0) {
+                      <div class="commodities">
+                        @for (commodity of stop.stopCommodities; track commodity.id) {
+                          <span class="commodity-chip">
+                            {{ commodity.commodity?.name }} ({{ commodity.quantity }} {{ commodity.commodity?.unit }})
+                          </span>
+                        }
+                      </div>
+                    }
+                    @if (stop.commodities && stop.commodities.length > 0) {
+                      <div class="commodities">
+                        @for (commodity of stop.commodities; track commodity.id) {
+                          <span class="commodity-chip">
+                            {{ commodity.commodityName }} ({{ commodity.quantity }} {{ commodity.unitOfMeasure || '' }})
+                            @if (commodity.invoiceNumber) { · {{ commodity.invoiceNumber }} }
+                          </span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
               }
             </div>
           </div>
-        }
 
-        <div class="stops-legend">
-          <h3>Stops Details ({{ data.load.stops?.length || 0 }} stop{{ (data.load.stops?.length || 0) === 1 ? '' : 's' }})</h3>
-          @if ((data.load.stops?.length || 0) === 1) {
-            <p class="group-note">
-              <mat-icon>info</mat-icon>
-              Invoices to the same customer are grouped into one stop.
-            </p>
-          }
-          @for (stop of data.load.stops; track stop.id; let i = $index) {
-            <div class="stop-item">
-              <div class="stop-number">{{ i + 1 }}</div>
-              <div class="stop-details">
-                <strong>{{ stop.companyName || stop.customerName || 'Stop ' + (i + 1) }}</strong>
-                <div>{{ stop.address }}{{ stop.city ? ', ' + stop.city : '' }}</div>
-                @if (stop.invoiceNumber) {
-                  <div class="invoice-line"><mat-icon>receipt</mat-icon> {{ stop.invoiceNumber }}</div>
-                }
-                @if (stop.notes) {
-                  <div class="stop-notes">{{ stop.notes }}</div>
-                }
-                @if (stop.stopCommodities && stop.stopCommodities.length > 0) {
-                  <div class="commodities">
-                    @for (commodity of stop.stopCommodities; track commodity.id) {
-                      <span class="commodity-chip">
-                        {{ commodity.commodity?.name }} ({{ commodity.quantity }} {{ commodity.commodity?.unit }})
-                      </span>
-                    }
-                  </div>
-                }
-                @if (stop.commodities && stop.commodities.length > 0) {
-                  <div class="commodities">
-                    @for (commodity of stop.commodities; track commodity.id) {
-                      <span class="commodity-chip">
-                        {{ commodity.commodityName }} ({{ commodity.quantity }} {{ commodity.unitOfMeasure || '' }})
-                        @if (commodity.invoiceNumber) { · {{ commodity.invoiceNumber }} }
-                      </span>
-                    }
-                  </div>
-                }
-              </div>
-            </div>
-          }
+          <!-- Right panel: map -->
+          <div class="route-map-panel">
+            <google-map
+              [options]="mapOptions"
+              [center]="mapCenter"
+              [zoom]="mapZoom"
+              width="100%"
+              height="100%">
+
+              <!-- Warehouse marker -->
+              @if (warehousePosition) {
+                <map-marker
+                  [position]="warehousePosition"
+                  [options]="warehouseMarkerOptions"
+                  [title]="'Origin: ' + (data.load.warehouseName || data.load.warehouse?.name || 'Warehouse')">
+                </map-marker>
+              }
+
+              <!-- Stop markers -->
+              @for (stop of geocodedStops; track stop.id) {
+                <map-marker
+                  [position]="stop.position"
+                  [label]="stop.label"
+                  [title]="stop.title"
+                  [options]="stopMarkerOptions">
+                </map-marker>
+              }
+
+              <!-- Route polyline -->
+              @if (routePath.length > 0) {
+                <map-polyline
+                  [path]="routePath"
+                  [options]="polylineOptions">
+                </map-polyline>
+              }
+
+              <!-- Live vehicle position marker -->
+              @if (vehiclePosition) {
+                <map-marker
+                  [position]="vehiclePosition"
+                  [options]="vehicleMarkerOptions"
+                  [title]="'Vehicle: ' + (trackingInfo?.vehicleRegistration || data.load.vehicleRegistration || 'Unknown')">
+                </map-marker>
+              }
+            </google-map>
+          </div>
         </div>
       }
     </mat-dialog-content>
@@ -18234,6 +18241,47 @@ export class ViewLoadDetailsDialog {
       min-width: 90vw;
       max-width: 1400px;
       padding: 20px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .route-layout {
+      display: flex;
+      gap: 16px;
+      flex: 1;
+      min-height: 0;
+      height: calc(85vh - 220px);
+    }
+
+    .route-sidebar {
+      width: 360px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 4px;
+    }
+
+    .route-map-panel {
+      flex: 1;
+      min-width: 0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .route-map-panel google-map {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    @media (max-width: 900px) {
+      .route-layout { flex-direction: column; height: auto; }
+      .route-sidebar { width: 100%; max-height: 300px; }
+      .route-map-panel { height: 50vh; }
     }
 
     h2 {
@@ -18291,7 +18339,6 @@ export class ViewLoadDetailsDialog {
     }
 
     .stops-legend {
-      margin-top: 24px;
       padding: 16px;
       background: white;
       border-radius: 8px;
@@ -18301,7 +18348,7 @@ export class ViewLoadDetailsDialog {
     .stops-legend h3 {
       margin: 0 0 16px 0;
       color: #333;
-      font-size: 18px;
+      font-size: 16px;
     }
 
     .stop-item {
@@ -18395,10 +18442,10 @@ export class ViewLoadDetailsDialog {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      margin-top: 12px;
       background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
       border-radius: 8px;
       border-left: 4px solid #4caf50;
+      flex-shrink: 0;
     }
 
     .tracking-banner mat-icon {
