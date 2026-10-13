@@ -869,6 +869,33 @@ namespace ProjectTracker.API.Controllers.Logistics
                     });
                 }
 
+                // Attach stored import artifacts (e.g. the original Excel import file)
+                try
+                {
+                    var loadFiles = await _context.LoadAttachments
+                        .Where(a => a.LoadId == loadId)
+                        .ToListAsync();
+                    foreach (var att in loadFiles)
+                    {
+                        var path = Path.Combine(AttachmentsDir, att.StoredFileName);
+                        if (!System.IO.File.Exists(path)) continue;
+                        // Skip duplicating the trip sheet PDF we already attached
+                        if (att.FileName.Equals(attachmentFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                        attachments.Add(new EmailAttachment
+                        {
+                            FileName = att.FileName,
+                            Content = await System.IO.File.ReadAllBytesAsync(path),
+                            ContentType = string.IsNullOrWhiteSpace(att.ContentType)
+                                ? "application/octet-stream"
+                                : att.ContentType
+                        });
+                    }
+                }
+                catch (Exception attEx)
+                {
+                    _logger.LogWarning(attEx, "Failed to attach stored load files for load {LoadId}", loadId);
+                }
+
                 // Get recipient emails
                 var recipients = new List<string>();
                 if (!string.IsNullOrWhiteSpace(dto.RecipientEmail))
