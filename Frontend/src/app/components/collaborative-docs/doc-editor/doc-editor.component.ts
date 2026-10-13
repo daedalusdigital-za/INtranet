@@ -197,10 +197,28 @@ import { Awareness } from 'y-protocols/awareness';
       <!-- Ribbon -->
       <div class="ribbon">
         <div class="ribbon-tabs">
+          <button class="ribbon-tab file-tab" [matMenuTriggerFor]="ribbonFileMenu">File</button>
+          <mat-menu #ribbonFileMenu="matMenu">
+            <button mat-menu-item (click)="triggerImportDocx()"><mat-icon>upload_file</mat-icon><span>Import Word Document</span></button>
+            <button mat-menu-item (click)="triggerImportPdf()"><mat-icon>picture_as_pdf</mat-icon><span>Import PDF</span></button>
+            <button mat-menu-item (click)="triggerScanImport()"><mat-icon>document_scanner</mat-icon><span>Import Scanned Document</span></button>
+            <mat-divider></mat-divider>
+            <button mat-menu-item (click)="exportAsWord()"><mat-icon>description</mat-icon><span>Export as Word (.doc)</span></button>
+            <button mat-menu-item (click)="exportAsHtml()"><mat-icon>download</mat-icon><span>Export as HTML</span></button>
+            <mat-divider></mat-divider>
+            <button mat-menu-item (click)="openEmailDialog()"><mat-icon>email</mat-icon><span>Email Document</span></button>
+            <button mat-menu-item (click)="print()"><mat-icon>print</mat-icon><span>Print</span></button>
+          </mat-menu>
           <button class="ribbon-tab" [class.active]="activeRibbonTab === 'home'" (click)="activeRibbonTab = 'home'">Home</button>
           <button class="ribbon-tab" [class.active]="activeRibbonTab === 'insert'" (click)="activeRibbonTab = 'insert'">Insert</button>
-          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'format'" (click)="activeRibbonTab = 'format'">Format</button>
+          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'draw'" (click)="activeRibbonTab = 'draw'">Draw</button>
+          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'design'" (click)="activeRibbonTab = 'design'">Design</button>
+          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'layout'" (click)="activeRibbonTab = 'layout'">Layout</button>
+          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'references'" (click)="activeRibbonTab = 'references'">References</button>
+          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'mailings'" (click)="activeRibbonTab = 'mailings'">Mailings</button>
+          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'review'" (click)="activeRibbonTab = 'review'">Review</button>
           <button class="ribbon-tab" [class.active]="activeRibbonTab === 'view'" (click)="activeRibbonTab = 'view'">View</button>
+          <button class="ribbon-tab" [class.active]="activeRibbonTab === 'help'" (click)="activeRibbonTab = 'help'">Help</button>
         </div>
 
         <!-- Home Tab -->
@@ -495,31 +513,110 @@ import { Awareness } from 'y-protocols/awareness';
           </div>
         }
 
-        <!-- Format Tab -->
-        @if (activeRibbonTab === 'format') {
+        <!-- Draw Tab -->
+        @if (activeRibbonTab === 'draw') {
           <div class="ribbon-content">
-            <!-- Text Group -->
             <div class="ribbon-group">
               <div class="ribbon-group-content">
-                <button class="ribbon-btn large" (click)="toggleBold()" [class.active]="editor?.isActive('bold')">
-                  <mat-icon>format_bold</mat-icon>
-                  <span>Bold</span>
-                </button>
-                <button class="ribbon-btn large" (click)="toggleItalic()" [class.active]="editor?.isActive('italic')">
-                  <mat-icon>format_italic</mat-icon>
-                  <span>Italic</span>
-                </button>
-                <button class="ribbon-btn large" (click)="toggleUnderline()" [class.active]="editor?.isActive('underline')">
-                  <mat-icon>format_underlined</mat-icon>
-                  <span>Underline</span>
+                @for (c of highlightColors; track c) {
+                  <button class="draw-pen" [class.active]="editor?.isActive('highlight', { color: c })" [style.background]="c" (click)="setHighlight(c)" [matTooltip]="'Highlighter ' + c"></button>
+                }
+              </div>
+              <div class="ribbon-group-label">Highlighters</div>
+            </div>
+            <div class="ribbon-separator"></div>
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large" (click)="removeHighlight()" matTooltip="Remove highlight from selection">
+                  <mat-icon>ink_eraser</mat-icon>
+                  <span>Eraser</span>
                 </button>
               </div>
-              <div class="ribbon-group-label">Text</div>
+              <div class="ribbon-group-label">Erase</div>
             </div>
+          </div>
+        }
 
+        <!-- Design Tab -->
+        @if (activeRibbonTab === 'design') {
+          <div class="ribbon-content">
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                @for (t of docThemes; track t.name) {
+                  <button class="theme-btn" [class.active]="activeTheme === t.name" (click)="applyTheme(t)" [matTooltip]="t.name">
+                    <span class="theme-preview" [style.fontFamily]="t.font" [style.color]="t.accent">Aa</span>
+                    <span class="theme-name">{{ t.name }}</span>
+                  </button>
+                }
+              </div>
+              <div class="ribbon-group-label">Themes</div>
+            </div>
             <div class="ribbon-separator"></div>
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large" [matMenuTriggerFor]="pageColorMenu" matTooltip="Page colour">
+                  <mat-icon>format_color_fill</mat-icon>
+                  <span>Page Colour</span>
+                </button>
+                <mat-menu #pageColorMenu="matMenu" class="color-palette-menu">
+                  <div class="color-palette" (click)="$event.stopPropagation()">
+                    @for (c of pageColors; track c) {
+                      <button class="color-swatch" [style.background]="c" (click)="pageColor = c" [matTooltip]="c"></button>
+                    }
+                  </div>
+                  <button mat-menu-item (click)="pageColor = '#ffffff'"><mat-icon>format_clear</mat-icon> White</button>
+                </mat-menu>
+              </div>
+              <div class="ribbon-group-label">Page Background</div>
+            </div>
+          </div>
+        }
 
-            <!-- Case Group -->
+        <!-- Layout Tab -->
+        @if (activeRibbonTab === 'layout') {
+          <div class="ribbon-content">
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large" [matMenuTriggerFor]="marginsMenu" matTooltip="Page margins">
+                  <mat-icon>select_all</mat-icon>
+                  <span>Margins</span>
+                </button>
+                <mat-menu #marginsMenu="matMenu">
+                  <button mat-menu-item (click)="setMargins('narrow')"><span [class.menu-active]="marginPreset === 'narrow'">Narrow (1.27 cm)</span></button>
+                  <button mat-menu-item (click)="setMargins('normal')"><span [class.menu-active]="marginPreset === 'normal'">Normal (2.54 cm)</span></button>
+                  <button mat-menu-item (click)="setMargins('wide')"><span [class.menu-active]="marginPreset === 'wide'">Wide (5.08 cm)</span></button>
+                </mat-menu>
+                <button class="ribbon-btn large" (click)="toggleOrientation()" matTooltip="Toggle portrait / landscape">
+                  <mat-icon>{{ pageOrientation === 'portrait' ? 'crop_portrait' : 'crop_landscape' }}</mat-icon>
+                  <span>{{ pageOrientation === 'portrait' ? 'Portrait' : 'Landscape' }}</span>
+                </button>
+                <button class="ribbon-btn large" [matMenuTriggerFor]="sizeMenu" matTooltip="Page size">
+                  <mat-icon>aspect_ratio</mat-icon>
+                  <span>Size</span>
+                </button>
+                <mat-menu #sizeMenu="matMenu">
+                  <button mat-menu-item (click)="pageSize = 'a4'"><span [class.menu-active]="pageSize === 'a4'">A4 (21 × 29.7 cm)</span></button>
+                  <button mat-menu-item (click)="pageSize = 'letter'"><span [class.menu-active]="pageSize === 'letter'">Letter (21.6 × 27.9 cm)</span></button>
+                  <button mat-menu-item (click)="pageSize = 'legal'"><span [class.menu-active]="pageSize === 'legal'">Legal (21.6 × 35.6 cm)</span></button>
+                </mat-menu>
+              </div>
+              <div class="ribbon-group-label">Page Setup</div>
+            </div>
+            <div class="ribbon-separator"></div>
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn vertical" (click)="decreaseIndent()" matTooltip="Decrease Indent">
+                  <mat-icon>format_indent_decrease</mat-icon>
+                  <span>Outdent</span>
+                </button>
+                <button class="ribbon-btn vertical" (click)="increaseIndent()" matTooltip="Increase Indent">
+                  <mat-icon>format_indent_increase</mat-icon>
+                  <span>Indent</span>
+                </button>
+              </div>
+              <div class="ribbon-group-label">Paragraph</div>
+            </div>
+            <div class="ribbon-separator"></div>
             <div class="ribbon-group">
               <div class="ribbon-group-content">
                 <button class="ribbon-btn vertical" (click)="transformText('uppercase')" matTooltip="UPPERCASE">
@@ -530,26 +627,156 @@ import { Awareness } from 'y-protocols/awareness';
                   <mat-icon>keyboard_arrow_down</mat-icon>
                   <span>lower</span>
                 </button>
-                <button class="ribbon-btn vertical" (click)="transformText('capitalize')" matTooltip="Capitalize">
+                <button class="ribbon-btn vertical" (click)="transformText('capitalize')" matTooltip="Capitalize Each Word">
                   <mat-icon>text_fields</mat-icon>
                   <span>Title</span>
                 </button>
               </div>
-              <div class="ribbon-group-label">Case</div>
+              <div class="ribbon-group-label">Change Case</div>
             </div>
+          </div>
+        }
 
-            <div class="ribbon-separator"></div>
-
-            <!-- Clear Group -->
+        <!-- References Tab -->
+        @if (activeRibbonTab === 'references') {
+          <div class="ribbon-content">
             <div class="ribbon-group">
               <div class="ribbon-group-content">
-                <button class="ribbon-btn large" (click)="clearFormatting()" matTooltip="Remove all formatting">
-                  <mat-icon>format_clear</mat-icon>
-                  <span>Clear Format</span>
+                <button class="ribbon-btn large" (click)="insertTableOfContents()" matTooltip="Insert a table of contents built from the document headings">
+                  <mat-icon>toc</mat-icon>
+                  <span>Table of Contents</span>
                 </button>
               </div>
-              <div class="ribbon-group-label">Clear</div>
+              <div class="ribbon-group-label">Table of Contents</div>
             </div>
+            <div class="ribbon-separator"></div>
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large" (click)="insertFootnote()" matTooltip="Insert footnote at the end of the document">
+                  <mat-icon>subdirectory_arrow_right</mat-icon>
+                  <span>Footnote</span>
+                </button>
+              </div>
+              <div class="ribbon-group-label">Footnotes</div>
+            </div>
+            <div class="ribbon-separator"></div>
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large" (click)="insertLink()" matTooltip="Insert hyperlink">
+                  <mat-icon>link</mat-icon>
+                  <span>Link</span>
+                </button>
+              </div>
+              <div class="ribbon-group-label">Links</div>
+            </div>
+          </div>
+        }
+
+        <!-- Mailings Tab -->
+        @if (activeRibbonTab === 'mailings') {
+          <div class="ribbon-content">
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large email-btn" (click)="openEmailDialog()" matTooltip="Email this document">
+                  <mat-icon>email</mat-icon>
+                  <span>Email Document</span>
+                </button>
+                <button class="ribbon-btn large" (click)="exportAsWord()" matTooltip="Export as Word attachment">
+                  <mat-icon>attach_file</mat-icon>
+                  <span>Export .doc</span>
+                </button>
+                <button class="ribbon-btn large" (click)="print()" matTooltip="Print / PDF">
+                  <mat-icon>print</mat-icon>
+                  <span>Print</span>
+                </button>
+              </div>
+              <div class="ribbon-group-label">Send</div>
+            </div>
+          </div>
+        }
+
+        <!-- Review Tab -->
+        @if (activeRibbonTab === 'review') {
+          <div class="ribbon-content">
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large welly-btn" (click)="wellyAssist('grammar')" matTooltip="Check spelling & grammar with Welly AI">
+                  <mat-icon>spellcheck</mat-icon>
+                  <span>Spelling &amp; Grammar</span>
+                </button>
+                <button class="ribbon-btn large" (click)="wellyAssist('improve')" matTooltip="Improve writing with Welly AI">
+                  <mat-icon>trending_up</mat-icon>
+                  <span>Improve</span>
+                </button>
+                <button class="ribbon-btn large" (click)="wellyAssist('summarize')" matTooltip="Summarize with Welly AI">
+                  <mat-icon>summarize</mat-icon>
+                  <span>Summarize</span>
+                </button>
+              </div>
+              <div class="ribbon-group-label">Proofing</div>
+            </div>
+            <div class="ribbon-separator"></div>
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large" [matMenuTriggerFor]="reviewTranslateMenu" matTooltip="Translate the document">
+                  <mat-icon>translate</mat-icon>
+                  <span>Translate</span>
+                </button>
+                <mat-menu #reviewTranslateMenu="matMenu">
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Afrikaans')">Afrikaans</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Zulu')">Zulu</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Xhosa')">Xhosa</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Sotho')">Sotho</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Tswana')">Tswana</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'French')">French</button>
+                  <button mat-menu-item (click)="wellyAssist('translate', 'Portuguese')">Portuguese</button>
+                </mat-menu>
+              </div>
+              <div class="ribbon-group-label">Language</div>
+            </div>
+            <div class="ribbon-separator"></div>
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <div class="word-count-panel">
+                  <div><strong>{{ wordCount }}</strong> words</div>
+                  <div><strong>{{ charCount }}</strong> characters</div>
+                </div>
+              </div>
+              <div class="ribbon-group-label">Word Count</div>
+            </div>
+          </div>
+        }
+
+        <!-- Help Tab -->
+        @if (activeRibbonTab === 'help') {
+          <div class="ribbon-content">
+            <div class="ribbon-group">
+              <div class="ribbon-group-content">
+                <button class="ribbon-btn large" (click)="showShortcuts = !showShortcuts" [class.active]="showShortcuts" matTooltip="Keyboard shortcuts">
+                  <mat-icon>keyboard</mat-icon>
+                  <span>Shortcuts</span>
+                </button>
+                <button class="ribbon-btn large welly-btn" (click)="wellyAssist('generate')" matTooltip="Ask Welly AI for help">
+                  <mat-icon class="welly-icon">auto_awesome</mat-icon>
+                  <span>Ask Welly</span>
+                </button>
+              </div>
+              <div class="ribbon-group-label">Help</div>
+            </div>
+            @if (showShortcuts) {
+              <div class="ribbon-separator"></div>
+              <div class="ribbon-group shortcuts-group">
+                <div class="ribbon-group-content shortcuts-list">
+                  <span><kbd>Ctrl+B</kbd> Bold</span>
+                  <span><kbd>Ctrl+I</kbd> Italic</span>
+                  <span><kbd>Ctrl+U</kbd> Underline</span>
+                  <span><kbd>Ctrl+Z</kbd> Undo</span>
+                  <span><kbd>Ctrl+Y</kbd> Redo</span>
+                  <span><kbd>Ctrl+K</kbd> Link</span>
+                </div>
+                <div class="ribbon-group-label">Keyboard Shortcuts</div>
+              </div>
+            }
           </div>
         }
 
@@ -695,7 +922,7 @@ import { Awareness } from 'y-protocols/awareness';
           </div>
         }
         <div class="editor-wrapper" [style.zoom]="zoomLevel / 100" [class.dark-mode]="darkMode" [class.show-marks]="showFormattingMarks">
-          <div class="editor-page">
+          <div class="editor-page" [style.background]="darkMode ? null : pageColor" [style.padding]="pageMargins" [style.width.px]="pageWidthPx" [style.minHeight.px]="pageHeightPx">
             <div #editorElement class="tiptap-editor"></div>
           </div>
         </div>
@@ -1032,6 +1259,70 @@ import { Awareness } from 'y-protocols/awareness';
       color: #1a73e8;
       border-bottom-color: #1a73e8;
     }
+
+    .ribbon-tab.file-tab {
+      background: #2b579a;
+      color: white;
+      border-radius: 4px 4px 0 0;
+      margin-right: 4px;
+      font-weight: 600;
+    }
+
+    .ribbon-tab.file-tab:hover { background: #1e3f73; }
+
+    .draw-pen {
+      width: 28px;
+      height: 36px;
+      border: 2px solid #dadce0;
+      border-radius: 4px 4px 12px 12px;
+      cursor: pointer;
+      margin: 0 2px;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .draw-pen:hover { transform: translateY(-3px); }
+    .draw-pen.active { border-color: #1a73e8; transform: translateY(-3px); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+
+    .theme-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 12px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: none;
+      cursor: pointer;
+    }
+    .theme-btn:hover { background: #f1f3f4; }
+    .theme-btn.active { border-color: #1a73e8; background: #e8f0fe; }
+    .theme-preview { font-size: 22px; font-weight: 700; line-height: 1; }
+    .theme-name { font-size: 11px; color: #5f6368; }
+
+    .word-count-panel {
+      font-size: 12px;
+      color: #3c4043;
+      padding: 4px 10px;
+      line-height: 1.6;
+    }
+
+    .shortcuts-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      font-size: 12px;
+      color: #3c4043;
+      align-items: center;
+    }
+    .shortcuts-list kbd {
+      background: #f1f3f4;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: inherit;
+      font-size: 11px;
+    }
+
+    .menu-active { font-weight: 700; color: #1a73e8; }
 
     .ribbon-content {
       display: flex;
@@ -2261,6 +2552,38 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   // Ribbon state
   activeRibbonTab = 'home';
 
+  // Design / Layout state
+  pageColor = '#ffffff';
+  pageColors = ['#ffffff', '#fdf6e3', '#fff8f0', '#f0f7ff', '#f3fff0', '#fff0f5', '#f5f0ff', '#f7f7f7', '#1e1e1e'];
+  activeTheme = 'Office';
+  docThemes: Array<{ name: string; font: string; accent: string }> = [
+    { name: 'Office', font: 'Calibri', accent: '#2b579a' },
+    { name: 'Classic', font: 'Times New Roman', accent: '#000000' },
+    { name: 'Modern', font: 'Helvetica', accent: '#d83b01' },
+    { name: 'Elegant', font: 'Garamond', accent: '#5c2d91' },
+    { name: 'Tech', font: 'Courier New', accent: '#107c10' },
+  ];
+  marginPreset: 'narrow' | 'normal' | 'wide' = 'normal';
+  pageOrientation: 'portrait' | 'landscape' = 'portrait';
+  pageSize: 'a4' | 'letter' | 'legal' = 'a4';
+  showShortcuts = false;
+  private footnoteCounter = 0;
+
+  get pageMargins(): string {
+    const m = { narrow: '48px 48px', normal: '96px 96px', wide: '96px 192px' }[this.marginPreset];
+    return m;
+  }
+  get pageWidthPx(): number {
+    const sizes = { a4: [794, 1123], letter: [816, 1056], legal: [816, 1346] } as const;
+    const [w, h] = sizes[this.pageSize];
+    return this.pageOrientation === 'portrait' ? w : h;
+  }
+  get pageHeightPx(): number {
+    const sizes = { a4: [794, 1123], letter: [816, 1056], legal: [816, 1346] } as const;
+    const [w, h] = sizes[this.pageSize];
+    return this.pageOrientation === 'portrait' ? h : w;
+  }
+
   // Font settings
   selectedFont = 'Arial';
   selectedFontSize = '11';
@@ -2808,6 +3131,58 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleHighlight(): void {
     this.editor?.chain().focus().toggleHighlight({ color: this.selectedHighlightColor }).run();
+  }
+
+  // ---- Draw tab ----
+  setHighlight(color: string): void {
+    this.selectedHighlightColor = color;
+    this.editor?.chain().focus().setHighlight({ color }).run();
+  }
+
+  removeHighlight(): void {
+    this.editor?.chain().focus().unsetHighlight().run();
+  }
+
+  // ---- Design tab ----
+  applyTheme(t: { name: string; font: string; accent: string }): void {
+    this.activeTheme = t.name;
+    this.selectedFont = t.font;
+    this.editor?.chain().focus().selectAll().setFontFamily(t.font).run();
+    this.editor?.commands.setTextSelection(this.editor.state.selection.to);
+    this.snackBar.open(`Theme "${t.name}" applied`, 'Close', { duration: 2000 });
+  }
+
+  // ---- Layout tab ----
+  setMargins(preset: 'narrow' | 'normal' | 'wide'): void {
+    this.marginPreset = preset;
+  }
+
+  toggleOrientation(): void {
+    this.pageOrientation = this.pageOrientation === 'portrait' ? 'landscape' : 'portrait';
+  }
+
+  // ---- References tab ----
+  insertTableOfContents(): void {
+    this.refreshHeadings();
+    if (!this.docHeadings.length) {
+      this.snackBar.open('No headings found. Apply Heading styles first.', 'Close', { duration: 3000 });
+      return;
+    }
+    const items = this.docHeadings
+      .map(h => `<p style="margin:2px 0; padding-left:${(h.level - 1) * 24}px;">${h.text || '(untitled)'}</p>`)
+      .join('');
+    const toc = `<h2>Table of Contents</h2>${items}<hr>`;
+    this.editor?.chain().focus().setTextSelection(0).insertContent(toc).run();
+  }
+
+  insertFootnote(): void {
+    this.footnoteCounter++;
+    const n = this.footnoteCounter;
+    const note = window.prompt('Footnote text:');
+    if (note === null) { this.footnoteCounter--; return; }
+    this.editor?.chain().focus().insertContent(`<sup>[${n}]</sup>`).run();
+    const endPos = this.editor?.state.doc.content.size ?? 0;
+    this.editor?.chain().setTextSelection(endPos).insertContent(`<p><sup>[${n}]</sup> ${note}</p>`).run();
   }
 
   clearFormatting(): void {
