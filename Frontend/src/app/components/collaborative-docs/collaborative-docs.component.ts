@@ -57,10 +57,6 @@ import * as mammoth from 'mammoth';
             </div>
           </div>
           <div class="header-actions">
-            <button mat-stroked-button routerLink="/docs/tools" class="create-btn create-btn-tools">
-              <mat-icon>handyman</mat-icon>
-              PDF Tools
-            </button>
             <button mat-stroked-button (click)="triggerImport()" class="create-btn create-btn-import">
               <mat-icon>upload_file</mat-icon>
               Import

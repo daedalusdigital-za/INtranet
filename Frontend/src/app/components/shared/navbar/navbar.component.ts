@@ -359,10 +359,6 @@ import { Subscription } from 'rxjs';
           <mat-icon class="pm-icon-red">picture_as_pdf</mat-icon>
           <span>I Hate PDF</span>
         </button>
-        <button mat-menu-item class="pm-menu-item" routerLink="/docs/tools">
-          <mat-icon class="pm-icon-red">handyman</mat-icon>
-          <span>PDF Tools</span>
-        </button>
         @if (isAdmin()) {
           <div class="pm-divider"></div>
           <div class="pm-section-label">Administration</div>
