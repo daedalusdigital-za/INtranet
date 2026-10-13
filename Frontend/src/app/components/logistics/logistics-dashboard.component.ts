@@ -1426,6 +1426,16 @@ Notes: ${record.notes || 'No notes'}
     return 'status-' + status.toLowerCase().replace(/\s+/g, '-');
   }
 
+  /** A load is "live" when its scheduled date is today (delivery in progress). */
+  isLoadLive(load: any): boolean {
+    if (!load?.scheduledDate) return false;
+    const d = new Date(load.scheduledDate);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear()
+        && d.getMonth() === now.getMonth()
+        && d.getDate() === now.getDate();
+  }
+
   // Cache for last update strings to prevent ExpressionChangedAfterItHasBeenCheckedError
   private lastUpdateCache = new Map<string, { value: string, timestamp: number }>();
   
