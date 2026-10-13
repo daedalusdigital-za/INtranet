@@ -362,6 +362,10 @@ import { Awareness } from 'y-protocols/awareness';
             <!-- Editing Group -->
             <div class="ribbon-group">
               <div class="ribbon-group-content editing-group">
+                <button class="ribbon-btn vertical" [class.active]="showFindReplace" (click)="toggleFindReplace()" matTooltip="Find & Replace (Ctrl+F)">
+                  <mat-icon>search</mat-icon>
+                  <span>Find</span>
+                </button>
                 <button class="ribbon-btn vertical" (click)="undo()" matTooltip="Undo">
                   <mat-icon>undo</mat-icon>
                   <span>Undo</span>
@@ -606,6 +610,10 @@ import { Awareness } from 'y-protocols/awareness';
                   <mat-icon>{{ darkMode ? 'light_mode' : 'dark_mode' }}</mat-icon>
                   <span>{{ darkMode ? 'Light' : 'Dark' }}</span>
                 </button>
+                <button class="ribbon-btn vertical" [class.active]="showNavPane" (click)="toggleNavPane()" matTooltip="Navigation pane — document headings">
+                  <mat-icon>toc</mat-icon>
+                  <span>Navigation</span>
+                </button>
               </div>
               <div class="ribbon-group-label">Show</div>
             </div>
@@ -649,10 +657,47 @@ import { Awareness } from 'y-protocols/awareness';
         </div>
       }
 
+      <!-- Find & Replace bar -->
+      @if (showFindReplace) {
+        <div class="find-bar">
+          <mat-icon class="find-icon">search</mat-icon>
+          <input class="find-input" type="text" placeholder="Find..." [(ngModel)]="findText" (ngModelChange)="runFind()" (keyup.enter)="findNext()" #findInput>
+          <input class="find-input" type="text" placeholder="Replace with..." [(ngModel)]="replaceText">
+          <label class="find-opt" matTooltip="Regular expression">
+            <input type="checkbox" [(ngModel)]="findUseRegex" (ngModelChange)="runFind()"> .*
+          </label>
+          <label class="find-opt" matTooltip="Match case">
+            <input type="checkbox" [(ngModel)]="findMatchCase" (ngModelChange)="runFind()"> Aa
+          </label>
+          <span class="find-count">{{ findMatches.length ? (currentMatchIndex + 1) + ' of ' + findMatches.length : (findText ? 'No matches' : '') }}</span>
+          <button mat-icon-button (click)="findPrev()" [disabled]="!findMatches.length" matTooltip="Previous"><mat-icon>keyboard_arrow_up</mat-icon></button>
+          <button mat-icon-button (click)="findNext()" [disabled]="!findMatches.length" matTooltip="Next"><mat-icon>keyboard_arrow_down</mat-icon></button>
+          <button mat-stroked-button (click)="replaceCurrent()" [disabled]="!findMatches.length">Replace</button>
+          <button mat-stroked-button (click)="replaceAll()" [disabled]="!findMatches.length">Replace All</button>
+          <button mat-icon-button (click)="toggleFindReplace()" matTooltip="Close"><mat-icon>close</mat-icon></button>
+        </div>
+      }
+
       <!-- Editor area -->
-      <div class="editor-wrapper" [style.zoom]="zoomLevel / 100" [class.dark-mode]="darkMode" [class.show-marks]="showFormattingMarks">
-        <div class="editor-page">
-          <div #editorElement class="tiptap-editor"></div>
+      <div class="editor-main">
+        @if (showNavPane) {
+          <div class="nav-pane" [class.dark-mode]="darkMode">
+            <div class="nav-pane-header">
+              <mat-icon>toc</mat-icon> Navigation
+            </div>
+            @if (docHeadings.length === 0) {
+              <p class="nav-empty">No headings yet. Use Heading styles to build the outline.</p>
+            } @else {
+              @for (h of docHeadings; track h.pos) {
+                <button class="nav-heading level-{{ h.level }}" (click)="goToHeading(h)">{{ h.text || '(empty heading)' }}</button>
+              }
+            }
+          </div>
+        }
+        <div class="editor-wrapper" [style.zoom]="zoomLevel / 100" [class.dark-mode]="darkMode" [class.show-marks]="showFormattingMarks">
+          <div class="editor-page">
+            <div #editorElement class="tiptap-editor"></div>
+          </div>
         </div>
       </div>
 
@@ -1441,6 +1486,114 @@ import { Awareness } from 'y-protocols/awareness';
       color: #5f6368;
     }
 
+    /* Editor main: nav pane + page */
+    .editor-main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .nav-pane {
+      width: 240px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      background: #fff;
+      border-right: 1px solid #dadce0;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-pane.dark-mode {
+      background: #2b2d31;
+      border-right-color: #3c3f45;
+    }
+
+    .nav-pane-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #5f6368;
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      margin-bottom: 4px;
+    }
+
+    .nav-pane.dark-mode .nav-pane-header { color: #9aa0a6; border-bottom-color: #3c3f45; }
+
+    .nav-pane-header mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+    .nav-empty {
+      font-size: 12px;
+      color: #9aa0a6;
+      padding: 8px;
+    }
+
+    .nav-heading {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #202124;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .nav-pane.dark-mode .nav-heading { color: #e8eaed; }
+
+    .nav-heading:hover { background: #e8f0fe; color: #1a73e8; }
+    .nav-heading.level-1 { font-weight: 700; }
+    .nav-heading.level-2 { padding-left: 20px; font-weight: 500; }
+    .nav-heading.level-3 { padding-left: 34px; color: #5f6368; }
+
+    /* Find & Replace bar */
+    .find-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: #fffbe6;
+      border-bottom: 1px solid #e6dba6;
+      flex-wrap: wrap;
+    }
+
+    .find-icon { color: #8a6d00; }
+
+    .find-input {
+      padding: 5px 10px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 13px;
+      width: 180px;
+    }
+
+    .find-opt {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #5f6368;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .find-count {
+      font-size: 12px;
+      color: #5f6368;
+      min-width: 70px;
+    }
+
     /* Editor Wrapper */
     .editor-wrapper {
       flex: 1;
@@ -2138,6 +2291,19 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   showWordCount = true;
   showFormattingMarks = false;
   darkMode = false;
+
+  // Find & Replace
+  showFindReplace = false;
+  findText = '';
+  replaceText = '';
+  findUseRegex = false;
+  findMatchCase = false;
+  findMatches: Array<{ from: number; to: number }> = [];
+  currentMatchIndex = 0;
+
+  // Navigation pane
+  showNavPane = false;
+  docHeadings: Array<{ level: number; text: string; pos: number }> = [];
   wordCount = 0;
   charCount = 0;
   rulerMarks = Array.from({ length: 81 }, (_, i) => i);
@@ -2336,6 +2502,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       onUpdate: ({ editor }) => {
         this.autosaveSubject.next();
         this.updateWordCount();
+        if (this.showNavPane) this.refreshHeadings();
       },
       onSelectionUpdate: ({ editor }) => {
         const { from, to } = editor.state.selection;
@@ -2809,6 +2976,100 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   applyTitleStyle(): void {
     this.editor?.chain().focus().setHeading({ level: 1 }).run();
     (this.editor?.chain().focus() as any).setFontSize('28pt').run();
+  }
+
+  // —— Find & Replace ——
+  toggleFindReplace(): void {
+    this.showFindReplace = !this.showFindReplace;
+    if (!this.showFindReplace) {
+      this.findMatches = [];
+    } else {
+      this.runFind();
+    }
+  }
+
+  /** Collect text segments with ProseMirror positions, then match. */
+  runFind(): void {
+    this.findMatches = [];
+    this.currentMatchIndex = 0;
+    if (!this.editor || !this.findText) return;
+
+    let regex: RegExp;
+    try {
+      const flags = this.findMatchCase ? 'g' : 'gi';
+      const pattern = this.findUseRegex
+        ? this.findText
+        : this.findText.replace(/[.*+?^$\{\}()|\[\]\\]/g, '\\$&');
+      regex = new RegExp(pattern, flags);
+    } catch {
+      return; // invalid regex while typing — just wait
+    }
+
+    const matches: Array<{ from: number; to: number }> = [];
+    this.editor.state.doc.descendants((node: any, pos: number) => {
+      if (!node.isText || !node.text) return;
+      let m: RegExpExecArray | null;
+      regex.lastIndex = 0;
+      while ((m = regex.exec(node.text)) !== null) {
+        if (m[0].length === 0) { regex.lastIndex++; continue; }
+        matches.push({ from: pos + m.index, to: pos + m.index + m[0].length });
+      }
+    });
+    this.findMatches = matches;
+    if (matches.length) this.highlightMatch(0);
+  }
+
+  private highlightMatch(index: number): void {
+    if (!this.editor || !this.findMatches.length) return;
+    this.currentMatchIndex = ((index % this.findMatches.length) + this.findMatches.length) % this.findMatches.length;
+    const m = this.findMatches[this.currentMatchIndex];
+    this.editor.chain().focus().setTextSelection({ from: m.from, to: m.to }).scrollIntoView().run();
+  }
+
+  findNext(): void { this.highlightMatch(this.currentMatchIndex + 1); }
+  findPrev(): void { this.highlightMatch(this.currentMatchIndex - 1); }
+
+  replaceCurrent(): void {
+    if (!this.editor || !this.findMatches.length) return;
+    const m = this.findMatches[this.currentMatchIndex];
+    this.editor.chain().focus().setTextSelection({ from: m.from, to: m.to })
+      .insertContent(this.replaceText).run();
+    const keepIndex = this.currentMatchIndex;
+    this.runFind();
+    if (this.findMatches.length) this.highlightMatch(Math.min(keepIndex, this.findMatches.length - 1));
+  }
+
+  replaceAll(): void {
+    if (!this.editor || !this.findMatches.length) return;
+    const count = this.findMatches.length;
+    // Replace from last to first so earlier positions stay valid
+    const chain = this.editor.chain().focus();
+    [...this.findMatches].reverse().forEach(m => {
+      chain.setTextSelection({ from: m.from, to: m.to }).insertContent(this.replaceText);
+    });
+    chain.run();
+    this.runFind();
+    this.snackBar.open(`Replaced ${count} occurrence${count === 1 ? '' : 's'}`, 'Close', { duration: 2500 });
+  }
+
+  // —— Navigation pane ——
+  toggleNavPane(): void {
+    this.showNavPane = !this.showNavPane;
+    if (this.showNavPane) this.refreshHeadings();
+  }
+
+  refreshHeadings(): void {
+    const headings: Array<{ level: number; text: string; pos: number }> = [];
+    this.editor?.state.doc.descendants((node: any, pos: number) => {
+      if (node.type.name === 'heading') {
+        headings.push({ level: node.attrs['level'] || 1, text: node.textContent, pos });
+      }
+    });
+    this.docHeadings = headings;
+  }
+
+  goToHeading(h: { pos: number }): void {
+    this.editor?.chain().focus().setTextSelection(h.pos + 1).scrollIntoView().run();
   }
 
   // Print
