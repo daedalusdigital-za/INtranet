@@ -262,22 +262,50 @@ public class TripSheetImportService
                     {
                         try
                         {
-                            // Create StopCommodity for the PDF.
-                            // Store the invoice number and value exactly as captured on the
-                            // trip sheet so multi-invoice stops and unmatched rows are never lost.
-                            var commodity = new StopCommodity
+                            // Create StopCommodity rows for the PDF.
+                            // A merged invoice row carries its products as
+                            // "NAME xQty; NAME xQty; ..." — split them back into ONE
+                            // commodity per product so trip sheets show each item
+                            // with its own quantity (combined totals confuse drivers).
+                            var productParts = (confirmation.ProductDescription ?? "Imported Item")
+                                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                .Select(p => p.Trim())
+                                .Where(p => p.Length > 0)
+                                .ToList();
+                            if (productParts.Count == 0) productParts.Add("Imported Item");
+
+                            for (int pi = 0; pi < productParts.Count; pi++)
                             {
-                                LoadStopId = stop.Id,
-                                Quantity = confirmation.Quantity ?? 1,
-                                UnitPrice = confirmation.SalesAmount ?? 0,
-                                TotalPrice = confirmation.SalesAmount ?? 0,
-                                InvoiceNumber = confirmation.InvoiceNumber,
-                                OrderNumber = confirmation.CustomerNumber,
-                                Brand = confirmation.Brand,
-                                Comment = confirmation.ProductDescription ?? "Imported Item",
-                                CreatedAt = DateTime.UtcNow
-                            };
-                            _context.StopCommodities.Add(commodity);
+                                var partText = productParts[pi];
+                                decimal partQty;
+                                var qtyMatch = Regex.Match(partText, @"\sx(\d+(?:\.\d+)?)\s*$", RegexOptions.IgnoreCase);
+                                if (qtyMatch.Success)
+                                {
+                                    partQty = decimal.Parse(qtyMatch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                                    partText = partText.Substring(0, qtyMatch.Index).Trim();
+                                }
+                                else
+                                {
+                                    // Single-product invoices keep the row quantity as-is.
+                                    partQty = productParts.Count == 1 ? (confirmation.Quantity ?? 1) : 1;
+                                }
+
+                                var commodity = new StopCommodity
+                                {
+                                    LoadStopId = stop.Id,
+                                    Quantity = partQty,
+                                    // Value is per invoice, not per product line — carry it
+                                    // on the first part so stop totals stay correct.
+                                    UnitPrice = pi == 0 ? (confirmation.SalesAmount ?? 0) : 0,
+                                    TotalPrice = pi == 0 ? (confirmation.SalesAmount ?? 0) : 0,
+                                    InvoiceNumber = confirmation.InvoiceNumber,
+                                    OrderNumber = confirmation.CustomerNumber,
+                                    Brand = confirmation.Brand,
+                                    Comment = partText,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                _context.StopCommodities.Add(commodity);
+                            }
 
                             totalValue += confirmation.SalesAmount ?? 0;
 
@@ -579,10 +607,25 @@ public class TripSheetImportService
             if (byInvoice.TryGetValue(key, out var existing))
             {
                 // Fold this line item into the already-seen invoice row.
+                // IMPORTANT: each product keeps its OWN quantity, embedded as a
+                // " x<qty>" suffix on its description part. The summed Quantity is
+                // only the invoice total — at commit the parts are split back into
+                // separate commodities so drivers see per-item counts, never one
+                // confusing combined number.
+                // First time we merge into this row, retro-tag the original part
+                // with its own quantity (captured before we add the new one).
+                if (!string.IsNullOrWhiteSpace(existing.ProductDescription) &&
+                    !existing.ProductDescription.Contains(';') &&
+                    !Regex.IsMatch(existing.ProductDescription, @"\sx\d+(\.\d+)?\s*$", RegexOptions.IgnoreCase) &&
+                    existing.Quantity.HasValue)
+                {
+                    existing.ProductDescription = $"{existing.ProductDescription.Trim()} x{existing.Quantity.Value:0.##}";
+                }
+
                 existing.Quantity = (existing.Quantity ?? 0) + (row.Quantity ?? 0);
                 existing.SalesAmount = (existing.SalesAmount ?? 0) + (row.SalesAmount ?? 0);
 
-                // Combine distinct product descriptions.
+                // Combine product descriptions, each carrying its own quantity.
                 if (!string.IsNullOrWhiteSpace(row.ProductDescription))
                 {
                     var parts = (existing.ProductDescription ?? string.Empty)
@@ -590,7 +633,11 @@ public class TripSheetImportService
                         .Select(p => p.Trim())
                         .Where(p => p.Length > 0)
                         .ToList();
-                    var incoming = row.ProductDescription.Trim();
+                    var incoming = row.Quantity.HasValue
+                        ? $"{row.ProductDescription.Trim()} x{row.Quantity.Value:0.##}"
+                        : row.ProductDescription.Trim();
+                    // Same product on multiple rows still gets its own entry — the
+                    // quantities differ, so de-dup only on the exact tagged string.
                     if (!parts.Contains(incoming, StringComparer.OrdinalIgnoreCase))
                     {
                         parts.Add(incoming);

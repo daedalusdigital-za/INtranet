@@ -2074,21 +2074,50 @@ namespace ProjectTracker.API.Controllers.Logistics
                         // Brand is optional — only shown when captured on the import sheet
                         var brandTag = !string.IsNullOrWhiteSpace(c.Brand)
                             ? $" <span class='prod-brand'>[{c.Brand}]</span>" : "";
-                        if (isPickingSlip)
+                        var invTag = !isPickingSlip && !string.IsNullOrWhiteSpace(c.InvoiceNumber)
+                            ? $" <span class='prod-inv'>({c.InvoiceNumber})</span>" : "";
+
+                        // Legacy rows may hold several products in one commodity as
+                        // "NAME xQty; NAME xQty" — split them onto their own lines so
+                        // each product reads with ITS OWN quantity.
+                        var parts = name.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(p => p.Trim())
+                            .Where(p => p.Length > 0)
+                            .ToList();
+                        if (parts.Count == 0) parts.Add("Product");
+
+                        // Pre-parse each part's own quantity (" xN" suffix).
+                        var parsed = parts.Select(p =>
                         {
-                            productLines.Add($"{name}{brandTag} <span class='prod-qty'>&times;{(int)c.Quantity}</span>");
-                        }
-                        else
+                            var m = System.Text.RegularExpressions.Regex.Match(p, @"\sx(\d+(?:\.\d+)?)\s*$",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            return m.Success
+                                ? (Text: p.Substring(0, m.Index).Trim(),
+                                   Qty: (decimal?)decimal.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture))
+                                : (Text: p, Qty: (decimal?)null);
+                        }).ToList();
+
+                        // Single product: the commodity quantity IS its quantity.
+                        // Legacy multi-product rows with no per-part counts: show the
+                        // invoice total on the first line (better than hiding it).
+                        if (parsed.Count == 1 && !parsed[0].Qty.HasValue)
+                            parsed[0] = (parsed[0].Text, c.Quantity);
+                        else if (parsed.Count > 1 && parsed.All(p => !p.Qty.HasValue))
+                            parsed[0] = (parsed[0].Text, c.Quantity);
+
+                        foreach (var (partText, partQty) in parsed)
                         {
-                            // Landscape gives the product column real width — show the
-                            // full description (drivers/receivers check products too).
-                            var invTag = !string.IsNullOrWhiteSpace(c.InvoiceNumber)
-                                ? $" <span class='prod-inv'>({c.InvoiceNumber})</span>" : "";
-                            productLines.Add($"{name}{brandTag} x{(int)c.Quantity}{invTag}");
+                            var qtyText = partQty.HasValue ? $"{(int)partQty.Value:N0}" : "&ndash;";
+                            if (isPickingSlip)
+                            {
+                                productLines.Add($"{partText}{brandTag} <span class='prod-qty'>&times;{qtyText}</span>");
+                            }
+                            else
+                            {
+                                productLines.Add($"{partText}{brandTag} x{qtyText}{invTag}");
+                            }
+                            qtyLines.Add(qtyText);
                         }
-                        // One quantity per item line — drivers must see each item's own
-                        // count, NOT one merged figure for the whole stop.
-                        qtyLines.Add($"{(int)c.Quantity:N0}");
                     }
                 }
                 var productDisplay = productLines.Any() ? string.Join("<br/>", productLines) : "N/A";
