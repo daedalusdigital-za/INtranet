@@ -1,6 +1,6 @@
 import { Component, OnInit, Inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,6 +27,7 @@ import * as mammoth from 'mammoth';
   imports: [
     CommonModule,
     FormsModule,
+    RouterLink,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
@@ -56,6 +57,10 @@ import * as mammoth from 'mammoth';
             </div>
           </div>
           <div class="header-actions">
+            <button mat-stroked-button routerLink="/docs/tools" class="create-btn create-btn-tools">
+              <mat-icon>handyman</mat-icon>
+              PDF Tools
+            </button>
             <button mat-stroked-button (click)="triggerImport()" class="create-btn create-btn-import">
               <mat-icon>upload_file</mat-icon>
               Import

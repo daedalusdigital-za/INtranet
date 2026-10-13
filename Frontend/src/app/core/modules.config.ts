@@ -539,6 +539,11 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard] 
     },
     { 
+      path: 'docs/tools', 
+      loadComponent: () => import('../components/collaborative-docs/pdf-tools/pdf-tools.component').then(m => m.PdfToolsComponent),
+      canActivate: [authGuard] 
+    },
+    { 
       path: 'docs/:id', 
       loadComponent: () => import('../components/collaborative-docs/doc-editor/doc-editor.component').then(m => m.DocEditorComponent),
       canActivate: [authGuard] 
