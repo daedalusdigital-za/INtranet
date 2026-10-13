@@ -1736,6 +1736,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             font-weight: 700;
             white-space: nowrap;
         }
+        /* Per-item quantities stack in the same order as the product lines */
+        .qty-cell {
+            font-size: 13px;
+            line-height: 1.35;
+            white-space: nowrap;
+        }
         .checkbox-cell {
             width: 20px;
             height: 20px;
@@ -2059,6 +2065,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 // Picking slip: show FULL product names (never truncated) — the
                 // warehouse team picks by product, so readability is critical.
                 var productLines = new List<string>();
+                var qtyLines = new List<string>();
                 if (stop.Commodities != null && stop.Commodities.Any())
                 {
                     foreach (var c in stop.Commodities)
@@ -2079,9 +2086,20 @@ namespace ProjectTracker.API.Controllers.Logistics
                                 ? $" <span class='prod-inv'>({c.InvoiceNumber})</span>" : "";
                             productLines.Add($"{name}{brandTag} x{(int)c.Quantity}{invTag}");
                         }
+                        // One quantity per item line — drivers must see each item's own
+                        // count, NOT one merged figure for the whole stop.
+                        qtyLines.Add($"{(int)c.Quantity:N0}");
                     }
                 }
                 var productDisplay = productLines.Any() ? string.Join("<br/>", productLines) : "N/A";
+                // Single item: plain number. Multiple items: stack individual counts
+                // (same order as the product list) — no confusing combined total.
+                var qtyDisplay = qtyLines.Count switch
+                {
+                    0 => $"{stopQty:N0}",
+                    1 => qtyLines[0],
+                    _ => string.Join("<br/>", qtyLines)
+                };
 
                 // Per-line scannable code. Encodes the invoice/order number so
                 // the AssetTag resolver can pull up this exact invoice + its
@@ -2102,7 +2120,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 <td class='customer-name'>{stop.CustomerName ?? stop.CompanyName ?? "Customer"}</td>
                 <td class='address-text'>{stop.Address ?? "Address TBC"}</td>
                 <td class='product-cell{(isPickingSlip ? " picking" : "")}'>{productDisplay}</td>
-                <td class='center'><strong>{stopQty}</strong></td>
+                <td class='center qty-cell'><strong>{qtyDisplay}</strong></td>
                 {valueCell}
                 <td class='center scan-cell'>{scanCell}</td>
                 <td class='center'><span class='checkbox-cell'></span></td>
