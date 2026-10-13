@@ -1595,18 +1595,23 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
         
         /* Header Section */
+        /* NOTE: uses table-cell (not flex) so iText7 pdfHTML renders it in emailed PDFs */
         .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: table;
+            width: 100%;
             padding-bottom: 10px;
             border-bottom: 3px solid #033142;
             margin-bottom: 15px;
         }
         .header-left {
-            display: flex;
-            align-items: center;
-            gap: 15px;
+            display: table-cell;
+            vertical-align: middle;
+            text-align: left;
+        }
+        .header-left > * {
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 15px;
         }
         .header-logo {
             height: 50px;
@@ -1626,11 +1631,14 @@ namespace ProjectTracker.API.Controllers.Logistics
             font-weight: bold;
         }
         .header-right {
+            display: table-cell;
+            vertical-align: middle;
             text-align: right;
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            gap: 10px;
+        }
+        .header-right > * {
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
         }
         .header-qr {
             height: 58px;
@@ -1641,9 +1649,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             background: #fff;
         }
         .header-right__text {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
+            display: inline-block;
+            text-align: right;
         }
         .company-name {
             font-size: 17px;
@@ -1652,25 +1659,25 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
         
         /* Info Strip - Single Row Compact */
+        /* NOTE: uses inline-block (not flex) so iText7 pdfHTML renders it in emailed PDFs */
         .info-strip {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+            display: block;
             margin-bottom: 10px;
             padding: 8px 12px;
-            background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+            background: #efefef;
             border-radius: 6px;
             border: 1px solid #ddd;
             font-size: 12px;
         }
         .info-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            display: inline-block;
+            vertical-align: middle;
             padding: 2px 8px;
+            margin: 2px 4px 2px 0;
             background: white;
             border-radius: 4px;
             border: 1px solid #e0e0e0;
+            white-space: nowrap;
         }
         .info-icon {
             font-size: 13px;
@@ -1720,9 +1727,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+            display: inline-block;
+            text-align: center;
+            line-height: 24px;
             font-weight: bold;
             font-size: 13px;
         }
@@ -1792,14 +1799,18 @@ namespace ProjectTracker.API.Controllers.Logistics
         
         /* Bottom Section */
         .bottom-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            display: table;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 10px 0;
             margin-top: 15px;
         }
         
         /* KM & Fuel Section */
         .km-fuel-section {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
             border: 1px solid #ddd;
             border-radius: 6px;
             padding: 12px;
@@ -1812,10 +1823,13 @@ namespace ProjectTracker.API.Controllers.Logistics
             border-bottom: 1px solid #e0e0e0;
         }
         .km-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
             margin-bottom: 10px;
+        }
+        .km-grid .km-field {
+            display: inline-block;
+            width: 47%;
+            vertical-align: top;
+            margin: 0 1% 10px 0;
         }
         .km-field label {
             display: block;
@@ -1829,24 +1843,27 @@ namespace ProjectTracker.API.Controllers.Logistics
             height: 24px;
             background: white;
         }
-        .fuel-section {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        .fuel-section > * {
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
         }
         .fuel-section label {
             font-size: 12px;
             color: #666;
         }
         .fuel-options {
-            display: flex;
-            gap: 8px;
+            display: inline-block;
         }
         .fuel-option {
-            display: flex;
-            align-items: center;
-            gap: 3px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
             font-size: 13px;
+        }
+        .fuel-option > * {
+            display: inline-block;
+            vertical-align: middle;
         }
         .fuel-checkbox {
             width: 14px;
@@ -1857,6 +1874,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         
         /* Signature Section */
         .signature-section {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
             border: 1px solid #ddd;
             border-radius: 6px;
             padding: 12px;
@@ -1868,10 +1888,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             padding-bottom: 5px;
             border-bottom: 1px solid #e0e0e0;
         }
-        .signature-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
+        .signature-grid .signature-box {
+            display: inline-block;
+            width: 47%;
+            vertical-align: top;
+            margin: 0 1% 10px 0;
         }
         .signature-box {
             text-align: center;
@@ -1889,12 +1910,16 @@ namespace ProjectTracker.API.Controllers.Logistics
 
         /* Authorisation Panels (Sales / Logistics) - built for future e-signature flow */
         .auth-row {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
+            display: table;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 10px 0;
             margin-top: 15px;
         }
         .auth-panel {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
             border: 1px solid #ddd;
             border-radius: 6px;
             padding: 12px;
@@ -1906,9 +1931,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             margin-bottom: 10px;
             padding-bottom: 5px;
             border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        }
+        .auth-panel h4 .auth-status {
+            float: right;
         }
         .auth-status {
             font-size: 9px;
@@ -1921,14 +1946,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             color: #e65100;
             border: 1px solid #ffcc80;
         }
-        .auth-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-        }
-        .auth-box {
-            display: flex;
-            flex-direction: column;
+        .auth-grid .auth-box {
+            display: inline-block;
+            width: 47%;
+            vertical-align: top;
+            margin: 0 1% 10px 0;
         }
         .auth-role {
             font-size: 11px;
