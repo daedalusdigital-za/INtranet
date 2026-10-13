@@ -18169,6 +18169,9 @@ export class ViewLoadDetailsDialog {
                   · {{ trackingInfo.currentLocation.speed }} km/h
                 }
               </span>
+              @if (trackingInfo.currentLocation?.location?.address) {
+                <span>{{ trackingInfo.currentLocation.location.address }}</span>
+              }
               @if (trackingInfo.distanceToNextStop) {
                 <span>Next stop: {{ trackingInfo.distanceToNextStop | number:'1.1-1' }} km away</span>
               }
@@ -18475,11 +18478,19 @@ export class ViewRouteMapDialog implements OnInit {
   vehiclePosition: google.maps.LatLngLiteral | null = null;
   vehicleMarkerOptions: google.maps.MarkerOptions = {
     icon: {
-      url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
-      scaledSize: new google.maps.Size(44, 44),
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="30" fill="#e53935" fill-opacity="0.25"/>
+          <circle cx="32" cy="32" r="22" fill="#e53935"/>
+          <path fill="#fff" d="M20 26h14v12h-2.3a3.5 3.5 0 0 0-6.4 0H22a3.5 3.5 0 0 0-2-2.9V26zm16 3h5l4 4v5h-1.3a3.5 3.5 0 0 0-6.4 0H36v-9zm-9.5 9a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm14.5 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/>
+        </svg>`),
+      scaledSize: new google.maps.Size(56, 56),
+      anchor: new google.maps.Point(28, 28),
     },
+    zIndex: 9999,
   };
   trackingInfo: any = null;
+  private trackingTimer: any = null;
 
   constructor(
     public dialogRef: MatDialogRef<ViewRouteMapDialog>,
@@ -18493,8 +18504,31 @@ export class ViewRouteMapDialog implements OnInit {
       const loc = this.data.liveTracking.currentLocation.location;
       this.vehiclePosition = { lat: loc.latitude, lng: loc.longitude };
       this.trackingInfo = this.data.liveTracking;
+    } else {
+      // Not provided (e.g. opened via View Route) — try to fetch it anyway
+      this.refreshVehiclePosition();
     }
+    // Keep the vehicle position fresh every 30 seconds
+    this.trackingTimer = setInterval(() => this.refreshVehiclePosition(), 30000);
+    this.dialogRef.afterClosed().subscribe(() => {
+      if (this.trackingTimer) { clearInterval(this.trackingTimer); this.trackingTimer = null; }
+    });
     this.initializeMap();
+  }
+
+  private refreshVehiclePosition(): void {
+    const loadId = this.data.load?.id || this.data.load?.loadId;
+    if (!loadId) return;
+    this.http.get<any>(`${environment.apiUrl}/tracking/load/${loadId}/track`).subscribe({
+      next: (tracking) => {
+        const loc = tracking?.currentLocation?.location;
+        if (loc?.latitude && loc?.longitude) {
+          this.vehiclePosition = { lat: loc.latitude, lng: loc.longitude };
+          this.trackingInfo = tracking;
+        }
+      },
+      error: () => { /* vehicle not trackable — keep showing the route */ }
+    });
   }
 
   async initializeMap(): Promise<void> {
