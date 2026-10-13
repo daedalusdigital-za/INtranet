@@ -2098,25 +2098,45 @@ namespace ProjectTracker.API.Controllers.Logistics
                         }).ToList();
 
                         // Single product: the commodity quantity IS its quantity.
-                        // Legacy multi-product rows with no per-part counts: show the
-                        // invoice total on the first line (better than hiding it).
+                        var legacyNoDetail = false;
                         if (parsed.Count == 1 && !parsed[0].Qty.HasValue)
-                            parsed[0] = (parsed[0].Text, c.Quantity);
-                        else if (parsed.Count > 1 && parsed.All(p => !p.Qty.HasValue))
-                            parsed[0] = (parsed[0].Text, c.Quantity);
-
-                        foreach (var (partText, partQty) in parsed)
                         {
-                            var qtyText = partQty.HasValue ? $"{(int)partQty.Value:N0}" : "&ndash;";
-                            if (isPickingSlip)
+                            parsed[0] = (parsed[0].Text, c.Quantity);
+                        }
+                        else if (parsed.Count > 1 && parsed.All(p => !p.Qty.HasValue))
+                        {
+                            // Legacy multi-product row with no per-item breakdown on
+                            // record — show products without fake counts and one clear
+                            // combined total so drivers aren't misled.
+                            legacyNoDetail = true;
+                        }
+
+                        for (int pi = 0; pi < parsed.Count; pi++)
+                        {
+                            var (partText, partQty) = parsed[pi];
+                            string qtyText;
+                            if (legacyNoDetail)
                             {
-                                productLines.Add($"{partText}{brandTag} <span class='prod-qty'>&times;{qtyText}</span>");
+                                qtyText = pi == 0 ? $"{(int)c.Quantity:N0} <span class='prod-inv'>(combined)</span>" : "";
                             }
                             else
                             {
-                                productLines.Add($"{partText}{brandTag} x{qtyText}{invTag}");
+                                qtyText = partQty.HasValue ? $"{(int)partQty.Value:N0}" : "&ndash;";
                             }
-                            qtyLines.Add(qtyText);
+
+                            if (isPickingSlip)
+                            {
+                                productLines.Add(string.IsNullOrEmpty(qtyText)
+                                    ? $"{partText}{brandTag}"
+                                    : $"{partText}{brandTag} <span class='prod-qty'>&times;{qtyText}</span>");
+                            }
+                            else
+                            {
+                                productLines.Add(string.IsNullOrEmpty(qtyText)
+                                    ? $"{partText}{brandTag}{invTag}"
+                                    : $"{partText}{brandTag} x{qtyText}{invTag}");
+                            }
+                            qtyLines.Add(string.IsNullOrEmpty(qtyText) ? "&nbsp;" : qtyText);
                         }
                     }
                 }
