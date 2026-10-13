@@ -17592,7 +17592,8 @@ export class UpdateLoadStatusDialog {
     MatIconModule,
     MatDividerModule,
     MatChipsModule,
-    MatTabsModule
+    MatTabsModule,
+    MatTooltipModule
   ],
   template: `
     <h2 mat-dialog-title>
@@ -17749,6 +17750,38 @@ export class UpdateLoadStatusDialog {
                 <div class="timeline-title">Delivered</div>
                 <div class="timeline-date">{{ data.actualDeliveryDate | date:'medium' }}</div>
               </div>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Attachments Tab -->
+        <mat-tab label="Attachments ({{ attachments.length }})">
+          <div class="attachments-section">
+            <div class="attachment-item" *ngFor="let att of attachments">
+              <mat-icon class="attachment-icon" [class.excel]="att.category === 'ImportExcel'"
+                        [class.pdf]="att.category !== 'ImportExcel'">
+                {{ att.category === 'ImportExcel' ? 'table_chart' : 'picture_as_pdf' }}
+              </mat-icon>
+              <div class="attachment-info">
+                <div class="attachment-name">{{ att.fileName }}</div>
+                <div class="attachment-meta">
+                  <span class="attachment-category">{{ categoryLabel(att.category) }}</span>
+                  &bull; {{ formatSize(att.fileSize) }}
+                  &bull; {{ att.uploadedAt | date:'medium' }}
+                  <span *ngIf="att.uploadedBy">&bull; {{ att.uploadedBy }}</span>
+                </div>
+              </div>
+              <button mat-icon-button color="primary" (click)="downloadAttachment(att)" matTooltip="Download">
+                <mat-icon>download</mat-icon>
+              </button>
+            </div>
+            <div class="empty-state" *ngIf="!loadingAttachments && attachments.length === 0">
+              <mat-icon>attach_file</mat-icon>
+              <p>No attachments for this load</p>
+              <p class="empty-hint">Trip sheets created from an Excel import automatically attach the Excel, trip sheet and picking slip.</p>
+            </div>
+            <div class="empty-state" *ngIf="loadingAttachments">
+              <p>Loading attachments&hellip;</p>
             </div>
           </div>
         </mat-tab>
@@ -17951,13 +17984,87 @@ export class UpdateLoadStatusDialog {
     mat-tab-group {
       margin-top: 16px;
     }
+
+    .attachments-section {
+      padding: 20px;
+    }
+
+    .attachment-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      background: #fafafa;
+    }
+
+    .attachment-icon { color: #c62828; }
+    .attachment-icon.excel { color: #2e7d32; }
+
+    .attachment-info { flex: 1; min-width: 0; }
+    .attachment-name { font-weight: 600; color: #333; word-break: break-all; }
+    .attachment-meta { font-size: 12px; color: #777; margin-top: 2px; }
+    .attachment-category {
+      font-weight: 600;
+      color: #1976d2;
+    }
+    .empty-hint { font-size: 12px; color: #aaa; margin-top: 4px; }
   `]
 })
 export class ViewLoadDetailsDialog {
+  attachments: any[] = [];
+  loadingAttachments = false;
+
   constructor(
     public dialogRef: MatDialogRef<ViewLoadDetailsDialog>,
-    @Inject(MAT_DIALOG_DATA) public data: any
-  ) {}
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private http: HttpClient
+  ) {
+    this.loadAttachments();
+  }
+
+  get apiUrl(): string { return environment.apiUrl || 'http://localhost:5143/api'; }
+
+  loadAttachments(): void {
+    if (!this.data?.id) return;
+    this.loadingAttachments = true;
+    this.http.get<any[]>(`${this.apiUrl}/logistics/tripsheet/${this.data.id}/attachments`).subscribe({
+      next: (items) => { this.attachments = items || []; this.loadingAttachments = false; },
+      error: () => { this.loadingAttachments = false; }
+    });
+  }
+
+  categoryLabel(category: string): string {
+    switch (category) {
+      case 'ImportExcel': return 'Imported Excel';
+      case 'TripSheet': return 'Trip Sheet';
+      case 'PickingSlip': return 'Picking Slip';
+      default: return 'Attachment';
+    }
+  }
+
+  formatSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  downloadAttachment(att: any): void {
+    this.http.get(`${this.apiUrl}/logistics/tripsheet/attachments/${att.id}/download`, { responseType: 'blob' })
+      .subscribe({
+        next: (blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = att.fileName;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      });
+  }
 
   onClose(): void {
     this.dialogRef.close();

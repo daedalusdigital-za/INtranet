@@ -2364,6 +2364,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             {
                 using var stream = file.OpenReadStream();
                 var result = await _importService.ParseAndPreviewAsync(stream, file.FileName, sheetName, skipMatching);
+                await StashImportExcelAsync(file, result.BatchId);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -2398,6 +2399,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 {
                     return BadRequest(result);
                 }
+
+                if (result.LoadId.HasValue)
+                    await AttachImportArtifactsAsync(result.LoadId.Value, request.BatchId);
 
                 return Ok(result);
             }
@@ -2467,6 +2471,12 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 var result = await _importService.CommitImportAsync(quickImportRequest);
 
+                if (result.Success && result.LoadId.HasValue)
+                {
+                    await StashImportExcelAsync(file, preview.BatchId);
+                    await AttachImportArtifactsAsync(result.LoadId.Value, preview.BatchId);
+                }
+
                 return Ok(new
                 {
                     success = result.Success,
@@ -2494,6 +2504,136 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        #region Load Attachments
+
+        private string AttachmentsDir => Path.Combine(_nasBasePath, "Logistics", "LoadAttachments");
+        private string ImportStashDir => Path.Combine(_nasBasePath, "Logistics", "ImportStash");
+
+        /// <summary>
+        /// Keep a copy of the uploaded import Excel keyed by batch id so it can be
+        /// attached to the load once the import is committed.
+        /// </summary>
+        private async Task StashImportExcelAsync(IFormFile file, string batchId)
+        {
+            try
+            {
+                Directory.CreateDirectory(ImportStashDir);
+                var safeName = Path.GetFileName(file.FileName);
+                var stashPath = Path.Combine(ImportStashDir, $"{batchId}__{safeName}");
+                using var fs = new FileStream(stashPath, FileMode.Create);
+                await file.CopyToAsync(fs);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to stash import Excel for batch {BatchId}", batchId);
+            }
+        }
+
+        /// <summary>
+        /// After an import commit creates a load: attach the original Excel plus
+        /// freshly generated trip sheet and picking slip PDFs. Never fails the commit.
+        /// </summary>
+        private async Task AttachImportArtifactsAsync(int loadId, string batchId)
+        {
+            try
+            {
+                Directory.CreateDirectory(AttachmentsDir);
+                var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                               ?? User.FindFirst("name")?.Value;
+
+                // 1) Original import Excel (stashed at preview time)
+                if (!string.IsNullOrEmpty(batchId) && Directory.Exists(ImportStashDir))
+                {
+                    var stashed = Directory.GetFiles(ImportStashDir, $"{batchId}__*").FirstOrDefault();
+                    if (stashed != null)
+                    {
+                        var originalName = Path.GetFileName(stashed).Substring(batchId.Length + 2);
+                        var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(originalName)}";
+                        System.IO.File.Copy(stashed, Path.Combine(AttachmentsDir, storedName), overwrite: true);
+                        _context.LoadAttachments.Add(new Models.Logistics.LoadAttachment
+                        {
+                            LoadId = loadId,
+                            FileName = originalName,
+                            StoredFileName = storedName,
+                            ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            FileSize = new FileInfo(stashed).Length,
+                            Category = "ImportExcel",
+                            UploadedBy = userName
+                        });
+                        try { System.IO.File.Delete(stashed); } catch { /* best effort */ }
+                    }
+                }
+
+                // 2) Generated trip sheet + picking slip PDFs
+                var tripSheetResult = await GetTripSheet(loadId);
+                var tripSheet = (tripSheetResult.Result as OkObjectResult)?.Value as TripSheetDto;
+                if (tripSheet != null)
+                {
+                    void AddPdf(string html, string label, string category)
+                    {
+                        try
+                        {
+                            var pdf = ConvertHtmlToPdf(html);
+                            var storedName = $"{Guid.NewGuid():N}.pdf";
+                            System.IO.File.WriteAllBytes(Path.Combine(AttachmentsDir, storedName), pdf);
+                            _context.LoadAttachments.Add(new Models.Logistics.LoadAttachment
+                            {
+                                LoadId = loadId,
+                                FileName = $"{label}_{tripSheet.LoadNumber}.pdf",
+                                StoredFileName = storedName,
+                                ContentType = "application/pdf",
+                                FileSize = pdf.Length,
+                                Category = category,
+                                UploadedBy = userName
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to attach {Category} PDF for load {LoadId}", category, loadId);
+                        }
+                    }
+
+                    AddPdf(GenerateTripSheetHtml(tripSheet), "TripSheet", "TripSheet");
+                    AddPdf(GenerateTripSheetHtml(tripSheet, isPickingSlip: true), "PickingSlip", "PickingSlip");
+                }
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Attached import artifacts to load {LoadId} (batch {BatchId})", loadId, batchId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to attach import artifacts for load {LoadId}", loadId);
+            }
+        }
+
+        /// <summary>List attachments for a load.</summary>
+        [HttpGet("{loadId}/attachments")]
+        public async Task<IActionResult> GetLoadAttachments(int loadId)
+        {
+            var items = await _context.LoadAttachments
+                .Where(a => a.LoadId == loadId)
+                .OrderBy(a => a.UploadedAt)
+                .Select(a => new { a.Id, a.FileName, a.ContentType, a.FileSize, a.Category, a.UploadedBy, a.UploadedAt })
+                .ToListAsync();
+            return Ok(items);
+        }
+
+        /// <summary>Download a load attachment.</summary>
+        [HttpGet("attachments/{attachmentId}/download")]
+        public async Task<IActionResult> DownloadLoadAttachment(int attachmentId)
+        {
+            var att = await _context.LoadAttachments.FindAsync(attachmentId);
+            if (att == null) return NotFound(new { message = "Attachment not found" });
+
+            var path = Path.Combine(AttachmentsDir, att.StoredFileName);
+            if (!System.IO.File.Exists(path)) return NotFound(new { message = "File missing on disk" });
+
+            var bytes = await System.IO.File.ReadAllBytesAsync(path);
+            return File(bytes, att.ContentType ?? "application/octet-stream", att.FileName);
+        }
+
+        #endregion
+
         #region Welly AI Tripsheet Wizard
 
         /// <summary>
@@ -2514,6 +2654,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             {
                 using var stream = file.OpenReadStream();
                 var preview = await _importService.ParseAndPreviewAsync(stream, file.FileName, sheetName);
+                await StashImportExcelAsync(file, preview.BatchId);
 
                 // Get warehouses for suggestion
                 var warehouses = await _context.Warehouses
@@ -2693,6 +2834,9 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 if (!result.Success)
                     return BadRequest(new { message = "Failed to create tripsheet", errors = result.Errors });
+
+                if (result.LoadId.HasValue)
+                    await AttachImportArtifactsAsync(result.LoadId.Value, request.BatchId);
 
                 return Ok(new
                 {

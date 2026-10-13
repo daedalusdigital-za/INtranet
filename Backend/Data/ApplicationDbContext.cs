@@ -115,6 +115,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.InvoiceLineItem> InvoiceLineItems { get; set; }
         public DbSet<Models.Logistics.VehicleMaintenance> VehicleMaintenance { get; set; }
         public DbSet<Models.Logistics.MaintenanceAttachment> MaintenanceAttachments { get; set; }
+        public DbSet<Models.Logistics.LoadAttachment> LoadAttachments { get; set; }
         public DbSet<Models.Logistics.CustomerContract> CustomerContracts { get; set; }
         public DbSet<Models.Logistics.CustomerDeliveryAddress> CustomerDeliveryAddresses { get; set; }
         public DbSet<Models.Logistics.ImportedInvoice> ImportedInvoices { get; set; }
