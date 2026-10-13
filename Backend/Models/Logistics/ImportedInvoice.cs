@@ -30,6 +30,10 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(500)]
         public string ProductDescription { get; set; } = string.Empty;
 
+        // Product brand from the import sheet (optional — can be blank)
+        [MaxLength(100)]
+        public string? Brand { get; set; }
+
         // Transaction Information
         public int Year { get; set; }
 

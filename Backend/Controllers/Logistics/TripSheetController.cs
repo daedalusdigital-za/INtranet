@@ -105,7 +105,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         No = lineNo.ToString(),
                         CustomerName = invoice.CustomerName,
                         ProductDescription = invoice.ProductDescription,
-                        ProductBrand = invoice.ProductCode,
+                        ProductBrand = !string.IsNullOrWhiteSpace(invoice.Brand) ? invoice.Brand : invoice.ProductCode,
                         Qty = (int)invoice.Quantity,
                         TimeDispatched = invoice.ScheduledDeliveryDate?.ToString("HH:mm"),
                         OrderNo = invoice.CustomerNumber,
@@ -136,7 +136,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             No = lineNo.ToString(),
                             CustomerName = stop.Customer?.Name ?? stop.CompanyName ?? "Unknown",
                             ProductDescription = commodity.Commodity?.Name ?? commodity.Comment ?? "Product",
-                            ProductBrand = commodity.Commodity?.Code,
+                            ProductBrand = !string.IsNullOrWhiteSpace(commodity.Brand) ? commodity.Brand : commodity.Commodity?.Code,
                             Qty = (int)commodity.Quantity,
                             TimeDispatched = stop.ScheduledArrival?.ToString("HH:mm"),
                             OrderNo = stop.OrderNumber,
@@ -234,6 +234,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         Description = c.Comment,
                         ContractNumber = c.Contract?.ContractNumber,
                         InvoiceNumber = c.InvoiceNumber,
+                        Brand = c.Brand,
                         Quantity = c.Quantity,
                         UnitOfMeasure = c.UnitOfMeasure,
                         UnitPrice = c.UnitPrice,
@@ -1708,18 +1709,23 @@ namespace ProjectTracker.API.Controllers.Logistics
             max-width: 240px;
         }
         .product-cell {
-            font-size: 11px;
-            line-height: 1.3;
+            font-size: 13px;
+            line-height: 1.35;
             color: #333;
         }
         .product-cell .prod-inv {
             color: #607d8b;
-            font-size: 10px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .product-cell .prod-brand {
+            color: #555;
+            font-style: italic;
             white-space: nowrap;
         }
         /* Picking slip: product is the star — bigger, bolder, roomier */
         .product-cell.picking {
-            font-size: 14px;
+            font-size: 16px;
             line-height: 1.7;
             font-weight: 600;
             color: #111;
@@ -2058,9 +2064,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                     foreach (var c in stop.Commodities)
                     {
                         var name = c.CommodityName ?? "Product";
+                        // Brand is optional — only shown when captured on the import sheet
+                        var brandTag = !string.IsNullOrWhiteSpace(c.Brand)
+                            ? $" <span class='prod-brand'>[{c.Brand}]</span>" : "";
                         if (isPickingSlip)
                         {
-                            productLines.Add($"{name} <span class='prod-qty'>&times;{(int)c.Quantity}</span>");
+                            productLines.Add($"{name}{brandTag} <span class='prod-qty'>&times;{(int)c.Quantity}</span>");
                         }
                         else
                         {
@@ -2068,7 +2077,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             // full description (drivers/receivers check products too).
                             var invTag = !string.IsNullOrWhiteSpace(c.InvoiceNumber)
                                 ? $" <span class='prod-inv'>({c.InvoiceNumber})</span>" : "";
-                            productLines.Add($"{name} x{(int)c.Quantity}{invTag}");
+                            productLines.Add($"{name}{brandTag} x{(int)c.Quantity}{invTag}");
                         }
                     }
                 }
@@ -2597,6 +2606,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         Province = r.Province,
                         InvoiceNumber = r.InvoiceNumber,
                         ProductDescription = r.ProductDescription,
+                        Brand = r.Brand,
                         Quantity = r.Quantity,
                         SalesAmount = r.SalesAmount,
                         ContactPerson = r.ContactPerson,
@@ -2727,6 +2737,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string? Province { get; set; }
         public string? InvoiceNumber { get; set; }
         public string? ProductDescription { get; set; }
+        public string? Brand { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? SalesAmount { get; set; }
         public string? ContactPerson { get; set; }
@@ -2875,6 +2886,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string? Description { get; set; }
         public string? ContractNumber { get; set; }
         public string? InvoiceNumber { get; set; }
+        public string? Brand { get; set; }
         public decimal Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }
         public decimal? UnitPrice { get; set; }

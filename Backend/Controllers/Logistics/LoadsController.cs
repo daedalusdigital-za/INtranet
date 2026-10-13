@@ -317,6 +317,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             Volume = commodityDto.Volume,
                             OrderNumber = commodityDto.OrderNumber,
                             InvoiceNumber = commodityDto.InvoiceNumber,
+                            Brand = commodityDto.Brand,
                             Comment = comment
                         };
 
@@ -550,6 +551,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                                 Volume = commDto.Volume,
                                 OrderNumber = commDto.OrderNumber,
                                 InvoiceNumber = commDto.InvoiceNumber,
+                                Brand = commDto.Brand,
                                 Comment = comment
                             };
                             _context.StopCommodities.Add(commodity);
@@ -1303,6 +1305,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         Volume = sc.Volume,
                         OrderNumber = sc.OrderNumber,
                         InvoiceNumber = sc.InvoiceNumber,
+                        Brand = sc.Brand,
                         Comment = sc.Comment
                     }).ToList()
                 }).ToList(),

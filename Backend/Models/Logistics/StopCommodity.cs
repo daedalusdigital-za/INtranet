@@ -39,6 +39,10 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(100)]
         public string? InvoiceNumber { get; set; }
 
+        // Product brand from the import sheet (optional — can be blank)
+        [MaxLength(100)]
+        public string? Brand { get; set; }
+
         [MaxLength(500)]
         public string? Comment { get; set; }
 

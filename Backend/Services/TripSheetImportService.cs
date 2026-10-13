@@ -273,6 +273,7 @@ public class TripSheetImportService
                                 TotalPrice = confirmation.SalesAmount ?? 0,
                                 InvoiceNumber = confirmation.InvoiceNumber,
                                 OrderNumber = confirmation.CustomerNumber,
+                                Brand = confirmation.Brand,
                                 Comment = confirmation.ProductDescription ?? "Imported Item",
                                 CreatedAt = DateTime.UtcNow
                             };
@@ -288,6 +289,7 @@ public class TripSheetImportService
                                 CustomerNumber = confirmation.CustomerNumber ?? string.Empty,
                                 ProductCode = "IMP",
                                 ProductDescription = confirmation.ProductDescription ?? "Imported Item",
+                                Brand = confirmation.Brand,
                                 DeliveryAddress = confirmation.DeliveryAddress,
                                 DeliveryCity = confirmation.City,
                                 DeliveryProvince = confirmation.Province,
@@ -689,6 +691,7 @@ public class TripSheetImportService
                     PostalCode = GetCellValue(row, columnMap, "PostalCode"),
                     InvoiceNumber = invoiceNumber?.Trim(),
                     ProductDescription = GetCellValue(row, columnMap, "ProductDescription"),
+                    Brand = GetCellValue(row, columnMap, "Brand"),
                     QuantityText = GetCellValue(row, columnMap, "Quantity"),
                     ContactPerson = GetCellValue(row, columnMap, "ContactPerson"),
                     ContactPhone = GetCellValue(row, columnMap, "ContactPhone"),
@@ -749,6 +752,7 @@ public class TripSheetImportService
                         PostalCode = GetCellValue(row, columnMap, "PostalCode") ?? lastRow2.PostalCode,
                         InvoiceNumber = lastRow2.InvoiceNumber, // Same invoice number
                         ProductDescription = continuationProduct?.Trim() ?? lastRow2.ProductDescription,
+                        Brand = GetCellValue(row, columnMap, "Brand"),
                         QuantityText = continuationQtyStr,
                         ContactPerson = GetCellValue(row, columnMap, "ContactPerson") ?? lastRow2.ContactPerson,
                         ContactPhone = GetCellValue(row, columnMap, "ContactPhone") ?? lastRow2.ContactPhone,
@@ -946,6 +950,9 @@ public class TripSheetImportService
 
             // Postal code variations
             "postalcode" or "postcode" or "zipcode" or "zip" or "code" => "PostalCode",
+
+            // Brand variations (optional column — can be blank)
+            var h when h.Contains("brand") => "Brand",
 
             // Product variations
             var h when h.Contains("product") && h.Contains("description") => "ProductDescription",
@@ -1326,6 +1333,7 @@ public class TripSheetImportRowDto
     public string? PostalCode { get; set; }
     public string? InvoiceNumber { get; set; }
     public string? ProductDescription { get; set; }
+    public string? Brand { get; set; }
     public string? QuantityText { get; set; }
     public decimal? Quantity { get; set; }
     public decimal? SalesAmount { get; set; }
@@ -1389,6 +1397,7 @@ public class TripSheetImportConfirmation
     public string? Province { get; set; }
     public string? InvoiceNumber { get; set; }
     public string? ProductDescription { get; set; }
+    public string? Brand { get; set; }
     public decimal? Quantity { get; set; }
     public decimal? SalesAmount { get; set; }
     public string? ContactPerson { get; set; }

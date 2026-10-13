@@ -197,6 +197,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal? Volume { get; set; }
         public string? OrderNumber { get; set; }
         public string? InvoiceNumber { get; set; }
+        public string? Brand { get; set; }
         public string? Comment { get; set; }
     }
 
@@ -215,6 +216,7 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? Comment { get; set; }
         public string? CommodityName { get; set; }
         public string? CommodityCode { get; set; }
+        public string? Brand { get; set; }
     }
 
     public class LoadItemDto

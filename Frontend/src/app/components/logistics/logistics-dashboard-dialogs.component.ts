@@ -13702,6 +13702,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           ? stop.invoices.map((inv: any) => ({
               commodityName: inv.productDescription || 'Product',
               commodityCode: inv.productCode || null,
+              brand: inv.brand || null,
               invoiceNumber: inv.transactionNumber || inv.invoiceNumber || null,
               quantity: inv.quantity || 1,
               unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
@@ -13710,6 +13711,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           : [{
               commodityName: stop.productDescription || 'Product',
               commodityCode: stop.productCode || null,
+              brand: stop.brand || null,
               invoiceNumber: stop.transactionNumber || null,
               quantity: stop.quantity || 1,
               unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
@@ -13825,6 +13827,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           ? stop.invoices.map((inv: any) => ({
               commodityName: inv.productDescription || 'Product',
               commodityCode: inv.productCode || null,
+              brand: inv.brand || null,
               invoiceNumber: inv.transactionNumber || inv.invoiceNumber || null,
               quantity: inv.quantity || 1,
               unitPrice: inv.quantity ? (inv.salesAmount / inv.quantity) : (inv.salesAmount || 0),
@@ -13833,6 +13836,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           : [{
               commodityName: stop.productDescription || 'Product',
               commodityCode: stop.productCode || null,
+              brand: stop.brand || null,
               invoiceNumber: stop.transactionNumber || null,
               quantity: stop.quantity || 1,
               unitPrice: stop.quantity ? (stop.salesAmount / stop.quantity) : (stop.salesAmount || 0),
@@ -16303,6 +16307,7 @@ export class ImportTripsheetDialog {
         province: row.data?.province || '',
         productDescription: row.data?.productDescription || 'Imported Product',
         productCode: row.data?.productCode,
+        brand: row.data?.brand || null,
         quantity: row.data?.quantity || 1,
         salesAmount: row.data?.salesAmount || 0,
         netSales: row.data?.salesAmount || 0,
@@ -21453,6 +21458,7 @@ export class WellyTripsheetWizardDialog {
         province: r.data?.province,
         invoiceNumber: r.data?.invoiceNumber,
         productDescription: r.data?.productDescription,
+        brand: r.data?.brand || null,
         quantity: r.data?.quantity,
         salesAmount: r.data?.salesAmount,
         contactPerson: r.data?.contactPerson,
