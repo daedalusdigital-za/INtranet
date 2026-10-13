@@ -188,6 +188,29 @@ import { Awareness } from 'y-protocols/awareness';
               </div>
             }
           </div>
+          <button mat-icon-button (click)="darkMode = !darkMode" [matTooltip]="darkMode ? 'Light mode' : 'Dark mode'">
+            <mat-icon>{{ darkMode ? 'light_mode' : 'dark_mode' }}</mat-icon>
+          </button>
+          <button mat-button class="topbar-btn" [class.active]="showComments" (click)="toggleComments()" matTooltip="Show comments">
+            <mat-icon>comment</mat-icon> Comments
+            @if (comments.length) { <span class="comment-count">{{ comments.length }}</span> }
+          </button>
+          <button mat-button class="topbar-btn" [matMenuTriggerFor]="editingModeMenu" matTooltip="Editing mode">
+            <mat-icon>{{ editingMode === 'editing' ? 'edit' : 'visibility' }}</mat-icon>
+            {{ editingMode === 'editing' ? 'Editing' : 'Viewing' }}
+            <mat-icon class="dropdown-caret">arrow_drop_down</mat-icon>
+          </button>
+          <mat-menu #editingModeMenu="matMenu">
+            <button mat-menu-item (click)="setEditingMode('editing')">
+              <mat-icon>edit</mat-icon><span>Editing — make changes</span>
+            </button>
+            <button mat-menu-item (click)="setEditingMode('viewing')">
+              <mat-icon>visibility</mat-icon><span>Viewing — read only</span>
+            </button>
+          </mat-menu>
+          <button mat-flat-button color="primary" class="share-btn" (click)="shareDocument()" matTooltip="Copy link to this document">
+            <mat-icon>share</mat-icon> Share
+          </button>
           <div class="connection-status" [class]="connectionState">
             <mat-icon>{{ getConnectionIcon() }}</mat-icon>
           </div>
@@ -380,9 +403,26 @@ import { Awareness } from 'y-protocols/awareness';
             <!-- Editing Group -->
             <div class="ribbon-group">
               <div class="ribbon-group-content editing-group">
-                <button class="ribbon-btn vertical" [class.active]="showFindReplace" (click)="toggleFindReplace()" matTooltip="Find & Replace (Ctrl+F)">
+                <button class="ribbon-btn vertical" [matMenuTriggerFor]="findMenu" matTooltip="Find, Replace, Select">
                   <mat-icon>search</mat-icon>
-                  <span>Find</span>
+                  <span>Find ▾</span>
+                </button>
+                <mat-menu #findMenu="matMenu">
+                  <button mat-menu-item (click)="openFind(false)"><mat-icon>search</mat-icon><span>Find (Ctrl+F)</span></button>
+                  <button mat-menu-item (click)="openFind(true)"><mat-icon>find_replace</mat-icon><span>Replace (Ctrl+H)</span></button>
+                  <button mat-menu-item (click)="selectAll()"><mat-icon>select_all</mat-icon><span>Select All (Ctrl+A)</span></button>
+                </mat-menu>
+                <button class="ribbon-btn vertical" [class.active]="dictating" (click)="toggleDictation()" matTooltip="Dictate — speech to text">
+                  <mat-icon [class.dictating-mic]="dictating">{{ dictating ? 'mic' : 'mic_none' }}</mat-icon>
+                  <span>{{ dictating ? 'Stop' : 'Dictate' }}</span>
+                </button>
+                <button class="ribbon-btn vertical" (click)="wellyAssist('grammar')" matTooltip="Editor — check spelling, grammar and style">
+                  <mat-icon>fact_check</mat-icon>
+                  <span>Editor</span>
+                </button>
+                <button class="ribbon-btn vertical" (click)="addComment()" matTooltip="New comment on selection">
+                  <mat-icon>add_comment</mat-icon>
+                  <span>Comment</span>
                 </button>
                 <button class="ribbon-btn vertical" (click)="undo()" matTooltip="Undo">
                   <mat-icon>undo</mat-icon>
@@ -926,6 +966,40 @@ import { Awareness } from 'y-protocols/awareness';
             <div #editorElement class="tiptap-editor"></div>
           </div>
         </div>
+        @if (showComments) {
+          <div class="comments-pane" [class.dark-mode]="darkMode">
+            <div class="comments-pane-header">
+              <mat-icon>comment</mat-icon> Comments
+              <span class="spacer"></span>
+              <button mat-icon-button (click)="showComments = false" matTooltip="Close"><mat-icon>close</mat-icon></button>
+            </div>
+            <div class="new-comment">
+              <textarea [(ngModel)]="newCommentText" placeholder="Add a comment about the selected text..." rows="2"></textarea>
+              <button mat-flat-button color="primary" [disabled]="!newCommentText.trim()" (click)="submitComment()">
+                <mat-icon>send</mat-icon> Post
+              </button>
+            </div>
+            @if (comments.length === 0) {
+              <p class="comments-empty">No comments yet. Select text and click Comment, or type above.</p>
+            }
+            @for (c of comments; track c.id) {
+              <div class="comment-card" (click)="goToComment(c)">
+                <div class="comment-head">
+                  <div class="comment-avatar" [style.background]="c.color">{{ c.author.charAt(0).toUpperCase() }}</div>
+                  <div class="comment-meta">
+                    <div class="comment-author">{{ c.author }}</div>
+                    <div class="comment-date">{{ c.createdAt | date:'MMM d, h:mm a' }}</div>
+                  </div>
+                  <button mat-icon-button class="comment-delete" (click)="deleteComment(c, $event)" matTooltip="Delete comment"><mat-icon>delete_outline</mat-icon></button>
+                </div>
+                @if (c.quote) {
+                  <div class="comment-quote">“{{ c.quote }}”</div>
+                }
+                <div class="comment-text">{{ c.text }}</div>
+              </div>
+            }
+          </div>
+        }
       </div>
 
       <!-- Welly AI Panel -->
@@ -1323,6 +1397,97 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .menu-active { font-weight: 700; color: #1a73e8; }
+
+    /* Word-web top bar */
+    .topbar-btn {
+      font-size: 13px;
+      color: #3c4043;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .topbar-btn.active { color: #1a73e8; background: #e8f0fe; }
+    .topbar-btn .dropdown-caret { margin: 0 -6px 0 -2px; }
+    .comment-count {
+      background: #1a73e8;
+      color: white;
+      border-radius: 10px;
+      font-size: 11px;
+      padding: 0 6px;
+      margin-left: 2px;
+    }
+    .share-btn {
+      background: #2b579a;
+      color: white;
+      border-radius: 6px;
+    }
+    .dictating-mic { color: #d93025; animation: livePulseMic 1.2s infinite; }
+    @keyframes livePulseMic { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    /* Comments pane */
+    .comments-pane {
+      width: 300px;
+      flex-shrink: 0;
+      background: #faf9f8;
+      border-left: 1px solid #e0e0e0;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .comments-pane.dark-mode { background: #26282c; border-left-color: #3c3f45; color: #e8eaed; }
+    .comments-pane-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .comments-pane-header .spacer { flex: 1; }
+    .new-comment { display: flex; flex-direction: column; gap: 6px; }
+    .new-comment textarea {
+      width: 100%;
+      border: 1px solid #dadce0;
+      border-radius: 6px;
+      padding: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .comments-empty { font-size: 12px; color: #80868b; }
+    .comment-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .comments-pane.dark-mode .comment-card { background: #2d2f34; border-color: #3c3f45; }
+    .comment-card:hover { border-color: #1a73e8; }
+    .comment-head { display: flex; align-items: center; gap: 8px; }
+    .comment-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      color: white; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; flex-shrink: 0;
+    }
+    .comment-meta { flex: 1; min-width: 0; }
+    .comment-author { font-size: 13px; font-weight: 600; }
+    .comment-date { font-size: 11px; color: #80868b; }
+    .comment-delete { opacity: 0.4; }
+    .comment-card:hover .comment-delete { opacity: 1; }
+    .comment-quote {
+      font-size: 12px;
+      color: #5f6368;
+      border-left: 3px solid #fbbc04;
+      padding-left: 8px;
+      margin: 6px 0;
+      font-style: italic;
+    }
+    .comments-pane.dark-mode .comment-quote { color: #9aa0a6; }
+    .comment-text { font-size: 13px; margin-top: 4px; white-space: pre-wrap; }
 
     .ribbon-content {
       display: flex;
@@ -2569,6 +2734,15 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   showShortcuts = false;
   private footnoteCounter = 0;
 
+  // Word-web chrome: comments / editing mode / dictation
+  showComments = false;
+  comments: Array<{ id: number; author: string; color: string; text: string; quote: string; pos: number; createdAt: Date }> = [];
+  newCommentText = '';
+  private commentIdSeq = 1;
+  editingMode: 'editing' | 'viewing' = 'editing';
+  dictating = false;
+  private speechRecognition: any = null;
+
   get pageMargins(): string {
     const m = { narrow: '48px 48px', normal: '96px 96px', wide: '96px 192px' }[this.marginPreset];
     return m;
@@ -3159,6 +3333,104 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleOrientation(): void {
     this.pageOrientation = this.pageOrientation === 'portrait' ? 'landscape' : 'portrait';
+  }
+
+  // ---- Word-web chrome ----
+  toggleComments(): void {
+    this.showComments = !this.showComments;
+  }
+
+  addComment(): void {
+    this.showComments = true;
+    const { from, to } = this.editor?.state.selection ?? { from: 0, to: 0 };
+    if (from !== to) {
+      // pre-fill quote via submitComment
+    }
+    setTimeout(() => (document.querySelector('.new-comment textarea') as HTMLTextAreaElement)?.focus(), 100);
+  }
+
+  submitComment(): void {
+    const text = this.newCommentText.trim();
+    if (!text) return;
+    const sel = this.editor?.state.selection;
+    let quote = '';
+    let pos = 0;
+    if (sel && sel.from !== sel.to) {
+      quote = this.editor!.state.doc.textBetween(sel.from, sel.to, ' ').slice(0, 120);
+      pos = sel.from;
+    }
+    this.comments.unshift({
+      id: this.commentIdSeq++,
+      author: this.currentUserName || 'Me',
+      color: this.currentUserColor || '#2b579a',
+      text,
+      quote,
+      pos,
+      createdAt: new Date(),
+    });
+    this.newCommentText = '';
+  }
+
+  deleteComment(c: { id: number }, ev: Event): void {
+    ev.stopPropagation();
+    this.comments = this.comments.filter(x => x.id !== c.id);
+  }
+
+  goToComment(c: { pos: number }): void {
+    if (!c.pos || !this.editor) return;
+    this.editor.chain().focus().setTextSelection(Math.min(c.pos, this.editor.state.doc.content.size)).scrollIntoView().run();
+  }
+
+  setEditingMode(mode: 'editing' | 'viewing'): void {
+    this.editingMode = mode;
+    this.editor?.setEditable(mode === 'editing');
+    this.snackBar.open(mode === 'editing' ? 'Editing mode — you can make changes' : 'Viewing mode — read only', 'Close', { duration: 2000 });
+  }
+
+  shareDocument(): void {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      this.snackBar.open('Link copied to clipboard — share it with your team', 'Close', { duration: 3000 });
+    });
+  }
+
+  openFind(withReplace: boolean): void {
+    this.showFindReplace = true;
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('.find-bar .find-input');
+      ((withReplace ? inputs[1] : inputs[0]) as HTMLInputElement)?.focus();
+    }, 100);
+  }
+
+  toggleDictation(): void {
+    if (this.dictating) {
+      this.speechRecognition?.stop();
+      this.dictating = false;
+      return;
+    }
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      this.snackBar.open('Dictation is not supported in this browser. Try Chrome or Edge.', 'Close', { duration: 4000 });
+      return;
+    }
+    this.speechRecognition = new SR();
+    this.speechRecognition.continuous = true;
+    this.speechRecognition.interimResults = false;
+    this.speechRecognition.lang = 'en-ZA';
+    this.speechRecognition.onresult = (event: any) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          const transcript = event.results[i][0].transcript;
+          this.editor?.chain().focus().insertContent(transcript + ' ').run();
+        }
+      }
+    };
+    this.speechRecognition.onerror = () => { this.dictating = false; };
+    this.speechRecognition.onend = () => {
+      if (this.dictating) this.speechRecognition.start(); // keep listening until user stops
+    };
+    this.speechRecognition.start();
+    this.dictating = true;
+    this.snackBar.open('Dictation started — speak now. Click Stop when done.', 'Close', { duration: 3000 });
   }
 
   // ---- References tab ----
