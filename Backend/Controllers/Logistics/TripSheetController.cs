@@ -2550,6 +2550,23 @@ namespace ProjectTracker.API.Controllers.Logistics
                         var originalName = Path.GetFileName(stashed).Substring(batchId.Length + 2);
                         var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(originalName)}";
                         System.IO.File.Copy(stashed, Path.Combine(AttachmentsDir, storedName), overwrite: true);
+
+                        // Also drop a friendly-named copy into the documents portal:
+                        // Documents -> Logistics -> Tripsheet Imports -> {LoadNumber}_{originalFile}.xlsx
+                        try
+                        {
+                            var loadNumber = (await _context.Loads.FindAsync(loadId))?.LoadNumber ?? $"Load{loadId}";
+                            var portalDir = Path.Combine(_nasBasePath, "Logistics", "Tripsheet Imports");
+                            Directory.CreateDirectory(portalDir);
+                            var portalName = $"{loadNumber}_{originalName}";
+                            foreach (var c in Path.GetInvalidFileNameChars()) portalName = portalName.Replace(c, '_');
+                            System.IO.File.Copy(stashed, Path.Combine(portalDir, portalName), overwrite: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to copy import Excel to documents portal for load {LoadId}", loadId);
+                        }
+
                         _context.LoadAttachments.Add(new Models.Logistics.LoadAttachment
                         {
                             LoadId = loadId,
