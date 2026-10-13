@@ -26,7 +26,7 @@ import { environment } from '../../../../environments/environment';
 import * as mammoth from 'mammoth';
 
 // Tiptap imports
-import { Editor } from '@tiptap/core';
+import { Editor, Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
@@ -34,6 +34,36 @@ import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import TextStyle from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
+import FontFamily from '@tiptap/extension-font-family';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
+import Link from '@tiptap/extension-link';
+
+// Font size as a TextStyle attribute (Word-style pt sizes)
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() { return { types: ['textStyle'] }; },
+  addGlobalAttributes() {
+    return [{
+      types: this.options.types,
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: (element: HTMLElement) => element.style.fontSize || null,
+          renderHTML: (attributes: any) => attributes['fontSize'] ? { style: `font-size: ${attributes['fontSize']}` } : {},
+        },
+      },
+    }];
+  },
+  addCommands(): any {
+    return {
+      setFontSize: (size: string) => ({ chain }: any) => chain().setMark('textStyle', { fontSize: size }).run(),
+      unsetFontSize: () => ({ chain }: any) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
+    };
+  },
+});
 
 // Yjs imports
 import * as Y from 'yjs';
@@ -199,6 +229,18 @@ import { Awareness } from 'y-protocols/awareness';
             <div class="ribbon-group">
               <div class="ribbon-group-content font-group">
                 <div class="font-row">
+                  <select class="font-select" [(ngModel)]="selectedFont" (change)="setFont()" matTooltip="Font">
+                    @for (f of fontFamilies; track f) {
+                      <option [value]="f" [style.fontFamily]="f">{{ f }}</option>
+                    }
+                  </select>
+                  <select class="size-select" [(ngModel)]="selectedFontSize" (change)="setFontSize()" matTooltip="Font size">
+                    @for (s of fontSizes; track s) {
+                      <option [value]="s">{{ s }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="font-row">
                   <button class="ribbon-icon-btn" [class.active]="editor?.isActive('bold')" (click)="toggleBold()" matTooltip="Bold (Ctrl+B)">
                     <mat-icon>format_bold</mat-icon>
                   </button>
@@ -211,8 +253,33 @@ import { Awareness } from 'y-protocols/awareness';
                   <button class="ribbon-icon-btn" [class.active]="editor?.isActive('strike')" (click)="toggleStrike()" matTooltip="Strikethrough">
                     <mat-icon>strikethrough_s</mat-icon>
                   </button>
+                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('subscript')" (click)="toggleSubscript()" matTooltip="Subscript">
+                    <mat-icon>subscript</mat-icon>
+                  </button>
+                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('superscript')" (click)="toggleSuperscript()" matTooltip="Superscript">
+                    <mat-icon>superscript</mat-icon>
+                  </button>
+                  <div class="color-btn-wrapper">
+                    <button class="ribbon-icon-btn" [matMenuTriggerFor]="textColorMenu" matTooltip="Font colour">
+                      <mat-icon>format_color_text</mat-icon>
+                      <div class="color-indicator" [style.background]="selectedTextColor"></div>
+                    </button>
+                    <mat-menu #textColorMenu="matMenu" class="color-palette-menu">
+                      <div class="color-palette" (click)="$event.stopPropagation()">
+                        @for (c of textColors; track c) {
+                          <button class="color-swatch" [style.background]="c" (click)="setTextColor(c)" [matTooltip]="c"></button>
+                        }
+                      </div>
+                      <button mat-menu-item (click)="unsetTextColor()">
+                        <mat-icon>format_clear</mat-icon> Automatic
+                      </button>
+                    </mat-menu>
+                  </div>
                   <button class="ribbon-icon-btn" [class.active]="editor?.isActive('highlight')" (click)="toggleHighlight()" matTooltip="Highlight">
                     <mat-icon>highlight</mat-icon>
+                  </button>
+                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('link')" (click)="insertLink()" matTooltip="Insert link (Ctrl+K)">
+                    <mat-icon>link</mat-icon>
                   </button>
                 </div>
               </div>
@@ -1037,6 +1104,36 @@ import { Awareness } from 'y-protocols/awareness';
       border-radius: 4px;
       font-size: 12px;
       background: white;
+    }
+
+    .size-select {
+      width: 56px;
+      padding: 4px 6px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 12px;
+      background: white;
+    }
+
+    .color-palette {
+      display: grid;
+      grid-template-columns: repeat(8, 22px);
+      gap: 4px;
+      padding: 10px;
+    }
+
+    .color-swatch {
+      width: 22px;
+      height: 22px;
+      border: 1px solid rgba(0,0,0,0.15);
+      border-radius: 3px;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.15);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
 
     .ribbon-icon-btn {
@@ -1943,6 +2040,8 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   // Font settings
   selectedFont = 'Arial';
   selectedFontSize = '11';
+  fontFamilies = ['Arial', 'Calibri', 'Cambria', 'Courier New', 'Garamond', 'Georgia', 'Helvetica', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
+  fontSizes = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48', '72'];
 
   // Color settings
   selectedTextColor = '#000000';
@@ -2128,6 +2227,16 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         }),
         Highlight.configure({
           multicolor: true,
+        }),
+        TextStyle,
+        Color,
+        FontFamily,
+        FontSize,
+        Subscript,
+        Superscript,
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
         }),
         TaskList,
         TaskItem.configure({
@@ -2428,29 +2537,28 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // New ribbon methods (some unavailable without additional extensions)
   toggleSubscript(): void {
-    // Subscript extension not available in Tiptap v2.x
-    this.snackBar.open('Subscript not available', 'Close', { duration: 2000 });
+    this.editor?.chain().focus().toggleSubscript().run();
   }
 
   toggleSuperscript(): void {
-    // Superscript extension not available in Tiptap v2.x
-    this.snackBar.open('Superscript not available', 'Close', { duration: 2000 });
+    this.editor?.chain().focus().toggleSuperscript().run();
   }
 
   setFont(): void {
-    // FontFamily extension not available in Tiptap v2.x
-    this.snackBar.open('Font selection not available', 'Close', { duration: 2000 });
+    this.editor?.chain().focus().setFontFamily(this.selectedFont).run();
   }
 
   setFontSize(): void {
-    // Font size not available without TextStyle extension
-    this.snackBar.open('Font size not available', 'Close', { duration: 2000 });
+    (this.editor?.chain().focus() as any).setFontSize(`${this.selectedFontSize}pt`).run();
   }
 
   setTextColor(color: string): void {
-    // Color extension not available in Tiptap v2.x
     this.selectedTextColor = color;
-    this.snackBar.open('Text color not available', 'Close', { duration: 2000 });
+    this.editor?.chain().focus().setColor(color).run();
+  }
+
+  unsetTextColor(): void {
+    this.editor?.chain().focus().unsetColor().run();
   }
 
   setHighlightColor(color: string): void {
@@ -2509,9 +2617,21 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     this.snackBar.open('Image insert not available', 'Close', { duration: 2000 });
   }
 
-  // Link operations (not available without Link extension)
+  // Link operations
   insertLink(): void {
-    this.snackBar.open('Link insert not available', 'Close', { duration: 2000 });
+    if (this.editor?.isActive('link')) {
+      this.editor.chain().focus().unsetLink().run();
+      return;
+    }
+    const previous = this.editor?.getAttributes('link')?.['href'] || '';
+    const url = window.prompt('Link URL:', previous);
+    if (url === null) return;
+    if (url === '') {
+      this.editor?.chain().focus().unsetLink().run();
+    } else {
+      const href = /^(https?:\/\/|mailto:)/i.test(url) ? url : `https://${url}`;
+      this.editor?.chain().focus().extendMarkRange('link').setLink({ href }).run();
+    }
   }
 
   // Text transformation
