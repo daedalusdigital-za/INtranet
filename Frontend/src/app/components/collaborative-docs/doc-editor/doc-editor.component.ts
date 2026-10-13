@@ -124,6 +124,10 @@ import { Awareness } from 'y-protocols/awareness';
                   <mat-icon>document_scanner</mat-icon>
                   <span>Import Scanned Document</span>
                 </button>
+                <button mat-menu-item (click)="exportAsWord()">
+                  <mat-icon>description</mat-icon>
+                  <span>Export as Word (.doc)</span>
+                </button>
                 <button mat-menu-item (click)="exportAsHtml()">
                   <mat-icon>download</mat-icon>
                   <span>Export as HTML</span>
@@ -342,6 +346,12 @@ import { Awareness } from 'y-protocols/awareness';
                 </button>
                 <button class="style-btn" [class.active]="editor?.isActive('heading', { level: 3 })" (click)="setHeading(3)">
                   <span class="style-preview h3">Heading 3</span>
+                </button>
+                <button class="style-btn" [class.active]="editor?.isActive('heading', { level: 1 }) && false" (click)="applyTitleStyle()">
+                  <span class="style-preview title-style">Title</span>
+                </button>
+                <button class="style-btn" [class.active]="editor?.isActive('blockquote')" (click)="toggleBlockquote()">
+                  <span class="style-preview quote-style">“Quote”</span>
                 </button>
               </div>
               <div class="ribbon-group-label">Styles</div>
@@ -588,6 +598,14 @@ import { Awareness } from 'y-protocols/awareness';
                   <mat-icon>text_snippet</mat-icon>
                   <span>Word Count</span>
                 </button>
+                <button class="ribbon-btn vertical" [class.active]="showFormattingMarks" (click)="showFormattingMarks = !showFormattingMarks" matTooltip="Show paragraph marks and spaces (¶)">
+                  <mat-icon>format_paragraph</mat-icon>
+                  <span>¶ Marks</span>
+                </button>
+                <button class="ribbon-btn vertical" [class.active]="darkMode" (click)="darkMode = !darkMode" matTooltip="Dark mode">
+                  <mat-icon>{{ darkMode ? 'light_mode' : 'dark_mode' }}</mat-icon>
+                  <span>{{ darkMode ? 'Light' : 'Dark' }}</span>
+                </button>
               </div>
               <div class="ribbon-group-label">Show</div>
             </div>
@@ -632,7 +650,7 @@ import { Awareness } from 'y-protocols/awareness';
       }
 
       <!-- Editor area -->
-      <div class="editor-wrapper" [style.zoom]="zoomLevel / 100">
+      <div class="editor-wrapper" [style.zoom]="zoomLevel / 100" [class.dark-mode]="darkMode" [class.show-marks]="showFormattingMarks">
         <div class="editor-page">
           <div #editorElement class="tiptap-editor"></div>
         </div>
@@ -1242,6 +1260,19 @@ import { Awareness } from 'y-protocols/awareness';
       color: #5f6368;
     }
 
+    .style-preview.title-style {
+      font-size: 15px;
+      font-weight: 700;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: #0f3b82;
+    }
+
+    .style-preview.quote-style {
+      font-size: 12px;
+      font-style: italic;
+      color: #666;
+    }
+
     /* Editing Group */
     .editing-group {
       gap: 4px;
@@ -1418,6 +1449,46 @@ import { Awareness } from 'y-protocols/awareness';
       display: flex;
       justify-content: center;
       background: #f1f3f4;
+      transition: background 0.25s ease;
+    }
+
+    /* — Dark mode (WordCraft-style) — */
+    .editor-wrapper.dark-mode {
+      background: #1e1f22;
+    }
+
+    .editor-wrapper.dark-mode .editor-page {
+      background: #2b2d31;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+
+    .editor-wrapper.dark-mode :is(.tiptap-editor, .tiptap-editor p, .tiptap-editor li,
+      .tiptap-editor h1, .tiptap-editor h2, .tiptap-editor h3) {
+      color: #e8eaed;
+    }
+
+    .editor-wrapper.dark-mode .tiptap-editor blockquote {
+      background: #35373c;
+      color: #e8eaed;
+    }
+
+    .editor-wrapper.dark-mode .tiptap-editor pre,
+    .editor-wrapper.dark-mode .tiptap-editor code {
+      background: #1e1f22;
+      color: #e8eaed;
+    }
+
+    /* — Formatting marks (¶ and space dots) — */
+    .editor-wrapper.show-marks .tiptap-editor p::after,
+    .editor-wrapper.show-marks .tiptap-editor h1::after,
+    .editor-wrapper.show-marks .tiptap-editor h2::after,
+    .editor-wrapper.show-marks .tiptap-editor h3::after {
+      content: '¶';
+      color: #9aa0a6;
+      opacity: 0.7;
+      margin-left: 2px;
+      font-weight: 400;
+      font-size: 0.9em;
     }
 
     .editor-page {
@@ -2065,6 +2136,8 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   isFullscreen = false;
   showRuler = false;
   showWordCount = true;
+  showFormattingMarks = false;
+  darkMode = false;
   wordCount = 0;
   charCount = 0;
   rulerMarks = Array.from({ length: 81 }, (_, i) => i);
@@ -2706,6 +2779,36 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       a.click();
       URL.revokeObjectURL(url);
     }
+  }
+
+  /** Export as a Word-compatible .doc (Word HTML format — opens directly in Word). */
+  exportAsWord(): void {
+    if (!this.editor) return;
+    const body = this.editor.getHTML();
+    const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>${this.documentTitle || 'Document'}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.4; }
+  h1 { font-size: 20pt; } h2 { font-size: 16pt; } h3 { font-size: 13pt; }
+  blockquote { border-left: 3pt solid #1a73e8; margin-left: 0; padding-left: 12pt; font-style: italic; }
+  table { border-collapse: collapse; } td, th { border: 1pt solid #999; padding: 4pt 8pt; }
+  mark { background: yellow; }
+</style></head><body>${body}</body></html>`;
+    const blob = new Blob(['\ufeff', doc], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (this.documentTitle || 'document') + '.doc';
+    a.click();
+    URL.revokeObjectURL(url);
+    this.snackBar.open('Exported as Word document', 'Close', { duration: 2500 });
+  }
+
+  /** Word-style Title: an H1 with larger size via textStyle. */
+  applyTitleStyle(): void {
+    this.editor?.chain().focus().setHeading({ level: 1 }).run();
+    (this.editor?.chain().focus() as any).setFontSize('28pt').run();
   }
 
   // Print
