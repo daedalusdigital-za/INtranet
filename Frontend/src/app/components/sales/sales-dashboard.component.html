@@ -1887,6 +1887,78 @@
                   </table>
                 </div>
               }
+
+              <!-- Logistics Trip Sheets (same list as the Logistics dashboard) -->
+              <div class="section-header" style="margin-top: 32px;">
+                <h3>Logistics Trip Sheets</h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Search</mat-label>
+                    <input matInput [ngModel]="logisticsTripsheetSearch()"
+                           (ngModelChange)="logisticsTripsheetSearch.set($event)"
+                           placeholder="Load #, driver, vehicle, status…">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                  <button mat-stroked-button (click)="loadLogisticsTripsheets()">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                </div>
+              </div>
+
+              @if (loadingLogisticsTripsheets()) {
+                <div class="loading-container"><mat-spinner diameter="40"></mat-spinner></div>
+              } @else if (filteredLogisticsTripsheets().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>local_shipping</mat-icon>
+                  <p>No logistics trip sheets found.</p>
+                </div>
+              } @else {
+                <div class="table-container">
+                  <table class="ts-table">
+                    <thead>
+                      <tr>
+                        <th>Load #</th>
+                        <th>Status</th>
+                        <th>Driver</th>
+                        <th>Vehicle</th>
+                        <th>Origin</th>
+                        <th>Destination</th>
+                        <th>Stops</th>
+                        <th>Distance</th>
+                        <th>Date</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (trip of filteredLogisticsTripsheets(); track trip.id) {
+                        <tr>
+                          <td><strong>{{ trip.loadNumber || trip.tripNumber || '—' }}</strong></td>
+                          <td>
+                            <span class="ts-status"
+                                  [class.approved]="trip.status === 'Completed' || trip.status === 'Delivered'"
+                                  [class.pending]="trip.status === 'In Progress' || trip.status === 'In Transit' || trip.status === 'Assigned'"
+                                  [class.to-sign]="trip.status === 'Pending' || trip.status === 'Available' || trip.status === 'Draft'">
+                              {{ trip.status || '—' }}
+                            </span>
+                          </td>
+                          <td>{{ trip.driverName || 'Unassigned' }}</td>
+                          <td>{{ trip.vehicleReg || '—' }}</td>
+                          <td>{{ trip.origin || '—' }}</td>
+                          <td>{{ trip.destination || '—' }}</td>
+                          <td>{{ trip.totalStops ?? '—' }}</td>
+                          <td>{{ trip.totalDistance ? (trip.totalDistance | number:'1.0-0') + ' km' : '—' }}</td>
+                          <td>{{ trip.date ? (trip.date | date:'dd MMM yyyy') : '—' }}</td>
+                          <td class="ts-actions">
+                            <button mat-icon-button matTooltip="View trip sheet" (click)="viewLogisticsTripsheet(trip)">
+                              <mat-icon>visibility</mat-icon>
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
             </div>
           </mat-tab>
 

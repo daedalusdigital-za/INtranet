@@ -143,6 +143,11 @@ export class SalesDashboardComponent implements OnInit {
   loadingTripSheets = signal(false);
   tripSheetsLoaded = false;
   tripSheetStatusFilter = signal<string>('all');
+
+  // Logistics tripsheets (Loads) — the same list Logistics sees
+  logisticsTripsheets = signal<any[]>([]);
+  loadingLogisticsTripsheets = signal(false);
+  logisticsTripsheetSearch = signal('');
   // Create/edit dialog state
   showTripSheetDialog = false;
   editingTripSheetId: number | null = null;
@@ -187,6 +192,20 @@ export class SalesDashboardComponent implements OnInit {
   });
 
   pendingTripSheetCount = computed(() => this.salesTripSheets().filter(t => t.status === 'PendingApproval' || t.status === 'PendingSignature').length);
+
+  filteredLogisticsTripsheets = computed(() => {
+    const q = this.logisticsTripsheetSearch().toLowerCase().trim();
+    const list = this.logisticsTripsheets();
+    if (!q) return list;
+    return list.filter(t =>
+      (t.loadNumber || '').toLowerCase().includes(q) ||
+      (t.tripNumber || '').toLowerCase().includes(q) ||
+      (t.driverName || '').toLowerCase().includes(q) ||
+      (t.vehicleReg || '').toLowerCase().includes(q) ||
+      (t.origin || '').toLowerCase().includes(q) ||
+      (t.destination || '').toLowerCase().includes(q) ||
+      (t.status || '').toLowerCase().includes(q));
+  });
 
   orders = signal<Order[]>([]);
   companyPerfServer = signal<CompanySales[] | null>(null);
@@ -1000,6 +1019,34 @@ export class SalesDashboardComponent implements OnInit {
         this.loadingTripSheets.set(false);
         this.snackBar.open('Failed to load trip sheets', 'Close', { duration: 3000 });
       }
+    });
+    this.loadLogisticsTripsheets();
+  }
+
+  /** Pull the same tripsheet list Logistics sees so sales can view them here. */
+  loadLogisticsTripsheets(): void {
+    this.loadingLogisticsTripsheets.set(true);
+    this.http.get<any[]>(`${this.apiUrl}/logistics/tripsheet`).subscribe({
+      next: (trips) => {
+        this.logisticsTripsheets.set(trips || []);
+        this.loadingLogisticsTripsheets.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load logistics tripsheets:', err);
+        this.loadingLogisticsTripsheets.set(false);
+      }
+    });
+  }
+
+  /** Open the printable Rocket Freight tripsheet for a logistics load. */
+  viewLogisticsTripsheet(trip: any): void {
+    const loadId = trip.loadId || trip.id;
+    this.http.get(`${this.apiUrl}/logistics/tripsheet/${loadId}/pdf`, { responseType: 'text' }).subscribe({
+      next: (html) => {
+        const w = window.open('', '_blank');
+        if (w) { w.document.write(html); w.document.close(); }
+      },
+      error: () => this.snackBar.open('Failed to load tripsheet', 'Close', { duration: 3000 })
     });
   }
 
