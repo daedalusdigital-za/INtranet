@@ -1076,19 +1076,61 @@ export class SalesDashboardComponent implements OnInit {
     return sheet.signerUserId === me;
   }
 
+  /** Create a trip sheet exactly like Logistics does — same dialog, same flow, no sign-off stages. */
   openCreateTripSheet(): void {
-    this.editingTripSheetId = null;
-    this.tripSheetMode = 'signoff';
-    this.tripSheetForm = { warehouseCode: '', routeArea: '', scheduledDate: '', notes: '' };
-    this.tripSheetLines = [];
-    this.tripSheetSignerId = null;
-    this.tripSheetApproverId = null;
-    this.signerSearch = '';
-    this.approverSearch = '';
-    this.loadSalesAgents();
     this.loadTsRefData();
-    this.resetImportState();
-    this.showTripSheetDialog = true;
+    // Fetch pending imported invoices so the dialog behaves identically to Logistics
+    this.http.get<any[]>(`${this.apiUrl}/logistics/importedinvoices?pageSize=10000`).subscribe({
+      next: (invoices) => this.openLogisticsCreateDialog(invoices || []),
+      error: () => this.openLogisticsCreateDialog([])
+    });
+  }
+
+  private openLogisticsCreateDialog(invoices: any[], opts?: { isImport?: boolean; isManualTripsheet?: boolean; batchId?: string; preSelectedInvoices?: any[] }): void {
+    const dialogRef = this.dialog.open(CreateTripsheetDialog, {
+      width: '99vw',
+      maxWidth: '2200px',
+      height: '95vh',
+      panelClass: 'create-tripsheet-dialog-panel',
+      data: {
+        invoices,
+        drivers: this.tsDrivers,
+        vehicles: this.tsVehicles,
+        warehouses: this.tsWarehouses,
+        customers: this.tsCustomers,
+        apiUrl: this.apiUrl,
+        ...(opts || {})
+      }
+    });
+    dialogRef.afterClosed().subscribe((result: any) => {
+      if (result?.created || result?.updated) {
+        this.snackBar.open('Trip sheet created — it now appears in Logistics too', 'Close', { duration: 4000 });
+        this.loadLogisticsTripsheets();
+      }
+    });
+  }
+
+  /** Import a trip sheet from Excel — the exact Logistics import dialog. */
+  openImportTripsheet(): void {
+    this.loadTsRefData();
+    const importRef = this.dialog.open(ImportTripsheetDialog, {
+      width: '900px',
+      maxWidth: '95vw',
+      panelClass: 'import-tripsheet-dialog-panel',
+      data: { apiUrl: this.apiUrl, padMode: false }
+    });
+    importRef.afterClosed().subscribe((result: any) => {
+      if (result?.openCreateDialog && result.invoices?.length > 0) {
+        setTimeout(() => this.openLogisticsCreateDialog(result.invoices, {
+          isImport: !result.isManualTripsheet,
+          isManualTripsheet: !!result.isManualTripsheet,
+          batchId: result.batchId,
+          preSelectedInvoices: result.invoices
+        }), 100);
+      } else if (result?.imported) {
+        this.loadLogisticsTripsheets();
+      }
+    });
   }
 
   editTripSheet(sheet: SalesTripSheet): void {
