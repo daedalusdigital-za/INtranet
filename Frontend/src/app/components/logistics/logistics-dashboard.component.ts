@@ -3639,6 +3639,94 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
+  /** Open a printable Rocket Freight Requisition Form in a new window. */
+  printRequisition(req: any): void {
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const money = (v: any) => (v && +v > 0) ? 'R ' + (+v).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const dateStr = req.date ? new Date(req.date).toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
+    const total = (+req.amountEwallet || 0) + (+req.dieselAmount || 0);
+    const printedAt = new Date().toLocaleString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const cancelled = req.status === 'Cancelled';
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Requisition ${esc(req.rfNumber) || ''}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #222; padding: 32px; background: #fff; }
+  .header { display: table; width: 100%; border-bottom: 3px solid #033142; padding-bottom: 14px; margin-bottom: 22px; }
+  .header-left { display: table-cell; vertical-align: middle; }
+  .header-right { display: table-cell; vertical-align: middle; text-align: right; }
+  .company { font-size: 24px; font-weight: 800; color: #033142; }
+  .doc-title { font-size: 15px; color: #555; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+  .rf-badge { display: inline-block; background: #033142; color: #fff; padding: 8px 22px; border-radius: 20px; font-size: 18px; font-weight: 700; }
+  .status { display: inline-block; margin-top: 8px; padding: 3px 14px; border-radius: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+  .status.active { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+  .status.cancelled { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+  table.details { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
+  table.details td { padding: 11px 14px; border: 1px solid #ddd; vertical-align: top; }
+  table.details td.label { width: 32%; background: #f4f6f8; font-weight: 700; color: #033142; text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.5px; }
+  .amount-row td.value { font-size: 17px; font-weight: 700; }
+  .total-row td { background: #e0ecf0; font-size: 18px; font-weight: 800; color: #033142; }
+  .sign-row { display: table; width: 100%; margin-top: 44px; border-spacing: 18px 0; }
+  .sign-box { display: table-cell; width: 33%; text-align: center; }
+  .sign-line { border-bottom: 1.5px solid #333; height: 44px; margin-bottom: 6px; }
+  .sign-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.6px; }
+  .footer { margin-top: 36px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 11px; color: #888; text-align: center; }
+  .watermark { position: fixed; top: 40%; left: 0; right: 0; text-align: center; font-size: 90px; font-weight: 900; color: rgba(198,40,40,0.12); transform: rotate(-20deg); pointer-events: none; }
+  @media print { body { padding: 14mm; } }
+</style>
+</head>
+<body>
+  ${cancelled ? '<div class="watermark">CANCELLED</div>' : ''}
+  <div class="header">
+    <div class="header-left">
+      <div class="company">Rocket Freight</div>
+      <div class="doc-title">Requisition Form &bull; Petty Cash / E-Wallet</div>
+    </div>
+    <div class="header-right">
+      <span class="rf-badge">RF ${esc(req.rfNumber) || '—'}</span><br>
+      <span class="status ${cancelled ? 'cancelled' : 'active'}">${esc(req.status) || 'Active'}</span>
+    </div>
+  </div>
+
+  <table class="details">
+    <tr><td class="label">Date</td><td>${esc(dateStr)}</td></tr>
+    <tr><td class="label">Paid To</td><td><strong>${esc(req.paidTo) || '—'}</strong></td></tr>
+    <tr><td class="label">Cell Number</td><td>${esc(req.cellNumber) || '—'}</td></tr>
+    <tr><td class="label">Reason / Description</td><td>${esc(req.reason) || '—'}</td></tr>
+    <tr class="amount-row"><td class="label">E-Wallet Amount</td><td class="value">${money(req.amountEwallet)}</td></tr>
+    <tr class="amount-row"><td class="label">Diesel Amount</td><td class="value">${money(req.dieselAmount)}</td></tr>
+    <tr class="total-row"><td class="label" style="background:#e0ecf0;">Total</td><td>${money(total)}</td></tr>
+    <tr><td class="label">Department</td><td>${esc(req.department) || 'Logistics'}</td></tr>
+    <tr><td class="label">Finance Status</td><td>${esc(req.financeStatus) || 'Requested'}${req.paidDate ? ' — paid ' + esc(new Date(req.paidDate).toLocaleDateString('en-ZA')) : ''}</td></tr>
+    ${req.financeNotes ? `<tr><td class="label">Finance Notes</td><td>${esc(req.financeNotes)}</td></tr>` : ''}
+  </table>
+
+  <div class="sign-row">
+    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Requested By</div></div>
+    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Authorised By</div></div>
+    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Received By</div></div>
+  </div>
+
+  <div class="footer">
+    Rocket Freight Logistics &bull; Requisition ${esc(req.rfNumber) || ''} &bull; Printed ${esc(printedAt)} from the Promed Technologies Intranet
+  </div>
+  <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</scr` + `ipt>
+</body>
+</html>`;
+
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+    } else {
+      this.snackBar.open('Pop-up blocked — allow pop-ups to print', 'Close', { duration: 4000 });
+    }
+  }
+
   // ─── Sleep Out Methods ─────────────────────────────────────────
 
   loadSleepOuts(): void {
