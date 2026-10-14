@@ -1827,14 +1827,15 @@
                     <thead>
                       <tr>
                         <th>Load #</th>
-                        <th>Status</th>
                         <th>Driver</th>
                         <th>Vehicle</th>
-                        <th>Origin</th>
-                        <th>Destination</th>
+                        <th>Route</th>
+                        <th>Warehouse</th>
                         <th>Stops</th>
                         <th>Distance</th>
                         <th>Date</th>
+                        <th>Created By</th>
+                        <th>Status</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -1842,6 +1843,20 @@
                       @for (trip of filteredLogisticsTripsheets(); track trip.id) {
                         <tr>
                           <td><strong>{{ trip.loadNumber || trip.tripNumber || '—' }}</strong></td>
+                          <td>{{ trip.driverName || 'Unassigned' }}</td>
+                          <td>{{ trip.vehicleReg || '—' }}</td>
+                          <td>
+                            <span class="route-cell">
+                              {{ trip.origin || '—' }}
+                              <mat-icon style="font-size: 14px; width: 14px; height: 14px; vertical-align: middle;">arrow_forward</mat-icon>
+                              {{ trip.destination || '—' }}
+                            </span>
+                          </td>
+                          <td>{{ trip.warehouseName || trip.warehouseCode || '—' }}</td>
+                          <td>{{ trip.totalStops ?? '—' }}</td>
+                          <td>{{ trip.totalDistance ? (trip.totalDistance | number:'1.0-0') + ' km' : '—' }}</td>
+                          <td>{{ trip.date ? (trip.date | date:'dd MMM yyyy') : '—' }}</td>
+                          <td>{{ trip.createdByName || '—' }}</td>
                           <td>
                             <span class="ts-status"
                                   [class.approved]="trip.status === 'Completed' || trip.status === 'Delivered'"
@@ -1850,13 +1865,6 @@
                               {{ trip.status || '—' }}
                             </span>
                           </td>
-                          <td>{{ trip.driverName || 'Unassigned' }}</td>
-                          <td>{{ trip.vehicleReg || '—' }}</td>
-                          <td>{{ trip.origin || '—' }}</td>
-                          <td>{{ trip.destination || '—' }}</td>
-                          <td>{{ trip.totalStops ?? '—' }}</td>
-                          <td>{{ trip.totalDistance ? (trip.totalDistance | number:'1.0-0') + ' km' : '—' }}</td>
-                          <td>{{ trip.date ? (trip.date | date:'dd MMM yyyy') : '—' }}</td>
                           <td class="ts-actions">
                             <button mat-icon-button matTooltip="View trip sheet" (click)="viewLogisticsTripsheet(trip)">
                               <mat-icon>visibility</mat-icon>
