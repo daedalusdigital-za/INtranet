@@ -57,10 +57,16 @@ namespace ProjectTracker.API.Controllers.Logistics
             var list = await query
                 .OrderBy(r => r.PeriodYear).ThenBy(r => r.PeriodMonth)
                 .ThenBy(r => r.Date).ThenBy(r => r.Id)
-                .Select(r => ToDto(r))
                 .ToListAsync();
 
-            return Ok(list);
+            var userIds = list.Where(r => r.CreatedByUserId.HasValue)
+                .Select(r => r.CreatedByUserId!.Value).Distinct().ToList();
+            var names = await _context.Users
+                .Where(u => userIds.Contains(u.UserId))
+                .ToDictionaryAsync(u => u.UserId, u => (u.Name + " " + u.Surname).Trim());
+
+            return Ok(list.Select(r => ToDto(r,
+                r.CreatedByUserId.HasValue && names.TryGetValue(r.CreatedByUserId.Value, out var n) ? n : null)));
         }
 
         /// <summary>
@@ -135,7 +141,15 @@ namespace ProjectTracker.API.Controllers.Logistics
         {
             var r = await _context.Requisitions.FindAsync(id);
             if (r == null) return NotFound();
-            return Ok(ToDto(r));
+            return Ok(ToDto(r, await ResolveUserNameAsync(r.CreatedByUserId)));
+        }
+
+        private async Task<string?> ResolveUserNameAsync(int? userId)
+        {
+            if (!userId.HasValue) return null;
+            return await _context.Users.Where(u => u.UserId == userId.Value)
+                .Select(u => (u.Name + " " + u.Surname).Trim())
+                .FirstOrDefaultAsync();
         }
 
         [HttpPost]
@@ -148,7 +162,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             _context.Requisitions.Add(r);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetRequisition), new { id = r.Id }, ToDto(r));
+            return CreatedAtAction(nameof(GetRequisition), new { id = r.Id }, ToDto(r, await ResolveUserNameAsync(r.CreatedByUserId)));
         }
 
         [HttpPut("{id}")]
@@ -160,7 +174,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             ApplyUpsert(r, dto);
             r.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-            return Ok(ToDto(r));
+            return Ok(ToDto(r, await ResolveUserNameAsync(r.CreatedByUserId)));
         }
 
         [HttpDelete("{id}")]
@@ -191,7 +205,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             r.PeriodMonth = dto.PeriodMonth ?? basis.Month;
         }
 
-        private static RequisitionDto ToDto(Requisition r) => new()
+        private static RequisitionDto ToDto(Requisition r, string? createdByName = null) => new()
         {
             Id = r.Id,
             RfNumber = r.RfNumber,
@@ -206,6 +220,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             PeriodYear = r.PeriodYear,
             PeriodMonth = r.PeriodMonth,
             CreatedByUserId = r.CreatedByUserId,
+            CreatedByName = createdByName,
             CreatedAt = r.CreatedAt,
             UpdatedAt = r.UpdatedAt
         };
@@ -226,6 +241,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public int PeriodYear { get; set; }
         public int PeriodMonth { get; set; }
         public int? CreatedByUserId { get; set; }
+        public string? CreatedByName { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }

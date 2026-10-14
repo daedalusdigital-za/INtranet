@@ -2115,6 +2115,9 @@
                         </mat-select>
                       </mat-form-field>
                     </div>
+                    <button mat-stroked-button (click)="exportAllRequisitionsExcel()" matTooltip="Export the listed requisitions to Excel">
+                      <mat-icon>file_download</mat-icon> Export Excel
+                    </button>
                     <button mat-raised-button color="primary" (click)="openRequisitionDialog()">
                       <mat-icon>add</mat-icon> New Requisition
                     </button>
@@ -2209,6 +2212,9 @@
                             <div style="display: flex; gap: 4px;">
                               <button mat-icon-button matTooltip="Print requisition" (click)="printRequisition(row)">
                                 <mat-icon>print</mat-icon>
+                              </button>
+                              <button mat-icon-button matTooltip="Export to Excel" (click)="exportRequisitionExcel(row)">
+                                <mat-icon>table_view</mat-icon>
                               </button>
                               <button mat-icon-button matTooltip="Edit" (click)="openRequisitionDialog(row)">
                                 <mat-icon>edit</mat-icon>
