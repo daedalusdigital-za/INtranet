@@ -3647,6 +3647,7 @@ Notes: ${record.notes || 'No notes'}
     const total = (+req.amountEwallet || 0) + (+req.dieselAmount || 0);
     const printedAt = new Date().toLocaleString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const cancelled = req.status === 'Cancelled';
+    const templateUrl = `${window.location.origin}/logos/requisition-template.png`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -3655,41 +3656,42 @@ Notes: ${record.notes || 'No notes'}
 <title>Requisition ${esc(req.rfNumber) || ''}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #222; padding: 32px; background: #fff; }
-  .header { display: table; width: 100%; border-bottom: 3px solid #033142; padding-bottom: 14px; margin-bottom: 22px; }
-  .header-left { display: table-cell; vertical-align: middle; }
-  .header-right { display: table-cell; vertical-align: middle; text-align: right; }
-  .company { font-size: 24px; font-weight: 800; color: #033142; }
-  .doc-title { font-size: 15px; color: #555; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
-  .rf-badge { display: inline-block; background: #033142; color: #fff; padding: 8px 22px; border-radius: 20px; font-size: 18px; font-weight: 700; }
-  .status { display: inline-block; margin-top: 8px; padding: 3px 14px; border-radius: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+  html, body { width: 210mm; min-height: 297mm; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #222;
+    /* Company letterhead template as the page background */
+    background: #fff url('${templateUrl}') no-repeat top center;
+    background-size: 210mm 297mm;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    /* Leave the letterhead visible: content starts below it, footer strip stays clear */
+    padding: 52mm 18mm 30mm 18mm;
+  }
+  .doc-title-bar { text-align: center; margin-bottom: 16px; }
+  .doc-title { font-size: 17px; font-weight: 800; color: #033142; letter-spacing: 2.5px; text-transform: uppercase; }
+  .rf-badge { display: inline-block; background: #033142; color: #fff; padding: 7px 20px; border-radius: 20px; font-size: 17px; font-weight: 700; margin-top: 8px; }
+  .status { display: inline-block; margin-left: 10px; padding: 3px 14px; border-radius: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; vertical-align: middle; }
   .status.active { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
   .status.cancelled { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
-  table.details { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
-  table.details td { padding: 11px 14px; border: 1px solid #ddd; vertical-align: top; }
-  table.details td.label { width: 32%; background: #f4f6f8; font-weight: 700; color: #033142; text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.5px; }
+  table.details { width: 100%; border-collapse: collapse; margin-bottom: 20px; background: rgba(255,255,255,0.92); }
+  table.details td { padding: 10px 14px; border: 1px solid #ccc; vertical-align: top; }
+  table.details td.label { width: 32%; background: rgba(244,246,248,0.95); font-weight: 700; color: #033142; text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.5px; }
   .amount-row td.value { font-size: 17px; font-weight: 700; }
-  .total-row td { background: #e0ecf0; font-size: 18px; font-weight: 800; color: #033142; }
-  .sign-row { display: table; width: 100%; margin-top: 44px; border-spacing: 18px 0; }
+  .total-row td { background: rgba(224,236,240,0.95); font-size: 18px; font-weight: 800; color: #033142; }
+  .sign-row { display: table; width: 100%; margin-top: 34px; border-spacing: 18px 0; }
   .sign-box { display: table-cell; width: 33%; text-align: center; }
-  .sign-line { border-bottom: 1.5px solid #333; height: 44px; margin-bottom: 6px; }
-  .sign-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.6px; }
-  .footer { margin-top: 36px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 11px; color: #888; text-align: center; }
-  .watermark { position: fixed; top: 40%; left: 0; right: 0; text-align: center; font-size: 90px; font-weight: 900; color: rgba(198,40,40,0.12); transform: rotate(-20deg); pointer-events: none; }
-  @media print { body { padding: 14mm; } }
+  .sign-line { border-bottom: 1.5px solid #333; height: 40px; margin-bottom: 6px; }
+  .sign-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.6px; }
+  .print-meta { margin-top: 20px; font-size: 10.5px; color: #777; text-align: center; }
+  .watermark { position: fixed; top: 40%; left: 0; right: 0; text-align: center; font-size: 90px; font-weight: 900; color: rgba(198,40,40,0.14); transform: rotate(-20deg); pointer-events: none; }
+  @page { size: A4; margin: 0; }
+  @media print { body { padding: 52mm 18mm 30mm 18mm; } }
 </style>
 </head>
 <body>
   ${cancelled ? '<div class="watermark">CANCELLED</div>' : ''}
-  <div class="header">
-    <div class="header-left">
-      <div class="company">Rocket Freight</div>
-      <div class="doc-title">Requisition Form &bull; Petty Cash / E-Wallet</div>
-    </div>
-    <div class="header-right">
-      <span class="rf-badge">RF ${esc(req.rfNumber) || '—'}</span><br>
-      <span class="status ${cancelled ? 'cancelled' : 'active'}">${esc(req.status) || 'Active'}</span>
-    </div>
+  <div class="doc-title-bar">
+    <div class="doc-title">Requisition Form &bull; Petty Cash / E-Wallet</div>
+    <span class="rf-badge">RF ${esc(req.rfNumber) || '—'}</span><span class="status ${cancelled ? 'cancelled' : 'active'}">${esc(req.status) || 'Active'}</span>
   </div>
 
   <table class="details">
@@ -3711,10 +3713,16 @@ Notes: ${record.notes || 'No notes'}
     <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Received By</div></div>
   </div>
 
-  <div class="footer">
-    Rocket Freight Logistics &bull; Requisition ${esc(req.rfNumber) || ''} &bull; Printed ${esc(printedAt)} from the Promed Technologies Intranet
+  <div class="print-meta">
+    Requisition ${esc(req.rfNumber) || ''} &bull; Printed ${esc(printedAt)} from the Promed Technologies Intranet
   </div>
-  <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</scr` + `ipt>
+  <script>
+    // Wait for the letterhead template to load before opening the print dialog.
+    var bg = new Image();
+    bg.onload = function(){ setTimeout(function(){ window.print(); }, 200); };
+    bg.onerror = function(){ setTimeout(function(){ window.print(); }, 200); };
+    bg.src = '${templateUrl}';
+  </scr` + `ipt>
 </body>
 </html>`;
 
