@@ -33,10 +33,10 @@ namespace ProjectTracker.API.Models.Logistics
         public decimal? Volume { get; set; } // in cubic meters
 
         // Reference Numbers
-        [MaxLength(100)]
+        [MaxLength(2000)]
         public string? OrderNumber { get; set; }
 
-        [MaxLength(100)]
+        [MaxLength(2000)]
         public string? InvoiceNumber { get; set; }
 
         // Product brand from the import sheet (optional — can be blank)
