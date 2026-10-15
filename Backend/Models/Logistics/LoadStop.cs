@@ -57,7 +57,7 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(100)]
         public string? OrderNumber { get; set; }
 
-        [MaxLength(100)]
+        [MaxLength(2000)]
         public string? InvoiceNumber { get; set; }
 
         // Timing
