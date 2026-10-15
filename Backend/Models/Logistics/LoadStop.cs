@@ -54,7 +54,7 @@ namespace ProjectTracker.API.Models.Logistics
         public string? ContactEmail { get; set; }
 
         // Reference Numbers
-        [MaxLength(100)]
+        [MaxLength(2000)]
         public string? OrderNumber { get; set; }
 
         [MaxLength(2000)]
