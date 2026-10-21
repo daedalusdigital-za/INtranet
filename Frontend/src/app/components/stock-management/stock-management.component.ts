@@ -679,6 +679,69 @@ interface ComprehensiveAnalysisResponse {
             </div>
           </mat-tab>
 
+          <!-- ISSUES -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">assignment_late</mat-icon> Issues ({{ openIssueCount }})</ng-template>
+            <div class="stk-tab-body">
+              <div class="stk-toolbar">
+                <button mat-stroked-button [class.stk-filter-on]="issueStatusFilter === 'Open'" (click)="issueStatusFilter = issueStatusFilter === 'Open' ? '' : 'Open'">
+                  <mat-icon>error_outline</mat-icon> Open ({{ issueCountByStatus('Open') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="issueStatusFilter === 'InProgress'" (click)="issueStatusFilter = issueStatusFilter === 'InProgress' ? '' : 'InProgress'">
+                  <mat-icon>pending</mat-icon> In Progress ({{ issueCountByStatus('InProgress') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="issueStatusFilter === 'Resolved'" (click)="issueStatusFilter = issueStatusFilter === 'Resolved' ? '' : 'Resolved'">
+                  <mat-icon>task_alt</mat-icon> Resolved ({{ issueCountByStatus('Resolved') }})</button>
+                <mat-form-field appearance="outline" class="stk-search">
+                  <mat-label>Search code, description or issue</mat-label>
+                  <input matInput [(ngModel)]="issueSearch">
+                  <mat-icon matPrefix>search</mat-icon>
+                </mat-form-field>
+                <span class="stk-spacer"></span>
+                <button mat-stroked-button (click)="loadIssues()" matTooltip="Reload issues"><mat-icon>refresh</mat-icon> Refresh</button>
+                <button mat-stroked-button (click)="exportIssues()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-raised-button color="primary" (click)="openCreateIssue()"><mat-icon>add</mat-icon> New Issue</button>
+              </div>
+              @if (issuesLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading issues...</div> }
+              @else {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr>
+                      <th>Date</th><th>Warehouse</th><th>Company</th><th>Code</th><th>Description</th><th>Issue</th><th>Detail</th><th>Status</th><th style="text-align:right;">Actions</th>
+                    </tr></thead>
+                    <tbody>
+                      @for (i of issueRows.slice(0, 400); track i.id) {
+                        <tr [class.stk-row-resolved]="i.status === 'Resolved' || i.status === 'Dismissed'">
+                          <td>{{ i.issueDate ? (i.issueDate | date:'dd MMM') : '—' }}</td>
+                          <td>{{ i.warehouseName || '—' }}</td>
+                          <td><span class="stk-chip">{{ i.company || '—' }}</span></td>
+                          <td class="mono">{{ i.itemCode || '—' }}</td>
+                          <td class="desc">{{ i.itemDescription }}</td>
+                          <td><b>{{ i.issueType }}</b></td>
+                          <td class="desc" [matTooltip]="i.detail">{{ i.detail }}</td>
+                          <td><span class="stk-badge" [class.b-out]="i.status === 'Open'" [class.b-warn]="i.status === 'InProgress'" [class.b-in]="i.status === 'Resolved'">{{ i.status }}</span>
+                            @if (i.resolution) { <div class="stk-resolution" [matTooltip]="'By ' + (i.resolvedBy || '?')">{{ i.resolution }}</div> }
+                          </td>
+                          <td style="text-align:right;white-space:nowrap;">
+                            @if (i.status === 'Open') {
+                              <button mat-icon-button matTooltip="Start working on this" (click)="setIssueStatus(i, 'InProgress')"><mat-icon>play_circle</mat-icon></button>
+                            }
+                            @if (i.status === 'Open' || i.status === 'InProgress') {
+                              <button mat-icon-button matTooltip="Resolve" style="color:#16a34a;" (click)="openResolveIssue(i, 'Resolved')"><mat-icon>task_alt</mat-icon></button>
+                              <button mat-icon-button matTooltip="Dismiss (not an issue)" (click)="openResolveIssue(i, 'Dismissed')"><mat-icon>block</mat-icon></button>
+                            }
+                            @if (i.status === 'Resolved' || i.status === 'Dismissed') {
+                              <button mat-icon-button matTooltip="Reopen" (click)="setIssueStatus(i, 'Open')"><mat-icon>restart_alt</mat-icon></button>
+                            }
+                          </td>
+                        </tr>
+                      } @empty { <tr><td colspan="9" class="stk-empty">No issues found{{ whFilterName }} 🎉</td></tr> }
+                    </tbody>
+                  </table>
+                  @if (issueRows.length > 400) { <div class="stk-more">Showing first 400 of {{ issueRows.length | number }} issues</div> }
+                </div>
+              }
+            </div>
+          </mat-tab>
+
           <!-- EXCEPTIONS -->
           <mat-tab>
             <ng-template mat-tab-label><mat-icon class="tab-ico">report_problem</mat-icon> Exceptions</ng-template>
@@ -2133,6 +2196,8 @@ interface ComprehensiveAnalysisResponse {
     .stk-badge.b-neg { background: #7f1d1d; color: #fff; }
     .stk-badge.b-warn { background: #fef3c7; color: #92400e; }
     .stk-empty { text-align: center; padding: 28px; color: #94a3b8; }
+    .stk-row-resolved td { opacity: 0.55; }
+    .stk-resolution { font-size: 11px; color: #16a34a; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
     .stk-more { text-align: center; padding: 10px; font-size: 12px; color: #64748b; background: #f8fafc; }
     .stk-note { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: #64748b; }
     .stk-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
@@ -2249,6 +2314,75 @@ export class StockManagementComponent implements OnInit {
     return this.whFilterId ? this.scrapRecords.filter(s => s.warehouseId === this.whFilterId) : this.scrapRecords;
   }
 
+  // ═══ Stock issues ═══
+  issues: any[] = [];
+  issuesLoading = true;
+  issueStatusFilter = 'Open';
+  issueSearch = '';
+
+  get issuesScoped(): any[] {
+    let rows = this.whFilterId ? this.issues.filter(i => i.warehouseId === this.whFilterId) : this.issues;
+    if (this.companyFilter) {
+      const key = this.companyFilter.toUpperCase();
+      rows = rows.filter(i => (i.company || '').toUpperCase() === key);
+    }
+    return rows;
+  }
+
+  get issueRows(): any[] {
+    let rows = this.issuesScoped;
+    if (this.issueStatusFilter) rows = rows.filter(i => i.status === this.issueStatusFilter);
+    const term = this.issueSearch.trim().toLowerCase();
+    if (term) {
+      rows = rows.filter(i =>
+        (i.itemCode || '').toLowerCase().includes(term) ||
+        (i.itemDescription || '').toLowerCase().includes(term) ||
+        (i.issueType || '').toLowerCase().includes(term) ||
+        (i.detail || '').toLowerCase().includes(term));
+    }
+    return rows;
+  }
+
+  get openIssueCount(): number { return this.issuesScoped.filter(i => i.status === 'Open' || i.status === 'InProgress').length; }
+  issueCountByStatus(s: string): number { return this.issuesScoped.filter(i => i.status === s).length; }
+
+  loadIssues(): void {
+    this.issuesLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/stock-issues`).subscribe({
+      next: d => { this.issues = d || []; this.issuesLoading = false; },
+      error: () => { this.issues = []; this.issuesLoading = false; }
+    });
+  }
+
+  openCreateIssue(): void {
+    const ref = this.dialog.open(CreateIssueDialog, {
+      width: '650px', maxWidth: '95vw',
+      data: { warehouses: this.warehouses, companies: this.stockCompanies, defaultWarehouseId: this.whFilterId }
+    });
+    ref.afterClosed().subscribe(created => { if (created) this.loadIssues(); });
+  }
+
+  openResolveIssue(issue: any, status: 'Resolved' | 'Dismissed'): void {
+    const ref = this.dialog.open(ResolveIssueDialog, { width: '560px', maxWidth: '95vw', data: { issue, status } });
+    ref.afterClosed().subscribe(done => { if (done) this.loadIssues(); });
+  }
+
+  setIssueStatus(issue: any, status: string): void {
+    this.http.put(`${environment.apiUrl}/logistics/stock-issues/${issue.id}/status`, { status }).subscribe({
+      next: () => { issue.status = status; this.snackBar.open(`Issue marked ${status}`, 'Close', { duration: 2500 }); },
+      error: () => this.snackBar.open('Failed to update issue', 'Close', { duration: 3000 })
+    });
+  }
+
+  exportIssues(): void {
+    const rows = this.issueRows.map(i => ({
+      'Date': i.issueDate ? String(i.issueDate).substring(0, 10) : '', 'Warehouse': i.warehouseName,
+      'Company': i.company, 'Code': i.itemCode, 'Description': i.itemDescription,
+      'Issue': i.issueType, 'Detail': i.detail, 'Status': i.status, 'Resolution': i.resolution || '', 'Resolved By': i.resolvedBy || ''
+    }));
+    this.writeExcel(rows, 'Issues', `Stock_Issues_${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+
   // ═══ Dispatch: tripsheets / picking slips / invoices from logistics ═══
   dispatchMode: 'tripsheets' | 'picking' | 'invoices' | 'transfers' = 'tripsheets';
   loads: any[] = [];
@@ -2345,6 +2479,7 @@ export class StockManagementComponent implements OnInit {
       next: d => { this.loads = d || []; this.loadsLoading = false; },
       error: () => { this.loads = []; this.loadsLoading = false; }
     });
+    this.loadIssues();
   }
 
   /** Resolve target warehouse: the filtered card, or prompt the user to pick one */
@@ -7114,6 +7249,204 @@ export class RepackagingDialog implements OnInit {
 })
 export class Warehouse3DDialog {
   constructor(@Inject(MAT_DIALOG_DATA) public data: any) {}
+}
+
+// ═══ Create Stock Issue Dialog ═══
+@Component({
+  selector: 'app-create-issue-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+            MatFormFieldModule, MatInputModule, MatSelectModule],
+  template: `
+    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">assignment_late</mat-icon> New Stock Issue</h2>
+    <mat-dialog-content class="ci-body">
+      <div class="ci-row">
+        <mat-form-field appearance="outline">
+          <mat-label>Warehouse</mat-label>
+          <mat-select [(ngModel)]="warehouseId">
+            @for (w of data.warehouses; track w.id) { <mat-option [value]="w.id">{{ w.name }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Company</mat-label>
+          <mat-select [(ngModel)]="company">
+            <mat-option [value]="''">—</mat-option>
+            @for (c of data.companies; track c.key) { <mat-option [value]="c.key">{{ c.shortName }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <mat-form-field appearance="outline" class="ci-full">
+        <mat-label>Issue type</mat-label>
+        <mat-select [(ngModel)]="issueType">
+          @for (t of issueTypes; track t) { <mat-option [value]="t">{{ t }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+      @if (issueType === 'Other') {
+        <mat-form-field appearance="outline" class="ci-full">
+          <mat-label>Custom issue type</mat-label>
+          <input matInput [(ngModel)]="customType" placeholder="Describe the type of issue">
+        </mat-form-field>
+      }
+      <div class="ci-row">
+        <mat-form-field appearance="outline">
+          <mat-label>Item code (optional)</mat-label>
+          <input matInput [(ngModel)]="itemCode" placeholder="e.g. 3030027">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Item description (optional)</mat-label>
+          <input matInput [(ngModel)]="itemDescription">
+        </mat-form-field>
+      </div>
+      <mat-form-field appearance="outline" class="ci-full">
+        <mat-label>Detail</mat-label>
+        <textarea matInput rows="3" [(ngModel)]="detail" placeholder="What is wrong, how was it found, quantities involved..."></textarea>
+      </mat-form-field>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!valid() || saving" (click)="save()">
+        <mat-icon>add</mat-icon> Create Issue
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .ci-body { padding-top: 8px; }
+    .ci-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .ci-full { width: 100%; }
+    mat-form-field { width: 100%; }
+  `]
+})
+export class CreateIssueDialog {
+  issueTypes = [
+    'Opening ≠ previous closing',
+    'Negative balance',
+    'Closing does not add up',
+    'Closing balance not filled in',
+    'Missing item code',
+    'Missing UOM',
+    'Duplicate code',
+    'Duplicate description',
+    'Damaged stock',
+    'Stock count variance',
+    'Wrong item received',
+    'Expired stock',
+    'Missing / lost stock',
+    'Other'
+  ];
+  warehouseId: number | null = null;
+  company = '';
+  issueType = '';
+  customType = '';
+  itemCode = '';
+  itemDescription = '';
+  detail = '';
+  saving = false;
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    public dialogRef: MatDialogRef<CreateIssueDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {
+    this.warehouseId = data.defaultWarehouseId || null;
+  }
+
+  valid(): boolean {
+    const type = this.issueType === 'Other' ? this.customType.trim() : this.issueType;
+    return !!type && !!this.warehouseId;
+  }
+
+  save(): void {
+    this.saving = true;
+    const payload = {
+      warehouseId: this.warehouseId,
+      company: this.company || null,
+      itemCode: this.itemCode || null,
+      itemDescription: this.itemDescription || null,
+      issueType: this.issueType === 'Other' ? this.customType.trim() : this.issueType,
+      detail: this.detail || null
+    };
+    this.http.post(`${environment.apiUrl}/logistics/stock-issues`, payload).subscribe({
+      next: () => { this.snackBar.open('Issue created', 'Close', { duration: 3000 }); this.dialogRef.close(true); },
+      error: () => { this.saving = false; this.snackBar.open('Failed to create issue', 'Close', { duration: 3000 }); }
+    });
+  }
+}
+
+// ═══ Resolve Stock Issue Dialog ═══
+@Component({
+  selector: 'app-resolve-issue-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+            MatFormFieldModule, MatInputModule, MatSelectModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon style="vertical-align:middle;margin-right:8px;" [style.color]="data.status === 'Resolved' ? '#16a34a' : '#64748b'">
+        {{ data.status === 'Resolved' ? 'task_alt' : 'block' }}</mat-icon>
+      {{ data.status === 'Resolved' ? 'Resolve' : 'Dismiss' }} Issue
+    </h2>
+    <mat-dialog-content>
+      <div class="ri-summary">
+        <b>{{ data.issue.issueType }}</b>
+        @if (data.issue.itemCode) { <span class="ri-code">{{ data.issue.itemCode }}</span> }
+        <div class="ri-detail">{{ data.issue.detail }}</div>
+      </div>
+      <mat-form-field appearance="outline" style="width:100%;">
+        <mat-label>{{ data.status === 'Resolved' ? 'How was it resolved?' : 'Why is this not an issue?' }}</mat-label>
+        <textarea matInput rows="3" [(ngModel)]="resolution"
+                  [placeholder]="data.status === 'Resolved' ? 'e.g. Recount done, opening corrected to 240; GRV captured...' : 'e.g. Known timing difference, already corrected in source sheet...'"></textarea>
+      </mat-form-field>
+      @if (quickNotes.length) {
+        <div class="ri-quick">
+          @for (q of quickNotes; track q) {
+            <button mat-stroked-button class="ri-chip" (click)="resolution = q">{{ q }}</button>
+          }
+        </div>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button [color]="data.status === 'Resolved' ? 'primary' : 'warn'" [disabled]="!resolution.trim() || saving" (click)="save()">
+        <mat-icon>{{ data.status === 'Resolved' ? 'task_alt' : 'block' }}</mat-icon>
+        {{ data.status === 'Resolved' ? 'Mark Resolved' : 'Dismiss' }}
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .ri-summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+    .ri-code { font-family: monospace; background: #e2e8f0; border-radius: 6px; padding: 1px 7px; margin-left: 8px; font-size: 12px; }
+    .ri-detail { font-size: 12.5px; color: #64748b; margin-top: 6px; }
+    .ri-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .ri-chip { font-size: 11.5px !important; line-height: 28px !important; padding: 0 10px !important; border-radius: 999px !important; }
+  `]
+})
+export class ResolveIssueDialog {
+  resolution = '';
+  saving = false;
+
+  quickNotes: string[] = [];
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    public dialogRef: MatDialogRef<ResolveIssueDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {
+    this.quickNotes = data.status === 'Resolved'
+      ? ['Recount performed and balance corrected', 'GRV / receipt captured retrospectively', 'Data captured incorrectly — sheet corrected', 'Stock adjusted via stock take']
+      : ['Known timing difference between sheets', 'Duplicate of another issue', 'Expected behaviour — not an error'];
+  }
+
+  save(): void {
+    this.saving = true;
+    this.http.put(`${environment.apiUrl}/logistics/stock-issues/${this.data.issue.id}/status`,
+      { status: this.data.status, resolution: this.resolution.trim() }).subscribe({
+      next: () => { this.snackBar.open(`Issue ${this.data.status.toLowerCase()}`, 'Close', { duration: 3000 }); this.dialogRef.close(true); },
+      error: () => { this.saving = false; this.snackBar.open('Failed to update issue', 'Close', { duration: 3000 }); }
+    });
+  }
 }
 
 
