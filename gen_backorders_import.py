@@ -1,0 +1,207 @@
+"""
+Regenerate back-order data from the four ERP "Back Order" Excel exports in uploads/.
+
+Outputs:
+  1. Frontend/src/app/components/sales/back-orders-data.ts  (static fallback used by Sales dashboard)
+  2. Database/ImportBackorders_<date>.sql                    (replaces ImportedBackorders snapshot per company)
+
+Company codes match BackordersController.ValidCompanies:
+  PMT = Promed, ACM = Access, PHT = Pharmacare, SBT = Sebenzani
+"""
+import glob
+import os
+import re
+from datetime import datetime, date
+
+import openpyxl
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+UPLOADS = os.path.join(ROOT, "uploads")
+TS_OUT = os.path.join(ROOT, "Frontend", "src", "app", "components", "sales", "back-orders-data.ts")
+SQL_OUT = os.path.join(ROOT, "Database", f"ImportBackorders_{date.today():%Y-%m-%d}.sql")
+
+FILES = [
+    ("PMT", "PROMED_BACK_ORDERS", "PROMED BACK ORDER.xlsx"),
+    ("ACM", "ACCESS_BACK_ORDERS", "ACCESS BACK ORDERS.xlsx"),
+    ("PHT", "PHARMATECH_BACK_ORDERS", "PHARMACARE BACK ORDER.xlsx"),
+    ("SBT", "SEBENZANI_BACK_ORDERS", "SEBENZANI BACK ORDER.xlsx"),
+]
+
+# header text (normalised) -> field
+HEADER_MAP = {
+    "ordernumber": "orderNumber",
+    "orderdate": "orderDate",
+    "customerno": "customerNo",
+    "customername": "customerName",
+    "pono": "poNo",
+    "itemdesc": "itemDesc",
+    "location": "location",
+    "uom": "uom",
+    "qtybackorder": "qtyBackOrder",
+    "unitprice": "unitPrice",
+    "extprice": "extPrice",
+    "contract": "contract",
+    "accountset": "accountSet",
+}
+FIELDS = ["orderNumber", "orderDate", "customerNo", "customerName", "poNo", "itemDesc",
+          "location", "uom", "qtyBackOrder", "unitPrice", "extPrice", "contract", "accountSet"]
+STR_FIELDS = [f for f in FIELDS if f not in ("orderDate", "qtyBackOrder", "unitPrice", "extPrice")]
+MAXLEN = {"orderNumber": 50, "customerNo": 50, "customerName": 255, "poNo": 100, "itemDesc": 255,
+          "location": 50, "uom": 20, "contract": 100, "accountSet": 50}
+
+
+def norm(h):
+    return re.sub(r"[^a-z]", "", str(h or "").lower())
+
+
+def to_num(v):
+    if v is None or v == "":
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).replace("R", "").replace(",", "").replace(" ", "")
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def to_date(v):
+    if v is None or v == "":
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    s = str(v).strip()
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def read_sheet(path):
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    ws = wb.worksheets[0]
+    rows = ws.iter_rows(values_only=True)
+    header = next(rows)
+    cols = {}
+    for idx, h in enumerate(header):
+        f = HEADER_MAP.get(norm(h))
+        if f:
+            cols[f] = idx
+    missing = [f for f in ("orderNumber", "itemDesc", "qtyBackOrder") if f not in cols]
+    if missing:
+        raise SystemExit(f"{os.path.basename(path)}: missing columns {missing}; header={header}")
+
+    out = []
+    for r in rows:
+        if r is None or all(c is None or str(c).strip() == "" for c in r):
+            continue
+        rec = {}
+        for f in FIELDS:
+            v = r[cols[f]] if f in cols and cols[f] < len(r) else None
+            if f == "orderDate":
+                rec[f] = to_date(v)
+            elif f in ("qtyBackOrder", "unitPrice", "extPrice"):
+                rec[f] = to_num(v)
+            else:
+                s = "" if v is None else str(v).strip()
+                rec[f] = s[: MAXLEN.get(f, 255)]
+        if not rec["orderNumber"] and not rec["itemDesc"]:
+            continue
+        if rec["extPrice"] == 0 and rec["unitPrice"] and rec["qtyBackOrder"]:
+            rec["extPrice"] = round(rec["unitPrice"] * rec["qtyBackOrder"], 2)
+        out.append(rec)
+    return out
+
+
+def ts_str(s):
+    return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def sql_str(s):
+    return "N'" + s.replace("'", "''") + "'"
+
+
+def main():
+    data = {}
+    for code, const, fname in FILES:
+        path = os.path.join(UPLOADS, fname)
+        if not os.path.exists(path):
+            cands = glob.glob(os.path.join(UPLOADS, f"*{code}*BACK*ORDER*.xlsx"))
+            if not cands:
+                raise SystemExit(f"Missing {path}")
+            path = cands[0]
+        recs = read_sheet(path)
+        data[code] = (const, recs, os.path.basename(path))
+        print(f"{code:4} {len(recs):5} lines  qty={sum(r['qtyBackOrder'] for r in recs):>12,.0f}  "
+              f"value=R{sum(r['extPrice'] for r in recs):>15,.2f}  <- {os.path.basename(path)}")
+
+    # ---------- TypeScript ----------
+    ts = ["// AUTO-GENERATED by gen_backorders_import.py on "
+          f"{date.today():%Y-%m-%d} from uploads/*BACK ORDER*.xlsx — do not edit by hand.",
+          "export interface BackOrderItem {",
+          "  orderNumber: string;", "  orderDate: string;", "  customerNo: string;",
+          "  customerName: string;", "  poNo: string;", "  itemDesc: string;",
+          "  location: string;", "  uom: string;", "  qtyBackOrder: number;",
+          "  unitPrice: number;", "  extPrice: number;", "  contract: string;",
+          "  accountSet: string;", "}", ""]
+    for code, const, _ in FILES:
+        _, recs, src = data[code]
+        ts.append(f"// {code} — {len(recs)} lines from {src}")
+        ts.append(f"export const {const}: BackOrderItem[] = [")
+        for r in recs:
+            d = r["orderDate"].strftime("%Y/%m/%d") if r["orderDate"] else ""
+            ts.append(
+                "  { "
+                f"orderNumber: {ts_str(r['orderNumber'])}, orderDate: '{d}', "
+                f"customerNo: {ts_str(r['customerNo'])}, customerName: {ts_str(r['customerName'])}, "
+                f"poNo: {ts_str(r['poNo'])}, itemDesc: {ts_str(r['itemDesc'])}, "
+                f"location: {ts_str(r['location'])}, uom: {ts_str(r['uom'])}, "
+                f"qtyBackOrder: {r['qtyBackOrder']:g}, unitPrice: {r['unitPrice']:.2f}, "
+                f"extPrice: {r['extPrice']:.2f}, contract: {ts_str(r['contract'])}, "
+                f"accountSet: {ts_str(r['accountSet'])} }},"
+            )
+        ts.append("];")
+        ts.append("")
+    with open(TS_OUT, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(ts))
+    print(f"\nWrote {TS_OUT}")
+
+    # ---------- SQL ----------
+    batch = f"BO-{datetime.utcnow():%Y%m%d%H%M%S}"
+    sql = ["SET NOCOUNT ON;", "BEGIN TRANSACTION;", ""]
+    for code, const, _ in FILES:
+        _, recs, src = data[code]
+        sql.append(f"-- {code}: {len(recs)} lines from {src}")
+        sql.append(f"DELETE FROM ImportedBackorders WHERE SourceCompany = '{code}';")
+        for i in range(0, len(recs), 500):
+            chunk = recs[i:i + 500]
+            sql.append("INSERT INTO ImportedBackorders (SourceCompany, OrderNumber, OrderDate, CustomerNo, CustomerName, PoNo, "
+                       "ItemDesc, Location, Uom, QtyBackOrder, UnitPrice, ExtPrice, Contract, AccountSet, "
+                       "ImportBatchId, ImportedAt, ImportedBy) VALUES")
+            vals = []
+            for r in chunk:
+                d = f"'{r['orderDate']:%Y-%m-%d}'" if r["orderDate"] else "NULL"
+                vals.append(
+                    f"('{code}', {sql_str(r['orderNumber'])}, {d}, {sql_str(r['customerNo'])}, "
+                    f"{sql_str(r['customerName'])}, {sql_str(r['poNo'])}, {sql_str(r['itemDesc'])}, "
+                    f"{sql_str(r['location'])}, {sql_str(r['uom'])}, {r['qtyBackOrder']:.2f}, "
+                    f"{r['unitPrice']:.4f}, {r['extPrice']:.2f}, {sql_str(r['contract'])}, "
+                    f"{sql_str(r['accountSet'])}, '{batch}', SYSUTCDATETIME(), N'excel-import')"
+                )
+            sql.append(",\n".join(vals) + ";")
+        sql.append("")
+    sql.append("COMMIT;")
+    sql.append("SELECT SourceCompany, COUNT(*) AS Lines, SUM(QtyBackOrder) AS Qty, SUM(ExtPrice) AS Value "
+               "FROM ImportedBackorders GROUP BY SourceCompany ORDER BY SourceCompany;")
+    with open(SQL_OUT, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(sql))
+    print(f"Wrote {SQL_OUT}")
+
+
+if __name__ == "__main__":
+    main()
