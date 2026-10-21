@@ -131,7 +131,8 @@ interface ComprehensiveAnalysisResponse {
     MatListModule,
     FormsModule,
     MatFormFieldModule,
-    MatInputModule
+    MatInputModule,
+    MatTabsModule
   ],
   template: `
     <app-navbar></app-navbar>
@@ -476,108 +477,342 @@ interface ComprehensiveAnalysisResponse {
         <app-empty-state icon="warehouse" title="No Warehouses Found"
           message="No warehouses have been configured yet."></app-empty-state>
       } @else if (!selectedWarehouse) {
-        <div class="warehouses-grid">
+
+        <!-- ═══ KPI CARDS ═══ -->
+        <div class="stk-kpi-grid">
+          <div class="stk-kpi k-blue">
+            <mat-icon>inventory_2</mat-icon>
+            <div class="stk-kpi-val">{{ kpiSkus | number }}</div>
+            <div class="stk-kpi-lbl">Total SKUs</div>
+          </div>
+          <div class="stk-kpi k-indigo">
+            <mat-icon>stacked_bar_chart</mat-icon>
+            <div class="stk-kpi-val">{{ formatQty(kpiUnits) }}</div>
+            <div class="stk-kpi-lbl">Units On Hand</div>
+          </div>
+          <div class="stk-kpi k-green">
+            <mat-icon>payments</mat-icon>
+            <div class="stk-kpi-val">{{ formatValue(kpiValue) }}</div>
+            <div class="stk-kpi-lbl">Stock Value</div>
+          </div>
+          <div class="stk-kpi k-teal">
+            <mat-icon>account_balance_wallet</mat-icon>
+            <div class="stk-kpi-val">{{ formatValue(kpiCost) }}</div>
+            <div class="stk-kpi-lbl">Cost Value</div>
+          </div>
+          <div class="stk-kpi k-emerald">
+            <mat-icon>check_circle</mat-icon>
+            <div class="stk-kpi-val">{{ kpiIn | number }}</div>
+            <div class="stk-kpi-lbl">Items In Stock</div>
+          </div>
+          <div class="stk-kpi k-red" [class.pulse]="kpiOut > 0">
+            <mat-icon>remove_shopping_cart</mat-icon>
+            <div class="stk-kpi-val">{{ kpiOut | number }}</div>
+            <div class="stk-kpi-lbl">Out of Stock</div>
+          </div>
+          <div class="stk-kpi k-amber">
+            <mat-icon>swap_horiz</mat-icon>
+            <div class="stk-kpi-val">{{ movements.length | number }}</div>
+            <div class="stk-kpi-lbl">Recent Movements</div>
+          </div>
+          <div class="stk-kpi k-slate">
+            <mat-icon>delete_sweep</mat-icon>
+            <div class="stk-kpi-val">{{ scrapRecords.length | number }}</div>
+            <div class="stk-kpi-lbl">Scrap Records</div>
+          </div>
+        </div>
+
+        <!-- ═══ WAREHOUSE CARDS (click to filter, Operations to drill in) ═══ -->
+        <div class="stk-wh-grid">
           @for (warehouse of warehouses; track warehouse.id) {
-            <div class="warehouse-card-modern warehouse-{{ warehouse.id }}" (click)="selectWarehouse(warehouse)"
-                 role="button" tabindex="0" (keydown.enter)="selectWarehouse(warehouse)" (keydown.space)="selectWarehouse(warehouse)"
-                 [attr.aria-label]="'Open warehouse ' + warehouse.name">
-              <div class="warehouse-gradient-bg"></div>
-              <div class="warehouse-content">
-                <div class="warehouse-header">
-                  <div class="warehouse-icon-modern">
-                    <mat-icon>warehouse</mat-icon>
-                  </div>
-                  <div class="warehouse-title-section">
-                    <h2>{{ warehouse.name }}</h2>
-                    <p class="warehouse-location">
-                      <mat-icon>location_on</mat-icon>
-                      {{ warehouse.location }}
-                    </p>
-                  </div>
+            <div class="stk-wh-card" [class.active]="whFilterId === warehouse.id"
+                 (click)="toggleWhFilter(warehouse.id)"
+                 role="button" tabindex="0" (keydown.enter)="toggleWhFilter(warehouse.id)"
+                 [matTooltip]="whFilterId === warehouse.id ? 'Click to clear filter' : 'Click to filter tabs by ' + warehouse.name">
+              <div class="stk-wh-head">
+                <mat-icon class="stk-wh-ico">warehouse</mat-icon>
+                <div class="stk-wh-title">
+                  <h3>{{ warehouse.name }}</h3>
+                  <span>{{ warehouse.location }}</span>
                 </div>
-
-                <div class="warehouse-stats-modern">
-                  <div class="stat-modern">
-                    <div class="stat-icon-wrapper">
-                      <mat-icon>inventory_2</mat-icon>
-                    </div>
-                    <div class="stat-details">
-                      <div class="stat-value">{{ warehouse.totalItems | number }}</div>
-                      <div class="stat-label">Total Items</div>
-                    </div>
-                  </div>
-                  <div class="stat-modern">
-                    <div class="stat-icon-wrapper">
-                      <mat-icon>attach_money</mat-icon>
-                    </div>
-                    <div class="stat-details">
-                      <div class="stat-value">{{ formatValue(warehouse.totalStockValue) }}</div>
-                      <div class="stat-label">Stock Value</div>
-                    </div>
-                  </div>
-                  <div class="stat-modern">
-                    <div class="stat-icon-wrapper">
-                      <mat-icon>stacked_bar_chart</mat-icon>
-                    </div>
-                    <div class="stat-details">
-                      <div class="stat-value">{{ formatQty(warehouse.totalQuantityOnHand) }}</div>
-                      <div class="stat-label">Units On Hand</div>
-                    </div>
-                  </div>
-                  <div class="stat-modern">
-                    <div class="stat-icon-wrapper">
-                      <mat-icon>check_circle</mat-icon>
-                    </div>
-                    <div class="stat-details">
-                      <div class="stat-value">{{ warehouse.itemsInStock | number }}<span class="stat-sub"> / {{ warehouse.itemsOutOfStock | number }} out</span></div>
-                      <div class="stat-label">In Stock</div>
-                    </div>
-                  </div>
-                </div>
-
-                @if (warehouse.byClient && warehouse.byClient.length > 0) {
-                  <div class="client-chips">
-                    @for (c of warehouse.byClient; track c.client) {
-                      <span class="client-chip" [matTooltip]="c.items + ' items \u00b7 ' + formatQty(c.quantityOnHand) + ' units \u00b7 ' + formatValue(c.stockValue)">
-                        {{ c.client }} <b>{{ formatQty(c.quantityOnHand) }}</b>
-                      </span>
-                    }
-                  </div>
-                }
-
-                @if (warehouse.lastCountDate) {
-                  <div class="stock-asat">
-                    <mat-icon>event_available</mat-icon>
-                    Stock as at {{ warehouse.lastCountDate | date:'dd MMM yyyy' }}
-                  </div>
-                }
-
-                <div class="warehouse-capacity-modern">
-                  <div class="capacity-header">
-                    <span class="capacity-title">Warehouse Capacity</span>
-                    <span class="capacity-percentage">{{ warehouse.capacityPercent }}%</span>
-                  </div>
-                  <mat-progress-bar 
-                    mode="determinate" 
-                    [value]="warehouse.capacityPercent"
-                    [color]="warehouse.capacityPercent > 80 ? 'warn' : 'primary'"
-                    class="warehouse-progress-bar">
-                  </mat-progress-bar>
-                  <div class="capacity-info">
-                    <span>{{ warehouse.totalCapacity - warehouse.availableCapacity | number }} / {{ warehouse.totalCapacity | number }} m³</span>
-                  </div>
-                </div>
-
-                <div class="warehouse-footer">
-                  <button mat-raised-button class="view-operations-btn">
-                    <mat-icon>arrow_forward</mat-icon>
-                    View Operations
-                  </button>
-                </div>
+                <button mat-icon-button class="stk-wh-ops" matTooltip="Open operations (dispatch, GRV, transfers, stock take)"
+                        (click)="selectWarehouse(warehouse); $event.stopPropagation()">
+                  <mat-icon>open_in_new</mat-icon>
+                </button>
               </div>
+              <div class="stk-wh-stats">
+                <div><b>{{ warehouse.totalItems | number }}</b><span>Items</span></div>
+                <div><b>{{ formatQty(warehouse.totalQuantityOnHand) }}</b><span>Units</span></div>
+                <div><b>{{ formatValue(warehouse.totalStockValue) }}</b><span>Value</span></div>
+                <div><b>{{ warehouse.itemsInStock | number }}<i class="out-sub">/{{ warehouse.itemsOutOfStock }}</i></b><span>In / Out</span></div>
+              </div>
+              @if (warehouse.byClient && warehouse.byClient.length > 0) {
+                <div class="client-chips">
+                  @for (c of warehouse.byClient.slice(0, 4); track c.client) {
+                    <span class="client-chip" [matTooltip]="c.items + ' items \u00b7 ' + formatQty(c.quantityOnHand) + ' units \u00b7 ' + formatValue(c.stockValue)">
+                      {{ c.client }} <b>{{ formatQty(c.quantityOnHand) }}</b>
+                    </span>
+                  }
+                </div>
+              }
+              @if (warehouse.lastCountDate) {
+                <div class="stock-asat">
+                  <mat-icon>event_available</mat-icon>
+                  Stock as at {{ warehouse.lastCountDate | date:'dd MMM yyyy' }}
+                </div>
+              }
             </div>
           }
         </div>
+
+        <!-- ═══ TABS ═══ -->
+        <mat-tab-group class="stk-tabs" animationDuration="150ms">
+
+          <!-- STOCK ON HAND -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">inventory_2</mat-icon> Stock on Hand</ng-template>
+            <div class="stk-tab-body">
+              <div class="stk-toolbar">
+                <mat-form-field appearance="outline" class="stk-search">
+                  <mat-label>Search code, description or client</mat-label>
+                  <input matInput [(ngModel)]="sohSearch" placeholder="e.g. 3009602">
+                  <mat-icon matPrefix>search</mat-icon>
+                </mat-form-field>
+                <span class="stk-count">{{ sohRows.length | number }} of {{ invScoped.length | number }} items{{ whFilterName }}</span>
+                <button mat-stroked-button (click)="exportSoh()"><mat-icon>file_download</mat-icon> Export</button>
+              </div>
+              @if (invLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading stock...</div> }
+              @else {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr>
+                      <th>Code</th><th>Description</th><th>Client</th><th>Warehouse</th><th>UOM</th>
+                      <th class="num">Qty On Hand</th><th class="num">Unit Price</th><th class="num">Value</th><th>Status</th>
+                    </tr></thead>
+                    <tbody>
+                      @for (r of sohRows.slice(0, 400); track r.id) {
+                        <tr>
+                          <td class="mono">{{ r.commodityCode }}</td>
+                          <td class="desc">{{ r.commodityName }}</td>
+                          <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
+                          <td>{{ r.warehouseName }}</td>
+                          <td>{{ r.unitOfMeasure || 'Each' }}</td>
+                          <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
+                          <td class="num">{{ r.unitPrice ? ('R' + (r.unitPrice | number:'1.2-2')) : '—' }}</td>
+                          <td class="num">{{ r.lineValue ? ('R' + (r.lineValue | number:'1.0-0')) : '—' }}</td>
+                          <td><span class="stk-badge" [class.b-in]="r.quantityOnHand > 0" [class.b-out]="r.quantityOnHand === 0" [class.b-neg]="r.quantityOnHand < 0">
+                            {{ r.quantityOnHand > 0 ? 'In stock' : (r.quantityOnHand < 0 ? 'Negative' : 'Out of stock') }}</span></td>
+                        </tr>
+                      } @empty { <tr><td colspan="9" class="stk-empty">No stock items found</td></tr> }
+                    </tbody>
+                  </table>
+                  @if (sohRows.length > 400) { <div class="stk-more">Showing first 400 — refine your search to narrow down ({{ sohRows.length | number }} matches)</div> }
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- STOCK COUNTS -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">fact_check</mat-icon> Stock Counts</ng-template>
+            <div class="stk-tab-body">
+              <div class="stk-table-wrap">
+                <table class="stk-table">
+                  <thead><tr>
+                    <th>Warehouse</th><th class="num">Items Counted</th><th class="num">Units</th><th class="num">Value</th>
+                    <th class="num">In Stock</th><th class="num">Out of Stock</th><th>Last Count</th><th>Clients</th>
+                  </tr></thead>
+                  <tbody>
+                    @for (w of warehouses; track w.id) {
+                      <tr>
+                        <td><b>{{ w.name }}</b></td>
+                        <td class="num">{{ w.totalItems | number }}</td>
+                        <td class="num">{{ w.totalQuantityOnHand | number }}</td>
+                        <td class="num">{{ formatValue(w.totalStockValue) }}</td>
+                        <td class="num">{{ w.itemsInStock | number }}</td>
+                        <td class="num" [style.color]="w.itemsOutOfStock > 0 ? '#dc2626' : ''">{{ w.itemsOutOfStock | number }}</td>
+                        <td>{{ w.lastCountDate ? (w.lastCountDate | date:'dd MMM yyyy') : '—' }}</td>
+                        <td>
+                          @for (c of w.byClient; track c.client) {
+                            <span class="stk-chip" style="margin-right:4px;">{{ c.client }} {{ c.items }}</span>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <p class="stk-note"><mat-icon>info</mat-icon> Counts come from the consolidated stock imports. Use a warehouse card's <b>Operations</b> button to run a new stock take.</p>
+            </div>
+          </mat-tab>
+
+          <!-- EXCEPTIONS -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">report_problem</mat-icon> Exceptions</ng-template>
+            <div class="stk-tab-body">
+              <div class="stk-toolbar">
+                <button mat-stroked-button [class.stk-filter-on]="excMode === 'out'" (click)="excMode = 'out'">
+                  <mat-icon>remove_shopping_cart</mat-icon> Out of Stock ({{ excCount('out') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="excMode === 'neg'" (click)="excMode = 'neg'">
+                  <mat-icon>error</mat-icon> Negative ({{ excCount('neg') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="excMode === 'unpriced'" (click)="excMode = 'unpriced'">
+                  <mat-icon>money_off</mat-icon> Unpriced with Stock ({{ excCount('unpriced') }})</button>
+                <span class="stk-spacer"></span>
+                <button mat-stroked-button (click)="exportExceptions()"><mat-icon>file_download</mat-icon> Export</button>
+              </div>
+              <div class="stk-table-wrap">
+                <table class="stk-table">
+                  <thead><tr><th>Code</th><th>Description</th><th>Client</th><th>Warehouse</th><th class="num">Qty</th><th>Issue</th></tr></thead>
+                  <tbody>
+                    @for (r of exceptionRows.slice(0, 400); track r.id) {
+                      <tr>
+                        <td class="mono">{{ r.commodityCode }}</td>
+                        <td class="desc">{{ r.commodityName }}</td>
+                        <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
+                        <td>{{ r.warehouseName }}</td>
+                        <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
+                        <td><span class="stk-badge" [class.b-out]="excMode === 'out'" [class.b-neg]="excMode === 'neg'" [class.b-warn]="excMode === 'unpriced'">
+                          {{ excMode === 'out' ? 'Out of stock' : (excMode === 'neg' ? 'Negative stock' : 'No sales price') }}</span></td>
+                      </tr>
+                    } @empty { <tr><td colspan="6" class="stk-empty">No exceptions — all good 🎉</td></tr> }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </mat-tab>
+
+          <!-- MOVEMENTS -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">swap_horiz</mat-icon> Movements</ng-template>
+            <div class="stk-tab-body">
+              @if (movLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading movements...</div> }
+              @else {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Description</th><th class="num">Qty</th><th>From → To</th><th>Reference</th><th>By</th></tr></thead>
+                    <tbody>
+                      @for (m of movements; track m.id) {
+                        <tr>
+                          <td>{{ m.createdAt | date:'dd MMM yyyy HH:mm' }}</td>
+                          <td><span class="stk-chip">{{ m.movementType }}</span></td>
+                          <td class="mono">{{ m.itemCode }}</td>
+                          <td class="desc">{{ m.itemDescription }}</td>
+                          <td class="num"><b>{{ m.quantity | number }}</b></td>
+                          <td>{{ m.fromBuildingCode || '—' }} → {{ m.toBuildingCode || '—' }}</td>
+                          <td class="mono">{{ m.reference }}</td>
+                          <td>{{ m.createdByName }}</td>
+                        </tr>
+                      } @empty { <tr><td colspan="8" class="stk-empty">No stock movements recorded yet</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- DISPATCH -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">local_shipping</mat-icon> Dispatch</ng-template>
+            <div class="stk-tab-body">
+              <div class="stk-toolbar">
+                <span class="stk-count">Inter-warehouse transfers & dispatches</span>
+                <span class="stk-spacer"></span>
+                <button mat-raised-button color="primary" [disabled]="!whFilterId" (click)="openDispatchForFilter()"
+                        [matTooltip]="whFilterId ? 'New dispatch from ' + whFilterName : 'Select a warehouse card above first'">
+                  <mat-icon>local_shipping</mat-icon> New Dispatch</button>
+              </div>
+              @if (trLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading transfers...</div> }
+              @else {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr><th>Transfer #</th><th>From</th><th>To</th><th>Commodity</th><th class="num">Qty</th><th>Status</th><th>Requested</th></tr></thead>
+                    <tbody>
+                      @for (t of transfers; track t.id) {
+                        <tr>
+                          <td class="mono">{{ t.transferNumber }}</td>
+                          <td>{{ t.fromWarehouseName }}</td>
+                          <td>{{ t.toWarehouseName }}</td>
+                          <td class="desc">{{ t.commodityName }}</td>
+                          <td class="num"><b>{{ t.quantity | number }}</b></td>
+                          <td><span class="stk-badge" [class.b-in]="t.status === 'Completed'" [class.b-warn]="t.status === 'Pending' || t.status === 'InTransit'">{{ t.status }}</span></td>
+                          <td>{{ t.requestedDate | date:'dd MMM yyyy' }}</td>
+                        </tr>
+                      } @empty { <tr><td colspan="7" class="stk-empty">No transfers recorded yet</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- SCRAP -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">delete_sweep</mat-icon> Scrap</ng-template>
+            <div class="stk-tab-body">
+              <div class="stk-toolbar">
+                <span class="stk-count">Damaged / written-off stock</span>
+                <span class="stk-spacer"></span>
+                <button mat-raised-button color="warn" [disabled]="!whFilterId" (click)="openScrapForFilter()"
+                        [matTooltip]="whFilterId ? 'Record scrap at ' + whFilterName : 'Select a warehouse card above first'">
+                  <mat-icon>delete_sweep</mat-icon> Record Scrap</button>
+              </div>
+              @if (scrapLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading scrap records...</div> }
+              @else {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr><th>Date</th><th>Warehouse</th><th>Commodity</th><th class="num">Qty</th><th>Reason</th><th>Notes</th><th>By</th></tr></thead>
+                    <tbody>
+                      @for (s of scrapScoped; track s.id) {
+                        <tr>
+                          <td>{{ s.scrapDate | date:'dd MMM yyyy' }}</td>
+                          <td>{{ s.warehouseName }}</td>
+                          <td class="desc">{{ s.commodityName }}</td>
+                          <td class="num"><b>{{ s.quantity | number }}</b></td>
+                          <td>{{ s.reason }}</td>
+                          <td class="desc">{{ s.notes }}</td>
+                          <td>{{ s.recordedBy }}</td>
+                        </tr>
+                      } @empty { <tr><td colspan="7" class="stk-empty">No scrap recorded{{ whFilterName }}</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- REPORTS -->
+          <mat-tab>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">summarize</mat-icon> Reports</ng-template>
+            <div class="stk-tab-body">
+              <div class="stk-reports-grid">
+                <div class="stk-report-card" (click)="exportSoh()">
+                  <mat-icon>inventory_2</mat-icon>
+                  <h4>Stock on Hand</h4>
+                  <p>Full SOH listing with quantities, sales-derived unit prices and values{{ whFilterName }}</p>
+                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
+                </div>
+                <div class="stk-report-card" (click)="exportValuation()">
+                  <mat-icon>payments</mat-icon>
+                  <h4>Valuation Summary</h4>
+                  <p>Per-warehouse and per-client stock valuation at sales price and cost</p>
+                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
+                </div>
+                <div class="stk-report-card" (click)="exportExceptions()">
+                  <mat-icon>report_problem</mat-icon>
+                  <h4>Exceptions</h4>
+                  <p>Out-of-stock, negative and unpriced items needing attention</p>
+                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
+                </div>
+                <div class="stk-report-card" (click)="exportMovements()">
+                  <mat-icon>swap_horiz</mat-icon>
+                  <h4>Movements</h4>
+                  <p>Recent stock movements, transfers and adjustments audit trail</p>
+                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
+                </div>
+              </div>
+            </div>
+          </mat-tab>
+        </mat-tab-group>
       }
 
       <!-- Welly Stock Analysis Panel -->
@@ -1624,6 +1859,89 @@ interface ComprehensiveAnalysisResponse {
       font-size: 11.5px; color: #64748b; position: relative; z-index: 1;
     }
     .stock-asat mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+    /* ═══ Dashboard redesign ═══ */
+    .stk-kpi-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; margin-bottom: 18px; }
+    @media (max-width: 1400px) { .stk-kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 760px) { .stk-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    .stk-kpi {
+      background: #fff; border-radius: 14px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(15,23,42,0.07);
+      border-top: 3px solid transparent; transition: transform .15s ease;
+    }
+    .stk-kpi:hover { transform: translateY(-2px); }
+    .stk-kpi mat-icon { font-size: 22px; width: 22px; height: 22px; opacity: 0.85; }
+    .stk-kpi-val { font-size: 1.35rem; font-weight: 800; color: #0f172a; margin-top: 4px; line-height: 1.1; }
+    .stk-kpi-lbl { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+    .k-blue { border-color: #2563eb; } .k-blue mat-icon { color: #2563eb; }
+    .k-indigo { border-color: #6366f1; } .k-indigo mat-icon { color: #6366f1; }
+    .k-green { border-color: #16a34a; } .k-green mat-icon { color: #16a34a; }
+    .k-teal { border-color: #0d9488; } .k-teal mat-icon { color: #0d9488; }
+    .k-emerald { border-color: #10b981; } .k-emerald mat-icon { color: #10b981; }
+    .k-red { border-color: #dc2626; } .k-red mat-icon { color: #dc2626; }
+    .k-amber { border-color: #d97706; } .k-amber mat-icon { color: #d97706; }
+    .k-slate { border-color: #64748b; } .k-slate mat-icon { color: #64748b; }
+
+    .stk-wh-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    @media (max-width: 1200px) { .stk-wh-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 700px) { .stk-wh-grid { grid-template-columns: 1fr; } }
+    .stk-wh-card {
+      background: #fff; border-radius: 14px; padding: 14px 16px; cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15,23,42,0.07); border: 2px solid transparent; transition: all .15s ease;
+    }
+    .stk-wh-card:hover { box-shadow: 0 6px 16px rgba(15,23,42,0.12); }
+    .stk-wh-card.active { border-color: #2563eb; background: #eff6ff; }
+    .stk-wh-head { display: flex; align-items: center; gap: 10px; }
+    .stk-wh-ico { color: #2563eb; }
+    .stk-wh-title { flex: 1; min-width: 0; }
+    .stk-wh-title h3 { margin: 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stk-wh-title span { font-size: 11.5px; color: #64748b; }
+    .stk-wh-ops { color: #64748b; }
+    .stk-wh-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+    .stk-wh-stats > div { text-align: center; background: #f8fafc; border-radius: 8px; padding: 6px 2px; }
+    .stk-wh-card.active .stk-wh-stats > div { background: rgba(255,255,255,0.7); }
+    .stk-wh-stats b { display: block; font-size: 13px; color: #0f172a; }
+    .stk-wh-stats b .out-sub { font-style: normal; font-size: 10px; color: #dc2626; font-weight: 600; }
+    .stk-wh-stats span { font-size: 9.5px; color: #64748b; text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
+
+    .stk-tabs { background: #fff; border-radius: 14px; box-shadow: 0 2px 8px rgba(15,23,42,0.07); overflow: hidden; margin-bottom: 30px; }
+    .tab-ico { margin-right: 6px; font-size: 18px; width: 18px; height: 18px; vertical-align: middle; }
+    .stk-tab-body { padding: 16px; }
+    .stk-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .stk-search { flex: 1; min-width: 240px; max-width: 420px; }
+    .stk-search ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
+    .stk-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
+    .stk-spacer { flex: 1; }
+    .stk-filter-on { background: #eff6ff !important; border-color: #2563eb !important; color: #1d4ed8 !important; }
+    .stk-loading { display: flex; align-items: center; gap: 12px; padding: 30px; color: #64748b; }
+    .stk-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .stk-table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
+    .stk-table thead th { text-align: left; padding: 9px 12px; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; position: sticky; top: 0; }
+    .stk-table th.num, .stk-table td.num { text-align: right; }
+    .stk-table tbody td { padding: 8px 12px; border-top: 1px solid #f1f5f9; color: #334155; }
+    .stk-table tbody tr:hover { background: #f8fafc; }
+    .stk-table td.mono { font-family: monospace; font-weight: 600; color: #0f172a; white-space: nowrap; }
+    .stk-table td.desc { max-width: 340px; }
+    .stk-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #475569; }
+    .stk-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #475569; white-space: nowrap; }
+    .stk-badge.b-in { background: #dcfce7; color: #166534; }
+    .stk-badge.b-out { background: #fee2e2; color: #991b1b; }
+    .stk-badge.b-neg { background: #7f1d1d; color: #fff; }
+    .stk-badge.b-warn { background: #fef3c7; color: #92400e; }
+    .stk-empty { text-align: center; padding: 28px; color: #94a3b8; }
+    .stk-more { text-align: center; padding: 10px; font-size: 12px; color: #64748b; background: #f8fafc; }
+    .stk-note { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: #64748b; }
+    .stk-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
+
+    .stk-reports-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    @media (max-width: 1100px) { .stk-reports-grid { grid-template-columns: repeat(2, 1fr); } }
+    .stk-report-card {
+      border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; text-align: center; cursor: pointer;
+      transition: all .15s ease;
+    }
+    .stk-report-card:hover { box-shadow: 0 6px 16px rgba(15,23,42,0.1); border-color: #93c5fd; }
+    .stk-report-card mat-icon { font-size: 34px; width: 34px; height: 34px; color: #2563eb; }
+    .stk-report-card h4 { margin: 8px 0 4px; color: #0f172a; }
+    .stk-report-card p { font-size: 12px; color: #64748b; min-height: 48px; }
   `]
 })
 export class StockManagementComponent implements OnInit {
@@ -1649,6 +1967,165 @@ export class StockManagementComponent implements OnInit {
     return n.toLocaleString();
   }
 
+  // ═══ Dashboard state ═══
+  whFilterId: number | null = null;
+  allInventory: any[] = [];
+  invLoading = true;
+  sohSearch = '';
+  excMode: 'out' | 'neg' | 'unpriced' = 'out';
+  movements: any[] = [];
+  movLoading = true;
+  transfers: any[] = [];
+  trLoading = true;
+  scrapRecords: any[] = [];
+  scrapLoading = true;
+
+  get kpiSkus(): number { return this.warehouses.reduce((s, w) => s + (w.totalItems || 0), 0); }
+  get kpiUnits(): number { return this.warehouses.reduce((s, w) => s + (w.totalQuantityOnHand || 0), 0); }
+  get kpiValue(): number { return this.warehouses.reduce((s, w) => s + (w.totalStockValue || 0), 0); }
+  get kpiCost(): number { return this.warehouses.reduce((s, w) => s + (w.totalCostValue || 0), 0); }
+  get kpiIn(): number { return this.warehouses.reduce((s, w) => s + (w.itemsInStock || 0), 0); }
+  get kpiOut(): number { return this.warehouses.reduce((s, w) => s + (w.itemsOutOfStock || 0), 0); }
+
+  get whFilterName(): string {
+    if (!this.whFilterId) return '';
+    const w = this.warehouses.find(x => x.id === this.whFilterId);
+    return w ? ' — ' + w.name : '';
+  }
+
+  toggleWhFilter(id: number): void {
+    this.whFilterId = this.whFilterId === id ? null : id;
+  }
+
+  /** Inventory scoped to the selected warehouse filter */
+  get invScoped(): any[] {
+    return this.whFilterId ? this.allInventory.filter(r => r.warehouseId === this.whFilterId) : this.allInventory;
+  }
+
+  get sohRows(): any[] {
+    const term = this.sohSearch.trim().toLowerCase();
+    if (!term) return this.invScoped;
+    return this.invScoped.filter(r =>
+      (r.commodityCode || '').toLowerCase().includes(term) ||
+      (r.commodityName || '').toLowerCase().includes(term) ||
+      (r.category || '').toLowerCase().includes(term));
+  }
+
+  excCount(mode: 'out' | 'neg' | 'unpriced'): number {
+    return this.excRowsFor(mode).length;
+  }
+
+  get exceptionRows(): any[] { return this.excRowsFor(this.excMode); }
+
+  private excRowsFor(mode: 'out' | 'neg' | 'unpriced'): any[] {
+    switch (mode) {
+      case 'out': return this.invScoped.filter(r => r.quantityOnHand === 0);
+      case 'neg': return this.invScoped.filter(r => r.quantityOnHand < 0);
+      case 'unpriced': return this.invScoped.filter(r => r.quantityOnHand > 0 && !r.unitPrice);
+    }
+  }
+
+  get scrapScoped(): any[] {
+    return this.whFilterId ? this.scrapRecords.filter(s => s.warehouseId === this.whFilterId) : this.scrapRecords;
+  }
+
+  loadDashboardData(): void {
+    this.invLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/warehouses/inventory`).subscribe({
+      next: d => { this.allInventory = d || []; this.invLoading = false; },
+      error: () => { this.allInventory = []; this.invLoading = false; }
+    });
+    this.movLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/inventory/movements?limit=200`).subscribe({
+      next: d => { this.movements = d || []; this.movLoading = false; },
+      error: () => { this.movements = []; this.movLoading = false; }
+    });
+    this.trLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/warehouses/stock-transfers`).subscribe({
+      next: d => { this.transfers = d || []; this.trLoading = false; },
+      error: () => { this.transfers = []; this.trLoading = false; }
+    });
+    this.scrapLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/scrap`).subscribe({
+      next: d => { this.scrapRecords = d || []; this.scrapLoading = false; },
+      error: () => { this.scrapRecords = []; this.scrapLoading = false; }
+    });
+  }
+
+  openDispatchForFilter(): void {
+    const w = this.warehouses.find(x => x.id === this.whFilterId);
+    if (!w) return;
+    this.dialog.open(DispatchDialog, { width: '1000px', maxWidth: '90vw', data: w });
+  }
+
+  openScrapForFilter(): void {
+    const w = this.warehouses.find(x => x.id === this.whFilterId);
+    if (!w) return;
+    const ref = this.dialog.open(ScrapDialog, { width: '800px', maxWidth: '90vw', data: w });
+    ref.afterClosed().subscribe(() => this.loadDashboardData());
+  }
+
+  // ═══ Excel exports ═══
+  private async writeExcel(rows: any[], sheet: string, file: string): Promise<void> {
+    if (!rows.length) { this.snackBar.open('Nothing to export', 'Close', { duration: 3000 }); return; }
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheet);
+    XLSX.writeFile(wb, file);
+    this.snackBar.open(`Exported ${rows.length} rows`, 'Close', { duration: 3000 });
+  }
+
+  exportSoh(): void {
+    const rows = this.sohRows.map(r => ({
+      'Code': r.commodityCode, 'Description': r.commodityName, 'Client': r.category,
+      'Warehouse': r.warehouseName, 'UOM': r.unitOfMeasure || 'Each',
+      'Qty On Hand': r.quantityOnHand, 'Unit Price': r.unitPrice || '', 'Unit Cost': r.unitCost || '',
+      'Stock Value': r.lineValue || '', 'Last Count': r.lastCountDate ? String(r.lastCountDate).substring(0, 10) : ''
+    }));
+    this.writeExcel(rows, 'Stock on Hand', `StockOnHand${this.whFilterId ? '-W' + this.whFilterId : ''}-${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+
+  exportExceptions(): void {
+    const all: any[] = [];
+    (['out', 'neg', 'unpriced'] as const).forEach(mode => {
+      this.excRowsFor(mode).forEach(r => all.push({
+        'Issue': mode === 'out' ? 'Out of stock' : mode === 'neg' ? 'Negative stock' : 'No sales price',
+        'Code': r.commodityCode, 'Description': r.commodityName, 'Client': r.category,
+        'Warehouse': r.warehouseName, 'Qty On Hand': r.quantityOnHand
+      }));
+    });
+    this.writeExcel(all, 'Exceptions', `StockExceptions-${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+
+  exportMovements(): void {
+    const rows = this.movements.map(m => ({
+      'Date': m.createdAt ? String(m.createdAt).replace('T', ' ').substring(0, 16) : '',
+      'Type': m.movementType, 'Item': m.itemCode, 'Description': m.itemDescription,
+      'Qty': m.quantity, 'From': m.fromBuildingCode || '', 'To': m.toBuildingCode || '',
+      'Reference': m.reference || '', 'By': m.createdByName || ''
+    }));
+    this.writeExcel(rows, 'Movements', `StockMovements-${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+
+  exportValuation(): void {
+    const rows: any[] = [];
+    this.warehouses.forEach(w => {
+      rows.push({
+        'Warehouse': w.name, 'Client': 'ALL', 'Items': w.totalItems, 'In Stock': w.itemsInStock,
+        'Out of Stock': w.itemsOutOfStock, 'Units On Hand': w.totalQuantityOnHand,
+        'Stock Value (R)': w.totalStockValue, 'Cost Value (R)': w.totalCostValue,
+        'Last Count': w.lastCountDate ? String(w.lastCountDate).substring(0, 10) : ''
+      });
+      (w.byClient || []).forEach(c => rows.push({
+        'Warehouse': w.name, 'Client': c.client, 'Items': c.items, 'In Stock': c.itemsInStock,
+        'Out of Stock': c.items - c.itemsInStock, 'Units On Hand': c.quantityOnHand,
+        'Stock Value (R)': c.stockValue, 'Cost Value (R)': '', 'Last Count': ''
+      }));
+    });
+    this.writeExcel(rows, 'Valuation', `StockValuation-${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+
   // Loading progress
   loadingProgress = 0;
   loadingStage = 0;
@@ -1671,6 +2148,7 @@ export class StockManagementComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadWarehouses();
+    this.loadDashboardData();
   }
 
   // ===== Invoice Fulfillment =====
