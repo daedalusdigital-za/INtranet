@@ -1502,6 +1502,7 @@
     .status-pending { background-color: #fff3e0 !important; color: #e65100 !important; }
     .status-intransit, .status-in-transit { background-color: #e3f2fd !important; color: #1565c0 !important; }
     .status-delivered { background-color: #e8f5e9 !important; color: #2e7d32 !important; }
+    .status-completed { background-color: #e3f2fd !important; color: #1565c0 !important; }
     .status-available { background-color: #e8f5e9 !important; color: #2e7d32 !important; }
     .status-onduty, .status-on-duty { background-color: #e3f2fd !important; color: #1565c0 !important; }
     .status-maintenance { background-color: #fff3e0 !important; color: #e65100 !important; }
@@ -3883,6 +3884,43 @@
     /* ─── POD Documents Tab ─── */
     .pod-section {
       padding: 0;
+    }
+
+    /* Delivered without POD backlog */
+    .nopod-panel {
+      border: 1px solid #c8e6c9; border-radius: 10px; background: #f1f8e9; margin-bottom: 16px; overflow: hidden;
+      &.has-items { border-color: #ffcc80; background: #fff8e1; }
+    }
+    .nopod-head {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; user-select: none;
+      .nopod-icon { color: #2e7d32; }
+      .has-items & .nopod-icon { color: #ef6c00; }
+      .nopod-title { display: flex; flex-direction: column; flex: 1; strong { font-size: .95rem; } }
+      .nopod-sub { font-size: .82rem; color: #555; }
+      .nopod-chevron { color: #777; }
+    }
+    .nopod-body { background: #fff; border-top: 1px solid #ffe0b2; padding: 12px 16px 16px; }
+    .nopod-filters {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: .85rem; color: #555;
+      .nopod-count { margin-left: auto; font-weight: 600; }
+    }
+    .nopod-chip {
+      border: 1px solid #e0e0e0; background: #fafafa; border-radius: 14px; padding: 3px 12px; font: inherit; font-size: .8rem; cursor: pointer;
+      &.active { background: #ef6c00; color: #fff; border-color: #ef6c00; }
+    }
+    .nopod-table {
+      width: 100%; border-collapse: collapse; font-size: .85rem;
+      th { text-align: left; padding: 8px; border-bottom: 2px solid #eee; color: #555; font-weight: 600; white-space: nowrap; }
+      td { padding: 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+      .num { text-align: right; white-space: nowrap; }
+      .nopod-invoices { max-width: 320px; color: #444; em { color: #999; } }
+      .nopod-actions { white-space: nowrap; text-align: right; button mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; } }
+    }
+    .nopod-age {
+      display: inline-block; min-width: 32px; text-align: center; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+      &.age-ok { background: #e8f5e9; color: #2e7d32; }
+      &.age-warn { background: #fff3e0; color: #ef6c00; }
+      &.age-critical { background: #ffebee; color: #c62828; }
     }
 
     .pod-toolbar {

@@ -636,7 +636,16 @@ export class UploadPodDocumentDialog {
     public dialogRef: MatDialogRef<UploadPodDocumentDialog>,
     @Inject(MAT_DIALOG_DATA) public data: any,
     private http: HttpClient
-  ) {}
+  ) {
+    // Pre-targeted upload from the "Delivered without POD" backlog.
+    if (data?.loadId) {
+      if (data.driverName) this.driverName = data.driverName;
+      if (data.deliveryDate) this.deliveryDate = new Date(data.deliveryDate);
+      if (data.region) this.region = data.region;
+      if (data.loadNumber) this.notes = `Load ${data.loadNumber}`;
+      for (const n of (data.invoiceNumbers || [])) this.detected.push({ number: n, id: null, matched: false });
+    }
+  }
 
   onDragOver(e: DragEvent) { e.preventDefault(); e.stopPropagation(); this.dragOver = true; }
   onDragLeave(e: DragEvent) { e.preventDefault(); e.stopPropagation(); this.dragOver = false; }
@@ -682,12 +691,16 @@ export class UploadPodDocumentDialog {
     formData.append('region', this.region);
     formData.append('deliveryDate', this.deliveryDate.toISOString());
     if (this.notes) formData.append('notes', this.notes);
+    if (this.data?.loadId) formData.append('loadId', String(this.data.loadId));
 
     this.http.post<any>(`${this.apiUrl}/PodDocuments/upload`, formData).subscribe({
       next: (res) => {
         this.uploading = false;
         this.uploadedPodId = res?.id ?? res?.Id ?? null;
         this.uploadedPodNumber = res?.podNumber ?? res?.PodNumber ?? '';
+        // Prefilled invoice numbers (from the no-POD backlog) need real ids before linking.
+        const prefilled = this.detected.filter(d => !d.id).map(d => d.number);
+        if (prefilled.length) this.validateNumbers(prefilled);
         // Kick off Welly detection automatically. If we can't (e.g. no id), just finish.
         if (this.uploadedPodId) {
           this.runDetection();
@@ -17480,6 +17493,7 @@ export class CompleteMaintenanceDialog {
           <mat-option value="Assigned">Assigned</mat-option>
           <mat-option value="InTransit">In Transit</mat-option>
           <mat-option value="Delivered">Delivered</mat-option>
+          <mat-option value="Completed">Completed (POD received)</mat-option>
           <mat-option value="Cancelled">Cancelled</mat-option>
         </mat-select>
       </mat-form-field>
@@ -17499,7 +17513,11 @@ export class CompleteMaintenanceDialog {
         </div>
         <div class="status-desc" *ngIf="selectedStatus === 'Delivered'">
           <mat-icon>info</mat-icon>
-          <span>Load has been successfully delivered</span>
+          <span>Driver reports the load delivered. Still needs a POD before it can be closed.</span>
+        </div>
+        <div class="status-desc warn" *ngIf="selectedStatus === 'Completed'">
+          <mat-icon>verified</mat-icon>
+          <span>Closes the load. Requires a POD document attached to the load, or a POD linked to every invoice on it.</span>
         </div>
         <div class="status-desc" *ngIf="selectedStatus === 'Cancelled'">
           <mat-icon>info</mat-icon>
@@ -17548,6 +17566,8 @@ export class CompleteMaintenanceDialog {
       width: 20px;
       height: 20px;
     }
+
+    .status-desc.warn { background: #fff8e1; color: #e65100; }
 
     mat-dialog-content {
       min-width: 400px;

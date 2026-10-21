@@ -186,5 +186,183 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .ExecuteDeleteAsync();
             return Ok(new { deleted = removed });
         }
+
+        // ------------------------------------------------------------------
+        // Stock availability (Sales ↔ Stock hand-off)
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Item code is the ERP product code prefix of ItemDesc, e.g.
+        /// "3002809-I.D BAND PLASTIC" → "3002809". Pharmacare style
+        /// "M-HP0-001-LUBRICATING JELLY" → "M-HP0-001" (first three segments).
+        /// </summary>
+        private static string ExtractItemCode(string? itemDesc)
+        {
+            if (string.IsNullOrWhiteSpace(itemDesc)) return "";
+            var s = itemDesc.Trim();
+            // Pharmacare pattern: X-XXX-NNN-description
+            var m = System.Text.RegularExpressions.Regex.Match(s, @"^([A-Z]-[A-Z0-9]{2,4}-\d{2,4})-", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success) return m.Groups[1].Value.ToUpperInvariant();
+            var dash = s.IndexOf('-');
+            return (dash > 0 ? s[..dash] : s).Trim().ToUpperInvariant();
+        }
+
+        private static string ExtractItemName(string? itemDesc)
+        {
+            if (string.IsNullOrWhiteSpace(itemDesc)) return "";
+            var code = ExtractItemCode(itemDesc);
+            var s = itemDesc.Trim();
+            if (code.Length > 0 && s.StartsWith(code, StringComparison.OrdinalIgnoreCase) && s.Length > code.Length + 1)
+                return s[(code.Length + 1)..].Trim();
+            return s;
+        }
+
+        /// <summary>
+        /// Per item code: mapped commodity + stock on hand per warehouse.
+        /// Frontend joins this to backorder lines to show Full / Partial / None / Unmapped.
+        /// </summary>
+        [HttpGet("stock-check")]
+        public async Task<IActionResult> StockCheck([FromQuery] string? company = null)
+        {
+            var q = _context.ImportedBackorders.AsNoTracking();
+            if (!string.IsNullOrWhiteSpace(company))
+                q = q.Where(b => b.SourceCompany == company.ToUpperInvariant());
+
+            var descs = await q.Select(b => b.ItemDesc).Distinct().ToListAsync();
+            var codes = descs.Select(ExtractItemCode).Where(c => c.Length > 0).Distinct().ToList();
+
+            var commodities = await _context.Commodities.AsNoTracking()
+                .Where(c => c.Code != null && codes.Contains(c.Code.ToUpper()))
+                .Select(c => new { c.Id, Code = c.Code!.ToUpper(), c.Name })
+                .ToListAsync();
+            var commodityIds = commodities.Select(c => c.Id).ToList();
+
+            var inventory = await _context.WarehouseInventory.AsNoTracking()
+                .Where(i => commodityIds.Contains(i.CommodityId))
+                .Select(i => new { i.CommodityId, i.WarehouseId, WarehouseName = i.Warehouse!.Name, i.QuantityOnHand })
+                .ToListAsync();
+
+            var result = commodities.Select(c =>
+            {
+                var inv = inventory.Where(i => i.CommodityId == c.Id).ToList();
+                return new
+                {
+                    code = c.Code,
+                    commodityId = c.Id,
+                    commodityName = c.Name,
+                    onHand = inv.Sum(i => i.QuantityOnHand),
+                    warehouses = inv.Where(i => i.QuantityOnHand != 0)
+                        .Select(i => new { i.WarehouseId, name = i.WarehouseName, qty = i.QuantityOnHand })
+                        .OrderByDescending(i => i.qty).ToList()
+                };
+            }).ToList();
+
+            return Ok(new { items = result, unmappedCodes = codes.Except(commodities.Select(c => c.Code)).ToList() });
+        }
+
+        /// <summary>
+        /// Distinct backorder item codes with no matching Commodity.Code — the
+        /// mapping queue. Each entry is one product that can be created or linked.
+        /// </summary>
+        [HttpGet("unmapped")]
+        public async Task<IActionResult> Unmapped()
+        {
+            var lines = await _context.ImportedBackorders.AsNoTracking()
+                .Select(b => new { b.SourceCompany, b.ItemDesc, b.QtyBackOrder, b.ExtPrice, b.Uom })
+                .ToListAsync();
+
+            var knownCodes = (await _context.Commodities.AsNoTracking()
+                .Where(c => c.Code != null).Select(c => c.Code!.ToUpper()).ToListAsync()).ToHashSet();
+
+            var queue = lines
+                .Select(l => new { l, code = ExtractItemCode(l.ItemDesc) })
+                .Where(x => x.code.Length > 0 && !knownCodes.Contains(x.code))
+                .GroupBy(x => x.code)
+                .Select(g => new
+                {
+                    code = g.Key,
+                    description = g.Select(x => ExtractItemName(x.l.ItemDesc)).Where(n => n.Length > 0).GroupBy(n => n).OrderByDescending(n => n.Count()).First().Key,
+                    uom = g.Select(x => x.l.Uom).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)),
+                    companies = g.Select(x => x.l.SourceCompany).Distinct().OrderBy(c => c).ToList(),
+                    lines = g.Count(),
+                    totalQty = g.Sum(x => x.l.QtyBackOrder),
+                    totalValue = g.Sum(x => x.l.ExtPrice)
+                })
+                .OrderByDescending(x => x.totalValue)
+                .ToList();
+
+            return Ok(queue);
+        }
+
+        /// <summary>Search commodities to link an unmapped code to.</summary>
+        [HttpGet("commodity-search")]
+        public async Task<IActionResult> CommoditySearch([FromQuery] string q, [FromQuery] int take = 20)
+        {
+            if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2) return Ok(Array.Empty<object>());
+            var term = q.Trim().ToLower();
+            var items = await _context.Commodities.AsNoTracking()
+                .Where(c => c.Name.ToLower().Contains(term) || (c.Code != null && c.Code.ToLower().Contains(term)))
+                .OrderBy(c => c.Name)
+                .Take(Math.Clamp(take, 1, 50))
+                .Select(c => new { c.Id, c.Name, c.Code, c.UnitOfMeasure, onHand = c.InventoryRecords.Sum(i => i.QuantityOnHand) })
+                .ToListAsync();
+            return Ok(items);
+        }
+
+        public class MapProductRequest
+        {
+            public string Code { get; set; } = string.Empty;
+            public string? Description { get; set; }
+            public string? Uom { get; set; }
+            /// <summary>If supplied, link the code to this existing commodity; otherwise create a new one.</summary>
+            public int? CommodityId { get; set; }
+        }
+
+        /// <summary>
+        /// Resolve an unmapped item code: create a new Commodity with that code,
+        /// or stamp the code onto an existing commodity that has no code yet.
+        /// </summary>
+        [HttpPost("map")]
+        public async Task<IActionResult> MapProduct([FromBody] MapProductRequest req)
+        {
+            var code = (req.Code ?? "").Trim().ToUpperInvariant();
+            if (code.Length == 0) return BadRequest(new { error = "Code is required." });
+
+            var existing = await _context.Commodities.FirstOrDefaultAsync(c => c.Code != null && c.Code.ToUpper() == code);
+            if (existing != null)
+                return Conflict(new { error = $"Code {code} is already mapped to '{existing.Name}' (#{existing.Id})." });
+
+            Commodity target;
+            if (req.CommodityId.HasValue)
+            {
+                target = await _context.Commodities.FindAsync(req.CommodityId.Value)
+                         ?? throw new InvalidOperationException("Commodity not found");
+                if (!string.IsNullOrWhiteSpace(target.Code))
+                    return Conflict(new { error = $"'{target.Name}' already has code {target.Code}. Create a new product instead, or clear its code first." });
+                target.Code = code;
+                target.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                var name = (req.Description ?? "").Trim();
+                if (name.Length == 0) return BadRequest(new { error = "Description is required to create a new product." });
+                target = new Commodity
+                {
+                    Code = code,
+                    Name = name.Length > 200 ? name[..200] : name,
+                    Description = name.Length > 200 ? name : null,
+                    Category = "Imported",
+                    UnitOfMeasure = string.IsNullOrWhiteSpace(req.Uom) ? null : req.Uom.Trim(),
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Commodities.Add(target);
+            }
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Backorder product mapping: {Code} -> commodity #{Id} '{Name}' by {User}",
+                code, target.Id, target.Name, User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue(ClaimTypes.Name));
+
+            return Ok(new { commodityId = target.Id, code = target.Code, name = target.Name, created = !req.CommodityId.HasValue });
+        }
     }
 }

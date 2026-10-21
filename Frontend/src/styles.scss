@@ -85,6 +85,9 @@ h1, h2, h3, h4, h5, h6,
   font-family: var(--font-body) !important;
 }
 
+/* Multi-line tooltips (e.g. stock-per-warehouse breakdown on back orders) */
+.bo-stock-tip .mdc-tooltip__surface { white-space: pre-line; text-align: left; max-width: 320px; }
+
 /* Animated background visibility - ensures icons show through page backgrounds */
 app-root {
   display: block;

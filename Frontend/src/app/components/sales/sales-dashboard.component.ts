@@ -42,6 +42,7 @@ import { AuthService } from '../../services/auth.service';
 // Company definitions
 import { COMPANIES, Company, SalesHistoryRow, SalesHistoryLine, SalesHistoryReconcile, CompanySales, Customer, SalesTripSheetLine, SalesTripSheet, Invoice, Order, IncomingOrderEmail, SalesStats } from './sales.models';
 import { PodInvoicesDialog, EmailDetailDialogComponent } from './sales-dashboard-dialogs.component';
+import { UnmappedProductsDialog, BackOrderStockInfo } from './unmapped-products-dialog.component';
 
 
 @Component({
@@ -580,7 +581,8 @@ export class SalesDashboardComponent implements OnInit {
     });
   }
 
-  filteredBackOrders = computed(() => {
+  /** Company tab + text search, before the stock-state filter. */
+  filteredBackOrdersUnfiltered = computed(() => {
     const tab = this.activeBackOrderTab();
     let list: BackOrderItem[] = [];
 
@@ -609,6 +611,13 @@ export class SalesDashboardComponent implements OnInit {
     return list;
   });
 
+  filteredBackOrders = computed(() => {
+    const list = this.filteredBackOrdersUnfiltered();
+    const f = this.backOrderStockFilter();
+    if (!f) return list;
+    return list.filter(bo => this.backOrderStockState(bo) === f);
+  });
+
   backOrderTotalCount = computed(() => this.promedBackOrders().length + this.accessBackOrders().length + this.pharmatechBackOrders().length + this.sebenzaniBackOrders().length);
   backOrderTotalQty = computed(() => this.filteredBackOrders().reduce((sum, bo) => sum + bo.qtyBackOrder, 0));
   backOrderTotalValue = computed(() => this.filteredBackOrders().reduce((sum, bo) => sum + bo.extPrice, 0));
@@ -623,6 +632,80 @@ export class SalesDashboardComponent implements OnInit {
   backOrderPageStart = computed(() => this.backOrderPage() * this.backOrderPageSize());
   backOrderPageEnd = computed(() => Math.min((this.backOrderPage() + 1) * this.backOrderPageSize(), this.filteredBackOrders().length));
   backOrderTotalPages = computed(() => Math.ceil(this.filteredBackOrders().length / this.backOrderPageSize()));
+
+  // ---------------------------------------------------------------
+  // Back order ↔ Stock availability (Sales → Stock hand-off)
+  // ---------------------------------------------------------------
+  backOrderStock = signal<{ [code: string]: BackOrderStockInfo }>({});
+  backOrderStockLoaded = signal(false);
+  backOrderUnmappedCount = signal(0);
+  backOrderStockFilter = signal<'' | 'full' | 'partial' | 'none' | 'unmapped'>('');
+
+  loadBackOrderStockCheck(): void {
+    this.http.get<{ items: BackOrderStockInfo[]; unmappedCodes: string[] }>(`${this.apiUrl}/backorders/stock-check`).subscribe({
+      next: (res) => {
+        const map: { [code: string]: BackOrderStockInfo } = {};
+        for (const it of res?.items || []) map[it.code] = it;
+        this.backOrderStock.set(map);
+        this.backOrderUnmappedCount.set(res?.unmappedCodes?.length || 0);
+        this.backOrderStockLoaded.set(true);
+      },
+      error: () => this.backOrderStockLoaded.set(true)
+    });
+  }
+
+  /** Mirrors BackordersController.ExtractItemCode. */
+  backOrderItemCode(itemDesc: string): string {
+    const s = (itemDesc || '').trim();
+    const m = /^([A-Z]-[A-Z0-9]{2,4}-\d{2,4})-/i.exec(s);
+    if (m) return m[1].toUpperCase();
+    const dash = s.indexOf('-');
+    return (dash > 0 ? s.substring(0, dash) : s).trim().toUpperCase();
+  }
+
+  backOrderStockState(bo: BackOrderItem): 'full' | 'partial' | 'none' | 'unmapped' {
+    const info = this.backOrderStock()[this.backOrderItemCode(bo.itemDesc)];
+    if (!info) return 'unmapped';
+    if (info.onHand <= 0) return 'none';
+    return info.onHand >= bo.qtyBackOrder ? 'full' : 'partial';
+  }
+
+  backOrderStockInfo(bo: BackOrderItem): BackOrderStockInfo | undefined {
+    return this.backOrderStock()[this.backOrderItemCode(bo.itemDesc)];
+  }
+
+  backOrderStockTooltip(bo: BackOrderItem): string {
+    const info = this.backOrderStockInfo(bo);
+    if (!info) return 'Item code not mapped to a product — map it via "Unmapped products"';
+    if (!info.warehouses?.length) return `${info.commodityName}: no stock in any warehouse`;
+    return `${info.commodityName} — on hand ${info.onHand}\n` + info.warehouses.map(w => `${w.name}: ${w.qty}`).join('\n');
+  }
+
+  backOrderStockLabel(state: string): string {
+    return state === 'full' ? 'In stock' : state === 'partial' ? 'Partial' : state === 'none' ? 'No stock' : 'Unmapped';
+  }
+
+  /** Lines the warehouse can fully cover right now (current company tab + search). */
+  backOrderCoverable = computed(() => {
+    const stock = this.backOrderStock();
+    let lines = 0, value = 0;
+    for (const bo of this.filteredBackOrdersUnfiltered()) {
+      const info = stock[this.backOrderItemCode(bo.itemDesc)];
+      if (info && bo.qtyBackOrder > 0 && info.onHand >= bo.qtyBackOrder) { lines++; value += bo.extPrice; }
+    }
+    return { lines, value };
+  });
+
+  backOrderStockCounts = computed(() => {
+    const c = { full: 0, partial: 0, none: 0, unmapped: 0 };
+    for (const bo of this.filteredBackOrdersUnfiltered()) c[this.backOrderStockState(bo)]++;
+    return c;
+  });
+
+  openUnmappedProducts(): void {
+    const ref = this.dialog.open(UnmappedProductsDialog, { width: '900px', maxHeight: '85vh', data: { apiUrl: this.apiUrl } });
+    ref.afterClosed().subscribe(changed => { if (changed) this.loadBackOrderStockCheck(); });
+  }
 
   // Attention computed values
   customersWithoutLocation = computed(() => {
@@ -821,6 +904,7 @@ export class SalesDashboardComponent implements OnInit {
     this.startLoadingProgress();
     this.loadDashboardData();
     this.loadImportedBackOrders();
+    this.loadBackOrderStockCheck();
   }
 
   private checkInitialLoadComplete(): void {

@@ -1449,6 +1449,65 @@
               </ng-template>
               <div class="tab-content">
                 <div class="pod-section">
+                  <!-- Delivered without POD — unbillable backlog -->
+                  <div class="nopod-panel" [class.has-items]="noPodLoads.length > 0">
+                    <div class="nopod-head" (click)="noPodExpanded = !noPodExpanded">
+                      <mat-icon class="nopod-icon">{{ noPodLoads.length > 0 ? 'report_problem' : 'verified' }}</mat-icon>
+                      <div class="nopod-title">
+                        <strong>Delivered without POD</strong>
+                        <span class="nopod-sub">
+                          @if (noPodLoading) { Checking… }
+                          @else if (noPodLoads.length === 0) { Every delivered load has proof of delivery. }
+                          @else { {{ noPodLoads.length }} of {{ noPodDeliveredTotal }} delivered loads have no POD · R{{ noPodTotalValue | number:'1.0-0' }} unbillable · oldest {{ noPodLoads[0].daysOutstanding }} days }
+                        </span>
+                      </div>
+                      <button mat-icon-button (click)="$event.stopPropagation(); loadDeliveredWithoutPod()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
+                      <mat-icon class="nopod-chevron">{{ noPodExpanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    </div>
+
+                    @if (noPodExpanded && noPodLoads.length > 0) {
+                      <div class="nopod-body">
+                        <div class="nopod-filters">
+                          <span>Show:</span>
+                          <button class="nopod-chip" [class.active]="noPodMinDays === 0" (click)="noPodMinDays = 0">All</button>
+                          <button class="nopod-chip" [class.active]="noPodMinDays === 7" (click)="noPodMinDays = 7">&gt; 7 days</button>
+                          <button class="nopod-chip" [class.active]="noPodMinDays === 14" (click)="noPodMinDays = 14">&gt; 14 days</button>
+                          <button class="nopod-chip" [class.active]="noPodMinDays === 30" (click)="noPodMinDays = 30">&gt; 30 days</button>
+                          <span class="nopod-count">{{ noPodVisible.length }} loads</span>
+                        </div>
+                        <table class="nopod-table">
+                          <thead>
+                            <tr>
+                              <th>Load</th><th>Customer</th><th>Driver</th><th>Warehouse</th><th>Delivered</th>
+                              <th class="num">Days</th><th class="num">Stops</th><th>Invoices without POD</th><th class="num">Value</th><th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (r of noPodVisible; track r.loadId) {
+                              <tr>
+                                <td><strong>{{ r.loadNumber }}</strong></td>
+                                <td>{{ r.customerName || '—' }}</td>
+                                <td>{{ r.driverName || '—' }}</td>
+                                <td>{{ r.warehouse || '—' }}</td>
+                                <td>{{ r.deliveredAt | date:'dd MMM yyyy' }}</td>
+                                <td class="num"><span class="nopod-age" [class]="'nopod-age ' + noPodAgeClass(r.daysOutstanding)">{{ r.daysOutstanding }}</span></td>
+                                <td class="num">{{ r.stopCount }}</td>
+                                <td class="nopod-invoices">
+                                  @if (r.invoiceCount === 0) { <em>No invoice numbers on this load</em> }
+                                  @else { {{ r.missingInvoices.slice(0, 4).join(', ') }}@if (r.missingInvoices.length > 4) { <span matTooltip="{{ r.missingInvoices.join(', ') }}"> +{{ r.missingInvoices.length - 4 }} more</span> } }
+                                </td>
+                                <td class="num">R{{ r.value | number:'1.0-0' }}</td>
+                                <td class="nopod-actions">
+                                  <button mat-stroked-button color="primary" (click)="uploadPodForLoad(r)"><mat-icon>upload_file</mat-icon> Upload POD</button>
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                    }
+                  </div>
+
                   <!-- POD Toolbar -->
                   <div class="pod-toolbar">
                     <div class="pod-filters">

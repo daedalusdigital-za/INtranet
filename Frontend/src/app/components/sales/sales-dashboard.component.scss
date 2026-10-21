@@ -2063,10 +2063,43 @@
     .bo-col-loc { min-width: 80px; }
     .bo-col-uom { min-width: 60px; }
     .bo-col-qty { min-width: 70px; text-align: right; }
+    .bo-col-stock { min-width: 110px; }
     .bo-col-price { min-width: 90px; text-align: right; }
     .bo-col-ext { min-width: 100px; text-align: right; font-weight: 600; }
     .bo-col-contract { min-width: 100px; }
     .bo-col-acct { min-width: 100px; }
+
+    /* Back Order ↔ Stock availability */
+    .bo-unmapped-btn {
+      display: inline-flex; align-items: center; gap: 6px; height: 40px; margin-left: 8px;
+      .bo-unmapped-count { background: #ff8f00; color: #fff; border-radius: 10px; padding: 1px 8px; font-size: .75rem; font-weight: 700; }
+    }
+    .bo-stock-bar {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+      padding: 10px 14px; margin-bottom: 16px;
+      background: #fafafa; border: 1px solid #e5e7eb; border-radius: 8px;
+      .bo-stock-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #37474f; margin-right: 6px; mat-icon { font-size: 20px; width: 20px; height: 20px; } }
+      .bo-coverable { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: #1b5e20; font-size: .9rem; mat-icon { font-size: 18px; width: 18px; height: 18px; color: #f9a825; } }
+    }
+    .bo-stock-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 16px;
+      border: 1px solid transparent; background: #eceff1; color: #455a64; font-size: .82rem; cursor: pointer; font: inherit;
+      b { font-weight: 700; }
+      &.full { background: #e8f5e9; color: #1b5e20; }
+      &.partial { background: #fff8e1; color: #e65100; }
+      &.none { background: #ffebee; color: #b71c1c; }
+      &.unmapped { background: #eceff1; color: #546e7a; }
+      &.active { border-color: currentColor; box-shadow: 0 0 0 2px rgba(0,0,0,.05) inset; font-weight: 600; }
+      &:hover { filter: brightness(.97); }
+    }
+    .bo-stock-badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; white-space: nowrap; cursor: help;
+      small { font-weight: 500; opacity: .8; }
+      &.full { background: #e8f5e9; color: #1b5e20; }
+      &.partial { background: #fff8e1; color: #e65100; }
+      &.none { background: #ffebee; color: #b71c1c; }
+      &.unmapped { background: #eceff1; color: #78909c; font-weight: 500; }
+    }
 
     /* Back Order Pagination */
     .back-order-pagination {

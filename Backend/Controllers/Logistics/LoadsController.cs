@@ -609,10 +609,29 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load == null)
                 return NotFound();
 
-            var validStatuses = new[] { "Available", "Assigned", "InTransit", "Delivered", "Cancelled" };
+            var validStatuses = new[] { "Available", "Assigned", "InTransit", "Delivered", "Completed", "Cancelled" };
             if (!validStatuses.Contains(dto.Status))
             {
                 return BadRequest($"Invalid status. Valid values are: {string.Join(", ", validStatuses)}");
+            }
+
+            // Closing a load requires proof of delivery: either a POD document attached
+            // to the load, or a POD linked to every invoice on the load.
+            if (dto.Status == "Completed")
+            {
+                var coverage = await GetPodCoverageAsync(load);
+                if (!coverage.Covered)
+                {
+                    return Conflict(new
+                    {
+                        error = coverage.InvoiceNumbers.Count == 0
+                            ? "Cannot close this load: no POD document has been uploaded for it."
+                            : $"Cannot close this load: {coverage.MissingInvoices.Count} of {coverage.InvoiceNumbers.Count} invoice(s) have no POD linked.",
+                        missingInvoices = coverage.MissingInvoices,
+                        invoiceCount = coverage.InvoiceNumbers.Count
+                    });
+                }
+                if (!load.ActualDeliveryDate.HasValue) load.ActualDeliveryDate = DateTime.UtcNow;
             }
 
             load.Status = dto.Status;
@@ -881,6 +900,122 @@ namespace ProjectTracker.API.Controllers.Logistics
         /// <summary>
         /// Normalize invoice number for matching (remove spaces, common prefixes, etc.)
         /// </summary>
+        // ------------------------------------------------------------------
+        // POD coverage (Logistics ↔ Finance hand-off)
+        // ------------------------------------------------------------------
+
+        private sealed class PodCoverage
+        {
+            public bool DirectPod { get; set; }
+            public List<string> InvoiceNumbers { get; set; } = new();
+            public List<string> MissingInvoices { get; set; } = new();
+            public bool Covered => DirectPod || (InvoiceNumbers.Count > 0 && MissingInvoices.Count == 0);
+        }
+
+        private static List<string> CollectInvoiceNumbers(Load load)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var stop in load.Stops)
+            {
+                foreach (var raw in (stop.InvoiceNumber ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    if (raw.Length > 0) set.Add(NormalizeInvoiceNumber(raw));
+                foreach (var c in stop.Commodities)
+                    foreach (var raw in (c.InvoiceNumber ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        if (raw.Length > 0) set.Add(NormalizeInvoiceNumber(raw));
+            }
+            return set.OrderBy(s => s).ToList();
+        }
+
+        private async Task<PodCoverage> GetPodCoverageAsync(Load load)
+        {
+            var cov = new PodCoverage { InvoiceNumbers = CollectInvoiceNumbers(load) };
+            cov.DirectPod = await _context.PodDocuments.AnyAsync(p => p.LoadId == load.Id);
+            if (cov.InvoiceNumbers.Count > 0)
+            {
+                var linked = (await _context.PodDocumentInvoiceLinks.AsNoTracking()
+                        .Where(l => l.InvoiceNumber != null)
+                        .Select(l => l.InvoiceNumber!)
+                        .ToListAsync())
+                    .Select(NormalizeInvoiceNumber)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                cov.MissingInvoices = cov.InvoiceNumbers.Where(n => !linked.Contains(n)).ToList();
+            }
+            return cov;
+        }
+
+        /// <summary>
+        /// Loads marked Delivered that still have no proof of delivery — the
+        /// unbillable backlog. A load is covered when a POD document is attached
+        /// to it directly, or every invoice on it has a linked POD.
+        /// </summary>
+        [HttpGet("delivered-without-pod")]
+        public async Task<IActionResult> DeliveredWithoutPod()
+        {
+            var loads = await _context.Loads.AsNoTracking()
+                .Include(l => l.Customer)
+                .Include(l => l.Driver)
+                .Include(l => l.Warehouse)
+                .Include(l => l.Stops).ThenInclude(s => s.Commodities)
+                .Where(l => l.Status == "Delivered")
+                .ToListAsync();
+
+            var directPodLoadIds = (await _context.PodDocuments.AsNoTracking()
+                .Where(p => p.LoadId != null).Select(p => p.LoadId!.Value).Distinct().ToListAsync()).ToHashSet();
+            var linkedInvoices = (await _context.PodDocumentInvoiceLinks.AsNoTracking()
+                    .Where(l => l.InvoiceNumber != null).Select(l => l.InvoiceNumber!).ToListAsync())
+                .Select(NormalizeInvoiceNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var now = DateTime.UtcNow;
+            var rows = new List<DeliveredWithoutPodRow>();
+            foreach (var l in loads)
+            {
+                if (directPodLoadIds.Contains(l.Id)) continue;
+                var invoices = CollectInvoiceNumbers(l);
+                var missing = invoices.Where(n => !linkedInvoices.Contains(n)).ToList();
+                if (invoices.Count > 0 && missing.Count == 0) continue;
+
+                var deliveredAt = l.ActualDeliveryDate ?? l.ScheduledDeliveryDate ?? l.UpdatedAt ?? l.CreatedAt;
+                rows.Add(new DeliveredWithoutPodRow
+                {
+                    LoadId = l.Id,
+                    LoadNumber = l.LoadNumber,
+                    CustomerName = l.Customer?.Name ?? l.Stops.Select(s => s.CompanyName ?? s.LocationName).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)),
+                    DriverName = l.Driver == null ? null : $"{l.Driver.FirstName} {l.Driver.LastName}".Trim(),
+                    Warehouse = l.Warehouse?.Name,
+                    DeliveredAt = deliveredAt,
+                    DaysOutstanding = (int)Math.Floor((now - deliveredAt).TotalDays),
+                    StopCount = l.Stops.Count,
+                    InvoiceCount = invoices.Count,
+                    MissingInvoices = missing,
+                    Value = l.Stops.SelectMany(s => s.Commodities).Sum(c => c.TotalPrice ?? 0m)
+                });
+            }
+
+            var ordered = rows.OrderByDescending(r => r.DaysOutstanding).ToList();
+            return Ok(new
+            {
+                count = ordered.Count,
+                deliveredTotal = loads.Count,
+                totalValue = ordered.Sum(r => r.Value),
+                items = ordered
+            });
+        }
+
+        public class DeliveredWithoutPodRow
+        {
+            public int LoadId { get; set; }
+            public string LoadNumber { get; set; } = "";
+            public string? CustomerName { get; set; }
+            public string? DriverName { get; set; }
+            public string? Warehouse { get; set; }
+            public DateTime DeliveredAt { get; set; }
+            public int DaysOutstanding { get; set; }
+            public int StopCount { get; set; }
+            public int InvoiceCount { get; set; }
+            public List<string> MissingInvoices { get; set; } = new();
+            public decimal Value { get; set; }
+        }
+
         private static string NormalizeInvoiceNumber(string invoiceNo)
         {
             if (string.IsNullOrWhiteSpace(invoiceNo))

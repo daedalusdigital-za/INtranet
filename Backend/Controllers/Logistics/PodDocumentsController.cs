@@ -290,7 +290,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromForm] string region,
             [FromForm] DateTime deliveryDate,
             [FromForm] int? driverId,
-            [FromForm] string? notes)
+            [FromForm] string? notes,
+            [FromForm] int? loadId)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("No file uploaded");
@@ -338,6 +339,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ContentType = GetContentType(filePath),
                     FileSize = file.Length,
                     Notes = notes,
+                    LoadId = loadId.HasValue && await _context.Loads.AnyAsync(l => l.Id == loadId.Value) ? loadId : null,
                     UploadedAt = DateTime.UtcNow
                 };
 

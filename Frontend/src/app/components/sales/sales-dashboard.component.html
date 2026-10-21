@@ -1324,7 +1324,34 @@
                     <input matInput [value]="backOrderSearch()" (input)="backOrderSearch.set($any($event.target).value)">
                     <mat-icon matSuffix>search</mat-icon>
                   </mat-form-field>
+                  <button mat-stroked-button class="bo-unmapped-btn" (click)="openUnmappedProducts()"
+                          matTooltip="Item codes with no product in the master — no stock check possible until mapped">
+                    <mat-icon>link_off</mat-icon>
+                    Unmapped products
+                    @if (backOrderUnmappedCount() > 0) { <span class="bo-unmapped-count">{{ backOrderUnmappedCount() }}</span> }
+                  </button>
                 </div>
+              </div>
+
+              <!-- Stock availability summary / filter -->
+              <div class="bo-stock-bar" *ngIf="backOrderStockLoaded()">
+                <span class="bo-stock-title"><mat-icon>warehouse</mat-icon> Stock check</span>
+                <button class="bo-stock-chip full" [class.active]="backOrderStockFilter() === 'full'" (click)="backOrderStockFilter.set(backOrderStockFilter() === 'full' ? '' : 'full'); backOrderPage.set(0)">
+                  In stock <b>{{ backOrderStockCounts().full }}</b>
+                </button>
+                <button class="bo-stock-chip partial" [class.active]="backOrderStockFilter() === 'partial'" (click)="backOrderStockFilter.set(backOrderStockFilter() === 'partial' ? '' : 'partial'); backOrderPage.set(0)">
+                  Partial <b>{{ backOrderStockCounts().partial }}</b>
+                </button>
+                <button class="bo-stock-chip none" [class.active]="backOrderStockFilter() === 'none'" (click)="backOrderStockFilter.set(backOrderStockFilter() === 'none' ? '' : 'none'); backOrderPage.set(0)">
+                  No stock <b>{{ backOrderStockCounts().none }}</b>
+                </button>
+                <button class="bo-stock-chip unmapped" [class.active]="backOrderStockFilter() === 'unmapped'" (click)="backOrderStockFilter.set(backOrderStockFilter() === 'unmapped' ? '' : 'unmapped'); backOrderPage.set(0)">
+                  Unmapped <b>{{ backOrderStockCounts().unmapped }}</b>
+                </button>
+                <span class="bo-coverable">
+                  <mat-icon>bolt</mat-icon>
+                  <strong>{{ backOrderCoverable().lines }}</strong> lines worth <strong>R{{ formatCurrency(backOrderCoverable().value) }}</strong> can be fulfilled from stock on hand
+                </span>
               </div>
 
               <!-- Back Order Stats -->
@@ -1405,6 +1432,7 @@
                           <th class="bo-col-loc">Location</th>
                           <th class="bo-col-uom">UOM</th>
                           <th class="bo-col-qty">Qty B/O</th>
+                          <th class="bo-col-stock">Stock</th>
                           <th class="bo-col-price">Unit Price</th>
                           <th class="bo-col-ext">Ext Price</th>
                           <th class="bo-col-contract">Contract</th>
@@ -1423,6 +1451,15 @@
                             <td class="bo-col-loc">{{ bo.location }}</td>
                             <td class="bo-col-uom">{{ bo.uom }}</td>
                             <td class="bo-col-qty">{{ bo.qtyBackOrder }}</td>
+                            <td class="bo-col-stock">
+                              @if (backOrderStockLoaded()) {
+                                @let st = backOrderStockState(bo);
+                                <span class="bo-stock-badge" [class]="'bo-stock-badge ' + st" [matTooltip]="backOrderStockTooltip(bo)" matTooltipClass="bo-stock-tip">
+                                  {{ backOrderStockLabel(st) }}
+                                  @if (st !== 'unmapped') { <small>{{ backOrderStockInfo(bo)?.onHand | number:'1.0-0' }}</small> }
+                                </span>
+                              }
+                            </td>
                             <td class="bo-col-price">R{{ bo.unitPrice | number:'1.2-2' }}</td>
                             <td class="bo-col-ext">R{{ bo.extPrice | number:'1.2-2' }}</td>
                             <td class="bo-col-contract">{{ bo.contract }}</td>

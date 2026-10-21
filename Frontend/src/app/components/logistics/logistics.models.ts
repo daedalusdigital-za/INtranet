@@ -3,6 +3,21 @@
 // 36k-line logistics-dashboard.component.ts during the split.
 // ============================================================
 
+/** A load marked Delivered that has no proof of delivery yet (GET loads/delivered-without-pod). */
+export interface DeliveredWithoutPodRow {
+  loadId: number;
+  loadNumber: string;
+  customerName?: string | null;
+  driverName?: string | null;
+  warehouse?: string | null;
+  deliveredAt: string;
+  daysOutstanding: number;
+  stopCount: number;
+  invoiceCount: number;
+  missingInvoices: string[];
+  value: number;
+}
+
 export interface DashboardStats {
   activeLoads: number;
   inTransit: number;

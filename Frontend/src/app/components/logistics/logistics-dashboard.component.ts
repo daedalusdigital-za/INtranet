@@ -43,7 +43,7 @@ import { OpenMapComponent } from './open-map.component';
 import { OpenMapDialogComponent } from './open-map-dialog.component';
 import { LogisticsReportsComponent } from './logistics-reports.component';
 import { AssetTrackingService, ResolveResult } from '../../services/asset-tracking.service';
-import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord, DeliveryRequest, DeliveryRequestSummary } from './logistics.models';
+import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord, DeliveryRequest, DeliveryRequestSummary, DeliveredWithoutPodRow } from './logistics.models';
 import { UploadPODDialog, UploadPodDocumentDialog, LinkTripsheetDialog, EditPodDialog, LinkInvoiceDialog, InvoiceDetailsDialog, FleetMapDialogComponent, NewLoadDialogComponent, LogisticsPodInvoicesDialog, TripSheetPreviewDialog, TripsheetDocumentPreviewDialog, TripsheetEmailRecipientsDialog, MaintenanceExportScopeDialog, SyncResultDialogComponent, SuggestedTripsDialog, TfnOrdersListDialog, TfnOrderDetailsDialog, IncomingRequestsDialog, AddressIssuesDialog, TfnDepotsMapDialog, AddDeliveryNoteDialog, CreateTripsheetDialog, TripsheetTypeDialog, ManualTripsheetDialog, InternalTransferDialog, ImportTripsheetDialog, AddMaintenanceDialog, VehicleDialogComponent, AssignDriverDialogComponent, LinkVehicleDialogComponent, AssignTripsheetDialog, CompleteMaintenanceDialog, UpdateLoadStatusDialog, ViewLoadDetailsDialog, ViewRouteMapDialog, LogisticsReportsDialog, LiveStreamingDialog, ReassignLoadDialog, RescheduleTripsheetDialog, ReassignProvinceDialog, VehicleStatusDialog, WellyTripsheetWizardDialog, WellySuggestsDialog, AiTripsheetBuilderDialog, FuelHistoryDialog, VehicleMaintenanceHistoryDialog, TodayHistoryDialog, FuelHealthDialog, BarcodeLookupDialog } from './logistics-dashboard-dialogs.component';
 
 @Component({
@@ -331,6 +331,14 @@ export class LogisticsDashboardComponent implements OnInit {
   podTotalCount = 0;
   podTableColumns = ['driverName', 'deliveryDate', 'region', 'linkStatus', 'fileName', 'fileSize', 'actions'];
 
+  // Delivered loads with no proof of delivery (unbillable backlog)
+  noPodLoads: DeliveredWithoutPodRow[] = [];
+  noPodTotalValue = 0;
+  noPodDeliveredTotal = 0;
+  noPodLoading = false;
+  noPodExpanded = false;
+  noPodMinDays = 0;
+
   // Incoming Delivery Requests
   deliveryRequests = signal<DeliveryRequest[]>([]);
   deliveryRequestsCount = signal(0);
@@ -408,6 +416,7 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadFuelPeriods();
     this.loadPodSummary();
     this.loadPodDocuments();
+    this.loadDeliveredWithoutPod();
     this.loadSleepOuts();
     this.loadRequisitionPeriods();
   }
@@ -1382,6 +1391,7 @@ Notes: ${record.notes || 'No notes'}
       case 'InTransit': return 50;
       case 'Arrived': return 85;
       case 'Delivered': return 100;
+      case 'Completed': return 100;
       default: return 0;
     }
   }
@@ -1599,10 +1609,14 @@ Notes: ${record.notes || 'No notes'}
               loads.map(l => l.id === load.id ? { ...l, status: result.status } : l)
             );
             this.snackBar.open(`Load status updated to ${result.status}`, 'Close', { duration: 3000 });
+            if (result.status === 'Delivered' || result.status === 'Completed') this.loadDeliveredWithoutPod();
           },
           error: (err) => {
             console.error('Error updating load status:', err);
-            this.snackBar.open('Failed to update load status', 'Close', { duration: 3000 });
+            const msg = err?.status === 409 && err?.error?.error
+              ? err.error.error + (err.error.missingInvoices?.length ? ` Missing: ${err.error.missingInvoices.slice(0, 5).join(', ')}${err.error.missingInvoices.length > 5 ? '…' : ''}` : '')
+              : 'Failed to update load status';
+            this.snackBar.open(msg, 'Close', { duration: 8000 });
           }
         });
       }
@@ -4101,6 +4115,51 @@ Notes: ${record.notes || 'No notes'}
       error: (err) => {
         console.error('Failed to download POD:', err);
         this.snackBar.open('Failed to download POD', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  loadDeliveredWithoutPod(): void {
+    this.noPodLoading = true;
+    this.http.get<{ count: number; deliveredTotal: number; totalValue: number; items: DeliveredWithoutPodRow[] }>(`${this.apiUrl}/logistics/loads/delivered-without-pod`).subscribe({
+      next: res => {
+        this.noPodLoads = res?.items || [];
+        this.noPodTotalValue = res?.totalValue || 0;
+        this.noPodDeliveredTotal = res?.deliveredTotal || 0;
+        this.noPodLoading = false;
+      },
+      error: () => { this.noPodLoading = false; }
+    });
+  }
+
+  get noPodVisible(): DeliveredWithoutPodRow[] {
+    return this.noPodMinDays > 0 ? this.noPodLoads.filter(r => r.daysOutstanding >= this.noPodMinDays) : this.noPodLoads;
+  }
+
+  noPodAgeClass(days: number): string {
+    return days > 30 ? 'age-critical' : days > 14 ? 'age-warn' : 'age-ok';
+  }
+
+  /** Upload a POD pre-targeted at this load, then refresh the backlog. */
+  uploadPodForLoad(row: DeliveredWithoutPodRow): void {
+    const dialogRef = this.dialog.open(UploadPodDocumentDialog, {
+      width: '600px',
+      maxWidth: '95vw',
+      data: {
+        drivers: this.podDriverList,
+        loadId: row.loadId,
+        loadNumber: row.loadNumber,
+        invoiceNumbers: row.missingInvoices,
+        driverName: row.driverName || '',
+        deliveryDate: row.deliveredAt
+      }
+    });
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.uploaded) {
+        this.loadPodDocuments();
+        this.loadPodSummary();
+        this.loadDeliveredWithoutPod();
+        this.snackBar.open(`POD uploaded for ${row.loadNumber}`, 'Close', { duration: 3000 });
       }
     });
   }
