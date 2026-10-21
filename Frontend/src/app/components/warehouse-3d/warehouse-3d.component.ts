@@ -8,6 +8,7 @@ import {
   HostListener,
   signal,
   computed,
+  Input,
   Output,
   EventEmitter
 } from '@angular/core';
@@ -65,6 +66,9 @@ const CARDBOARD_LIGHT = 0xA67B1A;
 })
 export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef<HTMLDivElement>;
+
+  // Optional input when embedded (e.g. inside a dialog) instead of routed
+  @Input() embeddedWarehouseId: number | null = null;
 
   // Event emitters
   @Output() boxSelected = new EventEmitter<WarehouseBox3D>();
@@ -132,6 +136,12 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // When embedded (dialog), use the provided warehouse id directly
+    if (this.embeddedWarehouseId) {
+      this.warehouseId.set(this.embeddedWarehouseId);
+      this.loadWarehouseBuildings(this.embeddedWarehouseId);
+      return;
+    }
     // Get warehouse ID or building ID from route params
     const warehouseIdParam = this.route.snapshot.queryParams['warehouseId'];
     const buildingIdParam = this.route.snapshot.queryParams['buildingId'];

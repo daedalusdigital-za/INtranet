@@ -27,6 +27,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { EmptyStateComponent } from '../shared/ui/empty-state.component';
 import { LoadingComponent } from '../shared/ui/loading.component';
+import { Warehouse3DComponent } from '../warehouse-3d/warehouse-3d.component';
 import { environment } from '../../../environments/environment';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import Chart from 'chart.js/auto';
@@ -535,6 +536,10 @@ interface ComprehensiveAnalysisResponse {
                   <h3>{{ warehouse.name }}</h3>
                   <span>{{ warehouse.location }}</span>
                 </div>
+                <button mat-icon-button class="stk-wh-ops" matTooltip="View warehouse in 3D with all stock"
+                        (click)="open3DView(warehouse); $event.stopPropagation()">
+                  <mat-icon>visibility</mat-icon>
+                </button>
                 <button mat-icon-button class="stk-wh-ops" matTooltip="Open operations (dispatch, GRV, transfers, stock take)"
                         (click)="selectWarehouse(warehouse); $event.stopPropagation()">
                   <mat-icon>open_in_new</mat-icon>
@@ -2021,7 +2026,8 @@ interface ComprehensiveAnalysisResponse {
       box-shadow: 0 10px 34px rgba(2,6,23,0.28); border: 2px solid transparent; transition: all .25s ease;
     }
     .stk-wh-card:hover { box-shadow: 0 22px 52px rgba(2,6,23,0.38); transform: translateY(-4px); }
-    .stk-wh-card.active { border-color: #2563eb; background: #eff6ff; }
+    .stk-wh-card.active { border-color: #16a34a; background: #f0fdf4; box-shadow: 0 10px 34px rgba(22,163,74,0.35); }
+    .stk-wh-card.active .stk-wh-ico { color: #16a34a; }
     .stk-wh-head { display: flex; align-items: center; gap: 10px; }
     .stk-wh-ico { color: #2563eb; }
     .stk-wh-title { flex: 1; min-width: 0; }
@@ -2322,6 +2328,14 @@ export class StockManagementComponent implements OnInit {
     if (!w) return;
     const ref = this.dialog.open(DispatchDialog, { width: '1000px', maxWidth: '90vw', data: w });
     ref.afterClosed().subscribe(() => this.loadDashboardData());
+  }
+
+  open3DView(warehouse: any): void {
+    this.dialog.open(Warehouse3DDialog, {
+      width: '96vw', maxWidth: '96vw', height: '90vh',
+      panelClass: 'stk-3d-dialog-panel',
+      data: warehouse
+    });
   }
 
   openScrapForFilter(): void {
@@ -7036,5 +7050,37 @@ export class RepackagingDialog implements OnInit {
     this.dialogRef.close({ repackaged: true });
   }
 }
+
+// ═══ Warehouse 3D View Dialog ═══
+@Component({
+  selector: 'app-warehouse-3d-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, Warehouse3DComponent],
+  template: `
+    <div class="w3d-head">
+      <div class="w3d-title">
+        <mat-icon>view_in_ar</mat-icon>
+        <h2>{{ data.name }} — 3D Stock View</h2>
+      </div>
+      <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+    </div>
+    <div class="w3d-body">
+      <app-warehouse-3d [embeddedWarehouseId]="data.id"></app-warehouse-3d>
+    </div>
+  `,
+  styles: [`
+    :host { display: flex; flex-direction: column; height: 100%; }
+    .w3d-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; }
+    .w3d-title { display: flex; align-items: center; gap: 10px; }
+    .w3d-title mat-icon { color: #16a34a; }
+    .w3d-title h2 { margin: 0; font-size: 18px; font-weight: 700; color: #0f172a; }
+    .w3d-body { flex: 1; min-height: 0; overflow: hidden; }
+    .w3d-body app-warehouse-3d { display: block; height: 100%; }
+  `]
+})
+export class Warehouse3DDialog {
+  constructor(@Inject(MAT_DIALOG_DATA) public data: any) {}
+}
+
 
 
