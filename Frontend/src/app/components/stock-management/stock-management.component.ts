@@ -144,7 +144,7 @@ interface ComprehensiveAnalysisResponse {
           <mat-icon class="header-icon">inventory_2</mat-icon>
           <div class="header-text">
             <h1>Stock Management</h1>
-            <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name : 'Select a warehouse to begin' }}</p>
+            <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name + ' · ' + selectedWarehouse.location : 'All warehouses — click a warehouse card to focus' }}</p>
           </div>
         </div>
         <div class="header-actions">
@@ -153,164 +153,13 @@ interface ComprehensiveAnalysisResponse {
               <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
               Ask Welly to Analyze
             </button>
-            <button mat-raised-button (click)="clearSelection()">
-              <mat-icon>arrow_back</mat-icon>
-              Back to Warehouses
-            </button>
-          } @else if (showFulfillment) {
-            <button mat-raised-button (click)="closeFulfillment()">
-              <mat-icon>arrow_back</mat-icon>
-              Back to Warehouses
-            </button>
-          } @else {
-            <button mat-raised-button class="fulfillment-btn" (click)="openFulfillment()" matTooltip="Match invoices to current stock">
-              <mat-icon>fact_check</mat-icon>
-              Invoice Fulfillment
+            <button mat-stroked-button (click)="whFilterId = null" matTooltip="Show all warehouses">
+              <mat-icon>filter_alt_off</mat-icon>
+              Clear Filter
             </button>
           }
         </div>
       </div>
-
-      @if (selectedWarehouse && !showInventorySubmenu) {
-        <div class="operations-grid">
-          <div class="operation-block depot-block" (click)="selectOperation('inventory')"
-               role="button" tabindex="0" (keydown.enter)="selectOperation('inventory')" aria-label="Inventory Management">
-            <div class="block-icon">
-              <mat-icon>inventory_2</mat-icon>
-            </div>
-            <h3>Inventory Management</h3>
-            <p>View & manage stock levels</p>
-            <div class="operation-stats">
-              <div class="stat-row">
-                <span class="stat-label">Items Tracked</span>
-                <span class="stat-value">{{ selectedWarehouse.totalItems | number }}</span>
-              </div>
-              <div class="stat-row">
-                <span class="stat-label">Stock Value</span>
-                <span class="stat-value">{{ formatValue(selectedWarehouse.totalStockValue) }}</span>
-              </div>
-              <mat-progress-bar mode="determinate" [value]="75" color="primary" class="operation-progress"></mat-progress-bar>
-              <button mat-raised-button class="operation-btn">
-                <mat-icon>arrow_forward</mat-icon>
-                View Operations
-              </button>
-            </div>
-          </div>
-
-          <div class="operation-block dispatch-block" (click)="selectOperation('dispatch')"
-               role="button" tabindex="0" (keydown.enter)="selectOperation('dispatch')" aria-label="Order Accept and Dispatch">
-            <div class="block-icon">
-              <mat-icon>local_shipping</mat-icon>
-            </div>
-            <h3>Order Accept & Dispatch</h3>
-            <p>Process orders & dispatch</p>
-            <div class="operation-stats">
-              <div class="stat-row">
-                <span class="stat-label">Pending Orders</span>
-                <span class="stat-value">12</span>
-              </div>
-              <div class="stat-row">
-                <span class="stat-label">Ready to Ship</span>
-                <span class="stat-value">8</span>
-              </div>
-              <mat-progress-bar mode="determinate" [value]="67" color="primary" class="operation-progress"></mat-progress-bar>
-              <button mat-raised-button class="operation-btn">
-                <mat-icon>arrow_forward</mat-icon>
-                View Operations
-              </button>
-            </div>
-          </div>
-
-          <div class="operation-block transfer-block" (click)="selectOperation('transfer')">
-            <div class="block-icon">
-              <mat-icon>swap_horiz</mat-icon>
-            </div>
-            <h3>Transfer & Returns</h3>
-            <p>Inter-warehouse transfers</p>
-            <div class="operation-stats">
-              <div class="stat-row">
-                <span class="stat-label">Active Transfers</span>
-                <span class="stat-value">5</span>
-              </div>
-              <div class="stat-row">
-                <span class="stat-label">Pending Returns</span>
-                <span class="stat-value">3</span>
-              </div>
-              <mat-progress-bar mode="determinate" [value]="40" color="primary" class="operation-progress"></mat-progress-bar>
-              <button mat-raised-button class="operation-btn">
-                <mat-icon>arrow_forward</mat-icon>
-                View Operations
-              </button>
-            </div>
-          </div>
-
-          <div class="operation-block grv-block" (click)="selectOperation('grv')">
-            <div class="block-icon">
-              <mat-icon>receipt_long</mat-icon>
-            </div>
-            <h3>Goods Received</h3>
-            <p>Record incoming deliveries</p>
-            <div class="operation-stats">
-              <div class="stat-row">
-                <span class="stat-label">Expected Deliveries</span>
-                <span class="stat-value">7</span>
-              </div>
-              <div class="stat-row">
-                <span class="stat-label">Received Today</span>
-                <span class="stat-value">4</span>
-              </div>
-              <mat-progress-bar mode="determinate" [value]="57" color="primary" class="operation-progress"></mat-progress-bar>
-              <button mat-raised-button class="operation-btn">
-                <mat-icon>arrow_forward</mat-icon>
-                View Operations
-              </button>
-            </div>
-          </div>
-        </div>
-      }
-
-      @if (showInventorySubmenu) {
-        <div class="submenu-header">
-          <button mat-icon-button (click)="backToOperations()">
-            <mat-icon>arrow_back</mat-icon>
-          </button>
-          <h2>Inventory Management</h2>
-        </div>
-
-        <div class="operations-grid">
-          <div class="operation-block inventory-block" (click)="openInventoryView()">
-            <div class="block-icon">
-              <mat-icon>view_list</mat-icon>
-            </div>
-            <h3>Inventory Management</h3>
-            <p>View all stock items</p>
-          </div>
-
-          <div class="operation-block scrap-block" (click)="openScrap()">
-            <div class="block-icon">
-              <mat-icon>delete_sweep</mat-icon>
-            </div>
-            <h3>Scrap</h3>
-            <p>Record damaged items</p>
-          </div>
-
-          <div class="operation-block stocktake-block" (click)="openStockTake()">
-            <div class="block-icon">
-              <mat-icon>fact_check</mat-icon>
-            </div>
-            <h3>Stock Take</h3>
-            <p>Physical count verification</p>
-          </div>
-
-          <div class="operation-block repack-block" (click)="openRepackaging()">
-            <div class="block-icon">
-              <mat-icon>inventory</mat-icon>
-            </div>
-            <h3>Repackaging</h3>
-            <p>Change item packaging</p>
-          </div>
-        </div>
-      }
 
       @if (loading) {
         <div class="loading-state">
@@ -345,139 +194,10 @@ interface ComprehensiveAnalysisResponse {
             </div>
           </div>
         </div>
-      } @else if (showFulfillment) {
-        <div class="fulfillment-view">
-          <div class="ff-header">
-            <div>
-              <h2>Invoice Fulfillment</h2>
-              <p class="ff-sub">Outstanding invoice demand matched against current stock (by product code)</p>
-            </div>
-            <mat-form-field appearance="outline" class="ff-search">
-              <mat-label>Search product code / description</mat-label>
-              <input matInput [(ngModel)]="ffSearch" (ngModelChange)="applyFfSearch()" placeholder="e.g. 4010239">
-              <mat-icon matSuffix>search</mat-icon>
-            </mat-form-field>
-          </div>
-
-          @if (ffLoading) {
-            <div class="ff-loading">
-              <mat-spinner diameter="40"></mat-spinner>
-              <p>Matching invoices to stock...</p>
-            </div>
-          } @else if (ffAnalysis) {
-            <div class="ff-summary-grid">
-              <div class="ff-card ff-can">
-                <mat-icon>check_circle</mat-icon>
-                <div><span class="ff-val">{{ ffAnalysis.summary.fullyFulfillable | number }}</span><span class="ff-lbl">Fully Fulfillable</span></div>
-              </div>
-              <div class="ff-card ff-partial">
-                <mat-icon>hourglass_bottom</mat-icon>
-                <div><span class="ff-val">{{ ffAnalysis.summary.partiallyFulfillable | number }}</span><span class="ff-lbl">Partial</span></div>
-              </div>
-              <div class="ff-card ff-out">
-                <mat-icon>cancel</mat-icon>
-                <div><span class="ff-val">{{ ffAnalysis.summary.outOfStock | number }}</span><span class="ff-lbl">Out of Stock</span></div>
-              </div>
-              <div class="ff-card ff-total">
-                <mat-icon>inventory_2</mat-icon>
-                <div><span class="ff-val">{{ ffAnalysis.summary.totalProductCodes | number }}</span><span class="ff-lbl">Matched Codes</span></div>
-              </div>
-            </div>
-
-            <div class="ff-table-wrap">
-              <table class="ff-table">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Product Code</th>
-                    <th>Description</th>
-                    <th class="num">Demand</th>
-                    <th class="num">Available</th>
-                    <th class="num">Can Fulfill</th>
-                    <th class="num">Shortfall</th>
-                    <th class="num">Orders</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (line of ffFiltered; track line.productCode) {
-                    <tr class="ff-row" (click)="toggleInvoices(line)">
-                      <td class="expand-cell">
-                        <mat-icon>{{ ffExpanded === line.productCode ? 'expand_more' : 'chevron_right' }}</mat-icon>
-                      </td>
-                      <td class="mono">{{ line.productCode }}</td>
-                      <td class="desc">{{ line.productDescription }}</td>
-                      <td class="num">{{ line.demandQty | number }}</td>
-                      <td class="num">{{ line.availableQty | number }}</td>
-                      <td class="num">{{ line.canFulfillQty | number }}</td>
-                      <td class="num" [class.short]="line.shortfallQty > 0">{{ line.shortfallQty | number }}</td>
-                      <td class="num">{{ line.orderLines | number }}</td>
-                      <td>
-                        <span class="ff-badge"
-                          [class.b-can]="line.status === 'CanFulfill'"
-                          [class.b-partial]="line.status === 'Partial'"
-                          [class.b-out]="line.status === 'OutOfStock'">
-                          {{ ffStatusLabel(line.status) }}
-                        </span>
-                      </td>
-                    </tr>
-                    @if (ffExpanded === line.productCode) {
-                      <tr class="ff-detail-row">
-                        <td colspan="9">
-                          @if (ffInvLoading) {
-                            <div class="ff-inv-loading"><mat-spinner diameter="24"></mat-spinner> Loading invoices...</div>
-                          } @else {
-                            <table class="ff-inv-table">
-                              <thead>
-                                <tr>
-                                  <th>Invoice #</th>
-                                  <th>Date</th>
-                                  <th>Customer</th>
-                                  <th class="num">Order Qty</th>
-                                  <th class="num">Can Fulfill</th>
-                                  <th class="num">Shortfall</th>
-                                  <th>Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                @for (inv of ffInvoices; track inv.id) {
-                                  <tr>
-                                    <td class="mono">{{ inv.invoiceNumber }}</td>
-                                    <td>{{ inv.invoiceDate | date:'yyyy-MM-dd' }}</td>
-                                    <td class="desc">{{ inv.customerName }}</td>
-                                    <td class="num">{{ inv.demandQty | number }}</td>
-                                    <td class="num">{{ inv.canFulfillQty | number }}</td>
-                                    <td class="num" [class.short]="inv.shortfallQty > 0">{{ inv.shortfallQty | number }}</td>
-                                    <td>
-                                      <span class="ff-badge"
-                                        [class.b-can]="inv.status === 'CanFulfill'"
-                                        [class.b-partial]="inv.status === 'Partial'"
-                                        [class.b-out]="inv.status === 'None'">
-                                        {{ inv.status === 'CanFulfill' ? 'Fulfillable' : (inv.status === 'Partial' ? 'Partial' : 'No Stock') }}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                } @empty {
-                                  <tr><td colspan="7" class="ff-empty">No invoices found for this product.</td></tr>
-                                }
-                              </tbody>
-                            </table>
-                          }
-                        </td>
-                      </tr>
-                    }
-                  } @empty {
-                    <tr><td colspan="9" class="ff-empty">No matching invoice/stock lines found.</td></tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
-        </div>
       } @else if (warehouses.length === 0) {
         <app-empty-state icon="warehouse" title="No Warehouses Found"
           message="No warehouses have been configured yet."></app-empty-state>
-      } @else if (!selectedWarehouse) {
+      } @else {
 
         <!-- ═══ KPI CARDS ═══ -->
         <div class="stk-kpi-grid">
@@ -524,10 +244,6 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-icon-button class="stk-wh-ops" matTooltip="View warehouse in 3D with all stock"
                         (click)="open3DView(warehouse); $event.stopPropagation()">
                   <mat-icon>visibility</mat-icon>
-                </button>
-                <button mat-icon-button class="stk-wh-ops" matTooltip="Open operations (dispatch, GRV, transfers, stock take)"
-                        (click)="selectWarehouse(warehouse); $event.stopPropagation()">
-                  <mat-icon>open_in_new</mat-icon>
                 </button>
               </div>
               <div class="stk-wh-stats">
@@ -588,8 +304,12 @@ interface ComprehensiveAnalysisResponse {
                   <mat-icon matPrefix>search</mat-icon>
                 </mat-form-field>
                 <span class="stk-count">{{ sohRows.length | number }} of {{ invScoped.length | number }} items{{ whFilterName }}</span>
+                <span class="stk-spacer"></span>
                 <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload stock data"><mat-icon>refresh</mat-icon> Refresh</button>
                 <button mat-stroked-button (click)="exportSoh()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-stroked-button (click)="openTransferStock()" matTooltip="Move stock from one warehouse to another"><mat-icon>sync_alt</mat-icon> Transfer</button>
+                <button mat-stroked-button (click)="openManualMovement('Adjustment')" matTooltip="Correct a quantity (+/-) with a reason"><mat-icon>tune</mat-icon> Adjust</button>
+                <button mat-raised-button color="primary" (click)="openManualMovement('Receive')" matTooltip="Book in a delivery (GRV)"><mat-icon>south_west</mat-icon> Receive Stock</button>
               </div>
               @if (invLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading stock...</div> }
               @else {
@@ -660,7 +380,7 @@ interface ComprehensiveAnalysisResponse {
                   </tbody>
                 </table>
               </div>
-              <p class="stk-note"><mat-icon>info</mat-icon> Counts come from the consolidated stock imports. Click a warehouse card then <b>New Stock Take</b> to run a count.</p>
+              <p class="stk-note"><mat-icon>info</mat-icon> Baseline quantities come from the consolidated stock imports; every count variance you post is written to the Movements ledger as an Adjustment. Click a warehouse card, then <b>New Stock Take</b>.</p>
             </div>
           </mat-tab>
 
@@ -832,6 +552,8 @@ interface ComprehensiveAnalysisResponse {
                   <mat-icon>undo</mat-icon> Return ({{ movCount('Return') }})</button>
                 <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Adjustment'" (click)="movTypeFilter = 'Adjustment'">
                   <mat-icon>tune</mat-icon> Adjust ({{ movCount('Adjustment') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Scrap'" (click)="movTypeFilter = 'Scrap'">
+                  <mat-icon>delete_sweep</mat-icon> Scrap ({{ movCount('Scrap') }})</button>
                 <mat-form-field appearance="outline" class="stk-search">
                   <mat-icon matPrefix>search</mat-icon>
                   <input matInput [(ngModel)]="movSearch" placeholder="Code, description, reference, user...">
@@ -841,7 +563,8 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button (click)="exportMovements()"><mat-icon>file_download</mat-icon> Export</button>
                 <button mat-stroked-button (click)="openTransferStock()" matTooltip="Move stock between warehouses"><mat-icon>sync_alt</mat-icon> Transfer</button>
                 <button mat-stroked-button (click)="openManualMovement('Adjustment')" matTooltip="Correct a stock count (+/-) with a reason"><mat-icon>tune</mat-icon> Adjust</button>
-                <button mat-stroked-button (click)="openManualMovement('Return')"><mat-icon>undo</mat-icon> Return</button>
+                <button mat-stroked-button (click)="openManualMovement('Return')" matTooltip="Customer return back into stock"><mat-icon>undo</mat-icon> Return</button>
+                <button mat-stroked-button (click)="openManualMovement('Scrap')" matTooltip="Write off damaged or expired stock" style="color:#dc2626;"><mat-icon>delete_sweep</mat-icon> Scrap</button>
                 <button mat-raised-button color="primary" (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon> Receive Stock</button>
               </div>
               @if (ledgerLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading movements...</div> }
@@ -893,14 +616,18 @@ interface ComprehensiveAnalysisResponse {
                   <mat-icon>checklist</mat-icon> Picking Slips ({{ loadsScoped.length }})</button>
                 <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'invoices'" (click)="dispatchMode = 'invoices'">
                   <mat-icon>description</mat-icon> Invoices ({{ dispatchInvoiceRows.length }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'transfers'" (click)="dispatchMode = 'transfers'">
-                  <mat-icon>sync_alt</mat-icon> Transfers ({{ transfers.length }})</button>
+                <span class="stk-sep"></span>
+                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'pending'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'pending' ? '' : 'pending'" matTooltip="Tripsheets whose stock has not been deducted yet">
+                  <mat-icon>pending_actions</mat-icon> Awaiting approval ({{ dispatchCount('pending') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'done'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'done' ? '' : 'done'">
+                  <mat-icon>inventory</mat-icon> Deducted ({{ dispatchCount('done') }})</button>
+                <mat-form-field appearance="outline" class="stk-search">
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [(ngModel)]="dispatchSearch" placeholder="Load #, customer, driver, invoice...">
+                </mat-form-field>
                 <span class="stk-spacer"></span>
                 <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload"><mat-icon>refresh</mat-icon> Refresh</button>
                 <button mat-stroked-button (click)="exportDispatch()"><mat-icon>file_download</mat-icon> Export</button>
-                <button mat-raised-button color="primary" (click)="openDispatchForFilter()"
-                        [matTooltip]="whFilterId ? 'New dispatch from ' + whFilterName : 'Select a warehouse card above first'">
-                  <mat-icon>local_shipping</mat-icon> New Dispatch</button>
               </div>
 
               <!-- TRIPSHEETS / PICKING SLIPS -->
@@ -911,10 +638,10 @@ interface ComprehensiveAnalysisResponse {
                     <table class="stk-table">
                       <thead><tr>
                         <th>Load #</th><th>Warehouse</th><th>Customer</th><th>Driver</th><th>Vehicle</th>
-                        <th class="num">Stops</th><th>Status</th><th>Delivery</th><th>POD</th><th style="text-align:right;">Actions</th>
+                        <th class="num">Stops</th><th>Status</th><th>Delivery</th><th>POD</th><th>Stock</th><th style="text-align:right;">Actions</th>
                       </tr></thead>
                       <tbody>
-                        @for (l of loadsScoped.slice(0, 300); track l.id) {
+                        @for (l of dispatchRows.slice(0, 500); track l.id) {
                           <tr>
                             <td class="mono">{{ l.loadNumber }}</td>
                             <td>{{ l.warehouseName || '—' }}</td>
@@ -926,10 +653,12 @@ interface ComprehensiveAnalysisResponse {
                                   [class.b-warn]="l.status === 'InTransit' || l.status === 'Pending' || l.status === 'Assigned'">{{ l.status }}</span></td>
                             <td>{{ (l.actualDeliveryDate || l.scheduledDeliveryDate) ? ((l.actualDeliveryDate || l.scheduledDeliveryDate) | date:'dd MMM yyyy') : '—' }}</td>
                             <td>@if (l.hasPOD) { <mat-icon style="color:#16a34a;font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
+                            <td>
+                              @if (isLoadDeducted(l.id)) { <span class="stk-badge b-in">Deducted</span> }
+                              @else { <span class="stk-badge b-warn">Awaiting</span> }
+                            </td>
                             <td style="text-align:right;white-space:nowrap;">
-                              @if (isLoadDeducted(l.id)) {
-                                <mat-icon style="color:#16a34a;font-size:20px;width:20px;height:20px;vertical-align:middle;" matTooltip="Stock deducted">inventory</mat-icon>
-                              } @else if (canApprove) {
+                              @if (!isLoadDeducted(l.id) && canApprove) {
                                 <button mat-icon-button matTooltip="Review picking slip & approve dispatch (deducts stock)" style="color:#d97706;"
                                         (click)="openApproveDispatch(l)"><mat-icon>fact_check</mat-icon></button>
                               }
@@ -939,10 +668,10 @@ interface ComprehensiveAnalysisResponse {
                               <button mat-icon-button matTooltip="View picking slip" (click)="openLoadDoc(l, 'picking')"><mat-icon>checklist</mat-icon></button>
                             </td>
                           </tr>
-                        } @empty { <tr><td colspan="10" class="stk-empty">No tripsheets found{{ whFilterName }}</td></tr> }
+                        } @empty { <tr><td colspan="11" class="stk-empty">No tripsheets found{{ whFilterName }}</td></tr> }
                       </tbody>
                     </table>
-                    @if (loadsScoped.length > 300) { <div class="stk-more">Showing first 300 of {{ loadsScoped.length | number }} tripsheets</div> }
+                    @if (dispatchRows.length > 500) { <div class="stk-more">Showing first 500 of {{ dispatchRows.length | number }} tripsheets — refine your search</div> }
                   </div>
                 }
               }
@@ -954,10 +683,10 @@ interface ComprehensiveAnalysisResponse {
                   <div class="stk-table-wrap">
                     <table class="stk-table">
                       <thead><tr>
-                        <th>Invoice #</th><th>Order #</th><th>Customer / Stop</th><th>Load #</th><th>Warehouse</th><th>Status</th><th>Delivery</th><th style="text-align:right;">Actions</th>
+                        <th>Invoice #</th><th>Order #</th><th>Customer / Stop</th><th>Load #</th><th>Warehouse</th><th>Status</th><th>Stock</th><th>Delivery</th><th style="text-align:right;">Actions</th>
                       </tr></thead>
                       <tbody>
-                        @for (r of dispatchInvoiceRows.slice(0, 400); track $index) {
+                        @for (r of dispatchInvoiceRows.slice(0, 500); track $index) {
                           <tr>
                             <td class="mono">{{ r.invoiceNumber }}</td>
                             <td class="mono">{{ r.orderNumber || '—' }}</td>
@@ -966,79 +695,21 @@ interface ComprehensiveAnalysisResponse {
                             <td>{{ r.warehouseName || '—' }}</td>
                             <td><span class="stk-badge" [class.b-in]="r.status === 'Delivered' || r.status === 'Completed'"
                                   [class.b-warn]="r.status === 'InTransit' || r.status === 'Pending' || r.status === 'Assigned'">{{ r.status }}</span></td>
+                            <td><span class="stk-badge" [class.b-in]="r.deducted" [class.b-warn]="!r.deducted">{{ r.deducted ? 'Deducted' : 'Awaiting' }}</span></td>
                             <td>{{ r.deliveryDate ? (r.deliveryDate | date:'dd MMM yyyy') : '—' }}</td>
-                            <td style="text-align:right;">
+                            <td style="text-align:right;white-space:nowrap;">
+                              @if (!r.deducted && canApprove) {
+                                <button mat-icon-button matTooltip="Review & approve dispatch" style="color:#d97706;" (click)="openApproveDispatch(r.load)"><mat-icon>fact_check</mat-icon></button>
+                              }
                               <button mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(r.load, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
                             </td>
                           </tr>
-                        } @empty { <tr><td colspan="8" class="stk-empty">No invoices found on tripsheets{{ whFilterName }}</td></tr> }
+                        } @empty { <tr><td colspan="9" class="stk-empty">No invoices found on tripsheets{{ whFilterName }}</td></tr> }
                       </tbody>
                     </table>
-                    @if (dispatchInvoiceRows.length > 400) { <div class="stk-more">Showing first 400 of {{ dispatchInvoiceRows.length | number }} invoices</div> }
+                    @if (dispatchInvoiceRows.length > 500) { <div class="stk-more">Showing first 500 of {{ dispatchInvoiceRows.length | number }} invoices</div> }
                   </div>
                 }
-              }
-
-              <!-- TRANSFERS -->
-              @if (dispatchMode === 'transfers') {
-                @if (trLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading transfers...</div> }
-                @else {
-                  <div class="stk-table-wrap">
-                    <table class="stk-table">
-                      <thead><tr><th>Transfer #</th><th>From</th><th>To</th><th>Commodity</th><th class="num">Qty</th><th>Status</th><th>Requested</th></tr></thead>
-                      <tbody>
-                        @for (t of transfers; track t.id) {
-                          <tr>
-                            <td class="mono">{{ t.transferNumber }}</td>
-                            <td>{{ t.fromWarehouseName }}</td>
-                            <td>{{ t.toWarehouseName }}</td>
-                            <td class="desc">{{ t.commodityName }}</td>
-                            <td class="num"><b>{{ t.quantity | number }}</b></td>
-                            <td><span class="stk-badge" [class.b-in]="t.status === 'Completed'" [class.b-warn]="t.status === 'Pending' || t.status === 'InTransit'">{{ t.status }}</span></td>
-                            <td>{{ t.requestedDate | date:'dd MMM yyyy' }}</td>
-                          </tr>
-                        } @empty { <tr><td colspan="7" class="stk-empty">No transfers recorded yet</td></tr> }
-                      </tbody>
-                    </table>
-                  </div>
-                }
-              }
-            </div>
-          </mat-tab>
-
-          <!-- SCRAP -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">delete_sweep</mat-icon> Scrap</ng-template>
-            <div class="stk-tab-body">
-              <div class="stk-toolbar">
-                <span class="stk-count">Damaged / written-off stock</span>
-                <span class="stk-spacer"></span>
-                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload scrap records"><mat-icon>refresh</mat-icon> Refresh</button>
-                <button mat-stroked-button (click)="exportScrap()"><mat-icon>file_download</mat-icon> Export</button>
-                <button mat-raised-button color="warn" (click)="openScrapForFilter()"
-                        [matTooltip]="whFilterId ? 'Record scrap at ' + whFilterName : 'Select a warehouse card above first'">
-                  <mat-icon>delete_sweep</mat-icon> Record Scrap</button>
-              </div>
-              @if (scrapLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading scrap records...</div> }
-              @else {
-                <div class="stk-table-wrap">
-                  <table class="stk-table">
-                    <thead><tr><th>Date</th><th>Warehouse</th><th>Commodity</th><th class="num">Qty</th><th>Reason</th><th>Notes</th><th>By</th></tr></thead>
-                    <tbody>
-                      @for (s of scrapScoped; track s.id) {
-                        <tr>
-                          <td>{{ s.scrapDate | date:'dd MMM yyyy' }}</td>
-                          <td>{{ s.warehouseName }}</td>
-                          <td class="desc">{{ s.commodityName }}</td>
-                          <td class="num"><b>{{ s.quantity | number }}</b></td>
-                          <td>{{ s.reason }}</td>
-                          <td class="desc">{{ s.notes }}</td>
-                          <td>{{ s.recordedBy }}</td>
-                        </tr>
-                      } @empty { <tr><td colspan="7" class="stk-empty">No scrap recorded{{ whFilterName }}</td></tr> }
-                    </tbody>
-                  </table>
-                </div>
               }
             </div>
           </mat-tab>
@@ -1047,32 +718,115 @@ interface ComprehensiveAnalysisResponse {
           <mat-tab>
             <ng-template mat-tab-label><mat-icon class="tab-ico">summarize</mat-icon> Reports</ng-template>
             <div class="stk-tab-body">
-              <div class="stk-reports-grid">
-                <div class="stk-report-card" (click)="exportSoh()">
-                  <mat-icon>inventory_2</mat-icon>
-                  <h4>Stock on Hand</h4>
-                  <p>Full SOH listing with quantities, sales-derived unit prices and values{{ whFilterName }}</p>
-                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
-                </div>
-                <div class="stk-report-card" (click)="exportValuation()">
-                  <mat-icon>payments</mat-icon>
-                  <h4>Valuation Summary</h4>
-                  <p>Per-warehouse and per-company stock valuation at sales price and cost</p>
-                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
-                </div>
-                <div class="stk-report-card" (click)="exportExceptions()">
-                  <mat-icon>report_problem</mat-icon>
-                  <h4>Exceptions</h4>
-                  <p>Out-of-stock, negative and unpriced items needing attention</p>
-                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
-                </div>
-                <div class="stk-report-card" (click)="exportMovements()">
-                  <mat-icon>swap_horiz</mat-icon>
-                  <h4>Movements</h4>
-                  <p>Recent stock movements, transfers and adjustments audit trail</p>
-                  <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
-                </div>
+              <div class="stk-toolbar">
+                <button mat-stroked-button [class.stk-filter-on]="reportMode === 'valuation'" (click)="reportMode = 'valuation'">
+                  <mat-icon>payments</mat-icon> Valuation by Company</button>
+                <button mat-stroked-button [class.stk-filter-on]="reportMode === 'activity'" (click)="reportMode = 'activity'">
+                  <mat-icon>swap_horiz</mat-icon> Movement Activity</button>
+                <button mat-stroked-button [class.stk-filter-on]="reportMode === 'dispatch'" (click)="reportMode = 'dispatch'">
+                  <mat-icon>local_shipping</mat-icon> Dispatch Compliance</button>
+                <button mat-stroked-button [class.stk-filter-on]="reportMode === 'exceptions'" (click)="reportMode = 'exceptions'">
+                  <mat-icon>report_problem</mat-icon> Exceptions</button>
+                <span class="stk-sep"></span>
+                @if (reportMode === 'activity') {
+                  <button mat-stroked-button [class.stk-filter-on]="reportDays === 7" (click)="reportDays = 7">7d</button>
+                  <button mat-stroked-button [class.stk-filter-on]="reportDays === 30" (click)="reportDays = 30">30d</button>
+                  <button mat-stroked-button [class.stk-filter-on]="reportDays === 90" (click)="reportDays = 90">90d</button>
+                  <button mat-stroked-button [class.stk-filter-on]="reportDays === 0" (click)="reportDays = 0">All</button>
+                }
+                <span class="stk-spacer"></span>
+                <button mat-stroked-button (click)="exportReport()"><mat-icon>file_download</mat-icon> Export Excel</button>
               </div>
+
+              <!-- Valuation by company × warehouse -->
+              @if (reportMode === 'valuation') {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr><th>Company</th><th>Warehouse</th><th class="num">Items</th><th class="num">In Stock</th><th class="num">Out</th><th class="num">Units</th><th class="num">Sales Value</th><th class="num">Cost Value</th></tr></thead>
+                    <tbody>
+                      @for (r of valuationReport; track r.key) {
+                        <tr [class.stk-row-total]="r.isTotal">
+                          <td><b>{{ r.company }}</b></td>
+                          <td>{{ r.warehouse }}</td>
+                          <td class="num">{{ r.items | number }}</td>
+                          <td class="num">{{ r.inStock | number }}</td>
+                          <td class="num" [style.color]="r.out > 0 ? '#dc2626' : ''">{{ r.out | number }}</td>
+                          <td class="num">{{ formatQty(r.units) }}</td>
+                          <td class="num"><b>{{ formatValue(r.value) }}</b></td>
+                          <td class="num">{{ formatValue(r.cost) }}</td>
+                        </tr>
+                      } @empty { <tr><td colspan="8" class="stk-empty">No stock data</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+                <p class="stk-note"><mat-icon>info</mat-icon> Sales value uses the latest invoiced unit price per item; cost value uses the item cost where captured.</p>
+              }
+
+              <!-- Movement activity by type × warehouse -->
+              @if (reportMode === 'activity') {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr><th>Warehouse</th><th>Type</th><th class="num">Movements</th><th class="num">Units In</th><th class="num">Units Out</th><th class="num">Net</th><th>Last</th></tr></thead>
+                    <tbody>
+                      @for (r of activityReport; track r.key) {
+                        <tr [class.stk-row-total]="r.isTotal">
+                          <td><b>{{ r.warehouse }}</b></td>
+                          <td>{{ r.type }}</td>
+                          <td class="num">{{ r.count | number }}</td>
+                          <td class="num" style="color:#16a34a;">+{{ formatQty(r.unitsIn) }}</td>
+                          <td class="num" style="color:#dc2626;">-{{ formatQty(r.unitsOut) }}</td>
+                          <td class="num"><b [style.color]="r.net < 0 ? '#dc2626' : '#16a34a'">{{ r.net > 0 ? '+' : '' }}{{ formatQty(r.net) }}</b></td>
+                          <td>{{ r.last ? (r.last | date:'dd MMM HH:mm') : '—' }}</td>
+                        </tr>
+                      } @empty { <tr><td colspan="7" class="stk-empty">No ledger movements in this period{{ whFilterName }}</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+              }
+
+              <!-- Dispatch compliance -->
+              @if (reportMode === 'dispatch') {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr><th>Warehouse</th><th class="num">Tripsheets</th><th class="num">Stock Deducted</th><th class="num">Awaiting Approval</th><th class="num">% Approved</th><th class="num">Delivered but not deducted</th><th class="num">With POD</th></tr></thead>
+                    <tbody>
+                      @for (r of dispatchReport; track r.key) {
+                        <tr [class.stk-row-total]="r.isTotal">
+                          <td><b>{{ r.warehouse }}</b></td>
+                          <td class="num">{{ r.total | number }}</td>
+                          <td class="num" style="color:#16a34a;">{{ r.deducted | number }}</td>
+                          <td class="num" [style.color]="r.pending > 0 ? '#d97706' : ''">{{ r.pending | number }}</td>
+                          <td class="num"><b>{{ r.total ? (r.deducted / r.total * 100 | number:'1.0-0') : 0 }}%</b></td>
+                          <td class="num" [style.color]="r.deliveredPending > 0 ? '#dc2626' : ''">{{ r.deliveredPending | number }}</td>
+                          <td class="num">{{ r.withPod | number }}</td>
+                        </tr>
+                      } @empty { <tr><td colspan="7" class="stk-empty">No tripsheets</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+                <p class="stk-note"><mat-icon>info</mat-icon> "Delivered but not deducted" are tripsheets already delivered whose stock has not been approved out of the warehouse — these should be zero.</p>
+              }
+
+              <!-- Exceptions summary -->
+              @if (reportMode === 'exceptions') {
+                <div class="stk-table-wrap">
+                  <table class="stk-table">
+                    <thead><tr><th>Warehouse</th><th class="num">Out of Stock</th><th class="num">Negative</th><th class="num">Unpriced with Stock</th><th class="num">Open Issues</th><th class="num">In Progress</th></tr></thead>
+                    <tbody>
+                      @for (r of exceptionReport; track r.key) {
+                        <tr [class.stk-row-total]="r.isTotal">
+                          <td><b>{{ r.warehouse }}</b></td>
+                          <td class="num" [style.color]="r.out > 0 ? '#dc2626' : ''">{{ r.out | number }}</td>
+                          <td class="num" [style.color]="r.neg > 0 ? '#dc2626' : ''">{{ r.neg | number }}</td>
+                          <td class="num" [style.color]="r.unpriced > 0 ? '#d97706' : ''">{{ r.unpriced | number }}</td>
+                          <td class="num">{{ r.openIssues | number }}</td>
+                          <td class="num">{{ r.inProgress | number }}</td>
+                        </tr>
+                      } @empty { <tr><td colspan="6" class="stk-empty">No data</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+              }
             </div>
           </mat-tab>
         </mat-tab-group>
@@ -2277,6 +2031,8 @@ interface ComprehensiveAnalysisResponse {
     .mov-queue-more { font-size: 12px; color: #a16207; text-align: center; padding: 4px 0 0; }
     .stk-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
     .stk-spacer { flex: 1; }
+    .stk-sep { width: 1px; height: 26px; background: #e2e8f0; margin: 0 4px; }
+    .stk-row-total td { background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1; }
     .stk-filter-on { background: #eff6ff !important; border-color: #2563eb !important; color: #1d4ed8 !important; }
     .stk-loading { display: flex; align-items: center; gap: 12px; padding: 30px; color: #64748b; }
     .stk-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
@@ -2316,8 +2072,6 @@ export class StockManagementComponent implements OnInit {
   warehouses: WarehouseSummary[] = [];
   loading = true;
   notificationCount = 3;
-  selectedWarehouse: any = null;
-  showInventorySubmenu = false;
 
   /** Compact currency: R12.4M / R980.5K / R123 */
   formatValue(v: number | null | undefined): string {
@@ -2341,12 +2095,6 @@ export class StockManagementComponent implements OnInit {
   invLoading = true;
   sohSearch = '';
   excMode: 'out' | 'neg' | 'unpriced' = 'out';
-  movements: any[] = [];
-  movLoading = true;
-  transfers: any[] = [];
-  trLoading = true;
-  scrapRecords: any[] = [];
-  scrapLoading = true;
 
   get kpiSkus(): number { return this.warehouses.reduce((s, w) => s + (w.totalItems || 0), 0); }
   get kpiUnits(): number { return this.warehouses.reduce((s, w) => s + (w.totalQuantityOnHand || 0), 0); }
@@ -2408,9 +2156,121 @@ export class StockManagementComponent implements OnInit {
     }
   }
 
-  get scrapScoped(): any[] {
-    return this.whFilterId ? this.scrapRecords.filter(s => s.warehouseId === this.whFilterId) : this.scrapRecords;
+  // ═══ Reports (computed on-screen from scoped data) ═══
+  reportMode: 'valuation' | 'activity' | 'dispatch' | 'exceptions' = 'valuation';
+  reportDays = 30;
+
+  private get reportWarehouses(): any[] {
+    return this.whFilterId ? this.warehouses.filter(w => w.id === this.whFilterId) : this.warehouses;
   }
+
+  get valuationReport(): any[] {
+    const map = new Map<string, any>();
+    for (const r of this.invScoped) {
+      const company = r.category || 'Unassigned';
+      const key = `${company}|${r.warehouseId}`;
+      let a = map.get(key);
+      if (!a) { a = { key, company, warehouse: r.warehouseName, items: 0, inStock: 0, out: 0, units: 0, value: 0, cost: 0 }; map.set(key, a); }
+      a.items++;
+      if (r.quantityOnHand > 0) a.inStock++; else if (r.quantityOnHand === 0) a.out++;
+      a.units += +(r.quantityOnHand || 0);
+      a.value += +(r.lineValue || (r.unitPrice || 0) * (r.quantityOnHand || 0));
+      a.cost += +((r.unitCost || 0) * (r.quantityOnHand || 0));
+    }
+    const rows = [...map.values()].sort((x, y) => x.company.localeCompare(y.company) || x.warehouse.localeCompare(y.warehouse));
+    if (rows.length > 1) {
+      rows.push(rows.reduce((t, r) => ({ ...t, items: t.items + r.items, inStock: t.inStock + r.inStock, out: t.out + r.out,
+        units: t.units + r.units, value: t.value + r.value, cost: t.cost + r.cost }),
+        { key: 'TOTAL', company: 'Total', warehouse: '', items: 0, inStock: 0, out: 0, units: 0, value: 0, cost: 0, isTotal: true }));
+    }
+    return rows;
+  }
+
+  get activityReport(): any[] {
+    const since = this.reportDays ? Date.now() - this.reportDays * 86400000 : 0;
+    const map = new Map<string, any>();
+    for (const m of this.ledgerScoped) {
+      const ts = new Date(m.createdAt).getTime();
+      if (since && ts < since) continue;
+      const key = `${m.warehouseId}|${m.movementType}`;
+      let a = map.get(key);
+      if (!a) { a = { key, warehouse: m.warehouseName, type: m.movementType, count: 0, unitsIn: 0, unitsOut: 0, net: 0, last: null }; map.set(key, a); }
+      a.count++;
+      if (m.quantity > 0) a.unitsIn += m.quantity; else a.unitsOut += -m.quantity;
+      a.net += m.quantity;
+      if (!a.last || ts > new Date(a.last).getTime()) a.last = m.createdAt;
+    }
+    const rows = [...map.values()].sort((x, y) => x.warehouse.localeCompare(y.warehouse) || x.type.localeCompare(y.type));
+    if (rows.length > 1) {
+      rows.push(rows.reduce((t, r) => ({ ...t, count: t.count + r.count, unitsIn: t.unitsIn + r.unitsIn, unitsOut: t.unitsOut + r.unitsOut, net: t.net + r.net,
+        last: (!t.last || new Date(r.last).getTime() > new Date(t.last).getTime()) ? r.last : t.last }),
+        { key: 'TOTAL', warehouse: 'Total', type: '', count: 0, unitsIn: 0, unitsOut: 0, net: 0, last: null, isTotal: true }));
+    }
+    return rows;
+  }
+
+  get dispatchReport(): any[] {
+    const rows = this.reportWarehouses.map(w => {
+      const ls = this.loads.filter(l => l.warehouseId === w.id);
+      const deducted = ls.filter(l => this.isLoadDeducted(l.id));
+      const pending = ls.filter(l => !this.isLoadDeducted(l.id));
+      return {
+        key: String(w.id), warehouse: w.name, total: ls.length, deducted: deducted.length, pending: pending.length,
+        deliveredPending: pending.filter(l => l.status === 'Delivered' || l.status === 'Completed').length,
+        withPod: ls.filter(l => l.hasPOD).length
+      };
+    }).filter(r => r.total > 0);
+    if (rows.length > 1) {
+      rows.push(rows.reduce((t, r) => ({ ...t, total: t.total + r.total, deducted: t.deducted + r.deducted, pending: t.pending + r.pending,
+        deliveredPending: t.deliveredPending + r.deliveredPending, withPod: t.withPod + r.withPod }),
+        { key: 'TOTAL', warehouse: 'Total', total: 0, deducted: 0, pending: 0, deliveredPending: 0, withPod: 0, isTotal: true } as any));
+    }
+    return rows;
+  }
+
+  get exceptionReport(): any[] {
+    const rows = this.reportWarehouses.map(w => {
+      const inv = this.allInventory.filter(r => r.warehouseId === w.id && (!this.companyFilter || (r.category || '').toUpperCase() === this.companyFilter.toUpperCase()));
+      const iss = this.issues.filter(i => i.warehouseId === w.id);
+      return {
+        key: String(w.id), warehouse: w.name,
+        out: inv.filter(r => r.quantityOnHand === 0).length,
+        neg: inv.filter(r => r.quantityOnHand < 0).length,
+        unpriced: inv.filter(r => r.quantityOnHand > 0 && !r.unitPrice).length,
+        openIssues: iss.filter(i => i.status === 'Open').length,
+        inProgress: iss.filter(i => i.status === 'InProgress').length
+      };
+    });
+    if (rows.length > 1) {
+      rows.push(rows.reduce((t, r) => ({ ...t, out: t.out + r.out, neg: t.neg + r.neg, unpriced: t.unpriced + r.unpriced,
+        openIssues: t.openIssues + r.openIssues, inProgress: t.inProgress + r.inProgress }),
+        { key: 'TOTAL', warehouse: 'Total', out: 0, neg: 0, unpriced: 0, openIssues: 0, inProgress: 0, isTotal: true } as any));
+    }
+    return rows;
+  }
+
+  exportReport(): void {
+    const stamp = new Date().toISOString().substring(0, 10);
+    switch (this.reportMode) {
+      case 'valuation':
+        this.writeExcel(this.valuationReport.map(r => ({ 'Company': r.company, 'Warehouse': r.warehouse, 'Items': r.items, 'In Stock': r.inStock, 'Out of Stock': r.out,
+          'Units': r.units, 'Sales Value': Math.round(r.value), 'Cost Value': Math.round(r.cost) })), 'Valuation', `Stock_Valuation_${stamp}.xlsx`);
+        break;
+      case 'activity':
+        this.writeExcel(this.activityReport.map(r => ({ 'Warehouse': r.warehouse, 'Type': r.type, 'Movements': r.count, 'Units In': r.unitsIn, 'Units Out': r.unitsOut,
+          'Net': r.net, 'Last': r.last ? String(r.last).substring(0, 16).replace('T', ' ') : '' })), 'Activity', `Movement_Activity_${this.reportDays || 'all'}d_${stamp}.xlsx`);
+        break;
+      case 'dispatch':
+        this.writeExcel(this.dispatchReport.map(r => ({ 'Warehouse': r.warehouse, 'Tripsheets': r.total, 'Stock Deducted': r.deducted, 'Awaiting Approval': r.pending,
+          '% Approved': r.total ? Math.round(r.deducted / r.total * 100) : 0, 'Delivered not deducted': r.deliveredPending, 'With POD': r.withPod })), 'Dispatch', `Dispatch_Compliance_${stamp}.xlsx`);
+        break;
+      case 'exceptions':
+        this.writeExcel(this.exceptionReport.map(r => ({ 'Warehouse': r.warehouse, 'Out of Stock': r.out, 'Negative': r.neg, 'Unpriced with Stock': r.unpriced,
+          'Open Issues': r.openIssues, 'In Progress': r.inProgress })), 'Exceptions', `Stock_Exceptions_${stamp}.xlsx`);
+        break;
+    }
+  }
+
 
   // ═══ Stock issues ═══
   issues: any[] = [];
@@ -2477,7 +2337,7 @@ export class StockManagementComponent implements OnInit {
 
   isLoadDeducted(loadId: number): boolean { return this.deductedLoadIds.has(loadId); }
 
-  openManualMovement(type: 'Receive' | 'Return' | 'Adjustment'): void {
+  openManualMovement(type: 'Receive' | 'Return' | 'Adjustment' | 'Scrap'): void {
     const w = this.resolveTargetWarehouse();
     if (!w) return;
     const ref = this.dialog.open(ManualMovementDialog, {
@@ -2588,7 +2448,9 @@ export class StockManagementComponent implements OnInit {
   }
 
   // ═══ Dispatch: tripsheets / picking slips / invoices from logistics ═══
-  dispatchMode: 'tripsheets' | 'picking' | 'invoices' | 'transfers' = 'tripsheets';
+  dispatchMode: 'tripsheets' | 'picking' | 'invoices' = 'tripsheets';
+  dispatchDeductFilter: '' | 'pending' | 'done' = '';
+  dispatchSearch = '';
   loads: any[] = [];
   loadsLoading = true;
 
@@ -2596,25 +2458,58 @@ export class StockManagementComponent implements OnInit {
     return this.whFilterId ? this.loads.filter(l => l.warehouseId === this.whFilterId) : this.loads;
   }
 
-  /** Flatten tripsheet stops into invoice rows (invoice numbers can be multi-valued per stop) */
+  /** Tripsheets after deduction-state filter and free-text search */
+  get dispatchRows(): any[] {
+    let rows = this.loadsScoped;
+    if (this.dispatchDeductFilter === 'pending') rows = rows.filter(l => !this.isLoadDeducted(l.id));
+    else if (this.dispatchDeductFilter === 'done') rows = rows.filter(l => this.isLoadDeducted(l.id));
+    const t = this.dispatchSearch.trim().toLowerCase();
+    if (t) {
+      rows = rows.filter(l =>
+        (l.loadNumber || '').toLowerCase().includes(t) ||
+        (l.customerName || '').toLowerCase().includes(t) ||
+        (l.driverName || '').toLowerCase().includes(t) ||
+        (l.vehicleRegistration || '').toLowerCase().includes(t) ||
+        (l.stops || []).some((s: any) =>
+          (s.invoiceNumber || '').toLowerCase().includes(t) ||
+          (s.orderNumber || '').toLowerCase().includes(t) ||
+          (s.customerName || s.companyName || s.locationName || '').toLowerCase().includes(t)));
+    }
+    return rows;
+  }
+
+  dispatchCount(kind: 'pending' | 'done'): number {
+    return this.loadsScoped.filter(l => kind === 'done' ? this.isLoadDeducted(l.id) : !this.isLoadDeducted(l.id)).length;
+  }
+
+  /** Flatten tripsheet stops into invoice rows (invoice numbers can be multi-valued per stop, or sit on the stop lines) */
   get dispatchInvoiceRows(): any[] {
     const rows: any[] = [];
+    const t = this.dispatchSearch.trim().toLowerCase();
     for (const l of this.loadsScoped) {
+      if (this.dispatchDeductFilter === 'pending' && this.isLoadDeducted(l.id)) continue;
+      if (this.dispatchDeductFilter === 'done' && !this.isLoadDeducted(l.id)) continue;
       for (const s of (l.stops || [])) {
-        const raw = (s.invoiceNumber || '').trim();
-        if (!raw) continue;
-        const invoices = raw.split(/[\n,;\/]+/).map((x: string) => x.trim()).filter((x: string) => x);
-        for (const inv of invoices) {
-          rows.push({
+        const set = new Set<string>();
+        const push = (raw: string | null | undefined) =>
+          (raw || '').split(/[\n,;\/]+/).map(x => x.trim()).filter(x => x).forEach(x => set.add(x));
+        push(s.invoiceNumber);
+        for (const c of (s.commodities || [])) push(c.invoiceNumber);
+        for (const inv of set) {
+          const row = {
             invoiceNumber: inv,
             orderNumber: (s.orderNumber || '').split(/[\n,;\/]+/)[0]?.trim() || '',
             customerName: s.customerName || s.companyName || s.locationName || l.customerName || '—',
             loadNumber: l.loadNumber,
             warehouseName: l.warehouseName,
             status: s.status || l.status,
+            deducted: this.isLoadDeducted(l.id),
             deliveryDate: s.actualArrival || l.actualDeliveryDate || l.scheduledDeliveryDate,
             load: l
-          });
+          };
+          if (t && !(inv.toLowerCase().includes(t) || row.orderNumber.toLowerCase().includes(t) ||
+                     row.customerName.toLowerCase().includes(t) || (l.loadNumber || '').toLowerCase().includes(t))) continue;
+          rows.push(row);
         }
       }
     }
@@ -2638,20 +2533,19 @@ export class StockManagementComponent implements OnInit {
   }
 
   exportDispatch(): void {
-    if (this.dispatchMode === 'transfers') { this.exportTransfers(); return; }
     if (this.dispatchMode === 'invoices') {
       const rows = this.dispatchInvoiceRows.map(r => ({
         'Invoice #': r.invoiceNumber, 'Order #': r.orderNumber, 'Customer': r.customerName,
-        'Load #': r.loadNumber, 'Warehouse': r.warehouseName, 'Status': r.status,
+        'Load #': r.loadNumber, 'Warehouse': r.warehouseName, 'Status': r.status, 'Stock': r.deducted ? 'Deducted' : 'Awaiting',
         'Delivery': r.deliveryDate ? String(r.deliveryDate).substring(0, 10) : ''
       }));
       this.writeExcel(rows, 'Invoices', `Dispatch_Invoices_${new Date().toISOString().substring(0, 10)}.xlsx`);
       return;
     }
-    const rows = this.loadsScoped.map(l => ({
+    const rows = this.dispatchRows.map(l => ({
       'Load #': l.loadNumber, 'Warehouse': l.warehouseName, 'Customer': l.customerName,
       'Driver': l.driverName, 'Vehicle': l.vehicleRegistration, 'Stops': l.stops?.length || 0,
-      'Status': l.status, 'POD': l.hasPOD ? 'Yes' : 'No',
+      'Status': l.status, 'POD': l.hasPOD ? 'Yes' : 'No', 'Stock': this.isLoadDeducted(l.id) ? 'Deducted' : 'Awaiting',
       'Delivery': (l.actualDeliveryDate || l.scheduledDeliveryDate) ? String(l.actualDeliveryDate || l.scheduledDeliveryDate).substring(0, 10) : ''
     }));
     this.writeExcel(rows, 'Tripsheets', `Tripsheets_${new Date().toISOString().substring(0, 10)}.xlsx`);
@@ -2662,21 +2556,6 @@ export class StockManagementComponent implements OnInit {
     this.http.get<any[]>(`${environment.apiUrl}/warehouses/inventory`).subscribe({
       next: d => { this.allInventory = d || []; this.invLoading = false; },
       error: () => { this.allInventory = []; this.invLoading = false; }
-    });
-    this.movLoading = true;
-    this.http.get<any[]>(`${environment.apiUrl}/inventory/movements?limit=200`).subscribe({
-      next: d => { this.movements = d || []; this.movLoading = false; },
-      error: () => { this.movements = []; this.movLoading = false; }
-    });
-    this.trLoading = true;
-    this.http.get<any[]>(`${environment.apiUrl}/warehouses/stock-transfers`).subscribe({
-      next: d => { this.transfers = d || []; this.trLoading = false; },
-      error: () => { this.transfers = []; this.trLoading = false; }
-    });
-    this.scrapLoading = true;
-    this.http.get<any[]>(`${environment.apiUrl}/logistics/scrap`).subscribe({
-      next: d => { this.scrapRecords = d || []; this.scrapLoading = false; },
-      error: () => { this.scrapRecords = []; this.scrapLoading = false; }
     });
     this.loadsLoading = true;
     this.http.get<any[]>(`${environment.apiUrl}/logistics/loads`).subscribe({
@@ -2701,13 +2580,6 @@ export class StockManagementComponent implements OnInit {
     return null;
   }
 
-  openDispatchForFilter(): void {
-    const w = this.resolveTargetWarehouse();
-    if (!w) return;
-    const ref = this.dialog.open(DispatchDialog, { width: '1000px', maxWidth: '90vw', data: w });
-    ref.afterClosed().subscribe(() => this.loadDashboardData());
-  }
-
   open3DView(warehouse: any): void {
     this.dialog.open(Warehouse3DDialog, {
       width: '96vw', maxWidth: '96vw', height: '90vh',
@@ -2716,42 +2588,14 @@ export class StockManagementComponent implements OnInit {
     });
   }
 
-  openScrapForFilter(): void {
-    const w = this.resolveTargetWarehouse();
-    if (!w) return;
-    const ref = this.dialog.open(ScrapDialog, { width: '800px', maxWidth: '90vw', data: w });
-    ref.afterClosed().subscribe(() => this.loadDashboardData());
-  }
-
   openStockTakeForFilter(): void {
     const w = this.resolveTargetWarehouse();
     if (!w) return;
-    const ref = this.dialog.open(StockTakeDialog, { width: '1200px', maxWidth: '95vw', data: w });
-    ref.afterClosed().subscribe(() => { this.loadWarehouses(); this.loadDashboardData(); });
-  }
-
-  openRepackagingForFilter(): void {
-    const w = this.resolveTargetWarehouse();
-    if (!w) return;
-    const ref = this.dialog.open(RepackagingDialog, { width: '700px', maxWidth: '90vw', data: w });
-    ref.afterClosed().subscribe(() => this.loadDashboardData());
-  }
-
-  exportTransfers(): void {
-    const rows = this.transfers.map(t => ({
-      'Transfer #': t.transferNumber, 'From': t.fromWarehouseName, 'To': t.toWarehouseName,
-      'Commodity': t.commodityName, 'Qty': t.quantity, 'Status': t.status,
-      'Requested': t.requestedDate ? String(t.requestedDate).substring(0, 10) : ''
-    }));
-    this.writeExcel(rows, 'Transfers', `Transfers_${new Date().toISOString().substring(0, 10)}.xlsx`);
-  }
-
-  exportScrap(): void {
-    const rows = this.scrapScoped.map(s => ({
-      'Date': s.scrapDate ? String(s.scrapDate).substring(0, 10) : '', 'Warehouse': s.warehouseName,
-      'Commodity': s.commodityName, 'Qty': s.quantity, 'Reason': s.reason, 'Notes': s.notes, 'By': s.recordedBy
-    }));
-    this.writeExcel(rows, 'Scrap', `Scrap_${new Date().toISOString().substring(0, 10)}.xlsx`);
+    const ref = this.dialog.open(StockTakeDialog, {
+      width: '1200px', maxWidth: '95vw',
+      data: { warehouse: w, inventory: this.allInventory.filter(r => r.warehouseId === w.id) }
+    });
+    ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadWarehouses(); this.loadDashboardData(); } });
   }
 
   // ═══ Excel exports ═══
@@ -2841,81 +2685,7 @@ export class StockManagementComponent implements OnInit {
     this.loadDashboardData();
   }
 
-  // ===== Invoice Fulfillment =====
-  showFulfillment = false;
-  ffLoading = false;
-  ffAnalysis: any = null;
-  ffFiltered: any[] = [];
-  ffSearch = '';
-  ffExpanded: string | null = null;
-  ffInvoices: any[] = [];
-  ffInvLoading = false;
-
-  openFulfillment(): void {
-    this.ffExpanded = null;
-    this.ffInvoices = [];
-    this.showFulfillment = true;
-    this.ffLoading = true;
-    this.ffAnalysis = null;
-    this.ffFiltered = [];
-    this.http.get<any>(`${environment.apiUrl}/stock-fulfillment/analysis?status=Pending&onlyMatched=true`).subscribe({
-      next: (data) => {
-        this.ffAnalysis = data;
-        this.ffFiltered = data.lines || [];
-        this.ffLoading = false;
-      },
-      error: (err) => {
-        console.error('Error loading fulfillment analysis:', err);
-        this.ffLoading = false;
-        this.snackBar.open('Failed to load fulfillment analysis', 'Close', { duration: 4000 });
-      }
-    });
-  }
-
-  closeFulfillment(): void {
-    this.showFulfillment = false;
-    this.ffSearch = '';
-  }
-
-  applyFfSearch(): void {
-    if (!this.ffAnalysis) { this.ffFiltered = []; return; }
-    const term = this.ffSearch.trim().toLowerCase();
-    if (!term) { this.ffFiltered = this.ffAnalysis.lines; return; }
-    this.ffFiltered = this.ffAnalysis.lines.filter((l: any) =>
-      (l.productCode || '').toLowerCase().includes(term) ||
-      (l.productDescription || '').toLowerCase().includes(term));
-  }
-
-  ffStatusLabel(status: string): string {
-    switch (status) {
-      case 'CanFulfill': return 'Fulfillable';
-      case 'Partial': return 'Partial';
-      case 'OutOfStock': return 'Out of Stock';
-      default: return status;
-    }
-  }
-
-  toggleInvoices(line: any): void {
-    if (this.ffExpanded === line.productCode) {
-      this.ffExpanded = null;
-      this.ffInvoices = [];
-      return;
-    }
-    this.ffExpanded = line.productCode;
-    this.ffInvoices = [];
-    this.ffInvLoading = true;
-    this.http.get<any>(`${environment.apiUrl}/stock-fulfillment/invoices/${encodeURIComponent(line.productCode)}?status=Pending`).subscribe({
-      next: (data) => {
-        this.ffInvoices = data.invoices || [];
-        this.ffInvLoading = false;
-      },
-      error: (err) => {
-        console.error('Error loading invoices for product:', err);
-        this.ffInvLoading = false;
-        this.snackBar.open('Failed to load invoices', 'Close', { duration: 4000 });
-      }
-    });
-  }
+  // Invoice Fulfillment removed: stock now flows through the ledger (Movements / Dispatch).
 
   loadWarehouses(): void {
     this.loading = true;
@@ -2973,62 +2743,9 @@ export class StockManagementComponent implements OnInit {
     this.loadingStage = 0;
   }
 
-  selectWarehouse(warehouse: any): void {
-    this.selectedWarehouse = warehouse;
-    this.showInventorySubmenu = false;
-  }
-
-  clearSelection(): void {
-    this.selectedWarehouse = null;
-    this.showInventorySubmenu = false;
-  }
-
-  selectOperation(operation: string): void {
-    if (operation === 'inventory') {
-      this.showInventorySubmenu = true;
-    } else if (operation === 'dispatch') {
-      this.openDispatchDialog();
-    } else if (operation === 'transfer') {
-      this.openTransferDialog();
-    } else if (operation === 'grv') {
-      this.openGRVDialog();
-    }
-  }
-
-  backToOperations(): void {
-    this.showInventorySubmenu = false;
-  }
-
-  openInventoryView(): void {
-    this.dialog.open(WarehouseDetailsDialog, {
-      width: '90%',
-      maxWidth: '1200px',
-      data: this.selectedWarehouse
-    });
-  }
-
-  openScrap(): void {
-    this.dialog.open(ScrapDialog, {
-      width: '800px',
-      maxWidth: '90vw',
-      data: this.selectedWarehouse
-    });
-  }
-
-  openStockTake(): void {
-    this.dialog.open(StockTakeDialog, {
-      width: '1200px',
-      maxWidth: '95vw',
-      data: this.selectedWarehouse
-    });
-  }
-
-  openRepackaging(): void {
-    this.dialog.open(RepackagingDialog, {
-      width: '700px',
-      maxWidth: '90vw',
-      data: this.selectedWarehouse
-    });
+  /** The warehouse currently focused via the card filter (drives header, Welly and action defaults) */
+  get selectedWarehouse(): any | null {
+    return this.whFilterId ? (this.warehouses.find(x => x.id === this.whFilterId) || null) : null;
   }
 
   openDispatchDialog(): void {
@@ -3037,32 +2754,6 @@ export class StockManagementComponent implements OnInit {
       maxWidth: '90vw',
       data: this.selectedWarehouse
     });
-  }
-
-  openTransferDialog(): void {
-    const detailsDialog = this.dialog.open(WarehouseDetailsDialog, {
-      width: '90%',
-      maxWidth: '1200px',
-      data: this.selectedWarehouse
-    });
-    setTimeout(() => {
-      if (detailsDialog.componentInstance) {
-        detailsDialog.componentInstance.openTransferDialog();
-      }
-    }, 500);
-  }
-
-  openGRVDialog(): void {
-    const grvDialog = this.dialog.open(WarehouseDetailsDialog, {
-      width: '90%',
-      maxWidth: '1200px',
-      data: this.selectedWarehouse
-    });
-    setTimeout(() => {
-      if (grvDialog.componentInstance) {
-        grvDialog.componentInstance.openGRVDialog();
-      }
-    }, 500);
   }
 
   viewWarehouseDetails(warehouse: any): void {
@@ -6757,9 +6448,190 @@ export class ScrapDialog implements OnInit {
   }
 }
 
-// Stock Take Dialog Component
+// Stock Take Dialog Component — counts against WarehouseInventory, posts variances to the ledger
 @Component({
   selector: 'stock-take-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatChipsModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule
+  ],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">fact_check</mat-icon>
+      Stock Take — {{ data.warehouse.name }}
+    </h2>
+    <mat-dialog-content>
+      <div class="st-bar">
+        <mat-form-field appearance="outline" class="st-search">
+          <mat-label>Filter items</mat-label>
+          <input matInput [(ngModel)]="searchQuery" placeholder="Code, description or company">
+          <mat-icon matPrefix>search</mat-icon>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="st-ref">
+          <mat-label>Count reference</mat-label>
+          <input matInput [(ngModel)]="reference">
+        </mat-form-field>
+        <button mat-stroked-button [class.st-on]="onlyCounted" (click)="onlyCounted = !onlyCounted" matTooltip="Show only lines you have counted">
+          <mat-icon>edit_note</mat-icon> Counted ({{ countedCount() }})</button>
+        <button mat-stroked-button [class.st-on]="onlyVariance" (click)="onlyVariance = !onlyVariance" matTooltip="Show only lines with a difference">
+          <mat-icon>difference</mat-icon> Variances ({{ varianceLines().length }})</button>
+      </div>
+
+      <div class="st-table-wrap">
+        <table class="st-table">
+          <thead><tr>
+            <th>Code</th><th>Description</th><th>Company</th><th>UOM</th>
+            <th class="num">System Qty</th><th class="num" style="width:130px;">Counted</th><th class="num">Variance</th>
+          </tr></thead>
+          <tbody>
+            @for (r of rows().slice(0, 500); track r.commodityId) {
+              <tr [class.st-diff]="r.counted !== null && r.counted !== r.systemQty">
+                <td class="mono">{{ r.code }}</td>
+                <td class="desc">{{ r.name }}</td>
+                <td><span class="st-chip">{{ r.company || '—' }}</span></td>
+                <td>{{ r.uom }}</td>
+                <td class="num">{{ r.systemQty | number }}</td>
+                <td class="num"><input class="st-qty" type="number" min="0" [(ngModel)]="r.counted" placeholder="—"></td>
+                <td class="num">
+                  @if (r.counted !== null && r.counted !== undefined) {
+                    <b [style.color]="varianceOf(r) > 0 ? '#16a34a' : (varianceOf(r) < 0 ? '#dc2626' : '#94a3b8')">
+                      {{ varianceOf(r) > 0 ? '+' : '' }}{{ varianceOf(r) | number }}</b>
+                  } @else { <span style="color:#cbd5e1;">—</span> }
+                </td>
+              </tr>
+            } @empty { <tr><td colspan="7" class="st-empty">No items match</td></tr> }
+          </tbody>
+        </table>
+        @if (rows().length > 500) { <div class="st-more">Showing first 500 of {{ rows().length | number }} — narrow the filter</div> }
+      </div>
+
+      @if (varianceLines().length) {
+        <div class="st-summary">
+          <div><b>{{ varianceLines().length }}</b><span>lines with variance</span></div>
+          <div class="pos"><b>+{{ totalOver() | number }}</b><span>units over</span></div>
+          <div class="neg"><b>{{ totalShort() | number }}</b><span>units short</span></div>
+        </div>
+        <mat-form-field appearance="outline" style="width:100%;margin-top:10px;">
+          <mat-label>Reason for variances (required)</mat-label>
+          <input matInput [(ngModel)]="reason" placeholder="e.g. Quarterly count — Oct 2026">
+        </mat-form-field>
+      }
+      <p class="st-note"><mat-icon>info</mat-icon> Only lines you type a count for are affected. Each variance posts an Adjustment to the stock ledger and updates stock on hand. Lines that match the system quantity are recorded as confirmed with no movement.</p>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!canSubmit() || saving" (click)="submitStockTake()">
+        <mat-icon>save</mat-icon> Post {{ varianceLines().length }} adjustment{{ varianceLines().length === 1 ? '' : 's' }}
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .st-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .st-search { flex: 1; min-width: 240px; }
+    .st-ref { width: 220px; }
+    .st-bar mat-form-field { margin-bottom: -1.25em; }
+    .st-on { background: #fef3c7 !important; border-color: #f59e0b !important; }
+    .st-table-wrap { max-height: 50vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .st-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .st-table th { position: sticky; top: 0; background: #f8fafc; text-align: left; padding: 8px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    .st-table td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; }
+    .st-table .num { text-align: right; }
+    .st-table .mono { font-family: monospace; font-weight: 600; }
+    .st-table .desc { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .st-diff { background: #fffbeb; }
+    .st-chip { font-size: 11px; background: #eef2ff; color: #3730a3; padding: 2px 8px; border-radius: 10px; }
+    .st-qty { width: 110px; text-align: right; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; }
+    .st-qty:focus { outline: 2px solid #f59e0b; border-color: transparent; }
+    .st-empty, .st-more { text-align: center; color: #94a3b8; padding: 16px; font-size: 12.5px; }
+    .st-summary { display: flex; gap: 14px; margin-top: 12px; }
+    .st-summary > div { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
+    .st-summary b { font-size: 20px; }
+    .st-summary span { font-size: 12px; color: #64748b; }
+    .st-summary .pos b { color: #16a34a; } .st-summary .neg b { color: #dc2626; }
+    .st-note { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #64748b; margin-top: 12px; }
+    .st-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
+  `]
+})
+export class StockTakeDialog implements OnInit {
+  lines: { commodityId: number; code: string; name: string; company: string; uom: string; systemQty: number; counted: number | null }[] = [];
+  searchQuery = '';
+  reference = '';
+  reason = '';
+  onlyCounted = false;
+  onlyVariance = false;
+  saving = false;
+  private http = inject(HttpClient);
+
+  constructor(
+    public dialogRef: MatDialogRef<StockTakeDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private snackBar: MatSnackBar
+  ) {}
+
+  ngOnInit(): void {
+    this.reference = `STK-${this.data.warehouse.code || this.data.warehouse.id}-${new Date().toISOString().substring(0, 10)}`;
+    this.lines = (this.data.inventory || []).map((r: any) => ({
+      commodityId: r.commodityId,
+      code: r.commodityCode || '',
+      name: r.commodityName || '',
+      company: r.category || '',
+      uom: r.unitOfMeasure || 'Each',
+      systemQty: +(r.quantityOnHand || 0),
+      counted: null
+    })).sort((a: any, b: any) => a.code.localeCompare(b.code));
+  }
+
+  rows() {
+    const t = this.searchQuery.trim().toLowerCase();
+    return this.lines.filter(r => {
+      if (this.onlyCounted && (r.counted === null || r.counted === undefined)) return false;
+      if (this.onlyVariance && !(r.counted !== null && r.counted !== undefined && r.counted !== r.systemQty)) return false;
+      if (!t) return true;
+      return r.code.toLowerCase().includes(t) || r.name.toLowerCase().includes(t) || r.company.toLowerCase().includes(t);
+    });
+  }
+
+  varianceOf(r: any): number { return (r.counted ?? r.systemQty) - r.systemQty; }
+  countedCount(): number { return this.lines.filter(r => r.counted !== null && r.counted !== undefined).length; }
+  varianceLines() { return this.lines.filter(r => r.counted !== null && r.counted !== undefined && r.counted !== r.systemQty); }
+  totalOver(): number { return this.varianceLines().filter(r => this.varianceOf(r) > 0).reduce((s, r) => s + this.varianceOf(r), 0); }
+  totalShort(): number { return this.varianceLines().filter(r => this.varianceOf(r) < 0).reduce((s, r) => s + this.varianceOf(r), 0); }
+
+  canSubmit(): boolean {
+    return this.varianceLines().length > 0 && !!this.reason.trim() && !!this.reference.trim();
+  }
+
+  submitStockTake(): void {
+    this.saving = true;
+    const payload = {
+      warehouseId: this.data.warehouse.id,
+      reference: this.reference.trim(),
+      reason: this.reason.trim(),
+      lines: this.varianceLines().map(r => ({ commodityId: r.commodityId, countedQuantity: r.counted }))
+    };
+    this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/stock-take`, payload).subscribe({
+      next: (r) => {
+        this.snackBar.open(`Stock take posted — ${r?.adjusted ?? payload.lines.length} adjustment(s) written to the ledger`, 'Close', { duration: 5000 });
+        this.dialogRef.close(true);
+      },
+      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to post stock take', 'Close', { duration: 5000 }); }
+    });
+  }
+}
+
+// ═══ LEGACY (unused) Stock Take dialog retained below for reference — not registered anywhere ═══
+@Component({
+  selector: 'stock-take-dialog-legacy',
   standalone: true,
   imports: [
     CommonModule,
@@ -7023,7 +6895,7 @@ export class ScrapDialog implements OnInit {
     }
   `]
 })
-export class StockTakeDialog implements OnInit {
+export class StockTakeDialogLegacy implements OnInit {
   displayedColumns = ['sku', 'name', 'category', 'uom', 'systemQty', 'countedQty', 'variance'];
   items: any[] = [];
   filteredItems: any[] = [];
@@ -7032,7 +6904,7 @@ export class StockTakeDialog implements OnInit {
   private http = inject(HttpClient);
 
   constructor(
-    public dialogRef: MatDialogRef<StockTakeDialog>,
+    public dialogRef: MatDialogRef<StockTakeDialogLegacy>,
     @Inject(MAT_DIALOG_DATA) public data: any,
     private snackBar: MatSnackBar
   ) {}
@@ -7667,8 +7539,8 @@ export class ResolveIssueDialog {
             MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon style="vertical-align:middle;margin-right:8px;color:#16a34a;">{{ data.type === 'Receive' ? 'south_west' : (data.type === 'Adjustment' ? 'tune' : 'undo') }}</mat-icon>
-      {{ data.type === 'Receive' ? 'Receive Stock (GRV)' : (data.type === 'Adjustment' ? 'Stock Adjustment' : 'Return Stock') }} — {{ data.warehouse.name }}
+      <mat-icon style="vertical-align:middle;margin-right:8px;" [style.color]="data.type === 'Scrap' ? '#dc2626' : '#16a34a'">{{ typeIcon() }}</mat-icon>
+      {{ typeTitle() }} — {{ data.warehouse.name }}
     </h2>
     <mat-dialog-content>
       <mat-form-field appearance="outline" style="width:100%;">
@@ -7694,27 +7566,27 @@ export class ResolveIssueDialog {
         </div>
         <div class="mm-row">
           <mat-form-field appearance="outline">
-            <mat-label>{{ data.type === 'Adjustment' ? 'Adjustment (+/-)' : 'Quantity (' + (data.type === 'Receive' ? 'received' : 'returned') + ')' }}</mat-label>
+            <mat-label>{{ data.type === 'Adjustment' ? 'Adjustment (+/-)' : 'Quantity (' + (data.type === 'Receive' ? 'received' : (data.type === 'Scrap' ? 'scrapped' : 'returned')) + ')' }}</mat-label>
             <input matInput type="number" [min]="data.type === 'Adjustment' ? null : 1" [(ngModel)]="quantity">
-            @if (data.type === 'Adjustment' && selected && quantity) {
-              <mat-hint>New balance: {{ selected.quantityOnHand + quantity | number }}</mat-hint>
+            @if (selected && quantity) {
+              <mat-hint>New balance: {{ selected.quantityOnHand + signedQty() | number }}</mat-hint>
             }
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>{{ data.type === 'Receive' ? 'Supplier / GRV reference' : (data.type === 'Adjustment' ? 'Reference (count sheet, etc.)' : 'Return reference (invoice, customer)') }}</mat-label>
+            <mat-label>{{ data.type === 'Receive' ? 'Supplier / GRV reference' : (data.type === 'Adjustment' ? 'Reference (count sheet, etc.)' : (data.type === 'Scrap' ? 'Reference (damage report, batch)' : 'Return reference (invoice, customer)')) }}</mat-label>
             <input matInput [(ngModel)]="reference">
           </mat-form-field>
         </div>
         <mat-form-field appearance="outline" style="width:100%;">
-          <mat-label>{{ data.type === 'Adjustment' ? 'Reason (required)' : 'Notes (optional)' }}</mat-label>
+          <mat-label>{{ (data.type === 'Adjustment' || data.type === 'Scrap') ? 'Reason (required)' : 'Notes (optional)' }}</mat-label>
           <input matInput [(ngModel)]="reason">
         </mat-form-field>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="!valid() || saving" (click)="save()">
-        <mat-icon>check</mat-icon> {{ data.type === 'Receive' ? 'Receive' : (data.type === 'Adjustment' ? 'Adjust' : 'Return') }} {{ quantity || '' }}
+      <button mat-raised-button [color]="data.type === 'Scrap' ? 'warn' : 'primary'" [disabled]="!valid() || saving" (click)="save()">
+        <mat-icon>check</mat-icon> {{ data.type === 'Adjustment' ? 'Adjust' : data.type }} {{ quantity || '' }}
       </button>
     </mat-dialog-actions>
   `,
@@ -7756,9 +7628,20 @@ export class ManualMovementDialog {
       (r.commodityName || '').toLowerCase().includes(t)).slice(0, 50);
   }
 
+  typeIcon(): string {
+    switch (this.data.type) { case 'Receive': return 'south_west'; case 'Adjustment': return 'tune'; case 'Scrap': return 'delete_sweep'; default: return 'undo'; }
+  }
+  typeTitle(): string {
+    switch (this.data.type) { case 'Receive': return 'Receive Stock (GRV)'; case 'Adjustment': return 'Stock Adjustment'; case 'Scrap': return 'Scrap / Write-off'; default: return 'Return Stock'; }
+  }
+  signedQty(): number {
+    const q = this.quantity || 0;
+    return this.data.type === 'Scrap' ? -Math.abs(q) : q;
+  }
+
   valid(): boolean {
     if (!this.selected || !this.quantity || this.quantity === 0) return false;
-    if (this.data.type === 'Adjustment') return !!this.reason.trim();
+    if (this.data.type === 'Adjustment' || this.data.type === 'Scrap') return !!this.reason.trim();
     return this.quantity > 0;
   }
 
@@ -7949,8 +7832,18 @@ export class TransferStockDialog {
         <span><b>Customer:</b> {{ data.load.customerName || '—' }}</span>
         <span><b>Status:</b> {{ data.load.status }}</span>
       </div>
+      @if (unmapped.length) {
+        <div class="ad-empty" style="color:#b45309;">
+          <b>{{ unmapped.length }} line(s) cannot be matched to a stock item and will NOT deduct stock:</b>
+          <ul style="margin:6px 0 0 18px;">
+            @for (u of unmapped; track $index) {
+              <li>{{ u.name }} @if (u.code) { ({{ u.code }}) } — qty {{ u.planned | number }} @if (u.invoice) { · inv {{ u.invoice }} }</li>
+            }
+          </ul>
+        </div>
+      }
       @if (!lines.length) {
-        <div class="ad-empty">This tripsheet has no commodity lines to dispatch.</div>
+        <div class="ad-empty">No mappable commodity lines on this tripsheet.</div>
       } @else {
         <table class="ad-table">
           <thead><tr><th>Code</th><th>Description</th><th class="num">Planned</th><th class="num">On Hand</th><th class="num" style="width:130px;">Dispatch Qty</th><th></th></tr></thead>
@@ -8003,6 +7896,8 @@ export class TransferStockDialog {
 })
 export class ApproveDispatchDialog {
   lines: { commodityId: number; code: string; name: string; planned: number; qty: number; onHand: number }[] = [];
+  /** Stop lines that have no commodity mapping and therefore cannot deduct stock */
+  unmapped: { code: string; name: string; planned: number; invoice: string }[] = [];
   negativeReason = '';
   saving = false;
 
@@ -8017,7 +7912,15 @@ export class ApproveDispatchDialog {
     const byId = new Map<number, any>();
     for (const s of (data.load.stops || [])) {
       for (const c of (s.commodities || [])) {
-        if (!c.commodityId) continue;
+        if (!c.commodityId) {
+          this.unmapped.push({
+            code: c.commodityCode || '',
+            name: c.commodityName || c.comment || 'Unnamed line',
+            planned: c.quantity || 0,
+            invoice: c.invoiceNumber || s.invoiceNumber || ''
+          });
+          continue;
+        }
         const existing = byId.get(c.commodityId);
         if (existing) existing.planned += (c.quantity || 0);
         else byId.set(c.commodityId, {

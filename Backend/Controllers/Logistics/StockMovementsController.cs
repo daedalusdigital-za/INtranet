@@ -101,14 +101,21 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPost]
         public async Task<ActionResult<object>> CreateMovement([FromBody] ManualMovementDto dto)
         {
-            var allowed = new[] { "Receive", "Return", "Adjustment" };
+            var allowed = new[] { "Receive", "Return", "Adjustment", "Scrap" };
             if (!allowed.Contains(dto.MovementType))
-                return BadRequest(new { message = "MovementType must be Receive, Return or Adjustment" });
+                return BadRequest(new { message = "MovementType must be Receive, Return, Adjustment or Scrap" });
             if (dto.Quantity == 0)
                 return BadRequest(new { message = "Quantity may not be zero" });
+            if ((dto.MovementType == "Adjustment" || dto.MovementType == "Scrap") && string.IsNullOrWhiteSpace(dto.Reason))
+                return BadRequest(new { message = $"{dto.MovementType} requires a reason" });
 
-            // Receive/Return are stock-in (positive); Adjustment may be either sign
-            var qty = dto.MovementType == "Adjustment" ? dto.Quantity : Math.Abs(dto.Quantity);
+            // Receive/Return are stock-in (positive); Scrap is stock-out (negative); Adjustment may be either sign
+            var qty = dto.MovementType switch
+            {
+                "Adjustment" => dto.Quantity,
+                "Scrap" => -Math.Abs(dto.Quantity),
+                _ => Math.Abs(dto.Quantity)
+            };
 
             using var tx = await _context.Database.BeginTransactionAsync();
             try
@@ -224,6 +231,55 @@ namespace ProjectTracker.API.Controllers.Logistics
                 await tx.RollbackAsync();
                 _logger.LogError(ex, "Error approving dispatch for load {LoadId}", dto.LoadId);
                 return StatusCode(500, new { message = "An error occurred while approving the dispatch" });
+            }
+        }
+
+        // ═══ POST: stock take — post counted quantities; each variance becomes an Adjustment ═══
+        [HttpPost("stock-take")]
+        public async Task<ActionResult<object>> PostStockTake([FromBody] StockTakeDto dto)
+        {
+            if (dto.Lines == null || dto.Lines.Count == 0)
+                return BadRequest(new { message = "No counted lines supplied" });
+            if (string.IsNullOrWhiteSpace(dto.Reason))
+                return BadRequest(new { message = "A reason is required for stock take adjustments" });
+            var wh = await _context.Warehouses.FindAsync(dto.WarehouseId);
+            if (wh == null) return NotFound(new { message = "Warehouse not found" });
+
+            var reference = string.IsNullOrWhiteSpace(dto.Reference)
+                ? $"STK-{wh.Id}-{DateTime.UtcNow:yyyy-MM-dd}"
+                : dto.Reference.Trim();
+
+            using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var adjusted = 0; var confirmed = 0;
+                foreach (var line in dto.Lines)
+                {
+                    var inv = await _context.WarehouseInventory
+                        .FirstOrDefaultAsync(i => i.WarehouseId == dto.WarehouseId && i.CommodityId == line.CommodityId);
+                    var system = inv?.QuantityOnHand ?? 0m;
+                    var variance = line.CountedQuantity - system;
+                    if (variance == 0) { confirmed++; if (inv != null) { inv.LastCountDate = DateTime.UtcNow; } continue; }
+
+                    await ApplyMovementAsync(dto.WarehouseId, line.CommodityId, "Adjustment", variance,
+                        null, null, reference, $"Stock take: counted {line.CountedQuantity}, system {system}. {dto.Reason}");
+                    if (inv != null) inv.LastCountDate = DateTime.UtcNow;
+                    adjusted++;
+                }
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return Ok(new { reference, adjusted, confirmed });
+            }
+            catch (InvalidOperationException ex)
+            {
+                await tx.RollbackAsync();
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "Error posting stock take for warehouse {WarehouseId}", dto.WarehouseId);
+                return StatusCode(500, new { message = "An error occurred while posting the stock take" });
             }
         }
 
@@ -383,6 +439,20 @@ namespace ProjectTracker.API.Controllers.Logistics
         public int CommodityId { get; set; }
         public decimal DispatchedQuantity { get; set; }
         public string? Reason { get; set; }
+    }
+
+    public class StockTakeDto
+    {
+        public int WarehouseId { get; set; }
+        public string? Reference { get; set; }
+        public string? Reason { get; set; }
+        public List<StockTakeLineDto> Lines { get; set; } = new();
+    }
+
+    public class StockTakeLineDto
+    {
+        public int CommodityId { get; set; }
+        public decimal CountedQuantity { get; set; }
     }
 
     public class ReverseDto
