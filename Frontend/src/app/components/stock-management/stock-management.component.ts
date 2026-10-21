@@ -2026,8 +2026,42 @@ interface ComprehensiveAnalysisResponse {
       box-shadow: 0 10px 34px rgba(2,6,23,0.28); border: 2px solid transparent; transition: all .25s ease;
     }
     .stk-wh-card:hover { box-shadow: 0 22px 52px rgba(2,6,23,0.38); transform: translateY(-4px); }
-    .stk-wh-card.active { border-color: #16a34a; background: #f0fdf4; box-shadow: 0 10px 34px rgba(22,163,74,0.35); }
+    .stk-wh-card.active {
+      border-color: #16a34a; background: #f0fdf4;
+      box-shadow: 0 10px 34px rgba(22,163,74,0.35);
+      animation: whPulse 2.6s ease-in-out infinite;
+      position: relative;
+    }
     .stk-wh-card.active .stk-wh-ico { color: #16a34a; }
+    @keyframes whPulse {
+      0%, 100% { box-shadow: 0 10px 34px rgba(22,163,74,0.30), 0 0 0 0 rgba(22,163,74,0.45); }
+      50% { box-shadow: 0 10px 34px rgba(22,163,74,0.40), 0 0 0 7px rgba(22,163,74,0); }
+    }
+    /* Green shimmer running around the edges every now and again */
+    .stk-wh-card.active::after {
+      content: '';
+      position: absolute; inset: -2px;
+      border-radius: 16px;
+      padding: 2px;
+      background: conic-gradient(from var(--wh-angle, 0deg), transparent 0 78%, #16a34a 88%, #4ade80 93%, transparent 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      animation: whBorderSweep 4s linear infinite;
+    }
+    @property --wh-angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+    @keyframes whBorderSweep {
+      0% { --wh-angle: 0deg; opacity: 0; }
+      10% { opacity: 1; }
+      55% { --wh-angle: 360deg; opacity: 1; }
+      62% { --wh-angle: 360deg; opacity: 0; }
+      100% { --wh-angle: 360deg; opacity: 0; }
+    }
     .stk-wh-head { display: flex; align-items: center; gap: 10px; }
     .stk-wh-ico { color: #2563eb; }
     .stk-wh-title { flex: 1; min-width: 0; }
