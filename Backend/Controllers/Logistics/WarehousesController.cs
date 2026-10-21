@@ -67,24 +67,39 @@ namespace ProjectTracker.API.Controllers.Logistics
                 })
                 .ToListAsync();
 
-            // Get live inventory from BuildingInventory grouped by warehouse
-            var inventoryByWarehouse = await _context.BuildingInventory
-                .Include(i => i.Building)
-                .GroupBy(i => i.Building!.WarehouseId)
-                .Select(g => new
+            // Live stock from WarehouseInventory with commodity info
+            var stockRows = await _context.WarehouseInventory
+                .Include(i => i.Commodity)
+                .Select(i => new
                 {
-                    WarehouseId = g.Key,
-                    Count = g.Count(),
-                    Value = g.Sum(i => i.QuantityOnHand * i.UnitCost) ?? 0m
+                    i.WarehouseId,
+                    i.QuantityOnHand,
+                    i.LastCountDate,
+                    Code = i.Commodity.Code,
+                    Client = i.Commodity.Category ?? "OTHER"
                 })
-                .ToDictionaryAsync(x => x.WarehouseId, x => (x.Count, x.Value));
+                .ToListAsync();
 
-            // Build the result
+            var prices = await GetSalesPricingAsync();
+
+            var byWarehouse = stockRows.GroupBy(r => r.WarehouseId).ToDictionary(g => g.Key, g => g.ToList());
+
             var warehouses = warehouseData.Select(w =>
             {
-                var inv = inventoryByWarehouse.TryGetValue(w.Id, out var data) 
-                    ? data 
-                    : (Count: 0, Value: 0m);
+                byWarehouse.TryGetValue(w.Id, out var rows);
+                rows ??= new();
+
+                decimal value = 0m, cost = 0m;
+                int priced = 0;
+                foreach (var r in rows)
+                {
+                    if (r.Code != null && prices.TryGetValue(r.Code, out var p))
+                    {
+                        value += r.QuantityOnHand * p.Price;
+                        cost += r.QuantityOnHand * p.Cost;
+                        priced++;
+                    }
+                }
 
                 return new WarehouseSummaryDto
                 {
@@ -92,8 +107,26 @@ namespace ProjectTracker.API.Controllers.Logistics
                     Name = w.Name,
                     Location = w.Location,
                     ManagerName = w.ManagerName,
-                    TotalItems = inv.Count,
-                    TotalStockValue = inv.Value,
+                    TotalItems = rows.Count,
+                    TotalQuantityOnHand = rows.Sum(r => r.QuantityOnHand),
+                    ItemsInStock = rows.Count(r => r.QuantityOnHand > 0),
+                    ItemsOutOfStock = rows.Count(r => r.QuantityOnHand <= 0),
+                    PricedItems = priced,
+                    TotalStockValue = Math.Round(value, 2),
+                    TotalCostValue = Math.Round(cost, 2),
+                    LastCountDate = rows.Count > 0 ? rows.Max(r => r.LastCountDate) : null,
+                    ByClient = rows
+                        .GroupBy(r => r.Client)
+                        .Select(g => new ClientStockSummaryDto
+                        {
+                            Client = g.Key,
+                            Items = g.Count(),
+                            ItemsInStock = g.Count(r => r.QuantityOnHand > 0),
+                            QuantityOnHand = g.Sum(r => r.QuantityOnHand),
+                            StockValue = Math.Round(g.Sum(r => r.Code != null && prices.TryGetValue(r.Code, out var p) ? r.QuantityOnHand * p.Price : 0m), 2)
+                        })
+                        .OrderByDescending(c => c.QuantityOnHand)
+                        .ToList(),
                     CapacityPercent = w.TotalCapacity.HasValue && w.TotalCapacity > 0
                         ? (int)(((w.TotalCapacity - (w.AvailableCapacity ?? 0)) / w.TotalCapacity) * 100)
                         : 0,
@@ -104,6 +137,31 @@ namespace ProjectTracker.API.Controllers.Logistics
             }).ToList();
 
             return Ok(warehouses);
+        }
+
+        /// <summary>
+        /// Average selling price and unit cost per product code, derived from imported sales invoices.
+        /// </summary>
+        private async Task<Dictionary<string, (decimal Price, decimal Cost)>> GetSalesPricingAsync()
+        {
+            var rows = await _context.ImportedInvoices
+                .Where(ii => ii.ProductCode != null && ii.Quantity > 0 && ii.SalesAmount > 0)
+                .GroupBy(ii => ii.ProductCode!)
+                .Select(g => new
+                {
+                    Code = g.Key,
+                    Qty = g.Sum(x => x.Quantity),
+                    Sales = g.Sum(x => x.SalesAmount),
+                    Cost = g.Sum(x => x.CostOfSales)
+                })
+                .ToListAsync();
+
+            return rows
+                .Where(r => r.Qty > 0)
+                .ToDictionary(
+                    r => r.Code,
+                    r => (Price: Math.Round(r.Sales / r.Qty, 2), Cost: Math.Round(r.Cost / r.Qty, 2)),
+                    StringComparer.OrdinalIgnoreCase);
         }
 
         [HttpGet("{id}")]
@@ -179,6 +237,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     WarehouseName = i.Warehouse.Name,
                     CommodityId = i.CommodityId,
                     CommodityName = i.Commodity.Name,
+                    CommodityCode = i.Commodity.Code,
+                    Category = i.Commodity.Category,
+                    UnitOfMeasure = i.Commodity.UnitOfMeasure,
                     QuantityOnHand = i.QuantityOnHand,
                     ReorderLevel = i.ReorderLevel,
                     MaximumLevel = i.MaximumLevel,
@@ -188,6 +249,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 })
                 .ToListAsync();
 
+            ApplyPricing(inventory, await GetSalesPricingAsync());
             return Ok(inventory);
         }
 
@@ -204,6 +266,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     WarehouseName = i.Warehouse.Name,
                     CommodityId = i.CommodityId,
                     CommodityName = i.Commodity.Name,
+                    CommodityCode = i.Commodity.Code,
+                    Category = i.Commodity.Category,
+                    UnitOfMeasure = i.Commodity.UnitOfMeasure,
                     QuantityOnHand = i.QuantityOnHand,
                     ReorderLevel = i.ReorderLevel,
                     MaximumLevel = i.MaximumLevel,
@@ -213,7 +278,21 @@ namespace ProjectTracker.API.Controllers.Logistics
                 })
                 .ToListAsync();
 
+            ApplyPricing(inventory, await GetSalesPricingAsync());
             return Ok(inventory);
+        }
+
+        private static void ApplyPricing(List<WarehouseInventoryDto> inventory, Dictionary<string, (decimal Price, decimal Cost)> prices)
+        {
+            foreach (var item in inventory)
+            {
+                if (item.CommodityCode != null && prices.TryGetValue(item.CommodityCode, out var p))
+                {
+                    item.UnitPrice = p.Price;
+                    item.UnitCost = p.Cost;
+                    item.LineValue = Math.Round(item.QuantityOnHand * p.Price, 2);
+                }
+            }
         }
 
         [HttpPost("inventory")]

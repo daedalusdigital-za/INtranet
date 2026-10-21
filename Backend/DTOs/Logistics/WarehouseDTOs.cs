@@ -32,6 +32,24 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal? TotalCapacity { get; set; }
         public decimal? AvailableCapacity { get; set; }
         public string Status { get; set; } = "Active";
+
+        // Enriched stock stats (from WarehouseInventory + sales pricing)
+        public decimal TotalQuantityOnHand { get; set; }
+        public int ItemsInStock { get; set; }
+        public int ItemsOutOfStock { get; set; }
+        public int PricedItems { get; set; }
+        public decimal TotalCostValue { get; set; }
+        public DateTime? LastCountDate { get; set; }
+        public List<ClientStockSummaryDto> ByClient { get; set; } = new();
+    }
+
+    public class ClientStockSummaryDto
+    {
+        public string Client { get; set; } = string.Empty;
+        public int Items { get; set; }
+        public int ItemsInStock { get; set; }
+        public decimal QuantityOnHand { get; set; }
+        public decimal StockValue { get; set; }
     }
 
     public class CreateWarehouseDto
@@ -58,12 +76,18 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string WarehouseName { get; set; } = string.Empty;
         public int CommodityId { get; set; }
         public string CommodityName { get; set; } = string.Empty;
+        public string? CommodityCode { get; set; }
+        public string? Category { get; set; }
+        public string? UnitOfMeasure { get; set; }
         public decimal QuantityOnHand { get; set; }
         public decimal? ReorderLevel { get; set; }
         public decimal? MaximumLevel { get; set; }
         public string? BinLocation { get; set; }
         public DateTime? LastCountDate { get; set; }
         public DateTime? LastRestockDate { get; set; }
+        public decimal? UnitPrice { get; set; }
+        public decimal? UnitCost { get; set; }
+        public decimal? LineValue { get; set; }
     }
 
     public class CreateWarehouseInventoryDto

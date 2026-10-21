@@ -31,6 +31,14 @@ import { environment } from '../../../environments/environment';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import Chart from 'chart.js/auto';
 
+interface ClientStockSummary {
+  client: string;
+  items: number;
+  itemsInStock: number;
+  quantityOnHand: number;
+  stockValue: number;
+}
+
 interface WarehouseSummary {
   id: number;
   name: string;
@@ -42,6 +50,13 @@ interface WarehouseSummary {
   totalCapacity: number;
   availableCapacity: number;
   status: string;
+  totalQuantityOnHand: number;
+  itemsInStock: number;
+  itemsOutOfStock: number;
+  pricedItems: number;
+  totalCostValue: number;
+  lastCountDate?: string;
+  byClient: ClientStockSummary[];
 }
 
 interface WarehouseInventory {
@@ -50,12 +65,18 @@ interface WarehouseInventory {
   warehouseName: string;
   commodityId: number;
   commodityName: string;
+  commodityCode?: string;
+  category?: string;
+  unitOfMeasure?: string;
   quantityOnHand: number;
   reorderLevel: number;
   maximumLevel: number;
   binLocation: string;
   lastCountDate: string;
   lastRestockDate: string;
+  unitPrice?: number;
+  unitCost?: number;
+  lineValue?: number;
 }
 
 interface ChartData {
@@ -164,7 +185,7 @@ interface ComprehensiveAnalysisResponse {
               </div>
               <div class="stat-row">
                 <span class="stat-label">Stock Value</span>
-                <span class="stat-value">R{{ (selectedWarehouse.totalStockValue / 1000000) | number:'1.1-1' }}M</span>
+                <span class="stat-value">{{ formatValue(selectedWarehouse.totalStockValue) }}</span>
               </div>
               <mat-progress-bar mode="determinate" [value]="75" color="primary" class="operation-progress"></mat-progress-bar>
               <button mat-raised-button class="operation-btn">
@@ -490,11 +511,46 @@ interface ComprehensiveAnalysisResponse {
                       <mat-icon>attach_money</mat-icon>
                     </div>
                     <div class="stat-details">
-                      <div class="stat-value">R{{ (warehouse.totalStockValue / 1000000) | number:'1.1-1' }}M</div>
+                      <div class="stat-value">{{ formatValue(warehouse.totalStockValue) }}</div>
                       <div class="stat-label">Stock Value</div>
                     </div>
                   </div>
+                  <div class="stat-modern">
+                    <div class="stat-icon-wrapper">
+                      <mat-icon>stacked_bar_chart</mat-icon>
+                    </div>
+                    <div class="stat-details">
+                      <div class="stat-value">{{ formatQty(warehouse.totalQuantityOnHand) }}</div>
+                      <div class="stat-label">Units On Hand</div>
+                    </div>
+                  </div>
+                  <div class="stat-modern">
+                    <div class="stat-icon-wrapper">
+                      <mat-icon>check_circle</mat-icon>
+                    </div>
+                    <div class="stat-details">
+                      <div class="stat-value">{{ warehouse.itemsInStock | number }}<span class="stat-sub"> / {{ warehouse.itemsOutOfStock | number }} out</span></div>
+                      <div class="stat-label">In Stock</div>
+                    </div>
+                  </div>
                 </div>
+
+                @if (warehouse.byClient && warehouse.byClient.length > 0) {
+                  <div class="client-chips">
+                    @for (c of warehouse.byClient; track c.client) {
+                      <span class="client-chip" [matTooltip]="c.items + ' items \u00b7 ' + formatQty(c.quantityOnHand) + ' units \u00b7 ' + formatValue(c.stockValue)">
+                        {{ c.client }} <b>{{ formatQty(c.quantityOnHand) }}</b>
+                      </span>
+                    }
+                  </div>
+                }
+
+                @if (warehouse.lastCountDate) {
+                  <div class="stock-asat">
+                    <mat-icon>event_available</mat-icon>
+                    Stock as at {{ warehouse.lastCountDate | date:'dd MMM yyyy' }}
+                  </div>
+                }
 
                 <div class="warehouse-capacity-modern">
                   <div class="capacity-header">
@@ -1554,6 +1610,20 @@ interface ComprehensiveAnalysisResponse {
     .ff-inv-table th.num, .ff-inv-table td.num { text-align: right; }
     .ff-inv-table tbody td { padding: 7px 12px; border-bottom: 1px solid #f1f5f9; color: #334155; }
     .ff-inv-table tbody tr:last-child td { border-bottom: none; }
+
+    .stat-sub { font-size: 0.65em; color: #94a3b8; font-weight: 500; }
+    .client-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; position: relative; z-index: 1; }
+    .client-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.75); color: #334155; border: 1px solid rgba(148,163,184,0.35);
+    }
+    .client-chip b { color: #0f172a; }
+    .stock-asat {
+      display: flex; align-items: center; gap: 6px; margin-top: 8px;
+      font-size: 11.5px; color: #64748b; position: relative; z-index: 1;
+    }
+    .stock-asat mat-icon { font-size: 15px; width: 15px; height: 15px; }
   `]
 })
 export class StockManagementComponent implements OnInit {
@@ -1562,6 +1632,22 @@ export class StockManagementComponent implements OnInit {
   notificationCount = 3;
   selectedWarehouse: any = null;
   showInventorySubmenu = false;
+
+  /** Compact currency: R12.4M / R980.5K / R123 */
+  formatValue(v: number | null | undefined): string {
+    const n = +(v || 0);
+    if (n >= 1_000_000) return 'R' + (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return 'R' + (n / 1_000).toFixed(1) + 'K';
+    return 'R' + n.toFixed(0);
+  }
+
+  /** Compact quantity: 20.5M / 1.2K / 847 */
+  formatQty(v: number | null | undefined): string {
+    const n = +(v || 0);
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 10_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toLocaleString();
+  }
 
   // Loading progress
   loadingProgress = 0;
@@ -2240,11 +2326,15 @@ export class StockManagementComponent implements OnInit {
               </td>
             </ng-container>
 
-            <!-- UOM Column -->
+            <!-- Unit Price Column -->
             <ng-container matColumnDef="unitPrice">
-              <th mat-header-cell *matHeaderCellDef>UOM</th>
+              <th mat-header-cell *matHeaderCellDef>Unit Price</th>
               <td mat-cell *matCellDef="let item">
-                <span class="price-value">{{ item.uom || 'Each' }}</span>
+                @if (item.unitPrice) {
+                  <span class="price-value">R{{ item.unitPrice | number:'1.2-2' }}</span>
+                } @else {
+                  <span class="price-value" style="color:#94a3b8;">—</span>
+                }
               </td>
             </ng-container>
 
@@ -2252,7 +2342,11 @@ export class StockManagementComponent implements OnInit {
             <ng-container matColumnDef="totalValue">
               <th mat-header-cell *matHeaderCellDef>Stock Value</th>
               <td mat-cell *matCellDef="let item">
-                <span class="total-value">R{{ (item.quantity * item.unitPrice).toLocaleString() }}</span>
+                @if (item.unitPrice) {
+                  <span class="total-value">R{{ (item.lineValue || item.quantity * item.unitPrice) | number:'1.0-0' }}</span>
+                } @else {
+                  <span class="total-value" style="color:#94a3b8;">—</span>
+                }
               </td>
             </ng-container>
 
@@ -3253,7 +3347,7 @@ export class StockManagementComponent implements OnInit {
   `]
 })
 export class WarehouseDetailsDialog implements OnInit, OnDestroy {
-  displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'unitPrice', 'status'];
+  displayedColumns: string[] = ['select', 'name', 'sku', 'category', 'quantity', 'unitPrice', 'totalValue', 'status'];
   searchQuery: string = '';
   selection = new SelectionModel<any>(true, []);
   showTransferDialog = false;
@@ -3328,16 +3422,51 @@ export class WarehouseDetailsDialog implements OnInit, OnDestroy {
 
   loadInventory(): void {
     this.loading = true;
-    // Load from live BuildingInventory
+    // Primary: live WarehouseInventory with sales-derived pricing
+    this.http.get<any[]>(`${environment.apiUrl}/warehouses/${this.data.id}/inventory`).subscribe({
+      next: (data) => {
+        if (data && data.length > 0) {
+          this.inventoryData = data.map(item => ({
+            id: item.id,
+            commodityId: item.commodityId,
+            name: item.commodityName,
+            sku: item.commodityCode || `COM-${item.commodityId.toString().padStart(3, '0')}`,
+            category: item.category || 'General',
+            quantity: item.quantityOnHand,
+            reorderLevel: item.reorderLevel,
+            binLocation: item.binLocation,
+            uom: item.unitOfMeasure || 'Each',
+            unitPrice: item.unitPrice || 0,
+            unitCost: item.unitCost || 0,
+            lineValue: item.lineValue || 0,
+            lastCountDate: item.lastCountDate,
+            status: this.getStockStatus(item.quantityOnHand, item.reorderLevel)
+          }));
+          this.filteredInventoryData = [...this.inventoryData];
+          this.sohTotalItems = this.inventoryData.length;
+          this.sohTotalValue = this.inventoryData.reduce((s, i) => s + (i.lineValue || 0), 0);
+          const dates = this.inventoryData.map(i => i.lastCountDate).filter(Boolean).sort();
+          this.sohAsAtDate = dates.length ? dates[dates.length - 1] : null;
+          this.sohLocations = [];
+          this.loading = false;
+        } else {
+          this.loadBuildingInventory();
+        }
+      },
+      error: () => this.loadBuildingInventory()
+    });
+  }
+
+  loadBuildingInventory(): void {
+    // Fallback: legacy BuildingInventory
     this.http.get<any>(`${environment.apiUrl}/warehouses/${this.data.id}/building-inventory`).subscribe({
       next: (data) => {
         if (data.items && data.items.length > 0) {
-          // Use live inventory data
           this.sohAsAtDate = new Date().toISOString().split('T')[0]; // Live data
           this.sohTotalItems = data.totalItems;
           this.sohTotalValue = data.totalStockValue;
           this.sohLocations = data.buildings?.map((b: any) => b.name) || [];
-          
+
           this.inventoryData = data.items.map((item: any) => ({
             id: item.id,
             name: item.itemDescription || item.itemCode,
