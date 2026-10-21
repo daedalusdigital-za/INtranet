@@ -949,7 +949,7 @@ interface ComprehensiveAnalysisResponse {
 
     .container {
       padding: 24px 24px 64px;
-      max-width: 1280px;
+      max-width: 1600px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
     }
