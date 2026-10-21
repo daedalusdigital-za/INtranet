@@ -129,6 +129,49 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // ═══ POST: transfer stock between warehouses (two linked ledger rows) ═══
+        [HttpPost("transfer")]
+        public async Task<ActionResult<object>> TransferStock([FromBody] TransferStockDto dto)
+        {
+            if (dto.FromWarehouseId == dto.ToWarehouseId)
+                return BadRequest(new { message = "Source and destination warehouses must differ" });
+            if (dto.Quantity <= 0)
+                return BadRequest(new { message = "Quantity must be greater than zero" });
+
+            var from = await _context.Warehouses.FindAsync(dto.FromWarehouseId);
+            var to = await _context.Warehouses.FindAsync(dto.ToWarehouseId);
+            if (from == null || to == null) return NotFound(new { message = "Warehouse not found" });
+
+            var reference = string.IsNullOrWhiteSpace(dto.Reference)
+                ? $"TRF {from.Name} → {to.Name}"
+                : dto.Reference;
+
+            using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // out of source (negative) — reason required if it goes negative (ApplyMovementAsync enforces)
+                var outRow = await ApplyMovementAsync(dto.FromWarehouseId, dto.CommodityId, "Transfer",
+                    -Math.Abs(dto.Quantity), null, null, reference, dto.Reason);
+                // into destination (positive)
+                var inRow = await ApplyMovementAsync(dto.ToWarehouseId, dto.CommodityId, "Transfer",
+                    Math.Abs(dto.Quantity), null, null, reference, dto.Reason);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return Ok(new { outRow, inRow });
+            }
+            catch (InvalidOperationException ex)
+            {
+                await tx.RollbackAsync();
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "Error transferring stock");
+                return StatusCode(500, new { message = "An error occurred while transferring stock" });
+            }
+        }
+
         // ═══ POST: approve a dispatch (deducts stock per picking-slip line) ═══
         [HttpPost("approve-dispatch")]
         public async Task<ActionResult<object>> ApproveDispatch([FromBody] ApproveDispatchDto dto)
@@ -310,6 +353,16 @@ namespace ProjectTracker.API.Controllers.Logistics
         public int WarehouseId { get; set; }
         public int CommodityId { get; set; }
         public string MovementType { get; set; } = string.Empty; // Receive | Return | Adjustment
+        public decimal Quantity { get; set; }
+        public string? Reference { get; set; }
+        public string? Reason { get; set; }
+    }
+
+    public class TransferStockDto
+    {
+        public int FromWarehouseId { get; set; }
+        public int ToWarehouseId { get; set; }
+        public int CommodityId { get; set; }
         public decimal Quantity { get; set; }
         public string? Reference { get; set; }
         public string? Reason { get; set; }

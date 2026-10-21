@@ -764,8 +764,62 @@ interface ComprehensiveAnalysisResponse {
 
           <!-- MOVEMENTS -->
           <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">swap_horiz</mat-icon> Movements</ng-template>
+            <ng-template mat-tab-label><mat-icon class="tab-ico">swap_horiz</mat-icon> Movements
+              @if (pendingDispatchCount > 0) { <span class="tab-count">{{ pendingDispatchCount }}</span> }
+            </ng-template>
             <div class="stk-tab-body">
+
+              <!-- Ledger summary strip -->
+              <div class="mov-stats">
+                <div class="mov-stat ms-amber" [class.ms-zero]="pendingDispatchCount === 0">
+                  <mat-icon>pending_actions</mat-icon>
+                  <div><b>{{ pendingDispatchCount | number }}</b><span>Pending Dispatch Approvals</span></div>
+                </div>
+                <div class="mov-stat ms-green">
+                  <mat-icon>south_west</mat-icon>
+                  <div><b>+{{ formatQty(movStockIn) }}</b><span>Units In (ledger)</span></div>
+                </div>
+                <div class="mov-stat ms-red">
+                  <mat-icon>north_east</mat-icon>
+                  <div><b>-{{ formatQty(movStockOut) }}</b><span>Units Out (ledger)</span></div>
+                </div>
+                <div class="mov-stat ms-blue">
+                  <mat-icon>today</mat-icon>
+                  <div><b>{{ movToday | number }}</b><span>Movements Today</span></div>
+                </div>
+              </div>
+
+              <!-- Pending dispatch approval queue -->
+              @if (pendingDispatchCount > 0) {
+                <div class="mov-queue">
+                  <div class="mov-queue-head">
+                    <mat-icon>fact_check</mat-icon>
+                    <b>Awaiting Stock Deduction</b>
+                    <span class="mov-queue-sub">Tripsheets that have not yet been approved against stock — review the picking slip and approve to deduct.</span>
+                  </div>
+                  @for (l of pendingDispatchLoads; track l.id) {
+                    <div class="mov-queue-row">
+                      <span class="mono mq-load">{{ l.loadNumber }}</span>
+                      <span class="mq-wh">{{ l.warehouseName || '—' }}</span>
+                      <span class="mq-cust">{{ l.customerName || '—' }}</span>
+                      <span class="mq-date">{{ (l.actualDeliveryDate || l.scheduledDeliveryDate || l.createdAt) | date:'dd MMM yyyy' }}</span>
+                      <span class="stk-badge" [class.b-in]="l.status === 'Delivered' || l.status === 'Completed'"
+                            [class.b-warn]="l.status !== 'Delivered' && l.status !== 'Completed'">{{ l.status }}</span>
+                      <span class="stk-spacer"></span>
+                      <button mat-stroked-button (click)="openLoadDoc(l, 'picking')" matTooltip="View picking slip"><mat-icon>checklist</mat-icon> Slip</button>
+                      @if (canApprove) {
+                        <button mat-raised-button color="primary" (click)="openApproveDispatch(l)"><mat-icon>inventory</mat-icon> Review & Approve</button>
+                      } @else {
+                        <span class="mq-noperm" matTooltip="Requires the Stock Dispatch Approver permission">Approver required</span>
+                      }
+                    </div>
+                  }
+                  @if (pendingDispatchCount > pendingDispatchLoads.length) {
+                    <div class="mov-queue-more">Showing {{ pendingDispatchLoads.length }} most recent of {{ pendingDispatchCount | number }} pending — older loads are covered by the cutover stock take baseline</div>
+                  }
+                </div>
+              }
+
               <div class="stk-toolbar">
                 <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === ''" (click)="movTypeFilter = ''">All ({{ ledgerScoped.length }})</button>
                 <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Receive'" (click)="movTypeFilter = 'Receive'">
@@ -776,9 +830,17 @@ interface ComprehensiveAnalysisResponse {
                   <mat-icon>sync_alt</mat-icon> Transfer ({{ movCount('Transfer') }})</button>
                 <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Return'" (click)="movTypeFilter = 'Return'">
                   <mat-icon>undo</mat-icon> Return ({{ movCount('Return') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Adjustment'" (click)="movTypeFilter = 'Adjustment'">
+                  <mat-icon>tune</mat-icon> Adjust ({{ movCount('Adjustment') }})</button>
+                <mat-form-field appearance="outline" class="stk-search">
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [(ngModel)]="movSearch" placeholder="Code, description, reference, user...">
+                </mat-form-field>
                 <span class="stk-spacer"></span>
                 <button mat-stroked-button (click)="loadLedger()" matTooltip="Reload movements"><mat-icon>refresh</mat-icon> Refresh</button>
                 <button mat-stroked-button (click)="exportMovements()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-stroked-button (click)="openTransferStock()" matTooltip="Move stock between warehouses"><mat-icon>sync_alt</mat-icon> Transfer</button>
+                <button mat-stroked-button (click)="openManualMovement('Adjustment')" matTooltip="Correct a stock count (+/-) with a reason"><mat-icon>tune</mat-icon> Adjust</button>
                 <button mat-stroked-button (click)="openManualMovement('Return')"><mat-icon>undo</mat-icon> Return</button>
                 <button mat-raised-button color="primary" (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon> Receive Stock</button>
               </div>
@@ -797,17 +859,21 @@ interface ComprehensiveAnalysisResponse {
                           <td class="mono">{{ m.commodityCode }}</td>
                           <td class="desc">{{ m.commodityName }}</td>
                           <td class="num"><b [style.color]="m.quantity < 0 ? '#dc2626' : '#16a34a'">{{ m.quantity > 0 ? '+' : '' }}{{ m.quantity | number }}</b></td>
-                          <td class="num">{{ m.balanceAfter | number }}</td>
+                          <td class="num" [style.color]="m.balanceAfter < 0 ? '#dc2626' : ''">{{ m.balanceAfter | number }}</td>
                           <td class="mono" [matTooltip]="m.reason">{{ m.reference }}</td>
                           <td>{{ m.createdBy }}</td>
-                          <td style="text-align:right;">
+                          <td style="text-align:right;white-space:nowrap;">
+                            @if (m.loadId) {
+                              <button mat-icon-button matTooltip="View the linked tripsheet's picking slip" (click)="openLedgerLoadDoc(m)"><mat-icon>checklist</mat-icon></button>
+                            }
                             @if (canApprove && !m.reversedByMovementId && m.movementType !== 'Reversal') {
                               <button mat-icon-button matTooltip="Reverse this movement (creates a counter-entry)" (click)="reverseMovement(m)"><mat-icon>undo</mat-icon></button>
                             }
                             @if (m.reversedByMovementId) { <span class="stk-chip" matTooltip="Reversed by movement #{{ m.reversedByMovementId }}">Reversed</span> }
+                            @if (m.reversesMovementId) { <span class="stk-chip" matTooltip="Reversal of movement #{{ m.reversesMovementId }}">↩ #{{ m.reversesMovementId }}</span> }
                           </td>
                         </tr>
-                      } @empty { <tr><td colspan="10" class="stk-empty">No stock movements yet — approve a dispatch or receive stock to start the ledger</td></tr> }
+                      } @empty { <tr><td colspan="10" class="stk-empty">No stock movements{{ movSearch ? ' matching "' + movSearch + '"' : '' }} — approve a dispatch or receive stock to start the ledger</td></tr> }
                     </tbody>
                   </table>
                 </div>
@@ -2067,8 +2133,8 @@ interface ComprehensiveAnalysisResponse {
     .stock-asat mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
     /* ═══ Dashboard redesign ═══ */
-    .stk-kpi-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; margin-bottom: 18px; }
-    @media (max-width: 1400px) { .stk-kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+    .stk-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 18px; }
+    @media (max-width: 1400px) { .stk-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 760px) { .stk-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
     .stk-kpi {
       background: #fff; border-radius: 22px; padding: 18px 18px; box-shadow: 0 10px 34px rgba(2,6,23,0.28);
@@ -2184,6 +2250,31 @@ interface ComprehensiveAnalysisResponse {
     .stk-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
     .stk-search { flex: 1; min-width: 240px; max-width: 420px; }
     .stk-search ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
+
+    /* Movements tab */
+    .tab-count { background: #d97706; color: #fff; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 1px 7px; margin-left: 6px; }
+    .mov-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+    @media (max-width: 1100px) { .mov-stats { grid-template-columns: repeat(2, 1fr); } }
+    .mov-stat { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 16px; }
+    .mov-stat mat-icon { font-size: 26px; width: 26px; height: 26px; }
+    .mov-stat b { display: block; font-size: 20px; line-height: 1.1; color: #0f172a; }
+    .mov-stat span { font-size: 11.5px; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+    .mov-stat.ms-amber mat-icon { color: #d97706; } .mov-stat.ms-amber { border-color: #fcd34d; background: #fffbeb; }
+    .mov-stat.ms-amber.ms-zero { border-color: #e2e8f0; background: #fff; }
+    .mov-stat.ms-green mat-icon { color: #16a34a; } .mov-stat.ms-green b { color: #16a34a; }
+    .mov-stat.ms-red mat-icon { color: #dc2626; } .mov-stat.ms-red b { color: #dc2626; }
+    .mov-stat.ms-blue mat-icon { color: #2563eb; }
+    .mov-queue { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
+    .mov-queue-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: #92400e; }
+    .mov-queue-head mat-icon { color: #d97706; }
+    .mov-queue-sub { font-size: 12px; color: #a16207; font-weight: 400; }
+    .mov-queue-row { display: flex; align-items: center; gap: 14px; padding: 8px 10px; background: #fff; border: 1px solid #fde68a; border-radius: 10px; margin-bottom: 6px; font-size: 13px; }
+    .mq-load { font-weight: 700; min-width: 110px; }
+    .mq-wh { min-width: 170px; color: #475569; }
+    .mq-cust { flex: 1; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mq-date { color: #64748b; white-space: nowrap; }
+    .mq-noperm { font-size: 12px; color: #94a3b8; font-style: italic; }
+    .mov-queue-more { font-size: 12px; color: #a16207; text-align: center; padding: 4px 0 0; }
     .stk-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
     .stk-spacer { flex: 1; }
     .stk-filter-on { background: #eff6ff !important; border-color: #2563eb !important; color: #1d4ed8 !important; }
@@ -2331,6 +2422,7 @@ export class StockManagementComponent implements OnInit {
   ledger: any[] = [];
   ledgerLoading = true;
   movTypeFilter = '';
+  movSearch = '';
   canApprove = false;
   deductedLoadIds = new Set<number>();
 
@@ -2338,9 +2430,38 @@ export class StockManagementComponent implements OnInit {
     return this.whFilterId ? this.ledger.filter(m => m.warehouseId === this.whFilterId) : this.ledger;
   }
   get ledgerRows(): any[] {
-    return this.movTypeFilter ? this.ledgerScoped.filter(m => m.movementType === this.movTypeFilter) : this.ledgerScoped;
+    let rows = this.movTypeFilter ? this.ledgerScoped.filter(m => m.movementType === this.movTypeFilter) : this.ledgerScoped;
+    const t = this.movSearch.trim().toLowerCase();
+    if (t) {
+      rows = rows.filter(m =>
+        (m.commodityCode || '').toLowerCase().includes(t) ||
+        (m.commodityName || '').toLowerCase().includes(t) ||
+        (m.reference || '').toLowerCase().includes(t) ||
+        (m.createdBy || '').toLowerCase().includes(t) ||
+        (m.warehouseName || '').toLowerCase().includes(t));
+    }
+    return rows;
   }
   movCount(t: string): number { return this.ledgerScoped.filter(m => m.movementType === t).length; }
+
+  get movStockIn(): number { return this.ledgerScoped.filter(m => m.quantity > 0).reduce((s, m) => s + m.quantity, 0); }
+  get movStockOut(): number { return Math.abs(this.ledgerScoped.filter(m => m.quantity < 0).reduce((s, m) => s + m.quantity, 0)); }
+  get movToday(): number {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return this.ledgerScoped.filter(m => new Date(m.createdAt) >= today).length;
+  }
+
+  /** Loads whose stock has not yet been deducted — the approval work-queue (most recent first) */
+  private get pendingDispatchAll(): any[] {
+    return this.loadsScoped.filter(l => !this.deductedLoadIds.has(l.id));
+  }
+  get pendingDispatchCount(): number { return this.pendingDispatchAll.length; }
+  get pendingDispatchLoads(): any[] {
+    return [...this.pendingDispatchAll]
+      .sort((a, b) => new Date(b.actualDeliveryDate || b.scheduledDeliveryDate || b.createdAt || 0).getTime()
+                    - new Date(a.actualDeliveryDate || a.scheduledDeliveryDate || a.createdAt || 0).getTime())
+      .slice(0, 15);
+  }
 
   loadLedger(): void {
     this.ledgerLoading = true;
@@ -2356,7 +2477,7 @@ export class StockManagementComponent implements OnInit {
 
   isLoadDeducted(loadId: number): boolean { return this.deductedLoadIds.has(loadId); }
 
-  openManualMovement(type: 'Receive' | 'Return'): void {
+  openManualMovement(type: 'Receive' | 'Return' | 'Adjustment'): void {
     const w = this.resolveTargetWarehouse();
     if (!w) return;
     const ref = this.dialog.open(ManualMovementDialog, {
@@ -2364,6 +2485,22 @@ export class StockManagementComponent implements OnInit {
       data: { warehouse: w, type, inventory: this.allInventory.filter(r => r.warehouseId === w.id) }
     });
     ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } });
+  }
+
+  openTransferStock(): void {
+    const from = this.whFilterId ? this.warehouses.find(w => w.id === this.whFilterId) : this.warehouses[0];
+    const ref = this.dialog.open(TransferStockDialog, {
+      width: '680px', maxWidth: '95vw',
+      data: { warehouses: this.warehouses, fromWarehouseId: from?.id, inventory: this.allInventory }
+    });
+    ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } });
+  }
+
+  /** Open the picking slip for the load linked to a ledger row */
+  openLedgerLoadDoc(m: any): void {
+    const load = this.loads.find(l => l.id === m.loadId);
+    if (load) { this.openLoadDoc(load, 'picking'); }
+    else { this.snackBar.open(`Load #${m.loadId} not loaded in dispatch list`, 'Close', { duration: 3000 }); }
   }
 
   openApproveDispatch(load: any): void {
@@ -7530,8 +7667,8 @@ export class ResolveIssueDialog {
             MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon style="vertical-align:middle;margin-right:8px;color:#16a34a;">{{ data.type === 'Receive' ? 'south_west' : 'undo' }}</mat-icon>
-      {{ data.type === 'Receive' ? 'Receive Stock (GRV)' : 'Return Stock' }} — {{ data.warehouse.name }}
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:#16a34a;">{{ data.type === 'Receive' ? 'south_west' : (data.type === 'Adjustment' ? 'tune' : 'undo') }}</mat-icon>
+      {{ data.type === 'Receive' ? 'Receive Stock (GRV)' : (data.type === 'Adjustment' ? 'Stock Adjustment' : 'Return Stock') }} — {{ data.warehouse.name }}
     </h2>
     <mat-dialog-content>
       <mat-form-field appearance="outline" style="width:100%;">
@@ -7557,24 +7694,27 @@ export class ResolveIssueDialog {
         </div>
         <div class="mm-row">
           <mat-form-field appearance="outline">
-            <mat-label>Quantity ({{ data.type === 'Receive' ? 'received' : 'returned' }})</mat-label>
-            <input matInput type="number" min="1" [(ngModel)]="quantity">
+            <mat-label>{{ data.type === 'Adjustment' ? 'Adjustment (+/-)' : 'Quantity (' + (data.type === 'Receive' ? 'received' : 'returned') + ')' }}</mat-label>
+            <input matInput type="number" [min]="data.type === 'Adjustment' ? null : 1" [(ngModel)]="quantity">
+            @if (data.type === 'Adjustment' && selected && quantity) {
+              <mat-hint>New balance: {{ selected.quantityOnHand + quantity | number }}</mat-hint>
+            }
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>{{ data.type === 'Receive' ? 'Supplier / GRV reference' : 'Return reference (invoice, customer)' }}</mat-label>
+            <mat-label>{{ data.type === 'Receive' ? 'Supplier / GRV reference' : (data.type === 'Adjustment' ? 'Reference (count sheet, etc.)' : 'Return reference (invoice, customer)') }}</mat-label>
             <input matInput [(ngModel)]="reference">
           </mat-form-field>
         </div>
         <mat-form-field appearance="outline" style="width:100%;">
-          <mat-label>Notes (optional)</mat-label>
+          <mat-label>{{ data.type === 'Adjustment' ? 'Reason (required)' : 'Notes (optional)' }}</mat-label>
           <input matInput [(ngModel)]="reason">
         </mat-form-field>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="!selected || !quantity || quantity <= 0 || saving" (click)="save()">
-        <mat-icon>check</mat-icon> {{ data.type === 'Receive' ? 'Receive' : 'Return' }} {{ quantity || '' }}
+      <button mat-raised-button color="primary" [disabled]="!valid() || saving" (click)="save()">
+        <mat-icon>check</mat-icon> {{ data.type === 'Receive' ? 'Receive' : (data.type === 'Adjustment' ? 'Adjust' : 'Return') }} {{ quantity || '' }}
       </button>
     </mat-dialog-actions>
   `,
@@ -7616,6 +7756,12 @@ export class ManualMovementDialog {
       (r.commodityName || '').toLowerCase().includes(t)).slice(0, 50);
   }
 
+  valid(): boolean {
+    if (!this.selected || !this.quantity || this.quantity === 0) return false;
+    if (this.data.type === 'Adjustment') return !!this.reason.trim();
+    return this.quantity > 0;
+  }
+
   save(): void {
     this.saving = true;
     this.http.post(`${environment.apiUrl}/logistics/stock-movements`, {
@@ -7631,6 +7777,157 @@ export class ManualMovementDialog {
         this.dialogRef.close(true);
       },
       error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to record movement', 'Close', { duration: 4000 }); }
+    });
+  }
+}
+
+// ═══ Transfer Stock Dialog (warehouse → warehouse) ═══
+@Component({
+  selector: 'app-transfer-stock-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+            MatFormFieldModule, MatInputModule, MatSelectModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:#2563eb;">sync_alt</mat-icon>
+      Transfer Stock Between Warehouses
+    </h2>
+    <mat-dialog-content>
+      <div class="ts-row">
+        <mat-form-field appearance="outline">
+          <mat-label>From warehouse</mat-label>
+          <mat-select [(ngModel)]="fromId" (ngModelChange)="selected = null; search = ''">
+            @for (w of data.warehouses; track w.id) { <mat-option [value]="w.id">{{ w.name }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        <mat-icon class="ts-arrow">arrow_forward</mat-icon>
+        <mat-form-field appearance="outline">
+          <mat-label>To warehouse</mat-label>
+          <mat-select [(ngModel)]="toId">
+            @for (w of data.warehouses; track w.id) {
+              @if (w.id !== fromId) { <mat-option [value]="w.id">{{ w.name }}</mat-option> }
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <mat-form-field appearance="outline" style="width:100%;">
+        <mat-label>Search item at source warehouse</mat-label>
+        <input matInput [(ngModel)]="search" placeholder="Code or description" (ngModelChange)="selected = null">
+        <mat-icon matPrefix>search</mat-icon>
+      </mat-form-field>
+      @if (!selected) {
+        <div class="mm-list">
+          @for (r of matches(); track r.id) {
+            <button class="mm-item" (click)="selected = r">
+              <span class="mm-code">{{ r.commodityCode }}</span>
+              <span class="mm-name">{{ r.commodityName }}</span>
+              <span class="mm-qty">{{ r.quantityOnHand | number }} on hand</span>
+            </button>
+          } @empty { <div class="mm-empty">Type to search items at the source warehouse</div> }
+        </div>
+      } @else {
+        <div class="mm-selected">
+          <div><b>{{ selected.commodityCode }}</b> — {{ selected.commodityName }}</div>
+          <div class="mm-onhand">On hand at source: <b>{{ selected.quantityOnHand | number }}</b></div>
+          <button mat-button (click)="selected = null"><mat-icon>swap_horiz</mat-icon> Change item</button>
+        </div>
+        <div class="ts-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Quantity to transfer</mat-label>
+            <input matInput type="number" min="1" [(ngModel)]="quantity">
+            @if (quantity && selected && quantity > selected.quantityOnHand) {
+              <mat-hint style="color:#dc2626;">Exceeds on hand — a reason will be required</mat-hint>
+            }
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Reference (optional)</mat-label>
+            <input matInput [(ngModel)]="reference" placeholder="e.g. IBT number">
+          </mat-form-field>
+        </div>
+        <mat-form-field appearance="outline" style="width:100%;">
+          <mat-label>Reason / notes {{ needsReason() ? '(required — stock goes negative)' : '(optional)' }}</mat-label>
+          <input matInput [(ngModel)]="reason">
+        </mat-form-field>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!valid() || saving" (click)="save()">
+        <mat-icon>sync_alt</mat-icon> Transfer {{ quantity || '' }}
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .ts-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+    .ts-arrow { color: #2563eb; margin-top: -18px; }
+    .ts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mm-list { max-height: 220px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid #f1f5f9; background: #fff; cursor: pointer; }
+    .mm-item:hover { background: #eff6ff; }
+    .mm-code { font-family: monospace; font-weight: 700; min-width: 110px; }
+    .mm-name { flex: 1; font-size: 13px; color: #334155; }
+    .mm-qty { font-size: 12px; color: #64748b; white-space: nowrap; }
+    .mm-empty { padding: 20px; text-align: center; color: #94a3b8; }
+    .mm-selected { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .mm-onhand { font-size: 13px; color: #475569; margin: 4px 0; }
+    mat-form-field { width: 100%; }
+  `]
+})
+export class TransferStockDialog {
+  fromId: number | null = null;
+  toId: number | null = null;
+  search = '';
+  selected: any = null;
+  quantity: number | null = null;
+  reference = '';
+  reason = '';
+  saving = false;
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    public dialogRef: MatDialogRef<TransferStockDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {
+    this.fromId = data.fromWarehouseId ?? data.warehouses?.[0]?.id ?? null;
+  }
+
+  matches(): any[] {
+    const t = this.search.trim().toLowerCase();
+    if (!t || !this.fromId) return [];
+    return (this.data.inventory || []).filter((r: any) =>
+      r.warehouseId === this.fromId &&
+      ((r.commodityCode || '').toLowerCase().includes(t) ||
+       (r.commodityName || '').toLowerCase().includes(t))).slice(0, 50);
+  }
+
+  needsReason(): boolean {
+    return !!(this.selected && this.quantity && this.quantity > this.selected.quantityOnHand);
+  }
+
+  valid(): boolean {
+    if (!this.fromId || !this.toId || this.fromId === this.toId) return false;
+    if (!this.selected || !this.quantity || this.quantity <= 0) return false;
+    if (this.needsReason() && !this.reason.trim()) return false;
+    return true;
+  }
+
+  save(): void {
+    this.saving = true;
+    this.http.post(`${environment.apiUrl}/logistics/stock-movements/transfer`, {
+      fromWarehouseId: this.fromId,
+      toWarehouseId: this.toId,
+      commodityId: this.selected.commodityId,
+      quantity: this.quantity,
+      reference: this.reference || null,
+      reason: this.reason || null
+    }).subscribe({
+      next: () => {
+        this.snackBar.open('Transfer recorded — two ledger entries written', 'Close', { duration: 3500 });
+        this.dialogRef.close(true);
+      },
+      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to transfer stock', 'Close', { duration: 4000 }); }
     });
   }
 }
