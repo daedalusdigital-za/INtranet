@@ -1933,6 +1933,15 @@ interface ComprehensiveAnalysisResponse {
     .stk-wh-stats span { font-size: 9.5px; color: #64748b; text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
 
     .stk-tabs { background: #fff; border-radius: 22px; box-shadow: 0 10px 34px rgba(2,6,23,0.28); overflow: hidden; margin-bottom: 30px; }
+    .stk-tabs ::ng-deep .mat-mdc-tab-header {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    .stk-tabs ::ng-deep .mat-mdc-tab { min-width: 140px; padding: 0 24px; }
+    .stk-tabs ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
+      display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px;
+    }
+    .stk-tabs ::ng-deep .mat-mdc-tab-body-wrapper { background: #fff; }
 
     /* Company filter chips — same design as Sales History */
     .sh-company-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
