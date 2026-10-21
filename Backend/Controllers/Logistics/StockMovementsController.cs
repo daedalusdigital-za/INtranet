@@ -199,6 +199,14 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (alreadyDeducted)
                 return Conflict(new { message = $"Load {load.LoadNumber} has already had stock deducted. Use a reversal first if this was a mistake." });
 
+            // Loads dated before the warehouse's stock-count baseline are already in the imported quantities
+            var baseline = await _context.WarehouseInventory
+                .Where(i => i.WarehouseId == warehouseId.Value && i.LastCountDate != null)
+                .MaxAsync(i => i.LastCountDate);
+            var loadDate = load.ActualDeliveryDate ?? load.ScheduledDeliveryDate ?? load.CreatedAt;
+            if (baseline != null && loadDate < baseline.Value)
+                return Conflict(new { message = $"Load {load.LoadNumber} ({loadDate:dd MMM yyyy}) predates the {load.Warehouse?.Name} stock count of {baseline:dd MMM yyyy} and is already reflected in stock on hand." });
+
             if (dto.Lines == null || dto.Lines.Count == 0)
                 return BadRequest(new { message = "No lines to dispatch" });
 
