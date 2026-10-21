@@ -32,8 +32,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (!int.TryParse(idClaim, out var userId)) return false;
             var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId);
             if (user == null) return false;
-            if (user.Role == "Admin") return true;
-            return (user.Permissions ?? "").ToLower().Contains(DispatchApproverPermission);
+            var role = (user.Role ?? "").ToLower();
+            if (role.Contains("admin") || role.Contains("manager")) return true;
+            var perms = (user.Permissions ?? "").ToLower();
+            // Stock controllers (stock_management permission) or explicit approvers
+            return perms.Contains("stock_management") || perms.Contains(DispatchApproverPermission);
         }
 
         // ═══ GET: list movements (ledger) ═══

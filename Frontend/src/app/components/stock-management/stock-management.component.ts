@@ -815,7 +815,7 @@ interface ComprehensiveAnalysisResponse {
                     </div>
                   }
                   @if (pendingDispatchCount > pendingDispatchLoads.length) {
-                    <div class="mov-queue-more">Showing {{ pendingDispatchLoads.length }} most recent of {{ pendingDispatchCount | number }} pending — older loads are covered by the cutover stock take baseline</div>
+                    <div class="mov-queue-more">Showing {{ pendingDispatchLoads.length }} most recent of {{ pendingDispatchCount | number }} pending</div>
                   }
                 </div>
               }
