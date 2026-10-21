@@ -598,6 +598,7 @@ interface ComprehensiveAnalysisResponse {
                   <mat-icon matPrefix>search</mat-icon>
                 </mat-form-field>
                 <span class="stk-count">{{ sohRows.length | number }} of {{ invScoped.length | number }} items{{ whFilterName }}</span>
+                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload stock data"><mat-icon>refresh</mat-icon> Refresh</button>
                 <button mat-stroked-button (click)="exportSoh()"><mat-icon>file_download</mat-icon> Export</button>
               </div>
               @if (invLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading stock...</div> }
@@ -635,6 +636,14 @@ interface ComprehensiveAnalysisResponse {
           <mat-tab>
             <ng-template mat-tab-label><mat-icon class="tab-ico">fact_check</mat-icon> Stock Counts</ng-template>
             <div class="stk-tab-body">
+              <div class="stk-toolbar">
+                <span class="stk-count">Latest counts per warehouse</span>
+                <span class="stk-spacer"></span>
+                <button mat-stroked-button (click)="exportValuation()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-raised-button color="primary" (click)="openStockTakeForFilter()"
+                        [matTooltip]="whFilterId ? 'New stock take at ' + whFilterName : 'Select a warehouse card above first'">
+                  <mat-icon>fact_check</mat-icon> New Stock Take</button>
+              </div>
               <div class="stk-table-wrap">
                 <table class="stk-table">
                   <thead><tr>
@@ -661,7 +670,7 @@ interface ComprehensiveAnalysisResponse {
                   </tbody>
                 </table>
               </div>
-              <p class="stk-note"><mat-icon>info</mat-icon> Counts come from the consolidated stock imports. Use a warehouse card's <b>Operations</b> button to run a new stock take.</p>
+              <p class="stk-note"><mat-icon>info</mat-icon> Counts come from the consolidated stock imports. Click a warehouse card then <b>New Stock Take</b> to run a count.</p>
             </div>
           </mat-tab>
 
@@ -704,6 +713,15 @@ interface ComprehensiveAnalysisResponse {
           <mat-tab>
             <ng-template mat-tab-label><mat-icon class="tab-ico">swap_horiz</mat-icon> Movements</ng-template>
             <div class="stk-tab-body">
+              <div class="stk-toolbar">
+                <span class="stk-count">{{ movements.length | number }} recent movements</span>
+                <span class="stk-spacer"></span>
+                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload movements"><mat-icon>refresh</mat-icon> Refresh</button>
+                <button mat-stroked-button (click)="exportMovements()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-raised-button color="primary" (click)="openRepackagingForFilter()"
+                        [matTooltip]="whFilterId ? 'Repackage stock at ' + whFilterName : 'Select a warehouse card above first'">
+                  <mat-icon>autorenew</mat-icon> Repackage</button>
+              </div>
               @if (movLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading movements...</div> }
               @else {
                 <div class="stk-table-wrap">
@@ -736,7 +754,9 @@ interface ComprehensiveAnalysisResponse {
               <div class="stk-toolbar">
                 <span class="stk-count">Inter-warehouse transfers & dispatches</span>
                 <span class="stk-spacer"></span>
-                <button mat-raised-button color="primary" [disabled]="!whFilterId" (click)="openDispatchForFilter()"
+                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload transfers"><mat-icon>refresh</mat-icon> Refresh</button>
+                <button mat-stroked-button (click)="exportTransfers()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-raised-button color="primary" (click)="openDispatchForFilter()"
                         [matTooltip]="whFilterId ? 'New dispatch from ' + whFilterName : 'Select a warehouse card above first'">
                   <mat-icon>local_shipping</mat-icon> New Dispatch</button>
               </div>
@@ -771,7 +791,9 @@ interface ComprehensiveAnalysisResponse {
               <div class="stk-toolbar">
                 <span class="stk-count">Damaged / written-off stock</span>
                 <span class="stk-spacer"></span>
-                <button mat-raised-button color="warn" [disabled]="!whFilterId" (click)="openScrapForFilter()"
+                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload scrap records"><mat-icon>refresh</mat-icon> Refresh</button>
+                <button mat-stroked-button (click)="exportScrap()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-raised-button color="warn" (click)="openScrapForFilter()"
                         [matTooltip]="whFilterId ? 'Record scrap at ' + whFilterName : 'Select a warehouse card above first'">
                   <mat-icon>delete_sweep</mat-icon> Record Scrap</button>
               </div>
@@ -2129,17 +2151,59 @@ export class StockManagementComponent implements OnInit {
     });
   }
 
+  /** Resolve target warehouse: the filtered card, or prompt the user to pick one */
+  private resolveTargetWarehouse(): any | null {
+    if (this.whFilterId) {
+      return this.warehouses.find(x => x.id === this.whFilterId) || null;
+    }
+    if (this.warehouses.length === 1) return this.warehouses[0];
+    this.snackBar.open('Click a warehouse card above to choose where this action happens', 'OK', { duration: 4000 });
+    return null;
+  }
+
   openDispatchForFilter(): void {
-    const w = this.warehouses.find(x => x.id === this.whFilterId);
+    const w = this.resolveTargetWarehouse();
     if (!w) return;
-    this.dialog.open(DispatchDialog, { width: '1000px', maxWidth: '90vw', data: w });
+    const ref = this.dialog.open(DispatchDialog, { width: '1000px', maxWidth: '90vw', data: w });
+    ref.afterClosed().subscribe(() => this.loadDashboardData());
   }
 
   openScrapForFilter(): void {
-    const w = this.warehouses.find(x => x.id === this.whFilterId);
+    const w = this.resolveTargetWarehouse();
     if (!w) return;
     const ref = this.dialog.open(ScrapDialog, { width: '800px', maxWidth: '90vw', data: w });
     ref.afterClosed().subscribe(() => this.loadDashboardData());
+  }
+
+  openStockTakeForFilter(): void {
+    const w = this.resolveTargetWarehouse();
+    if (!w) return;
+    const ref = this.dialog.open(StockTakeDialog, { width: '1200px', maxWidth: '95vw', data: w });
+    ref.afterClosed().subscribe(() => { this.loadWarehouses(); this.loadDashboardData(); });
+  }
+
+  openRepackagingForFilter(): void {
+    const w = this.resolveTargetWarehouse();
+    if (!w) return;
+    const ref = this.dialog.open(RepackagingDialog, { width: '700px', maxWidth: '90vw', data: w });
+    ref.afterClosed().subscribe(() => this.loadDashboardData());
+  }
+
+  exportTransfers(): void {
+    const rows = this.transfers.map(t => ({
+      'Transfer #': t.transferNumber, 'From': t.fromWarehouseName, 'To': t.toWarehouseName,
+      'Commodity': t.commodityName, 'Qty': t.quantity, 'Status': t.status,
+      'Requested': t.requestedDate ? String(t.requestedDate).substring(0, 10) : ''
+    }));
+    this.writeExcel(rows, 'Transfers', `Transfers_${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+
+  exportScrap(): void {
+    const rows = this.scrapScoped.map(s => ({
+      'Date': s.scrapDate ? String(s.scrapDate).substring(0, 10) : '', 'Warehouse': s.warehouseName,
+      'Commodity': s.commodityName, 'Qty': s.quantity, 'Reason': s.reason, 'Notes': s.notes, 'By': s.recordedBy
+    }));
+    this.writeExcel(rows, 'Scrap', `Scrap_${new Date().toISOString().substring(0, 10)}.xlsx`);
   }
 
   // ═══ Excel exports ═══
