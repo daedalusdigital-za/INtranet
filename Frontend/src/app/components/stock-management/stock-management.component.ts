@@ -565,6 +565,25 @@ interface ComprehensiveAnalysisResponse {
           }
         </div>
 
+        <!-- ═══ COMPANY FILTER ═══ -->
+        <div class="sh-company-bar">
+          <button class="sh-company-chip" [class.active]="companyFilter === ''" (click)="companyFilter = ''">
+            <mat-icon>apps</mat-icon> All Companies
+          </button>
+          @for (c of stockCompanies; track c.key) {
+            <button class="sh-company-chip" [class.sh-company-chip--logo]="!!c.logo" [class.active]="companyFilter === c.key"
+                    [style.--chip-color]="c.color"
+                    (click)="companyFilter = companyFilter === c.key ? '' : c.key">
+              @if (c.logo) {
+                <img class="sh-chip-logo" [src]="c.logo" [alt]="c.shortName" width="32" height="32" decoding="async" loading="lazy" />
+              } @else {
+                <mat-icon>business</mat-icon>
+              }
+              <span class="sh-chip-label">{{ c.shortName }}</span>
+            </button>
+          }
+        </div>
+
         <!-- ═══ TABS ═══ -->
         <mat-tab-group class="stk-tabs" animationDuration="150ms">
 
@@ -574,7 +593,7 @@ interface ComprehensiveAnalysisResponse {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
                 <mat-form-field appearance="outline" class="stk-search">
-                  <mat-label>Search code, description or client</mat-label>
+                  <mat-label>Search code, description or company</mat-label>
                   <input matInput [(ngModel)]="sohSearch" placeholder="e.g. 3009602">
                   <mat-icon matPrefix>search</mat-icon>
                 </mat-form-field>
@@ -586,7 +605,7 @@ interface ComprehensiveAnalysisResponse {
                 <div class="stk-table-wrap">
                   <table class="stk-table">
                     <thead><tr>
-                      <th>Code</th><th>Description</th><th>Client</th><th>Warehouse</th><th>UOM</th>
+                      <th>Code</th><th>Description</th><th>Company</th><th>Warehouse</th><th>UOM</th>
                       <th class="num">Qty On Hand</th><th class="num">Unit Price</th><th class="num">Value</th><th>Status</th>
                     </tr></thead>
                     <tbody>
@@ -620,7 +639,7 @@ interface ComprehensiveAnalysisResponse {
                 <table class="stk-table">
                   <thead><tr>
                     <th>Warehouse</th><th class="num">Items Counted</th><th class="num">Units</th><th class="num">Value</th>
-                    <th class="num">In Stock</th><th class="num">Out of Stock</th><th>Last Count</th><th>Clients</th>
+                    <th class="num">In Stock</th><th class="num">Out of Stock</th><th>Last Count</th><th>Companies</th>
                   </tr></thead>
                   <tbody>
                     @for (w of warehouses; track w.id) {
@@ -662,7 +681,7 @@ interface ComprehensiveAnalysisResponse {
               </div>
               <div class="stk-table-wrap">
                 <table class="stk-table">
-                  <thead><tr><th>Code</th><th>Description</th><th>Client</th><th>Warehouse</th><th class="num">Qty</th><th>Issue</th></tr></thead>
+                  <thead><tr><th>Code</th><th>Description</th><th>Company</th><th>Warehouse</th><th class="num">Qty</th><th>Issue</th></tr></thead>
                   <tbody>
                     @for (r of exceptionRows.slice(0, 400); track r.id) {
                       <tr>
@@ -794,7 +813,7 @@ interface ComprehensiveAnalysisResponse {
                 <div class="stk-report-card" (click)="exportValuation()">
                   <mat-icon>payments</mat-icon>
                   <h4>Valuation Summary</h4>
-                  <p>Per-warehouse and per-client stock valuation at sales price and cost</p>
+                  <p>Per-warehouse and per-company stock valuation at sales price and cost</p>
                   <button mat-stroked-button><mat-icon>file_download</mat-icon> Excel</button>
                 </div>
                 <div class="stk-report-card" (click)="exportExceptions()">
@@ -1914,6 +1933,30 @@ interface ComprehensiveAnalysisResponse {
     .stk-wh-stats span { font-size: 9.5px; color: #64748b; text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
 
     .stk-tabs { background: #fff; border-radius: 22px; box-shadow: 0 10px 34px rgba(2,6,23,0.28); overflow: hidden; margin-bottom: 30px; }
+
+    /* Company filter chips — same design as Sales History */
+    .sh-company-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
+    .sh-company-chip {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
+      border: 1.5px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.92); border-radius: 999px;
+      font-size: 13px; font-weight: 600; color: #475569; cursor: pointer;
+      transition: all .18s ease; box-shadow: 0 4px 14px rgba(2,6,23,0.25);
+    }
+    .sh-company-chip mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .sh-company-chip:hover { background: #fff; transform: translateY(-1px); }
+    .sh-company-chip.active {
+      border-color: var(--chip-color, #1a237e); color: var(--chip-color, #1a237e);
+      background: #fff; box-shadow: 0 6px 18px rgba(2,6,23,0.35);
+    }
+    .sh-company-chip--logo { padding: 6px 14px 6px 8px; gap: 8px; }
+    .sh-chip-logo {
+      width: 30px; height: 30px; object-fit: contain; object-position: center;
+      display: block; filter: grayscale(30%); opacity: .82; transition: all .18s ease;
+    }
+    .sh-company-chip--logo:hover .sh-chip-logo { filter: grayscale(0%); opacity: 1; }
+    .sh-company-chip--logo.active .sh-chip-logo { filter: none; opacity: 1; }
+    .sh-chip-label { font-size: 12.5px; font-weight: 600; color: #475569; }
+    .sh-company-chip--logo.active .sh-chip-label { color: var(--chip-color, #1a237e); }
     .tab-ico { margin-right: 6px; font-size: 18px; width: 18px; height: 18px; vertical-align: middle; }
     .stk-tab-body { padding: 16px; }
     .stk-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -2007,9 +2050,24 @@ export class StockManagementComponent implements OnInit {
     this.whFilterId = this.whFilterId === id ? null : id;
   }
 
-  /** Inventory scoped to the selected warehouse filter */
+  /** Company filter (matches Commodities.Category) — same companies as Sales */
+  companyFilter = '';
+  stockCompanies = [
+    { key: 'PROMED', shortName: 'Promed', color: '#1a237e', logo: 'logos/promed-round.png?v=4' },
+    { key: 'ACCESS', shortName: 'Access', color: '#00695c', logo: 'logos/access-round.png?v=4' },
+    { key: 'PHARMACARE', shortName: 'Pharmatech', color: '#c62828', logo: 'logos/pharmatech-round.png?v=4' },
+    { key: 'SEBENZANI', shortName: 'Sebenzani', color: '#6a1b9a', logo: 'logos/sebenzani-round.png?v=4' },
+    { key: 'KOG', shortName: 'KOG', color: '#b45309', logo: '' }
+  ];
+
+  /** Inventory scoped to the selected warehouse + company filters */
   get invScoped(): any[] {
-    return this.whFilterId ? this.allInventory.filter(r => r.warehouseId === this.whFilterId) : this.allInventory;
+    let rows = this.whFilterId ? this.allInventory.filter(r => r.warehouseId === this.whFilterId) : this.allInventory;
+    if (this.companyFilter) {
+      const key = this.companyFilter.toUpperCase();
+      rows = rows.filter(r => (r.category || '').toUpperCase() === key);
+    }
+    return rows;
   }
 
   get sohRows(): any[] {
@@ -2088,7 +2146,7 @@ export class StockManagementComponent implements OnInit {
 
   exportSoh(): void {
     const rows = this.sohRows.map(r => ({
-      'Code': r.commodityCode, 'Description': r.commodityName, 'Client': r.category,
+      'Code': r.commodityCode, 'Description': r.commodityName, 'Company': r.category,
       'Warehouse': r.warehouseName, 'UOM': r.unitOfMeasure || 'Each',
       'Qty On Hand': r.quantityOnHand, 'Unit Price': r.unitPrice || '', 'Unit Cost': r.unitCost || '',
       'Stock Value': r.lineValue || '', 'Last Count': r.lastCountDate ? String(r.lastCountDate).substring(0, 10) : ''
@@ -2101,7 +2159,7 @@ export class StockManagementComponent implements OnInit {
     (['out', 'neg', 'unpriced'] as const).forEach(mode => {
       this.excRowsFor(mode).forEach(r => all.push({
         'Issue': mode === 'out' ? 'Out of stock' : mode === 'neg' ? 'Negative stock' : 'No sales price',
-        'Code': r.commodityCode, 'Description': r.commodityName, 'Client': r.category,
+        'Code': r.commodityCode, 'Description': r.commodityName, 'Company': r.category,
         'Warehouse': r.warehouseName, 'Qty On Hand': r.quantityOnHand
       }));
     });
@@ -2122,13 +2180,13 @@ export class StockManagementComponent implements OnInit {
     const rows: any[] = [];
     this.warehouses.forEach(w => {
       rows.push({
-        'Warehouse': w.name, 'Client': 'ALL', 'Items': w.totalItems, 'In Stock': w.itemsInStock,
+        'Warehouse': w.name, 'Company': 'ALL', 'Items': w.totalItems, 'In Stock': w.itemsInStock,
         'Out of Stock': w.itemsOutOfStock, 'Units On Hand': w.totalQuantityOnHand,
         'Stock Value (R)': w.totalStockValue, 'Cost Value (R)': w.totalCostValue,
         'Last Count': w.lastCountDate ? String(w.lastCountDate).substring(0, 10) : ''
       });
       (w.byClient || []).forEach(c => rows.push({
-        'Warehouse': w.name, 'Client': c.client, 'Items': c.items, 'In Stock': c.itemsInStock,
+        'Warehouse': w.name, 'Company': c.client, 'Items': c.items, 'In Stock': c.itemsInStock,
         'Out of Stock': c.items - c.itemsInStock, 'Units On Hand': c.quantityOnHand,
         'Stock Value (R)': c.stockValue, 'Cost Value (R)': '', 'Last Count': ''
       }));
