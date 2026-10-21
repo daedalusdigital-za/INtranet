@@ -752,34 +752,115 @@ interface ComprehensiveAnalysisResponse {
             <ng-template mat-tab-label><mat-icon class="tab-ico">local_shipping</mat-icon> Dispatch</ng-template>
             <div class="stk-tab-body">
               <div class="stk-toolbar">
-                <span class="stk-count">Inter-warehouse transfers & dispatches</span>
+                <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'tripsheets'" (click)="dispatchMode = 'tripsheets'">
+                  <mat-icon>receipt_long</mat-icon> Tripsheets ({{ loadsScoped.length }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'picking'" (click)="dispatchMode = 'picking'">
+                  <mat-icon>checklist</mat-icon> Picking Slips ({{ loadsScoped.length }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'invoices'" (click)="dispatchMode = 'invoices'">
+                  <mat-icon>description</mat-icon> Invoices ({{ dispatchInvoiceRows.length }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'transfers'" (click)="dispatchMode = 'transfers'">
+                  <mat-icon>sync_alt</mat-icon> Transfers ({{ transfers.length }})</button>
                 <span class="stk-spacer"></span>
-                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload transfers"><mat-icon>refresh</mat-icon> Refresh</button>
-                <button mat-stroked-button (click)="exportTransfers()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload"><mat-icon>refresh</mat-icon> Refresh</button>
+                <button mat-stroked-button (click)="exportDispatch()"><mat-icon>file_download</mat-icon> Export</button>
                 <button mat-raised-button color="primary" (click)="openDispatchForFilter()"
                         [matTooltip]="whFilterId ? 'New dispatch from ' + whFilterName : 'Select a warehouse card above first'">
                   <mat-icon>local_shipping</mat-icon> New Dispatch</button>
               </div>
-              @if (trLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading transfers...</div> }
-              @else {
-                <div class="stk-table-wrap">
-                  <table class="stk-table">
-                    <thead><tr><th>Transfer #</th><th>From</th><th>To</th><th>Commodity</th><th class="num">Qty</th><th>Status</th><th>Requested</th></tr></thead>
-                    <tbody>
-                      @for (t of transfers; track t.id) {
-                        <tr>
-                          <td class="mono">{{ t.transferNumber }}</td>
-                          <td>{{ t.fromWarehouseName }}</td>
-                          <td>{{ t.toWarehouseName }}</td>
-                          <td class="desc">{{ t.commodityName }}</td>
-                          <td class="num"><b>{{ t.quantity | number }}</b></td>
-                          <td><span class="stk-badge" [class.b-in]="t.status === 'Completed'" [class.b-warn]="t.status === 'Pending' || t.status === 'InTransit'">{{ t.status }}</span></td>
-                          <td>{{ t.requestedDate | date:'dd MMM yyyy' }}</td>
-                        </tr>
-                      } @empty { <tr><td colspan="7" class="stk-empty">No transfers recorded yet</td></tr> }
-                    </tbody>
-                  </table>
-                </div>
+
+              <!-- TRIPSHEETS / PICKING SLIPS -->
+              @if (dispatchMode === 'tripsheets' || dispatchMode === 'picking') {
+                @if (loadsLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading tripsheets...</div> }
+                @else {
+                  <div class="stk-table-wrap">
+                    <table class="stk-table">
+                      <thead><tr>
+                        <th>Load #</th><th>Warehouse</th><th>Customer</th><th>Driver</th><th>Vehicle</th>
+                        <th class="num">Stops</th><th>Status</th><th>Delivery</th><th>POD</th><th style="text-align:right;">Actions</th>
+                      </tr></thead>
+                      <tbody>
+                        @for (l of loadsScoped.slice(0, 300); track l.id) {
+                          <tr>
+                            <td class="mono">{{ l.loadNumber }}</td>
+                            <td>{{ l.warehouseName || '—' }}</td>
+                            <td class="desc">{{ l.customerName || '—' }}</td>
+                            <td>{{ l.driverName || '—' }}</td>
+                            <td>{{ l.vehicleRegistration || '—' }}</td>
+                            <td class="num"><b>{{ l.stops?.length || 0 }}</b></td>
+                            <td><span class="stk-badge" [class.b-in]="l.status === 'Delivered' || l.status === 'Completed'"
+                                  [class.b-warn]="l.status === 'InTransit' || l.status === 'Pending' || l.status === 'Assigned'">{{ l.status }}</span></td>
+                            <td>{{ (l.actualDeliveryDate || l.scheduledDeliveryDate) ? ((l.actualDeliveryDate || l.scheduledDeliveryDate) | date:'dd MMM yyyy') : '—' }}</td>
+                            <td>@if (l.hasPOD) { <mat-icon style="color:#16a34a;font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
+                            <td style="text-align:right;white-space:nowrap;">
+                              @if (dispatchMode === 'tripsheets') {
+                                <button mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(l, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
+                              }
+                              <button mat-icon-button matTooltip="View picking slip" (click)="openLoadDoc(l, 'picking')"><mat-icon>checklist</mat-icon></button>
+                            </td>
+                          </tr>
+                        } @empty { <tr><td colspan="10" class="stk-empty">No tripsheets found{{ whFilterName }}</td></tr> }
+                      </tbody>
+                    </table>
+                    @if (loadsScoped.length > 300) { <div class="stk-more">Showing first 300 of {{ loadsScoped.length | number }} tripsheets</div> }
+                  </div>
+                }
+              }
+
+              <!-- INVOICES -->
+              @if (dispatchMode === 'invoices') {
+                @if (loadsLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading invoices...</div> }
+                @else {
+                  <div class="stk-table-wrap">
+                    <table class="stk-table">
+                      <thead><tr>
+                        <th>Invoice #</th><th>Order #</th><th>Customer / Stop</th><th>Load #</th><th>Warehouse</th><th>Status</th><th>Delivery</th><th style="text-align:right;">Actions</th>
+                      </tr></thead>
+                      <tbody>
+                        @for (r of dispatchInvoiceRows.slice(0, 400); track $index) {
+                          <tr>
+                            <td class="mono">{{ r.invoiceNumber }}</td>
+                            <td class="mono">{{ r.orderNumber || '—' }}</td>
+                            <td class="desc">{{ r.customerName }}</td>
+                            <td class="mono">{{ r.loadNumber }}</td>
+                            <td>{{ r.warehouseName || '—' }}</td>
+                            <td><span class="stk-badge" [class.b-in]="r.status === 'Delivered' || r.status === 'Completed'"
+                                  [class.b-warn]="r.status === 'InTransit' || r.status === 'Pending' || r.status === 'Assigned'">{{ r.status }}</span></td>
+                            <td>{{ r.deliveryDate ? (r.deliveryDate | date:'dd MMM yyyy') : '—' }}</td>
+                            <td style="text-align:right;">
+                              <button mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(r.load, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
+                            </td>
+                          </tr>
+                        } @empty { <tr><td colspan="8" class="stk-empty">No invoices found on tripsheets{{ whFilterName }}</td></tr> }
+                      </tbody>
+                    </table>
+                    @if (dispatchInvoiceRows.length > 400) { <div class="stk-more">Showing first 400 of {{ dispatchInvoiceRows.length | number }} invoices</div> }
+                  </div>
+                }
+              }
+
+              <!-- TRANSFERS -->
+              @if (dispatchMode === 'transfers') {
+                @if (trLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading transfers...</div> }
+                @else {
+                  <div class="stk-table-wrap">
+                    <table class="stk-table">
+                      <thead><tr><th>Transfer #</th><th>From</th><th>To</th><th>Commodity</th><th class="num">Qty</th><th>Status</th><th>Requested</th></tr></thead>
+                      <tbody>
+                        @for (t of transfers; track t.id) {
+                          <tr>
+                            <td class="mono">{{ t.transferNumber }}</td>
+                            <td>{{ t.fromWarehouseName }}</td>
+                            <td>{{ t.toWarehouseName }}</td>
+                            <td class="desc">{{ t.commodityName }}</td>
+                            <td class="num"><b>{{ t.quantity | number }}</b></td>
+                            <td><span class="stk-badge" [class.b-in]="t.status === 'Completed'" [class.b-warn]="t.status === 'Pending' || t.status === 'InTransit'">{{ t.status }}</span></td>
+                            <td>{{ t.requestedDate | date:'dd MMM yyyy' }}</td>
+                          </tr>
+                        } @empty { <tr><td colspan="7" class="stk-empty">No transfers recorded yet</td></tr> }
+                      </tbody>
+                    </table>
+                  </div>
+                }
               }
             </div>
           </mat-tab>
@@ -2128,6 +2209,76 @@ export class StockManagementComponent implements OnInit {
     return this.whFilterId ? this.scrapRecords.filter(s => s.warehouseId === this.whFilterId) : this.scrapRecords;
   }
 
+  // ═══ Dispatch: tripsheets / picking slips / invoices from logistics ═══
+  dispatchMode: 'tripsheets' | 'picking' | 'invoices' | 'transfers' = 'tripsheets';
+  loads: any[] = [];
+  loadsLoading = true;
+
+  get loadsScoped(): any[] {
+    return this.whFilterId ? this.loads.filter(l => l.warehouseId === this.whFilterId) : this.loads;
+  }
+
+  /** Flatten tripsheet stops into invoice rows (invoice numbers can be multi-valued per stop) */
+  get dispatchInvoiceRows(): any[] {
+    const rows: any[] = [];
+    for (const l of this.loadsScoped) {
+      for (const s of (l.stops || [])) {
+        const raw = (s.invoiceNumber || '').trim();
+        if (!raw) continue;
+        const invoices = raw.split(/[\n,;\/]+/).map((x: string) => x.trim()).filter((x: string) => x);
+        for (const inv of invoices) {
+          rows.push({
+            invoiceNumber: inv,
+            orderNumber: (s.orderNumber || '').split(/[\n,;\/]+/)[0]?.trim() || '',
+            customerName: s.customerName || s.companyName || s.locationName || l.customerName || '—',
+            loadNumber: l.loadNumber,
+            warehouseName: l.warehouseName,
+            status: s.status || l.status,
+            deliveryDate: s.actualArrival || l.actualDeliveryDate || l.scheduledDeliveryDate,
+            load: l
+          });
+        }
+      }
+    }
+    return rows;
+  }
+
+  /** Open trip sheet or picking slip document for a load */
+  openLoadDoc(load: any, kind: 'tripsheet' | 'picking'): void {
+    const id = load.id;
+    const url = kind === 'picking'
+      ? `${environment.apiUrl}/logistics/tripsheet/${id}/picking-slip/pdf`
+      : `${environment.apiUrl}/logistics/tripsheet/${id}/pdf`;
+    this.http.get(url, { responseType: 'blob' }).subscribe({
+      next: blob => {
+        const objUrl = URL.createObjectURL(blob);
+        window.open(objUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+      },
+      error: () => this.snackBar.open(`Could not load ${kind === 'picking' ? 'picking slip' : 'trip sheet'} for ${load.loadNumber}`, 'Close', { duration: 4000 })
+    });
+  }
+
+  exportDispatch(): void {
+    if (this.dispatchMode === 'transfers') { this.exportTransfers(); return; }
+    if (this.dispatchMode === 'invoices') {
+      const rows = this.dispatchInvoiceRows.map(r => ({
+        'Invoice #': r.invoiceNumber, 'Order #': r.orderNumber, 'Customer': r.customerName,
+        'Load #': r.loadNumber, 'Warehouse': r.warehouseName, 'Status': r.status,
+        'Delivery': r.deliveryDate ? String(r.deliveryDate).substring(0, 10) : ''
+      }));
+      this.writeExcel(rows, 'Invoices', `Dispatch_Invoices_${new Date().toISOString().substring(0, 10)}.xlsx`);
+      return;
+    }
+    const rows = this.loadsScoped.map(l => ({
+      'Load #': l.loadNumber, 'Warehouse': l.warehouseName, 'Customer': l.customerName,
+      'Driver': l.driverName, 'Vehicle': l.vehicleRegistration, 'Stops': l.stops?.length || 0,
+      'Status': l.status, 'POD': l.hasPOD ? 'Yes' : 'No',
+      'Delivery': (l.actualDeliveryDate || l.scheduledDeliveryDate) ? String(l.actualDeliveryDate || l.scheduledDeliveryDate).substring(0, 10) : ''
+    }));
+    this.writeExcel(rows, 'Tripsheets', `Tripsheets_${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+
   loadDashboardData(): void {
     this.invLoading = true;
     this.http.get<any[]>(`${environment.apiUrl}/warehouses/inventory`).subscribe({
@@ -2148,6 +2299,11 @@ export class StockManagementComponent implements OnInit {
     this.http.get<any[]>(`${environment.apiUrl}/logistics/scrap`).subscribe({
       next: d => { this.scrapRecords = d || []; this.scrapLoading = false; },
       error: () => { this.scrapRecords = []; this.scrapLoading = false; }
+    });
+    this.loadsLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/loads`).subscribe({
+      next: d => { this.loads = d || []; this.loadsLoading = false; },
+      error: () => { this.loads = []; this.loadsLoading = false; }
     });
   }
 
