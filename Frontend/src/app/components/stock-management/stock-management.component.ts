@@ -782,35 +782,51 @@ interface ComprehensiveAnalysisResponse {
             <ng-template mat-tab-label><mat-icon class="tab-ico">swap_horiz</mat-icon> Movements</ng-template>
             <div class="stk-tab-body">
               <div class="stk-toolbar">
-                <span class="stk-count">{{ movements.length | number }} recent movements</span>
+                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === ''" (click)="movTypeFilter = ''">All ({{ ledgerScoped.length }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Receive'" (click)="movTypeFilter = 'Receive'">
+                  <mat-icon>south_west</mat-icon> Receive ({{ movCount('Receive') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Dispatch'" (click)="movTypeFilter = 'Dispatch'">
+                  <mat-icon>north_east</mat-icon> Dispatch ({{ movCount('Dispatch') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Transfer'" (click)="movTypeFilter = 'Transfer'">
+                  <mat-icon>sync_alt</mat-icon> Transfer ({{ movCount('Transfer') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Return'" (click)="movTypeFilter = 'Return'">
+                  <mat-icon>undo</mat-icon> Return ({{ movCount('Return') }})</button>
                 <span class="stk-spacer"></span>
-                <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload movements"><mat-icon>refresh</mat-icon> Refresh</button>
+                <button mat-stroked-button (click)="loadLedger()" matTooltip="Reload movements"><mat-icon>refresh</mat-icon> Refresh</button>
                 <button mat-stroked-button (click)="exportMovements()"><mat-icon>file_download</mat-icon> Export</button>
-                <button mat-raised-button color="primary" (click)="openRepackagingForFilter()"
-                        [matTooltip]="whFilterId ? 'Repackage stock at ' + whFilterName : 'Select a warehouse card above first'">
-                  <mat-icon>autorenew</mat-icon> Repackage</button>
+                <button mat-stroked-button (click)="openManualMovement('Return')"><mat-icon>undo</mat-icon> Return</button>
+                <button mat-raised-button color="primary" (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon> Receive Stock</button>
               </div>
-              @if (movLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading movements...</div> }
+              @if (ledgerLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading movements...</div> }
               @else {
                 <div class="stk-table-wrap">
                   <table class="stk-table">
-                    <thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Description</th><th class="num">Qty</th><th>From → To</th><th>Reference</th><th>By</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Code</th><th>Description</th>
+                      <th class="num">Qty</th><th class="num">Balance After</th><th>Reference</th><th>By</th><th style="text-align:right;">Actions</th></tr></thead>
                     <tbody>
-                      @for (m of movements; track m.id) {
-                        <tr>
-                          <td>{{ m.createdAt | date:'dd MMM yyyy HH:mm' }}</td>
-                          <td><span class="stk-chip">{{ m.movementType }}</span></td>
-                          <td class="mono">{{ m.itemCode }}</td>
-                          <td class="desc">{{ m.itemDescription }}</td>
-                          <td class="num"><b>{{ m.quantity | number }}</b></td>
-                          <td>{{ m.fromBuildingCode || '—' }} → {{ m.toBuildingCode || '—' }}</td>
-                          <td class="mono">{{ m.reference }}</td>
-                          <td>{{ m.createdByName }}</td>
+                      @for (m of ledgerRows; track m.id) {
+                        <tr [class.stk-row-resolved]="m.reversedByMovementId">
+                          <td>{{ m.createdAt | date:'dd MMM HH:mm' }}</td>
+                          <td><span class="stk-badge" [class.b-in]="m.quantity > 0" [class.b-out]="m.quantity < 0">{{ m.movementType }}</span></td>
+                          <td>{{ m.warehouseName }}</td>
+                          <td class="mono">{{ m.commodityCode }}</td>
+                          <td class="desc">{{ m.commodityName }}</td>
+                          <td class="num"><b [style.color]="m.quantity < 0 ? '#dc2626' : '#16a34a'">{{ m.quantity > 0 ? '+' : '' }}{{ m.quantity | number }}</b></td>
+                          <td class="num">{{ m.balanceAfter | number }}</td>
+                          <td class="mono" [matTooltip]="m.reason">{{ m.reference }}</td>
+                          <td>{{ m.createdBy }}</td>
+                          <td style="text-align:right;">
+                            @if (canApprove && !m.reversedByMovementId && m.movementType !== 'Reversal') {
+                              <button mat-icon-button matTooltip="Reverse this movement (creates a counter-entry)" (click)="reverseMovement(m)"><mat-icon>undo</mat-icon></button>
+                            }
+                            @if (m.reversedByMovementId) { <span class="stk-chip" matTooltip="Reversed by movement #{{ m.reversedByMovementId }}">Reversed</span> }
+                          </td>
                         </tr>
-                      } @empty { <tr><td colspan="8" class="stk-empty">No stock movements recorded yet</td></tr> }
+                      } @empty { <tr><td colspan="10" class="stk-empty">No stock movements yet — approve a dispatch or receive stock to start the ledger</td></tr> }
                     </tbody>
                   </table>
                 </div>
+                <p class="stk-note"><mat-icon>info</mat-icon> Stock on hand = imported baseline + these approved movements. Rows are never edited — mistakes are fixed with reversals.</p>
               }
             </div>
           </mat-tab>
@@ -860,6 +876,12 @@ interface ComprehensiveAnalysisResponse {
                             <td>{{ (l.actualDeliveryDate || l.scheduledDeliveryDate) ? ((l.actualDeliveryDate || l.scheduledDeliveryDate) | date:'dd MMM yyyy') : '—' }}</td>
                             <td>@if (l.hasPOD) { <mat-icon style="color:#16a34a;font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
                             <td style="text-align:right;white-space:nowrap;">
+                              @if (isLoadDeducted(l.id)) {
+                                <mat-icon style="color:#16a34a;font-size:20px;width:20px;height:20px;vertical-align:middle;" matTooltip="Stock deducted">inventory</mat-icon>
+                              } @else if (canApprove) {
+                                <button mat-icon-button matTooltip="Review picking slip & approve dispatch (deducts stock)" style="color:#d97706;"
+                                        (click)="openApproveDispatch(l)"><mat-icon>fact_check</mat-icon></button>
+                              }
                               @if (dispatchMode === 'tripsheets') {
                                 <button mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(l, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
                               }
@@ -2320,6 +2342,66 @@ export class StockManagementComponent implements OnInit {
   issueStatusFilter = 'Open';
   issueSearch = '';
 
+  // ═══ Stock ledger (WarehouseStockMovements) ═══
+  ledger: any[] = [];
+  ledgerLoading = true;
+  movTypeFilter = '';
+  canApprove = false;
+  deductedLoadIds = new Set<number>();
+
+  get ledgerScoped(): any[] {
+    return this.whFilterId ? this.ledger.filter(m => m.warehouseId === this.whFilterId) : this.ledger;
+  }
+  get ledgerRows(): any[] {
+    return this.movTypeFilter ? this.ledgerScoped.filter(m => m.movementType === this.movTypeFilter) : this.ledgerScoped;
+  }
+  movCount(t: string): number { return this.ledgerScoped.filter(m => m.movementType === t).length; }
+
+  loadLedger(): void {
+    this.ledgerLoading = true;
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/stock-movements?limit=500`).subscribe({
+      next: d => { this.ledger = d || []; this.ledgerLoading = false; },
+      error: () => { this.ledger = []; this.ledgerLoading = false; }
+    });
+    this.http.get<number[]>(`${environment.apiUrl}/logistics/stock-movements/dispatched-loads`).subscribe({
+      next: d => this.deductedLoadIds = new Set(d || []),
+      error: () => {}
+    });
+  }
+
+  isLoadDeducted(loadId: number): boolean { return this.deductedLoadIds.has(loadId); }
+
+  openManualMovement(type: 'Receive' | 'Return'): void {
+    const w = this.resolveTargetWarehouse();
+    if (!w) return;
+    const ref = this.dialog.open(ManualMovementDialog, {
+      width: '620px', maxWidth: '95vw',
+      data: { warehouse: w, type, inventory: this.allInventory.filter(r => r.warehouseId === w.id) }
+    });
+    ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } });
+  }
+
+  openApproveDispatch(load: any): void {
+    const whId = load.warehouseId;
+    if (!whId) { this.snackBar.open('This load has no originating warehouse set', 'Close', { duration: 4000 }); return; }
+    const ref = this.dialog.open(ApproveDispatchDialog, {
+      width: '900px', maxWidth: '95vw',
+      data: { load, inventory: this.allInventory.filter(r => r.warehouseId === whId) }
+    });
+    ref.afterClosed().subscribe(done => {
+      if (done) { this.deductedLoadIds.add(load.id); this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); }
+    });
+  }
+
+  reverseMovement(m: any): void {
+    const reason = prompt(`Reverse ${m.movementType} of ${m.quantity} × ${m.commodityCode}?\n\nReason for reversal (required):`);
+    if (!reason || !reason.trim()) return;
+    this.http.post(`${environment.apiUrl}/logistics/stock-movements/${m.id}/reverse`, { reason: reason.trim() }).subscribe({
+      next: () => { this.snackBar.open('Movement reversed', 'Close', { duration: 3000 }); this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); },
+      error: (e) => this.snackBar.open(e?.error?.message || 'Failed to reverse movement', 'Close', { duration: 4000 })
+    });
+  }
+
   get issuesScoped(): any[] {
     let rows = this.whFilterId ? this.issues.filter(i => i.warehouseId === this.whFilterId) : this.issues;
     if (this.companyFilter) {
@@ -2480,6 +2562,11 @@ export class StockManagementComponent implements OnInit {
       error: () => { this.loads = []; this.loadsLoading = false; }
     });
     this.loadIssues();
+    this.loadLedger();
+    this.http.get<any>(`${environment.apiUrl}/logistics/stock-movements/can-approve`).subscribe({
+      next: d => this.canApprove = !!d?.canApprove,
+      error: () => this.canApprove = false
+    });
   }
 
   /** Resolve target warehouse: the filtered card, or prompt the user to pick one */
@@ -2579,11 +2666,12 @@ export class StockManagementComponent implements OnInit {
   }
 
   exportMovements(): void {
-    const rows = this.movements.map(m => ({
+    const rows = this.ledgerRows.map(m => ({
       'Date': m.createdAt ? String(m.createdAt).replace('T', ' ').substring(0, 16) : '',
-      'Type': m.movementType, 'Item': m.itemCode, 'Description': m.itemDescription,
-      'Qty': m.quantity, 'From': m.fromBuildingCode || '', 'To': m.toBuildingCode || '',
-      'Reference': m.reference || '', 'By': m.createdByName || ''
+      'Type': m.movementType, 'Warehouse': m.warehouseName, 'Code': m.commodityCode,
+      'Description': m.commodityName, 'Qty': m.quantity, 'Balance After': m.balanceAfter,
+      'Reference': m.reference || '', 'Reason': m.reason || '', 'By': m.createdBy || '',
+      'Reversed': m.reversedByMovementId ? 'Yes' : ''
     }));
     this.writeExcel(rows, 'Movements', `StockMovements-${new Date().toISOString().substring(0, 10)}.xlsx`);
   }
@@ -7445,6 +7533,249 @@ export class ResolveIssueDialog {
       { status: this.data.status, resolution: this.resolution.trim() }).subscribe({
       next: () => { this.snackBar.open(`Issue ${this.data.status.toLowerCase()}`, 'Close', { duration: 3000 }); this.dialogRef.close(true); },
       error: () => { this.saving = false; this.snackBar.open('Failed to update issue', 'Close', { duration: 3000 }); }
+    });
+  }
+}
+
+// ═══ Manual Movement Dialog (Receive / Return) ═══
+@Component({
+  selector: 'app-manual-movement-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+            MatFormFieldModule, MatInputModule, MatSelectModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:#16a34a;">{{ data.type === 'Receive' ? 'south_west' : 'undo' }}</mat-icon>
+      {{ data.type === 'Receive' ? 'Receive Stock (GRV)' : 'Return Stock' }} — {{ data.warehouse.name }}
+    </h2>
+    <mat-dialog-content>
+      <mat-form-field appearance="outline" style="width:100%;">
+        <mat-label>Search item</mat-label>
+        <input matInput [(ngModel)]="search" placeholder="Code or description" (ngModelChange)="selected = null">
+        <mat-icon matPrefix>search</mat-icon>
+      </mat-form-field>
+      @if (!selected) {
+        <div class="mm-list">
+          @for (r of matches(); track r.id) {
+            <button class="mm-item" (click)="selected = r">
+              <span class="mm-code">{{ r.commodityCode }}</span>
+              <span class="mm-name">{{ r.commodityName }}</span>
+              <span class="mm-qty">{{ r.quantityOnHand | number }} on hand</span>
+            </button>
+          } @empty { <div class="mm-empty">Type to search items at this warehouse</div> }
+        </div>
+      } @else {
+        <div class="mm-selected">
+          <div><b>{{ selected.commodityCode }}</b> — {{ selected.commodityName }}</div>
+          <div class="mm-onhand">On hand: <b>{{ selected.quantityOnHand | number }}</b></div>
+          <button mat-button (click)="selected = null"><mat-icon>swap_horiz</mat-icon> Change item</button>
+        </div>
+        <div class="mm-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Quantity ({{ data.type === 'Receive' ? 'received' : 'returned' }})</mat-label>
+            <input matInput type="number" min="1" [(ngModel)]="quantity">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ data.type === 'Receive' ? 'Supplier / GRV reference' : 'Return reference (invoice, customer)' }}</mat-label>
+            <input matInput [(ngModel)]="reference">
+          </mat-form-field>
+        </div>
+        <mat-form-field appearance="outline" style="width:100%;">
+          <mat-label>Notes (optional)</mat-label>
+          <input matInput [(ngModel)]="reason">
+        </mat-form-field>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!selected || !quantity || quantity <= 0 || saving" (click)="save()">
+        <mat-icon>check</mat-icon> {{ data.type === 'Receive' ? 'Receive' : 'Return' }} {{ quantity || '' }}
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .mm-list { max-height: 260px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid #f1f5f9; background: #fff; cursor: pointer; }
+    .mm-item:hover { background: #f0fdf4; }
+    .mm-code { font-family: monospace; font-weight: 700; min-width: 110px; }
+    .mm-name { flex: 1; font-size: 13px; color: #334155; }
+    .mm-qty { font-size: 12px; color: #64748b; white-space: nowrap; }
+    .mm-empty { padding: 20px; text-align: center; color: #94a3b8; }
+    .mm-selected { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .mm-onhand { font-size: 13px; color: #475569; margin: 4px 0; }
+    .mm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    mat-form-field { width: 100%; }
+  `]
+})
+export class ManualMovementDialog {
+  search = '';
+  selected: any = null;
+  quantity: number | null = null;
+  reference = '';
+  reason = '';
+  saving = false;
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    public dialogRef: MatDialogRef<ManualMovementDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {}
+
+  matches(): any[] {
+    const t = this.search.trim().toLowerCase();
+    if (!t) return [];
+    return (this.data.inventory || []).filter((r: any) =>
+      (r.commodityCode || '').toLowerCase().includes(t) ||
+      (r.commodityName || '').toLowerCase().includes(t)).slice(0, 50);
+  }
+
+  save(): void {
+    this.saving = true;
+    this.http.post(`${environment.apiUrl}/logistics/stock-movements`, {
+      warehouseId: this.data.warehouse.id,
+      commodityId: this.selected.commodityId,
+      movementType: this.data.type,
+      quantity: this.quantity,
+      reference: this.reference || null,
+      reason: this.reason || null
+    }).subscribe({
+      next: (r: any) => {
+        this.snackBar.open(`${this.data.type} recorded — new balance ${r?.balanceAfter ?? ''}`, 'Close', { duration: 3500 });
+        this.dialogRef.close(true);
+      },
+      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to record movement', 'Close', { duration: 4000 }); }
+    });
+  }
+}
+
+// ═══ Approve Dispatch Dialog (picking slip review → stock deduction) ═══
+@Component({
+  selector: 'app-approve-dispatch-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+            MatFormFieldModule, MatInputModule, MatTooltipModule],
+  template: `
+    <h2 mat-dialog-title>
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">fact_check</mat-icon>
+      Approve Dispatch — {{ data.load.loadNumber }}
+    </h2>
+    <mat-dialog-content>
+      <div class="ad-meta">
+        <span><b>Warehouse:</b> {{ data.load.warehouseName }}</span>
+        <span><b>Customer:</b> {{ data.load.customerName || '—' }}</span>
+        <span><b>Status:</b> {{ data.load.status }}</span>
+      </div>
+      @if (!lines.length) {
+        <div class="ad-empty">This tripsheet has no commodity lines to dispatch.</div>
+      } @else {
+        <table class="ad-table">
+          <thead><tr><th>Code</th><th>Description</th><th class="num">Planned</th><th class="num">On Hand</th><th class="num" style="width:130px;">Dispatch Qty</th><th></th></tr></thead>
+          <tbody>
+            @for (l of lines; track l.commodityId) {
+              <tr>
+                <td class="mono">{{ l.code }}</td>
+                <td>{{ l.name }}</td>
+                <td class="num">{{ l.planned | number }}</td>
+                <td class="num" [style.color]="l.onHand < l.qty ? '#dc2626' : ''">{{ l.onHand | number }}</td>
+                <td class="num"><input class="ad-qty" type="number" min="0" [(ngModel)]="l.qty"></td>
+                <td>
+                  @if (l.qty > l.onHand) { <mat-icon class="ad-warn" matTooltip="Will take stock negative — reason required">warning</mat-icon> }
+                  @if (l.qty < l.planned) { <span class="ad-short" matTooltip="Short-pick: {{ l.planned - l.qty }} short">-{{ l.planned - l.qty }}</span> }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (needsReason()) {
+          <mat-form-field appearance="outline" style="width:100%;margin-top:10px;">
+            <mat-label>Reason for dispatching more than on hand (required)</mat-label>
+            <input matInput [(ngModel)]="negativeReason" placeholder="e.g. stock received but GRV not yet captured">
+          </mat-form-field>
+        }
+        <p class="ad-note"><mat-icon>info</mat-icon> Approving deducts these quantities from stock on hand and writes ledger entries. Short-picks record the dispatched quantity only.</p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="!canSave() || saving" (click)="save()">
+        <mat-icon>inventory</mat-icon> Approve & Deduct Stock
+      </button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .ad-meta { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+    .ad-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .ad-table th { text-align: left; padding: 8px 10px; background: #f1f5f9; font-size: 11.5px; text-transform: uppercase; color: #475569; }
+    .ad-table th.num, .ad-table td.num { text-align: right; }
+    .ad-table td { padding: 7px 10px; border-top: 1px solid #f1f5f9; }
+    .ad-table td.mono { font-family: monospace; font-weight: 600; }
+    .ad-qty { width: 100px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; text-align: right; font-weight: 700; }
+    .ad-warn { color: #d97706; font-size: 20px; width: 20px; height: 20px; }
+    .ad-short { color: #dc2626; font-weight: 700; font-size: 12px; }
+    .ad-empty { padding: 24px; text-align: center; color: #94a3b8; }
+    .ad-note { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #64748b; margin-top: 12px; }
+    .ad-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
+  `]
+})
+export class ApproveDispatchDialog {
+  lines: { commodityId: number; code: string; name: string; planned: number; qty: number; onHand: number }[] = [];
+  negativeReason = '';
+  saving = false;
+
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+
+  constructor(
+    public dialogRef: MatDialogRef<ApproveDispatchDialog>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {
+    // Aggregate commodity quantities across all stops of the load
+    const byId = new Map<number, any>();
+    for (const s of (data.load.stops || [])) {
+      for (const c of (s.commodities || [])) {
+        if (!c.commodityId) continue;
+        const existing = byId.get(c.commodityId);
+        if (existing) existing.planned += (c.quantity || 0);
+        else byId.set(c.commodityId, {
+          commodityId: c.commodityId,
+          code: c.commodityCode || '',
+          name: c.commodityName || '',
+          planned: c.quantity || 0
+        });
+      }
+    }
+    const invById = new Map<number, any>((data.inventory || []).map((r: any) => [r.commodityId, r]));
+    this.lines = [...byId.values()].map(l => ({
+      ...l,
+      qty: l.planned,
+      onHand: invById.get(l.commodityId)?.quantityOnHand ?? 0
+    }));
+  }
+
+  needsReason(): boolean { return this.lines.some(l => l.qty > l.onHand && l.qty > 0); }
+
+  canSave(): boolean {
+    if (!this.lines.length) return false;
+    if (!this.lines.some(l => l.qty > 0)) return false;
+    if (this.needsReason() && !this.negativeReason.trim()) return false;
+    return true;
+  }
+
+  save(): void {
+    this.saving = true;
+    const payload = {
+      loadId: this.data.load.id,
+      lines: this.lines.filter(l => l.qty > 0).map(l => ({
+        commodityId: l.commodityId,
+        dispatchedQuantity: l.qty,
+        reason: l.qty > l.onHand ? this.negativeReason.trim() : null
+      }))
+    };
+    this.http.post(`${environment.apiUrl}/logistics/stock-movements/approve-dispatch`, payload).subscribe({
+      next: () => { this.snackBar.open(`Dispatch approved — stock deducted for ${this.data.load.loadNumber}`, 'Close', { duration: 4000 }); this.dialogRef.close(true); },
+      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to approve dispatch', 'Close', { duration: 5000 }); }
     });
   }
 }
