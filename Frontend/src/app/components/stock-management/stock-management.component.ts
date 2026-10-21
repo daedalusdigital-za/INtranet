@@ -481,11 +481,6 @@ interface ComprehensiveAnalysisResponse {
 
         <!-- ═══ KPI CARDS ═══ -->
         <div class="stk-kpi-grid">
-          <div class="stk-kpi k-blue">
-            <mat-icon>inventory_2</mat-icon>
-            <div class="stk-kpi-val">{{ kpiSkus | number }}</div>
-            <div class="stk-kpi-lbl">Total SKUs</div>
-          </div>
           <div class="stk-kpi k-indigo">
             <mat-icon>stacked_bar_chart</mat-icon>
             <div class="stk-kpi-val">{{ formatQty(kpiUnits) }}</div>
@@ -510,16 +505,6 @@ interface ComprehensiveAnalysisResponse {
             <mat-icon>remove_shopping_cart</mat-icon>
             <div class="stk-kpi-val">{{ kpiOut | number }}</div>
             <div class="stk-kpi-lbl">Out of Stock</div>
-          </div>
-          <div class="stk-kpi k-amber">
-            <mat-icon>swap_horiz</mat-icon>
-            <div class="stk-kpi-val">{{ movements.length | number }}</div>
-            <div class="stk-kpi-lbl">Recent Movements</div>
-          </div>
-          <div class="stk-kpi k-slate">
-            <mat-icon>delete_sweep</mat-icon>
-            <div class="stk-kpi-val">{{ scrapRecords.length | number }}</div>
-            <div class="stk-kpi-lbl">Scrap Records</div>
           </div>
         </div>
 
