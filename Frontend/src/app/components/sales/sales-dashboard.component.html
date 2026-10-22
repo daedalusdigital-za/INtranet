@@ -1454,9 +1454,12 @@
                             <td class="bo-col-stock">
                               @if (backOrderStockLoaded()) {
                                 @let st = backOrderStockState(bo);
-                                <span class="bo-stock-badge" [class]="'bo-stock-badge ' + st" [matTooltip]="backOrderStockTooltip(bo)" matTooltipClass="bo-stock-tip">
+                                <span class="bo-stock-badge" [class]="'bo-stock-badge ' + st" [class.clickable]="st === 'full' || st === 'partial'"
+                                      [matTooltip]="(st === 'full' || st === 'partial') ? 'Click to see stock per warehouse' : backOrderStockTooltip(bo)" matTooltipClass="bo-stock-tip"
+                                      (click)="openBackOrderStock(bo)">
                                   {{ backOrderStockLabel(st) }}
                                   @if (st !== 'unmapped') { <small>{{ backOrderStockInfo(bo)?.onHand | number:'1.0-0' }}</small> }
+                                  @if (st === 'full' || st === 'partial') { <mat-icon class="bo-stock-open">open_in_new</mat-icon> }
                                 </span>
                               }
                             </td>

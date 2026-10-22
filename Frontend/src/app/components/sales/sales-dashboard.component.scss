@@ -2099,6 +2099,8 @@
       &.partial { background: #fff8e1; color: #e65100; }
       &.none { background: #ffebee; color: #b71c1c; }
       &.unmapped { background: #eceff1; color: #78909c; font-weight: 500; }
+      &.clickable { cursor: pointer; &:hover { filter: brightness(.95); box-shadow: 0 0 0 1px currentColor inset; } }
+      .bo-stock-open { font-size: 14px; width: 14px; height: 14px; opacity: .7; }
     }
 
     /* Back Order Pagination */

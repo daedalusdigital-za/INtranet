@@ -43,6 +43,7 @@ import { AuthService } from '../../services/auth.service';
 import { COMPANIES, Company, SalesHistoryRow, SalesHistoryLine, SalesHistoryReconcile, CompanySales, Customer, SalesTripSheetLine, SalesTripSheet, Invoice, Order, IncomingOrderEmail, SalesStats } from './sales.models';
 import { PodInvoicesDialog, EmailDetailDialogComponent } from './sales-dashboard-dialogs.component';
 import { UnmappedProductsDialog, BackOrderStockInfo } from './unmapped-products-dialog.component';
+import { BackOrderStockDialog } from './back-order-stock-dialog.component';
 
 
 @Component({
@@ -705,6 +706,13 @@ export class SalesDashboardComponent implements OnInit {
   openUnmappedProducts(): void {
     const ref = this.dialog.open(UnmappedProductsDialog, { width: '900px', maxHeight: '85vh', data: { apiUrl: this.apiUrl } });
     ref.afterClosed().subscribe(changed => { if (changed) this.loadBackOrderStockCheck(); });
+  }
+
+  /** Click on an In stock / Partial badge: show which warehouses hold the item. */
+  openBackOrderStock(bo: BackOrderItem): void {
+    const info = this.backOrderStockInfo(bo);
+    if (!info || info.onHand <= 0) return;
+    this.dialog.open(BackOrderStockDialog, { width: '620px', data: { bo, info } });
   }
 
   // Attention computed values
