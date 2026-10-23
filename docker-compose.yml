@@ -36,6 +36,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5143
+      # The default inotify file watcher recursively walks EVERY subdirectory under the
+      # content root (/app) at startup - including the NAS shares mounted at
+      # /app/documents and /app/archives - which can block boot for minutes when the
+      # NAS is slow. Polling only watches the specific appsettings files.
+      - DOTNET_USE_POLLING_FILE_WATCHER=1
       - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationThatIsLongEnough123456!
       - ConnectionStrings__DefaultConnection=Server=database;Database=ProjectTrackerDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;

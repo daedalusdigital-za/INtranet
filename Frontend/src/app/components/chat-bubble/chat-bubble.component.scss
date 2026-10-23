@@ -328,6 +328,64 @@
   }
 }
 
+// Typing indicator
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  color: #6b7280;
+  font-size: 12px;
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #9ca3af;
+    animation: typing-bounce 1.2s infinite ease-in-out;
+    &:nth-child(2) { animation-delay: 0.15s; }
+    &:nth-child(3) { animation-delay: 0.3s; }
+  }
+  .typing-text { margin-left: 6px; }
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+// Upload / download error banner
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  border-top: 1px solid #fecaca;
+
+  span { flex: 1; }
+  .remove-file { color: #b91c1c; }
+}
+
+// Secure image states
+img.secure-src-loading {
+  min-height: 80px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+img.secure-src-error {
+  min-height: 60px;
+  background: #fef2f2;
+  border: 1px dashed #fca5a5;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 // Selected File Preview
 .selected-file {
   display: flex;

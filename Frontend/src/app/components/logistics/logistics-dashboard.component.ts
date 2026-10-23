@@ -4031,6 +4031,10 @@ Notes: ${record.notes || 'No notes'}
   }
 
   reconcilePodTripsheets(): void {
+    this.reconcilePods();
+  }
+
+  private reconcilePodTripsheetsLegacy(): void {
     this.podReconciling = true;
     this.http.post<any>(`${this.apiUrl}/PodDocuments/reconcile-tripsheets`, {}).subscribe({
       next: (res) => {
@@ -4116,6 +4120,37 @@ Notes: ${record.notes || 'No notes'}
         console.error('Failed to download POD:', err);
         this.snackBar.open('Failed to download POD', 'Close', { duration: 3000 });
       }
+    });
+  }
+
+  /** Preview, confirm, then apply POD ↔ tripsheet reconciliation by invoice number. */
+  reconcilePods(): void {
+    this.podReconciling = true;
+    const url = `${this.apiUrl}/logistics/loads/pod-reconcile`;
+    this.http.post<any>(`${url}?apply=false`, {}).subscribe({
+      next: p => {
+        this.podReconciling = false;
+        const sample = (p.closable || []).slice(0, 15).map((c: any) => c.loadNumber).join(', ');
+        const msg = `POD ↔ Tripsheet reconciliation preview:\n\n`
+          + `• ${p.tripsheetsClosable} open tripsheet(s) have a POD for EVERY invoice → will be marked Delivered\n`
+          + `• ${p.tripsheetsPartial} open tripsheet(s) have PODs for only some invoices (left open)\n`
+          + `• ${p.podsLinkedToTripsheets} POD(s) will be linked to their tripsheet\n`
+          + `• ${p.invoicesLinkedToTripsheets} invoice(s) will be linked to their tripsheet\n`
+          + `• ${p.podLinksNumberFilled} POD link(s) missing an invoice number will be repaired\n`
+          + (sample ? `\nTripsheets to close: ${sample}${p.tripsheetsClosable > 15 ? ', …' : ''}\n` : '')
+          + `\nApply these changes?`;
+        if (!confirm(msg)) return;
+        this.podReconciling = true;
+        this.http.post<any>(`${url}?apply=true`, {}).subscribe({
+          next: r => {
+            this.podReconciling = false;
+            this.snackBar.open(`Reconciled: ${r.tripsheetsClosable} tripsheets delivered, ${r.podsLinkedToTripsheets} PODs and ${r.invoicesLinkedToTripsheets} invoices linked`, 'Close', { duration: 8000 });
+            this.loadDeliveredWithoutPod();
+          },
+          error: e => { this.podReconciling = false; this.snackBar.open(e?.error?.message || 'Reconciliation failed', 'Close', { duration: 5000 }); }
+        });
+      },
+      error: e => { this.podReconciling = false; this.snackBar.open(e?.error?.message || 'Reconciliation preview failed', 'Close', { duration: 5000 }); }
     });
   }
 

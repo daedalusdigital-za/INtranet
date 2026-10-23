@@ -5,7 +5,20 @@ namespace ProjectTracker.API.Services.Google
     /// </summary>
     public static class GoogleMapsConfig
     {
-        public const string ApiKey = "AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k";
+        /// <summary>Built-in fallback key (used until an admin saves one under Admin Settings → Client Locations).</summary>
+        public const string DefaultApiKey = "AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k";
+
+        private static string? _override;
+
+        /// <summary>
+        /// Effective Google Maps API key. Resolved from the SystemSettings table at startup
+        /// (and whenever an admin updates it) with the built-in key as fallback.
+        /// </summary>
+        public static string ApiKey => string.IsNullOrWhiteSpace(_override) ? DefaultApiKey : _override!;
+
+        public static bool IsOverridden => !string.IsNullOrWhiteSpace(_override);
+
+        public static void SetApiKey(string? key) => _override = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
         
         // API Endpoints
         public const string GeocodingApiUrl = "https://maps.googleapis.com/maps/api/geocode/json";

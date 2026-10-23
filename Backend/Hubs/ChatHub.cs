@@ -1,12 +1,32 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using ProjectTracker.API.DTOs;
+using System.Security.Claims;
 
 namespace ProjectTracker.API.Hubs
 {
+    [Authorize]
     public class ChatHub : Hub
     {
         private static readonly Dictionary<int, HashSet<string>> _userConnections = new();
         private static readonly Dictionary<string, int> _connectionUsers = new();
+
+        private int? AuthenticatedUserId()
+        {
+            var raw = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? Context.User?.FindFirst("sub")?.Value;
+            return int.TryParse(raw, out var id) ? id : null;
+        }
+
+        public override async Task OnConnectedAsync()
+        {
+            // Join the personal group immediately so messages arrive even if the
+            // client has not called RegisterUser yet.
+            var uid = AuthenticatedUserId();
+            if (uid.HasValue)
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{uid.Value}");
+            await base.OnConnectedAsync();
+        }
 
         public async Task JoinConversation(int conversationId)
         {
@@ -20,6 +40,8 @@ namespace ProjectTracker.API.Hubs
 
         public async Task RegisterUser(int userId)
         {
+            // Never trust the client-supplied id when the token identifies the user.
+            userId = AuthenticatedUserId() ?? userId;
             var connectionId = Context.ConnectionId;
 
             lock (_userConnections)
@@ -61,8 +83,10 @@ namespace ProjectTracker.API.Hubs
                 .SendAsync("MessageDeleted", messageId);
         }
 
-        public async Task SendTypingIndicator(int conversationId, int userId, string userName, bool isTyping)
+        public async Task SendTypingIndicator(int conversationId, bool isTyping)
         {
+            var userId = AuthenticatedUserId() ?? 0;
+            var userName = Context.User?.FindFirst(ClaimTypes.Name)?.Value ?? "Someone";
             await Clients.OthersInGroup($"conversation_{conversationId}")
                 .SendAsync("UserTyping", new TypingIndicator
                 {

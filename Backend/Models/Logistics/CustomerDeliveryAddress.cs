@@ -65,7 +65,7 @@ namespace ProjectTracker.API.Models.Logistics
         /// <summary>
         /// Google Place ID for address verification
         /// </summary>
-        [MaxLength(100)]
+        [MaxLength(500)]
         public string? GooglePlaceId { get; set; }
 
         /// <summary>
@@ -94,6 +94,16 @@ namespace ProjectTracker.API.Models.Logistics
         /// Number of times this address has been used in tripsheets
         /// </summary>
         public int UsageCount { get; set; } = 0;
+
+        /// <summary>
+        /// True when an admin has confirmed this address in Admin Settings → Client Locations.
+        /// Verified addresses are shown in purple on tripsheets.
+        /// </summary>
+        public bool IsVerified { get; set; } = false;
+        public DateTime? VerifiedAt { get; set; }
+
+        [MaxLength(200)]
+        public string? VerifiedBy { get; set; }
 
         /// <summary>
         /// Last time this address was used in a tripsheet

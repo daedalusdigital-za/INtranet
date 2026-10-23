@@ -4,12 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { MessageService, Conversation, Message, Participant, MessageAttachment } from '../../services/message.service';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
-import { environment } from '../../../environments/environment';
+import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
 @Component({
   selector: 'app-chat-bubble',
   standalone: true,
-  imports: [CommonModule, FormsModule, PickerComponent],
+  imports: [CommonModule, FormsModule, PickerComponent, SecureSrcDirective],
   templateUrl: './chat-bubble.component.html',
   styleUrls: ['./chat-bubble.component.scss']
 })
@@ -31,27 +31,85 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   selectedFile: File | null = null;
   showEmojiPicker = false;
   attention = false;
+  typingUser: string | null = null;
+  uploadError: string | null = null;
 
   private refreshInterval: any;
-  private attentionSub?: Subscription;
+  private subs: Subscription[] = [];
   private attentionTimeout: any;
+  private typingTimeout: any;
+  private typingSentAt = 0;
 
   constructor(private messageService: MessageService) {}
 
   ngOnInit(): void {
     this.loadMessages();
-    // Refresh messages every 5 seconds
+    if (this.conversation?.conversationId) {
+      this.messageService.joinConversation(this.conversation.conversationId);
+    }
+
+    // Slow fallback poll in case the socket drops; real-time path is below.
     this.refreshInterval = setInterval(() => {
-      if (this.isOpen && !this.isMinimized) {
+      if (this.isOpen && !this.isMinimized && !this.messageService.getConnectionState()) {
         this.loadNewMessages();
       }
-    }, 5000);
+    }, 15000);
 
     // Shake + red glow when a new message arrives for this conversation
-    this.attentionSub = this.messageService.bubbleAttention$.subscribe((conversationId) => {
+    this.subs.push(this.messageService.bubbleAttention$.subscribe((conversationId) => {
       if (conversationId === this.conversation?.conversationId) {
         this.triggerAttention();
       }
+    }));
+
+    // Live message stream
+    this.subs.push(this.messageService.newMessage$.subscribe((m) => {
+      if (m?.conversationId !== this.conversation?.conversationId) return;
+      this.upsertMessage(m);
+      if (!this.isMinimized && m.senderId !== this.currentUserId) {
+        this.markRead();
+      }
+    }));
+    this.subs.push(this.messageService.messageUpdated$.subscribe((m) => {
+      if (m?.conversationId === this.conversation?.conversationId) this.upsertMessage(m);
+    }));
+    this.subs.push(this.messageService.messageEdited$.subscribe(({ conversationId, messageId, content }) => {
+      if (conversationId !== this.conversation?.conversationId) return;
+      const msg = this.messages.find(x => x.messageId === messageId);
+      if (msg) { msg.content = content; msg.isEdited = true; }
+    }));
+    this.subs.push(this.messageService.messageDeleted$.subscribe(({ conversationId, messageId }) => {
+      if (conversationId !== this.conversation?.conversationId) return;
+      const msg = this.messages.find(x => x.messageId === messageId);
+      if (msg) { msg.isDeleted = true; msg.content = 'This message was deleted'; }
+    }));
+    this.subs.push(this.messageService.typing$.subscribe((t) => {
+      if (t.conversationId !== this.conversation?.conversationId || t.userId === this.currentUserId) return;
+      this.typingUser = t.isTyping ? t.userName : null;
+      if (this.typingTimeout) clearTimeout(this.typingTimeout);
+      if (t.isTyping) this.typingTimeout = setTimeout(() => (this.typingUser = null), 4000);
+    }));
+  }
+
+  private upsertMessage(m: Message): void {
+    const idx = this.messages.findIndex(x => x.messageId === m.messageId);
+    if (idx >= 0) {
+      this.messages[idx] = m;
+    } else {
+      this.messages.push(m);
+      this.messages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+    }
+    setTimeout(() => this.scrollToBottom(), 50);
+  }
+
+  private markRead(): void {
+    if (!this.conversation?.conversationId) return;
+    this.messageService.markAsRead(this.conversation.conversationId, this.currentUserId).subscribe({
+      next: () => {
+        if (this.conversation) this.conversation.unreadCount = 0;
+        this.messageService.refreshUnreadCount(this.currentUserId);
+      },
+      error: () => {}
     });
   }
 
@@ -63,7 +121,6 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     setTimeout(() => { this.attention = true; }, 20);
     if (this.attentionTimeout) clearTimeout(this.attentionTimeout);
     this.attentionTimeout = setTimeout(() => { this.attention = false; }, 1600);
-    this.loadNewMessages();
   }
 
   ngOnDestroy(): void {
@@ -71,7 +128,11 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
       clearInterval(this.refreshInterval);
     }
     if (this.attentionTimeout) clearTimeout(this.attentionTimeout);
-    this.attentionSub?.unsubscribe();
+    if (this.typingTimeout) clearTimeout(this.typingTimeout);
+    this.subs.forEach(s => s.unsubscribe());
+    if (this.conversation?.conversationId) {
+      this.messageService.leaveConversation(this.conversation.conversationId);
+    }
   }
 
   getOtherParticipant(): Participant | undefined {
@@ -117,8 +178,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
           this.messages = messages;
           this.isLoading = false;
           setTimeout(() => this.scrollToBottom(), 100);
-          // Mark as read
-          this.messageService.markAsRead(this.conversation.conversationId, this.currentUserId).subscribe();
+          this.markRead();
         },
         error: (err: any) => {
           console.error('Error loading messages:', err);
@@ -133,10 +193,10 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     this.messageService.getMessages(this.conversation.conversationId, this.currentUserId)
       .subscribe({
         next: (messages: Message[]) => {
-          if (messages.length > this.messages.length) {
+          if (messages.length !== this.messages.length) {
             this.messages = messages;
             setTimeout(() => this.scrollToBottom(), 100);
-            this.messageService.markAsRead(this.conversation.conversationId, this.currentUserId).subscribe();
+            this.markRead();
           }
         }
       });
@@ -157,10 +217,10 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
         messageType: 'text'
       }, this.currentUserId).subscribe({
         next: (message: Message) => {
-          this.messages.push(message);
+          this.upsertMessage(message);
           this.newMessage = '';
           this.isSending = false;
-          setTimeout(() => this.scrollToBottom(), 100);
+          this.sendTyping(false);
         },
         error: (err: any) => {
           console.error('Error sending message:', err);
@@ -174,6 +234,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     if (!this.selectedFile) return;
 
     const file = this.selectedFile;
+    this.uploadError = null;
     // Send the message first, then stream the file to it (disk-backed storage).
     this.messageService.sendMessage({
       conversationId: this.conversation.conversationId,
@@ -182,21 +243,24 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     }, this.currentUserId).subscribe({
       next: (message: Message) => {
         this.messageService.uploadFileToMessage(message.messageId, file, this.currentUserId).subscribe({
-          next: () => {
-            this.messages.push(message);
+          next: (attachment: MessageAttachment) => {
+            message.attachments = [...(message.attachments || []), attachment];
+            this.upsertMessage(message);
             this.newMessage = '';
-            this.selectedFile = null;
+            this.removeSelectedFile();
             this.isSending = false;
-            setTimeout(() => this.scrollToBottom(), 100);
           },
           error: (err: any) => {
             console.error('Error uploading file:', err);
+            this.uploadError = `Could not upload ${file.name}`;
+            this.upsertMessage(message);
             this.isSending = false;
           }
         });
       },
       error: (err: any) => {
         console.error('Error sending file message:', err);
+        this.uploadError = 'Could not send message';
         this.isSending = false;
       }
     });
@@ -205,7 +269,32 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
-      this.selectedFile = input.files[0];
+      const file = input.files[0];
+      const maxSize = 200 * 1024 * 1024;
+      if (file.size > maxSize) {
+        this.uploadError = `${file.name} is larger than 200 MB`;
+        input.value = '';
+        return;
+      }
+      this.uploadError = null;
+      this.selectedFile = file;
+    }
+  }
+
+  onPaste(event: ClipboardEvent): void {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          const named = new File([file], `pasted-image-${Date.now()}.${(item.type.split('/')[1] || 'png')}`, { type: item.type });
+          this.selectedFile = named;
+          event.preventDefault();
+          return;
+        }
+      }
     }
   }
 
@@ -228,6 +317,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     this.isMinimized = !this.isMinimized;
     if (!this.isMinimized) {
       setTimeout(() => this.scrollToBottom(), 100);
+      this.markRead();
     }
   }
 
@@ -268,7 +358,16 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.sendMessage();
+      return;
     }
+    this.sendTyping(true);
+  }
+
+  private sendTyping(isTyping: boolean): void {
+    const now = Date.now();
+    if (isTyping && now - this.typingSentAt < 2500) return; // throttle
+    this.typingSentAt = isTyping ? now : 0;
+    this.messageService.sendTypingIndicator(this.conversation.conversationId, isTyping);
   }
 
   triggerFileInput(): void {
@@ -281,14 +380,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   }
 
   getAttachmentUrl(attachment: MessageAttachment): string {
-    if (attachment.fileUrl) {
-      // If it starts with /api, prepend the base URL
-      if (attachment.fileUrl.startsWith('/api')) {
-        return environment.apiUrl.replace('/api', '') + attachment.fileUrl;
-      }
-      return attachment.fileUrl;
-    }
-    return `${environment.apiUrl}/messages/attachments/${attachment.attachmentId}`;
+    return this.messageService.getAttachmentUrl(attachment);
   }
 
   getFileIcon(mimeType: string): string {
@@ -302,53 +394,18 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   }
 
   downloadAttachment(attachment: MessageAttachment): void {
-    const url = this.getAttachmentUrl(attachment);
-    
-    // Fetch with Authorization header for authenticated download
-    fetch(url, {
-      headers: {
-        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
-      }
-    })
-    .then(response => {
-      if (!response.ok) throw new Error('Download failed');
-      return response.blob();
-    })
-    .then(blob => {
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = attachment.fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-    })
-    .catch(() => {
-      // Fallback: open in new tab
-      window.open(url, '_blank');
+    this.messageService.downloadAttachment(attachment).catch(() => {
+      this.uploadError = `Could not download ${attachment.fileName}`;
     });
   }
 
   previewAttachment(attachment: MessageAttachment): void {
-    const url = this.getAttachmentUrl(attachment);
-    
-    // For images and PDFs, try to open with auth
-    fetch(url, {
-      headers: {
-        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
-      }
-    })
-    .then(response => {
-      if (!response.ok) throw new Error('Preview failed');
-      return response.blob();
-    })
-    .then(blob => {
-      const blobUrl = window.URL.createObjectURL(blob);
-      window.open(blobUrl, '_blank');
-    })
-    .catch(() => {
-      window.open(url, '_blank');
+    const previewable = this.isImageFile(attachment.mimeType) || attachment.mimeType === 'application/pdf';
+    const action = previewable
+      ? this.messageService.openAttachment(attachment)
+      : this.messageService.downloadAttachment(attachment);
+    action.catch(() => {
+      this.uploadError = `Could not open ${attachment.fileName}`;
     });
   }
 

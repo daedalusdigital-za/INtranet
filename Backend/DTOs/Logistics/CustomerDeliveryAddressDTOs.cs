@@ -26,6 +26,10 @@ namespace ProjectTracker.API.DTOs.Logistics
         public int UsageCount { get; set; }
         public DateTime? LastUsedAt { get; set; }
         public DateTime CreatedAt { get; set; }
+        /// <summary>Admin-verified in Admin Settings → Client Locations (shown purple on tripsheets).</summary>
+        public bool IsVerified { get; set; }
+        public DateTime? VerifiedAt { get; set; }
+        public string? VerifiedBy { get; set; }
     }
 
     // DTO for creating a new delivery address

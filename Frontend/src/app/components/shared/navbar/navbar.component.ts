@@ -1268,14 +1268,37 @@ export class NavbarComponent implements OnInit, OnDestroy {
     this.notificationService.loadAllNotifications();
     
     // Subscribe to active chat bubbles
-    this.messageService.activeChats$.subscribe((chats: Conversation[]) => {
-      this.activeChatBubbles = chats;
-    });
+    this.subscriptions.push(
+      this.messageService.activeChats$.subscribe((chats: Conversation[]) => {
+        this.activeChatBubbles = chats;
+      })
+    );
+
+    // App-wide real-time chat connection. The navbar is on every page, so
+    // starting it here means new-message bubbles and badges work everywhere,
+    // not only while the Messages page is open. startConnection is idempotent.
+    if (this.currentUserId) {
+      this.messageService.startConnection(this.currentUserId).catch(() => {});
+    }
+
+    // Keep the envelope badge in sync with the server-side unread count
+    this.subscriptions.push(
+      this.notificationService.unreadCount$.subscribe(count => {
+        this.unreadMessagesCount = count;
+      })
+    );
 
     // Auto-pop a mini chat bubble when a new message arrives from someone else
     this.subscriptions.push(
       this.messageService.newMessage$.subscribe((message) => {
         if (!message || message.senderId === this.currentUserId) return;
+
+        // Refresh the dropdown's recent list so the preview is current
+        this.loadRecentConversations();
+
+        // On the full Messages page the inbox already shows it; no bubble needed
+        if (this.router.url.startsWith('/messages')) return;
+
         // If this conversation isn't already the open bubble, fetch it and open it
         const alreadyOpen = this.activeChatBubbles.some(
           c => c.conversationId === message.conversationId
@@ -1286,6 +1309,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
               next: (conv) => this.messageService.openChatBubble(conv),
               error: () => {}
             });
+        }
+      })
+    );
+
+    // Reconnected after a drop: re-sync the badge and recent list
+    this.subscriptions.push(
+      this.messageService.connectionState$.subscribe(connected => {
+        if (connected) {
+          this.loadUnreadCount();
+          this.loadRecentConversations();
         }
       })
     );
@@ -1364,6 +1397,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
       })
       .then(count => {
         this.unreadMessagesCount = count;
+        this.notificationService.updateUnreadCount(count);
       })
       .catch(error => {
         console.error('Error loading unread count:', error);
@@ -1587,6 +1621,10 @@ export class NavbarComponent implements OnInit, OnDestroy {
   }
 
   logout(): void {
+    // Close any open chat bubbles and the real-time connection before the
+    // token is cleared so the socket doesn't try to reconnect unauthenticated.
+    this.messageService.getActiveChatBubbles().forEach(c => this.messageService.closeChatBubble(c.conversationId));
+    this.messageService.stopConnection();
     this.authService.logout();
     this.router.navigate(['/login']);
   }

@@ -24,6 +24,10 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(100)]
         public string? BinLocation { get; set; }
 
+        /// <summary>Manual unit price override. When set it takes precedence over the price derived from invoices.</summary>
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? UnitPrice { get; set; }
+
         public DateTime? LastCountDate { get; set; }
         public DateTime? LastRestockDate { get; set; }
 

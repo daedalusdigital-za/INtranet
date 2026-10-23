@@ -497,11 +497,20 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                     // Auto-link to a tripsheet if any invoice belongs to one.
                     var loadId = matchedInvoices.Select(i => i.LoadId).FirstOrDefault(x => x.HasValue);
+                    if (!loadId.HasValue)
+                    {
+                        foreach (var num in matchedInvoices.Select(i => i.TransactionNumber).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct())
+                        {
+                            loadId = await FindLoadIdByInvoiceTextAsync(num);
+                            if (loadId.HasValue) break;
+                        }
+                    }
                     if (loadId.HasValue)
                     {
                         pod.LoadId = loadId.Value;
                         var load = await _context.Loads.FindAsync(loadId.Value);
                         loadNumber = load?.LoadNumber;
+                        foreach (var inv in matchedInvoices.Where(i => i.LoadId == null)) inv.LoadId = loadId.Value;
                     }
 
                     pod.InvoiceId = matchedInvoices.First().Id; // legacy compatibility
@@ -862,10 +871,19 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             pod.LoadId = request.LoadId;
 
-            // Auto-link to all non-cancelled invoices on the tripsheet
-            var invoicesOnLoad = await _context.ImportedInvoices
-                .Where(i => i.LoadId == request.LoadId && i.Status != "Cancelled")
+            // Auto-link to all non-cancelled invoices on the tripsheet — by FK, and by the
+            // invoice numbers typed on its stops/lines (spreadsheet-imported tripsheets).
+            var stopTexts = await _context.LoadStops.Where(s => s.LoadId == request.LoadId)
+                .Select(s => s.InvoiceNumber)
+                .Concat(_context.StopCommodities.Where(c => c.LoadStop.LoadId == request.LoadId).Select(c => c.InvoiceNumber))
                 .ToListAsync();
+            var textNums = stopTexts.Where(t => !string.IsNullOrWhiteSpace(t))
+                .SelectMany(t => t!.Split(new[] { ',', ';', '/', '\n', '\r', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var invoicesOnLoad = await _context.ImportedInvoices
+                .Where(i => (i.LoadId == request.LoadId || textNums.Contains(i.TransactionNumber)) && i.Status != "Cancelled")
+                .ToListAsync();
+            foreach (var inv in invoicesOnLoad.Where(i => i.LoadId == null)) inv.LoadId = request.LoadId;
 
             var existingInvoiceIds = await _context.PodDocumentInvoiceLinks
                 .Where(l => l.PodDocumentId == pod.Id)
@@ -878,6 +896,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 {
                     PodDocumentId = pod.Id,
                     InvoiceId = i.Id,
+                    InvoiceNumber = i.TransactionNumber,
                     LinkedAt = DateTime.UtcNow
                 })
                 .ToList();
@@ -998,6 +1017,34 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Find the (most recent, non-cancelled) tripsheet whose stops/lines mention this invoice number.
+        /// Text is a comma-separated list, so verify the exact token after a LIKE pre-filter.
+        /// </summary>
+        private async Task<int?> FindLoadIdByInvoiceTextAsync(string invoiceNumber)
+        {
+            var num = invoiceNumber.Trim();
+            var candidates = await _context.Loads.AsNoTracking()
+                .Where(l => l.Status != "Cancelled" && l.Stops.Any(s =>
+                    (s.InvoiceNumber != null && s.InvoiceNumber.Contains(num)) ||
+                    s.Commodities.Any(c => c.InvoiceNumber != null && c.InvoiceNumber.Contains(num))))
+                .OrderByDescending(l => l.CreatedAt)
+                .Select(l => new
+                {
+                    l.Id,
+                    Texts = l.Stops.Select(s => s.InvoiceNumber)
+                        .Concat(l.Stops.SelectMany(s => s.Commodities.Select(c => c.InvoiceNumber))).ToList()
+                })
+                .Take(10)
+                .ToListAsync();
+            var seps = new[] { ',', ';', '/', '\n', '\r', '|' };
+            foreach (var c in candidates)
+                if (c.Texts.Any(t => t != null && t.Split(seps, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Any(tok => string.Equals(tok, num, StringComparison.OrdinalIgnoreCase))))
+                    return c.Id;
+            return null;
+        }
+
+        /// <summary>
         /// Search loads for linking
         /// </summary>
         [HttpGet("search-loads")]
@@ -1008,7 +1055,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (!string.IsNullOrEmpty(search))
             {
                 query = query.Where(l => l.LoadNumber.Contains(search) ||
-                    (l.Customer != null && l.Customer.Name != null && l.Customer.Name.Contains(search)));
+                    (l.Customer != null && l.Customer.Name != null && l.Customer.Name.Contains(search)) ||
+                    l.Stops.Any(s => (s.InvoiceNumber != null && s.InvoiceNumber.Contains(search)) ||
+                                     s.Commodities.Any(c => c.InvoiceNumber != null && c.InvoiceNumber.Contains(search))));
             }
 
             var loads = await query
@@ -1070,6 +1119,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 {
                     PodDocumentId = pod.Id,
                     InvoiceId = i.Id,
+                    InvoiceNumber = i.TransactionNumber,
                     LinkedAt = DateTime.UtcNow
                 })
                 .ToList();
@@ -1090,11 +1140,22 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (pod.LoadId == null)
             {
                 var loadId = invoices.Select(i => i.LoadId).FirstOrDefault(x => x.HasValue);
+                // Tripsheets imported from spreadsheets only hold invoice numbers as text on
+                // stops/lines (ImportedInvoices.LoadId stays empty) — search that text too.
+                if (!loadId.HasValue)
+                {
+                    foreach (var num in invoices.Select(i => i.TransactionNumber).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct())
+                    {
+                        loadId = await FindLoadIdByInvoiceTextAsync(num);
+                        if (loadId.HasValue) break;
+                    }
+                }
                 if (loadId.HasValue)
                 {
                     pod.LoadId = loadId.Value;
                     var load = await _context.Loads.FindAsync(loadId.Value);
                     loadNumber = load?.LoadNumber;
+                    foreach (var inv in invoices.Where(i => i.LoadId == null)) inv.LoadId = loadId.Value;
                 }
             }
 

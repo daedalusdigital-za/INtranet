@@ -125,6 +125,26 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
     }
 }
 
+// Load admin-editable runtime settings (Admin Settings → Client Locations → Google API key)
+using (var settingsScope = app.Services.CreateScope())
+{
+    var logger = settingsScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        var db = settingsScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var googleKey = db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == ProjectTracker.API.Models.SystemSettingKeys.GoogleMapsApiKey)
+            .Select(s => s.Value).FirstOrDefault();
+        ProjectTracker.API.Services.Google.GoogleMapsConfig.SetApiKey(googleKey);
+        logger.LogInformation("Google Maps API key source: {Source}",
+            ProjectTracker.API.Services.Google.GoogleMapsConfig.IsOverridden ? "SystemSettings (admin)" : "built-in default");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Could not load Google Maps API key from SystemSettings; using built-in default.");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // HTTP pipeline
 // ---------------------------------------------------------------------------

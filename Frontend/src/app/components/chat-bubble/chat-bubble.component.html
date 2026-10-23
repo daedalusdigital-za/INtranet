@@ -55,7 +55,7 @@
                 <div *ngFor="let attachment of message.attachments" class="attachment-item">
                   <!-- Image Preview -->
                   <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container" (click)="previewAttachment(attachment)">
-                    <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" class="attachment-image">
+                    <img [appSecureSrc]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" class="attachment-image" loading="lazy">
                     <div class="attachment-overlay">
                       <button class="overlay-btn" (click)="downloadAttachment(attachment); $event.stopPropagation()" title="Download">
                         <i class="bi bi-download"></i>
@@ -86,7 +86,18 @@
           <i class="bi bi-chat-dots"></i>
           <p>No messages yet. Start the conversation!</p>
         </div>
+
+        <div class="typing-indicator" *ngIf="typingUser">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="typing-text">{{ typingUser }} is typing…</span>
+        </div>
       </div>
+    </div>
+
+    <div class="upload-error" *ngIf="uploadError">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>{{ uploadError }}</span>
+      <button class="remove-file" (click)="uploadError = null" title="Dismiss"><i class="bi bi-x"></i></button>
     </div>
 
     <!-- Selected File Preview -->
@@ -128,6 +139,7 @@
         type="text" 
         [(ngModel)]="newMessage" 
         (keypress)="onKeyPress($event)"
+        (paste)="onPaste($event)"
         placeholder="Type a message..."
         class="message-input"
         [disabled]="isSending">

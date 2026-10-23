@@ -1919,6 +1919,90 @@
             </div>
           </mat-tab>
 
+          <!-- Tender Pricing Tab -->
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>gavel</mat-icon>
+              <span>Tender Pricing</span>
+            </ng-template>
+            <div class="tab-content">
+              <div class="section-header">
+                <h3>
+                  <mat-icon style="vertical-align: middle; margin-right: 8px;">gavel</mat-icon>
+                  Tenders Won — Price List <span style="font-weight: 400; color: #64748b; font-size: 13px;">(prices incl. 15% VAT)</span>
+                </h3>
+                <div class="section-actions">
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Tender No.</mat-label>
+                    <mat-select [value]="tenderNoFilter()" (selectionChange)="tenderNoFilter.set($event.value)">
+                      <mat-option value="all">All tenders</mat-option>
+                      @for (t of tenderNumbers(); track t) {
+                        <mat-option [value]="t">{{ t }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="filter-field">
+                    <mat-label>Search</mat-label>
+                    <input matInput [ngModel]="tenderSearch()" (ngModelChange)="tenderSearch.set($event)"
+                           placeholder="Item no, description, tender…">
+                    <mat-icon matSuffix>search</mat-icon>
+                  </mat-form-field>
+                  <button mat-stroked-button (click)="exportTenderPricing()">
+                    <mat-icon>download</mat-icon> Export Excel
+                  </button>
+                </div>
+              </div>
+
+              <div class="tp-chips">
+                <button class="tp-chip" [class.active]="tenderCompanyFilter() === 'all'" (click)="setTenderCompany('all')">
+                  All Companies
+                </button>
+                @for (c of tenderCompanies; track c) {
+                  <button class="tp-chip" [class.active]="tenderCompanyFilter() === c" (click)="setTenderCompany(c)">
+                    {{ c }}
+                  </button>
+                }
+                <span class="tp-count">
+                  {{ tenderStats().items }} items · {{ tenderStats().tenders }} tenders · {{ tenderStats().companies }} companies
+                </span>
+              </div>
+
+              @if (filteredTenderItems().length === 0) {
+                <div class="empty-state">
+                  <mat-icon>gavel</mat-icon>
+                  <p>No tender items match your filters.</p>
+                </div>
+              } @else {
+                <div class="table-container">
+                  <table class="ts-table">
+                    <thead>
+                      <tr>
+                        <th>Company</th>
+                        <th>Tender No.</th>
+                        <th>Item No.</th>
+                        <th>Item Description</th>
+                        <th>UOM / Pack Size</th>
+                        <th style="text-align: right;">Price (R, incl. VAT)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (item of filteredTenderItems(); track $index) {
+                        <tr>
+                          <td>{{ item.company }}</td>
+                          <td><strong>{{ item.tenderNo }}</strong></td>
+                          <td>{{ item.itemNo || '—' }}</td>
+                          <td>{{ item.description }}</td>
+                          <td>{{ item.uom || '—' }}</td>
+                          <td style="text-align: right;"><strong>R {{ item.price | number:'1.2-2' }}</strong></td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          </mat-tab>
+
         </mat-tab-group>
       </mat-card>
 

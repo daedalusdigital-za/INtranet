@@ -332,6 +332,8 @@ export class PaperlessService {
   }
 
   openInViewer(id: string): void {
+    this.revokePreviewUrl();
+    this.previewLoading.set(false);
     this.preview.set(null);
     this.selectedId.set(id);
     this.open('left', id);
@@ -387,6 +389,8 @@ export class PaperlessService {
   }
 
   private showPreview(p: PaperlessPreview): void {
+    this.revokePreviewUrl();
+    this.previewLoading.set(false); // a new preview supersedes any in-flight load
     this.selectedId.set(null); // ensure the editable doc viewer steps aside
     this.preview.set(p);
     this.open('left');
@@ -473,17 +477,22 @@ export class PaperlessService {
     if (load?.id == null) return;
     this.previewLoading.set(true);
     this.http.get(`${environment.apiUrl}/logistics/TripSheet/${load.id}/pdf?format=pdf`, { responseType: 'blob' }).subscribe({
-      next: (blob) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          this.preview.update(p => (p && p.kind === 'tripsheet') ? { ...p, pdfDataUrl: reader.result as string } : p);
-          this.previewLoading.set(false);
-        };
-        reader.onerror = () => this.previewLoading.set(false);
-        reader.readAsDataURL(blob);
-      },
+      next: (blob) => this.setPreviewBlob('tripsheet', blob),
       error: () => this.previewLoading.set(false)
     });
+  }
+
+  /** Swap the preview document for a fresh blob URL (object URLs avoid the base64 size/perf limits of data URLs on large scans). */
+  private previewObjectUrl: string | null = null;
+  private setPreviewBlob(kind: 'tripsheet' | 'pod', blob: Blob): void {
+    this.revokePreviewUrl();
+    const url = URL.createObjectURL(blob);
+    this.previewObjectUrl = url;
+    this.preview.update(p => (p && p.kind === kind) ? { ...p, pdfDataUrl: url } : p);
+    this.previewLoading.set(false);
+  }
+  private revokePreviewUrl(): void {
+    if (this.previewObjectUrl) { try { URL.revokeObjectURL(this.previewObjectUrl); } catch { /* ignore */ } this.previewObjectUrl = null; }
   }
 
   /** Open a POD preview and lazily load its file (PDF/image) into the viewer. */
@@ -507,15 +516,7 @@ export class PaperlessService {
     if (pod?.id == null) return;
     this.previewLoading.set(true);
     this.http.get(`${environment.apiUrl}/PodDocuments/${pod.id}/view`, { responseType: 'blob' }).subscribe({
-      next: (blob) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          this.preview.update(p => (p && p.kind === 'pod') ? { ...p, pdfDataUrl: reader.result as string } : p);
-          this.previewLoading.set(false);
-        };
-        reader.onerror = () => this.previewLoading.set(false);
-        reader.readAsDataURL(blob);
-      },
+      next: (blob) => this.setPreviewBlob('pod', blob),
       error: () => this.previewLoading.set(false)
     });
   }

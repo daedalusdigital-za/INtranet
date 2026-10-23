@@ -211,6 +211,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? SourceSystem { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
+        public bool AddressVerified { get; set; }
+        public DateTime? AddressVerifiedAt { get; set; }
+        public string? AddressVerifiedBy { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }

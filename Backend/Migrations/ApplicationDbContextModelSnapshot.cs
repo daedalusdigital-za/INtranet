@@ -3992,6 +3992,10 @@ namespace ProjectTracker.API.Migrations
                     b.Property<DateTime?>("AddressVerifiedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("AddressVerifiedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("City")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -4055,8 +4059,8 @@ namespace ProjectTracker.API.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("GooglePlaceId")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("ImportBatchId")
                         .HasMaxLength(100)
@@ -4258,13 +4262,16 @@ namespace ProjectTracker.API.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("GooglePlaceId")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsVerified")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastUsedAt")
@@ -4290,11 +4297,43 @@ namespace ProjectTracker.API.Migrations
                     b.Property<int>("UsageCount")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VerifiedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
 
                     b.ToTable("CustomerDeliveryAddresses");
+                });
+
+            modelBuilder.Entity("ProjectTracker.API.Models.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("SystemSettings");
                 });
 
             modelBuilder.Entity("ProjectTracker.API.Models.Logistics.Driver", b =>
@@ -7334,6 +7373,9 @@ namespace ProjectTracker.API.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("ReorderLevel")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("UnitPrice")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")

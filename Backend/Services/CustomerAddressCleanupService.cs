@@ -11,7 +11,7 @@ namespace ProjectTracker.API.Services
         private readonly ApplicationDbContext _context;
         private readonly ILogger<CustomerAddressCleanupService> _logger;
         private readonly HttpClient _httpClient;
-        private const string GoogleMapsApiKey = "AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k";
+        private static string GoogleMapsApiKey => Google.GoogleMapsConfig.ApiKey;
         private const string GeocodeUrl = "https://maps.googleapis.com/maps/api/geocode/json";
 
         public CustomerAddressCleanupService(

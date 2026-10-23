@@ -1,4 +1,4 @@
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -756,6 +756,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 SourceSystem = c.SourceSystem,
                 Latitude = c.Latitude,
                 Longitude = c.Longitude,
+                AddressVerified = c.AddressVerified == true,
+                AddressVerifiedAt = c.AddressVerifiedAt,
+                AddressVerifiedBy = c.AddressVerifiedBy,
                 CreatedAt = c.CreatedAt,
                 UpdatedAt = c.UpdatedAt
             };
@@ -805,6 +808,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     IsActive = a.IsActive,
                     DeliveryInstructions = a.DeliveryInstructions,
                     UsageCount = a.UsageCount,
+                    IsVerified = a.IsVerified,
+                    VerifiedAt = a.VerifiedAt,
+                    VerifiedBy = a.VerifiedBy,
                     LastUsedAt = a.LastUsedAt,
                     CreatedAt = a.CreatedAt
                 })
@@ -848,6 +854,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     IsActive = a.IsActive,
                     DeliveryInstructions = a.DeliveryInstructions,
                     UsageCount = a.UsageCount,
+                    IsVerified = a.IsVerified,
+                    VerifiedAt = a.VerifiedAt,
+                    VerifiedBy = a.VerifiedBy,
                     LastUsedAt = a.LastUsedAt,
                     CreatedAt = a.CreatedAt
                 })
@@ -916,6 +925,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     IsDefault = existingAddress.IsDefault,
                     IsActive = existingAddress.IsActive,
                     UsageCount = existingAddress.UsageCount,
+                    IsVerified = existingAddress.IsVerified,
+                    VerifiedAt = existingAddress.VerifiedAt,
+                    VerifiedBy = existingAddress.VerifiedBy,
                     LastUsedAt = existingAddress.LastUsedAt,
                     CreatedAt = existingAddress.CreatedAt
                 });
@@ -975,6 +987,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 IsActive = address.IsActive,
                 DeliveryInstructions = address.DeliveryInstructions,
                 UsageCount = address.UsageCount,
+                IsVerified = address.IsVerified,
+                VerifiedAt = address.VerifiedAt,
+                VerifiedBy = address.VerifiedBy,
                 LastUsedAt = address.LastUsedAt,
                 CreatedAt = address.CreatedAt
             });
@@ -1064,6 +1079,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     IsDefault = existingAddress.IsDefault,
                     IsActive = existingAddress.IsActive,
                     UsageCount = existingAddress.UsageCount,
+                    IsVerified = existingAddress.IsVerified,
+                    VerifiedAt = existingAddress.VerifiedAt,
+                    VerifiedBy = existingAddress.VerifiedBy,
                     LastUsedAt = existingAddress.LastUsedAt,
                     CreatedAt = existingAddress.CreatedAt
                 });
@@ -1120,6 +1138,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 IsDefault = address.IsDefault,
                 IsActive = address.IsActive,
                 UsageCount = address.UsageCount,
+                IsVerified = address.IsVerified,
+                VerifiedAt = address.VerifiedAt,
+                VerifiedBy = address.VerifiedBy,
                 LastUsedAt = address.LastUsedAt,
                 CreatedAt = address.CreatedAt
             });
@@ -1248,7 +1269,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                             Province = existingAddress.Province,
                             Latitude = existingAddress.Latitude,
                             Longitude = existingAddress.Longitude,
-                            UsageCount = existingAddress.UsageCount
+                            UsageCount = existingAddress.UsageCount,
+                            IsVerified = existingAddress.IsVerified,
+                            VerifiedAt = existingAddress.VerifiedAt,
+                            VerifiedBy = existingAddress.VerifiedBy
                         });
                     }
                     else
@@ -1288,7 +1312,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                             Province = address.Province,
                             Latitude = address.Latitude,
                             Longitude = address.Longitude,
-                            UsageCount = address.UsageCount
+                            UsageCount = address.UsageCount,
+                            IsVerified = address.IsVerified,
+                            VerifiedAt = address.VerifiedAt,
+                            VerifiedBy = address.VerifiedBy
                         });
                     }
                 }
@@ -1370,6 +1397,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 IsActive = address.IsActive,
                 DeliveryInstructions = address.DeliveryInstructions,
                 UsageCount = address.UsageCount,
+                IsVerified = address.IsVerified,
+                VerifiedAt = address.VerifiedAt,
+                VerifiedBy = address.VerifiedBy,
                 LastUsedAt = address.LastUsedAt,
                 CreatedAt = address.CreatedAt
             });

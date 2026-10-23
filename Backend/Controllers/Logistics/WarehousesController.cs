@@ -75,6 +75,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     i.WarehouseId,
                     i.QuantityOnHand,
                     i.LastCountDate,
+                    i.UnitPrice,
                     Code = i.Commodity.Code,
                     Client = i.Commodity.Category ?? "OTHER"
                 })
@@ -93,7 +94,15 @@ namespace ProjectTracker.API.Controllers.Logistics
                 int priced = 0;
                 foreach (var r in rows)
                 {
-                    if (r.Code != null && prices.TryGetValue(r.Code, out var p))
+                    (decimal Price, decimal Cost) p = default;
+                    var hasInv = r.Code != null && prices.TryGetValue(r.Code, out p);
+                    if (r.UnitPrice.HasValue && r.UnitPrice > 0)
+                    {
+                        value += r.QuantityOnHand * r.UnitPrice.Value;
+                        if (hasInv) cost += r.QuantityOnHand * p.Cost;
+                        priced++;
+                    }
+                    else if (hasInv)
                     {
                         value += r.QuantityOnHand * p.Price;
                         cost += r.QuantityOnHand * p.Cost;
@@ -123,7 +132,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             Items = g.Count(),
                             ItemsInStock = g.Count(r => r.QuantityOnHand > 0),
                             QuantityOnHand = g.Sum(r => r.QuantityOnHand),
-                            StockValue = Math.Round(g.Sum(r => r.Code != null && prices.TryGetValue(r.Code, out var p) ? r.QuantityOnHand * p.Price : 0m), 2)
+                            StockValue = Math.Round(g.Sum(r => (r.UnitPrice.HasValue && r.UnitPrice > 0) ? r.QuantityOnHand * r.UnitPrice.Value : (r.Code != null && prices.TryGetValue(r.Code, out var p) ? r.QuantityOnHand * p.Price : 0m)), 2)
                         })
                         .OrderByDescending(c => c.QuantityOnHand)
                         .ToList(),
@@ -241,6 +250,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     Category = i.Commodity.Category,
                     UnitOfMeasure = i.Commodity.UnitOfMeasure,
                     QuantityOnHand = i.QuantityOnHand,
+                    UnitPrice = i.UnitPrice,
                     ReorderLevel = i.ReorderLevel,
                     MaximumLevel = i.MaximumLevel,
                     BinLocation = i.BinLocation,
@@ -270,6 +280,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     Category = i.Commodity.Category,
                     UnitOfMeasure = i.Commodity.UnitOfMeasure,
                     QuantityOnHand = i.QuantityOnHand,
+                    UnitPrice = i.UnitPrice,
                     ReorderLevel = i.ReorderLevel,
                     MaximumLevel = i.MaximumLevel,
                     BinLocation = i.BinLocation,
@@ -286,7 +297,15 @@ namespace ProjectTracker.API.Controllers.Logistics
         {
             foreach (var item in inventory)
             {
-                if (item.CommodityCode != null && prices.TryGetValue(item.CommodityCode, out var p))
+                (decimal Price, decimal Cost) p = default;
+                var hasInvoicePrice = item.CommodityCode != null && prices.TryGetValue(item.CommodityCode, out p);
+                if (item.UnitPrice.HasValue && item.UnitPrice > 0)
+                {
+                    // Manual override entered on the datasheet
+                    if (hasInvoicePrice) item.UnitCost = p.Cost;
+                    item.LineValue = Math.Round(item.QuantityOnHand * item.UnitPrice.Value, 2);
+                }
+                else if (hasInvoicePrice)
                 {
                     item.UnitPrice = p.Price;
                     item.UnitCost = p.Cost;

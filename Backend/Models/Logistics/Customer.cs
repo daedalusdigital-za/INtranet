@@ -92,11 +92,15 @@ namespace ProjectTracker.API.Models.Logistics
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         
-        [MaxLength(100)]
+        [MaxLength(500)]
         public string? GooglePlaceId { get; set; }
         
         public bool? AddressVerified { get; set; }
         public DateTime? AddressVerifiedAt { get; set; }
+
+        /// <summary>Display name of the admin who verified the delivery address (Admin Settings → Client Locations).</summary>
+        [MaxLength(200)]
+        public string? AddressVerifiedBy { get; set; }
 
         // Business Details
         [MaxLength(50)]

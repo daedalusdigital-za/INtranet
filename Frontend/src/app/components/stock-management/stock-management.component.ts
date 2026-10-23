@@ -135,7 +135,7 @@ interface ComprehensiveAnalysisResponse {
           <mat-icon class="header-icon">inventory_2</mat-icon>
           <div class="header-text">
             <h1>Stock Management</h1>
-            <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name + ' Â· ' + selectedWarehouse.location : 'All warehouses â€” click a warehouse card to focus' }}</p>
+            <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name + ' · ' + selectedWarehouse.location : 'All warehouses — click a warehouse card to focus' }}</p>
           </div>
         </div>
         <div class="header-actions">
@@ -190,7 +190,7 @@ interface ComprehensiveAnalysisResponse {
           message="No warehouses have been configured yet."></app-empty-state>
       } @else {
 
-        <!-- â•â•â• KPI CARDS â•â•â• -->
+        <!-- ═══ KPI CARDS ═══ -->
         <div class="stk-kpi-grid">
           <div class="stk-kpi k-indigo">
             <mat-icon>stacked_bar_chart</mat-icon>
@@ -219,7 +219,7 @@ interface ComprehensiveAnalysisResponse {
           </div>
         </div>
 
-        <!-- â•â•â• WAREHOUSE CARDS (click to filter, Operations to drill in) â•â•â• -->
+        <!-- ═══ WAREHOUSE CARDS (click to filter, Operations to drill in) ═══ -->
         <div class="stk-wh-grid">
           @for (warehouse of warehouses; track warehouse.id) {
             <div class="stk-wh-card" [class.active]="whFilterId === warehouse.id"
@@ -262,7 +262,7 @@ interface ComprehensiveAnalysisResponse {
           }
         </div>
 
-        <!-- â•â•â• COMPANY FILTER â•â•â• -->
+        <!-- ═══ COMPANY FILTER ═══ -->
         <div class="sh-company-bar">
           <button class="sh-company-chip" [class.active]="companyFilter === ''" (click)="companyFilter = ''">
             <mat-icon>apps</mat-icon> All Companies
@@ -281,7 +281,7 @@ interface ComprehensiveAnalysisResponse {
           }
         </div>
 
-        <!-- â•â•â• TABS â•â•â• -->
+        <!-- ═══ TABS ═══ -->
         <mat-tab-group class="stk-tabs" animationDuration="150ms">
 
           <!-- STOCK ON HAND -->
@@ -313,21 +313,21 @@ interface ComprehensiveAnalysisResponse {
                     <tbody>
                       @for (r of sohRows.slice(0, 400); track r.id) {
                         <tr>
-                          <td class="mono">{{ r.commodityCode }}</td>
+                          <td class="mono" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
                           <td class="desc">{{ r.commodityName }}</td>
-                          <td><span class="stk-chip">{{ r.category || 'â€”' }}</span></td>
+                          <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
                           <td>{{ r.warehouseName }}</td>
                           <td>{{ r.unitOfMeasure || 'Each' }}</td>
                           <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
-                          <td class="num">{{ r.unitPrice ? ('R' + (r.unitPrice | number:'1.2-2')) : 'â€”' }}</td>
-                          <td class="num">{{ r.lineValue ? ('R' + (r.lineValue | number:'1.0-0')) : 'â€”' }}</td>
+                          <td class="num">{{ r.unitPrice ? ('R' + (r.unitPrice | number:'1.2-2')) : '—' }}</td>
+                          <td class="num">{{ r.lineValue ? ('R' + (r.lineValue | number:'1.0-0')) : '—' }}</td>
                           <td><span class="stk-badge" [class.b-in]="r.quantityOnHand > 0" [class.b-out]="r.quantityOnHand === 0" [class.b-neg]="r.quantityOnHand < 0">
                             {{ r.quantityOnHand > 0 ? 'In stock' : (r.quantityOnHand < 0 ? 'Negative' : 'Out of stock') }}</span></td>
                         </tr>
                       } @empty { <tr><td colspan="9" class="stk-empty">No stock items found</td></tr> }
                     </tbody>
                   </table>
-                  @if (sohRows.length > 400) { <div class="stk-more">Showing first 400 â€” refine your search to narrow down ({{ sohRows.length | number }} matches)</div> }
+                  @if (sohRows.length > 400) { <div class="stk-more">Showing first 400 — refine your search to narrow down ({{ sohRows.length | number }} matches)</div> }
                 </div>
               }
             </div>
@@ -341,6 +341,16 @@ interface ComprehensiveAnalysisResponse {
                 <span class="stk-count">Latest counts per warehouse</span>
                 <span class="stk-spacer"></span>
                 <button mat-stroked-button (click)="exportValuation()"><mat-icon>file_download</mat-icon> Export</button>
+                <button mat-stroked-button (click)="requestApplyInvoicePrices()"
+                        matTooltip="Fill in missing unit prices from sales invoices — average price per matched (green) code (PIN required)">
+                  <mat-icon>receipt_long</mat-icon> Apply Invoice Prices</button>
+                <button mat-stroked-button (click)="downloadCountTemplate()"
+                        [matTooltip]="whFilterId ? 'Download a count sheet with every item at ' + whFilterName : 'Select a warehouse card above first'">
+                  <mat-icon>description</mat-icon> Count Template</button>
+                <button mat-stroked-button (click)="requestCountImport(countFile)"
+                        [matTooltip]="whFilterId ? 'Import a completed count sheet for ' + whFilterName + ' (PIN required)' : 'Select a warehouse card above first'">
+                  <mat-icon>lock</mat-icon> Import Count</button>
+                <input #countFile type="file" accept=".xlsx,.xls,.csv" hidden (change)="onCountFileSelected($event)">
                 <button mat-raised-button color="primary" (click)="openStockTakeForFilter()"
                         [matTooltip]="whFilterId ? 'New stock take at ' + whFilterName : 'Select a warehouse card above first'">
                   <mat-icon>fact_check</mat-icon> New Stock Take</button>
@@ -354,16 +364,17 @@ interface ComprehensiveAnalysisResponse {
                   <tbody>
                     @for (w of warehouses; track w.id) {
                       <tr>
-                        <td><b>{{ w.name }}</b></td>
+                        <td><a class="stk-link" (click)="openWarehouseSheet(w)" matTooltip="View all stock on hand at this warehouse"><b>{{ w.name }}</b></a></td>
                         <td class="num">{{ w.totalItems | number }}</td>
                         <td class="num">{{ w.totalQuantityOnHand | number }}</td>
                         <td class="num">{{ formatValue(w.totalStockValue) }}</td>
                         <td class="num">{{ w.itemsInStock | number }}</td>
                         <td class="num" [style.color]="w.itemsOutOfStock > 0 ? '#dc2626' : ''">{{ w.itemsOutOfStock | number }}</td>
-                        <td>{{ w.lastCountDate ? (w.lastCountDate | date:'dd MMM yyyy') : 'â€”' }}</td>
+                        <td>{{ w.lastCountDate ? (w.lastCountDate | date:'dd MMM yyyy') : '—' }}</td>
                         <td>
                           @for (c of w.byClient; track c.client) {
-                            <span class="stk-chip" style="margin-right:4px;">{{ c.client }} {{ c.items }}</span>
+                            <button type="button" class="stk-chip stk-chip-btn" style="margin-right:4px;" (click)="openWarehouseSheet(w, c.client)"
+                                    [matTooltip]="'View ' + c.client + ' stock on hand at ' + w.name">{{ c.client }} {{ c.items }}</button>
                           }
                         </td>
                       </tr>
@@ -371,7 +382,7 @@ interface ComprehensiveAnalysisResponse {
                   </tbody>
                 </table>
               </div>
-              <p class="stk-note"><mat-icon>info</mat-icon> Baseline quantities come from the consolidated stock imports; every count variance you post is written to the Movements ledger as an Adjustment. Click a warehouse card, then <b>New Stock Take</b>.</p>
+              <p class="stk-note"><mat-icon>info</mat-icon> Click a <b>warehouse name</b> or a <b>company chip</b> to open a datasheet of the stock on hand there. Baseline quantities come from the consolidated stock imports; every count variance you post is written to the Movements ledger as an Adjustment. Click a warehouse card, then <b>New Stock Take</b> to count on screen — or download the <b>Count Template</b> (one sheet per warehouse, all companies, fill in <i>Counted Qty</i> only) and <b>Import Count</b> to load it for review before posting.</p>
             </div>
           </mat-tab>
 
@@ -406,10 +417,10 @@ interface ComprehensiveAnalysisResponse {
                     <tbody>
                       @for (i of issueRows.slice(0, 400); track i.id) {
                         <tr [class.stk-row-resolved]="i.status === 'Resolved' || i.status === 'Dismissed'">
-                          <td>{{ i.issueDate ? (i.issueDate | date:'dd MMM') : 'â€”' }}</td>
-                          <td>{{ i.warehouseName || 'â€”' }}</td>
-                          <td><span class="stk-chip">{{ i.company || 'â€”' }}</span></td>
-                          <td class="mono">{{ i.itemCode || 'â€”' }}</td>
+                          <td>{{ i.issueDate ? (i.issueDate | date:'dd MMM') : '—' }}</td>
+                          <td>{{ i.warehouseName || '—' }}</td>
+                          <td><span class="stk-chip">{{ i.company || '—' }}</span></td>
+                          <td class="mono">{{ i.itemCode || '—' }}</td>
                           <td class="desc">{{ i.itemDescription }}</td>
                           <td><b>{{ i.issueType }}</b></td>
                           <td class="desc" [matTooltip]="i.detail">{{ i.detail }}</td>
@@ -429,7 +440,7 @@ interface ComprehensiveAnalysisResponse {
                             }
                           </td>
                         </tr>
-                      } @empty { <tr><td colspan="9" class="stk-empty">No issues found{{ whFilterName }} ðŸŽ‰</td></tr> }
+                      } @empty { <tr><td colspan="9" class="stk-empty">No issues found{{ whFilterName }} 🎉</td></tr> }
                     </tbody>
                   </table>
                   @if (issueRows.length > 400) { <div class="stk-more">Showing first 400 of {{ issueRows.length | number }} issues</div> }
@@ -458,15 +469,15 @@ interface ComprehensiveAnalysisResponse {
                   <tbody>
                     @for (r of exceptionRows.slice(0, 400); track r.id) {
                       <tr>
-                        <td class="mono">{{ r.commodityCode }}</td>
+                        <td class="mono" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
                         <td class="desc">{{ r.commodityName }}</td>
-                        <td><span class="stk-chip">{{ r.category || 'â€”' }}</span></td>
+                        <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
                         <td>{{ r.warehouseName }}</td>
                         <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
                         <td><span class="stk-badge" [class.b-out]="excMode === 'out'" [class.b-neg]="excMode === 'neg'" [class.b-warn]="excMode === 'unpriced'">
                           {{ excMode === 'out' ? 'Out of stock' : (excMode === 'neg' ? 'Negative stock' : 'No sales price') }}</span></td>
                       </tr>
-                    } @empty { <tr><td colspan="6" class="stk-empty">No exceptions â€” all good ðŸŽ‰</td></tr> }
+                    } @empty { <tr><td colspan="6" class="stk-empty">No exceptions — all good 🎉</td></tr> }
                   </tbody>
                 </table>
               </div>
@@ -506,13 +517,13 @@ interface ComprehensiveAnalysisResponse {
                   <div class="mov-queue-head">
                     <mat-icon>fact_check</mat-icon>
                     <b>Awaiting Stock Deduction</b>
-                    <span class="mov-queue-sub">Tripsheets since the stock-count baseline that have not been approved against stock â€” review the picking slip and approve to deduct.</span>
+                    <span class="mov-queue-sub">Tripsheets since the stock-count baseline that have not been approved against stock — review the picking slip and approve to deduct.</span>
                   </div>
                   @for (l of pendingDispatchLoads; track l.id) {
                     <div class="mov-queue-row">
                       <span class="mono mq-load">{{ l.loadNumber }}</span>
-                      <span class="mq-wh">{{ l.warehouseName || 'â€”' }}</span>
-                      <span class="mq-cust">{{ l.customerName || 'â€”' }}</span>
+                      <span class="mq-wh">{{ l.warehouseName || '—' }}</span>
+                      <span class="mq-cust">{{ l.customerName || '—' }}</span>
                       <span class="mq-date">{{ (l.actualDeliveryDate || l.scheduledDeliveryDate || l.createdAt) | date:'dd MMM yyyy' }}</span>
                       <span class="stk-badge" [class.b-in]="l.status === 'Delivered' || l.status === 'Completed'"
                             [class.b-warn]="l.status !== 'Delivered' && l.status !== 'Completed'">{{ l.status }}</span>
@@ -584,14 +595,14 @@ interface ComprehensiveAnalysisResponse {
                               <button mat-icon-button matTooltip="Reverse this movement (creates a counter-entry)" (click)="reverseMovement(m)"><mat-icon>undo</mat-icon></button>
                             }
                             @if (m.reversedByMovementId) { <span class="stk-chip" matTooltip="Reversed by movement #{{ m.reversedByMovementId }}">Reversed</span> }
-                            @if (m.reversesMovementId) { <span class="stk-chip" matTooltip="Reversal of movement #{{ m.reversesMovementId }}">â†© #{{ m.reversesMovementId }}</span> }
+                            @if (m.reversesMovementId) { <span class="stk-chip" matTooltip="Reversal of movement #{{ m.reversesMovementId }}">↩ #{{ m.reversesMovementId }}</span> }
                           </td>
                         </tr>
-                      } @empty { <tr><td colspan="10" class="stk-empty">No stock movements{{ movSearch ? ' matching "' + movSearch + '"' : '' }} â€” approve a dispatch or receive stock to start the ledger</td></tr> }
+                      } @empty { <tr><td colspan="10" class="stk-empty">No stock movements{{ movSearch ? ' matching "' + movSearch + '"' : '' }} — approve a dispatch or receive stock to start the ledger</td></tr> }
                     </tbody>
                   </table>
                 </div>
-                <p class="stk-note"><mat-icon>info</mat-icon> Stock on hand = imported baseline + these approved movements. Rows are never edited â€” mistakes are fixed with reversals.</p>
+                <p class="stk-note"><mat-icon>info</mat-icon> Stock on hand = imported baseline + these approved movements. Rows are never edited — mistakes are fixed with reversals.</p>
               }
             </div>
           </mat-tab>
@@ -612,7 +623,7 @@ interface ComprehensiveAnalysisResponse {
                   <mat-icon>pending_actions</mat-icon> Awaiting approval ({{ dispatchCount('pending') }})</button>
                 <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'done'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'done' ? '' : 'done'">
                   <mat-icon>inventory</mat-icon> Deducted ({{ dispatchCount('done') }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'baseline'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'baseline' ? '' : 'baseline'" matTooltip="Historical tripsheets already reflected in the imported stock count â€” cannot be approved again">
+                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'baseline'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'baseline' ? '' : 'baseline'" matTooltip="Historical tripsheets already reflected in the imported stock count — cannot be approved again">
                   <mat-icon>history</mat-icon> Pre-baseline ({{ dispatchCount('baseline') }})</button>
                 <mat-form-field appearance="outline" class="stk-search">
                   <mat-icon matPrefix>search</mat-icon>
@@ -637,19 +648,19 @@ interface ComprehensiveAnalysisResponse {
                         @for (l of dispatchRows.slice(0, 500); track l.id) {
                           <tr>
                             <td class="mono">{{ l.loadNumber }}</td>
-                            <td>{{ l.warehouseName || 'â€”' }}</td>
-                            <td class="desc">{{ l.customerName || 'â€”' }}</td>
-                            <td>{{ l.driverName || 'â€”' }}</td>
-                            <td>{{ l.vehicleRegistration || 'â€”' }}</td>
+                            <td>{{ l.warehouseName || '—' }}</td>
+                            <td class="desc">{{ l.customerName || '—' }}</td>
+                            <td>{{ l.driverName || '—' }}</td>
+                            <td>{{ l.vehicleRegistration || '—' }}</td>
                             <td class="num"><b>{{ l.stops?.length || 0 }}</b></td>
                             <td><span class="stk-badge" [class.b-in]="l.status === 'Delivered' || l.status === 'Completed'"
                                   [class.b-warn]="l.status === 'InTransit' || l.status === 'Pending' || l.status === 'Assigned'">{{ l.status }}</span></td>
-                            <td>{{ (l.actualDeliveryDate || l.scheduledDeliveryDate) ? ((l.actualDeliveryDate || l.scheduledDeliveryDate) | date:'dd MMM yyyy') : 'â€”' }}</td>
-                            <td>@if (l.hasPOD) { <mat-icon style="color:#16a34a;font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { â€” }</td>
+                            <td>{{ (l.actualDeliveryDate || l.scheduledDeliveryDate) ? ((l.actualDeliveryDate || l.scheduledDeliveryDate) | date:'dd MMM yyyy') : '—' }}</td>
+                            <td>@if (l.hasPOD) { <mat-icon style="color:#16a34a;font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
                             <td>
                               @switch (loadStockState(l)) {
                                 @case ('deducted') { <span class="stk-badge b-in">Deducted</span> }
-                                @case ('baseline') { <span class="stk-chip" matTooltip="Dated before the warehouse stock count â€” already in the baseline">Baseline</span> }
+                                @case ('baseline') { <span class="stk-chip" matTooltip="Dated before the warehouse stock count — already in the baseline">Baseline</span> }
                                 @default { <span class="stk-badge b-warn">Awaiting</span> }
                               }
                             </td>
@@ -667,7 +678,7 @@ interface ComprehensiveAnalysisResponse {
                         } @empty { <tr><td colspan="11" class="stk-empty">No tripsheets found{{ whFilterName }}</td></tr> }
                       </tbody>
                     </table>
-                    @if (dispatchRows.length > 500) { <div class="stk-more">Showing first 500 of {{ dispatchRows.length | number }} tripsheets â€” refine your search</div> }
+                    @if (dispatchRows.length > 500) { <div class="stk-more">Showing first 500 of {{ dispatchRows.length | number }} tripsheets — refine your search</div> }
                   </div>
                 }
               }
@@ -685,14 +696,14 @@ interface ComprehensiveAnalysisResponse {
                         @for (r of dispatchInvoiceRows.slice(0, 500); track $index) {
                           <tr>
                             <td class="mono">{{ r.invoiceNumber }}</td>
-                            <td class="mono">{{ r.orderNumber || 'â€”' }}</td>
+                            <td class="mono">{{ r.orderNumber || '—' }}</td>
                             <td class="desc">{{ r.customerName }}</td>
                             <td class="mono">{{ r.loadNumber }}</td>
-                            <td>{{ r.warehouseName || 'â€”' }}</td>
+                            <td>{{ r.warehouseName || '—' }}</td>
                             <td><span class="stk-badge" [class.b-in]="r.status === 'Delivered' || r.status === 'Completed'"
                                   [class.b-warn]="r.status === 'InTransit' || r.status === 'Pending' || r.status === 'Assigned'">{{ r.status }}</span></td>
                             <td><span class="stk-badge" [class.b-in]="r.deducted" [class.b-warn]="!r.deducted">{{ r.deducted ? 'Deducted' : 'Awaiting' }}</span></td>
-                            <td>{{ r.deliveryDate ? (r.deliveryDate | date:'dd MMM yyyy') : 'â€”' }}</td>
+                            <td>{{ r.deliveryDate ? (r.deliveryDate | date:'dd MMM yyyy') : '—' }}</td>
                             <td style="text-align:right;white-space:nowrap;">
                               @if (!r.deducted && canApprove) {
                                 <button mat-icon-button matTooltip="Review & approve dispatch" style="color:#d97706;" (click)="openApproveDispatch(r.load)"><mat-icon>fact_check</mat-icon></button>
@@ -734,7 +745,7 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button (click)="exportReport()"><mat-icon>file_download</mat-icon> Export Excel</button>
               </div>
 
-              <!-- Valuation by company Ã— warehouse -->
+              <!-- Valuation by company × warehouse -->
               @if (reportMode === 'valuation') {
                 <div class="stk-table-wrap">
                   <table class="stk-table">
@@ -758,7 +769,7 @@ interface ComprehensiveAnalysisResponse {
                 <p class="stk-note"><mat-icon>info</mat-icon> Sales value uses the latest invoiced unit price per item; cost value uses the item cost where captured.</p>
               }
 
-              <!-- Movement activity by type Ã— warehouse -->
+              <!-- Movement activity by type × warehouse -->
               @if (reportMode === 'activity') {
                 <div class="stk-table-wrap">
                   <table class="stk-table">
@@ -772,7 +783,7 @@ interface ComprehensiveAnalysisResponse {
                           <td class="num" style="color:#16a34a;">+{{ formatQty(r.unitsIn) }}</td>
                           <td class="num" style="color:#dc2626;">-{{ formatQty(r.unitsOut) }}</td>
                           <td class="num"><b [style.color]="r.net < 0 ? '#dc2626' : '#16a34a'">{{ r.net > 0 ? '+' : '' }}{{ formatQty(r.net) }}</b></td>
-                          <td>{{ r.last ? (r.last | date:'dd MMM HH:mm') : 'â€”' }}</td>
+                          <td>{{ r.last ? (r.last | date:'dd MMM HH:mm') : '—' }}</td>
                         </tr>
                       } @empty { <tr><td colspan="7" class="stk-empty">No ledger movements in this period{{ whFilterName }}</td></tr> }
                     </tbody>
@@ -1385,7 +1396,7 @@ interface ComprehensiveAnalysisResponse {
     }
     .stock-asat mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
-    /* â•â•â• Dashboard redesign â•â•â• */
+    /* ═══ Dashboard redesign ═══ */
     .stk-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 18px; }
     @media (max-width: 1400px) { .stk-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 760px) { .stk-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -1407,6 +1418,10 @@ interface ComprehensiveAnalysisResponse {
     .stk-wh-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
     @media (max-width: 1200px) { .stk-wh-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 700px) { .stk-wh-grid { grid-template-columns: 1fr; } }
+    .stk-link { cursor: pointer; color: #0369a1; text-decoration: none; }
+    .stk-link:hover { text-decoration: underline; }
+    .stk-chip-btn { cursor: pointer; border: 1px solid transparent; font: inherit; }
+    .stk-chip-btn:hover { border-color: #0369a1; color: #0369a1; background: #e0f2fe; }
     .stk-wh-card {
       background: #fff; border-radius: 16px; padding: 18px; cursor: pointer;
       box-shadow: 0 10px 34px rgba(2,6,23,0.28); border: 2px solid transparent; transition: all .25s ease;
@@ -1472,7 +1487,7 @@ interface ComprehensiveAnalysisResponse {
     }
     .stk-tabs ::ng-deep .mat-mdc-tab-body-wrapper { background: #fff; }
 
-    /* Company filter chips â€” same design as Sales History */
+    /* Company filter chips — same design as Sales History */
     .sh-company-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
     .sh-company-chip {
       display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
@@ -1538,6 +1553,7 @@ interface ComprehensiveAnalysisResponse {
     .stk-table tbody td { padding: 8px 12px; border-top: 1px solid #f1f5f9; color: #334155; }
     .stk-table tbody tr:hover { background: #f8fafc; }
     .stk-table td.mono { font-family: monospace; font-weight: 600; color: #0f172a; white-space: nowrap; }
+    .stk-table td.mono.code-inv, .ws-table td.mono.code-inv { color: #16a34a !important; font-weight: 800; }
     .stk-table td.desc { max-width: 340px; }
     .stk-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #475569; }
     .stk-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #475569; white-space: nowrap; }
@@ -1574,7 +1590,7 @@ export class StockManagementComponent implements OnInit {
     return n.toLocaleString();
   }
 
-  // â•â•â• Dashboard state â•â•â•
+  // ═══ Dashboard state ═══
   whFilterId: number | null = null;
   allInventory: any[] = [];
   invLoading = true;
@@ -1591,14 +1607,14 @@ export class StockManagementComponent implements OnInit {
   get whFilterName(): string {
     if (!this.whFilterId) return '';
     const w = this.warehouses.find(x => x.id === this.whFilterId);
-    return w ? ' â€” ' + w.name : '';
+    return w ? ' — ' + w.name : '';
   }
 
   toggleWhFilter(id: number): void {
     this.whFilterId = this.whFilterId === id ? null : id;
   }
 
-  /** Company filter (matches Commodities.Category) â€” same companies as Sales */
+  /** Company filter (matches Commodities.Category) — same companies as Sales */
   companyFilter = '';
   stockCompanies = [
     { key: 'PROMED', shortName: 'Promed', color: '#1a237e', logo: 'logos/promed-round.png?v=4' },
@@ -1641,7 +1657,7 @@ export class StockManagementComponent implements OnInit {
     }
   }
 
-  // â•â•â• Reports (computed on-screen from scoped data) â•â•â•
+  // ═══ Reports (computed on-screen from scoped data) ═══
   reportMode: 'valuation' | 'activity' | 'dispatch' | 'exceptions' = 'valuation';
   reportDays = 30;
 
@@ -1759,13 +1775,13 @@ export class StockManagementComponent implements OnInit {
   }
 
 
-  // â•â•â• Stock issues â•â•â•
+  // ═══ Stock issues ═══
   issues: any[] = [];
   issuesLoading = true;
   issueStatusFilter = 'Open';
   issueSearch = '';
 
-  // â•â•â• Stock ledger (WarehouseStockMovements) â•â•â•
+  // ═══ Stock ledger (WarehouseStockMovements) ═══
   ledger: any[] = [];
   ledgerLoading = true;
   movTypeFilter = '';
@@ -1798,7 +1814,7 @@ export class StockManagementComponent implements OnInit {
     return this.ledgerScoped.filter(m => new Date(m.createdAt) >= today).length;
   }
 
-  /** Loads whose stock has not yet been deducted â€” the approval work-queue (most recent first) */
+  /** Loads whose stock has not yet been deducted — the approval work-queue (most recent first) */
   private get pendingDispatchAll(): any[] {
     return this.loadsScoped.filter(l => this.isLoadAwaiting(l));
   }
@@ -1870,7 +1886,7 @@ export class StockManagementComponent implements OnInit {
     const whId = load.warehouseId;
     if (!whId) { this.snackBar.open('This load has no originating warehouse set', 'Close', { duration: 4000 }); return; }
     const ref = this.dialog.open(ApproveDispatchDialog, {
-      width: '900px', maxWidth: '95vw',
+      width: '1100px', maxWidth: '96vw',
       data: { load, inventory: this.allInventory.filter(r => r.warehouseId === whId) }
     });
     ref.afterClosed().subscribe(done => {
@@ -1879,7 +1895,7 @@ export class StockManagementComponent implements OnInit {
   }
 
   reverseMovement(m: any): void {
-    const reason = prompt(`Reverse ${m.movementType} of ${m.quantity} Ã— ${m.commodityCode}?\n\nReason for reversal (required):`);
+    const reason = prompt(`Reverse ${m.movementType} of ${m.quantity} × ${m.commodityCode}?\n\nReason for reversal (required):`);
     if (!reason || !reason.trim()) return;
     this.http.post(`${environment.apiUrl}/logistics/stock-movements/${m.id}/reverse`, { reason: reason.trim() }).subscribe({
       next: () => { this.snackBar.open('Movement reversed', 'Close', { duration: 3000 }); this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); },
@@ -1950,7 +1966,7 @@ export class StockManagementComponent implements OnInit {
     this.writeExcel(rows, 'Issues', `Stock_Issues_${new Date().toISOString().substring(0, 10)}.xlsx`);
   }
 
-  // â•â•â• Dispatch: tripsheets / picking slips / invoices from logistics â•â•â•
+  // ═══ Dispatch: tripsheets / picking slips / invoices from logistics ═══
   dispatchMode: 'tripsheets' | 'picking' | 'invoices' = 'tripsheets';
   dispatchDeductFilter: '' | 'pending' | 'done' | 'baseline' = '';
   dispatchSearch = '';
@@ -2008,7 +2024,7 @@ export class StockManagementComponent implements OnInit {
           const row = {
             invoiceNumber: inv,
             orderNumber: (s.orderNumber || '').split(/[\n,;\/]+/)[0]?.trim() || '',
-            customerName: s.customerName || s.companyName || s.locationName || l.customerName || 'â€”',
+            customerName: s.customerName || s.companyName || s.locationName || l.customerName || '—',
             loadNumber: l.loadNumber,
             warehouseName: l.warehouseName,
             status: s.status || l.status,
@@ -2097,17 +2113,111 @@ export class StockManagementComponent implements OnInit {
     });
   }
 
-  openStockTakeForFilter(): void {
+  openStockTakeForFilter(imported?: CountImportResult): void {
     const w = this.resolveTargetWarehouse();
     if (!w) return;
     const ref = this.dialog.open(StockTakeDialog, {
       width: '1200px', maxWidth: '95vw',
-      data: { warehouse: w, inventory: this.allInventory.filter(r => r.warehouseId === w.id) }
+      data: { warehouse: w, inventory: this.allInventory.filter(r => r.warehouseId === w.id), imported }
     });
     ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadWarehouses(); this.loadDashboardData(); } });
   }
 
-  // â•â•â• Excel exports â•â•â•
+  // ═══ Stock count template + import ═══
+  /** One count sheet per warehouse: every item, all companies, grouped by Company then Code. Only "Counted Qty" is filled in by the counter. */
+  /** Stock Counts tab: open a datasheet of everything on hand at a warehouse (optionally one company only). */
+  openWarehouseSheet(w: WarehouseSummary, company?: string): void {
+    const rows = this.allInventory.filter(r => r.warehouseId === w.id);
+    if (!rows.length) { this.snackBar.open(`No stock on hand recorded at ${w.name}`, 'Close', { duration: 3000 }); return; }
+    this.dialog.open(WarehouseStockSheetDialog, {
+      width: '1200px', maxWidth: '96vw', maxHeight: '92vh',
+      data: { warehouse: w, rows, company: company || '', invMatched: (c: string) => this.invMatched(c) }
+    }).afterClosed().subscribe(res => { if (res === 'changed') { this.loadLedger(); this.loadWarehouses(); this.loadDashboardData(); } });
+  }
+
+  async downloadCountTemplate(): Promise<void> {
+    const w = this.resolveTargetWarehouse();
+    if (!w) return;
+    const inv = this.allInventory.filter(r => r.warehouseId === w.id)
+      .sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.commodityCode || '').localeCompare(b.commodityCode || ''));
+    if (!inv.length) { this.snackBar.open('No stock items at this warehouse', 'Close', { duration: 3000 }); return; }
+    const today = new Date().toISOString().substring(0, 10);
+    const rows = inv.map(r => ({
+      'Code': r.commodityCode || '', 'Description': r.commodityName || '', 'Company': r.category || '',
+      'UOM': r.unitOfMeasure || 'Each', 'System Qty': +(r.quantityOnHand || 0), 'Counted Qty': '', 'Notes': ''
+    }));
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 14 }, { wch: 48 }, { wch: 16 }, { wch: 8 }, { wch: 12 }, { wch: 13 }, { wch: 30 }];
+    const info = XLSX.utils.aoa_to_sheet([
+      ['Stock Count Sheet'],
+      ['Warehouse', w.name], ['Location', w.location || ''], ['Generated', today], ['Items', rows.length],
+      [],
+      ['How to use'],
+      ['1.', 'Count the physical stock and type the quantity into the "Counted Qty" column on the "Count Sheet" tab.'],
+      ['2.', 'Leave "Counted Qty" blank for any item you did not count — it will not be changed.'],
+      ['3.', 'Type 0 if the item was counted and none was found.'],
+      ['4.', 'Do not change the Code column — it is used to match the item on import.'],
+      ['5.', 'Save the file, then in Stock Management → Stock Counts, select this warehouse and click "Import Count".'],
+      ['6.', 'Review the variances on screen, enter a reason, and post. Each variance is written to the ledger as an Adjustment.']
+    ]);
+    info['!cols'] = [{ wch: 12 }, { wch: 110 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Count Sheet');
+    XLSX.utils.book_append_sheet(wb, info, 'Instructions');
+    const safe = (w.code || w.name || String(w.id)).replace(/[^A-Za-z0-9_-]+/g, '_');
+    XLSX.writeFile(wb, `StockCount_${safe}_${today}.xlsx`);
+    this.snackBar.open(`Count template for ${w.name} downloaded (${rows.length} items)`, 'Close', { duration: 4000 });
+  }
+
+  /** Importing a count overrides stock on hand — require the 4-digit unlock PIN before opening the file picker. */
+  requestCountImport(fileInput: HTMLInputElement): void {
+    const w = this.resolveTargetWarehouse();
+    if (!w) return;
+    const ref = this.dialog.open(CountImportPinDialog, { width: '360px', disableClose: true, data: { warehouse: w } });
+    ref.afterClosed().subscribe(ok => { if (ok === true) fileInput.click(); });
+  }
+
+  /** Fill in missing unit prices from imported sales invoices (the green matched codes), PIN-gated. */
+  requestApplyInvoicePrices(): void {
+    const ref = this.dialog.open(CountImportPinDialog, {
+      width: '360px', disableClose: true,
+      data: { title: 'Apply Invoice Prices', message: 'This fills in the unit price on every stock line that has no price, using the average selling price from the imported sales invoices (matched by code — the green codes). Existing prices are never changed. Enter the PIN to continue.' }
+    });
+    ref.afterClosed().subscribe(ok => {
+      if (ok !== true) return;
+      this.snackBar.open('Matching invoice prices to unpriced stock…', undefined, { duration: 10000 });
+      this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/inventory/apply-invoice-prices`, {}).subscribe({
+        next: res => {
+          this.snackBar.open(`Invoice prices applied: ${res.matched} of ${res.totalUnpriced} unpriced lines now have a price (${res.stillUnpriced} still unpriced)`, 'Close', { duration: 8000 });
+          this.loadWarehouses(); this.loadDashboardData();
+          this.http.get<any[]>(`${environment.apiUrl}/warehouses/inventory`).subscribe({ next: d => this.allInventory = d || [], error: () => {} });
+        },
+        error: err => this.snackBar.open(err?.error?.message || 'Failed to apply invoice prices', 'Close', { duration: 6000 })
+      });
+    });
+  }
+
+  async onCountFileSelected(ev: Event): Promise<void> {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const w = this.resolveTargetWarehouse();
+    if (!w) return;
+    try {
+      const result = await parseCountSheet(file, this.allInventory.filter(r => r.warehouseId === w.id));
+      if (!result.matched) {
+        this.snackBar.open(`No rows matched items at ${w.name}. Check the Code column and that the right warehouse is selected.`, 'Close', { duration: 6000 });
+        return;
+      }
+      this.openStockTakeForFilter(result);
+    } catch (e: any) {
+      this.snackBar.open(e?.message || 'Could not read the count sheet', 'Close', { duration: 5000 });
+    }
+  }
+
+  // ═══ Excel exports ═══
   private async writeExcel(rows: any[], sheet: string, file: string): Promise<void> {
     if (!rows.length) { this.snackBar.open('Nothing to export', 'Close', { duration: 3000 }); return; }
     const XLSX = await import('xlsx');
@@ -2190,6 +2300,32 @@ export class StockManagementComponent implements OnInit {
   ngOnInit(): void {
     this.loadWarehouses();
     this.loadDashboardData();
+    this.loadInvoiceCodes();
+  }
+
+  /** Codes that appear on imported sales invoices — used to colour stock codes green */
+  invoiceCodes = new Set<string>();
+  private static normCode(c: string): string { return (c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  invMatched(code: string | null | undefined): boolean {
+    if (!code || !this.invoiceCodes.size) return false;
+    const n = StockManagementComponent.normCode(code);
+    if (!n) return false;
+    if (this.invoiceCodes.has(n)) return true;
+    // stock codes are often the invoice code padded with trailing zeros (e.g. RT320300100000 vs RT32-03-001)
+    const trimmed = n.replace(/0+$/, '');
+    return trimmed.length >= 4 && this.invoiceCodes.has(trimmed);
+  }
+  private loadInvoiceCodes(): void {
+    this.http.get<string[]>(`${environment.apiUrl}/logistics/stock-movements/inventory/invoice-matched-codes`).subscribe({
+      next: codes => {
+        this.invoiceCodes = new Set<string>();
+        for (const c of (codes || [])) {
+          const n = StockManagementComponent.normCode(c);
+          if (n) { this.invoiceCodes.add(n); const t = n.replace(/0+$/, ''); if (t.length >= 4) this.invoiceCodes.add(t); }
+        }
+      },
+      error: () => {}
+    });
   }
 
   // Invoice Fulfillment removed: stock now flows through the ledger (Movements / Dispatch).
@@ -2255,9 +2391,9 @@ export class StockManagementComponent implements OnInit {
     return this.whFilterId ? (this.warehouses.find(x => x.id === this.whFilterId) || null) : null;
   }
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════════
   // Welly AI Stock Analysis (Enhanced with Charts + PDF)
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════════
 
   showWellyPanel = false;
   wellyLoading = false;
@@ -2430,8 +2566,8 @@ export class StockManagementComponent implements OnInit {
       // Add title
       pdf.setFontSize(10);
       pdf.setTextColor(100);
-      pdf.text(`ProMed Technologies â€” Welly Stock Analysis`, 10, 8);
-      pdf.text(`${this.selectedWarehouse?.name || 'Warehouse'} â€” ${new Date().toLocaleDateString()}`, 10, 13);
+      pdf.text(`ProMed Technologies — Welly Stock Analysis`, 10, 8);
+      pdf.text(`${this.selectedWarehouse?.name || 'Warehouse'} — ${new Date().toLocaleDateString()}`, 10, 13);
       yOffset = 16;
 
       // Multi-page support
@@ -2459,7 +2595,7 @@ export class StockManagementComponent implements OnInit {
 
       const filename = `Stock-Analysis-${(this.selectedWarehouse?.name || 'Report').replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(filename);
-      this.snackBar.open('PDF downloaded âœ“', 'Close', { duration: 2000 });
+      this.snackBar.open('PDF downloaded ✓', 'Close', { duration: 2000 });
     } catch (err) {
       console.error('PDF generation error:', err);
       this.snackBar.open('Failed to generate PDF. Please try again.', 'Close', { duration: 3000 });
@@ -2468,12 +2604,425 @@ export class StockManagementComponent implements OnInit {
 
   copyWellyResult(): void {
     navigator.clipboard.writeText(this.wellyResult).then(() => {
-      this.snackBar.open('Copied to clipboard âœ“', 'Close', { duration: 2000 });
+      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
     });
   }
 }
 
-// Stock Take Dialog Component â€” counts against WarehouseInventory, posts variances to the ledger
+// ═══ Stock count sheet parser ═══
+export interface CountImportResult {
+  fileName: string;
+  /** commodityId -> counted quantity */
+  counts: Map<number, number>;
+  matched: number;
+  skipped: number;      // rows with blank Counted Qty
+  unmatched: string[];  // codes not found at this warehouse
+  invalid: string[];    // codes whose Counted Qty was not a number
+}
+
+/** Reads a completed count sheet (Code + Counted Qty columns) and matches rows to the warehouse inventory by item code. */
+async function parseCountSheet(file: File, inventory: any[]): Promise<CountImportResult> {
+  const XLSX = await import('xlsx');
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheetName = wb.SheetNames.find(n => n.toLowerCase().replace(/\s+/g, '') === 'countsheet') || wb.SheetNames[0];
+  const rows: any[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+  if (!rows.length) throw new Error('The count sheet is empty');
+
+  const norm = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const headers = Object.keys(rows[0]);
+  const codeCol = headers.find(h => ['code', 'itemcode', 'commoditycode', 'stockcode', 'sku'].includes(norm(h)));
+  const qtyCol = headers.find(h => ['countedqty', 'counted', 'countedquantity', 'count', 'physicalqty', 'physical', 'actualqty', 'actual'].includes(norm(h)));
+  if (!codeCol) throw new Error('Could not find a "Code" column in the sheet');
+  if (!qtyCol) throw new Error('Could not find a "Counted Qty" column in the sheet');
+
+  const byCode = new Map<string, number>();
+  for (const r of inventory) if (r.commodityCode) byCode.set(norm(r.commodityCode), r.commodityId);
+
+  const result: CountImportResult = { fileName: file.name, counts: new Map(), matched: 0, skipped: 0, unmatched: [], invalid: [] };
+  for (const r of rows) {
+    const code = String(r[codeCol] ?? '').trim();
+    if (!code) continue;
+    const raw = r[qtyCol];
+    if (raw === '' || raw === null || raw === undefined) { result.skipped++; continue; }
+    const qty = typeof raw === 'number' ? raw : Number(String(raw).replace(/[,\s]/g, ''));
+    if (!Number.isFinite(qty) || qty < 0) { result.invalid.push(code); continue; }
+    const id = byCode.get(norm(code));
+    if (id === undefined) { result.unmatched.push(code); continue; }
+    result.counts.set(id, qty);
+    result.matched++;
+  }
+  return result;
+}
+
+// ═══ Warehouse stock-on-hand datasheet (opened from Stock Counts) ═══
+@Component({
+  selector: 'warehouse-stock-sheet-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTooltipModule],
+  template: `
+    <div class="ws-head">
+      <div class="ws-title">
+        <mat-icon>warehouse</mat-icon>
+        <div>
+          <h2>{{ data.warehouse.name }}</h2>
+          <span>{{ data.warehouse.location || 'Stock on hand datasheet' }}</span>
+        </div>
+      </div>
+      <button mat-icon-button (click)="dialogRef.close(changed ? 'changed' : undefined)" matTooltip="Close"><mat-icon>close</mat-icon></button>
+    </div>
+
+    <div class="ws-companies">
+      <button type="button" class="ws-chip" [class.active]="company === ''" (click)="company = ''">All companies <b>{{ data.rows.length }}</b></button>
+      @for (c of companies; track c.name) {
+        <button type="button" class="ws-chip" [class.active]="company === c.name" (click)="company = company === c.name ? '' : c.name">{{ c.name }} <b>{{ c.items }}</b></button>
+      }
+    </div>
+
+    <div class="ws-kpis">
+      <div><b>{{ filtered.length | number }}</b><span>Items</span></div>
+      <div><b>{{ sum('quantityOnHand') | number:'1.0-0' }}</b><span>Units on hand</span></div>
+      <div><b>{{ inStock | number }}</b><span>In stock</span></div>
+      <div [class.warn]="outOfStock > 0"><b>{{ outOfStock | number }}</b><span>Out of stock</span></div>
+      <div><b>{{ money(sum('lineValue')) }}</b><span>Stock value</span></div>
+    </div>
+
+    <div class="ws-toolbar">
+      <mat-form-field appearance="outline" class="ws-search">
+        <mat-label>Search code or description</mat-label>
+        <input matInput [(ngModel)]="search">
+        <mat-icon matPrefix>search</mat-icon>
+      </mat-form-field>
+      <label class="ws-toggle"><input type="checkbox" [(ngModel)]="hideZero"> Hide zero quantities</label>
+      <span style="flex:1"></span>
+      @if (unlocked) {
+        <span class="ws-unlocked"><mat-icon>lock_open</mat-icon> Editing unlocked — double-click a cell to edit, Enter to save, Esc to cancel</span>
+      } @else {
+        <span class="ws-locked"><mat-icon>lock</mat-icon> Double-click any cell to unlock editing (PIN)</span>
+      }
+      <button mat-stroked-button (click)="exportSheet()"><mat-icon>file_download</mat-icon> Export</button>
+    </div>
+
+    <mat-dialog-content class="ws-body">
+      <table class="ws-table" [class.editable]="unlocked">
+        <thead><tr>
+          <th (click)="sortBy('commodityCode')">Code {{ arrow('commodityCode') }}</th>
+          <th (click)="sortBy('commodityName')">Description {{ arrow('commodityName') }}</th>
+          <th (click)="sortBy('category')">Company {{ arrow('category') }}</th>
+          <th>UOM</th>
+          <th class="num" (click)="sortBy('quantityOnHand')">Qty On Hand {{ arrow('quantityOnHand') }}</th>
+          <th class="num" (click)="sortBy('unitPrice')">Unit Price {{ arrow('unitPrice') }}</th>
+          <th class="num" (click)="sortBy('lineValue')">Value {{ arrow('lineValue') }}</th>
+          <th>Bin</th>
+          <th (click)="sortBy('lastCountDate')">Last Count {{ arrow('lastCountDate') }}</th>
+        </tr></thead>
+        <tbody>
+          @for (r of filtered; track r.id) {
+            <tr [class.zero]="!r.quantityOnHand" [class.saving]="savingId === r.id">
+              <td class="mono edit" [class.code-inv]="isInvMatched(r.commodityCode)" (dblclick)="beginEdit(r, 'commodityCode')"
+                  [matTooltip]="isInvMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">
+                @if (isEditing(r, 'commodityCode')) { <input class="ws-input" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" autofocus> }
+                @else { {{ r.commodityCode || '—' }} }
+              </td>
+              <td class="desc edit" (dblclick)="beginEdit(r, 'commodityName')">
+                @if (isEditing(r, 'commodityName')) { <input class="ws-input" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" autofocus> }
+                @else { {{ r.commodityName }} }
+              </td>
+              <td class="edit" (dblclick)="beginEdit(r, 'category')">
+                @if (isEditing(r, 'category')) { <input class="ws-input" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" list="ws-companies" autofocus> }
+                @else { <span class="ws-tag">{{ r.category || '—' }}</span> }
+              </td>
+              <td class="edit" (dblclick)="beginEdit(r, 'unitOfMeasure')">
+                @if (isEditing(r, 'unitOfMeasure')) { <input class="ws-input" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" autofocus> }
+                @else { {{ r.unitOfMeasure || 'Each' }} }
+              </td>
+              <td class="num qty edit" (dblclick)="beginEdit(r, 'quantityOnHand')">
+                @if (isEditing(r, 'quantityOnHand')) { <input class="ws-input num" type="number" min="0" step="any" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" autofocus> }
+                @else { {{ r.quantityOnHand | number:'1.0-2' }} }
+              </td>
+              <td class="num edit" [class.noprice]="!r.unitPrice" (dblclick)="beginEdit(r, 'unitPrice')" [matTooltip]="r.unitPrice ? 'Double-click to override the unit price' : 'No price on file — double-click to enter one so value can be calculated'">
+                @if (isEditing(r, 'unitPrice')) { <input class="ws-input num" type="number" min="0" step="0.01" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" autofocus> }
+                @else { {{ r.unitPrice ? money(r.unitPrice) : 'No price' }} }
+              </td>
+              <td class="num ro" matTooltip="Qty × unit price — calculated">{{ r.lineValue ? money(r.lineValue) : '—' }}</td>
+              <td class="edit" (dblclick)="beginEdit(r, 'binLocation')">
+                @if (isEditing(r, 'binLocation')) { <input class="ws-input" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" autofocus> }
+                @else { {{ r.binLocation || '—' }} }
+              </td>
+              <td class="ro" matTooltip="Set automatically when the quantity is edited or counted">{{ r.lastCountDate ? (r.lastCountDate | date:'dd MMM yyyy') : '—' }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="9" class="ws-empty">No items match.</td></tr>
+          }
+        </tbody>
+        @if (filtered.length) {
+          <tfoot><tr>
+            <td colspan="4"><b>Total · {{ filtered.length | number }} items</b></td>
+            <td class="num qty"><b>{{ sum('quantityOnHand') | number:'1.0-2' }}</b></td>
+            <td></td>
+            <td class="num"><b>{{ money(sum('lineValue')) }}</b></td>
+            <td colspan="2"></td>
+          </tr></tfoot>
+        }
+      </table>
+      <datalist id="ws-companies">@for (c of companies; track c.name) { <option [value]="c.name"></option> }</datalist>
+    </mat-dialog-content>
+  `,
+  styles: [`
+    :host { display: block; }
+    .ws-locked, .ws-unlocked { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 4px 12px; }
+    .ws-locked { color: #64748b; background: #f1f5f9; }
+    .ws-unlocked { color: #065f46; background: #d1fae5; }
+    .ws-locked mat-icon, .ws-unlocked mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .ws-table.editable td.edit { cursor: cell; }
+    .ws-table.editable td.edit:hover { outline: 2px solid #0369a1; outline-offset: -2px; background: #eff6ff; }
+    .ws-table td.ro { color: #94a3b8; font-style: italic; }
+    .ws-table td.noprice { color: #d97706; font-weight: 600; font-size: 12px; }
+    .ws-table tr.saving td { opacity: .5; }
+    .ws-input { width: 100%; box-sizing: border-box; border: 2px solid #0369a1; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; background: #fff; }
+    .ws-input.num { text-align: right; font-weight: 700; }
+    .ws-input:focus { outline: none; box-shadow: 0 0 0 3px #bfdbfe; }
+    .ws-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px 10px; }
+    .ws-title { display: flex; align-items: center; gap: 14px; }
+    .ws-title > mat-icon { font-size: 36px; width: 36px; height: 36px; color: #0369a1; }
+    .ws-title h2 { margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; }
+    .ws-title span { font-size: 12.5px; color: #64748b; }
+    .ws-companies { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 24px 12px; }
+    .ws-chip { border: 1.5px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: #334155; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+    .ws-chip b { background: #e2e8f0; border-radius: 999px; padding: 0 8px; font-size: 12px; }
+    .ws-chip:hover { border-color: #0369a1; color: #0369a1; }
+    .ws-chip.active { background: #0369a1; border-color: #0369a1; color: #fff; }
+    .ws-chip.active b { background: rgba(255,255,255,0.25); color: #fff; }
+    .ws-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 0 24px 12px; }
+    .ws-kpis > div { background: #f1f5f9; border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
+    .ws-kpis b { font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+    .ws-kpis span { font-size: 11.5px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .ws-kpis .warn b { color: #dc2626; }
+    .ws-toolbar { display: flex; align-items: center; gap: 14px; padding: 0 24px 6px; }
+    .ws-search { width: 340px; }
+    .ws-search ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
+    .ws-toggle { font-size: 13px; color: #475569; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .ws-body { padding: 0 24px 20px !important; max-height: 60vh; }
+    .ws-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ws-table th { position: sticky; top: 0; background: #0f172a; color: #fff; text-align: left; padding: 10px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; user-select: none; white-space: nowrap; z-index: 1; }
+    .ws-table th.num, .ws-table td.num { text-align: right; }
+    .ws-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #1e293b; vertical-align: middle; }
+    .ws-table tbody tr:hover td { background: #f8fafc; }
+    .ws-table tr.zero td { color: #94a3b8; }
+    .ws-table tr.zero td.qty { color: #dc2626; font-weight: 700; }
+    .ws-table td.qty { font-weight: 700; font-size: 14px; }
+    .ws-table td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+    .ws-table td.mono.code-inv { color: #16a34a !important; font-weight: 800; }
+    .ws-table td.desc { max-width: 420px; }
+    .ws-tag { background: #e0f2fe; color: #075985; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; font-weight: 600; }
+    .ws-table tfoot td { background: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: none; font-size: 13.5px; }
+    .ws-empty { text-align: center; color: #94a3b8; padding: 28px !important; }
+  `]
+})
+export class WarehouseStockSheetDialog {
+  company = '';
+  search = '';
+  hideZero = false;
+  sortKey: keyof WarehouseInventory = 'commodityCode';
+  sortDir: 1 | -1 = 1;
+  companies: { name: string; items: number }[] = [];
+
+  // ── PIN-gated inline editing ──
+  unlocked = false;
+  editingId: number | null = null;
+  editingField: string | null = null;
+  editValue: any = '';
+  savingId: number | null = null;
+  changed = false;
+  private http = inject(HttpClient);
+  private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
+
+  constructor(public dialogRef: MatDialogRef<WarehouseStockSheetDialog>,
+              @Inject(MAT_DIALOG_DATA) public data: { warehouse: WarehouseSummary; rows: WarehouseInventory[]; company: string; invMatched?: (c: string) => boolean }) {
+    this.company = data.company || '';
+    this.rebuildCompanies();
+    if (this.company && !this.companies.some(c => c.name === this.company)) this.company = '';
+    dialogRef.disableClose = true;
+    dialogRef.backdropClick().subscribe(() => dialogRef.close(this.changed ? 'changed' : undefined));
+    dialogRef.keydownEvents().subscribe(e => { if (e.key === 'Escape' && this.editingId === null) dialogRef.close(this.changed ? 'changed' : undefined); });
+  }
+
+  isInvMatched(code: string | null | undefined): boolean { return !!code && !!this.data.invMatched && this.data.invMatched(code); }
+
+  private rebuildCompanies(): void {
+    const map = new Map<string, number>();
+    for (const r of this.data.rows) { const k = r.category || 'Unassigned'; map.set(k, (map.get(k) || 0) + 1); }
+    this.companies = [...map.entries()].map(([name, items]) => ({ name, items })).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  isEditing(r: WarehouseInventory, f: string): boolean { return this.editingId === r.id && this.editingField === f; }
+
+  beginEdit(r: WarehouseInventory, field: string): void {
+    if (this.savingId) return;
+    if (!this.unlocked) {
+      const ref = this.dialog.open(CountImportPinDialog, {
+        width: '360px', disableClose: true,
+        data: { warehouse: this.data.warehouse, title: 'Unlock Editing',
+                message: `Editing this datasheet changes <b>live stock data</b> at <b>${this.data.warehouse.name}</b>. Quantity changes are posted to the ledger as adjustments.<br>Enter the 4-digit PIN to continue.` }
+      });
+      ref.afterClosed().subscribe(ok => { if (ok === true) { this.unlocked = true; this.startEdit(r, field); } });
+      return;
+    }
+    this.startEdit(r, field);
+  }
+
+  private startEdit(r: WarehouseInventory, field: string): void {
+    this.editingId = r.id; this.editingField = field;
+    const v: any = (r as any)[field];
+    this.editValue = field === 'quantityOnHand' ? (v ?? 0) : field === 'unitPrice' ? (v ?? '') : (v ?? '');
+    setTimeout(() => { const el = document.querySelector('.ws-input') as HTMLInputElement | null; el?.focus(); el?.select(); }, 0);
+  }
+
+  editKey(ev: KeyboardEvent, r: WarehouseInventory): void {
+    if (ev.key === 'Enter') { ev.preventDefault(); this.commit(r); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); this.cancelEdit(); }
+  }
+
+  cancelEdit(): void { this.editingId = null; this.editingField = null; this.editValue = ''; }
+
+  commit(r: WarehouseInventory): void {
+    if (this.editingId !== r.id || !this.editingField) return;
+    const field = this.editingField;
+    const raw = this.editValue;
+    const current: any = (r as any)[field];
+    const isNum = field === 'quantityOnHand' || field === 'unitPrice';
+    const newStr = isNum ? (raw === '' || raw === null || raw === undefined ? '' : String(+raw)) : String(raw ?? '').trim();
+    const curStr = isNum ? (current === null || current === undefined ? '' : String(+current)) : String(current ?? '').trim();
+    this.cancelEdit();
+    if (newStr === curStr) return;
+    if (field === 'quantityOnHand' && (isNaN(+raw) || +raw < 0)) { this.snackBar.open('Quantity must be 0 or more', 'Close', { duration: 3000 }); return; }
+    if (field === 'unitPrice' && newStr !== '' && (isNaN(+raw) || +raw < 0)) { this.snackBar.open('Unit price must be 0 or more', 'Close', { duration: 3000 }); return; }
+
+    this.savingId = r.id;
+    this.http.patch<any>(`${environment.apiUrl}/logistics/stock-movements/inventory/${r.id}/cell`, { field, value: newStr }).subscribe({
+      next: res => {
+        this.savingId = null; this.changed = true;
+        r.commodityCode = res.commodityCode; r.commodityName = res.commodityName; r.category = res.category;
+        r.unitOfMeasure = res.unitOfMeasure; r.quantityOnHand = +res.quantityOnHand; r.binLocation = res.binLocation; r.lastCountDate = res.lastCountDate;
+        if (field === 'unitPrice') r.unitPrice = res.unitPrice != null ? +res.unitPrice : undefined;
+        r.lineValue = r.unitPrice ? Math.round(r.quantityOnHand * r.unitPrice * 100) / 100 : undefined;
+        if (field === 'category') this.rebuildCompanies();
+        this.snackBar.open(
+          field === 'quantityOnHand' ? 'Quantity updated — adjustment posted to ledger, last count set to today'
+          : field === 'unitPrice' ? (newStr === '' ? 'Price override cleared' : `Unit price set — value now ${this.money(r.lineValue || 0)}`)
+          : 'Saved', 'Close', { duration: 2500 });
+      },
+      error: e => { this.savingId = null; this.snackBar.open(e?.error?.message || 'Failed to save', 'Close', { duration: 5000 }); }
+    });
+  }
+
+  get filtered(): WarehouseInventory[] {
+    const q = this.search.trim().toLowerCase();
+    let rows = this.data.rows.filter(r =>
+      (!this.company || (r.category || 'Unassigned') === this.company) &&
+      (!this.hideZero || (r.quantityOnHand || 0) !== 0) &&
+      (!q || (r.commodityCode || '').toLowerCase().includes(q) || (r.commodityName || '').toLowerCase().includes(q)));
+    const k = this.sortKey, d = this.sortDir;
+    rows = [...rows].sort((a, b) => {
+      const av: any = a[k] ?? '', bv: any = b[k] ?? '';
+      if (typeof av === 'number' || typeof bv === 'number') return ((+av || 0) - (+bv || 0)) * d;
+      return String(av).localeCompare(String(bv)) * d;
+    });
+    return rows;
+  }
+  get inStock(): number { return this.filtered.filter(r => (r.quantityOnHand || 0) > 0).length; }
+  get outOfStock(): number { return this.filtered.filter(r => !(r.quantityOnHand || 0)).length; }
+  sum(k: 'quantityOnHand' | 'lineValue'): number { return this.filtered.reduce((s, r) => s + (+(r[k] || 0)), 0); }
+  money(v: number): string { return 'R ' + (v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  sortBy(k: keyof WarehouseInventory): void { if (this.sortKey === k) this.sortDir = this.sortDir === 1 ? -1 : 1; else { this.sortKey = k; this.sortDir = 1; } }
+  arrow(k: keyof WarehouseInventory): string { return this.sortKey === k ? (this.sortDir === 1 ? '▲' : '▼') : ''; }
+
+  async exportSheet(): Promise<void> {
+    const rows = this.filtered.map(r => ({
+      'Code': r.commodityCode || '', 'Description': r.commodityName || '', 'Company': r.category || '',
+      'UOM': r.unitOfMeasure || 'Each', 'Qty On Hand': +(r.quantityOnHand || 0),
+      'Unit Price': r.unitPrice || '', 'Stock Value': r.lineValue || '', 'Bin': r.binLocation || '',
+      'Last Count': r.lastCountDate ? String(r.lastCountDate).substring(0, 10) : ''
+    }));
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 14 }, { wch: 48 }, { wch: 16 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stock on Hand');
+    const safe = (s: string) => s.replace(/[^A-Za-z0-9_-]+/g, '_');
+    XLSX.writeFile(wb, `SOH_${safe(this.data.warehouse.name)}${this.company ? '_' + safe(this.company) : ''}_${new Date().toISOString().substring(0, 10)}.xlsx`);
+  }
+}
+
+// ═══ Stock count import PIN dialog ═══
+const COUNT_IMPORT_PIN = '2630';
+
+@Component({
+  selector: 'count-import-pin-dialog',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule],
+  template: `
+    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">lock</mat-icon> {{ data.title || 'Unlock Import' }}</h2>
+    <mat-dialog-content class="pin-body">
+      @if (data.message) { <p [innerHTML]="data.message"></p> }
+      @else { <p>Importing a stock count will <b>override stock on hand</b> at <b>{{ data.warehouse.name }}</b>.<br>Enter the 4-digit PIN to continue.</p> }
+      <div class="pin-boxes" [class.shake]="error">
+        @for (i of [0,1,2,3]; track i) {
+          <input #box class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off"
+                 [value]="digits[i]" (input)="onDigit(i, $event, box)" (keydown)="onKey(i, $event, box)" (focus)="box.select()">
+        }
+      </div>
+      @if (error) { <div class="pin-error"><mat-icon>error</mat-icon> Incorrect PIN</div> }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="dialogRef.close(false)">Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="digits.join('').length < 4" (click)="submit()"><mat-icon>lock_open</mat-icon> Unlock</button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    .pin-body p { font-size: 13.5px; color: #475569; margin: 0 0 16px; line-height: 1.5; }
+    .pin-boxes { display: flex; gap: 12px; justify-content: center; margin-bottom: 8px; }
+    .pin-box { width: 52px; height: 60px; text-align: center; font-size: 28px; font-weight: 700; border: 2px solid #cbd5e1; border-radius: 10px; letter-spacing: 0; }
+    .pin-box:focus { outline: none; border-color: #d97706; box-shadow: 0 0 0 3px #fde68a; }
+    .pin-error { display: flex; align-items: center; justify-content: center; gap: 6px; color: #dc2626; font-size: 13px; font-weight: 600; margin-top: 6px; }
+    .pin-error mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .shake { animation: shake .35s; }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+  `]
+})
+export class CountImportPinDialog {
+  digits: string[] = ['', '', '', ''];
+  error = false;
+  constructor(public dialogRef: MatDialogRef<CountImportPinDialog>, @Inject(MAT_DIALOG_DATA) public data: any) {}
+
+  onDigit(i: number, ev: Event, box: HTMLInputElement): void {
+    const v = (ev.target as HTMLInputElement).value.replace(/\D/g, '').slice(-1);
+    this.digits[i] = v;
+    box.value = v;
+    this.error = false;
+    if (v) {
+      const next = box.nextElementSibling as HTMLInputElement | null;
+      if (next) next.focus(); else if (this.digits.join('').length === 4) this.submit();
+    }
+  }
+
+  onKey(i: number, ev: KeyboardEvent, box: HTMLInputElement): void {
+    if (ev.key === 'Backspace' && !this.digits[i]) {
+      const prev = box.previousElementSibling as HTMLInputElement | null;
+      if (prev) { prev.focus(); }
+    } else if (ev.key === 'Enter') { this.submit(); }
+  }
+
+  submit(): void {
+    if (this.digits.join('') === COUNT_IMPORT_PIN) { this.dialogRef.close(true); return; }
+    this.error = true;
+    this.digits = ['', '', '', ''];
+    setTimeout(() => (document.querySelector('.pin-box') as HTMLInputElement | null)?.focus(), 0);
+  }
+}
+
+// Stock Take Dialog Component — counts against WarehouseInventory, posts variances to the ledger
 @Component({
   selector: 'stock-take-dialog',
   standalone: true,
@@ -2493,9 +3042,26 @@ export class StockManagementComponent implements OnInit {
   template: `
     <h2 mat-dialog-title>
       <mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">fact_check</mat-icon>
-      Stock Take â€” {{ data.warehouse.name }}
+      Stock Take — {{ data.warehouse.name }}
     </h2>
     <mat-dialog-content>
+      @if (data.imported) {
+        <div class="st-import">
+          <mat-icon>upload_file</mat-icon>
+          <div>
+            <b>Imported {{ data.imported.fileName }}</b> — {{ data.imported.matched }} item(s) counted,
+            {{ data.imported.skipped }} left blank (unchanged)
+            @if (data.imported.unmatched.length) { · <span class="st-warn">{{ data.imported.unmatched.length }} code(s) not found at this warehouse</span> }
+            @if (data.imported.invalid.length) { · <span class="st-warn">{{ data.imported.invalid.length }} row(s) with an invalid quantity</span> }
+            @if (data.imported.unmatched.length || data.imported.invalid.length) {
+              <div class="st-import-detail">
+                @if (data.imported.unmatched.length) { <span>Not found: {{ data.imported.unmatched.slice(0, 15).join(', ') }}{{ data.imported.unmatched.length > 15 ? ' …' : '' }}</span> }
+                @if (data.imported.invalid.length) { <span>Invalid qty: {{ data.imported.invalid.slice(0, 15).join(', ') }}{{ data.imported.invalid.length > 15 ? ' …' : '' }}</span> }
+              </div>
+            }
+          </div>
+        </div>
+      }
       <div class="st-bar">
         <mat-form-field appearance="outline" class="st-search">
           <mat-label>Filter items</mat-label>
@@ -2523,21 +3089,21 @@ export class StockManagementComponent implements OnInit {
               <tr [class.st-diff]="r.counted !== null && r.counted !== r.systemQty">
                 <td class="mono">{{ r.code }}</td>
                 <td class="desc">{{ r.name }}</td>
-                <td><span class="st-chip">{{ r.company || 'â€”' }}</span></td>
+                <td><span class="st-chip">{{ r.company || '—' }}</span></td>
                 <td>{{ r.uom }}</td>
                 <td class="num">{{ r.systemQty | number }}</td>
-                <td class="num"><input class="st-qty" type="number" min="0" [(ngModel)]="r.counted" placeholder="â€”"></td>
+                <td class="num"><input class="st-qty" type="number" min="0" [(ngModel)]="r.counted" placeholder="—"></td>
                 <td class="num">
                   @if (r.counted !== null && r.counted !== undefined) {
                     <b [style.color]="varianceOf(r) > 0 ? '#16a34a' : (varianceOf(r) < 0 ? '#dc2626' : '#94a3b8')">
                       {{ varianceOf(r) > 0 ? '+' : '' }}{{ varianceOf(r) | number }}</b>
-                  } @else { <span style="color:#cbd5e1;">â€”</span> }
+                  } @else { <span style="color:#cbd5e1;">—</span> }
                 </td>
               </tr>
             } @empty { <tr><td colspan="7" class="st-empty">No items match</td></tr> }
           </tbody>
         </table>
-        @if (rows().length > 500) { <div class="st-more">Showing first 500 of {{ rows().length | number }} â€” narrow the filter</div> }
+        @if (rows().length > 500) { <div class="st-more">Showing first 500 of {{ rows().length | number }} — narrow the filter</div> }
       </div>
 
       @if (varianceLines().length) {
@@ -2548,7 +3114,7 @@ export class StockManagementComponent implements OnInit {
         </div>
         <mat-form-field appearance="outline" style="width:100%;margin-top:10px;">
           <mat-label>Reason for variances (required)</mat-label>
-          <input matInput [(ngModel)]="reason" placeholder="e.g. Quarterly count â€” Oct 2026">
+          <input matInput [(ngModel)]="reason" placeholder="e.g. Quarterly count — Oct 2026">
         </mat-form-field>
       }
       <p class="st-note"><mat-icon>info</mat-icon> Only lines you type a count for are affected. Each variance posts an Adjustment to the stock ledger and updates stock on hand. Lines that match the system quantity are recorded as confirmed with no movement.</p>
@@ -2585,6 +3151,10 @@ export class StockManagementComponent implements OnInit {
     .st-summary .pos b { color: #16a34a; } .st-summary .neg b { color: #dc2626; }
     .st-note { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #64748b; margin-top: 12px; }
     .st-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
+    .st-import { display: flex; gap: 10px; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #1e3a8a; }
+    .st-import mat-icon { color: #2563eb; flex-shrink: 0; }
+    .st-warn { color: #b45309; font-weight: 600; }
+    .st-import-detail { margin-top: 4px; font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
   `]
 })
 export class StockTakeDialog implements OnInit {
@@ -2604,6 +3174,7 @@ export class StockTakeDialog implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    const imp: CountImportResult | undefined = this.data.imported;
     this.reference = `STK-${this.data.warehouse.code || this.data.warehouse.id}-${new Date().toISOString().substring(0, 10)}`;
     this.lines = (this.data.inventory || []).map((r: any) => ({
       commodityId: r.commodityId,
@@ -2612,8 +3183,12 @@ export class StockTakeDialog implements OnInit {
       company: r.category || '',
       uom: r.unitOfMeasure || 'Each',
       systemQty: +(r.quantityOnHand || 0),
-      counted: null
+      counted: imp?.counts.has(r.commodityId) ? imp.counts.get(r.commodityId)! : null
     })).sort((a: any, b: any) => a.code.localeCompare(b.code));
+    if (imp) {
+      this.reason = `Stock count imported from ${imp.fileName}`;
+      if (this.varianceLines().length) this.onlyVariance = true;
+    }
   }
 
   rows() {
@@ -2646,7 +3221,7 @@ export class StockTakeDialog implements OnInit {
     };
     this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/stock-take`, payload).subscribe({
       next: (r) => {
-        this.snackBar.open(`Stock take posted â€” ${r?.adjusted ?? payload.lines.length} adjustment(s) written to the ledger`, 'Close', { duration: 5000 });
+        this.snackBar.open(`Stock take posted — ${r?.adjusted ?? payload.lines.length} adjustment(s) written to the ledger`, 'Close', { duration: 5000 });
         this.dialogRef.close(true);
       },
       error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to post stock take', 'Close', { duration: 5000 }); }
@@ -2654,7 +3229,7 @@ export class StockTakeDialog implements OnInit {
   }
 }
 
-// â•â•â• Warehouse 3D View Dialog â•â•â•
+// ═══ Warehouse 3D View Dialog ═══
 @Component({
   selector: 'app-warehouse-3d-dialog',
   standalone: true,
@@ -2663,7 +3238,7 @@ export class StockTakeDialog implements OnInit {
     <div class="w3d-head">
       <div class="w3d-title">
         <mat-icon>view_in_ar</mat-icon>
-        <h2>{{ data.name }} â€” 3D Stock View</h2>
+        <h2>{{ data.name }} — 3D Stock View</h2>
       </div>
       <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
     </div>
@@ -2685,7 +3260,7 @@ export class Warehouse3DDialog {
   constructor(@Inject(MAT_DIALOG_DATA) public data: any) {}
 }
 
-// â•â•â• Create Stock Issue Dialog â•â•â•
+// ═══ Create Stock Issue Dialog ═══
 @Component({
   selector: 'app-create-issue-dialog',
   standalone: true,
@@ -2704,7 +3279,7 @@ export class Warehouse3DDialog {
         <mat-form-field appearance="outline">
           <mat-label>Company</mat-label>
           <mat-select [(ngModel)]="company">
-            <mat-option [value]="''">â€”</mat-option>
+            <mat-option [value]="''">—</mat-option>
             @for (c of data.companies; track c.key) { <mat-option [value]="c.key">{{ c.shortName }}</mat-option> }
           </mat-select>
         </mat-form-field>
@@ -2752,7 +3327,7 @@ export class Warehouse3DDialog {
 })
 export class CreateIssueDialog {
   issueTypes = [
-    'Opening â‰  previous closing',
+    'Opening ≠ previous closing',
     'Negative balance',
     'Closing does not add up',
     'Closing balance not filled in',
@@ -2808,7 +3383,7 @@ export class CreateIssueDialog {
   }
 }
 
-// â•â•â• Resolve Stock Issue Dialog â•â•â•
+// ═══ Resolve Stock Issue Dialog ═══
 @Component({
   selector: 'app-resolve-issue-dialog',
   standalone: true,
@@ -2869,8 +3444,8 @@ export class ResolveIssueDialog {
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {
     this.quickNotes = data.status === 'Resolved'
-      ? ['Recount performed and balance corrected', 'GRV / receipt captured retrospectively', 'Data captured incorrectly â€” sheet corrected', 'Stock adjusted via stock take']
-      : ['Known timing difference between sheets', 'Duplicate of another issue', 'Expected behaviour â€” not an error'];
+      ? ['Recount performed and balance corrected', 'GRV / receipt captured retrospectively', 'Data captured incorrectly — sheet corrected', 'Stock adjusted via stock take']
+      : ['Known timing difference between sheets', 'Duplicate of another issue', 'Expected behaviour — not an error'];
   }
 
   save(): void {
@@ -2883,7 +3458,7 @@ export class ResolveIssueDialog {
   }
 }
 
-// â•â•â• Manual Movement Dialog (Receive / Return) â•â•â•
+// ═══ Manual Movement Dialog (Receive / Return) ═══
 @Component({
   selector: 'app-manual-movement-dialog',
   standalone: true,
@@ -2918,7 +3493,7 @@ export class ResolveIssueDialog {
         </div>
       } @else {
         <div class="mm-selected">
-          <div><b>{{ selected.commodityCode }}</b> â€” {{ selected.commodityName }}</div>
+          <div><b>{{ selected.commodityCode }}</b> — {{ selected.commodityName }}</div>
           <div class="mm-onhand">On hand: <b>{{ selected.quantityOnHand | number }}</b></div>
           <button mat-button (click)="selected = null"><mat-icon>swap_horiz</mat-icon> Change item</button>
         </div>
@@ -3018,7 +3593,7 @@ export class ManualMovementDialog {
       reason: this.reason || null
     }).subscribe({
       next: (r: any) => {
-        this.snackBar.open(`${this.data.type} recorded â€” new balance ${r?.balanceAfter ?? ''}`, 'Close', { duration: 3500 });
+        this.snackBar.open(`${this.data.type} recorded — new balance ${r?.balanceAfter ?? ''}`, 'Close', { duration: 3500 });
         this.dialogRef.close(true);
       },
       error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to record movement', 'Close', { duration: 4000 }); }
@@ -3026,7 +3601,7 @@ export class ManualMovementDialog {
   }
 }
 
-// â•â•â• Transfer Stock Dialog (warehouse â†’ warehouse) â•â•â•
+// ═══ Transfer Stock Dialog (warehouse → warehouse) ═══
 @Component({
   selector: 'app-transfer-stock-dialog',
   standalone: true,
@@ -3072,7 +3647,7 @@ export class ManualMovementDialog {
         </div>
       } @else {
         <div class="mm-selected">
-          <div><b>{{ selected.commodityCode }}</b> â€” {{ selected.commodityName }}</div>
+          <div><b>{{ selected.commodityCode }}</b> — {{ selected.commodityName }}</div>
           <div class="mm-onhand">On hand at source: <b>{{ selected.quantityOnHand | number }}</b></div>
           <button mat-button (click)="selected = null"><mat-icon>swap_horiz</mat-icon> Change item</button>
         </div>
@@ -3081,7 +3656,7 @@ export class ManualMovementDialog {
             <mat-label>Quantity to transfer</mat-label>
             <input matInput type="number" min="1" [(ngModel)]="quantity">
             @if (quantity && selected && quantity > selected.quantityOnHand) {
-              <mat-hint style="color:#dc2626;">Exceeds on hand â€” a reason will be required</mat-hint>
+              <mat-hint style="color:#dc2626;">Exceeds on hand — a reason will be required</mat-hint>
             }
           </mat-form-field>
           <mat-form-field appearance="outline">
@@ -3090,7 +3665,7 @@ export class ManualMovementDialog {
           </mat-form-field>
         </div>
         <mat-form-field appearance="outline" style="width:100%;">
-          <mat-label>Reason / notes {{ needsReason() ? '(required â€” stock goes negative)' : '(optional)' }}</mat-label>
+          <mat-label>Reason / notes {{ needsReason() ? '(required — stock goes negative)' : '(optional)' }}</mat-label>
           <input matInput [(ngModel)]="reason">
         </mat-form-field>
       }
@@ -3169,7 +3744,7 @@ export class TransferStockDialog {
       reason: this.reason || null
     }).subscribe({
       next: () => {
-        this.snackBar.open('Transfer recorded â€” two ledger entries written', 'Close', { duration: 3500 });
+        this.snackBar.open('Transfer recorded — two ledger entries written', 'Close', { duration: 3500 });
         this.dialogRef.close(true);
       },
       error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to transfer stock', 'Close', { duration: 4000 }); }
@@ -3177,7 +3752,7 @@ export class TransferStockDialog {
   }
 }
 
-// â•â•â• Approve Dispatch Dialog (picking slip review â†’ stock deduction) â•â•â•
+// ═══ Approve Dispatch Dialog (picking slip review → stock deduction) ═══
 @Component({
   selector: 'app-approve-dispatch-dialog',
   standalone: true,
@@ -3186,80 +3761,157 @@ export class TransferStockDialog {
   template: `
     <h2 mat-dialog-title>
       <mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">fact_check</mat-icon>
-      Approve Dispatch â€” {{ data.load.loadNumber }}
+      Approve Dispatch — {{ data.load.loadNumber }}
     </h2>
     <mat-dialog-content>
       <div class="ad-meta">
-        <span><b>Warehouse:</b> {{ data.load.warehouseName }}</span>
-        <span><b>Customer:</b> {{ data.load.customerName || 'â€”' }}</span>
-        <span><b>Status:</b> {{ data.load.status }}</span>
+        <div><span class="ad-meta-lbl">Warehouse</span><span class="ad-meta-val">{{ data.load.warehouseName }}</span></div>
+        <div><span class="ad-meta-lbl">Customer</span><span class="ad-meta-val">{{ data.load.customerName || '—' }}</span></div>
+        <div><span class="ad-meta-lbl">Status</span><span class="ad-meta-val">{{ data.load.status }}</span></div>
+        <div><span class="ad-meta-lbl">Lines</span><span class="ad-meta-val">{{ lines.length }}@if (unmapped.length) {<small> + {{ unmapped.length }} unmapped</small>}</span></div>
+        <div><span class="ad-meta-lbl">Units to dispatch</span><span class="ad-meta-val ad-strong">{{ totalQty() | number }}</span></div>
       </div>
+
       @if (unmapped.length) {
-        <div class="ad-empty" style="color:#b45309;">
-          <b>{{ unmapped.length }} line(s) cannot be matched to a stock item and will NOT deduct stock:</b>
-          <ul style="margin:6px 0 0 18px;">
-            @for (u of unmapped; track $index) {
-              <li>{{ u.name }} @if (u.code) { ({{ u.code }}) } â€” qty {{ u.planned | number }} @if (u.invoice) { Â· inv {{ u.invoice }} }</li>
-            }
-          </ul>
+        <div class="ad-unmapped">
+          <div class="ad-unmapped-head"><mat-icon>link_off</mat-icon> {{ unmapped.length }} line(s) are not linked to a stock item and will <b>not</b> deduct stock — search and link them below</div>
+          <table class="ad-table ad-table-sm">
+            <thead><tr><th>Code</th><th>Description</th><th class="num">Qty</th><th>Invoice</th><th style="min-width:280px;">Link to stock item</th></tr></thead>
+            <tbody>
+              @for (u of unmapped; track u.id) {
+                <tr>
+                  <td class="mono">{{ u.code || '—' }}</td><td>{{ u.name }}</td><td class="num">{{ u.planned | number }}</td><td class="mono">{{ u.invoice || '—' }}</td>
+                  <td class="ad-link-cell">
+                    <input class="ad-link-search" type="text" placeholder="Search code or name…" [(ngModel)]="u.search" [disabled]="u.linking">
+                    @if (u.search && u.search.length >= 2) {
+                      <div class="ad-link-opts">
+                        @for (o of matchOptions(u.search); track o.commodityId) {
+                          <button type="button" class="ad-link-opt" [disabled]="u.linking" (click)="linkLine(u, o)">
+                            <span class="mono">{{ o.code || '—' }}</span> {{ o.name }} <small>on hand {{ o.onHand | number }}</small>
+                          </button>
+                        } @empty {
+                          <div class="ad-link-none">No stock items match</div>
+                        }
+                      </div>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
       }
+
       @if (!lines.length) {
         <div class="ad-empty">No mappable commodity lines on this tripsheet.</div>
       } @else {
-        <table class="ad-table">
-          <thead><tr><th>Code</th><th>Description</th><th class="num">Planned</th><th class="num">On Hand</th><th class="num" style="width:130px;">Dispatch Qty</th><th></th></tr></thead>
-          <tbody>
-            @for (l of lines; track l.commodityId) {
-              <tr>
-                <td class="mono">{{ l.code }}</td>
-                <td>{{ l.name }}</td>
-                <td class="num">{{ l.planned | number }}</td>
-                <td class="num" [style.color]="l.onHand < l.qty ? '#dc2626' : ''">{{ l.onHand | number }}</td>
-                <td class="num"><input class="ad-qty" type="number" min="0" [(ngModel)]="l.qty"></td>
-                <td>
-                  @if (l.qty > l.onHand) { <mat-icon class="ad-warn" matTooltip="Will take stock negative â€” reason required">warning</mat-icon> }
-                  @if (l.qty < l.planned) { <span class="ad-short" matTooltip="Short-pick: {{ l.planned - l.qty }} short">-{{ l.planned - l.qty }}</span> }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="ad-table-wrap">
+          <table class="ad-table">
+            <thead><tr>
+              <th style="width:120px;">Code</th>
+              <th>Description</th>
+              <th class="num" style="width:100px;">Planned</th>
+              <th class="num" style="width:100px;">On Hand</th>
+              <th class="num" style="width:140px;">Dispatch Qty</th>
+              <th class="num" style="width:100px;">After</th>
+              <th style="width:120px;">Note</th>
+            </tr></thead>
+            <tbody>
+              @for (l of lines; track l.commodityId) {
+                <tr [class.ad-row-neg]="l.qty > l.onHand" [class.ad-row-short]="l.qty < l.planned">
+                  <td class="mono">{{ l.code || '—' }}</td>
+                  <td class="desc" [matTooltip]="l.name">{{ l.name }}</td>
+                  <td class="num ad-big">{{ l.planned | number }}</td>
+                  <td class="num ad-big" [class.ad-red]="l.onHand < l.qty">{{ l.onHand | number }}</td>
+                  <td class="num"><input class="ad-qty" type="number" min="0" [(ngModel)]="l.qty" (focus)="$any($event.target).select()"></td>
+                  <td class="num ad-big" [class.ad-red]="l.onHand - l.qty < 0">{{ (l.onHand - l.qty) | number }}</td>
+                  <td>
+                    @if (l.qty > l.onHand) { <span class="ad-tag ad-tag-neg"><mat-icon>warning</mat-icon> Negative</span> }
+                    @else if (l.qty < l.planned) { <span class="ad-tag ad-tag-short">Short {{ l.planned - l.qty | number }}</span> }
+                    @else if (l.qty > l.planned) { <span class="ad-tag ad-tag-over">Over {{ l.qty - l.planned | number }}</span> }
+                    @else { <span class="ad-tag ad-tag-ok"><mat-icon>check</mat-icon> Full</span> }
+                  </td>
+                </tr>
+              }
+            </tbody>
+            <tfoot><tr>
+              <td colspan="2">Total</td>
+              <td class="num ad-big">{{ totalPlanned() | number }}</td>
+              <td></td>
+              <td class="num ad-big">{{ totalQty() | number }}</td>
+              <td></td><td></td>
+            </tr></tfoot>
+          </table>
+        </div>
         @if (needsReason()) {
-          <mat-form-field appearance="outline" style="width:100%;margin-top:10px;">
+          <mat-form-field appearance="outline" style="width:100%;margin-top:14px;">
             <mat-label>Reason for dispatching more than on hand (required)</mat-label>
             <input matInput [(ngModel)]="negativeReason" placeholder="e.g. stock received but GRV not yet captured">
           </mat-form-field>
         }
-        <p class="ad-note"><mat-icon>info</mat-icon> Approving deducts these quantities from stock on hand and writes ledger entries. Short-picks record the dispatched quantity only.</p>
+        <p class="ad-note"><mat-icon>info</mat-icon> Approving deducts the <b>Dispatch Qty</b> from stock on hand and writes ledger entries. Edit a quantity to record a short-pick; lines set to 0 are skipped.</p>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
       <button mat-raised-button color="primary" [disabled]="!canSave() || saving" (click)="save()">
-        <mat-icon>inventory</mat-icon> Approve & Deduct Stock
+        <mat-icon>inventory</mat-icon> Approve & Deduct {{ totalQty() | number }} units
       </button>
     </mat-dialog-actions>
   `,
   styles: [`
-    .ad-meta { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
-    .ad-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .ad-table th { text-align: left; padding: 8px 10px; background: #f1f5f9; font-size: 11.5px; text-transform: uppercase; color: #475569; }
+    .ad-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+    .ad-meta > div { display: flex; flex-direction: column; gap: 2px; }
+    .ad-meta-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; font-weight: 600; }
+    .ad-meta-val { font-size: 14.5px; color: #0f172a; font-weight: 600; }
+    .ad-meta-val small { color: #b45309; font-weight: 600; font-size: 12px; }
+    .ad-strong { font-size: 20px; color: #1d4ed8; font-weight: 800; }
+    .ad-table-wrap { max-height: 52vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .ad-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+    .ad-table th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 10px 12px; background: #f1f5f9; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #475569; border-bottom: 2px solid #e2e8f0; }
     .ad-table th.num, .ad-table td.num { text-align: right; }
-    .ad-table td { padding: 7px 10px; border-top: 1px solid #f1f5f9; }
-    .ad-table td.mono { font-family: monospace; font-weight: 600; }
-    .ad-qty { width: 100px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; text-align: right; font-weight: 700; }
-    .ad-warn { color: #d97706; font-size: 20px; width: 20px; height: 20px; }
-    .ad-short { color: #dc2626; font-weight: 700; font-size: 12px; }
+    .ad-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #0f172a; }
+    .ad-table tbody tr:nth-child(even) td { background: #fafbfc; }
+    .ad-table td.mono { font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 13px; color: #334155; }
+    .ad-table td.desc { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ad-table tfoot td { background: #f8fafc; font-weight: 800; border-top: 2px solid #e2e8f0; color: #0f172a; }
+    .ad-big { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ad-red { color: #dc2626 !important; }
+    .ad-row-neg td { background: #fef2f2 !important; }
+    .ad-row-short td { background: #fffbeb !important; }
+    .ad-qty { width: 120px; padding: 8px 10px; border: 2px solid #94a3b8; border-radius: 8px; text-align: right; font-weight: 800; font-size: 17px; color: #0f172a; background: #fff; font-variant-numeric: tabular-nums; }
+    .ad-qty:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px #bfdbfe; }
+    .ad-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .ad-tag mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .ad-tag-ok { background: #dcfce7; color: #166534; }
+    .ad-tag-short { background: #fef3c7; color: #92400e; }
+    .ad-tag-over { background: #dbeafe; color: #1e40af; }
+    .ad-tag-neg { background: #fee2e2; color: #991b1b; }
+    .ad-unmapped { border: 1px solid #fcd34d; background: #fffbeb; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+    .ad-unmapped-head { display: flex; align-items: center; gap: 8px; color: #92400e; font-size: 13.5px; margin-bottom: 8px; }
+    .ad-unmapped-head mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .ad-table-sm { font-size: 13px; background: #fff; border-radius: 8px; overflow: hidden; }
+    .ad-table-sm th { position: static; background: #fef3c7; color: #78350f; padding: 7px 10px; }
+    .ad-table-sm td { padding: 7px 10px; }
+    .ad-link-cell { position: relative; }
+    .ad-link-search { width: 100%; min-width: 240px; padding: 6px 9px; border: 1.5px solid #cbd5e1; border-radius: 7px; font-size: 13px; }
+    .ad-link-search:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px #bfdbfe; }
+    .ad-link-opts { position: absolute; z-index: 5; left: 10px; right: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 20px rgba(15,23,42,.15); max-height: 180px; overflow: auto; }
+    .ad-link-opt { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid #f1f5f9; padding: 7px 10px; font-size: 12.5px; cursor: pointer; color: #0f172a; }
+    .ad-link-opt:hover { background: #eff6ff; }
+    .ad-link-opt .mono { font-family: ui-monospace, Consolas, monospace; font-weight: 700; margin-right: 6px; }
+    .ad-link-opt small { color: #64748b; margin-left: 6px; }
+    .ad-link-none { padding: 8px 10px; font-size: 12.5px; color: #94a3b8; }
     .ad-empty { padding: 24px; text-align: center; color: #94a3b8; }
-    .ad-note { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #64748b; margin-top: 12px; }
+    .ad-note { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #64748b; margin-top: 12px; }
     .ad-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
   `]
 })
 export class ApproveDispatchDialog {
   lines: { commodityId: number; code: string; name: string; planned: number; qty: number; onHand: number }[] = [];
   /** Stop lines that have no commodity mapping and therefore cannot deduct stock */
-  unmapped: { code: string; name: string; planned: number; invoice: string }[] = [];
+  unmapped: { id: number; code: string; name: string; planned: number; invoice: string; search: string; linking: boolean }[] = [];
+  private invOptions: { commodityId: number; code: string; name: string; onHand: number }[] = [];
   negativeReason = '';
   saving = false;
 
@@ -3276,10 +3928,13 @@ export class ApproveDispatchDialog {
       for (const c of (s.commodities || [])) {
         if (!c.commodityId) {
           this.unmapped.push({
+            id: c.id,
             code: c.commodityCode || '',
             name: c.commodityName || c.comment || 'Unnamed line',
             planned: c.quantity || 0,
-            invoice: c.invoiceNumber || s.invoiceNumber || ''
+            invoice: c.invoiceNumber || s.invoiceNumber || '',
+            search: '',
+            linking: false
           });
           continue;
         }
@@ -3298,8 +3953,43 @@ export class ApproveDispatchDialog {
       ...l,
       qty: l.planned,
       onHand: invById.get(l.commodityId)?.quantityOnHand ?? 0
+    })).sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+    this.invOptions = (data.inventory || []).map((r: any) => ({
+      commodityId: r.commodityId,
+      code: r.commodityCode || '',
+      name: r.commodityName || '',
+      onHand: r.quantityOnHand ?? 0
     }));
   }
+
+  matchOptions(search: string): { commodityId: number; code: string; name: string; onHand: number }[] {
+    const tokens = (search || '').toLowerCase().split(/\s+/).filter(t => t);
+    if (!tokens.length) return [];
+    return this.invOptions
+      .filter(o => tokens.every(t => o.code.toLowerCase().includes(t) || o.name.toLowerCase().includes(t)))
+      .slice(0, 6);
+  }
+
+  linkLine(u: { id: number; planned: number; search: string; linking: boolean }, o: { commodityId: number; code: string; name: string; onHand: number }): void {
+    u.linking = true;
+    this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/map-stop-commodity`,
+      { stopCommodityIds: [u.id], commodityId: o.commodityId }).subscribe({
+      next: () => {
+        this.unmapped = this.unmapped.filter(x => x.id !== u.id);
+        const existing = this.lines.find(l => l.commodityId === o.commodityId);
+        if (existing) { existing.planned += u.planned; existing.qty += u.planned; }
+        else {
+          this.lines.push({ commodityId: o.commodityId, code: o.code, name: o.name, planned: u.planned, qty: u.planned, onHand: o.onHand });
+          this.lines.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+        }
+        this.snackBar.open(`Linked to ${o.code || o.name} — line will now deduct stock`, 'Close', { duration: 3500 });
+      },
+      error: (e) => { u.linking = false; this.snackBar.open(e?.error?.message || 'Failed to link line', 'Close', { duration: 5000 }); }
+    });
+  }
+
+  totalPlanned(): number { return this.lines.reduce((s, l) => s + (+l.planned || 0), 0); }
+  totalQty(): number { return this.lines.reduce((s, l) => s + (+l.qty || 0), 0); }
 
   needsReason(): boolean { return this.lines.some(l => l.qty > l.onHand && l.qty > 0); }
 
@@ -3321,7 +4011,7 @@ export class ApproveDispatchDialog {
       }))
     };
     this.http.post(`${environment.apiUrl}/logistics/stock-movements/approve-dispatch`, payload).subscribe({
-      next: () => { this.snackBar.open(`Dispatch approved â€” stock deducted for ${this.data.load.loadNumber}`, 'Close', { duration: 4000 }); this.dialogRef.close(true); },
+      next: () => { this.snackBar.open(`Dispatch approved — stock deducted for ${this.data.load.loadNumber}`, 'Close', { duration: 4000 }); this.dialogRef.close(true); },
       error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to approve dispatch', 'Close', { duration: 5000 }); }
     });
   }

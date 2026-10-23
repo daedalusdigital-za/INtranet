@@ -36,6 +36,7 @@ import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.
 import { environment } from '../../../environments/environment';
 import { PodUploaderComponent } from './pod-uploader.component';
 import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
+import { ClientLocationsComponent } from '../admin/client-locations/client-locations.component';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -70,7 +71,8 @@ import * as XLSX from 'xlsx';
     MatMenuModule,
     NavbarComponent,
     PodUploaderComponent,
-    DocumentTemplatesComponent
+    DocumentTemplatesComponent,
+    ClientLocationsComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -105,6 +107,17 @@ import * as XLSX from 'xlsx';
           </ng-template>
           <div class="tab-content">
             <app-document-templates></app-document-templates>
+          </div>
+        </mat-tab>
+
+        <!-- Client Locations Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon>where_to_vote</mat-icon>
+            <span>Client Locations</span>
+          </ng-template>
+          <div class="tab-content">
+            <app-client-locations></app-client-locations>
           </div>
         </mat-tab>
 

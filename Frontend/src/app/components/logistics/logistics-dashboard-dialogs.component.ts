@@ -9369,7 +9369,7 @@ export class AddDeliveryNoteDialog {
                         <p class="drag-hint"><mat-icon>drag_indicator</mat-icon> Drag stops by the handle to change the delivery order</p>
                         <div class="stops-list" cdkDropList (cdkDropListDropped)="dropGroupedStop($event)">
                           @for (group of groupedStops; track $index; let i = $index) {
-                            <div class="stop-item" cdkDrag cdkDragLockAxis="y" [class.missing-coords]="!isStopResolved(group)" [class.collapsed]="group.isCollapsed && isStopResolved(group)">
+                            <div class="stop-item" cdkDrag cdkDragLockAxis="y" [class.missing-coords]="!isStopResolved(group)" [class.collapsed]="group.isCollapsed && isStopResolved(group)" [class.verified]="isStopVerified(group)">
                               <button class="stop-drag-grip" cdkDragHandle matTooltip="Drag to reorder">
                                 <mat-icon>drag_indicator</mat-icon>
                               </button>
@@ -9388,8 +9388,10 @@ export class AddDeliveryNoteDialog {
                                     }
                                   </div>
                                   <div class="stop-status">
-                                    @if (isStopResolved(group)) {
-                                      <mat-icon class="coord-icon success" matTooltip="Coordinates: {{ group.latitude }}, {{ group.longitude }}">location_on</mat-icon>
+                                    @if (isStopVerified(group)) {
+                                      <mat-icon class="coord-icon verified" matTooltip="Admin-verified delivery address — {{ group.latitude }}, {{ group.longitude }}">verified</mat-icon>
+                                    } @else if (isStopResolved(group)) {
+                                      <mat-icon class="coord-icon success" matTooltip="Coordinates: {{ group.latitude }}, {{ group.longitude }} (not yet admin-verified)">location_on</mat-icon>
                                     } @else if (group.addressApproximate) {
                                       <mat-icon class="coord-icon warning" matTooltip="Address too vague — enter a full street address">wrong_location</mat-icon>
                                     } @else if (isBlankAddress(group.deliveryAddress)) {
@@ -9411,6 +9413,11 @@ export class AddDeliveryNoteDialog {
                                       <mat-icon>location_off</mat-icon>
                                       <span><strong>Delivery address missing.</strong> Click <em>"Match from Customer DB"</em> above to pull it from the customer record, or enter it manually below.</span>
                                     </div>
+                                  } @else if (isStopVerified(group)) {
+                                    <div class="address-verified-banner">
+                                      <mat-icon>verified</mat-icon>
+                                      <span>Admin-verified delivery address{{ verifiedByFor(group) ? ' — checked by ' + verifiedByFor(group) : '' }}. Changing it here will drop the verified status for this trip.</span>
+                                    </div>
                                   } @else if (group.addressFromCustomerDb) {
                                     <div class="address-info-banner">
                                       <mat-icon>contacts</mat-icon>
@@ -9425,8 +9432,12 @@ export class AddDeliveryNoteDialog {
                                         <mat-select (selectionChange)="onSavedAddressSelected(group, $event.value)">
                                           @for (addr of getSavedAddresses(group); track addr.id) {
                                             <mat-option [value]="addr">
-                                              <div class="saved-addr-option">
-                                                <span class="addr-label">{{ addr.addressLabel || 'Address' }}</span>
+                                              <div class="saved-addr-option" [class.is-verified]="addr.isVerified">
+                                                <span class="addr-label">
+                                                  @if (addr.isVerified) { <mat-icon class="addr-verified-ico">verified</mat-icon> }
+                                                  {{ addr.addressLabel || 'Address' }}
+                                                  @if (addr.isVerified) { <span class="addr-verified-tag">Verified</span> }
+                                                </span>
                                                 <span class="addr-text">{{ addr.address }}</span>
                                                 @if (addr.usageCount > 1) {
                                                   <span class="addr-usage">(used {{ addr.usageCount }}x)</span>
@@ -9489,9 +9500,10 @@ export class AddDeliveryNoteDialog {
                                     </div>
                                   }
                                 } @else {
-                                  <div class="collapsed-info">
-                                    <mat-icon>check_circle</mat-icon>
+                                  <div class="collapsed-info" [class.verified]="isStopVerified(group)">
+                                    <mat-icon>{{ isStopVerified(group) ? 'verified' : 'check_circle' }}</mat-icon>
                                     <span>{{ group.deliveryAddress }}</span>
+                                    @if (isStopVerified(group)) { <em class="collapsed-verified-tag">Verified</em> }
                                   </div>
                                 }
                               </div>
@@ -10559,6 +10571,21 @@ export class AddDeliveryNoteDialog {
       background: #f8fdf8;
       border-left: 3px solid #4caf50;
     }
+    /* Admin-verified address (Admin Settings → Client Locations): purple instead of green */
+    .stop-item.verified { border-left: 3px solid #7c3aed; }
+    .stop-item.verified.collapsed { background: #faf5ff; border-left-color: #7c3aed; }
+    .stop-header .coord-icon.verified { color: #7c3aed; }
+    .collapsed-info.verified { color: #7c3aed; }
+    .collapsed-verified-tag { font-style: normal; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: #ede9fe; color: #5b21b6; padding: 1px 7px; border-radius: 999px; margin-left: 4px; }
+    .address-verified-banner {
+      display: flex; align-items: center; gap: 8px;
+      background: #f5f3ff; border: 1px solid #c4b5fd; color: #5b21b6;
+      border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 12.5px;
+    }
+    .address-verified-banner mat-icon { font-size: 20px; width: 20px; height: 20px; color: #7c3aed; }
+    .saved-addr-option.is-verified .addr-label { color: #5b21b6; }
+    .addr-verified-ico { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; color: #7c3aed; margin-right: 2px; }
+    .addr-verified-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; background: #ede9fe; color: #5b21b6; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
     .stop-number {
       width: 28px;
       height: 28px;
@@ -12759,6 +12786,37 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     if (this.isBlankAddress(group.deliveryAddress)) return false;
     if (group.addressApproximate) return false;
     return !!(group.latitude && group.longitude);
+  }
+
+  /**
+   * Purple state: the stop's current address is one an admin has verified in
+   * Admin Settings → Client Locations. Matched by normalised address text against
+   * (a) the customer's verified saved delivery address and (b) the customer record
+   * itself, so typing a different address immediately drops back to green.
+   */
+  isStopVerified(group: any): boolean {
+    if (!this.isStopResolved(group)) return false;
+    return !!this.findVerifiedMatch(group);
+  }
+
+  verifiedByFor(group: any): string {
+    const m = this.findVerifiedMatch(group);
+    return m?.verifiedBy || m?.addressVerifiedBy || '';
+  }
+
+  private findVerifiedMatch(group: any): any | null {
+    const norm = this.normAddr(group.deliveryAddress);
+    if (!norm) return null;
+    const saved = this.getSavedAddresses(group).find((a: any) => a.isVerified &&
+      (this.normAddr(a.formattedAddress) === norm || this.normAddr(a.address) === norm));
+    if (saved) return saved;
+    const c = group.invoices?.length ? this.findCustomerForStop(group.invoices[0]) : null;
+    if (c?.addressVerified && this.normAddr(c.deliveryAddress) === norm) return c;
+    return null;
+  }
+
+  private normAddr(s: any): string {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
   // Every delivery stop must be fully resolved before routing can continue.

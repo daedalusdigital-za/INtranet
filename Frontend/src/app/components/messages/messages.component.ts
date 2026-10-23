@@ -25,6 +25,7 @@ import { UserSearchPopupComponent } from '../user-search-popup/user-search-popup
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
+import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
 @Component({
   selector: 'app-messages',
@@ -48,7 +49,8 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
     MatCheckboxModule,
     UserSearchPopupComponent,
     NavbarComponent,
-    PickerComponent
+    PickerComponent,
+    SecureSrcDirective
   ],
   template: `
     <app-navbar></app-navbar>
@@ -235,7 +237,7 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
                       <div *ngFor="let attachment of message.attachments" class="attachment-item">
                         <!-- Image Preview -->
                         <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container">
-                          <img [src]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)" class="attachment-image">
+                          <img [appSecureSrc]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)" class="attachment-image" loading="lazy">
                           <div class="attachment-overlay">
                             <button mat-mini-fab (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download">
                               <mat-icon>download</mat-icon>
@@ -443,10 +445,10 @@ import { PickerComponent } from '@ctrl/ngx-emoji-mart';
         </div>
         <div class="preview-content">
           <!-- Image Preview -->
-          <img *ngIf="isImageFile(previewingAttachment.mimeType)" [src]="getAttachmentUrl(previewingAttachment)" [alt]="previewingAttachment.fileName">
+          <img *ngIf="isImageFile(previewingAttachment.mimeType)" [appSecureSrc]="getAttachmentUrl(previewingAttachment)" [alt]="previewingAttachment.fileName">
           
           <!-- PDF Preview -->
-          <iframe *ngIf="isPdfFile(previewingAttachment.mimeType)" [src]="getSafeUrl(previewingAttachment)" frameborder="0"></iframe>
+          <iframe *ngIf="isPdfFile(previewingAttachment.mimeType)" [appSecureSrc]="getAttachmentUrl(previewingAttachment)" frameborder="0"></iframe>
           
           <!-- Excel/Other Files - Show download prompt -->
           <div *ngIf="!isImageFile(previewingAttachment.mimeType) && !isPdfFile(previewingAttachment.mimeType)" class="no-preview">
@@ -1755,9 +1757,22 @@ export class MessagesComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.refreshSubscription?.unsubscribe();
     this.signalRSubscriptions.forEach(sub => sub.unsubscribe());
-    
-    // Stop SignalR connection
-    this.messageService.stopConnection();
+    if (this.selectedConversation) {
+      this.messageService.leaveConversation(this.selectedConversation.conversationId);
+    }
+    // The hub connection is app-wide (owned by the navbar) so that new-message
+    // bubbles and badges keep working on every page. Do not stop it here.
+  }
+
+  private upsertMessage(message: Message): void {
+    const idx = this.messages.findIndex(m => m.messageId === message.messageId);
+    if (idx >= 0) {
+      this.messages[idx] = message;
+    } else {
+      this.messages.push(message);
+      this.messages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+      this.scrollToBottom();
+    }
   }
 
   private setupSignalRSubscriptions(): void {
@@ -1766,13 +1781,14 @@ export class MessagesComponent implements OnInit, OnDestroy {
       this.messageService.newMessage$.subscribe(message => {
         // Add to messages if in the current conversation
         if (this.selectedConversation?.conversationId === message.conversationId) {
-          // Check if message already exists (avoid duplicates)
-          if (!this.messages.find(m => m.messageId === message.messageId)) {
-            this.messages.push(message);
-            this.scrollToBottom();
-            
+          const existed = this.messages.some(m => m.messageId === message.messageId);
+          this.upsertMessage(message);
+          if (!existed && message.senderId !== this.currentUserId) {
             // Mark as read if conversation is open
-            this.messageService.markAsRead(message.conversationId, this.currentUserId).subscribe();
+            this.messageService.markAsRead(message.conversationId, this.currentUserId).subscribe({
+              next: () => this.messageService.refreshUnreadCount(this.currentUserId),
+              error: () => {}
+            });
           }
         }
         
@@ -1794,6 +1810,32 @@ export class MessagesComponent implements OnInit, OnDestroy {
           // New conversation - reload list
           this.loadConversations(false);
         }
+      })
+    );
+
+    // Message replaced (attachment finished uploading)
+    this.signalRSubscriptions.push(
+      this.messageService.messageUpdated$.subscribe(message => {
+        if (this.selectedConversation?.conversationId === message.conversationId) {
+          this.upsertMessage(message);
+        }
+        const conv = this.conversations.find(c => c.conversationId === message.conversationId);
+        if (conv && conv.lastMessage?.messageId === message.messageId) {
+          conv.lastMessage = message;
+        }
+      })
+    );
+
+    // Other participant read our messages
+    this.signalRSubscriptions.push(
+      this.messageService.messagesRead$.subscribe(({ conversationId, userId, messageIds, readAt }) => {
+        if (userId === this.currentUserId || this.selectedConversation?.conversationId !== conversationId) return;
+        const ids = new Set(messageIds);
+        this.messages.forEach(m => {
+          if (ids.has(m.messageId) && !m.readReceipts?.some(r => r.userId === userId)) {
+            m.readReceipts = [...(m.readReceipts || []), { userId, userName: '', readAt }];
+          }
+        });
       })
     );
 
@@ -1940,7 +1982,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
 
     this.messageService.sendMessage(request, this.currentUserId).subscribe({
       next: (message) => {
-        this.messages.push(message);
+        this.upsertMessage(message);
         this.newMessage = '';
         this.replyingTo = null;
         this.showEmojiPicker = false; // Close emoji picker after sending
@@ -2238,14 +2280,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
   }
 
   getAttachmentUrl(attachment: MessageAttachment): string {
-    if (attachment.fileUrl) {
-      // If it starts with /api, prepend the base URL
-      if (attachment.fileUrl.startsWith('/api')) {
-        return environment.apiUrl.replace('/api', '') + attachment.fileUrl;
-      }
-      return attachment.fileUrl;
-    }
-    return environment.apiUrl + '/messages/attachments/' + attachment.attachmentId;
+    return this.messageService.getAttachmentUrl(attachment);
   }
 
   getSafeUrl(attachment: MessageAttachment): SafeResourceUrl {
@@ -2262,32 +2297,8 @@ export class MessagesComponent implements OnInit, OnDestroy {
   }
 
   downloadAttachment(attachment: MessageAttachment): void {
-    const url = this.getAttachmentUrl(attachment);
-    
-    // Create a temporary anchor element to trigger download
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = attachment.fileName;
-    a.target = '_blank';
-    
-    // For cross-origin requests, we need to fetch and create a blob
-    fetch(url, {
-      headers: {
-        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
-      }
-    })
-    .then(response => response.blob())
-    .then(blob => {
-      const blobUrl = window.URL.createObjectURL(blob);
-      a.href = blobUrl;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(blobUrl);
-    })
-    .catch(() => {
-      // Fallback: just open in new tab
-      window.open(url, '_blank');
+    this.messageService.downloadAttachment(attachment).catch(() => {
+      this.snackBar.open('Could not download ' + attachment.fileName, 'Close', { duration: 3000 });
     });
   }
 
@@ -2307,18 +2318,25 @@ export class MessagesComponent implements OnInit, OnDestroy {
       const message = await this.messageService.sendMessage(request, this.currentUserId).toPromise();
       
       if (message) {
+        message.attachments = message.attachments || [];
+        this.upsertMessage(message);
         // Upload attachments to this message
         for (const file of this.pendingAttachments) {
           try {
-            await this.uploadFileAsAttachment(message.messageId, file);
+            const att = await this.uploadFileAsAttachment(message.messageId, file);
+            if (att) {
+              message.attachments = [...message.attachments, att];
+              this.upsertMessage({ ...message });
+            }
           } catch (err) {
             console.error('Error uploading attachment:', err);
             this.snackBar.open('Failed to upload ' + file.name, 'Close', { duration: 3000 });
           }
         }
-        
-        // Reload messages to show attachments
-        this.loadMessages();
+        if (this.selectedConversation) {
+          this.selectedConversation.lastMessage = message;
+          this.selectedConversation.lastMessageAt = message.sentAt;
+        }
       }
       
       this.newMessage = '';
@@ -2331,9 +2349,9 @@ export class MessagesComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async uploadFileAsAttachment(messageId: number, file: File): Promise<void> {
+  private async uploadFileAsAttachment(messageId: number, file: File): Promise<MessageAttachment | undefined> {
     // Stream the file to disk-backed storage (multipart) instead of base64 in the DB.
-    await this.messageService.uploadFileToMessage(messageId, file, this.currentUserId).toPromise();
+    return await this.messageService.uploadFileToMessage(messageId, file, this.currentUserId).toPromise();
   }
 
   // ═══════════════════════════════════════════

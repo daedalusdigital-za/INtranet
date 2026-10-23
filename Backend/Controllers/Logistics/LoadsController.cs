@@ -912,15 +912,17 @@ namespace ProjectTracker.API.Controllers.Logistics
             public bool Covered => DirectPod || (InvoiceNumbers.Count > 0 && MissingInvoices.Count == 0);
         }
 
+        private static readonly char[] InvoiceSeparators = { ',', ';', '/', '\n', '\r', '|' };
+
         private static List<string> CollectInvoiceNumbers(Load load)
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var stop in load.Stops)
             {
-                foreach (var raw in (stop.InvoiceNumber ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                foreach (var raw in (stop.InvoiceNumber ?? "").Split(InvoiceSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                     if (raw.Length > 0) set.Add(NormalizeInvoiceNumber(raw));
                 foreach (var c in stop.Commodities)
-                    foreach (var raw in (c.InvoiceNumber ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    foreach (var raw in (c.InvoiceNumber ?? "").Split(InvoiceSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                         if (raw.Length > 0) set.Add(NormalizeInvoiceNumber(raw));
             }
             return set.OrderBy(s => s).ToList();
@@ -932,15 +934,145 @@ namespace ProjectTracker.API.Controllers.Logistics
             cov.DirectPod = await _context.PodDocuments.AnyAsync(p => p.LoadId == load.Id);
             if (cov.InvoiceNumbers.Count > 0)
             {
-                var linked = (await _context.PodDocumentInvoiceLinks.AsNoTracking()
-                        .Where(l => l.InvoiceNumber != null)
-                        .Select(l => l.InvoiceNumber!)
-                        .ToListAsync())
-                    .Select(NormalizeInvoiceNumber)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var linked = await GetPodLinkedInvoiceNumbersAsync();
                 cov.MissingInvoices = cov.InvoiceNumbers.Where(n => !linked.Contains(n)).ToList();
             }
             return cov;
+        }
+
+        /// <summary>
+        /// Every invoice number that has a POD, normalised. Uses the link's own InvoiceNumber
+        /// AND the linked invoice's TransactionNumber (older links only stored InvoiceId).
+        /// </summary>
+        private async Task<HashSet<string>> GetPodLinkedInvoiceNumbersAsync()
+        {
+            var raw = await _context.PodDocumentInvoiceLinks.AsNoTracking()
+                .Select(l => new { l.InvoiceNumber, Tx = l.Invoice != null ? l.Invoice.TransactionNumber : null })
+                .ToListAsync();
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in raw)
+            {
+                if (!string.IsNullOrWhiteSpace(r.InvoiceNumber)) set.Add(NormalizeInvoiceNumber(r.InvoiceNumber));
+                if (!string.IsNullOrWhiteSpace(r.Tx)) set.Add(NormalizeInvoiceNumber(r.Tx));
+            }
+            return set;
+        }
+
+        /// <summary>
+        /// POD ↔ Tripsheet reconciliation. Tripsheets are imported from spreadsheets, so their
+        /// invoices live as comma-separated text on stops/lines and ImportedInvoices.LoadId is
+        /// usually empty — which meant PODs linked to those invoices never reached the tripsheet.
+        /// Matches on invoice number text and:
+        ///  • back-fills PodDocumentInvoiceLinks.InvoiceNumber, ImportedInvoices.LoadId, PodDocuments.LoadId
+        ///  • marks open tripsheets Delivered when EVERY invoice on them has a POD.
+        /// apply=false previews only.
+        /// </summary>
+        [HttpPost("pod-reconcile")]
+        public async Task<IActionResult> PodReconcile([FromQuery] bool apply = false)
+        {
+            var blankLinks = await _context.PodDocumentInvoiceLinks
+                .Include(l => l.Invoice)
+                .Where(l => (l.InvoiceNumber == null || l.InvoiceNumber == "") && l.Invoice != null)
+                .ToListAsync();
+            if (apply) foreach (var l in blankLinks) l.InvoiceNumber = l.Invoice!.TransactionNumber;
+
+            var links = await _context.PodDocumentInvoiceLinks.AsNoTracking()
+                .Select(l => new
+                {
+                    l.PodDocumentId,
+                    Num = l.InvoiceNumber ?? (l.Invoice != null ? l.Invoice.TransactionNumber : null),
+                    Date = (DateTime?)l.PodDocument.DeliveryDate
+                })
+                .ToListAsync();
+            var podByInvoice = new Dictionary<string, List<(int PodId, DateTime? Date)>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var l in links)
+            {
+                if (string.IsNullOrWhiteSpace(l.Num)) continue;
+                var key = NormalizeInvoiceNumber(l.Num);
+                if (!podByInvoice.TryGetValue(key, out var list)) podByInvoice[key] = list = new();
+                list.Add((l.PodDocumentId, l.Date));
+            }
+
+            var loads = await _context.Loads
+                .Include(l => l.Stops).ThenInclude(s => s.Commodities)
+                .Where(l => l.Status != "Cancelled")
+                .ToListAsync();
+            var directPodLoadIds = (await _context.PodDocuments.AsNoTracking()
+                .Where(p => p.LoadId != null).Select(p => p.LoadId!.Value).Distinct().ToListAsync()).ToHashSet();
+
+            var loadByInvoice = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var closable = new List<object>();
+            var partial = new List<object>();
+            var closeIds = new Dictionary<int, DateTime?>();
+            var podToLoad = new Dictionary<int, int>();
+
+            foreach (var load in loads)
+            {
+                var invoices = CollectInvoiceNumbers(load);
+                foreach (var n in invoices) loadByInvoice.TryAdd(n, load.Id);
+                if (invoices.Count == 0) continue;
+
+                var covered = invoices.Where(n => podByInvoice.ContainsKey(n)).ToList();
+                foreach (var n in covered)
+                    foreach (var p in podByInvoice[n]) podToLoad.TryAdd(p.PodId, load.Id);
+
+                var isOpen = load.Status != "Delivered" && load.Status != "Completed";
+                if (!isOpen || covered.Count == 0) continue;
+
+                var missing = invoices.Except(covered, StringComparer.OrdinalIgnoreCase).ToList();
+                if (missing.Count == 0 || directPodLoadIds.Contains(load.Id))
+                {
+                    var podDate = covered.SelectMany(n => podByInvoice[n]).Max(p => p.Date);
+                    closeIds[load.Id] = podDate;
+                    closable.Add(new { load.Id, load.LoadNumber, load.Status, invoices = invoices.Count, podDate });
+                }
+                else
+                {
+                    partial.Add(new { load.Id, load.LoadNumber, load.Status, invoices = invoices.Count, withPod = covered.Count, missing });
+                }
+            }
+
+            var unlinkedInvoices = await _context.ImportedInvoices
+                .Where(i => i.LoadId == null)
+                .ToListAsync();
+            int invoicesLinked = 0;
+            foreach (var inv in unlinkedInvoices)
+            {
+                if (!string.IsNullOrWhiteSpace(inv.TransactionNumber) &&
+                    loadByInvoice.TryGetValue(NormalizeInvoiceNumber(inv.TransactionNumber), out var lid))
+                { if (apply) inv.LoadId = lid; invoicesLinked++; }
+            }
+
+            var podsNoLoad = await _context.PodDocuments.Where(p => p.LoadId == null).ToListAsync();
+            int podsLinked = 0;
+            foreach (var p in podsNoLoad)
+                if (podToLoad.TryGetValue(p.Id, out var lid)) { if (apply) p.LoadId = lid; podsLinked++; }
+
+            if (apply)
+            {
+                var now = DateTime.UtcNow;
+                foreach (var load in loads.Where(l => closeIds.ContainsKey(l.Id)))
+                {
+                    load.Status = "Delivered";
+                    load.ActualDeliveryDate ??= closeIds[load.Id] ?? now;
+                    load.UpdatedAt = now;
+                }
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("POD reconcile applied: {Closed} tripsheets delivered, {Inv} invoices linked, {Pods} PODs linked, {Links} link numbers filled",
+                    closeIds.Count, invoicesLinked, podsLinked, blankLinks.Count);
+            }
+
+            return Ok(new
+            {
+                applied = apply,
+                tripsheetsClosable = closable.Count,
+                tripsheetsPartial = partial.Count,
+                invoicesLinkedToTripsheets = invoicesLinked,
+                podsLinkedToTripsheets = podsLinked,
+                podLinksNumberFilled = blankLinks.Count,
+                closable,
+                partial
+            });
         }
 
         /// <summary>
@@ -961,9 +1093,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             var directPodLoadIds = (await _context.PodDocuments.AsNoTracking()
                 .Where(p => p.LoadId != null).Select(p => p.LoadId!.Value).Distinct().ToListAsync()).ToHashSet();
-            var linkedInvoices = (await _context.PodDocumentInvoiceLinks.AsNoTracking()
-                    .Where(l => l.InvoiceNumber != null).Select(l => l.InvoiceNumber!).ToListAsync())
-                .Select(NormalizeInvoiceNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var linkedInvoices = await GetPodLinkedInvoiceNumbersAsync();
 
             var now = DateTime.UtcNow;
             var rows = new List<DeliveredWithoutPodRow>();

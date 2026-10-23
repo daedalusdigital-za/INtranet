@@ -36,6 +36,7 @@ import { ImportTripsheetDialog, CreateTripsheetDialog, EditPodDialog, UploadPodD
 import { environment } from '../../../environments/environment';
 import { WellyActivityService } from '../../services/welly-activity.service';
 import { PROMED_BACK_ORDERS, ACCESS_BACK_ORDERS, PHARMATECH_BACK_ORDERS, SEBENZANI_BACK_ORDERS, BackOrderItem } from './back-orders-data';
+import { TENDER_PRICE_ITEMS, TenderPriceItem } from './tender-pricing-data';
 import * as XLSX from 'xlsx';
 import { AuthService } from '../../services/auth.service';
 
@@ -101,6 +102,48 @@ export class SalesDashboardComponent implements OnInit {
 
   // Tab state
   selectedTab = 0;
+
+  // ── Tender Pricing tab state ─────────────────────────────────────────────
+  tenderItems: TenderPriceItem[] = TENDER_PRICE_ITEMS;
+  tenderSearch = signal<string>('');
+  tenderCompanyFilter = signal<string>('all');
+  tenderNoFilter = signal<string>('all');
+  tenderCompanies = [...new Set(TENDER_PRICE_ITEMS.map(i => i.company))];
+  tenderNumbers = computed(() => {
+    const c = this.tenderCompanyFilter();
+    const src = c === 'all' ? this.tenderItems : this.tenderItems.filter(i => i.company === c);
+    return [...new Set(src.map(i => i.tenderNo))];
+  });
+  filteredTenderItems = computed(() => {
+    const c = this.tenderCompanyFilter();
+    const t = this.tenderNoFilter();
+    const q = this.tenderSearch().trim().toLowerCase();
+    return this.tenderItems.filter(i =>
+      (c === 'all' || i.company === c) &&
+      (t === 'all' || i.tenderNo === t) &&
+      (!q || i.itemNo.toLowerCase().includes(q) || i.description.toLowerCase().includes(q) || i.tenderNo.toLowerCase().includes(q) || i.uom.toLowerCase().includes(q)));
+  });
+  tenderStats = computed(() => {
+    const rows = this.filteredTenderItems();
+    return { items: rows.length, tenders: new Set(rows.map(r => r.tenderNo)).size, companies: new Set(rows.map(r => r.company)).size };
+  });
+
+  setTenderCompany(c: string): void {
+    this.tenderCompanyFilter.set(c);
+    this.tenderNoFilter.set('all');
+  }
+
+  exportTenderPricing(): void {
+    const rows = this.filteredTenderItems().map(i => ({
+      'Company': i.company, 'Tender No.': i.tenderNo, 'Item No.': i.itemNo,
+      'Item Description': i.description, 'UOM / Pack Size': i.uom, 'Price (R, incl. 15% VAT)': i.price,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 70 }, { wch: 20 }, { wch: 22 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Tender Pricing');
+    XLSX.writeFile(wb, `Tender_Pricing_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
 
   // ── Sales History tab state ──────────────────────────────────────────────
   salesHistoryRecords = signal<SalesHistoryRow[]>([]);

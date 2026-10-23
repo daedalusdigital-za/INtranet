@@ -29,6 +29,38 @@ namespace ProjectTracker.API.Controllers
             _attachments = attachments;
         }
 
+        /// <summary>User id from the JWT (NameIdentifier claim), or null.</summary>
+        private int? GetAuthenticatedUserId()
+        {
+            var raw = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value;
+            return int.TryParse(raw, out var id) ? id : null;
+        }
+
+        /// <summary>
+        /// Push a SignalR event to every active participant of a conversation via
+        /// their personal "user_{id}" group. Unlike the "conversation_{id}" group,
+        /// users are in their personal group from the moment they connect, so
+        /// they receive events even when that chat is not open.
+        /// </summary>
+        private async Task BroadcastToParticipantsAsync(Conversation conversation, string eventName, params object[] args)
+        {
+            var groups = conversation.Participants
+                .Where(p => !p.HasLeft)
+                .Select(p => $"user_{p.UserId}")
+                .Distinct()
+                .ToList();
+            if (groups.Count == 0) return;
+            try
+            {
+                await _hubContext.Clients.Groups(groups).SendCoreAsync(eventName, args);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SignalR broadcast '{Event}' failed for conversation {ConversationId}", eventName, conversation.ConversationId);
+            }
+        }
+
         // GET: api/messages/conversations
         [HttpGet("conversations")]
         public async Task<ActionResult<IEnumerable<ConversationDto>>> GetConversations([FromQuery] int userId)
@@ -238,19 +270,8 @@ namespace ProjectTracker.API.Controllers
 
             var messageDto = MapMessageToDto(result!, userId);
 
-            // Send SignalR notification to all participants in the conversation
-            try
-            {
-                await _hubContext.Clients.Group($"conversation_{request.ConversationId}")
-                    .SendAsync("ReceiveMessage", messageDto);
-                
-                _logger.LogInformation("SignalR notification sent for message {MessageId} in conversation {ConversationId}", 
-                    message.MessageId, request.ConversationId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send SignalR notification for message {MessageId}", message.MessageId);
-            }
+            // Real-time push to every participant (sender included, for multi-tab sync).
+            await BroadcastToParticipantsAsync(conversation, "ReceiveMessage", messageDto);
 
             // Push desktop tray notification to recipients (everyone except the sender)
             try
@@ -347,18 +368,25 @@ namespace ProjectTracker.API.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> EditMessage(int id, [FromBody] EditMessageRequest request, [FromQuery] int userId)
         {
-            var message = await _context.Messages.FindAsync(id);
+            var message = await _context.Messages
+                .Include(m => m.Conversation).ThenInclude(c => c.Participants)
+                .FirstOrDefaultAsync(m => m.MessageId == id);
             if (message == null)
                 return NotFound();
 
             if (message.SenderId != userId)
                 return Forbid();
 
+            if (string.IsNullOrWhiteSpace(request.Content))
+                return BadRequest("Message content cannot be empty.");
+
             message.Content = request.Content;
             message.IsEdited = true;
             message.EditedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            await BroadcastToParticipantsAsync(message.Conversation, "MessageEdited", message.ConversationId, message.MessageId, message.Content);
             return NoContent();
         }
 
@@ -366,7 +394,9 @@ namespace ProjectTracker.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMessage(int id, [FromQuery] int userId)
         {
-            var message = await _context.Messages.FindAsync(id);
+            var message = await _context.Messages
+                .Include(m => m.Conversation).ThenInclude(c => c.Participants)
+                .FirstOrDefaultAsync(m => m.MessageId == id);
             if (message == null)
                 return NotFound();
 
@@ -377,6 +407,7 @@ namespace ProjectTracker.API.Controllers
             message.Content = "This message was deleted";
             await _context.SaveChangesAsync();
 
+            await BroadcastToParticipantsAsync(message.Conversation, "MessageDeleted", message.ConversationId, message.MessageId);
             return NoContent();
         }
 
@@ -385,6 +416,7 @@ namespace ProjectTracker.API.Controllers
         public async Task<IActionResult> MarkAsRead([FromBody] MarkAsReadRequest request, [FromQuery] int userId)
         {
             var participant = await _context.ConversationParticipants
+                .Include(p => p.Conversation).ThenInclude(c => c.Participants)
                 .FirstOrDefaultAsync(p => p.ConversationId == request.ConversationId && p.UserId == userId);
 
             if (participant == null)
@@ -411,6 +443,18 @@ namespace ProjectTracker.API.Controllers
             }
 
             await _context.SaveChangesAsync();
+
+            // Let other participants update their "seen" indicators in real time.
+            if (unreadMessages.Count > 0 && participant.Conversation != null)
+            {
+                await BroadcastToParticipantsAsync(participant.Conversation, "MessagesRead", new
+                {
+                    conversationId = request.ConversationId,
+                    userId,
+                    messageIds = unreadMessages.Select(m => m.MessageId).ToList(),
+                    readAt = DateTime.UtcNow
+                });
+            }
             return NoContent();
         }
 
@@ -476,13 +520,17 @@ namespace ProjectTracker.API.Controllers
                 relativePath = await _attachments.SaveAsync(message.ConversationId, file.FileName, stream);
             }
 
+            // Browsers sometimes send a generic content type; fall back to the
+            // extension so images render inline and previews work.
+            var mime = file.ContentType;
+            if (string.IsNullOrWhiteSpace(mime) || mime.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase))
+                mime = _attachments.GetContentType(file.FileName);
+
             var attachment = new MessageAttachment
             {
                 MessageId = id,
-                FileName = file.FileName,
-                MimeType = string.IsNullOrWhiteSpace(file.ContentType)
-                    ? _attachments.GetContentType(file.FileName)
-                    : file.ContentType,
+                FileName = Path.GetFileName(file.FileName),
+                MimeType = mime,
                 FileSize = file.Length,
                 FileUrl = relativePath,   // relative disk path (blob storage)
                 FileData = null,          // no longer stored in DB
@@ -491,6 +539,18 @@ namespace ProjectTracker.API.Controllers
 
             _context.MessageAttachments.Add(attachment);
             await _context.SaveChangesAsync();
+
+            // Push the updated message (now carrying the attachment) to all
+            // participants so recipients see the file without a refresh.
+            var updated = await _context.Messages
+                .AsNoTracking()
+                .Include(m => m.Sender)
+                .Include(m => m.Attachments)
+                .Include(m => m.ReadReceipts).ThenInclude(r => r.User)
+                .Include(m => m.ReplyToMessage).ThenInclude(r => r!.Sender)
+                .FirstOrDefaultAsync(m => m.MessageId == id);
+            if (updated != null)
+                await BroadcastToParticipantsAsync(message.Conversation, "MessageUpdated", MapMessageToDto(updated, userId));
 
             return Ok(new MessageAttachmentDto
             {
@@ -505,11 +565,32 @@ namespace ProjectTracker.API.Controllers
 
         // GET: api/messages/attachments/{id}
         [HttpGet("attachments/{id}")]
-        public async Task<IActionResult> GetAttachment(int id)
+        public async Task<IActionResult> GetAttachment(int id, [FromQuery] bool download = false)
         {
-            var attachment = await _context.MessageAttachments.FindAsync(id);
+            var attachment = await _context.MessageAttachments
+                .AsNoTracking()
+                .Include(a => a.Message).ThenInclude(m => m.Conversation).ThenInclude(c => c.Participants)
+                .FirstOrDefaultAsync(a => a.AttachmentId == id);
             if (attachment == null)
                 return NotFound();
+
+            // Only participants of the conversation may read the file.
+            var me = GetAuthenticatedUserId();
+            var participants = attachment.Message?.Conversation?.Participants;
+            if (me == null || participants == null || !participants.Any(p => p.UserId == me.Value))
+                return Forbid();
+
+            var mime = string.IsNullOrWhiteSpace(attachment.MimeType)
+                ? _attachments.GetContentType(attachment.FileName)
+                : attachment.MimeType;
+
+            Response.Headers.CacheControl = "private, max-age=3600";
+
+            // Inline for previews (images / PDF); attachment disposition when the
+            // client explicitly asks for a download.
+            string? downloadName = download ? attachment.FileName : null;
+            if (!download)
+                Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(attachment.FileName)}\"";
 
             // Prefer disk storage (FileUrl holds the relative path); fall back to
             // legacy in-DB bytes for attachments uploaded before the migration.
@@ -517,12 +598,13 @@ namespace ProjectTracker.API.Controllers
             {
                 var stream = _attachments.OpenRead(attachment.FileUrl);
                 if (stream != null)
-                    return File(stream, attachment.MimeType, attachment.FileName);
+                    return File(stream, mime, downloadName, enableRangeProcessing: true);
+                _logger.LogWarning("Attachment {AttachmentId} points to missing file {Path}", id, attachment.FileUrl);
                 // If the DB says disk but the file is missing, fall through to bytes.
             }
 
             if (attachment.FileData != null)
-                return File(attachment.FileData, attachment.MimeType, attachment.FileName);
+                return File(attachment.FileData, mime, downloadName, enableRangeProcessing: true);
 
             return NotFound();
         }

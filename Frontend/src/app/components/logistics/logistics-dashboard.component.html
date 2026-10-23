@@ -1554,7 +1554,7 @@
                       <button mat-stroked-button class="pod-upload-btn" (click)="openPodUploadDialog()">
                         <mat-icon>upload_file</mat-icon> Upload POD
                       </button>
-                      <button mat-stroked-button class="pod-reconcile-btn" (click)="reconcilePodTripsheets()" [disabled]="podReconciling" matTooltip="Auto-link PODs to tripsheets that share the same invoices">
+                      <button mat-stroked-button class="pod-reconcile-btn" (click)="reconcilePodTripsheets()" [disabled]="podReconciling" matTooltip="Match PODs to tripsheets by invoice number and close tripsheets where every invoice has a POD">
                         <mat-icon>{{ podReconciling ? 'hourglass_empty' : 'sync' }}</mat-icon> {{ podReconciling ? 'Linking…' : 'Reconcile → Tripsheets' }}
                       </button>
                       <div class="pod-view-toggle">
