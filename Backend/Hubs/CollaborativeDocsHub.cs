@@ -201,13 +201,26 @@ namespace ProjectTracker.API.Hubs
         {
             var connectionId = Context.ConnectionId;
 
+            if (!ConnectionDocuments.TryGetValue(connectionId, out int docId) || docId != documentId)
+            {
+                return;
+            }
+
             // Ask one other client to send their current state
             await Clients.OthersInGroup($"doc_{documentId}").SendAsync("SyncRequested", connectionId);
         }
 
-        // Send sync data to requesting client
+        // Send sync data to requesting client. SECURITY: only to a connection that has
+        // joined the same document as the sender (both passed the JoinDocument access check).
         public async Task SendSyncData(string targetConnectionId, string yjsState)
         {
+            if (!ConnectionDocuments.TryGetValue(Context.ConnectionId, out int senderDocId) ||
+                !ConnectionDocuments.TryGetValue(targetConnectionId, out int targetDocId) ||
+                senderDocId != targetDocId)
+            {
+                return;
+            }
+
             await Clients.Client(targetConnectionId).SendAsync("SyncData", yjsState);
         }
 

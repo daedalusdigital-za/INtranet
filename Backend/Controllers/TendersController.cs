@@ -5,6 +5,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Tenders;
 using System.Net;
 using System.Net.Mail;
+using ProjectTracker.API.Security;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -465,7 +466,11 @@ namespace ProjectTracker.API.Controllers
             Directory.CreateDirectory(uploadsPath);
 
             // Save file
-            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{file.FileName}";
+            // SECURITY: never use the client file name as a path.
+            var safeName = SafePaths.SanitizeFileName(file.FileName);
+            if (SafePaths.IsBlockedExtension(safeName))
+                return BadRequest($"Files of type '{Path.GetExtension(safeName)}' cannot be uploaded.");
+            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{safeName}";
             var filePath = Path.Combine(uploadsPath, fileName);
 
             using (var stream = new FileStream(filePath, FileMode.Create))

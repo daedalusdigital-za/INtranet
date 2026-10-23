@@ -1,4 +1,5 @@
-import { Component, OnInit, Output, EventEmitter, ViewChild, ElementRef, NgZone } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, ViewChild, ElementRef, NgZone, inject } from '@angular/core';
+import { GoogleMapsLoaderService } from '../../../services/google-maps-loader.service';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
@@ -2182,6 +2183,7 @@ export class CondomsDashboardComponent implements OnInit {
   private readonly DELIVERY_PASSWORD = '0000';
   addressVerified = false;
   private autocomplete: google.maps.places.Autocomplete | null = null;
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   deliveryForm = {
     invoiceNumber: '',
     scent: '',
@@ -2455,7 +2457,8 @@ export class CondomsDashboardComponent implements OnInit {
     });
   }
 
-  private initAddressAutocomplete(): void {
+  private async initAddressAutocomplete(): Promise<void> {
+    try { await this.mapsLoader.load(); } catch { return; } // key fetched from the API, script injected once
     if (!this.deliveryAddressInputRef?.nativeElement) return;
     if (typeof google === 'undefined' || !google.maps?.places) return;
     this.autocomplete = new google.maps.places.Autocomplete(

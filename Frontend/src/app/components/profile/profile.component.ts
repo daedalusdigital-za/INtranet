@@ -1281,8 +1281,8 @@ export class ProfileComponent implements OnInit, OnDestroy {
       this.snackBar.open('Please fill in all password fields.', 'Close', { duration: 3000 });
       return;
     }
-    if (this.newPassword.length < 4) {
-      this.snackBar.open('New password must be at least 4 characters.', 'Close', { duration: 3000 });
+    if (this.newPassword.length < 8) {
+      this.snackBar.open('New password must be at least 8 characters.', 'Close', { duration: 3000 });
       return;
     }
     if (this.newPassword !== this.confirmPassword) {

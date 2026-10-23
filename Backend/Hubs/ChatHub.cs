@@ -1,15 +1,31 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs;
+using System.Collections.Concurrent;
 using System.Security.Claims;
 
 namespace ProjectTracker.API.Hubs
 {
+    // SECURITY: message/edit/delete/read events are broadcast by MessagesController
+    // via IHubContext after the change is persisted and authorised. Clients may only
+    // join conversations they participate in and send typing indicators there.
     [Authorize]
     public class ChatHub : Hub
     {
         private static readonly Dictionary<int, HashSet<string>> _userConnections = new();
         private static readonly Dictionary<string, int> _connectionUsers = new();
+
+        // Conversations each connection has been verified to participate in.
+        private static readonly ConcurrentDictionary<string, ConcurrentDictionary<int, byte>> _joinedConversations = new();
+
+        private readonly ApplicationDbContext _context;
+
+        public ChatHub(ApplicationDbContext context)
+        {
+            _context = context;
+        }
 
         private int? AuthenticatedUserId()
         {
@@ -30,11 +46,22 @@ namespace ProjectTracker.API.Hubs
 
         public async Task JoinConversation(int conversationId)
         {
+            var uid = AuthenticatedUserId();
+            if (uid == null) return;
+
+            var isParticipant = await _context.ConversationParticipants
+                .AnyAsync(p => p.ConversationId == conversationId && p.UserId == uid.Value);
+            if (!isParticipant)
+                throw new HubException("You are not a participant in this conversation.");
+
+            _joinedConversations.GetOrAdd(Context.ConnectionId, _ => new ConcurrentDictionary<int, byte>())[conversationId] = 0;
             await Groups.AddToGroupAsync(Context.ConnectionId, $"conversation_{conversationId}");
         }
 
         public async Task LeaveConversation(int conversationId)
         {
+            if (_joinedConversations.TryGetValue(Context.ConnectionId, out var joined))
+                joined.TryRemove(conversationId, out _);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"conversation_{conversationId}");
         }
 
@@ -65,26 +92,11 @@ namespace ProjectTracker.API.Hubs
             });
         }
 
-        public async Task SendMessage(MessageDto message)
-        {
-            await Clients.Group($"conversation_{message.ConversationId}")
-                .SendAsync("ReceiveMessage", message);
-        }
-
-        public async Task MessageEdited(int conversationId, int messageId, string newContent)
-        {
-            await Clients.Group($"conversation_{conversationId}")
-                .SendAsync("MessageEdited", new { messageId, newContent, editedAt = DateTime.UtcNow });
-        }
-
-        public async Task MessageDeleted(int conversationId, int messageId)
-        {
-            await Clients.Group($"conversation_{conversationId}")
-                .SendAsync("MessageDeleted", messageId);
-        }
-
         public async Task SendTypingIndicator(int conversationId, bool isTyping)
         {
+            if (!_joinedConversations.TryGetValue(Context.ConnectionId, out var joined) || !joined.ContainsKey(conversationId))
+                return;
+
             var userId = AuthenticatedUserId() ?? 0;
             var userName = Context.User?.FindFirst(ClaimTypes.Name)?.Value ?? "Someone";
             await Clients.OthersInGroup($"conversation_{conversationId}")
@@ -97,28 +109,9 @@ namespace ProjectTracker.API.Hubs
                 });
         }
 
-        public async Task MarkMessagesAsRead(int conversationId, int userId, int lastReadMessageId)
-        {
-            await Clients.Group($"conversation_{conversationId}")
-                .SendAsync("MessagesRead", new { conversationId, userId, lastReadMessageId, readAt = DateTime.UtcNow });
-        }
-
-        public async Task NotifyNewConversation(int[] participantUserIds, ConversationDto conversation)
-        {
-            foreach (var userId in participantUserIds)
-            {
-                if (_userConnections.TryGetValue(userId, out var connections))
-                {
-                    foreach (var connectionId in connections)
-                    {
-                        await Clients.Client(connectionId).SendAsync("NewConversation", conversation);
-                    }
-                }
-            }
-        }
-
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
+            _joinedConversations.TryRemove(Context.ConnectionId, out _);
             int? userId = null;
 
             lock (_userConnections)

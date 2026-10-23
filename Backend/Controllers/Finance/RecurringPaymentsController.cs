@@ -5,6 +5,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Finance;
 using System.Security.Claims;
 
+using ProjectTracker.API.Authorization;
 namespace ProjectTracker.API.Controllers.Finance
 {
     /// <summary>
@@ -15,6 +16,7 @@ namespace ProjectTracker.API.Controllers.Finance
     [Authorize]
     [ApiController]
     [Route("api/finance/recurring-payments")]
+    [RequireModule("finance", AlsoAllowRoles = "Finance")]
     public class RecurringPaymentsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

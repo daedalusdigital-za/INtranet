@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Hr;
 
+using ProjectTracker.API.Authorization;
 namespace ProjectTracker.API.Controllers
 {
     /// <summary>
@@ -15,6 +16,7 @@ namespace ProjectTracker.API.Controllers
     [ApiController]
     [Route("api/hr-disciplinary")]
     [Authorize]
+    [RequireModule("human_resource", AlsoAllowRoles = "HR")]
     public class HrDisciplinaryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

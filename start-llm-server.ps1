@@ -119,5 +119,25 @@ if ($cfg.ExtraArgs) {
     $serverArgs += $cfg.ExtraArgs
 }
 
+# ── API key ───────────────────────────────────────────────
+# The server listens on 0.0.0.0 so the backend container can reach it via
+# host.docker.internal. Require a bearer key so other machines on the LAN can't
+# use it. Same value as LOCAL_LLM_API_KEY in the repo .env (passed to the backend
+# as LocalLlm__ApiKey by docker-compose).
+$ApiKey = $env:LOCAL_LLM_API_KEY
+if (-not $ApiKey) {
+    $envFile = Join-Path $PSScriptRoot ".env"
+    if (Test-Path $envFile) {
+        $line = Get-Content $envFile | Where-Object { $_ -match '^\s*LOCAL_LLM_API_KEY\s*=' } | Select-Object -First 1
+        if ($line) { $ApiKey = ($line -split '=', 2)[1].Trim().Trim('"') }
+    }
+}
+if ($ApiKey) {
+    $serverArgs += @("--api-key", $ApiKey)
+    Write-Host "API key:   required (LOCAL_LLM_API_KEY)" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: LOCAL_LLM_API_KEY is not set - the LLM server is open to anyone on the network." -ForegroundColor Red
+}
+
 # ── Launch ────────────────────────────────────────────────
 & $LlamaServer @serverArgs

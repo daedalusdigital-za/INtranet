@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
+using ProjectTracker.API.Security;
 using System.Security.Claims;
 using System.Collections.Concurrent;
 
@@ -58,6 +59,21 @@ namespace ProjectTracker.API.Controllers
                 d => configuration[$"DocumentPasswords:{d}"] ?? configuration["DocumentPasswords:Default"] ?? "0000"
             );
         }
+
+        // SECURITY: the department must be one of the known libraries and the resolved
+        // path must stay inside it (no "..", absolute paths or sibling-prefix folders).
+        private string? ResolveDeptPath(string department, params string?[] parts)
+        {
+            if (string.IsNullOrEmpty(department) || !_departmentPasswords.ContainsKey(department))
+                return null;
+            return SafePaths.ResolveUnder(Path.Combine(_documentsBasePath, department), parts);
+        }
+
+        private bool IsDeptRoot(string department, string fullPath) =>
+            Path.TrimEndingDirectorySeparator(fullPath) ==
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(_documentsBasePath, department)));
+
+        private BadRequestObjectResult InvalidPath() => BadRequest(new { message = "Invalid file path" });
 
         // GET: api/documents/departments
         [HttpGet("departments")]
@@ -164,12 +180,8 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("files/{department}")]
         public ActionResult<IEnumerable<DocumentFile>> GetFiles(string department, [FromQuery] string? subfolder = null)
         {
-            var deptPath = Path.Combine(_documentsBasePath, department);
-            
-            if (!string.IsNullOrEmpty(subfolder))
-            {
-                deptPath = Path.Combine(deptPath, subfolder);
-            }
+            var deptPath = ResolveDeptPath(department, subfolder);
+            if (deptPath == null) return InvalidPath();
 
             if (!Directory.Exists(deptPath))
             {
@@ -217,19 +229,12 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("download/{department}/{**filePath}")]
         public IActionResult DownloadFile(string department, string filePath)
         {
-            var fullPath = Path.Combine(_documentsBasePath, department, filePath);
-            
+            var fullPath = ResolveDeptPath(department, filePath);
+            if (fullPath == null) return InvalidPath();
+
             if (!System.IO.File.Exists(fullPath))
             {
                 return NotFound(new { message = "File not found" });
-            }
-
-            // Security check - ensure path is within documents folder
-            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
-            var requestedFullPath = Path.GetFullPath(fullPath);
-            if (!requestedFullPath.StartsWith(documentsFullPath))
-            {
-                return BadRequest(new { message = "Invalid file path" });
             }
 
             var fileName = Path.GetFileName(fullPath);
@@ -252,21 +257,24 @@ namespace ProjectTracker.API.Controllers
                 return BadRequest(new { message = "No file provided" });
             }
 
-            var deptPath = Path.Combine(_documentsBasePath, department);
-            if (!string.IsNullOrEmpty(subfolder))
+            var deptPath = ResolveDeptPath(department, subfolder);
+            if (deptPath == null) return InvalidPath();
+
+            var safeName = SafePaths.SanitizeFileName(file.FileName);
+            if (SafePaths.IsBlockedExtension(safeName))
             {
-                deptPath = Path.Combine(deptPath, subfolder);
+                return BadRequest(new { message = $"Files of type '{Path.GetExtension(safeName)}' cannot be uploaded." });
             }
 
             // Ensure directory exists
             Directory.CreateDirectory(deptPath);
 
-            var filePath = Path.Combine(deptPath, file.FileName);
-            
+            var filePath = Path.Combine(deptPath, safeName);
+
             // Handle duplicate filenames
             var counter = 1;
-            var originalName = Path.GetFileNameWithoutExtension(file.FileName);
-            var extension = Path.GetExtension(file.FileName);
+            var originalName = Path.GetFileNameWithoutExtension(safeName);
+            var extension = Path.GetExtension(safeName);
             while (System.IO.File.Exists(filePath))
             {
                 filePath = Path.Combine(deptPath, $"{originalName} ({counter}){extension}");
@@ -298,13 +306,13 @@ namespace ProjectTracker.API.Controllers
         [HttpPost("create-folder/{department}")]
         public ActionResult<DocumentFile> CreateFolder(string department, [FromBody] CreateFolderRequest request)
         {
-            var basePath = Path.Combine(_documentsBasePath, department);
-            if (!string.IsNullOrEmpty(request.ParentPath))
+            if (!SafePaths.IsPlainFileName(request.FolderName))
             {
-                basePath = Path.Combine(basePath, request.ParentPath);
+                return BadRequest(new { message = "Invalid folder name" });
             }
 
-            var newFolderPath = Path.Combine(basePath, request.FolderName);
+            var newFolderPath = ResolveDeptPath(department, request.ParentPath, request.FolderName);
+            if (newFolderPath == null) return InvalidPath();
 
             if (Directory.Exists(newFolderPath))
             {
@@ -330,15 +338,8 @@ namespace ProjectTracker.API.Controllers
         [HttpDelete("delete/{department}/{**filePath}")]
         public IActionResult DeleteFile(string department, string filePath)
         {
-            var fullPath = Path.Combine(_documentsBasePath, department, filePath);
-
-            // Security check
-            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
-            var requestedFullPath = Path.GetFullPath(fullPath);
-            if (!requestedFullPath.StartsWith(documentsFullPath))
-            {
-                return BadRequest(new { message = "Invalid file path" });
-            }
+            var fullPath = ResolveDeptPath(department, filePath);
+            if (fullPath == null || IsDeptRoot(department, fullPath)) return InvalidPath();
 
             if (Directory.Exists(fullPath))
             {
@@ -367,8 +368,15 @@ namespace ProjectTracker.API.Controllers
                 return Ok(new List<DocumentFile>());
             }
 
-            var deptPath = Path.Combine(_documentsBasePath, department);
+            var deptPath = ResolveDeptPath(department);
+            if (deptPath == null) return InvalidPath();
             if (!Directory.Exists(deptPath))
+            {
+                return Ok(new List<DocumentFile>());
+            }
+
+            // The query becomes a file-system search pattern: keep it to a single name fragment.
+            if (query.IndexOfAny(new[] { '/', '\\' }) >= 0 || query.Contains(".."))
             {
                 return Ok(new List<DocumentFile>());
             }
@@ -403,21 +411,21 @@ namespace ProjectTracker.API.Controllers
                 return BadRequest(new { message = "Source path and destination folder are required" });
             }
 
-            var sourcePath = Path.Combine(_documentsBasePath, department, request.SourcePath);
-            var destFolder = string.IsNullOrEmpty(request.DestinationFolder) 
-                ? Path.Combine(_documentsBasePath, department)
-                : Path.Combine(_documentsBasePath, department, request.DestinationFolder);
-            
+            var sourcePath = ResolveDeptPath(department, request.SourcePath);
+            var destFolder = ResolveDeptPath(department, request.DestinationFolder);
+            if (sourcePath == null || destFolder == null || IsDeptRoot(department, sourcePath))
+            {
+                return InvalidPath();
+            }
+
+            // A folder cannot be moved into itself or one of its own subfolders.
+            if (SafePaths.IsUnder(sourcePath, destFolder))
+            {
+                return BadRequest(new { message = "Cannot move a folder into itself" });
+            }
+
             var fileName = Path.GetFileName(sourcePath);
             var destPath = Path.Combine(destFolder, fileName);
-
-            // Security check
-            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
-            if (!Path.GetFullPath(sourcePath).StartsWith(documentsFullPath) ||
-                !Path.GetFullPath(destPath).StartsWith(documentsFullPath))
-            {
-                return BadRequest(new { message = "Invalid file path" });
-            }
 
             if (!System.IO.File.Exists(sourcePath) && !Directory.Exists(sourcePath))
             {
@@ -459,17 +467,20 @@ namespace ProjectTracker.API.Controllers
                 return BadRequest(new { message = "Path and new name are required" });
             }
 
-            var sourcePath = Path.Combine(_documentsBasePath, department, request.Path);
-            var parentDir = Path.GetDirectoryName(sourcePath) ?? _documentsBasePath;
-            var destPath = Path.Combine(parentDir, request.NewName);
-
-            // Security check
-            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
-            if (!Path.GetFullPath(sourcePath).StartsWith(documentsFullPath) ||
-                !Path.GetFullPath(destPath).StartsWith(documentsFullPath))
+            if (!SafePaths.IsPlainFileName(request.NewName))
             {
-                return BadRequest(new { message = "Invalid file path" });
+                return BadRequest(new { message = "Invalid name" });
             }
+            if (SafePaths.IsBlockedExtension(request.NewName))
+            {
+                return BadRequest(new { message = $"Files of type '{Path.GetExtension(request.NewName)}' are not allowed." });
+            }
+
+            var sourcePath = ResolveDeptPath(department, request.Path);
+            if (sourcePath == null || IsDeptRoot(department, sourcePath)) return InvalidPath();
+
+            var parentDir = Path.GetDirectoryName(sourcePath)!;
+            var destPath = Path.Combine(parentDir, request.NewName);
 
             if (System.IO.File.Exists(destPath) || Directory.Exists(destPath))
             {
@@ -496,19 +507,12 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("preview/{department}/{**filePath}")]
         public IActionResult PreviewFile(string department, string filePath)
         {
-            var fullPath = Path.Combine(_documentsBasePath, department, filePath);
-            
+            var fullPath = ResolveDeptPath(department, filePath);
+            if (fullPath == null) return InvalidPath();
+
             if (!System.IO.File.Exists(fullPath))
             {
                 return NotFound(new { message = "File not found" });
-            }
-
-            // Security check
-            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
-            var requestedFullPath = Path.GetFullPath(fullPath);
-            if (!requestedFullPath.StartsWith(documentsFullPath))
-            {
-                return BadRequest(new { message = "Invalid file path" });
             }
 
             var extension = Path.GetExtension(fullPath).ToLower();
@@ -523,9 +527,13 @@ namespace ProjectTracker.API.Controllers
             // For PDF and images, return directly
             var fileBytes = System.IO.File.ReadAllBytes(fullPath);
             
-            // Set headers for inline display
-            Response.Headers["Content-Disposition"] = $"inline; filename=\"{Path.GetFileName(fullPath)}\"";
-            
+            // SECURITY: only passive types render inline on the API origin; anything else
+            // (e.g. an .html/.svg already on the share) is downloaded, never executed.
+            if (SafePaths.IsBlockedExtension(fullPath)) contentType = "application/octet-stream";
+            var disposition = SafePaths.IsInlineSafe(fullPath) ? "inline" : "attachment";
+            Response.Headers["Content-Disposition"] = $"{disposition}; filename=\"{Path.GetFileName(fullPath)}\"";
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+
             return File(fileBytes, contentType);
         }
 
@@ -533,7 +541,8 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("folders/{department}")]
         public ActionResult<IEnumerable<FolderInfo>> GetFolders(string department)
         {
-            var deptPath = Path.Combine(_documentsBasePath, department);
+            var deptPath = ResolveDeptPath(department);
+            if (deptPath == null) return InvalidPath();
             
             if (!Directory.Exists(deptPath))
             {
@@ -641,10 +650,8 @@ namespace ProjectTracker.API.Controllers
             }
 
             // Validate the source item actually exists
-            var fullPath = Path.Combine(_documentsBasePath, request.SourceDepartment, request.SourcePath);
-            var documentsFullPath = Path.GetFullPath(_documentsBasePath);
-            var requestedFullPath = Path.GetFullPath(fullPath);
-            if (!requestedFullPath.StartsWith(documentsFullPath))
+            var fullPath = ResolveDeptPath(request.SourceDepartment, request.SourcePath);
+            if (fullPath == null)
             {
                 return BadRequest(new { message = "Invalid source path" });
             }
@@ -745,7 +752,8 @@ namespace ProjectTracker.API.Controllers
             if (share == null) return Forbid();
 
             // A shared file (not folder) with no subfolder request: return the single file
-            var basePath = Path.Combine(_documentsBasePath, share.SourceDepartment, share.SourcePath);
+            var basePath = ResolveDeptPath(share.SourceDepartment, share.SourcePath);
+            if (basePath == null) return BadRequest(new { message = "Invalid path" });
             if (!share.IsFolder)
             {
                 if (!System.IO.File.Exists(basePath)) return Ok(new List<DocumentFile>());
@@ -765,11 +773,9 @@ namespace ProjectTracker.API.Controllers
                 });
             }
 
-            var targetPath = string.IsNullOrEmpty(subfolder) ? basePath : Path.Combine(basePath, subfolder);
-
             // Security: keep browsing inside the shared folder only
-            var shareRoot = Path.GetFullPath(basePath);
-            if (!Path.GetFullPath(targetPath).StartsWith(shareRoot))
+            var targetPath = SafePaths.ResolveUnder(basePath, subfolder);
+            if (targetPath == null)
             {
                 return BadRequest(new { message = "Invalid path" });
             }
@@ -816,13 +822,8 @@ namespace ProjectTracker.API.Controllers
             var share = await GetAccessibleShare(shareId);
             if (share == null) return Forbid();
 
-            var basePath = Path.Combine(_documentsBasePath, share.SourceDepartment, share.SourcePath);
-            var fullPath = share.IsFolder && !string.IsNullOrEmpty(path)
-                ? Path.Combine(basePath, path)
-                : basePath;
-
-            var shareRoot = Path.GetFullPath(basePath);
-            if (!Path.GetFullPath(fullPath).StartsWith(shareRoot))
+            var fullPath = ResolveSharedPath(share, path);
+            if (fullPath == null)
             {
                 return BadRequest(new { message = "Invalid path" });
             }
@@ -848,13 +849,8 @@ namespace ProjectTracker.API.Controllers
             var share = await GetAccessibleShare(shareId);
             if (share == null) return Forbid();
 
-            var basePath = Path.Combine(_documentsBasePath, share.SourceDepartment, share.SourcePath);
-            var fullPath = share.IsFolder && !string.IsNullOrEmpty(path)
-                ? Path.Combine(basePath, path)
-                : basePath;
-
-            var shareRoot = Path.GetFullPath(basePath);
-            if (!Path.GetFullPath(fullPath).StartsWith(shareRoot))
+            var fullPath = ResolveSharedPath(share, path);
+            if (fullPath == null)
             {
                 return BadRequest(new { message = "Invalid path" });
             }
@@ -867,9 +863,23 @@ namespace ProjectTracker.API.Controllers
             {
                 contentType = "application/octet-stream";
             }
+            if (SafePaths.IsBlockedExtension(fullPath)) contentType = "application/octet-stream";
             var fileBytes = System.IO.File.ReadAllBytes(fullPath);
-            Response.Headers["Content-Disposition"] = $"inline; filename=\"{Path.GetFileName(fullPath)}\"";
+            var disposition = SafePaths.IsInlineSafe(fullPath) ? "inline" : "attachment";
+            Response.Headers["Content-Disposition"] = $"{disposition}; filename=\"{Path.GetFileName(fullPath)}\"";
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
             return File(fileBytes, contentType);
+        }
+
+        // Resolves a file inside a share: the share itself for a shared file, or a path
+        // contained within the shared folder.
+        private string? ResolveSharedPath(DocumentShare share, string? path)
+        {
+            var basePath = ResolveDeptPath(share.SourceDepartment, share.SourcePath);
+            if (basePath == null) return null;
+            return share.IsFolder && !string.IsNullOrEmpty(path)
+                ? SafePaths.ResolveUnder(basePath, path)
+                : basePath;
         }
 
         // DELETE: api/documents/share/{id}  (unshare - only sharer or admin)

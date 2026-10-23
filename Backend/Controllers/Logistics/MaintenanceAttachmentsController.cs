@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Security;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
@@ -69,6 +70,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             Directory.CreateDirectory(uploadsPath);
 
             var results = new List<object>();
+
+            // SECURITY: reject active content (html/svg/scripts/executables).
+            var blocked = files.FirstOrDefault(f => SafePaths.IsBlockedExtension(f.FileName));
+            if (blocked != null)
+                return BadRequest(new { message = $"Files of type '{Path.GetExtension(blocked.FileName)}' cannot be uploaded." });
 
             foreach (var file in files)
             {

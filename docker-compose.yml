@@ -8,7 +8,9 @@ services:
       - SA_PASSWORD=YourStrong@Passw0rd
       - MSSQL_PID=Express
     ports:
-      - "0.0.0.0:1435:1433"
+      # SECURITY: SQL Server is reachable from this host only (backup/import scripts,
+      # SSMS on the server). Containers use the internal network name "database".
+      - "127.0.0.1:1435:1433"
     volumes:
       - sql-data:/var/opt/mssql
       - C:\Backups\ProjectTrackerDB:/var/opt/mssql/backup
@@ -34,7 +36,8 @@ services:
       dockerfile: Dockerfile
     container_name: projecttracker-backend
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      # Production: no developer exception page / stack traces, no Debug-level SQL logging.
+      - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5143
       # The default inotify file watcher recursively walks EVERY subdirectory under the
       # content root (/app) at startup - including the NAS shares mounted at
@@ -67,12 +70,17 @@ services:
       - LocalLlm__BaseUrl=http://host.docker.internal:8090
       - LocalLlm__Model=gemma-4-26B-A4B-it-Q4_K_M
       - LocalLlm__Enabled=true
+      # Must match LLM_API_KEY used by start-llm-server.ps1 (empty = no auth header sent).
+      - LocalLlm__ApiKey=${LOCAL_LLM_API_KEY:-}
       - EmailEnabled=true
       - AzureSync__Enabled=false
       - SearXNG__BaseUrl=http://searxng:8080
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
+      # Published on the LAN because the biometric clocking device (/api/device) and the
+      # Windows tray notifier call the API directly on :5143. Everything else should go
+      # through nginx. Remove this mapping once those clients point at the nginx URL.
       - "0.0.0.0:5143:5143"
     volumes:
       - ./kb-docs:/app/kb-docs
@@ -152,7 +160,7 @@ services:
     environment:
       - PORT=8080
       - PUBLIC_URL=${MCP_PUBLIC_URL:-}
-      - ACCESS_PASSWORD=${MCP_ACCESS_PASSWORD:-change-me-please}
+      - ACCESS_PASSWORD=${MCP_ACCESS_PASSWORD:-}
       - DB_SERVER=database
       - DB_PORT=1433
       - DB_NAME=ProjectTrackerDB

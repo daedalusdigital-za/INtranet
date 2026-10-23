@@ -129,6 +129,7 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
 using (var settingsScope = app.Services.CreateScope())
 {
     var logger = settingsScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    ProjectTracker.API.Services.Google.GoogleMapsConfig.SetConfiguredKey(app.Configuration["GoogleMaps:ApiKey"]);
     try
     {
         var db = settingsScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -137,11 +138,12 @@ using (var settingsScope = app.Services.CreateScope())
             .Select(s => s.Value).FirstOrDefault();
         ProjectTracker.API.Services.Google.GoogleMapsConfig.SetApiKey(googleKey);
         logger.LogInformation("Google Maps API key source: {Source}",
-            ProjectTracker.API.Services.Google.GoogleMapsConfig.IsOverridden ? "SystemSettings (admin)" : "built-in default");
+            ProjectTracker.API.Services.Google.GoogleMapsConfig.IsOverridden ? "SystemSettings (admin)"
+            : string.IsNullOrEmpty(ProjectTracker.API.Services.Google.GoogleMapsConfig.ApiKey) ? "NOT CONFIGURED" : "configuration (GoogleMaps:ApiKey)");
     }
     catch (Exception ex)
     {
-        logger.LogWarning(ex, "Could not load Google Maps API key from SystemSettings; using built-in default.");
+        logger.LogWarning(ex, "Could not load Google Maps API key from SystemSettings; using GoogleMaps:ApiKey from configuration.");
     }
 }
 
@@ -151,16 +153,39 @@ using (var settingsScope = app.Services.CreateScope())
 app.UseResponseCompression();
 app.UseCors("AppCors");
 
-// Serve static files for uploads
+app.UseAuthentication();
+
+// Serve uploaded files. SECURITY: signed-in users only, and never rendered as active
+// content on the API origin — an uploaded .html/.svg must not run script (stored XSS).
 var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
 Directory.CreateDirectory(uploadsPath);
+app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/uploads"), uploads =>
+{
+    uploads.Use(async (ctx, next) =>
+    {
+        if (ctx.User.Identity?.IsAuthenticated != true)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+        await next();
+    });
+});
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
-    RequestPath = "/uploads"
+    RequestPath = "/uploads",
+    OnPrepareResponse = ctx =>
+    {
+        var headers = ctx.Context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'";
+        var ext = Path.GetExtension(ctx.File.Name).ToLowerInvariant();
+        if (ext is not (".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".pdf"))
+            headers["Content-Disposition"] = "attachment";
+    }
 });
 
-app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
@@ -174,11 +199,11 @@ app.MapHub<ProjectTracker.API.Hubs.NotificationHub>("/hubs/notifications");
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     Predicate = _ => false // liveness only — no dependency checks
-});
+}).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
-});
+}).AllowAnonymous();
 
 // Auto-ingest knowledge base documents on startup
 _ = Task.Run(async () =>

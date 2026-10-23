@@ -30,6 +30,60 @@ namespace ProjectTracker.API.Controllers
             _env = env;
         }
 
+        // SECURITY: table/column names cannot be SQL parameters. Every identifier that
+        // comes from a request is (1) checked against the real schema and (2) quoted
+        // with ']' escaped, so it can never break out of the [...] delimiters.
+        private static string QuoteIdentifier(string name) => "[" + name.Replace("]", "]]") + "]";
+
+        // Columns never included in exports (credential material).
+        private static readonly HashSet<string> SensitiveColumns = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PasswordHash", "Password", "Token", "RefreshToken", "TokenHash", "ApiKey", "Secret", "ClientSecret"
+        };
+
+        private static async Task<HashSet<string>> GetBaseTablesAsync(SqlConnection connection)
+        {
+            var tables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using var cmd = new SqlCommand(
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = 'dbo'",
+                connection);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync()) tables.Add(reader.GetString(0));
+            return tables;
+        }
+
+        private static async Task<HashSet<string>> GetColumnsAsync(SqlConnection connection, string table)
+        {
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using var cmd = new SqlCommand(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @t",
+                connection);
+            cmd.Parameters.AddWithValue("@t", table);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync()) columns.Add(reader.GetString(0));
+            return columns;
+        }
+
+        private static async Task<List<Dictionary<string, object?>>> ReadTableAsync(SqlConnection connection, string table)
+        {
+            var data = new List<Dictionary<string, object?>>();
+            using var command = new SqlCommand($"SELECT * FROM {QuoteIdentifier(table)}", connection);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var row = new Dictionary<string, object?>();
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    var name = reader.GetName(i);
+                    if (SensitiveColumns.Contains(name)) continue;
+                    var value = reader.GetValue(i);
+                    row[name] = value == DBNull.Value ? null : value;
+                }
+                data.Add(row);
+            }
+            return data;
+        }
+
         // GET: api/database/info
         [HttpGet("info")]
         public async Task<ActionResult<DatabaseInfoDto>> GetDatabaseInfo()
@@ -65,7 +119,7 @@ namespace ProjectTracker.API.Controllers
                         // Table name cannot be parameterized in SQL, but source is safe (hardcoded array above)
                         #pragma warning disable EF1002 // Table names from hardcoded whitelist, not user input
                         var count = await _context.Database
-                            .SqlQueryRaw<int>($"SELECT COUNT(*) AS Value FROM [{table}]")
+                            .SqlQueryRaw<int>($"SELECT COUNT(*) AS Value FROM {QuoteIdentifier(table)}")
                             .FirstOrDefaultAsync();
                         #pragma warning restore EF1002
                         
@@ -129,29 +183,21 @@ namespace ProjectTracker.API.Controllers
                     };
                 }
 
+                using var exportConnection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+                await exportConnection.OpenAsync();
+                var knownTables = await GetBaseTablesAsync(exportConnection);
+
                 foreach (var table in tablesToExport)
                 {
+                    if (!knownTables.Contains(table))
+                    {
+                        _logger.LogWarning("Export skipped unknown table {Table}", table);
+                        continue;
+                    }
+
                     try
                     {
-                        var data = new List<Dictionary<string, object?>>();
-                        
-                        using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
-                        await connection.OpenAsync();
-                        
-                        using var command = new SqlCommand($"SELECT * FROM [{table}]", connection);
-                        using var reader = await command.ExecuteReaderAsync();
-                        
-                        while (await reader.ReadAsync())
-                        {
-                            var row = new Dictionary<string, object?>();
-                            for (int i = 0; i < reader.FieldCount; i++)
-                            {
-                                var value = reader.GetValue(i);
-                                row[reader.GetName(i)] = value == DBNull.Value ? null : value;
-                            }
-                            data.Add(row);
-                        }
-                        
+                        var data = await ReadTableAsync(exportConnection, table);
                         exportData[table] = data;
                         _logger.LogInformation("Exported {Count} rows from {Table}", data.Count, table);
                     }
@@ -207,7 +253,7 @@ namespace ProjectTracker.API.Controllers
                 await connection.OpenAsync();
 
                 var backupQuery = $@"
-                    BACKUP DATABASE [{dbName}] 
+                    BACKUP DATABASE {QuoteIdentifier(dbName)}  
                     TO DISK = '{sqlBackupPath}'
                     WITH FORMAT, INIT, 
                     NAME = '{dbName} Full Backup'";
@@ -323,19 +369,36 @@ namespace ProjectTracker.API.Controllers
                 var results = new Dictionary<string, DbImportResultDto>();
                 var connectionString = _configuration.GetConnectionString("DefaultConnection");
 
+                HashSet<string> knownTables;
+                using (var schemaConnection = new SqlConnection(connectionString))
+                {
+                    await schemaConnection.OpenAsync();
+                    knownTables = await GetBaseTablesAsync(schemaConnection);
+                }
+
                 foreach (var (table, rows) in importData)
                 {
                     var result = new DbImportResultDto { TableName = table };
-                    
+
+                    if (!knownTables.Contains(table))
+                    {
+                        result.Success = false;
+                        result.Errors.Add("Unknown table");
+                        results[table] = result;
+                        continue;
+                    }
+
                     try
                     {
                         using var connection = new SqlConnection(connectionString);
                         await connection.OpenAsync();
+                        var tableColumns = await GetColumnsAsync(connection, table);
+                        var quotedTable = QuoteIdentifier(table);
 
                         // Optionally clear existing data
                         if (clearExisting)
                         {
-                            using var deleteCmd = new SqlCommand($"DELETE FROM [{table}]", connection);
+                            using var deleteCmd = new SqlCommand($"DELETE FROM {quotedTable}", connection);
                             await deleteCmd.ExecuteNonQueryAsync();
                         }
 
@@ -344,10 +407,18 @@ namespace ProjectTracker.API.Controllers
                         {
                             if (!row.Any()) continue;
 
-                            var columns = string.Join(", ", row.Keys.Select(k => $"[{k}]"));
+                            var unknown = row.Keys.FirstOrDefault(k => !tableColumns.Contains(k));
+                            if (unknown != null)
+                            {
+                                result.ErrorCount++;
+                                result.Errors.Add($"Unknown column '{unknown}'");
+                                continue;
+                            }
+
+                            var columns = string.Join(", ", row.Keys.Select(QuoteIdentifier));
                             var parameters = string.Join(", ", row.Keys.Select((k, i) => $"@p{i}"));
-                            
-                            var insertQuery = $"SET IDENTITY_INSERT [{table}] ON; INSERT INTO [{table}] ({columns}) VALUES ({parameters}); SET IDENTITY_INSERT [{table}] OFF;";
+
+                            var insertQuery = $"SET IDENTITY_INSERT {quotedTable} ON; INSERT INTO {quotedTable} ({columns}) VALUES ({parameters}); SET IDENTITY_INSERT {quotedTable} OFF;";
 
                             try
                             {
@@ -402,6 +473,14 @@ namespace ProjectTracker.API.Controllers
                 return BadRequest(new { error = "Backup path is required" });
             }
 
+            // SECURITY: the path is passed as a parameter below; also require a .bak file
+            // so arbitrary server files can't be fed to RESTORE.
+            if (!request.BackupPath.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) ||
+                request.BackupPath.IndexOfAny(new[] { '\'', '"', ';', '*', '?' }) >= 0)
+            {
+                return BadRequest(new { error = "Invalid backup path" });
+            }
+
             try
             {
                 var connectionString = _configuration.GetConnectionString("DefaultConnection");
@@ -416,7 +495,7 @@ namespace ProjectTracker.API.Controllers
 
                 // Set database to single user mode
                 var singleUserQuery = $@"
-                    ALTER DATABASE [{dbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE";
+                    ALTER DATABASE {QuoteIdentifier(dbName)} SET SINGLE_USER WITH ROLLBACK IMMEDIATE";
                 
                 using (var cmd = new SqlCommand(singleUserQuery, connection))
                 {
@@ -426,19 +505,20 @@ namespace ProjectTracker.API.Controllers
 
                 // Restore the database
                 var restoreQuery = $@"
-                    RESTORE DATABASE [{dbName}] 
-                    FROM DISK = '{request.BackupPath}'
+                    RESTORE DATABASE {QuoteIdentifier(dbName)}
+                    FROM DISK = @backupPath
                     WITH REPLACE";
 
                 using (var cmd = new SqlCommand(restoreQuery, connection))
                 {
+                    cmd.Parameters.AddWithValue("@backupPath", request.BackupPath);
                     cmd.CommandTimeout = 600; // 10 minutes timeout
                     await cmd.ExecuteNonQueryAsync();
                 }
 
                 // Set back to multi user mode
                 var multiUserQuery = $@"
-                    ALTER DATABASE [{dbName}] SET MULTI_USER";
+                    ALTER DATABASE {QuoteIdentifier(dbName)} SET MULTI_USER";
                 
                 using (var cmd = new SqlCommand(multiUserQuery, connection))
                 {
@@ -467,24 +547,15 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
-                var data = new List<Dictionary<string, object?>>();
-                
                 using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
                 await connection.OpenAsync();
-                
-                using var command = new SqlCommand($"SELECT * FROM [{tableName}]", connection);
-                using var reader = await command.ExecuteReaderAsync();
-                
-                while (await reader.ReadAsync())
+
+                if (!(await GetBaseTablesAsync(connection)).Contains(tableName))
                 {
-                    var row = new Dictionary<string, object?>();
-                    for (int i = 0; i < reader.FieldCount; i++)
-                    {
-                        var value = reader.GetValue(i);
-                        row[reader.GetName(i)] = value == DBNull.Value ? null : value;
-                    }
-                    data.Add(row);
+                    return NotFound(new { error = "Unknown table" });
                 }
+
+                var data = await ReadTableAsync(connection, tableName);
 
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                 var filename = $"{tableName}_export_{timestamp}.json";

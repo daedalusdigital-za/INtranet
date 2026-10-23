@@ -5,18 +5,21 @@ namespace ProjectTracker.API.Services.Google
     /// </summary>
     public static class GoogleMapsConfig
     {
-        /// <summary>Built-in fallback key (used until an admin saves one under Admin Settings → Client Locations).</summary>
-        public const string DefaultApiKey = "AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k";
-
+        // SECURITY: no key in source control. The base key comes from configuration
+        // (GoogleMaps:ApiKey in appsettings.json or the GoogleMaps__ApiKey env var);
+        // an admin can override it under Admin Settings -> Client Locations.
+        private static string? _configured;
         private static string? _override;
 
         /// <summary>
-        /// Effective Google Maps API key. Resolved from the SystemSettings table at startup
-        /// (and whenever an admin updates it) with the built-in key as fallback.
+        /// Effective Google Maps API key: the admin override from SystemSettings when set,
+        /// otherwise the configured key. Empty when neither is configured.
         /// </summary>
-        public static string ApiKey => string.IsNullOrWhiteSpace(_override) ? DefaultApiKey : _override!;
+        public static string ApiKey => !string.IsNullOrWhiteSpace(_override) ? _override! : (_configured ?? string.Empty);
 
         public static bool IsOverridden => !string.IsNullOrWhiteSpace(_override);
+
+        public static void SetConfiguredKey(string? key) => _configured = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
 
         public static void SetApiKey(string? key) => _override = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
         

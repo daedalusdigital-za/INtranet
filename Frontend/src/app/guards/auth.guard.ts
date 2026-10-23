@@ -15,16 +15,22 @@ export const authGuard: CanActivateFn = (route, state) => {
   return false;
 };
 
+/**
+ * Admin / Super Admin only. UI-level gate; the API must still enforce the role server-side.
+ */
 export const adminGuard: CanActivateFn = (route, state) => {
   const authService = inject(AuthService);
   const router = inject(Router);
+
+  if (!authService.isAuthenticated) {
+    return router.createUrlTree(['/login']);
+  }
 
   if (authService.isAdmin) {
     return true;
   }
 
-  router.navigate(['/dashboard']);
-  return false;
+  return router.createUrlTree(['/dashboard']);
 };
 
 /**

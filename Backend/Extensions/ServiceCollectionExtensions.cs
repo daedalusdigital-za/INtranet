@@ -87,7 +87,15 @@ namespace ProjectTracker.API.Extensions
                     };
                 });
 
-            services.AddAuthorization();
+            // SECURITY: deny-by-default. Any endpoint (controller, hub, health check) without
+            // its own [Authorize]/[AllowAnonymous] requires a signed-in user, so a forgotten
+            // attribute no longer exposes an endpoint to anonymous callers.
+            services.AddAuthorization(options =>
+            {
+                options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
+            });
             return services;
         }
 

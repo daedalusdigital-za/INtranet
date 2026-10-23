@@ -1,11 +1,15 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ProjectTracker.API.Authorization;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs;
 
 namespace ProjectTracker.API.Controllers
 {
+    // SECURITY: write endpoints act only on the caller's own account. Admins may
+    // also edit other users' profile details and photos (User Management);
+    // passwords of other users are changed only via api/users/{id}/reset-password.
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -56,6 +60,9 @@ namespace ProjectTracker.API.Controllers
         [HttpPut("{userId}")]
         public async Task<IActionResult> UpdateProfile(int userId, [FromBody] UpdateProfileDto dto)
         {
+            if (!User.IsSelfOrAdmin(userId))
+                return Forbid();
+
             var user = await _context.Users.FindAsync(userId);
 
             if (user == null)
@@ -91,6 +98,13 @@ namespace ProjectTracker.API.Controllers
         [HttpPost("{userId}/change-password")]
         public async Task<IActionResult> ChangePassword(int userId, [FromBody] ChangePasswordDto dto)
         {
+            // Own password only, even for admins (they use reset-password).
+            if (User.GetUserId() != userId)
+                return Forbid();
+
+            if (string.IsNullOrWhiteSpace(dto.NewPassword) || dto.NewPassword.Length < 8)
+                return BadRequest(new { message = "New password must be at least 8 characters." });
+
             var user = await _context.Users.FindAsync(userId);
 
             if (user == null)
@@ -131,6 +145,9 @@ namespace ProjectTracker.API.Controllers
             {
                 return BadRequest(new { message = "No file uploaded" });
             }
+
+            if (!User.IsSelfOrAdmin(userId))
+                return Forbid();
 
             var user = await _context.Users.FindAsync(userId);
 
@@ -182,6 +199,9 @@ namespace ProjectTracker.API.Controllers
         [HttpDelete("{userId}/photo")]
         public async Task<IActionResult> DeletePhoto(int userId)
         {
+            if (!User.IsSelfOrAdmin(userId))
+                return Forbid();
+
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
             {

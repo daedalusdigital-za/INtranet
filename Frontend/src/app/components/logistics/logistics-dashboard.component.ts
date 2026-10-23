@@ -34,6 +34,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of, Subject } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
+import { GoogleMapsLoaderService } from '../../services/google-maps-loader.service';
 import { WellyActivityService } from '../../services/welly-activity.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { GoogleMapsModule } from '@angular/google-maps';
@@ -354,6 +355,7 @@ export class LogisticsDashboardComponent implements OnInit {
 
   private readonly router = inject(Router);
   private readonly assetTracking = inject(AssetTrackingService);
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
 
   // Quick barcode lookup (header search bar)
   barcodeQuery = '';
@@ -1569,15 +1571,18 @@ Notes: ${record.notes || 'No notes'}
         // Open route map dialog with live vehicle position overlay
         this.http.get<any>(`${environment.apiUrl}/logistics/loads/${load.id}`).subscribe({
           next: (loadDetails) => {
-            this.dialog.open(ViewRouteMapDialog, {
-              width: '95vw',
-              maxWidth: '1400px',
-              height: '85vh',
-              data: { 
-                load: loadDetails,
-                liveTracking: tracking
-              }
-            });
+            // ViewRouteMapDialog needs the Maps JS API (key served by the API) before it is constructed
+            this.mapsLoader.load().then(() => {
+              this.dialog.open(ViewRouteMapDialog, {
+                width: '95vw',
+                maxWidth: '1400px',
+                height: '85vh',
+                data: { 
+                  load: loadDetails,
+                  liveTracking: tracking
+                }
+              });
+            }).catch(() => this.snackBar.open('Google Maps could not be loaded', 'Close', { duration: 4000 }));
           },
           error: () => {
             this.snackBar.open('Failed to load route details', 'Close', { duration: 3000 });
@@ -2356,12 +2361,15 @@ Notes: ${record.notes || 'No notes'}
           return;
         }
 
-        this.dialog.open(ViewRouteMapDialog, {
-          width: '95vw',
-          maxWidth: '1400px',
-          height: '85vh',
-          data: { load: loadDetails }
-        });
+        // ViewRouteMapDialog needs the Maps JS API (key served by the API) before it is constructed
+        this.mapsLoader.load().then(() => {
+          this.dialog.open(ViewRouteMapDialog, {
+            width: '95vw',
+            maxWidth: '1400px',
+            height: '85vh',
+            data: { load: loadDetails }
+          });
+        }).catch(() => this.snackBar.open('Google Maps could not be loaded', 'Close', { duration: 4000 }));
       },
       error: (error) => {
         console.error('Error fetching load details:', error);

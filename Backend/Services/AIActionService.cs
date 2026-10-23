@@ -103,6 +103,21 @@ namespace ProjectTracker.API.Services
 
                 _logger.LogInformation("AI Action detected: {ActionType} by user {User}", actionType, user.FullName);
 
+                // SECURITY: the model's output is untrusted (prompt injection via documents,
+                // emails, KB content). Account-changing actions must be gated on the real
+                // caller's role, exactly like the equivalent REST endpoints.
+                if (AdminOnlyActions.Contains(actionType) && !IsAdminRole(user.Role))
+                {
+                    _logger.LogWarning("AI Action {ActionType} blocked for non-admin user {UserId}", actionType, user.UserId);
+                    results.Add(new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = actionType,
+                        Message = "⛔ Only administrators can change user accounts or reset passwords."
+                    });
+                    continue;
+                }
+
                 try
                 {
                     var result = actionType switch
@@ -151,6 +166,20 @@ namespace ProjectTracker.API.Services
 
             return results;
         }
+
+        private static readonly HashSet<string> AdminOnlyActions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "EDIT_EMPLOYEE", "RESET_PASSWORD"
+        };
+
+        private static bool IsAdminRole(string? role) =>
+            string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(role, "Super Admin", StringComparison.OrdinalIgnoreCase);
+
+        // True when targetRole is Super Admin but the caller is not one.
+        private static bool IsSuperAdminTargetDenied(string? targetRole, string? callerRole) =>
+            string.Equals(targetRole?.Trim(), "Super Admin", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(callerRole, "Super Admin", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Remove action tags from the response so the user sees clean text
@@ -384,6 +413,21 @@ namespace ProjectTracker.API.Services
                 var smtpHost = configuration["AIEmail:SmtpHost"] ?? "mail.promedtechnologies.co.za";
                 var smtpPort = int.TryParse(configuration["AIEmail:SmtpPort"], out var port) ? port : 465;
                 var senderEmail = configuration["AIEmail:SenderEmail"] ?? "ai@promedtechnologies.co.za";
+
+                // SECURITY: the model's output is untrusted — a prompt injected through a
+                // document, email or KB article could ask it to mail data out. Only a single
+                // recipient on an internal domain (or the requesting user) is allowed.
+                // Extra domains: AIEmail:AllowedRecipientDomains (comma-separated).
+                if (!IsAllowedAiRecipient(to, user.Email, senderEmail, configuration["AIEmail:AllowedRecipientDomains"]))
+                {
+                    _logger.LogWarning("AI Action: SEND_EMAIL to '{To}' blocked for {User} (external recipient)", to, user.FullName);
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "SEND_EMAIL",
+                        Message = $"⛔ Welly can only send email to a single internal address. \"{to}\" is not allowed — please send external emails yourself."
+                    };
+                }
                 var senderName = configuration["AIEmail:SenderName"] ?? "Welly - ProMed AI Assistant";
                 var senderPassword = configuration["AIEmail:SenderPassword"] ?? "";
                 var enableSsl = bool.TryParse(configuration["AIEmail:EnableSsl"], out var ssl) ? ssl : true;
@@ -395,7 +439,7 @@ namespace ProjectTracker.API.Services
         <h2 style=""color: white; margin: 0; font-size: 18px;"">📧 Message from ProMed Technologies</h2>
     </div>
     <div style=""padding: 25px 30px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none;"">
-        {body.Replace("\n", "<br/>")}
+        {System.Net.WebUtility.HtmlEncode(body).Replace("\n", "<br/>")}
     </div>
     <div style=""padding: 15px 30px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; font-size: 12px; color: #6b7280;"">
         <p style=""margin: 0;"">Sent via <strong>Welly AI Assistant</strong> on behalf of <strong>{user.FullName}</strong> ({user.Email})</p>
@@ -440,6 +484,29 @@ namespace ProjectTracker.API.Services
                     Message = $"Failed to send email: {ex.Message}"
                 };
             }
+        }
+
+        // One address only, on the AI sender's domain, the requesting user's domain, a
+        // configured extra domain, or the requesting user's own address.
+        private static bool IsAllowedAiRecipient(string to, string userEmail, string senderEmail, string? extraDomains)
+        {
+            var trimmed = to.Trim();
+            if (trimmed.IndexOfAny(new[] { ',', ';' }) >= 0) return false;
+
+            System.Net.Mail.MailAddress address;
+            try { address = new System.Net.Mail.MailAddress(trimmed); }
+            catch (FormatException) { return false; }
+
+            if (string.Equals(address.Address, userEmail, StringComparison.OrdinalIgnoreCase)) return true;
+
+            static string DomainOf(string email) => email.Contains('@') ? email[(email.LastIndexOf('@') + 1)..] : string.Empty;
+
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { DomainOf(senderEmail), DomainOf(userEmail) };
+            foreach (var d in (extraDomains ?? string.Empty).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                allowed.Add(d.TrimStart('@'));
+            allowed.Remove(string.Empty);
+
+            return allowed.Contains(address.Host);
         }
 
         private static DateTime GetNextWeekday(DayOfWeek day)
@@ -1466,6 +1533,16 @@ namespace ProjectTracker.API.Services
                     };
                 }
 
+                if (IsSuperAdminTargetDenied(userEntity.Role, user.Role))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "EDIT_EMPLOYEE",
+                        Message = "⛔ Only a Super Admin can modify a Super Admin account."
+                    };
+                }
+
                 var changes = new List<string>();
 
                 if (root.TryGetProperty("name", out var nameEl) && !string.IsNullOrWhiteSpace(nameEl.GetString()))
@@ -1511,6 +1588,16 @@ namespace ProjectTracker.API.Services
                         { "employee", "Employee" }, { "staff", "Employee" }, { "user", "Employee" }
                     };
                     if (roleMap.TryGetValue(newRole, out var mapped)) newRole = mapped;
+
+                    if (IsSuperAdminTargetDenied(newRole, user.Role))
+                    {
+                        return new AIActionResult
+                        {
+                            Success = false,
+                            ActionType = "EDIT_EMPLOYEE",
+                            Message = "⛔ Only a Super Admin can grant the Super Admin role."
+                        };
+                    }
 
                     var oldVal = userEntity.Role;
                     userEntity.Role = newRole;
@@ -1679,6 +1766,16 @@ namespace ProjectTracker.API.Services
                         Success = false,
                         ActionType = "RESET_PASSWORD",
                         Message = $"Could not find an employee matching \"{employeeSearch}\"."
+                    };
+                }
+
+                if (IsSuperAdminTargetDenied(userEntity.Role, user.Role))
+                {
+                    return new AIActionResult
+                    {
+                        Success = false,
+                        ActionType = "RESET_PASSWORD",
+                        Message = "⛔ Only a Super Admin can reset a Super Admin's password."
                     };
                 }
 

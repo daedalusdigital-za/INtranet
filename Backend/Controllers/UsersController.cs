@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ProjectTracker.API.Authorization;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models;
 using ProjectTracker.API.DTOs.Users;
@@ -8,6 +9,9 @@ using ProjectTracker.API.Services;
 
 namespace ProjectTracker.API.Controllers
 {
+    // SECURITY: reads are open to any signed-in user (directory, pickers, birthdays);
+    // every write is Admin/Super Admin only. Only a Super Admin may grant the
+    // Super Admin role or modify/delete an existing Super Admin.
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -197,7 +201,9 @@ namespace ProjectTracker.API.Controllers
             // Biometric machines store the face capture as a JPEG blob.
             return File(e.Photo, "image/jpeg");
         }
+
         [HttpPost("clockin-employees")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<ActionResult<ClockInEmployeeDto>> CreateClockInEmployee([FromBody] ClockInEmployeeRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Name) && string.IsNullOrWhiteSpace(request.LastName))
@@ -241,6 +247,7 @@ namespace ProjectTracker.API.Controllers
 
         // PUT: api/users/clockin-employees/{empId}
         [HttpPut("clockin-employees/{empId}")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<ActionResult<ClockInEmployeeDto>> UpdateClockInEmployee(string empId, [FromBody] ClockInEmployeeRequest request)
         {
             var entity = await _context.EmpRegistrations.FirstOrDefaultAsync(x => x.EmpId == empId);
@@ -271,6 +278,7 @@ namespace ProjectTracker.API.Controllers
 
         // DELETE: api/users/clockin-employees/{empId}
         [HttpDelete("clockin-employees/{empId}")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<IActionResult> DeleteClockInEmployee(string empId)
         {
             var entity = await _context.EmpRegistrations.FirstOrDefaultAsync(x => x.EmpId == empId);
@@ -360,8 +368,15 @@ namespace ProjectTracker.API.Controllers
 
         // POST: api/users
         [HttpPost]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<ActionResult<UserDetailDto>> CreateUser([FromBody] CreateUserDto dto)
         {
+            if (IsSuperAdminRole(dto.Role) && !User.IsSuperAdmin())
+                return Forbid();
+
+            if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Length < 8)
+                return BadRequest(new { message = "Password must be at least 8 characters." });
+
             // Check if email already exists
             if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
             {
@@ -440,6 +455,7 @@ namespace ProjectTracker.API.Controllers
 
         // PUT: api/users/{id}
         [HttpPut("{id}")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
         {
             var user = await _context.Users.FindAsync(id);
@@ -447,6 +463,21 @@ namespace ProjectTracker.API.Controllers
             if (user == null)
             {
                 return NotFound(new { message = "User not found" });
+            }
+
+            if (!CanManage(user))
+                return Forbid();
+
+            if (!string.IsNullOrEmpty(dto.Role) && dto.Role != user.Role && IsSuperAdminRole(dto.Role) && !User.IsSuperAdmin())
+                return Forbid();
+
+            // Stop an admin from locking themselves out by demoting or deactivating their own account.
+            if (id == User.GetUserId())
+            {
+                if (!string.IsNullOrEmpty(dto.Role) && dto.Role != user.Role)
+                    return BadRequest(new { message = "You cannot change your own role." });
+                if (dto.IsActive == false)
+                    return BadRequest(new { message = "You cannot deactivate your own account." });
             }
 
             // Check if email is being changed and if new email already exists
@@ -536,11 +567,14 @@ namespace ProjectTracker.API.Controllers
         // POST: api/users/{id}/use-clockin-photo
         // Copies the linked clock-in employee's biometric photo into the user's profile picture.
         [HttpPost("{id}/use-clockin-photo")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<IActionResult> UseClockInPhoto(int id)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null)
                 return NotFound(new { message = "User not found" });
+            if (!CanManage(user))
+                return Forbid();
 
             if (string.IsNullOrEmpty(user.LinkedEmpId))
                 return BadRequest(new { message = "This user is not linked to a clock-in profile." });
@@ -575,8 +609,12 @@ namespace ProjectTracker.API.Controllers
 
         // DELETE: api/users/{id}
         [HttpDelete("{id}")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<IActionResult> DeleteUser(int id, [FromQuery] bool permanent = false)
         {
+            if (id == User.GetUserId())
+                return BadRequest(new { message = "You cannot delete your own account." });
+
             var user = await _context.Users
                 .Include(u => u.Extensions)
                 .FirstOrDefaultAsync(u => u.UserId == id);
@@ -585,6 +623,9 @@ namespace ProjectTracker.API.Controllers
             {
                 return NotFound(new { message = "User not found" });
             }
+
+            if (!CanManage(user))
+                return Forbid();
 
             var displayName = $"{user.Name} {user.Surname}".Trim();
             if (string.IsNullOrWhiteSpace(displayName)) displayName = user.Email;
@@ -765,14 +806,21 @@ namespace ProjectTracker.API.Controllers
 
         // POST: api/users/{id}/reset-password
         [HttpPost("{id}/reset-password")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.NewPassword) || dto.NewPassword.Length < 8)
+                return BadRequest(new { message = "Password must be at least 8 characters." });
+
             var user = await _context.Users.FindAsync(id);
 
             if (user == null)
             {
                 return NotFound(new { message = "User not found" });
             }
+
+            if (!CanManage(user))
+                return Forbid();
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             user.UpdatedAt = DateTime.UtcNow;
@@ -791,14 +839,21 @@ namespace ProjectTracker.API.Controllers
 
         // POST: api/users/{id}/toggle-active
         [HttpPost("{id}/toggle-active")]
+        [Authorize(Roles = AppRoles.Admins)]
         public async Task<IActionResult> ToggleActive(int id)
         {
+            if (id == User.GetUserId())
+                return BadRequest(new { message = "You cannot deactivate your own account." });
+
             var user = await _context.Users.FindAsync(id);
 
             if (user == null)
             {
                 return NotFound(new { message = "User not found" });
             }
+
+            if (!CanManage(user))
+                return Forbid();
 
             user.IsActive = !user.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
@@ -834,6 +889,13 @@ namespace ProjectTracker.API.Controllers
 
             return Ok(new { message = $"User {(user.IsActive ? "activated" : "deactivated")} successfully", isActive = user.IsActive });
         }
+
+        private static bool IsSuperAdminRole(string? role) =>
+            string.Equals(role?.Trim(), AppRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+        // Admins manage everyone except Super Admins; only a Super Admin manages a Super Admin.
+        private bool CanManage(User target) =>
+            !IsSuperAdminRole(target.Role) || User.IsSuperAdmin();
 
         // GET: api/users/roles
         [HttpGet("roles")]

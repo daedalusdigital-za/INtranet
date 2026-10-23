@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { sanitizeUntrustedHtml } from '../../utils/sanitize-html';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
 
@@ -160,7 +161,8 @@ export class ArchivesComponent implements OnInit {
   backToCompanies(): void { this.selectedCompany.set(null); this.selectedFile.set(null); this.files.set([]); this.folders.set([]); this.messages.set(null); this.selectedMessage.set(null); }
   backToFiles(): void { this.selectedFile.set(null); this.folders.set([]); this.messages.set(null); this.selectedMessage.set(null); }
 
-  safeHtml(html: string): SafeHtml { return this.sanitizer.bypassSecurityTrustHtml(html); }
+  /** Archived (external) mail HTML: purified with DOMPurify before being marked trusted. */
+  safeHtml(html: string): SafeHtml { return this.sanitizer.bypassSecurityTrustHtml(sanitizeUntrustedHtml(html)); }
 
   openAttachment(a: AttachmentInfo): void {
     const d = this.selectedMessage();

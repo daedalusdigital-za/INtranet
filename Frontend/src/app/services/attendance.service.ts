@@ -29,6 +29,8 @@ export class AttendanceService {
   private startConnection(): void {
     this.hubConnection = new signalR.HubConnectionBuilder()
       .withUrl(`${environment.apiUrl.replace('/api', '')}/hubs/attendance`, {
+        // The hub requires a signed-in user; read lazily so reconnects use a fresh token.
+        accessTokenFactory: () => localStorage.getItem('token') || '',
         skipNegotiation: true,
         transport: signalR.HttpTransportType.WebSockets
       })

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 
+using ProjectTracker.API.Authorization;
 namespace ProjectTracker.API.Controllers.Finance
 {
     /// <summary>
@@ -16,6 +17,7 @@ namespace ProjectTracker.API.Controllers.Finance
     [Authorize]
     [ApiController]
     [Route("api/finance")]
+    [RequireModule("finance", AlsoAllowRoles = "Finance")]
     public class FinanceOverviewController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

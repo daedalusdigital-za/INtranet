@@ -79,7 +79,7 @@ interface PageResult {
           </div>
           <mat-form-field appearance="outline" class="cl-key-input">
             <mat-label>New API key</mat-label>
-            <input matInput [(ngModel)]="newKey" placeholder="AIza…" autocomplete="off" [type]="showKey ? 'text' : 'password'">
+            <input matInput [(ngModel)]="newKey" placeholder="Paste Google API key" autocomplete="off" [type]="showKey ? 'text' : 'password'">
             <button mat-icon-button matSuffix (click)="showKey = !showKey" type="button"><mat-icon>{{ showKey ? 'visibility_off' : 'visibility' }}</mat-icon></button>
           </mat-form-field>
           <button mat-raised-button color="primary" [disabled]="!newKey.trim() || keySaving" (click)="saveKey()"><mat-icon>save</mat-icon> Save key</button>

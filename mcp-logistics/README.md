@@ -54,6 +54,10 @@ To add or change tools, edit [src/tools.ts](src/tools.ts) and rebuild.
 
 ## Changelog
 
+- **v1.9** (23 Oct 2026) — OAuth hardening: server refuses to start without a strong
+  `ACCESS_PASSWORD`; redirect-URI allow-list (+ `ALLOWED_REDIRECT_URIS`) and client cap on `/register`;
+  `/authorize` checks client + exact redirect URI, requires PKCE S256, escapes the consent page and
+  rate-limits failed passwords per IP; `/token` enforces single-use codes bound to client/redirect URI.
 - **v1.8** (18 Sep 2026) — Full financial + document exposure: invoices now include SalesAmount,
   SalesReturns, CostOfSales, MarginPercent and GrossProfit; sales history adds TotalCost/margin/
   reconciliation; customers expose PaymentTerms, CreditLimit, VAT & registration numbers. Added
@@ -96,9 +100,19 @@ copy .env.example .env
 
 Edit `.env` (or set these in the root `.env` used by docker-compose):
 
-- `MCP_ACCESS_PASSWORD` — a long random password (people type this once when connecting Claude).
+- `MCP_ACCESS_PASSWORD` — **required**, a long random password (people type this once when
+  connecting Claude). Passed to the container as `ACCESS_PASSWORD`. The server **refuses to start**
+  if it is unset, shorter than **12 characters**, or a placeholder (`change-me-please`,
+  `please-set-a-long-random-password`). Generate one with
+  `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`.
 - `MCP_PUBLIC_URL` — the public HTTPS URL from step 3, e.g. `https://logistics-mcp.yourdomain.com`.
 - `MCP_TUNNEL_TOKEN` — the Cloudflare Tunnel token from step 3.
+- `ALLOWED_REDIRECT_URIS` — *optional*, comma-separated `https://` URL prefixes that OAuth clients
+  may register as redirect URIs **in addition to** the built-in ones (see Security notes). Only needed
+  for a non-Claude MCP client. To use it with docker-compose, add
+  `- ALLOWED_REDIRECT_URIS=${MCP_ALLOWED_REDIRECT_URIS:-}` to the `mcp-logistics` environment.
+- `DB_USER` — the least-privilege `mcp_readonly` login (compose default) created by
+  `Database/CreateMcpReadonlyViews.sql`; never `sa`.
 
 (The compose file reads `MCP_ACCESS_PASSWORD`, `MCP_PUBLIC_URL`, `MCP_TUNNEL_TOKEN`.)
 
@@ -179,6 +193,19 @@ Custom connectors on **Claude Team** must be enabled by an **Owner/Primary Owner
 
 - **Read-only**: every query is a `SELECT` with bound parameters. No writes, no DDL.
 - **Password-gated OAuth**: Claude gets a bearer token only after someone enters the shared password.
+  The password is compared in constant time. After **5 failed attempts from one IP within 15 minutes**
+  (IP from `CF-Connecting-IP`, else the first `X-Forwarded-For` hop) that IP gets HTTP 429 until the
+  window ends.
+- **Redirect URI allow-list**: dynamic client registration (`/register`) only accepts
+  `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback`, loopback
+  `http://localhost:<port>/...` / `http://127.0.0.1:<port>/...` (Claude Desktop / Claude Code), plus any
+  `ALLOWED_REDIRECT_URIS` prefixes; anything else gets `400 invalid_redirect_uri`. `/authorize` only
+  redirects to a URI that exactly matches one registered for that `client_id`. At most 200 clients are
+  kept (oldest evicted) and one IP may register 20 clients per hour.
+- **PKCE S256 required**; authorization codes are single-use, expire after 5 minutes and are bound to
+  the `client_id` + `redirect_uri` they were issued for. Access tokens last 7 days.
+- **In-memory state**: registered clients and tokens are lost on restart. If Claude then shows
+  "Unknown client", remove and re-add (or disconnect/reconnect) the connector.
 - **No open ports**: traffic reaches the server only via the Cloudflare Tunnel.
 - Rotate `MCP_ACCESS_PASSWORD` any time and re-authorize the connector in Claude.
 - To grant write actions later, add tools deliberately in [src/tools.ts](src/tools.ts) — none exist today.
@@ -191,7 +218,9 @@ Custom connectors on **Claude Team** must be enabled by an **Owner/Primary Owner
 cd mcp-logistics
 npm install
 npm run build
-$env:PUBLIC_URL="http://localhost:8080"; $env:ACCESS_PASSWORD="dev"; $env:DB_SERVER="localhost"; $env:DB_PORT="1435"; npm start
+$env:PUBLIC_URL="http://localhost:8080"; $env:ACCESS_PASSWORD="<at-least-12-random-chars>"; $env:DB_SERVER="localhost"; $env:DB_PORT="1435"; npm start
 ```
+
+(`ACCESS_PASSWORD` must be at least 12 characters even for local development, or the server exits.)
 
 (`localhost:1435` is the host-mapped SQL port from the root compose file.)

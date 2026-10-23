@@ -54,6 +54,14 @@ namespace ProjectTracker.API.Services
                 Timeout = TimeSpan.FromMinutes(5) // CPU inference can be slow for long responses
             };
 
+            // llama-server started with --api-key requires this bearer token on every request.
+            var apiKey = configuration["LocalLlm:ApiKey"];
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            }
+
             // Load system prompt — same multi-path approach as other services
             var promptPaths = new[]
             {

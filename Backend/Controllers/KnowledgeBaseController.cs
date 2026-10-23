@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProjectTracker.API.Models;
 using ProjectTracker.API.Services;
+using ProjectTracker.API.Security;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -78,13 +79,15 @@ namespace ProjectTracker.API.Controllers
                 var kbFolder = _configuration["KnowledgeBase:DocumentsPath"] ?? "/app/kb-docs";
                 Directory.CreateDirectory(kbFolder);
 
-                var filePath = Path.Combine(kbFolder, file.FileName);
+                // SECURITY: never use the client file name as a path.
+                var safeName = SafePaths.SanitizeFileName(file.FileName);
+                var filePath = Path.Combine(kbFolder, safeName);
                 
                 // Handle duplicate filenames
                 var counter = 1;
                 while (System.IO.File.Exists(filePath))
                 {
-                    var nameWithoutExt = Path.GetFileNameWithoutExtension(file.FileName);
+                    var nameWithoutExt = Path.GetFileNameWithoutExtension(safeName);
                     filePath = Path.Combine(kbFolder, $"{nameWithoutExt}_{counter}{extension}");
                     counter++;
                 }

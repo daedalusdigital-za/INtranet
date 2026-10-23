@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Tenders;
+using ProjectTracker.API.Security;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -165,10 +166,17 @@ namespace ProjectTracker.API.Controllers
             // Handle file upload
             if (request.File != null)
             {
+                // SECURITY: CompanyCode and the client file name are untrusted path segments.
+                if (!SafePaths.IsPlainFileName(request.CompanyCode))
+                    return BadRequest("Invalid company code");
+                var safeName = SafePaths.SanitizeFileName(request.File.FileName);
+                if (SafePaths.IsBlockedExtension(safeName))
+                    return BadRequest($"Files of type '{Path.GetExtension(safeName)}' cannot be uploaded.");
+
                 var uploadsPath = Path.Combine(_env.ContentRootPath, "uploads", "compliance", request.CompanyCode);
                 Directory.CreateDirectory(uploadsPath);
 
-                var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{request.File.FileName}";
+                var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{safeName}";
                 var filePath = Path.Combine(uploadsPath, fileName);
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
@@ -230,10 +238,16 @@ namespace ProjectTracker.API.Controllers
                 System.IO.File.Delete(doc.FilePath);
             }
 
+            if (!SafePaths.IsPlainFileName(doc.CompanyCode))
+                return BadRequest("Invalid company code");
+            var safeName = SafePaths.SanitizeFileName(file.FileName);
+            if (SafePaths.IsBlockedExtension(safeName))
+                return BadRequest($"Files of type '{Path.GetExtension(safeName)}' cannot be uploaded.");
+
             var uploadsPath = Path.Combine(_env.ContentRootPath, "uploads", "compliance", doc.CompanyCode);
             Directory.CreateDirectory(uploadsPath);
 
-            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{file.FileName}";
+            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{safeName}";
             var filePath = Path.Combine(uploadsPath, fileName);
 
             using (var stream = new FileStream(filePath, FileMode.Create))

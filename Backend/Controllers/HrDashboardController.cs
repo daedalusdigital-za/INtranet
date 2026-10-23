@@ -6,6 +6,7 @@ using ProjectTracker.API.Models;
 using ProjectTracker.API.Models.Hr;
 using System.Data.Common;
 
+using ProjectTracker.API.Authorization;
 namespace ProjectTracker.API.Controllers
 {
     /// <summary>
@@ -20,6 +21,7 @@ namespace ProjectTracker.API.Controllers
     [ApiController]
     [Route("api/hr-dashboard")]
     [Authorize]
+    [RequireModule("human_resource", AlsoAllowRoles = "HR")]
     public class HrDashboardController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

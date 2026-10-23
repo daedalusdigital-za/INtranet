@@ -6,11 +6,13 @@ using ProjectTracker.API.DTOs.Finance;
 using ProjectTracker.API.Models.Finance;
 using System.Security.Claims;
 
+using ProjectTracker.API.Authorization;
 namespace ProjectTracker.API.Controllers
 {
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
+    [RequireModule("finance", AlsoAllowRoles = "Finance")]
     public class FinanceController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

@@ -4,11 +4,13 @@ using ProjectTracker.API.DTOs;
 using ProjectTracker.API.Services;
 using System.Security.Claims;
 
+using ProjectTracker.API.Authorization;
 namespace ProjectTracker.API.Controllers;
 
 [ApiController]
 [Route("api/imports")]
 [Authorize]
+[RequireModule("sales", "logistics", "finance")]
 public class SalesImportController : ControllerBase
 {
     private readonly SalesReportImportService _importService;

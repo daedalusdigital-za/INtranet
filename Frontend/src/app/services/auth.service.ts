@@ -15,6 +15,36 @@ export type ModulePermission = ModuleKey;
 export const ALL_MODULES: { key: ModulePermission; name: string; icon: string }[] = 
   getPermissionModules().map(m => ({ key: m.key, name: m.name, icon: m.icon }));
 
+/** Tolerance for the browser clock running slightly ahead of the API server. */
+const TOKEN_EXPIRY_SKEW_SECONDS = 60;
+
+/** Decodes a JWT's payload (base64url JSON). Returns null if the token is malformed. */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split('.');
+  if (parts.length !== 3 || !parts[1]) return null;
+  try {
+    let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4;
+    if (pad === 1) return null;
+    if (pad) b64 += '='.repeat(4 - pad);
+    const binary = atob(b64);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True if the token cannot be decoded or its `exp` claim has passed (with a small skew allowance). */
+function isJwtExpired(token: string): boolean {
+  const payload = decodeJwtPayload(token);
+  if (!payload) return true;
+  const exp = payload['exp'];
+  if (typeof exp !== 'number' || !isFinite(exp)) return false; // no exp claim: let the API decide
+  return Date.now() / 1000 >= exp + TOKEN_EXPIRY_SKEW_SECONDS;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -79,8 +109,14 @@ export class AuthService {
     return this.currentUserSubject.value;
   }
 
+  /**
+   * True only while a non-expired access token is stored. The web app does not use the
+   * API's refresh-token endpoint (login keeps only the access token and there is no
+   * refresh-on-401 interceptor), so an expired token means the user must sign in again.
+   */
   get isAuthenticated(): boolean {
-    return !!this.getToken();
+    const token = this.getToken();
+    return !!token && !isJwtExpired(token);
   }
 
   get isAdmin(): boolean {

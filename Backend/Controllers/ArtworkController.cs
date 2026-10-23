@@ -5,6 +5,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Tenders;
 using System.Net;
 using System.Net.Mail;
+using ProjectTracker.API.Security;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -147,12 +148,19 @@ namespace ProjectTracker.API.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest("No file provided");
 
+            // SECURITY: companyCode and the client file name are untrusted path segments.
+            if (!SafePaths.IsPlainFileName(companyCode))
+                return BadRequest("Invalid company code");
+            var safeName = SafePaths.SanitizeFileName(file.FileName);
+            if (SafePaths.IsBlockedExtension(safeName))
+                return BadRequest($"Files of type '{Path.GetExtension(safeName)}' cannot be uploaded.");
+
             // Create directory
             var uploadsPath = Path.Combine(_env.ContentRootPath, "uploads", "artwork", companyCode);
             Directory.CreateDirectory(uploadsPath);
 
             // Save file with timestamp prefix
-            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{file.FileName}";
+            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{safeName}";
             var filePath = Path.Combine(uploadsPath, fileName);
 
             using (var stream = new FileStream(filePath, FileMode.Create))

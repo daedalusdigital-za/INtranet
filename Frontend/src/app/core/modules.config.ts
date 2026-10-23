@@ -12,7 +12,7 @@
  */
 
 import { Routes } from '@angular/router';
-import { authGuard, moduleGuard } from '../guards/auth.guard';
+import { authGuard, moduleGuard, adminGuard } from '../guards/auth.guard';
 
 // ============================================================================
 // MODULE KEYS - All available module permission keys
@@ -492,7 +492,7 @@ export function getModuleRoutes(): Routes {
     { 
       path: 'user-management', 
       loadComponent: () => import('../components/user-management/user-management.component').then(m => m.UserManagementComponent),
-      canActivate: [authGuard] 
+      canActivate: [authGuard, adminGuard] 
     },
     
     // Messaging Module
@@ -521,7 +521,7 @@ export function getModuleRoutes(): Routes {
     { 
       path: 'settings', 
       loadComponent: () => import('../components/settings/settings.component').then(m => m.SettingsComponent),
-      canActivate: [authGuard] 
+      canActivate: [authGuard, adminGuard] 
     },
     
     // Management / Executive Oversight Module

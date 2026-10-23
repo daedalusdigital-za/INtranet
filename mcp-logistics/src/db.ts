@@ -5,7 +5,7 @@ const config: sql.config = {
   port: parseInt(process.env.DB_PORT || '1433', 10),
   database: process.env.DB_NAME || 'ProjectTrackerDB',
   user: process.env.DB_USER || 'mcp_readonly',
-  password: process.env.DB_PASSWORD || 'McpR3ad0nly@2026!',
+  password: process.env.DB_PASSWORD || '', // no hardcoded fallback: set DB_PASSWORD
   options: {
     encrypt: true,
     trustServerCertificate: true,

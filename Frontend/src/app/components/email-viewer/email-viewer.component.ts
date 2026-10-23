@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { sanitizeUntrustedHtml } from '../../utils/sanitize-html';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -727,8 +728,10 @@ export class EmailViewerComponent implements OnInit {
     ).subscribe({
       next: (detail) => {
         this.emailDetail = detail;
+        // External email HTML: DOMPurify strips scripts/handlers/forms/embeds first; only the
+        // purified output is marked trusted (Angular's own sanitizer would drop inline styles).
         this.sanitizedHtml = detail.htmlBody
-          ? this.sanitizer.bypassSecurityTrustHtml(detail.htmlBody)
+          ? this.sanitizer.bypassSecurityTrustHtml(sanitizeUntrustedHtml(detail.htmlBody))
           : null;
         this.detailLoading = false;
 

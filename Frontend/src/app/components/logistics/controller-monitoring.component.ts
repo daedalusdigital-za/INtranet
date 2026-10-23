@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, NgZone, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, NgZone, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -17,6 +17,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { environment } from '../../../environments/environment';
+import { GoogleMapsLoaderService } from '../../services/google-maps-loader.service';
 import * as XLSX from 'xlsx';
 
 declare const google: any;
@@ -655,7 +656,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
   @ViewChild('geoMapEl') geoMapEl!: ElementRef;
 
   private apiUrl = environment.apiUrl;
-  private readonly googleKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
 
   curfewStart = 18;
   curfewEnd = 5;
@@ -749,7 +750,9 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
   constructor(private http: HttpClient, private zone: NgZone, private snack: MatSnackBar) {}
 
   ngOnInit(): void {
-    this.loadGoogleMaps().then(() => { this.mapsReady = true; this.initMap(); });
+    this.loadGoogleMaps()
+      .then(() => { this.mapsReady = true; this.initMap(); })
+      .catch(err => console.error('Google Maps failed to load', err));
     this.loadNightWatch();
     this.loadGeofences();
     this.startAuto();
@@ -919,17 +922,8 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
 
   // ---------- maps ----------
   private loadGoogleMaps(): Promise<void> {
-    return new Promise((resolve) => {
-      if (typeof google !== 'undefined' && google.maps) { resolve(); return; }
-      const existing = document.getElementById('google-maps-script');
-      if (existing) { existing.addEventListener('load', () => resolve()); return; }
-      const s = document.createElement('script');
-      s.id = 'google-maps-script';
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${this.googleKey}&libraries=geometry`;
-      s.async = true; s.defer = true;
-      s.onload = () => resolve();
-      document.head.appendChild(s);
-    });
+    // Key is served by the API (no hardcoded key); the loader injects the script once app-wide.
+    return this.mapsLoader.load().then(() => undefined);
   }
 
   private initMap(): void {

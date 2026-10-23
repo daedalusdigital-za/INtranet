@@ -37,6 +37,8 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { sanitizeHtmlDocument } from '../../utils/sanitize-html';
+import { GoogleMapsLoaderService } from '../../services/google-maps-loader.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of, Subject, firstValueFrom } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
@@ -2200,6 +2202,7 @@ export class InvoiceDetailsDialog {
   `]
 })
 export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   @ViewChild('mapElement') mapElement!: ElementRef;
   
   selectedVehicle: Vehicle | null = null;
@@ -2260,23 +2263,10 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
   }
 
   private loadGoogleMapsScript(): void {
-    const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
-    
-    if (typeof google !== 'undefined' && google.maps) {
-      this.initializeMap();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + apiKey + '&callback=initFleetMap';
-    script.async = true;
-    script.defer = true;
-    
-    (window as any).initFleetMap = () => {
-      this.initializeMap();
-    };
-    
-    document.head.appendChild(script);
+    // Maps JS API is loaded once app-wide by GoogleMapsLoaderService (key served by the API).
+    this.mapsLoader.load()
+      .then(() => this.initializeMap())
+      .catch(err => console.error('Google Maps failed to load', err));
   }
 
   private initializeMap(): void {
@@ -3478,6 +3468,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
   `]
 })
 export class NewLoadDialogComponent implements OnInit, OnDestroy {
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   loading = true;
   loadingInventory = false;
   calculatingRoute = false;
@@ -3753,8 +3744,9 @@ export class NewLoadDialogComponent implements OnInit, OnDestroy {
     this.calculateDistanceWithGoogle(origin, destinations);
   }
 
-  private calculateDistanceWithGoogle(origin: string, destinations: string[]): void {
-    // Check if Google Maps is loaded
+  private async calculateDistanceWithGoogle(origin: string, destinations: string[]): Promise<void> {
+    // Load the Maps JS API on demand (key served by the API); falls back to an estimate if unavailable
+    try { await this.mapsLoader.load(); } catch { /* fall back below */ }
     if (typeof google === 'undefined' || !google.maps) {
       // Fallback to estimated calculation
       this.calculateEstimatedRoute(destinations);
@@ -8209,6 +8201,7 @@ export class AddressIssuesDialog {
   `]
 })
 export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   selectedProvince = 'all';
   searchTerm = '';
   filteredDepots: any[] = [];
@@ -8304,25 +8297,10 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   }
 
   private loadGoogleMapsScript(): void {
-    const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
-    
-    if (typeof google !== 'undefined' && google.maps) {
-      this.initializeMap();
-      return;
-    }
-
-    const callbackName = 'initTfnDepotsMap' + Date.now();
-    const script = document.createElement('script');
-    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + apiKey + '&callback=' + callbackName;
-    script.async = true;
-    script.defer = true;
-    
-    (window as any)[callbackName] = () => {
-      this.initializeMap();
-      delete (window as any)[callbackName];
-    };
-    
-    document.head.appendChild(script);
+    // Maps JS API is loaded once app-wide by GoogleMapsLoaderService (key served by the API).
+    this.mapsLoader.load()
+      .then(() => this.initializeMap())
+      .catch(err => console.error('Google Maps failed to load', err));
   }
 
   private initializeMap(): void {
@@ -11107,8 +11085,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   customerSavedAddresses: Map<string, any[]> = new Map(); // Map customer name/code to saved addresses
   loadingSavedAddresses = false;
   
-  // Google Maps API key
-  private readonly googleMapsApiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
+  // Google Maps loader (API key is served by the backend, not hardcoded)
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   
   // Optimization state
   advancedOptimizing = false;
@@ -11460,6 +11438,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   // Geocode invoices using Google Maps API
   private async geocodeInvoices(invoices: any[]): Promise<void> {
     const geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
+    let apiKey: string;
+    try { apiKey = await this.mapsLoader.getKey(); } catch (err) { console.error('Google Maps key unavailable', err); return; }
     
     // Process in batches to avoid rate limiting
     const batchSize = 5;
@@ -11504,7 +11484,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         
         try {
           const response = await fetch(
-            `${geocodeUrl}?address=${encodeURIComponent(searchQuery)}&key=${this.googleMapsApiKey}&components=country:ZA`
+            `${geocodeUrl}?address=${encodeURIComponent(searchQuery)}&key=${encodeURIComponent(apiKey)}&components=country:ZA`
           );
           const data = await response.json();
           
@@ -12598,32 +12578,16 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const mapElement = document.getElementById('tripsheetRouteMap');
     if (!mapElement || this.mapInitialized) return;
 
-    const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
-    
-    if (typeof google !== 'undefined' && google.maps) {
-      this.createMap(mapElement);
+    // Maps JS API (incl. places) is loaded once app-wide by GoogleMapsLoaderService (key served by the API).
+    this.mapsLoader.load().then(() => {
+      const el = document.getElementById('tripsheetRouteMap');
+      if (!el || this.mapInitialized) return;
+      this.createMap(el);
       // Initialize autocomplete service if Places is loaded
       if ((google.maps as any).places) {
         this.autocompleteService = new (google.maps as any).places.AutocompleteService();
       }
-      return;
-    }
-
-    const callbackName = 'initTripsheetMap' + Date.now();
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
-    script.async = true;
-    
-    (window as any)[callbackName] = () => {
-      this.createMap(mapElement);
-      // Initialize autocomplete service
-      if ((google.maps as any).places) {
-        this.autocompleteService = new (google.maps as any).places.AutocompleteService();
-      }
-      delete (window as any)[callbackName];
-    };
-    
-    document.head.appendChild(script);
+    }).catch(err => console.error('Google Maps failed to load', err));
   }
 
   private createMap(element: HTMLElement): void {
@@ -12894,26 +12858,12 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
 
   // Load Google Places library if not available
   private loadPlacesLibrary(): Promise<void> {
-    return new Promise((resolve) => {
-      if (typeof google !== 'undefined' && google.maps && google.maps.places) {
-        resolve();
-        return;
-      }
-
-      const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
-      const callbackName = 'initPlacesLib' + Date.now();
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
-      script.async = true;
-      
-      (window as any)[callbackName] = () => {
+    // Loaded once app-wide by GoogleMapsLoaderService (key served by the API; includes places).
+    return this.mapsLoader.load().then(() => {
+      if (!this.autocompleteService && (google.maps as any).places) {
         this.autocompleteService = new (google.maps.places as any).AutocompleteService();
-        delete (window as any)[callbackName];
-        resolve();
-      };
-      
-      document.head.appendChild(script);
-    });
+      }
+    }).catch(err => console.error('Google Places failed to load', err));
   }
 
   // Perform the actual address search
@@ -18571,6 +18521,7 @@ export class ViewLoadDetailsDialog {
     }
   `]
 })
+// NOTE: field initializers below call google.maps.* — open this dialog only after GoogleMapsLoaderService.load() resolves.
 export class ViewRouteMapDialog implements OnInit {
   isLoadingMap = true;
   geocodingError: string | null = null;
@@ -21483,6 +21434,7 @@ export class VehicleStatusDialog {
   `]
 })
 export class WellyTripsheetWizardDialog {
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   steps = [
     { id: 0, label: 'Upload' },
     { id: 1, label: 'Analysis' },
@@ -21536,9 +21488,12 @@ export class WellyTripsheetWizardDialog {
   }
 
   private initPlacesService(): void {
-    if (typeof google !== 'undefined' && google.maps && (google.maps as any).places) {
-      this.autocompleteService = new (google.maps as any).places.AutocompleteService();
-    }
+    // Maps JS API (incl. places) is loaded on demand by GoogleMapsLoaderService (key served by the API).
+    this.mapsLoader.load().then(() => {
+      if (!this.autocompleteService && (google.maps as any).places) {
+        this.autocompleteService = new (google.maps as any).places.AutocompleteService();
+      }
+    }).catch(err => console.error('Google Places failed to load', err));
   }
 
   // Google Places address input handler
@@ -24774,6 +24729,7 @@ export class VehicleMaintenanceHistoryDialog {
   `]
 })
 export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   @ViewChild('tripMapElement') mapElement!: ElementRef;
 
   loading = true;
@@ -24990,23 +24946,10 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
   private initMap(): void {
     if (this.mapInitialized || !this.mapElement?.nativeElement) return;
 
-    const apiKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
-
-    if (typeof google !== 'undefined' && google.maps) {
-      this.createMap();
-      return;
-    }
-
-    const cbName = 'initTripHistoryMap_' + Date.now();
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${cbName}`;
-    script.async = true;
-    script.defer = true;
-    (window as any)[cbName] = () => {
-      this.createMap();
-      delete (window as any)[cbName];
-    };
-    document.head.appendChild(script);
+    // Maps JS API is loaded once app-wide by GoogleMapsLoaderService (key served by the API).
+    this.mapsLoader.load()
+      .then(() => { if (this.mapElement?.nativeElement) this.createMap(); })
+      .catch(err => console.error('Google Maps failed to load', err));
   }
 
   private createMap(): void {
@@ -26303,6 +26246,7 @@ export class TripsheetDocumentPreviewDialog implements OnInit {
     this.http.get(url, { responseType: 'text' }).subscribe({
       next: (html) => {
         this.rawHtml = html;
+        // Safe: only rendered via <iframe sandbox="allow-same-origin"> (no allow-scripts), so scripts/handlers in it can never execute.
         this.safeHtml = this.sanitizer.bypassSecurityTrustHtml(html);
         this.loading = false;
       },
@@ -26322,7 +26266,8 @@ export class TripsheetDocumentPreviewDialog implements OnInit {
     if (!this.rawHtml) return;
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(this.rawHtml);
+      // The print popup is a same-origin, unsandboxed window, so purify the server HTML first.
+      printWindow.document.write(sanitizeHtmlDocument(this.rawHtml));
       printWindow.document.close();
       setTimeout(() => printWindow.print(), 500);
     }

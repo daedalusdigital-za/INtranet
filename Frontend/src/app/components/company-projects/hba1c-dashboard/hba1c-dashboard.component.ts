@@ -1,4 +1,5 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, ViewChild, ElementRef, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, Output, EventEmitter, ViewChild, ElementRef, NgZone, inject } from '@angular/core';
+import { GoogleMapsLoaderService } from '../../../services/google-maps-loader.service';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -4442,6 +4443,7 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   private readonly DELIVERY_PASSWORD = '0000';
   addressVerified = false;
   private autocomplete: google.maps.places.Autocomplete | null = null;
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   deliveryForm = {
     description: '',
     priority: 'Normal',
@@ -5157,7 +5159,8 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     return match ? match[1] : '--:--';
   }
 
-  private initTripHistoryMap(): void {
+  private async initTripHistoryMap(): Promise<void> {
+    try { await this.mapsLoader.load(); } catch { return; } // key fetched from the API, script injected once
     if (!this.tripHistoryMapRef?.nativeElement || !this.tripHistoryData?.trips?.length) return;
     const trips = this.tripHistoryData.trips;
     const mapEl = this.tripHistoryMapRef.nativeElement;
@@ -5307,7 +5310,8 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     return this.carTrackReps.some((r: any) => r.name === repName);
   }
 
-  private initCarTrackLocationAutocomplete(): void {
+  private async initCarTrackLocationAutocomplete(): Promise<void> {
+    try { await this.mapsLoader.load(); } catch { return; } // key fetched from the API, script injected once
     if (!this.carTrackLocationInputRef?.nativeElement) return;
     if (typeof google === 'undefined' || !google.maps?.places) return;
     this.carTrackLocationVerified = false;
@@ -5500,7 +5504,8 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  private initAddressAutocomplete(): void {
+  private async initAddressAutocomplete(): Promise<void> {
+    try { await this.mapsLoader.load(); } catch { return; } // key fetched from the API, script injected once
     if (!this.deliveryAddressInputRef?.nativeElement) return;
     if (typeof google === 'undefined' || !google.maps?.places) return;
     this.autocomplete = new google.maps.places.Autocomplete(

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -9,6 +9,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { environment } from '../../../environments/environment';
+import { GoogleMapsLoaderService } from '../../services/google-maps-loader.service';
 
 declare const google: any;
 
@@ -268,7 +269,7 @@ export class OpenMapComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('mapEl') mapEl!: ElementRef;
 
   private apiUrl = environment.apiUrl;
-  private readonly googleKey = 'AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k';
+  private readonly mapsLoader = inject(GoogleMapsLoaderService);
   private readonly speedingThreshold = 90;   // km/h → flagged as an alert
   private readonly maxSpeedKmh = 120;         // full-scale of the speedometer ring
 
@@ -324,7 +325,9 @@ export class OpenMapComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(private http: HttpClient, private snack: MatSnackBar) {}
 
   ngOnInit(): void {
-    this.loadGoogleMaps().then(() => { this.mapsReady = true; this.initMap(); });
+    this.loadGoogleMaps()
+      .then(() => { this.mapsReady = true; this.initMap(); })
+      .catch(err => console.error('Google Maps failed to load', err));
     this.loadLive();
     this.startAuto();
   }
@@ -399,17 +402,8 @@ export class OpenMapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ---------- maps ----------
   private loadGoogleMaps(): Promise<void> {
-    return new Promise((resolve) => {
-      if (typeof google !== 'undefined' && google.maps) { resolve(); return; }
-      const existing = document.getElementById('google-maps-script');
-      if (existing) { existing.addEventListener('load', () => resolve()); return; }
-      const s = document.createElement('script');
-      s.id = 'google-maps-script';
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${this.googleKey}&libraries=geometry`;
-      s.async = true; s.defer = true;
-      s.onload = () => resolve();
-      document.head.appendChild(s);
-    });
+    // Key is served by the API (no hardcoded key); the loader injects the script once app-wide.
+    return this.mapsLoader.load().then(() => undefined);
   }
 
   private initMap(): void {

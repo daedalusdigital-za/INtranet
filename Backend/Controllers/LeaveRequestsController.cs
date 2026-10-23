@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using System.Security.Claims;
 
+using ProjectTracker.API.Authorization;
 namespace ProjectTracker.API.Controllers
 {
     [ApiController]
@@ -63,6 +64,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         // GET api/leave-requests — HR: get all requests (with optional status filter)
+        [RequireModule("human_resource", AlsoAllowRoles = "HR")]
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] string? status = null)
         {
@@ -162,6 +164,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         // PUT api/leave-requests/{id}/review — HR approves/rejects
+        [RequireModule("human_resource", AlsoAllowRoles = "HR")]
         [HttpPut("{id}/review")]
         public async Task<IActionResult> Review(int id, [FromBody] ReviewLeaveRequestDto dto)
         {
@@ -180,6 +183,7 @@ namespace ProjectTracker.API.Controllers
         }
 
         // GET api/leave-requests/counts — badge counts for HR
+        [RequireModule("human_resource", AlsoAllowRoles = "HR")]
         [HttpGet("counts")]
         public async Task<IActionResult> GetCounts()
         {
