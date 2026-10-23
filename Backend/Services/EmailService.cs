@@ -11,6 +11,8 @@ namespace ProjectTracker.API.Services
         Task<bool> SendEmailAsync(string to, string subject, string body, bool isHtml = true, List<EmailAttachment>? attachments = null);
         Task<bool> SendEmailAsync(List<string> to, string subject, string body, bool isHtml = true, List<EmailAttachment>? attachments = null, List<string>? cc = null);
         Task<EmailHealthStatus> CheckEmailHealthAsync();
+        /// <summary>Human-readable reason the last SendEmailAsync on this instance failed (null if it succeeded).</summary>
+        string? LastError { get; }
     }
 
     public class EmailAttachment
@@ -206,16 +208,47 @@ namespace ProjectTracker.API.Services
             return await SendEmailAsync(new List<string> { to }, subject, body, isHtml, attachments);
         }
 
+        public string? LastError { get; private set; }
+
         public async Task<bool> SendEmailAsync(List<string> to, string subject, string body, bool isHtml = true, List<EmailAttachment>? attachments = null, List<string>? cc = null)
         {
+            LastError = null;
+
             // Global email kill switch
             if (!_configuration.GetValue<bool>("EmailEnabled", true))
             {
+                LastError = "Email sending is disabled in configuration (EmailEnabled=false).";
                 _logger.LogWarning("Email DISABLED - skipping send to {Recipients}. Subject: {Subject}", string.Join(", ", to), subject);
                 return false;
             }
 
+            // Validate addresses up front. MailboxAddress.Parse throws on a bad
+            // address, which previously made BOTH providers "fail" and the user
+            // was told to check the email configuration.
+            var invalid = new List<string>();
+            foreach (var addr in (to ?? new List<string>()).Concat(cc ?? new List<string>()))
+            {
+                if (string.IsNullOrWhiteSpace(addr)) continue;
+                if (!MailboxAddress.TryParse(addr.Trim(), out _)) invalid.Add(addr.Trim());
+            }
+            if (invalid.Count > 0)
+            {
+                LastError = $"Invalid email address: {string.Join(", ", invalid)}";
+                _logger.LogWarning("Email not sent - invalid recipient address(es): {Invalid}", string.Join(", ", invalid));
+                return false;
+            }
+            if (to == null || to.All(string.IsNullOrWhiteSpace))
+            {
+                LastError = "No recipients provided.";
+                return false;
+            }
+
+            var totalAttachmentBytes = attachments?.Sum(a => (long)(a.Content?.Length ?? 0)) ?? 0;
+            _logger.LogInformation("Sending email to {Recipients} (cc: {Cc}) subject '{Subject}' with {Count} attachment(s), {Mb:F1} MB",
+                string.Join(", ", to), cc == null ? "-" : string.Join(", ", cc), subject, attachments?.Count ?? 0, totalAttachmentBytes / 1024d / 1024d);
+
             // Try primary provider first, then fallback
+            var errors = new List<string>();
             var primarySuccess = await TrySendWithProviderAsync(
                 "Office365",
                 _settings.SmtpHost,
@@ -224,7 +257,7 @@ namespace ProjectTracker.API.Services
                 _settings.SenderName,
                 _settings.SenderPassword,
                 _settings.EnableSsl,
-                to, subject, body, isHtml, attachments, cc);
+                to, subject, body, isHtml, attachments, cc, errors);
                 
             if (primarySuccess)
             {
@@ -242,14 +275,15 @@ namespace ProjectTracker.API.Services
                 _fallbackSettings.SenderName,
                 _fallbackSettings.SenderPassword,
                 _fallbackSettings.EnableSsl,
-                to, subject, body, isHtml, attachments, cc);
+                to, subject, body, isHtml, attachments, cc, errors);
                 
             if (fallbackSuccess)
             {
                 return true;
             }
             
-            _logger.LogError("All email providers failed. Email not sent to {Recipients}", string.Join(", ", to));
+            LastError = errors.Count > 0 ? string.Join(" | ", errors.Distinct()) : "All email providers failed.";
+            _logger.LogError("All email providers failed. Email not sent to {Recipients}. Reasons: {Reasons}", string.Join(", ", to), LastError);
             return false;
         }
 
@@ -266,19 +300,22 @@ namespace ProjectTracker.API.Services
             string body,
             bool isHtml,
             List<EmailAttachment>? attachments,
-            List<string>? cc)
+            List<string>? cc,
+            List<string> errors)
         {
             try
             {
                 if (string.IsNullOrEmpty(senderEmail))
                 {
                     _logger.LogWarning("{Provider}: Not configured (no sender email)", providerName);
+                    errors.Add($"{providerName}: not configured");
                     return false;
                 }
 
                 if (string.IsNullOrEmpty(password))
                 {
                     _logger.LogWarning("{Provider}: Not configured (no password)", providerName);
+                    errors.Add($"{providerName}: not configured");
                     return false;
                 }
 
@@ -317,7 +354,10 @@ namespace ProjectTracker.API.Services
                 {
                     foreach (var attachment in attachments)
                     {
-                        builder.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.ContentType));
+                        if (attachment.Content == null || attachment.Content.Length == 0) continue;
+                        if (!ContentType.TryParse(attachment.ContentType, out var ct) || ct == null)
+                            ct = new ContentType("application", "octet-stream");
+                        builder.Attachments.Add(attachment.FileName, attachment.Content, ct);
                     }
                 }
 
@@ -343,7 +383,8 @@ namespace ProjectTracker.API.Services
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("[{Provider}] Failed to send email: {Error}", providerName, ex.Message);
+                _logger.LogWarning(ex, "[{Provider}] Failed to send email via {Host}:{Port}: {Error}", providerName, host, port, ex.Message);
+                errors.Add($"{providerName} ({host}:{port}): {ex.Message}");
                 return false;
             }
         }

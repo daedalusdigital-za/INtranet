@@ -980,7 +980,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
                 else
                 {
-                    return StatusCode(500, new { error = "Failed to send email. Please check email configuration." });
+                    var reason = _emailService.LastError ?? "All email providers failed.";
+                    _logger.LogError("Tripsheet {LoadNumber} email FAILED to {Recipients}: {Reason}",
+                        tripSheet.LoadNumber, string.Join(", ", recipients), reason);
+                    return StatusCode(502, new { error = $"Email could not be sent: {reason}" });
                 }
             }
             catch (Exception ex)
@@ -1159,7 +1162,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
                 else
                 {
-                    return StatusCode(500, new { error = "Failed to send email. Please check email configuration." });
+                    var reason = _emailService.LastError ?? "All email providers failed.";
+                    return StatusCode(502, new { error = $"Email could not be sent: {reason}" });
                 }
             }
             catch (Exception ex)
